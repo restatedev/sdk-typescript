@@ -14,3 +14,8 @@ If everything goes well, the artifact would be created at `dist/`.
 ```bash
 npm run test
 ```
+
+
+#### Editor support
+
+If you are using vscode, install the typescript plugin by Microsoft.
