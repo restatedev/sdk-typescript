@@ -37,14 +37,20 @@ If you are using `vscode`, install the following extentions:
 #### Run the example file
 
 Since this project final artifact is a node package that others would import in their projects,
-interactive development might be a bit tedious, so as a temporary productivity boost I've added `example.ts` 
-that is going to be built as part of this artifact for now.
-After building the project `npm run build` you can run:
+interactive development might be a bit tedious, so as a temporary productivity boost I've added an `example.ts`
+that is going to be built as part of this artifact _for now_.
 
-Make sure to *build first* then run:
+To run the example type:
+
+```bash
+npm run example
+```
+
+You can also, produce the final artifiact by `npm run build`, and then you can manually run
+
 
 ```bash
 node dist/example.js
 ```
 
-It should just print Hello world.
+(Please note the `.js` and not `.ts` as the `build` process will translate the TypeScript files back to .Js files)

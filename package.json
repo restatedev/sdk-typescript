@@ -8,7 +8,8 @@
     "build": "tsc --noEmitOnError",
     "test": "jest",
     "lint": "eslint --ignore-path .eslintignore --ext .ts .",
-    "format": "prettier --ignore-path .eslintignore --write \"**/*.+(js|ts|json)\""
+    "format": "prettier --ignore-path .eslintignore --write \"**/*.+(js|ts|json)\"",
+    "example" : "ts-node-dev --respawn --transpile-only ./src/example.ts"
   },
   "files": [
     "dist"
@@ -25,6 +26,7 @@
     "@types/node": "^18.14.2",
     "@typescript-eslint/eslint-plugin": "^5.53.0",
     "@typescript-eslint/parser": "^5.53.0",
+    "ts-node-dev": "^1.1.1",
     "eslint": "^8.35.0",
     "prettier": "^2.8.4",
     "ts-jest": "^29.0.5",
