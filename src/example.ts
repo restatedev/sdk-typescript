@@ -1,3 +1,4 @@
+import { GreetRequest, GreetResponse } from "./generated/example_pb";
 import { Restate, RestateContext } from "./public_api";
 
 const restate = new Restate();
@@ -7,8 +8,10 @@ const restate = new Restate();
 
 restate.bind({
   method: "/dev.restate.Greeter/greet",
-  fn: async function (context: RestateContext, message: any) {
-    console.log(`I don't do a lot just yet.`);
+  fn: async (context: RestateContext, message: GreetRequest) => {
+    console.log(`I don't do a lot just yet. ${message.name}`);
+
+    return new GreetResponse({ greeting: "hello" });
   },
 });
 
