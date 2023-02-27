@@ -70,17 +70,18 @@ export class GrpcService {
 //
 // For example (see first: example.proto and example.ts):
 //
-// parse(example.protoMetaData, "Greeter", new GreeterService())
-//
+// > parse(example.protoMetaData, "Greeter", new GreeterService())
+//  
+//  produces ~ 
 //
 //  serviceName: 'Greeter',
 //  instance: GreeterService {},
 //  methods: {
 //    multiword: {
-//      localName: 'multiWord',
+//     localName: 'multiWord',
 //     fn: [Function: multiWord],
-//      inputType: [Object],
-//      outputType: [Object]
+//     inputType: [Object],
+//     outputType: [Object]
 //    },
 //    greet: {
 //      localName: 'greet',
@@ -98,6 +99,8 @@ export function parseService(
 ) {
   const svcMethods: Record<string, GrpcServiceMethod<unknown, unknown>> = {};
 
+  // index all the existing properties that `instance` has.
+  // we index them by the lower case represention.
   const prototype = Object.getPrototypeOf(instance);
   const names = new Map<string, string>(
     Object.getOwnPropertyNames(prototype).map((name) => [
@@ -116,9 +119,13 @@ export function parseService(
       if (localName === undefined || localName === null) {
         throw new Error(`unimplemented method ${methodDescriptor.name}`);
       }
-      const localMethod = instance[localName] as (
-        input: unknown
-      ) => Promise<unknown>;
+      const fn = instance[localName];
+      if (typeof fn !== "function") {
+        throw new Error(
+          `A property ${localName} exists, which coresponds to a gRPC service named ${methodDescriptor.name}, but that property is not a function.`
+        );
+      }
+      const localMethod = fn as (input: unknown) => Promise<unknown>;
       const inputMessage = meta.references[methodDescriptor.inputType];
       const outputMessage = meta.references[methodDescriptor.outputType];
       const decoder = (buffer: Uint8Array) => inputMessage.decode(buffer);

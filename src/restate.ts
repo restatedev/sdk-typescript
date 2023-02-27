@@ -1,6 +1,10 @@
 "use strict";
 
-import { GrpcService, ProtoMetadata, parseService } from "./types";
+import {
+  GrpcService,
+  ProtoMetadata,
+  parseService,
+} from "./types";
 
 export interface ServiceOpts {
   descriptor: ProtoMetadata;
