@@ -1,9 +1,5 @@
 #!/bin/sh
 
-#
-# The following script will use protobufjs-cli to statically generate a .js file with 
-# type script type definitions. 
-#
 
 CURRENT_PATH="$(pwd -P)";
 SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
@@ -11,18 +7,16 @@ SCRIPTPATH="$( cd -- "$(dirname "$0")" >/dev/null 2>&1 ; pwd -P )"
 cd $SCRIPTPATH;
 cd ..
 
-PBJS="./node_modules/protobufjs-cli/bin/pbjs"
-PBTS="./node_modules/protobufjs-cli/bin/pbts"
+rm -r src/generated
+mkdir -p src/generated
 
-
-
-for path in ./proto/*.proto; do
-	filename=$(basename "$path" .proto)
-
-	echo "generating ${filename} ..."
-	$PBJS -t static-module -w commonjs -o src/generated/${filename}.js $path 
-	$PBTS -o src/generated/${filename}.d.ts src/generated/${filename}.js
-	echo "done."
-done
-
+protoc --plugin=./node_modules/.bin/protoc-gen-ts_proto \
+       	--ts_proto_out=src/generated/ \
+	--ts_proto_opt=outputSchema=true \
+	--ts_proto_opt=env=node \
+	--ts_proto_opt=esModuleInterop=true \
+	--ts_proto_opt=lowerCaseServiceMethods=true \
+	./proto/*
+	
 cd $CURRENT_PATH;
+

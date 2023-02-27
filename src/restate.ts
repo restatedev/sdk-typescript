@@ -1,17 +1,26 @@
 "use strict";
 
-import * as types from "./types";
-import { MethodSpec, MethodOpts, RestateMethod, RestateContext } from "./core";
+import { GrpcService, ProtoMetadata, parseService } from "./types";
+
+export interface ServiceOpts {
+  descriptor: ProtoMetadata;
+  service: string;
+  instance: unknown;
+}
 
 export class Restate {
-  readonly #fns: Record<string, MethodSpec> = {};
+  public readonly services: Record<string, GrpcService> = {};
 
-  bind(opts: MethodOpts) {
-    const spec = MethodSpec.fromOpts(opts);
-    this.#fns[spec.method] = spec;
+  bind({ descriptor, service, instance: instnace }: ServiceOpts): Restate {
+    const spec = parseService(descriptor, service, instnace);
+    // note that this log will not print all the keys.
+    console.log(`Registering ${JSON.stringify(spec, null, "\t")}`);
+    this.services[service] = spec;
+
+    return this;
   }
 
   async listen(port: number) {
-    console.log("hello");
+    // hello
   }
 }

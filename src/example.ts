@@ -1,20 +1,48 @@
-import { GreetRequest, GreetResponse } from "./generated/example_pb";
-import { Restate, RestateContext } from "./public_api";
+import { Restate } from "./public_api";
+import {
+  GreetRequest,
+  GreetResponse,
+  Greeter,
+  protoMetadata,
+} from "./generated/proto/example";
 
 const restate = new Restate();
 
-// this is not an gRPC service just yet, but it is here
-// just as an example.
+class GreeterService implements Greeter {
+  async greet(request: GreetRequest): Promise<GreetResponse> {
+    return GreetResponse.create({ greeting: `Hello ${request.name}` });
+  }
+
+  async multiWord(request: GreetRequest): Promise<GreetResponse> {
+    return GreetResponse.create({
+      greeting: `YAGM (yet another greeting method) ${request.name}!`,
+    });
+  }
+}
 
 restate.bind({
-  method: "/dev.restate.Greeter/greet",
-  fn: async (context: RestateContext, message: GreetRequest) => {
-    console.log(`I don't do a lot just yet. ${message.name}`);
-
-    return new GreetResponse({ greeting: "hello" });
-  },
+  descriptor: protoMetadata,
+  service: "Greeter",
+  instance: new GreeterService(),
 });
 
-restate.listen(8000);
+// fake some
+async function round(
+  service: string,
+  method: string,
+  arg: GreetRequest
+): Promise<GreetResponse> {
+  const inputBytes = GreetRequest.encode(arg).finish();
+  const s = restate.services[service];
+  const input = s.methods[method].inputDecoder(inputBytes);
 
-console.log("Hello world!");
+  console.log(s.methods[method]);
+  const output = await s.methods[method].localFn(input);
+  const outputBytes = s.methods[method].outputEncoder(output);
+  return GreetResponse.decode(outputBytes);
+}
+
+const req = GreetRequest.create({ name: "bob" });
+round("Greeter", "MultiWord", req).then((res) => console.log(res));
+
+restate.listen(8000);

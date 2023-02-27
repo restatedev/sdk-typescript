@@ -1,9 +1,12 @@
 syntax = "proto3";
 
-package dev.restate.Greeter;
+package dev.restate;
 
 service Greeter {
 	rpc Greet(GreetRequest) returns (GreetResponse) {};
+
+	rpc MultiWord(GreetRequest) returns (GreetResponse) {};
+
 }
 
 message GreetRequest {
