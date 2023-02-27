@@ -9,10 +9,9 @@ const restate = new Restate();
 
 restate.bind({
   method: "/dev.restate.Greeter/greet",
-  fn: async function(context: RestateContext, message: any) {
-      console.log(`I don't do a lot just yet.`);
-  }
- });
+  fn: async function (context: RestateContext, message: any) {
+    console.log(`I don't do a lot just yet.`);
+  },
+});
 
-
- console.log("Hello world!");
+console.log("Hello world!");

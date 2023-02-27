@@ -1,6 +1,6 @@
 export interface RestateContext {
   // TODO: what goes here
-  dummy: string
+  dummy: string;
 }
 
 export type RestateMethod = (
@@ -24,7 +24,7 @@ export interface MethodOpts {
 export class MethodSpec implements MethodOpts {
   constructor(readonly method: string, readonly fn: RestateMethod) {}
 
-  static fromOpts({method, fn}: MethodOpts): MethodSpec {
+  static fromOpts({ method, fn }: MethodOpts): MethodSpec {
     if (fn === undefined || fn === null) {
       throw new Error(`missing method instance for ${method}`);
     }

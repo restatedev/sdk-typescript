@@ -21,6 +21,11 @@ npm run test
 npm run lint
 ```
 
+#### run a code foramtter
+
+```bash
+npm run format
+```
 
 #### Editor support
 

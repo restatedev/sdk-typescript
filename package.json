@@ -7,7 +7,8 @@
   "scripts": {
     "build": "tsc --noEmitOnError",
     "test": "jest",
-    "lint": "eslint --ignore-path .eslintignore --ext .ts src/"
+    "lint": "eslint --ignore-path .eslintignore --ext .ts .",
+    "format": "prettier --ignore-path .eslintignore --write \"**/*.+(js|ts|json)\""
   },
   "files": [
     "dist"
@@ -20,11 +21,12 @@
   },
   "type": "commonjs",
   "devDependencies": {
-    "@types/node": "^18.14.2",
     "@types/jest": "^29.4.0",
+    "@types/node": "^18.14.2",
     "@typescript-eslint/eslint-plugin": "^5.53.0",
     "@typescript-eslint/parser": "^5.53.0",
     "eslint": "^8.35.0",
+    "prettier": "^2.8.4",
     "ts-jest": "^29.0.5",
     "typescript": "^4.9.5"
   }
