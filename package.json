@@ -5,7 +5,7 @@
   "main": "dist/public_api.js",
   "types": "dist/public_api.d.ts",
   "scripts": {
-    "proto": "npx buf generate proto",
+    "proto": "./bin/generate-protobuf.sh",
     "build": "tsc --noEmitOnError",
     "test": "jest",
     "lint": "eslint --ignore-path .eslintignore --ext .ts .",
@@ -17,11 +17,9 @@
   ],
   "author": "Restate Developers",
   "license": "BUSL",
-  "email": "dev@restate.dev",
+  "email": "stephan@restate.dev",
   "dependencies": {
-    "@bufbuild/buf": "^1.14.0-1",
-    "@bufbuild/protobuf": "^1.0.0",
-    "@bufbuild/protoc-gen-es": "^1.0.0"
+    "protobufjs": "^7.2.2"
   },
   "type": "commonjs",
   "devDependencies": {
@@ -33,6 +31,7 @@
     "prettier": "^2.8.4",
     "ts-jest": "^29.0.5",
     "ts-node-dev": "^1.1.1",
-    "typescript": "^4.9.5"
+    "typescript": "^4.9.5",
+    "protobufjs-cli": "^1.1.1"
   }
 }
