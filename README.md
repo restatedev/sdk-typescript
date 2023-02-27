@@ -15,10 +15,18 @@ If everything goes well, the artifact would be created at `dist/`.
 npm run test
 ```
 
+#### run a linter
+
+```bash
+npm run lint
+```
+
 
 #### Editor support
 
-If you are using `vscode`, install the typescript plugin by Microsoft.
+If you are using `vscode`, install the following extentions:
+* Typescript plugin by Microsoft.
+* ESLint
 
 
 #### Run the example file
