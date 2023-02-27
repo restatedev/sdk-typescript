@@ -1,1 +1,3 @@
-export interface Dummy {}
+export interface Dummy {
+  dummy: string,
+}

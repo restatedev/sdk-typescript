@@ -1,5 +1,6 @@
 export interface RestateContext {
   // TODO: what goes here
+  dummy: string
 }
 
 export type RestateMethod = (

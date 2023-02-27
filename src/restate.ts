@@ -12,7 +12,6 @@ export class Restate {
   }
 
   async listen(port: number) {
-    const self = this;
     console.log('hello');
   }
 }
