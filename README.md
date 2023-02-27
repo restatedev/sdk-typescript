@@ -1,7 +1,12 @@
 ### TypeScript SDK PoC 
 
-#### build
+#### Generate Protobufs
 
+```bash
+npm run proto
+```
+
+#### build
 ```bash
 npm run build
 ```
