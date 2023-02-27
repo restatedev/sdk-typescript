@@ -32,6 +32,8 @@ npm run format
 If you are using `vscode`, install the following extentions:
 * Typescript plugin by Microsoft.
 * ESLint
+* Prettier ESLint
+* Jest
 
 
 #### Run the example file
