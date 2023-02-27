@@ -1,2 +1,1 @@
-export interface Dummy {
-}
+export interface Dummy {}

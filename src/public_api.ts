@@ -1,1 +1,1 @@
-export {Restate} from "./restate";
+export {Restate} from './restate';

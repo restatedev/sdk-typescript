@@ -1,8 +1,11 @@
 export interface RestateContext {
-	// TODO: what goes here
-};
+  // TODO: what goes here
+}
 
-export type RestateMethod = (context: RestateContext, message: any) => void | Promise<void>;
+export type RestateMethod = (
+  context: RestateContext,
+  message: any
+) => void | Promise<void>;
 
 /**
  * {
@@ -13,26 +16,17 @@ export type RestateMethod = (context: RestateContext, message: any) => void | Pr
  * }
  */
 export interface MethodOpts {
-    method: string;
-    fn: RestateMethod;
+  method: string;
+  fn: RestateMethod;
 }
 
 export class MethodSpec implements MethodOpts {
-    constructor(
-        readonly method: string,
-        readonly fn: RestateMethod
-    ) 
-    {
-    }
+  constructor(readonly method: string, readonly fn: RestateMethod) {}
 
-    static fromOpts({method, fn}: MethodOpts): MethodSpec {
-        if (fn === undefined || fn === null) {
-            throw new Error(`missing method instance for ${method}`);
-        }
-        return new MethodSpec(method, fn);
+  static fromOpts({method, fn}: MethodOpts): MethodSpec {
+    if (fn === undefined || fn === null) {
+      throw new Error(`missing method instance for ${method}`);
     }
+    return new MethodSpec(method, fn);
+  }
 }
-
-
-
-
