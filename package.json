@@ -9,7 +9,7 @@
     "test": "jest",
     "lint": "eslint --ignore-path .eslintignore --ext .ts .",
     "format": "prettier --ignore-path .eslintignore --write \"**/*.+(js|ts|json)\"",
-    "example" : "ts-node-dev --respawn --transpile-only ./src/example.ts"
+    "example": "ts-node-dev --respawn --transpile-only ./src/example.ts"
   },
   "files": [
     "dist"
