@@ -1,5 +1,11 @@
 ### TypeScript SDK PoC 
 
+#### Prerequisites
+
+* A reletivily recent NodeJs installed.
+* A protobuf compiler [protoc](https://grpc.io/docs/protoc-installation/)
+* run `npm install`
+
 #### Generate Protobufs
 
 ```bash
