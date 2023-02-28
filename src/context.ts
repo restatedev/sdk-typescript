@@ -7,17 +7,19 @@ export interface RestateContext {
     data: Uint8Array
   ): Promise<Uint8Array>;
 
-  getState(name: string): Promise<Uint8Array>;
+  getState<T>(name: string): Promise<T | null>;
 
-  setState(name: string, value: Uint8Array): Promise<void>;
+  setState<T>(name: string, value: T): Promise<void>;
 }
 
 export class GrpcRestateContext implements RestateContext {
-  async getState(name: string): Promise<Uint8Array> {
-    return new Uint8Array(0);
+  async getState<T>(name: string): Promise<T | null> {
+    return null as T;
   }
 
-  async setState(name: string, value: Uint8Array): Promise<void> {
+  async setState<T>(name: string, value: T): Promise<void> {
+    const str = JSON.stringify(value);
+    const bytes = Buffer.from(str);
     // nothing
   }
 
@@ -49,6 +51,8 @@ export function setContext<T>(instance: T, context: RestateContext): T {
   // except '$$restate' which is a unique, per call pointer to a restate context.
   const wrapper = new ThisMethodWrapper(context);
   // TODO: figure out if there is a more robust way to achieve that.
+  // see here for example
+  // https://itnext.io/hidden-properties-in-javascript-73b52def1589
   Object.assign(wrapper, instance);
   return wrapper as T;
 }

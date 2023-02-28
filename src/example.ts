@@ -15,8 +15,17 @@ class GreeterService implements Greeter {
   async multiWord(request: GreetRequest): Promise<GreetResponse> {
     const ctx = restate.useContext(this);
 
+    // state
+    let seen = (await ctx.getState<number>("seen")) || 0;
+    seen += 1;
+
+    await ctx.setState("seen", seen);
+
+    // rpc
     const client = new GreeterClientImpl(ctx);
     const greeting = await client.greet(request);
+
+    // return the final response
 
     return GreetResponse.create({
       greeting: `YAGM (yet another greeting method) ${request.name}!`,
