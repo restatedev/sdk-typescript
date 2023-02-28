@@ -1,11 +1,34 @@
 "use strict";
 
 export interface RestateContext {
-  dummy: string; // just a dummy field for now
+  request(
+    service: string,
+    method: string,
+    data: Uint8Array
+  ): Promise<Uint8Array>;
+
+  getState(name: string): Promise<Uint8Array>;
+
+  setState(name: string, value: Uint8Array): Promise<void>;
 }
 
 export class GrpcRestateContext implements RestateContext {
-  dummy = "dummy";
+  async getState(name: string): Promise<Uint8Array> {
+    return new Uint8Array(0);
+  }
+
+  async setState(name: string, value: Uint8Array): Promise<void> {
+    // nothing
+  }
+
+  request(
+    service: string,
+    method: string,
+    data: Uint8Array
+  ): Promise<Uint8Array> {
+    // restae call
+    return Promise.resolve(new Uint8Array(0));
+  }
 }
 
 export function useContext<T>(instance: T): RestateContext {

@@ -3,6 +3,7 @@ import {
   GreetRequest,
   GreetResponse,
   Greeter,
+  GreeterClientImpl,
   protoMetadata,
 } from "./generated/proto/example";
 
@@ -13,6 +14,9 @@ class GreeterService implements Greeter {
 
   async multiWord(request: GreetRequest): Promise<GreetResponse> {
     const ctx = restate.useContext(this);
+
+    const client = new GreeterClientImpl(ctx);
+    const greeting = await client.greet(request);
 
     return GreetResponse.create({
       greeting: `YAGM (yet another greeting method) ${request.name}!`,
