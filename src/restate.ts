@@ -1,6 +1,7 @@
 "use strict";
 
 import { GrpcServiceMethod, ProtoMetadata, parseService } from "./types";
+import { GrpcRestateContext, RestateContext, setContext } from "./context";
 
 export interface ServiceOpts {
   descriptor: ProtoMetadata;
@@ -9,12 +10,23 @@ export interface ServiceOpts {
 }
 
 class HostedGrpcServiceMethod<I, O> {
-  constructor(readonly method: GrpcServiceMethod<I, O>) {}
+  constructor(
+    readonly instance: unknown,
+    readonly method: GrpcServiceMethod<I, O>
+  ) {}
 
   async invoke(inBytes: Uint8Array): Promise<Uint8Array> {
+    const context = new GrpcRestateContext();
+    const instanceWithContext = setContext(this.instance, context);
+
     const input = this.method.inputDecoder(inBytes);
-    const output = await this.method.localFn(input);
-    return this.method.outputEncoder(output);
+    const output = await this.method.localFn(instanceWithContext, input);
+    const outBytes = this.method.outputEncoder(output);
+
+    // TODO: do something with the context
+    // for example collect the final side effects, etc.
+
+    return outBytes;
   }
 }
 
@@ -34,7 +46,7 @@ export class RestateServer {
     const spec = parseService(descriptor, service, instance);
     for (const method of spec.methods) {
       const url = `${spec.packge}.${spec.name}/${method.name}`;
-      this.methods[url] = new HostedGrpcServiceMethod(method);
+      this.methods[url] = new HostedGrpcServiceMethod(instance, method);
       // note that this log will not print all the keys.
       console.log(
         `Registering: ${url}  -> ${JSON.stringify(method, null, "\t")}`

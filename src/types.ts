@@ -45,7 +45,7 @@ export class GrpcServiceMethod<I, O> {
   constructor(
     readonly name: string, // the gRPC name as defined in the .proto file
     readonly localName: string, // the method name as defined in the class.
-    readonly localFn: (input: I) => Promise<O>, // the actual function
+    readonly localFn: (instance: unknown, input: I) => Promise<O>, // the actual function
     readonly inputDecoder: (buf: Uint8Array) => I, // the protobuf decoder
     readonly outputEncoder: (output: O) => Uint8Array // protobuf encoder
   ) {}
@@ -126,9 +126,9 @@ export function parseService(
           `A property ${localName} exists, which coresponds to a gRPC service named ${methodDescriptor.name}, but that property is not a function.`
         );
       }
-      const localMethod = fn.bind(instance) as (
-        input: unknown
-      ) => Promise<unknown>;
+      const localMethod = async (instance: unknown, input: unknown) => {
+        return await fn.call(instance, input);
+      };
       const inputMessage = meta.references[methodDescriptor.inputType];
       const outputMessage = meta.references[methodDescriptor.outputType];
       const decoder = (buffer: Uint8Array) => inputMessage.decode(buffer);
