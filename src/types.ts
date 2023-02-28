@@ -43,6 +43,7 @@ export interface ProtoMetadata {
 
 export class GrpcServiceMethod<I, O> {
   constructor(
+    readonly name: string, // the gRPC name as defined in the .proto file
     readonly localName: string, // the method name as defined in the class.
     readonly localFn: (input: I) => Promise<O>, // the actual function
     readonly inputDecoder: (buf: Uint8Array) => I, // the protobuf decoder
@@ -55,7 +56,7 @@ export class GrpcService {
     readonly name: string,
     readonly packge: string,
     readonly impl: object,
-    readonly methods: Record<string, GrpcServiceMethod<unknown, unknown>>
+    readonly methods: Array<GrpcServiceMethod<unknown, unknown>>
   ) {}
 }
 
@@ -71,8 +72,8 @@ export class GrpcService {
 // For example (see first: example.proto and example.ts):
 //
 // > parse(example.protoMetaData, "Greeter", new GreeterService())
-//  
-//  produces ~ 
+//
+//  produces ~
 //
 //  serviceName: 'Greeter',
 //  instance: GreeterService {},
@@ -97,7 +98,7 @@ export function parseService(
   serviceName: string,
   instance: any
 ) {
-  const svcMethods: Record<string, GrpcServiceMethod<unknown, unknown>> = {};
+  const svcMethods: Array<GrpcServiceMethod<unknown, unknown>> = [];
 
   // index all the existing properties that `instance` has.
   // we index them by the lower case represention.
@@ -125,16 +126,23 @@ export function parseService(
           `A property ${localName} exists, which coresponds to a gRPC service named ${methodDescriptor.name}, but that property is not a function.`
         );
       }
-      const localMethod = fn as (input: unknown) => Promise<unknown>;
+      const localMethod = fn.bind(instance) as (
+        input: unknown
+      ) => Promise<unknown>;
       const inputMessage = meta.references[methodDescriptor.inputType];
       const outputMessage = meta.references[methodDescriptor.outputType];
       const decoder = (buffer: Uint8Array) => inputMessage.decode(buffer);
       const encoder = (message: unknown) =>
         outputMessage.encode(message).finish();
-      svcMethods[methodDescriptor.name] = new GrpcServiceMethod<
-        unknown,
-        unknown
-      >(localName, localMethod, decoder, encoder);
+      svcMethods.push(
+        new GrpcServiceMethod<unknown, unknown>(
+          methodDescriptor.name,
+          localName,
+          localMethod,
+          decoder,
+          encoder
+        )
+      );
     }
     return new GrpcService(
       serviceName,

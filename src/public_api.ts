@@ -1,1 +1,1 @@
-export { Restate } from "./restate";
+export { RestateServer, createServer } from "./restate";
