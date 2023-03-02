@@ -29,7 +29,7 @@ describe("BindingTest", () => {
 
     const arg = GreetRequest.create({ name: "bob" });
     const inBytes = GreetRequest.encode(arg).finish();
-    const outBytes = await r.fakeInvoke("dev.restate.Greeter/Greet", inBytes);
+    const outBytes = await r.fakeInvoke("/dev.restate.Greeter/Greet", inBytes);
     const out = GreetResponse.decode(outBytes);
 
     expect(out.greeting).toStrictEqual("Hello bob");
