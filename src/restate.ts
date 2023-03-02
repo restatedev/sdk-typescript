@@ -1,33 +1,17 @@
 "use strict";
 
-import { GrpcServiceMethod, ProtoMetadata, parseService } from "./types";
-import { GrpcRestateContext, RestateContext, setContext } from "./context";
+import { ProtoMetadata, parseService } from "./types";
+import { incomingConnectionAtPort } from "./bidirectional_server";
+import { HostedGrpcServiceMethod } from "./core";
+import {
+  DurableExecutionContext,
+  DurableExecutionStateMachine,
+} from "./durable_execution";
 
 export interface ServiceOpts {
   descriptor: ProtoMetadata;
   service: string;
   instance: unknown;
-}
-
-class HostedGrpcServiceMethod<I, O> {
-  constructor(
-    readonly instance: unknown,
-    readonly method: GrpcServiceMethod<I, O>
-  ) {}
-
-  async invoke(inBytes: Uint8Array): Promise<Uint8Array> {
-    const context = new GrpcRestateContext();
-    const instanceWithContext = setContext(this.instance, context);
-
-    const input = this.method.inputDecoder(inBytes);
-    const output = await this.method.localFn(instanceWithContext, input);
-    const outBytes = this.method.outputEncoder(output);
-
-    // TODO: do something with the context
-    // for example collect the final side effects, etc.
-
-    return outBytes;
-  }
 }
 
 export function createServer(): RestateServer {
@@ -45,7 +29,7 @@ export class RestateServer {
   }: ServiceOpts): RestateServer {
     const spec = parseService(descriptor, service, instance);
     for (const method of spec.methods) {
-      const url = `${spec.packge}.${spec.name}/${method.name}`;
+      const url = `/${spec.packge}.${spec.name}/${method.name}`;
       this.methods[url] = new HostedGrpcServiceMethod(instance, method);
       // note that this log will not print all the keys.
       console.log(
@@ -55,19 +39,36 @@ export class RestateServer {
     return this;
   }
 
-  methodByUrl<I, O>(url: string): HostedGrpcServiceMethod<I, O> | null {
+  methodByUrl<I, O>(
+    url: string | undefined | null
+  ): HostedGrpcServiceMethod<I, O> | undefined {
+    if (url == undefined || url === null) {
+      return undefined;
+    }
     const method = this.methods[url];
     if (method === null || method === undefined) {
-      return null;
+      return undefined;
     }
     return method as HostedGrpcServiceMethod<I, O>;
   }
 
   public async listen(port: number) {
-    console.log(`Listening on port ${port} ...`);
+    console.log(`listening on ${port}...`);
+
+    for await (const connection of incomingConnectionAtPort(port)) {
+      const method = this.methodByUrl(connection.url.path);
+      if (method === undefined) {
+        console.log(`INFO no service found for URL ${connection.url.path}`);
+        connection.respond404();
+      } else {
+        console.log(`INFO new stream for ${connection.url.path}`);
+        connection.respondOk();
+        new DurableExecutionStateMachine(connection, method);
+      }
+    }
   }
 
   public async fakeInvoke(url: string, buf: Uint8Array): Promise<Uint8Array> {
-    return await this.methods[url].invoke(buf);
+    return await this.methods[url].invoke(new DurableExecutionContext(), buf);
   }
 }

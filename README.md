@@ -59,6 +59,12 @@ To run the example type:
 npm run example
 ```
 
+Try it out using CURL 
+
+```bash
+curl -v --http2-prior-knowledge -d '' localhost:8000/dev.restate.Greeter/Greet
+```
+
 You can also, produce the final artifiact by `npm run build`, and then you can manually run
 
 

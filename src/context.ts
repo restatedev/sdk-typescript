@@ -12,27 +12,6 @@ export interface RestateContext {
   setState<T>(name: string, value: T): Promise<void>;
 }
 
-export class GrpcRestateContext implements RestateContext {
-  async getState<T>(name: string): Promise<T | null> {
-    return null as T;
-  }
-
-  async setState<T>(name: string, value: T): Promise<void> {
-    const str = JSON.stringify(value);
-    const bytes = Buffer.from(str);
-    // nothing
-  }
-
-  request(
-    service: string,
-    method: string,
-    data: Uint8Array
-  ): Promise<Uint8Array> {
-    // restae call
-    return Promise.resolve(new Uint8Array(0));
-  }
-}
-
 export function useContext<T>(instance: T): RestateContext {
   const wrapper = instance as ThisMethodWrapper;
   if (wrapper.$$restate === undefined || wrapper.$$restate === null) {
