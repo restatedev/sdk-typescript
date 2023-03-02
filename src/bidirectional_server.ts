@@ -34,6 +34,7 @@ export class Connection {
 
   send(
     message_type: bigint,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     message: any,
     completed?: boolean,
     requires_ack?: boolean
@@ -43,6 +44,14 @@ export class Connection {
 
   onMessage(handler: RestateDuplexStreamEventHandler) {
     this.restate.onMessage(handler);
+  }
+
+  onClose(handler: () => void) {
+    this.stream.on("close", handler);
+  }
+
+  end() {
+    this.stream.end();
   }
 }
 
