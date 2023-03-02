@@ -68,7 +68,6 @@ export class DurableExecutionStateMachine<I, O> {
   ) {
     connection.onMessage(this.onIncomingMessage.bind(this));
     connection.onClose(this.onClose.bind(this));
-    // connection.end();
   }
 
   onIncomingMessage(
@@ -99,7 +98,12 @@ export class DurableExecutionStateMachine<I, O> {
     //}));
     //
     // 3. to send a custom message (whatever that is) use
+    //
     // this.connection.send(12345, Buffer.alloc(0));
+    //
+    // 4. to actually invoke the method with an argument.
+    //
+    // const result: Promise<Uint8Array> = this.method.invoke(this.context, argBytes);
 
     switch (message_type) {
       case START_MESSAGE_TYPE: {
