@@ -4,7 +4,7 @@ import {
   START_MESSAGE_TYPE,
   COMPLETION_MESSAGE_TYPE,
   GET_STATE_ENTRY_MESSAGE_TYPE,
-  RestateDuplexStream
+  RestateDuplexStream,
 } from "../src/protocol_stream";
 import stream from "stream";
 import { StartMessage } from "../src/generated/proto/protocol";
