@@ -83,7 +83,7 @@ export class DurableExecutionStateMachine<I, O> {
     // reminder: to send a message back to restate use: this.connection.send
     //
     // here are few examples,
-    // 1. send a set access request use
+    // 1. send a state access request use
     //
     // this.connection.send(GET_STATE_ENTRY_MESSAGE_TYPE, GetStateEntryMessage.create({
     //   key: Buffer.from("my-state-key-1"),
