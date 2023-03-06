@@ -6,9 +6,11 @@ import {
   GET_STATE_ENTRY_MESSAGE_TYPE,
   POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
   RestateDuplexStream,
-  OUTPUT_STREAM_ENTRY_MESSAGE_TYPE
+  OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
+  SET_STATE_ENTRY_MESSAGE_TYPE,
+  INVOKE_ENTRY_MESSAGE_TYPE
 } from "../src/protocol_stream";
-import { GetStateEntryMessage, OutputStreamEntryMessage, PollInputStreamEntryMessage, StartMessage } from "../src/generated/proto/protocol";
+import { GetStateEntryMessage, OutputStreamEntryMessage, PollInputStreamEntryMessage, SetStateEntryMessage, StartMessage } from "../src/generated/proto/protocol";
 import {
   GreetRequest,
   GreetResponse,
@@ -79,6 +81,8 @@ describe("Greeter/Greeter", () => {
           value: Buffer.from(inBytes)
         }));
 
+      connection.end();
+
       
       const result: Array<any> = await connection.getResult();
       const response = GreetResponse.decode(result[0].message.value);
@@ -86,8 +90,7 @@ describe("Greeter/Greeter", () => {
       console.log(GreetResponse.decode(result[0].message.value));
 
       expect(response).toStrictEqual(GreetResponse.create({greeting: "Hello bob"}))
-    
-      connection.end();
+  
     });
   });
 
@@ -117,12 +120,14 @@ describe("Greeter/Greeter", () => {
           value: Buffer.from(inBytes)
         }));
 
+      connection.end();
+
       const result: Array<any> = await connection.getResult();
 
       expect(result[0].message_type).toStrictEqual(GET_STATE_ENTRY_MESSAGE_TYPE);
       expect(result[0].message.key.toString()).toStrictEqual("seen");
 
-      connection.end();
+
     });
   });
 
@@ -161,10 +166,11 @@ describe("Greeter/Greeter", () => {
 
       const result: Array<any> = await connection.getResult();
 
-      expect(result[0].message_type).toStrictEqual(GET_STATE_ENTRY_MESSAGE_TYPE);
-      expect(result[0].message.key.toString()).toStrictEqual("seen");
 
-      
+      expect(result[0].message_type).toStrictEqual(SET_STATE_ENTRY_MESSAGE_TYPE);
+      expect(result[0].message.key.toString()).toStrictEqual("seen");     
+      // expect(result[0].message.value).c(Buffer.from("51");
+
     });
   });
 

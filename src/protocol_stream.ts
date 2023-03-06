@@ -93,7 +93,6 @@ export class RestateDuplexStream {
   }
 
   onMessage(handler: RestateDuplexStreamEventHandler) {
-    console.debug("New message in protocol stream");
     this.sdkInput.on("data", (data) => {
       const { header, message } = data;
       const h = header as Header;

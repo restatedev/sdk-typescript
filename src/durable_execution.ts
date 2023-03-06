@@ -53,9 +53,6 @@ export class DurableExecutionStateMachine<I, O>  implements RestateContext {
   // Promises that need to be resolved. Journal index -> promise
   private pendingPromises: Map<number, (value: any) => void>;
 
-  // // history to be replayed at initiation
-  private history: Array<any>;
-
   constructor(
     private readonly connection: Connection,
     private readonly method: HostedGrpcServiceMethod<I, O>
@@ -63,15 +60,14 @@ export class DurableExecutionStateMachine<I, O>  implements RestateContext {
     connection.onMessage(this.onIncomingMessage.bind(this));
     connection.onClose(this.onClose.bind(this));
     this.pendingPromises = new Map();
-    this.history = new Array<number>();
   }
 
 
   async getState<T>(name: string): Promise<T | null> {
     console.debug("Service called getState: " + name);
-    this.currentJournalIndex++;
 
     return new Promise((resolve, reject) => {
+      this.incrementJournalIndex();
       this.pendingPromises.set(this.currentJournalIndex, resolve);
       
       if(this.state === ExecutionState.PROCESSING){
@@ -79,7 +75,7 @@ export class DurableExecutionStateMachine<I, O>  implements RestateContext {
         // Forward to runtime
         this.connection.send(GET_STATE_ENTRY_MESSAGE_TYPE, GetStateEntryMessage.create({key: Buffer.from(name)}));
       } else{
-        console.log("Ignoring get state entry message from user. We are in replay mode. This will be fulfilled by the next journal entry.")
+        console.debug("In replay mode: GetState message will not be forwarded to the runtime. This will be fulfilled by the next replayed journal entry.")
       }
     });
   }
@@ -89,8 +85,15 @@ export class DurableExecutionStateMachine<I, O>  implements RestateContext {
     const str = JSON.stringify(value);
     const bytes = Buffer.from(str);
 
-    SetStateEntryMessage.create({key: Buffer.from(name, 'utf8'), value: bytes});
-    // nothing
+    this.incrementJournalIndex();
+
+    if(this.state === ExecutionState.PROCESSING){
+      console.debug("Forward the SetStateEntryMessage to the runtime")
+      // Forward to runtime
+      this.connection.send(SET_STATE_ENTRY_MESSAGE_TYPE, SetStateEntryMessage.create({key: Buffer.from(name, 'utf8'), value: bytes}));
+    } else{
+      console.debug("In replay mode: SetState message will not be forwarded to the runtime. This will be fulfilled by the next replayed journal entry.")
+    }
   }
 
   request(
@@ -98,8 +101,20 @@ export class DurableExecutionStateMachine<I, O>  implements RestateContext {
     method: string,
     data: Uint8Array
   ): Promise<Uint8Array> {
-    // restae call
-    return Promise.resolve(new Uint8Array(0));
+    console.debug(`Service called other service: ${service} / ${method}`);
+
+    return new Promise((resolve, reject) => {
+      this.pendingPromises.set(this.currentJournalIndex, resolve);
+      
+      if(this.state === ExecutionState.PROCESSING){
+        console.debug("Forward the InvokeEntryMessage to the runtime")
+        // Forward to runtime
+        this.connection.send(INVOKE_ENTRY_MESSAGE_TYPE, InvokeEntryMessage.create(
+          {serviceName: service, methodName: method, parameter: Buffer.from(data)}));
+      } else{
+        console.debug("Ignoring call request from user. We are in replay mode. This will be fulfilled by the next journal entry.")
+      }
+    });
   }
 
 
@@ -138,33 +153,7 @@ export class DurableExecutionStateMachine<I, O>  implements RestateContext {
     //
     // const result: Promise<Uint8Array> = this.method.invoke(this.context, argBytes);
 
-    // if(this.state == ExecutionState.REPLAYING && this.history.length < this.entriesToReplay){
-    //   // First save all the messages which are replayed. Because we need all the completions before we can continue.
-    //   console.log("Save as history: " + message);
-    //   this.history.push({message_type: message_type, message: message});
-    // } else if(this.state == ExecutionState.REPLAYING && this.history.length === this.entriesToReplay){
-    //   // play history
-    //   console.log("Replay history");
 
-      
-
-    //   // process the new message
-    //   this.handleMessage(message_type, message);
-
-    // } else{
-    //   this.handleMessage(message_type, message);
-    // }
-
-    this.handleMessage(message_type, message);
-  }
-
-  handleMessage(
-    message_type: bigint,
-    message: any,
-    completed_flag?: boolean,
-    protocol_version?: number,
-    requires_ack_flag?: boolean
-  ) {
     switch (message_type) {
       case START_MESSAGE_TYPE: {
         const m = message as StartMessage;
@@ -205,7 +194,6 @@ export class DurableExecutionStateMachine<I, O>  implements RestateContext {
         console.debug("Received completed GetStateEntryMessage from runtime: " + JSON.stringify(m));
 
         if(this.state === ExecutionState.REPLAYING) {
-
           const resolveFct = this.pendingPromises.get(this.currentJournalIndex);
           if(!resolveFct){
             throw new Error(`Promise for journal index ${this.currentJournalIndex} not found`);
@@ -271,11 +259,13 @@ export class DurableExecutionStateMachine<I, O>  implements RestateContext {
   }
 
   incrementJournalIndex(): void {
-      this.currentJournalIndex++;
+    
+    this.currentJournalIndex++;
+    console.debug("Incremented journal index. Journal index is now "+ this.currentJournalIndex );
 
-      if(this.currentJournalIndex >= this.entriesToReplay && this.state == ExecutionState.REPLAYING){
-        this.transitionState(ExecutionState.PROCESSING);
-      }
+    if(this.currentJournalIndex > this.entriesToReplay && this.state == ExecutionState.REPLAYING){
+      this.transitionState(ExecutionState.PROCESSING);
+    }
   }
 
   onCallSuccess(result: Uint8Array){

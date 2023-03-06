@@ -103,7 +103,7 @@ export class TestConnection implements Connection {
   }
 
   end() {
-    console.log("calling on close")
+    console.log("calling end")
     this.stream.end();
     this.resolveOnClose(this.result);
   }
