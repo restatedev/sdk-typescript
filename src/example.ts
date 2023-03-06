@@ -7,7 +7,7 @@ import {
   protoMetadata,
 } from "./generated/proto/example";
 
-class GreeterService implements Greeter {
+export class GreeterService implements Greeter {
   async greet(request: GreetRequest): Promise<GreetResponse> {
     return GreetResponse.create({ greeting: `Hello ${request.name}` });
   }
@@ -16,6 +16,7 @@ class GreeterService implements Greeter {
     const ctx = restate.useContext(this);
 
     // state
+    console.log("Getting the state");
     let seen = (await ctx.getState<number>("seen")) || 0;
     seen += 1;
 

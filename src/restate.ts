@@ -4,7 +4,6 @@ import { ProtoMetadata, parseService } from "./types";
 import { incomingConnectionAtPort } from "./bidirectional_server";
 import { HostedGrpcServiceMethod } from "./core";
 import {
-  DurableExecutionContext,
   DurableExecutionStateMachine,
 } from "./durable_execution";
 
@@ -68,7 +67,7 @@ export class RestateServer {
     }
   }
 
-  public async fakeInvoke(url: string, buf: Uint8Array): Promise<Uint8Array> {
-    return await this.methods[url].invoke(new DurableExecutionContext(), buf);
-  }
+  // public async fakeInvoke(url: string, buf: Uint8Array): Promise<Uint8Array> {
+  //   return await this.methods[url].invoke(new DurableExecutionContext(), buf);
+  // }
 }

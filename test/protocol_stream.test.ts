@@ -2,12 +2,13 @@ import { describe, expect } from "@jest/globals";
 import {
   Header,
   START_MESSAGE_TYPE,
+  StartMessage,
   COMPLETION_MESSAGE_TYPE,
   GET_STATE_ENTRY_MESSAGE_TYPE,
   RestateDuplexStream,
 } from "../src/protocol_stream";
 import stream from "stream";
-import { StartMessage } from "../src/generated/proto/protocol";
+
 
 // The following test suite is taken from headers.rs
 describe("Header", () => {

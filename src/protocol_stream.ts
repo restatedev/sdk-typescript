@@ -93,6 +93,7 @@ export class RestateDuplexStream {
   }
 
   onMessage(handler: RestateDuplexStreamEventHandler) {
+    console.debug("New message in protocol stream");
     this.sdkInput.on("data", (data) => {
       const { header, message } = data;
       const h = header as Header;
@@ -157,7 +158,7 @@ const PROTOBUF_MESSAGES: Array<[bigint, any]> = [
   [COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE, CompleteAwakeableEntryMessage],
 ];
 
-const PROTOBUF_MESSAGE_BY_TYPE = new Map(PROTOBUF_MESSAGES);
+export const PROTOBUF_MESSAGE_BY_TYPE = new Map(PROTOBUF_MESSAGES);
 
 const CUSTOM_MESSAGE_MASK = BigInt(0xfc00);
 const COMPLETED_MASK = BigInt(0x0001_0000_0000);
@@ -263,6 +264,7 @@ const WAITING_FOR_HEADER = 0;
 const WAITING_FOR_BODY = 1;
 
 function stream_decoder(): stream.Transform {
+  console.debug("Decoding")
   let buf = Buffer.alloc(0);
   let state = WAITING_FOR_HEADER;
   let header: Header;
@@ -284,6 +286,7 @@ function stream_decoder(): stream.Transform {
             const h = buf.readBigUint64BE();
             buf = buf.subarray(8);
             header = Header.from_u64be(h);
+            console.debug(header);
             state = WAITING_FOR_BODY;
             break;
           }

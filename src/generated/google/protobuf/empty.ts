@@ -12,6 +12,8 @@ export const protobufPackage = "google.protobuf";
  *     service Foo {
  *       rpc Bar(google.protobuf.Empty) returns (google.protobuf.Empty);
  *     }
+ *
+ * The JSON representation for `Empty` is empty JSON object `{}`.
  */
 export interface Empty {
 }
@@ -109,7 +111,7 @@ export const protoMetadata: ProtoMetadata = {
       "javaGenerateEqualsAndHash": false,
       "javaStringCheckUtf8": false,
       "optimizeFor": 1,
-      "goPackage": "google.golang.org/protobuf/types/known/emptypb",
+      "goPackage": "github.com/golang/protobuf/ptypes/empty",
       "ccGenericServices": false,
       "javaGenericServices": false,
       "pyGenericServices": false,
@@ -128,9 +130,9 @@ export const protoMetadata: ProtoMetadata = {
     "sourceCodeInfo": {
       "location": [{
         "path": [4, 0],
-        "span": [50, 0, 16],
+        "span": [51, 0, 16],
         "leadingComments":
-          " A generic empty message that you can re-use to avoid defining duplicated\n empty messages in your APIs. A typical example is to use it as the request\n or the response type of an API method. For instance:\n\n     service Foo {\n       rpc Bar(google.protobuf.Empty) returns (google.protobuf.Empty);\n     }\n\n",
+          " A generic empty message that you can re-use to avoid defining duplicated\n empty messages in your APIs. A typical example is to use it as the request\n or the response type of an API method. For instance:\n\n     service Foo {\n       rpc Bar(google.protobuf.Empty) returns (google.protobuf.Empty);\n     }\n\n The JSON representation for `Empty` is empty JSON object `{}`.\n",
         "trailingComments": "",
         "leadingDetachedComments": [],
       }],
