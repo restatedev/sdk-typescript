@@ -24,12 +24,14 @@ export class GreeterService implements Greeter {
     const ctx = restate.useContext(this);
 
     // state
-    let seen = (await ctx.getState<number>("seen")) || 0;
+    let seen: number = (await ctx.getState<number>("seen")) || 0;
 
-    console.log("The current state is " + seen);
+
+    console.debug("The current state is " + seen);
     seen += 1;
 
-    await ctx.setState("seen", seen);
+    console.debug("Writing new state: " + seen);
+    await ctx.setState<number>("seen", seen);
 
     // rpc
     const client = new GreeterClientImpl(ctx);
@@ -81,24 +83,25 @@ describe("Greeter/MultiWord2", () => {
         [
           startMessage(2),
           inputMessage(GreetRequest.encode(GreetRequest.create({ name: "bob" })).finish()), 
-          getStateMessageCompletion("seen", "5")
+          getStateMessageCompletion("seen", 5)
         ]
     ).then((result) => {
-      expect(result[0].message_type).toStrictEqual(SET_STATE_ENTRY_MESSAGE_TYPE);
-      expect(result[0].message.key.toString()).toStrictEqual("seen"); 
+        expect(result[0].message_type).toStrictEqual(SET_STATE_ENTRY_MESSAGE_TYPE);
+        expect(result[0].message.key.toString()).toStrictEqual("seen"); 
+        expect(JSON.parse(result[0].message.value.toString())).toStrictEqual(6); 
     });
   });
 });
 
-describe("Greeter/MultiWord4", () => {
+describe("Greeter/MultiWord3", () => {
   it("should call multiword, get state, set state and then call", async () => {
     TestDriver.setupAndRun(
       protoMetadata, "Greeter", new GreeterService(), "/dev.restate.Greeter/MultiWord",  
     [
       startMessage(3),
       inputMessage(GreetRequest.encode(GreetRequest.create({ name: "bob" })).finish()), 
-      getStateMessageCompletion("seen", "5"),
-      setStateMessage("seen", "51")
+      getStateMessageCompletion("seen", 5),
+      setStateMessage("seen", 6)
      ]).then((result) => {
       expect(result[0].message_type).toStrictEqual(INVOKE_ENTRY_MESSAGE_TYPE);
       expect(result[0].message.serviceName).toStrictEqual("dev.restate.Greeter");

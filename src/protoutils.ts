@@ -1,3 +1,4 @@
+import { Empty } from "./generated/google/protobuf/empty";
 import { StartMessage, START_MESSAGE_TYPE,
     PollInputStreamEntryMessage, POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
     GetStateEntryMessage, GET_STATE_ENTRY_MESSAGE_TYPE,
@@ -21,12 +22,12 @@ export function inputMessage(value: Uint8Array): any {
     };
 }
 
-export function getStateMessageCompletion(key: string, value: string): any {
+export function getStateMessageCompletion<T>(key: string, value: T): any {
   return {
     message_type: GET_STATE_ENTRY_MESSAGE_TYPE, 
     message: GetStateEntryMessage.create({
       key: Buffer.from(key),
-      value: Buffer.from(value)
+      value: Buffer.from(JSON.stringify(value))
     })
   };
 }
@@ -40,22 +41,32 @@ export function getStateMessage(key: string): any {
   };
 }
 
-export function setStateMessage(key: string, value: string): any {
+export function setStateMessage<T>(key: string, value: T): any {
   return {
     message_type: SET_STATE_ENTRY_MESSAGE_TYPE, 
     message: SetStateEntryMessage.create({
       key: Buffer.from(key),
-      value: Buffer.from(value)
+      value: Buffer.from(JSON.stringify(value))
     })
   };
 }
 
-export function completionMessage(index: number, value: string){
+export function completionMessage(index: number, value: any){
   return {
     message_type: COMPLETION_MESSAGE_TYPE, 
     message: CompletionMessage.create({
       entryIndex: index, 
-      value: Buffer.from(value)
+      value: Buffer.from(JSON.stringify(value))
+    })
+  }
+}
+
+export function emptyCompletionMessage(index: number){
+  return {
+    message_type: COMPLETION_MESSAGE_TYPE, 
+    message: CompletionMessage.create({
+      entryIndex: index, 
+      empty: Empty.create()
     })
   }
 }

@@ -66,7 +66,7 @@ export class DurableExecutionStateMachine<I, O>  implements RestateContext {
   async getState<T>(name: string): Promise<T | null> {
     console.debug("Service called getState: " + name);
 
-    return new Promise((resolve, reject) => {
+    return new Promise<Buffer>((resolve, reject) => {
       this.incrementJournalIndex();
       this.pendingPromises.set(this.currentJournalIndex, resolve);
       
@@ -77,7 +77,8 @@ export class DurableExecutionStateMachine<I, O>  implements RestateContext {
       } else{
         console.debug("In replay mode: GetState message will not be forwarded to the runtime. This will be fulfilled by the next replayed journal entry.")
       }
-    });
+    }).then<T>((result: Buffer) => {return JSON.parse(result.toString()) as T} )
+    .catch<null>(() => {return null});
   }
 
   async setState<T>(name: string, value: T): Promise<void> {
@@ -176,7 +177,6 @@ export class DurableExecutionStateMachine<I, O>  implements RestateContext {
         console.debug("Received completion message: " + JSON.stringify(m));
 
         this.resolvePromise(m.value);
-        
         break;
       }
       case POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE: {
@@ -198,7 +198,13 @@ export class DurableExecutionStateMachine<I, O>  implements RestateContext {
         console.debug("Received completed GetStateEntryMessage from runtime: " + JSON.stringify(m));
 
         if(this.state === ExecutionState.REPLAYING) {
-          this.resolvePromise(m.value);          
+          if(m.value === undefined){
+            console.debug("Empty value");
+            this.resolvePromise(null); 
+          } else {
+            console.log("Resolving state to " + m.value?.toString() + "with type " + typeof m.value)
+            this.resolvePromise(m.value as Buffer);   
+          }
         }
         break;
       }
@@ -266,7 +272,7 @@ export class DurableExecutionStateMachine<I, O>  implements RestateContext {
     }
   }
 
-  resolvePromise(value: any){
+  resolvePromise<T>(value: T){
     const resolveFct = this.pendingPromises.get(this.currentJournalIndex);
     if(!resolveFct){
       throw new Error(`Promise for journal index ${this.currentJournalIndex} not found`);
