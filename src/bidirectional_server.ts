@@ -92,6 +92,8 @@ export class TestConnection implements Connection {
   ) {
     this.result.push({message_type: message_type, message: message});
     console.debug("Adding result to the result array. Message type: " + message_type + ", message: " + JSON.stringify(message));
+
+    this.resolveOnClose(this.result);
   }
 
   onMessage(handler: RestateDuplexStreamEventHandler) {
@@ -99,13 +101,12 @@ export class TestConnection implements Connection {
   }
 
   onClose(handler: () => void) {
+    console.log("calling onClose")
     this.stream.on("close", handler);
   }
 
   end() {
-    console.log("calling end")
     this.stream.end();
-    this.resolveOnClose(this.result);
   }
 
   public async getResult(): Promise<Array<any>> {

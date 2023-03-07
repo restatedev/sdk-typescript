@@ -1,16 +1,9 @@
 import { describe, expect } from "@jest/globals";
 import {
-  Header,
-  START_MESSAGE_TYPE,
-  COMPLETION_MESSAGE_TYPE,
   GET_STATE_ENTRY_MESSAGE_TYPE,
-  POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
-  RestateDuplexStream,
-  OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
   SET_STATE_ENTRY_MESSAGE_TYPE,
   INVOKE_ENTRY_MESSAGE_TYPE
 } from "../src/protocol_stream";
-import { GetStateEntryMessage, OutputStreamEntryMessage, PollInputStreamEntryMessage, SetStateEntryMessage, StartMessage } from "../src/generated/proto/protocol";
 import {
   GreetRequest,
   GreetResponse,
@@ -19,15 +12,8 @@ import {
   protoMetadata,
 } from "../src/generated/proto/example";
 import * as restate from "../src/public_api";
-import { TestConnection } from "../src/bidirectional_server";
-import { ServerHttp2Stream } from "http2";
-import stream from "stream";
-import {PROTOBUF_MESSAGE_BY_TYPE} from "../src/protocol_stream"
-import { DurableExecutionStateMachine  } from "../src/durable_execution";
-import { HostedGrpcServiceMethod } from "../src/core";
-import exp from "constants";
-
-
+import { TestDriver } from "../src/testdriver";
+import { getStateMessage, getStateMessageCompletion, inputMessage, setStateMessage, startMessage } from "../src/protoutils";
 
 export class GreeterService implements Greeter {
   async greet(request: GreetRequest): Promise<GreetResponse> {
@@ -57,134 +43,68 @@ export class GreeterService implements Greeter {
   }
 }
 
+
 describe("Greeter/Greeter", () => {
-    it("should call greet", async () => {
-
-      const http2stream = mockHttp2DuplexStream();
-      const restateStream = RestateDuplexStream.from(http2stream);
-      const connection = new TestConnection(http2stream as ServerHttp2Stream, restateStream)
-      const restateServer: restate.RestateServer = restate.createServer()
-        .bindService({
-            descriptor: protoMetadata,
-            service: "Greeter",
-            instance: new GreeterService(),
-          });
-
-      const desm = new DurableExecutionStateMachine(connection, restateServer.methods["/dev.restate.Greeter/Greet"]);
-
-      const inBytes = GreetRequest.encode(GreetRequest.create({ name: "bob" })).finish();
-
-      desm.onIncomingMessage(START_MESSAGE_TYPE, 
-        StartMessage.create({ invocationId: Buffer.from("abcd"), knownEntries: 1 }));
-
-      desm.onIncomingMessage(POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE, PollInputStreamEntryMessage.create({
-          value: Buffer.from(inBytes)
-        }));
-
-      connection.end();
-
-      
-      const result: Array<any> = await connection.getResult();
-      const response = GreetResponse.decode(result[0].message.value);
-
-      console.log(GreetResponse.decode(result[0].message.value));
-
-      expect(response).toStrictEqual(GreetResponse.create({greeting: "Hello bob"}))
-  
-    });
+  it("should call greet", async () => {
+    TestDriver.setupAndRun(
+      protoMetadata, "Greeter", new GreeterService(), "/dev.restate.Greeter/Greet", 
+      [
+        startMessage(1),
+        inputMessage(GreetRequest.encode(GreetRequest.create({ name: "bob" })).finish())
+      ])
+      .then((result) => {
+        const response = GreetResponse.decode(result[0].message.value);
+        expect(response).toStrictEqual(GreetResponse.create({greeting: "Hello bob"}))
+      });
   });
+});
 
-  describe("Greeter/MultiWord", () => {
-    it("should call multiword and return a GetStateEntryMessage", async () => {
-      const http2stream = mockHttp2DuplexStream();
-      const restateStream = RestateDuplexStream.from(http2stream);
-      const connection = new TestConnection(http2stream as ServerHttp2Stream, restateStream)
-      const restateServer: restate.RestateServer = restate.createServer()
-        .bindService({
-            descriptor: protoMetadata,
-            service: "Greeter",
-            instance: new GreeterService(),
-          });
-
-      const desm = new DurableExecutionStateMachine(connection, restateServer.methods["/dev.restate.Greeter/MultiWord"]);
-
-      const inBytes = GreetRequest.encode(GreetRequest.create({ name: "bob" })).finish();
-
-      desm.onIncomingMessage(START_MESSAGE_TYPE, 
-        StartMessage.create({
-          invocationId: Buffer.from("abcd"),
-          knownEntries: 1,
-        }));
-
-      desm.onIncomingMessage(POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE, PollInputStreamEntryMessage.create({
-          value: Buffer.from(inBytes)
-        }));
-
-      connection.end();
-
-      const result: Array<any> = await connection.getResult();
-
+describe("Greeter/MultiWord", () => {
+  it("should call multiword and return the get state entry message", async () => { 
+    TestDriver.setupAndRun(
+      protoMetadata, "Greeter", new GreeterService(), "/dev.restate.Greeter/MultiWord", 
+      [
+        startMessage(1),
+        inputMessage(GreetRequest.encode(GreetRequest.create({ name: "bob" })).finish())
+      ]
+    ).then((result) => {
       expect(result[0].message_type).toStrictEqual(GET_STATE_ENTRY_MESSAGE_TYPE);
       expect(result[0].message.key.toString()).toStrictEqual("seen");
-
-
     });
   });
+});
 
-  describe("Greeter/MultiWord2", () => {
-    it("should call multiword and have a completed get state message", async () => {
-      const http2stream = mockHttp2DuplexStream();
-      const restateStream = RestateDuplexStream.from(http2stream);
-      const connection = new TestConnection(http2stream as ServerHttp2Stream, restateStream)
-      const restateServer: restate.RestateServer = restate.createServer()
-        .bindService({
-            descriptor: protoMetadata,
-            service: "Greeter",
-            instance: new GreeterService(),
-          });
-
-      const desm = new DurableExecutionStateMachine(connection, restateServer.methods["/dev.restate.Greeter/MultiWord"]);
-
-      const inBytes = GreetRequest.encode(GreetRequest.create({ name: "bob" })).finish();
-
-      desm.onIncomingMessage(START_MESSAGE_TYPE, 
-        StartMessage.create({
-          invocationId: Buffer.from("abcd"),
-          knownEntries: 2,
-        }));
-
-      desm.onIncomingMessage(POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE, PollInputStreamEntryMessage.create({
-          value: Buffer.from(inBytes)
-        }));
-
-      desm.onIncomingMessage(GET_STATE_ENTRY_MESSAGE_TYPE, GetStateEntryMessage.create({
-        key: Buffer.from("seen"),
-        value: Buffer.from("5")
-      }));
-
-      connection.end();
-
-      const result: Array<any> = await connection.getResult();
-
-
+describe("Greeter/MultiWord2", () => {
+  it("should call multiword and have a completed get state message", async () => {
+    TestDriver.setupAndRun(
+      protoMetadata, "Greeter", new GreeterService(), "/dev.restate.Greeter/MultiWord", 
+        [
+          startMessage(2),
+          inputMessage(GreetRequest.encode(GreetRequest.create({ name: "bob" })).finish()), 
+          getStateMessageCompletion("seen", "5")
+        ]
+    ).then((result) => {
       expect(result[0].message_type).toStrictEqual(SET_STATE_ENTRY_MESSAGE_TYPE);
-      expect(result[0].message.key.toString()).toStrictEqual("seen");     
-      // expect(result[0].message.value).c(Buffer.from("51");
-
+      expect(result[0].message.key.toString()).toStrictEqual("seen"); 
     });
   });
+});
+
+describe("Greeter/MultiWord4", () => {
+  it("should call multiword, get state, set state and then call", async () => {
+    TestDriver.setupAndRun(
+      protoMetadata, "Greeter", new GreeterService(), "/dev.restate.Greeter/MultiWord",  
+    [
+      startMessage(3),
+      inputMessage(GreetRequest.encode(GreetRequest.create({ name: "bob" })).finish()), 
+      getStateMessageCompletion("seen", "5"),
+      setStateMessage("seen", "51")
+     ]).then((result) => {
+      expect(result[0].message_type).toStrictEqual(INVOKE_ENTRY_MESSAGE_TYPE);
+      expect(result[0].message.serviceName).toStrictEqual("dev.restate.Greeter");
+      expect(result[0].message.methodName).toStrictEqual("Greet");
+     });
+  });
+});
 
 
-  function mockHttp2DuplexStream() {
-    return new stream.Duplex({
-      write(chunk, _encoding, next) {
-        this.push(chunk);
-        next();
-      },
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      read(_encoding) {
-        // don't care.
-      },
-    });
-  }
-  

@@ -48,7 +48,7 @@ export class DurableExecutionStateMachine<I, O>  implements RestateContext {
 
   private entriesToReplay!: number;
 
-  private currentJournalIndex: number = 0;
+  private currentJournalIndex = 0;
 
   // Promises that need to be resolved. Journal index -> promise
   private pendingPromises: Map<number, (value: any) => void>;
@@ -104,6 +104,7 @@ export class DurableExecutionStateMachine<I, O>  implements RestateContext {
     console.debug(`Service called other service: ${service} / ${method}`);
 
     return new Promise((resolve, reject) => {
+      this.incrementJournalIndex();
       this.pendingPromises.set(this.currentJournalIndex, resolve);
       
       if(this.state === ExecutionState.PROCESSING){
@@ -118,6 +119,7 @@ export class DurableExecutionStateMachine<I, O>  implements RestateContext {
   }
 
 
+  // Called for every incoming message from the runtime.
   onIncomingMessage(
     message_type: bigint,
     message: any,
@@ -172,6 +174,8 @@ export class DurableExecutionStateMachine<I, O>  implements RestateContext {
       case COMPLETION_MESSAGE_TYPE: {
         const m = message as CompletionMessage;
         console.debug("Received completion message: " + JSON.stringify(m));
+
+        this.resolvePromise(m.value);
         
         break;
       }
@@ -194,13 +198,7 @@ export class DurableExecutionStateMachine<I, O>  implements RestateContext {
         console.debug("Received completed GetStateEntryMessage from runtime: " + JSON.stringify(m));
 
         if(this.state === ExecutionState.REPLAYING) {
-          const resolveFct = this.pendingPromises.get(this.currentJournalIndex);
-          if(!resolveFct){
-            throw new Error(`Promise for journal index ${this.currentJournalIndex} not found`);
-          }
-          resolveFct(m.value);
-          this.pendingPromises.delete(this.currentJournalIndex);
-          
+          this.resolvePromise(m.value);          
         }
         break;
       }
@@ -261,11 +259,21 @@ export class DurableExecutionStateMachine<I, O>  implements RestateContext {
   incrementJournalIndex(): void {
     
     this.currentJournalIndex++;
-    console.debug("Incremented journal index. Journal index is now "+ this.currentJournalIndex );
+    console.debug(`Incremented journal index. Journal index is now  ${this.currentJournalIndex} while known_entries is ${this.entriesToReplay}` );
 
     if(this.currentJournalIndex > this.entriesToReplay && this.state == ExecutionState.REPLAYING){
       this.transitionState(ExecutionState.PROCESSING);
     }
+  }
+
+  resolvePromise(value: any){
+    const resolveFct = this.pendingPromises.get(this.currentJournalIndex);
+    if(!resolveFct){
+      throw new Error(`Promise for journal index ${this.currentJournalIndex} not found`);
+    }
+    console.debug("Resolving the promise of journal entry " + this.currentJournalIndex);
+    resolveFct(value);
+    this.pendingPromises.delete(this.currentJournalIndex);
   }
 
   onCallSuccess(result: Uint8Array){

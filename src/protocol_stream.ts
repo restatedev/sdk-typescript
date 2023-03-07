@@ -263,7 +263,6 @@ const WAITING_FOR_HEADER = 0;
 const WAITING_FOR_BODY = 1;
 
 function stream_decoder(): stream.Transform {
-  console.debug("Decoding")
   let buf = Buffer.alloc(0);
   let state = WAITING_FOR_HEADER;
   let header: Header;
