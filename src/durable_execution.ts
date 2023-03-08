@@ -52,6 +52,7 @@ export class DurableExecutionStateMachine<I, O>  implements RestateContext {
   // We need this to match incoming replayed messages with the promises they need to resolve (can be out of sync).  
   private replayIndex = 0; 
 
+  // Current journal index from user code perspective (as opposed to replay perspective)
   private currentJournalIndex = 0;
 
   // This flag is set to true when an inter-service request is done that needs to happen in the background.
@@ -152,7 +153,7 @@ export class DurableExecutionStateMachine<I, O>  implements RestateContext {
     this.inBackgroundFlag = false;
   }
 
-  // Called for every incoming message from the runtime.
+  // Called for every incoming message from the runtime: start messages, input messages and replay messages.
   onIncomingMessage(
     message_type: bigint,
     message: any,
@@ -160,54 +161,14 @@ export class DurableExecutionStateMachine<I, O>  implements RestateContext {
     protocol_version?: number,
     requires_ack_flag?: boolean
   ) {
-    // TODO:
-    // here is the hardest part.
-    //
-    // reminder: to send a message back to restate use: this.connection.send
-    //
-    // here are few examples,
-    // 1. send a state access request use
-    //
-    // this.connection.send(GET_STATE_ENTRY_MESSAGE_TYPE, GetStateEntryMessage.create({
-    //   key: Buffer.from("my-state-key-1"),
-    // }));
-    //
-    //
-    // 2. report a state access
-    //
-    //this.connection.send(SET_STATE_ENTRY_MESSAGE_TYPE, SetStateEntryMessage.create({
-    //  key: Buffer.from("key-1"),
-    //  value: Buffer.from("value-1"),
-    //}));
-    //
-    // 3. to send a custom message (whatever that is) use
-    //
-    // this.connection.send(12345, Buffer.alloc(0));
-    //
-    // 4. to actually invoke the method with an argument.
-    //
-    // const result: Promise<Uint8Array> = this.method.invoke(this.context, argBytes);
-
-
     switch (message_type) {
       case START_MESSAGE_TYPE: {
-        const m = message as StartMessage;
-        console.debug("Received start message: " + JSON.stringify(m));
-
-        this.nbEntriesToReplay = m.knownEntries;
-
-        this.transitionState(ExecutionState.REPLAYING);
-        if (this.nbEntriesToReplay === 0) {
-          console.debug("No entries to replay so switching to PROCESSING state")
-          this.transitionState(ExecutionState.PROCESSING);
-        }
-
+        this.handleStartMessage(message as StartMessage);
         break;
       }
       case COMPLETION_MESSAGE_TYPE: {
         const m = message as CompletionMessage;
         console.debug("Received completion message: " + JSON.stringify(m));
-
         this.resolvePromise(m.entryIndex, m.value);
         break;
       }
@@ -218,49 +179,25 @@ export class DurableExecutionStateMachine<I, O>  implements RestateContext {
         this.method.invoke(this, m.value)
           .then(
               (value) => this.onCallSuccess(value), 
-              // (failure) => this.onCallFailure(failure)
+              (failure) => this.onCallFailure(failure)
             );
         
         break;
       }
       case GET_STATE_ENTRY_MESSAGE_TYPE: {
-        const m = message as GetStateEntryMessage;
-        console.debug("Received completed GetStateEntryMessage from runtime: " + JSON.stringify(m));
-
-        if(this.state === ExecutionState.REPLAYING) {
-          this.replayIndex++
-          if(m.value != undefined){
-            console.debug("Resolving state to " + m.value.toString())
-            this.resolvePromise(this.currentJournalIndex, m.value as Buffer);   
-          } else {
-            console.debug("Empty value");
-            this.resolvePromise(this.currentJournalIndex, null); 
-          }
-        } else { 
-          throw new Error("Illegal state: We received a GetStateEntryMessage from the runtime but we are not in replay mode.")
-        }
+        this.handleGetStateMessage(message as GetStateEntryMessage)
         break;
       }
       case SET_STATE_ENTRY_MESSAGE_TYPE: {
         const m = message as SetStateEntryMessage;
         console.debug("Received SetStateEntryMessage: " + JSON.stringify(m));
-        
-        if(this.state === ExecutionState.REPLAYING){
-          this.replayIndex++
-        } else {
-          throw new Error("Illegal state: We received a SetStateEntryMessage from the runtime but we are not in replay mode.")
-        }
+        this.checkIfInReplay()
         break;
       }
       case CLEAR_STATE_ENTRY_MESSAGE_TYPE: {
         const m = message as ClearStateEntryMessage;
         console.debug("Received ClearStateEntryMessage: " + JSON.stringify(m));
-
-        if(this.state === ExecutionState.REPLAYING){
-          this.replayIndex++
-        } else{
-          throw new Error("Illegal state: We received a ClearStateEntryMessage from the runtime but we are not in replay mode.")
-        }
+        this.checkIfInReplay();
         break;
       }
       case SLEEP_ENTRY_MESSAGE_TYPE: {
@@ -269,32 +206,13 @@ export class DurableExecutionStateMachine<I, O>  implements RestateContext {
         break;
       }
       case INVOKE_ENTRY_MESSAGE_TYPE: {
-        const m = message as InvokeEntryMessage;
-        console.debug("Received InvokeEntryMessage: " + JSON.stringify(m));
-
-        if(this.state === ExecutionState.REPLAYING) {
-          this.replayIndex++
-          if(m.value != undefined){
-            console.debug("Resolving state to " + m.value.toString())
-            this.resolvePromise(this.replayIndex, m.value as Buffer);   
-          } else {
-            console.debug("Empty value");
-            this.resolvePromise(this.replayIndex, null); 
-          }
-        } else { 
-          throw new Error("Illegal state: We received a InvokeEntryMessage from the runtime but we are not in replay mode.")
-        }
+        this.handleInvokeEntryMessage(message as InvokeEntryMessage);
         break;
       }
       case BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE: {
         const m = message as BackgroundInvokeEntryMessage;
         console.debug("Received BackgroundInvokeEntryMessage: " + JSON.stringify(m));
-
-        if(this.state === ExecutionState.REPLAYING){
-          this.replayIndex++
-        } else {
-          throw new Error("Illegal state: We received a ClearStateEntryMessage from the runtime but we are not in replay mode.")
-        }
+        this.checkIfInReplay();
         break;
       }
       case AWAKEABLE_ENTRY_MESSAGE_TYPE: {
@@ -311,6 +229,59 @@ export class DurableExecutionStateMachine<I, O>  implements RestateContext {
         // assume custom message
         break;
       }
+    }
+  }
+
+  handleStartMessage(m: StartMessage): void {
+    console.debug("Received start message: " + JSON.stringify(m));
+
+    this.nbEntriesToReplay = m.knownEntries;
+
+    this.transitionState(ExecutionState.REPLAYING);
+    if (this.nbEntriesToReplay === 0) {
+      console.debug("No entries to replay so switching to PROCESSING state")
+      this.transitionState(ExecutionState.PROCESSING);
+    }
+  }
+
+  handleGetStateMessage(m: GetStateEntryMessage): void {
+    console.debug("Received completed GetStateEntryMessage from runtime: " + JSON.stringify(m));
+    if(this.state === ExecutionState.REPLAYING) {
+      this.replayIndex++
+      if(m.value != undefined){
+        console.debug("Resolving state to " + m.value.toString())
+        this.resolvePromise(this.currentJournalIndex, m.value as Buffer);   
+      } else {
+        console.debug("Empty value");
+        this.resolvePromise(this.currentJournalIndex, null); 
+      }
+    } else { 
+      throw new Error("Illegal state: We received a GetStateEntryMessage from the runtime but we are not in replay mode.")
+    }
+  }
+
+  handleInvokeEntryMessage(m: InvokeEntryMessage){
+    console.debug("Received InvokeEntryMessage: " + JSON.stringify(m));
+
+    if(this.state === ExecutionState.REPLAYING) {
+      this.replayIndex++
+      if(m.value != undefined){
+        console.debug("Resolving state to " + m.value.toString())
+        this.resolvePromise(this.replayIndex, m.value as Buffer);   
+      } else {
+        console.debug("Empty value");
+        this.resolvePromise(this.replayIndex, null); 
+      }
+    } else { 
+      throw new Error("Illegal state: We received a InvokeEntryMessage from the runtime but we are not in replay mode.")
+    }
+  }
+
+  checkIfInReplay(){
+    if(this.state === ExecutionState.REPLAYING){
+      this.replayIndex++
+    } else {
+      throw new Error("Illegal state: We received a replay message from the runtime but we are not in replay mode.")
     }
   }
 
