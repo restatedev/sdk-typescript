@@ -11,6 +11,7 @@ import { TestDriver } from "../src/testdriver";
 import { inputMessage, 
   startMessage, 
   invokeMessage,
+  invokeMessageCompletion,
   completionMessage, 
   outputMessage,
   setStateMessage,
@@ -83,8 +84,8 @@ describe("ReverseAwaitOrder: A1 and A2 completed later", () => {
       [
         startMessage(1),
         inputMessage(GreetRequest.encode(GreetRequest.create({ name: "Till" })).finish()),
-        completionMessage(1, GreetRequest.encode(GreetRequest.create({ name: "FRANCESCO" })).finish()),
-        completionMessage(2, GreetRequest.encode(GreetRequest.create({ name: "TILL" })).finish()),
+        completionMessage(1, GreetResponse.encode(GreetResponse.create({ greeting: "FRANCESCO" })).finish()),
+        completionMessage(2, GreetResponse.encode(GreetResponse.create({ greeting: "TILL" })).finish()),
       ])
     .then((result) => {
       expect(result).toStrictEqual([
@@ -104,8 +105,8 @@ describe("ReverseAwaitOrder: A2 and A1 completed later", () => {
       [
         startMessage(1),
         inputMessage(GreetRequest.encode(GreetRequest.create({ name: "Till" })).finish()),
-        completionMessage(2, GreetRequest.encode(GreetRequest.create({ name: "TILL" })).finish()),
-        completionMessage(1, GreetRequest.encode(GreetRequest.create({ name: "FRANCESCO" })).finish()),
+        completionMessage(2, GreetResponse.encode(GreetResponse.create({ greeting: "TILL" })).finish()),
+        completionMessage(1, GreetResponse.encode(GreetResponse.create({ greeting: "FRANCESCO" })).finish()),
       ])
     .then((result) => {
       expect(result).toStrictEqual([
@@ -125,7 +126,7 @@ describe("ReverseAwaitOrder: Only A2 completed", () => {
       [
         startMessage(1),
         inputMessage(GreetRequest.encode(GreetRequest.create({ name: "Till" })).finish()),
-        completionMessage(2, GreetRequest.encode(GreetRequest.create({ name: "TILL" })).finish())
+        completionMessage(2, GreetResponse.encode(GreetResponse.create({ greeting: "TILL" })).finish())
       ])
     .then((result) => {
       expect(result).toStrictEqual([
@@ -144,13 +145,36 @@ describe("ReverseAwaitOrder: Only A1 completed", () => {
       [
         startMessage(1),
         inputMessage(GreetRequest.encode(GreetRequest.create({ name: "Till" })).finish()),
-        completionMessage(2, GreetRequest.encode(GreetRequest.create({ name: "FRANCESCO" })).finish())
+        completionMessage(2, GreetResponse.encode(GreetResponse.create({ greeting: "FRANCESCO" })).finish())
       ])
     .then((result) => {
       expect(result).toStrictEqual([
         invokeMessage("dev.restate.Greeter", "Greet", GreetRequest.encode(GreetRequest.create({ name: "Francesco" })).finish()),
         invokeMessage("dev.restate.Greeter", "Greet", GreetRequest.encode(GreetRequest.create({ name: "Till" })).finish())
       ])
+    });
+  });
+});
+
+describe("ReverseAwaitOrder: replay invoke messages", () => {
+  it("should call greet", async () => {
+    TestDriver.setupAndRun(
+      protoMetadata, "Greeter", new ReverseAwaitOrder(), "/dev.restate.Greeter/Greet", 
+      [
+        startMessage(4),
+        inputMessage(GreetRequest.encode(GreetRequest.create({ name: "Till" })).finish()),
+        invokeMessageCompletion("dev.restate.Greeter", "Greet", GreetRequest.encode(GreetRequest.create({ name: "Francesco" })).finish(),
+          GreetResponse.encode(GreetResponse.create({ greeting: "Francesco" })).finish()),
+        invokeMessageCompletion("dev.restate.Greeter", "Greet", GreetRequest.encode(GreetRequest.create({ name: "Till" })).finish(),
+          GreetResponse.encode(GreetResponse.create({ greeting: "Till" })).finish()),
+        setStateMessage("A2", "TILL")
+      ])
+    .then((result) => {
+      console.debug(result)
+      // expect(result).toStrictEqual([
+      //   invokeMessage("dev.restate.Greeter", "Greet", GreetRequest.encode(GreetRequest.create({ name: "Francesco" })).finish()),
+      //   invokeMessage("dev.restate.Greeter", "Greet", GreetRequest.encode(GreetRequest.create({ name: "Till" })).finish())
+      // ])
     });
   });
 });

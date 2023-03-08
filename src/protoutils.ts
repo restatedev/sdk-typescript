@@ -91,6 +91,18 @@ export function invokeMessage(serviceName: string, methodName: string, parameter
   }
 }
 
+export function invokeMessageCompletion(serviceName: string, methodName: string, parameter: any, value: any){
+  return {
+    message_type: INVOKE_ENTRY_MESSAGE_TYPE, 
+    message: InvokeEntryMessage.create({
+      serviceName: serviceName, 
+      methodName: methodName,
+      parameter: Buffer.from(parameter),
+      value: Buffer.from(value)
+    })
+  }
+}
+
 export function backgroundInvokeMessage(serviceName: string, methodName: string, parameter: any){
   return {
     message_type: BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE, 
