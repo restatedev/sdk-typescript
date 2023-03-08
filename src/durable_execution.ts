@@ -50,6 +50,12 @@ export class DurableExecutionStateMachine<I, O>  implements RestateContext {
 
   private currentJournalIndex = 0;
 
+  // This flag is set to true when an inter-service request is done that needs to happen in the background.
+  // Both types of requests (background or sync) call the same request() method. 
+  // So to be able to know if a request is a background request or not, the user first sets this flag:
+  // e.g.: ctx.inBackground(() => client.greet(request))
+  private inBackgroundFlag = false;
+
   // Promises that need to be resolved. Journal index -> promise
   private pendingPromises: Map<number, (value: any) => void>;
 
@@ -121,16 +127,27 @@ export class DurableExecutionStateMachine<I, O>  implements RestateContext {
       this.pendingPromises.set(this.currentJournalIndex, resolve);
       
       if(this.state === ExecutionState.PROCESSING){
-        console.debug("Forward the InvokeEntryMessage to the runtime")
         // Forward to runtime
-        this.connection.send(INVOKE_ENTRY_MESSAGE_TYPE, InvokeEntryMessage.create(
-          {serviceName: service, methodName: method, parameter: Buffer.from(data)}));
+        if(this.inBackgroundFlag){
+          console.debug("Forward the BackgroundInvokeEntryMessage to the runtime")
+          this.connection.send(BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE, BackgroundInvokeEntryMessage.create(
+            {serviceName: service, methodName: method, parameter: Buffer.from(data)}));
+        } else {
+          console.debug("Forward the InvokeEntryMessage to the runtime")
+          this.connection.send(INVOKE_ENTRY_MESSAGE_TYPE, InvokeEntryMessage.create(
+            {serviceName: service, methodName: method, parameter: Buffer.from(data)}));
+        }
       } else{
         console.debug("Ignoring call request from user. We are in replay mode. This will be fulfilled by the next journal entry.")
       }
     });
   }
 
+  async inBackground<T>(call: () => Promise<T>): Promise<void>  {
+    this.inBackgroundFlag = true;
+    call();
+    this.inBackgroundFlag = false;
+  }
 
   // Called for every incoming message from the runtime.
   onIncomingMessage(

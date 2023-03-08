@@ -10,6 +10,8 @@ export interface RestateContext {
   getState<T>(name: string): Promise<T | null>;
 
   setState<T>(name: string, value: T): Promise<void>;
+
+  inBackground<T>(call: () => Promise<T>): Promise<void>;
 }
 
 export function useContext<T>(instance: T): RestateContext {

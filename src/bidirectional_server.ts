@@ -106,10 +106,6 @@ export class TestConnection implements Connection {
     this.result.push({message_type: message_type, message: message});
     console.debug("Adding result to the result array. Message type: " +  message_type + ", message: " + JSON.stringify(message));
 
-    if(message_type === INVOKE_ENTRY_MESSAGE_TYPE){
-      console.debug("Parameter: " + message.parameter.toString())
-    }
-
     // TODO some are missing here
     const requiresFlush = [OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, INVOKE_ENTRY_MESSAGE_TYPE, GET_STATE_ENTRY_MESSAGE_TYPE]
     if(this.inputFinished && requiresFlush.includes(message_type)){

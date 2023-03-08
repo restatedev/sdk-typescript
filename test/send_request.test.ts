@@ -1,8 +1,5 @@
 import { describe, expect } from "@jest/globals";
 import {
-  GET_STATE_ENTRY_MESSAGE_TYPE, InvokeEntryMessage,
-} from "../src/protocol_stream";
-import {
   GreetRequest,
   GreetResponse,
   Greeter,
@@ -11,15 +8,13 @@ import {
 } from "../src/generated/proto/example";
 import * as restate from "../src/public_api";
 import { TestDriver } from "../src/testdriver";
-import { getStateMessage, 
-  getStateMessageCompletion, 
-  inputMessage, 
+import { inputMessage, 
   startMessage, 
-  invokeEntryMessage,
+  invokeMessage,
   completionMessage, 
-  emptyCompletionMessage, 
   outputMessage,
-  setStateMessage} from "../src/protoutils";
+  setStateMessage,
+  backgroundInvokeMessage} from "../src/protoutils";
 
 export class ReverseAwaitOrder implements Greeter {
   async greet(request: GreetRequest): Promise<GreetResponse> {
@@ -44,6 +39,23 @@ export class ReverseAwaitOrder implements Greeter {
   }
 }
 
+export class BackgroundInvokeGreeter implements Greeter {
+  async greet(request: GreetRequest): Promise<GreetResponse> {
+    const ctx = restate.useContext(this);
+
+    const client = new GreeterClientImpl(ctx);
+    await ctx.inBackground( () => client.greet(GreetRequest.create({name: "Francesco"})));
+
+    return GreetResponse.create({ greeting: `Hello` })
+  }
+
+  async multiWord(request: GreetRequest): Promise<GreetResponse> {
+    return GreetResponse.create({
+      greeting: `YAGM (yet another greeting method) ${request.name}!`,
+    });
+  }
+}
+
 describe("ReverseAwaitOrder: None completed", () => {
   it("should call greet", async () => {
     TestDriver.setupAndRun(
@@ -55,9 +67,9 @@ describe("ReverseAwaitOrder: None completed", () => {
     .then((result) => {
         expect(result).toStrictEqual(
           [
-            invokeEntryMessage("dev.restate.Greeter", "Greet", 
+            invokeMessage("dev.restate.Greeter", "Greet", 
               GreetRequest.encode(GreetRequest.create({ name: "Francesco" })).finish()),
-            invokeEntryMessage("dev.restate.Greeter", "Greet", 
+            invokeMessage("dev.restate.Greeter", "Greet", 
               GreetRequest.encode(GreetRequest.create({ name: "Till" })).finish())
           ]);
     });
@@ -76,8 +88,8 @@ describe("ReverseAwaitOrder: A1 and A2 completed later", () => {
       ])
     .then((result) => {
       expect(result).toStrictEqual([
-        invokeEntryMessage("dev.restate.Greeter", "Greet", GreetRequest.encode(GreetRequest.create({ name: "Francesco" })).finish()),
-        invokeEntryMessage("dev.restate.Greeter", "Greet", GreetRequest.encode(GreetRequest.create({ name: "Till" })).finish()),
+        invokeMessage("dev.restate.Greeter", "Greet", GreetRequest.encode(GreetRequest.create({ name: "Francesco" })).finish()),
+        invokeMessage("dev.restate.Greeter", "Greet", GreetRequest.encode(GreetRequest.create({ name: "Till" })).finish()),
         setStateMessage("A2", "TILL"),
         outputMessage(GreetResponse.encode(GreetResponse.create({greeting: "Hello FRANCESCO-TILL"})).finish())
       ])
@@ -97,8 +109,8 @@ describe("ReverseAwaitOrder: A2 and A1 completed later", () => {
       ])
     .then((result) => {
       expect(result).toStrictEqual([
-        invokeEntryMessage("dev.restate.Greeter", "Greet", GreetRequest.encode(GreetRequest.create({ name: "Francesco" })).finish()),
-        invokeEntryMessage("dev.restate.Greeter", "Greet", GreetRequest.encode(GreetRequest.create({ name: "Till" })).finish()),
+        invokeMessage("dev.restate.Greeter", "Greet", GreetRequest.encode(GreetRequest.create({ name: "Francesco" })).finish()),
+        invokeMessage("dev.restate.Greeter", "Greet", GreetRequest.encode(GreetRequest.create({ name: "Till" })).finish()),
         setStateMessage("A2", "TILL"),
         outputMessage(GreetResponse.encode(GreetResponse.create({greeting: "Hello FRANCESCO-TILL"})).finish())
       ])
@@ -117,8 +129,8 @@ describe("ReverseAwaitOrder: Only A2 completed", () => {
       ])
     .then((result) => {
       expect(result).toStrictEqual([
-        invokeEntryMessage("dev.restate.Greeter", "Greet", GreetRequest.encode(GreetRequest.create({ name: "Francesco" })).finish()),
-        invokeEntryMessage("dev.restate.Greeter", "Greet", GreetRequest.encode(GreetRequest.create({ name: "Till" })).finish()),
+        invokeMessage("dev.restate.Greeter", "Greet", GreetRequest.encode(GreetRequest.create({ name: "Francesco" })).finish()),
+        invokeMessage("dev.restate.Greeter", "Greet", GreetRequest.encode(GreetRequest.create({ name: "Till" })).finish()),
         setStateMessage("A2", "TILL")
       ])
     });
@@ -136,9 +148,30 @@ describe("ReverseAwaitOrder: Only A1 completed", () => {
       ])
     .then((result) => {
       expect(result).toStrictEqual([
-        invokeEntryMessage("dev.restate.Greeter", "Greet", GreetRequest.encode(GreetRequest.create({ name: "Francesco" })).finish()),
-        invokeEntryMessage("dev.restate.Greeter", "Greet", GreetRequest.encode(GreetRequest.create({ name: "Till" })).finish())
+        invokeMessage("dev.restate.Greeter", "Greet", GreetRequest.encode(GreetRequest.create({ name: "Francesco" })).finish()),
+        invokeMessage("dev.restate.Greeter", "Greet", GreetRequest.encode(GreetRequest.create({ name: "Till" })).finish())
       ])
     });
   });
 });
+
+
+// async calls
+describe("BackgroundInvokeGreeter: background call ", () => {
+  it("should call greet", async () => {
+    TestDriver.setupAndRun(
+      protoMetadata, "Greeter", new BackgroundInvokeGreeter(), "/dev.restate.Greeter/Greet", 
+      [
+        startMessage(1),
+        inputMessage(GreetRequest.encode(GreetRequest.create({ name: "Till" })).finish())
+      ])
+    .then((result) => {
+      expect(result).toStrictEqual([
+        backgroundInvokeMessage("dev.restate.Greeter", "Greet", GreetRequest.encode(GreetRequest.create({ name: "Francesco" })).finish()),
+        outputMessage(GreetResponse.encode(GreetResponse.create({greeting: "Hello"})).finish())
+      ])
+    });
+  });
+});
+
+// TODO also implement the other tests of the Java SDK.

@@ -26,6 +26,9 @@ export class GreeterService implements Greeter {
     const client = new GreeterClientImpl(ctx);
     const greeting = await client.greet(request);
 
+    // background call 
+    await ctx.inBackground(() => client.greet(request))
+
     // return the final response
 
     return GreetResponse.create({
