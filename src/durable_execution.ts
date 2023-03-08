@@ -32,8 +32,10 @@ import {
   StartMessage,
 } from "./protocol_stream";
 import { RestateContext } from "./context";
+import { SIDE_EFFECT_ENTRY_MESSAGE_TYPE } from "./types"
 import { stat } from "fs";
 import { resolve } from "path";
+import { check } from "prettier";
 
 enum ExecutionState {
   WAITING_FOR_START = "WAITING_FOR_START",
@@ -59,7 +61,7 @@ export class DurableExecutionStateMachine<I, O>  implements RestateContext {
   // Both types of requests (background or sync) call the same request() method. 
   // So to be able to know if a request is a background request or not, the user first sets this flag:
   // e.g.: ctx.inBackground(() => client.greet(request))
-  private inBackgroundFlag = false;
+  private inBackgroundCallFlag = false;
 
   // Promises that need to be resolved. Journal index -> promise
   private pendingPromises: Map<number, (value: any) => void>;
@@ -125,19 +127,19 @@ export class DurableExecutionStateMachine<I, O>  implements RestateContext {
     data: Uint8Array
   ): Promise<Uint8Array> {
     console.debug(`Service called other service: ${service} / ${method}`);
-    this.incrementJournalIndex();
 
     return new Promise((resolve, reject) => {
+      this.incrementJournalIndex();
       this.pendingPromises.set(this.currentJournalIndex, resolve);
       
       if(this.state === ExecutionState.PROCESSING){
         // Forward to runtime
-        if(this.inBackgroundFlag){
-          console.debug("Forward the BackgroundInvokeEntryMessage to the runtime")
+        if(this.inBackgroundCallFlag){
+          console.debug("Forward the BackgroundInvokeEntryMessage to the runtime");
           this.connection.send(BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE, BackgroundInvokeEntryMessage.create(
             {serviceName: service, methodName: method, parameter: Buffer.from(data)}));
         } else {
-          console.debug("Forward the InvokeEntryMessage to the runtime")
+          console.debug("Forward the InvokeEntryMessage to the runtime");
           this.connection.send(INVOKE_ENTRY_MESSAGE_TYPE, InvokeEntryMessage.create(
             {serviceName: service, methodName: method, parameter: Buffer.from(data)}));
         }
@@ -148,9 +150,29 @@ export class DurableExecutionStateMachine<I, O>  implements RestateContext {
   }
 
   async inBackground<T>(call: () => Promise<T>): Promise<void>  {
-    this.inBackgroundFlag = true;
+    this.inBackgroundCallFlag = true;
     call();
-    this.inBackgroundFlag = false;
+    this.inBackgroundCallFlag = false;
+  }
+
+  async withSideEffect<T>(fn: () => Promise<T>): Promise<T> {
+    console.debug("Service used side effect");
+    this.incrementJournalIndex();
+
+    return new Promise((resolve, reject) => {
+      this.pendingPromises.set(this.currentJournalIndex, resolve);
+
+      const sideEffectOutput = fn().then((result) => {
+        if(this.state === ExecutionState.PROCESSING){
+          const bytes = Buffer.from(JSON.stringify(result));
+          this.connection.send(SIDE_EFFECT_ENTRY_MESSAGE_TYPE, bytes);
+        } else {
+          console.debug("Ignoring side effect call from user. We are in replay mode. This will be fulfilled by the next journal entry.")
+        }
+        return result;
+      })
+      return sideEffectOutput;
+    })
   }
 
   // Called for every incoming message from the runtime: start messages, input messages and replay messages.
@@ -225,6 +247,10 @@ export class DurableExecutionStateMachine<I, O>  implements RestateContext {
         console.debug("Received CompleteAwakeableEntryMessage: " + JSON.stringify(m));
         break;
       }
+      case SIDE_EFFECT_ENTRY_MESSAGE_TYPE: {
+        this.handleSideEffectMessage(message);
+        break;
+      }
       default: {
         // assume custom message
         break;
@@ -246,40 +272,43 @@ export class DurableExecutionStateMachine<I, O>  implements RestateContext {
 
   handleGetStateMessage(m: GetStateEntryMessage): void {
     console.debug("Received completed GetStateEntryMessage from runtime: " + JSON.stringify(m));
-    if(this.state === ExecutionState.REPLAYING) {
-      this.replayIndex++
-      if(m.value != undefined){
-        console.debug("Resolving state to " + m.value.toString())
-        this.resolvePromise(this.currentJournalIndex, m.value as Buffer);   
-      } else {
-        console.debug("Empty value");
-        this.resolvePromise(this.currentJournalIndex, null); 
-      }
-    } else { 
-      throw new Error("Illegal state: We received a GetStateEntryMessage from the runtime but we are not in replay mode.")
+
+    this.checkIfInReplay();
+
+    if(m.value != undefined){
+      console.debug("Resolving state to " + m.value.toString());
+      this.resolvePromise(this.currentJournalIndex, m.value as Buffer);   
+    } else {
+      console.debug("Empty value");
+      this.resolvePromise(this.currentJournalIndex, null); 
     }
   }
 
   handleInvokeEntryMessage(m: InvokeEntryMessage){
     console.debug("Received InvokeEntryMessage: " + JSON.stringify(m));
 
-    if(this.state === ExecutionState.REPLAYING) {
-      this.replayIndex++
-      if(m.value != undefined){
-        console.debug("Resolving state to " + m.value.toString())
-        this.resolvePromise(this.replayIndex, m.value as Buffer);   
-      } else {
-        console.debug("Empty value");
-        this.resolvePromise(this.replayIndex, null); 
-      }
-    } else { 
-      throw new Error("Illegal state: We received a InvokeEntryMessage from the runtime but we are not in replay mode.")
+    this.checkIfInReplay();
+
+    if(m.value != undefined){
+      console.debug("Resolving state to " + m.value.toString());
+      this.resolvePromise(this.replayIndex, m.value as Buffer);   
+    } else {
+      console.debug("Empty value");
+      this.resolvePromise(this.replayIndex, null); 
     }
+  }
+
+  handleSideEffectMessage(m: Buffer){
+    console.debug("Received SideEffectMessage: " + JSON.parse(m.toString()));
+
+    this.checkIfInReplay();
+    this.resolvePromise(this.replayIndex, JSON.parse(m.toString())); 
   }
 
   checkIfInReplay(){
     if(this.state === ExecutionState.REPLAYING){
       this.replayIndex++
+      console.debug(`Incremented replay index to ${this.replayIndex}. The user code journal index is at ${this.currentJournalIndex}`)
     } else {
       throw new Error("Illegal state: We received a replay message from the runtime but we are not in replay mode.")
     }
@@ -296,7 +325,6 @@ export class DurableExecutionStateMachine<I, O>  implements RestateContext {
   }
 
   incrementJournalIndex(): void {
-    
     this.currentJournalIndex++;
     console.debug(`Incremented journal index. Journal index is now  ${this.currentJournalIndex} while known_entries is ${this.nbEntriesToReplay}` );
 

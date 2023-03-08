@@ -4,6 +4,7 @@ import { StartMessage, START_MESSAGE_TYPE,
     GetStateEntryMessage, GET_STATE_ENTRY_MESSAGE_TYPE,
     SetStateEntryMessage, SET_STATE_ENTRY_MESSAGE_TYPE, CompletionMessage, COMPLETION_MESSAGE_TYPE, INVOKE_ENTRY_MESSAGE_TYPE, InvokeEntryMessage, OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, OutputStreamEntryMessage, BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE, BackgroundInvokeEntryMessage
   } from "./protocol_stream";
+import { SIDE_EFFECT_ENTRY_MESSAGE_TYPE } from "./types";
 
 
 export function startMessage(knownEntries: number): any {
@@ -111,5 +112,12 @@ export function backgroundInvokeMessage(serviceName: string, methodName: string,
       methodName: methodName,
       parameter: Buffer.from(parameter)
     })
+  }
+}
+
+export function sideEffectMessage(value: any){
+  return {
+    message_type: SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+    message: Buffer.from(JSON.stringify(value))
   }
 }

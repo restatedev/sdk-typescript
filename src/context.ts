@@ -12,6 +12,8 @@ export interface RestateContext {
   setState<T>(name: string, value: T): Promise<void>;
 
   inBackground<T>(call: () => Promise<T>): Promise<void>;
+  
+  withSideEffect<T>(fn: () => Promise<T>): Promise<T>;
 }
 
 export function useContext<T>(instance: T): RestateContext {
