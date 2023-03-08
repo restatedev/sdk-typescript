@@ -85,7 +85,6 @@ export class DurableExecutionStateMachine<I, O>  implements RestateContext {
     console.debug("Service called setState: " + name);
     const str = JSON.stringify(value);
     const bytes = Buffer.from(str);
-
     this.incrementJournalIndex();
 
     if(this.state === ExecutionState.PROCESSING){
@@ -97,15 +96,28 @@ export class DurableExecutionStateMachine<I, O>  implements RestateContext {
     }
   }
 
+  async clearState<T>(name: string): Promise<void> {
+    console.debug("Service called clearState: " + name);
+    this.incrementJournalIndex();
+
+    if(this.state === ExecutionState.PROCESSING){
+      console.debug("Forward the ClearStateEntryMessage to the runtime")
+      // Forward to runtime
+      this.connection.send(CLEAR_STATE_ENTRY_MESSAGE_TYPE, ClearStateEntryMessage.create({key: Buffer.from(name, 'utf8')}));
+    } else{
+      console.debug("In replay mode: ClearState message will not be forwarded to the runtime. This will be fulfilled by the next replayed journal entry.")
+    }
+  }
+
   request(
     service: string,
     method: string,
     data: Uint8Array
   ): Promise<Uint8Array> {
     console.debug(`Service called other service: ${service} / ${method}`);
+    this.incrementJournalIndex();
 
     return new Promise((resolve, reject) => {
-      this.incrementJournalIndex();
       this.pendingPromises.set(this.currentJournalIndex, resolve);
       
       if(this.state === ExecutionState.PROCESSING){
@@ -176,19 +188,19 @@ export class DurableExecutionStateMachine<I, O>  implements RestateContext {
         const m = message as CompletionMessage;
         console.debug("Received completion message: " + JSON.stringify(m));
 
-        this.resolvePromise(m.value);
+        this.resolvePromise(m.entryIndex, m.value);
         break;
       }
       case POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE: {
         const m = message as PollInputStreamEntryMessage;
         console.debug("Received input message: " + JSON.stringify(m));
 
-        this.incrementJournalIndex();
+        // this.incrementJournalIndex();
       
         this.method.invoke(this, m.value)
           .then(
               (value) => this.onCallSuccess(value), 
-              (failure) => this.onCallFailure(failure)
+              // (failure) => this.onCallFailure(failure)
             );
         
         break;
@@ -198,12 +210,12 @@ export class DurableExecutionStateMachine<I, O>  implements RestateContext {
         console.debug("Received completed GetStateEntryMessage from runtime: " + JSON.stringify(m));
 
         if(this.state === ExecutionState.REPLAYING) {
-          if(m.value === undefined){
-            console.debug("Empty value");
-            this.resolvePromise(null); 
+          if(m.value != undefined){
+            console.debug("Resolving state to " + m.value.toString())
+            this.resolvePromise(this.currentJournalIndex, m.value as Buffer);   
           } else {
-            console.log("Resolving state to " + m.value?.toString() + "with type " + typeof m.value)
-            this.resolvePromise(m.value as Buffer);   
+            console.debug("Empty value");
+            this.resolvePromise(this.currentJournalIndex, null); 
           }
         }
         break;
@@ -267,31 +279,31 @@ export class DurableExecutionStateMachine<I, O>  implements RestateContext {
     this.currentJournalIndex++;
     console.debug(`Incremented journal index. Journal index is now  ${this.currentJournalIndex} while known_entries is ${this.entriesToReplay}` );
 
-    if(this.currentJournalIndex > this.entriesToReplay && this.state == ExecutionState.REPLAYING){
+    if(this.currentJournalIndex === this.entriesToReplay && this.state === ExecutionState.REPLAYING){
       this.transitionState(ExecutionState.PROCESSING);
     }
   }
 
-  resolvePromise<T>(value: T){
-    const resolveFct = this.pendingPromises.get(this.currentJournalIndex);
+  resolvePromise<T>(journalIndex: number, value: T){
+    const resolveFct = this.pendingPromises.get(journalIndex);
     if(!resolveFct){
-      throw new Error(`Promise for journal index ${this.currentJournalIndex} not found`);
+      throw new Error(`Promise for journal index ${journalIndex} not found`);
     }
-    console.debug("Resolving the promise of journal entry " + this.currentJournalIndex);
+    console.debug("Resolving the promise of journal entry " + journalIndex);
     resolveFct(value);
-    this.pendingPromises.delete(this.currentJournalIndex);
+    this.pendingPromises.delete(journalIndex);
   }
 
   onCallSuccess(result: Uint8Array){
     console.debug("Call successfully completed")
-    this.connection.send(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, OutputStreamEntryMessage.create({value: Buffer.from(result)}), true);
+    this.connection.send(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, OutputStreamEntryMessage.create({value: Buffer.from(result)}));
     this.connection.end();
   }
 
   onCallFailure(failure: any){
-    console.debug("Call failed")
+    console.debug("Call failed: " + failure)
     // TODO parse error codes and messages
-    this.connection.send(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, OutputStreamEntryMessage.create({failure: {code: 1, message: "Call failed"}}), true);
+    this.connection.send(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, OutputStreamEntryMessage.create({failure: {code: 1, message: "Call failed"}}));
     this.connection.end();
   }
 

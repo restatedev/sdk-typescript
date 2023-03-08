@@ -2,7 +2,7 @@ import { Empty } from "./generated/google/protobuf/empty";
 import { StartMessage, START_MESSAGE_TYPE,
     PollInputStreamEntryMessage, POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
     GetStateEntryMessage, GET_STATE_ENTRY_MESSAGE_TYPE,
-    SetStateEntryMessage, SET_STATE_ENTRY_MESSAGE_TYPE, CompletionMessage, COMPLETION_MESSAGE_TYPE
+    SetStateEntryMessage, SET_STATE_ENTRY_MESSAGE_TYPE, CompletionMessage, COMPLETION_MESSAGE_TYPE, INVOKE_ENTRY_MESSAGE_TYPE, InvokeEntryMessage, OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, OutputStreamEntryMessage
   } from "./protocol_stream";
 
 
@@ -17,6 +17,15 @@ export function inputMessage(value: Uint8Array): any {
   return {
       message_type: POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE, 
       message: PollInputStreamEntryMessage.create({
+        value: Buffer.from(value)
+      })
+    };
+}
+
+export function outputMessage(value: Uint8Array): any {
+  return {
+      message_type: OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, 
+      message: OutputStreamEntryMessage.create({
         value: Buffer.from(value)
       })
     };
@@ -56,7 +65,7 @@ export function completionMessage(index: number, value: any){
     message_type: COMPLETION_MESSAGE_TYPE, 
     message: CompletionMessage.create({
       entryIndex: index, 
-      value: Buffer.from(JSON.stringify(value))
+      value: Buffer.from(value)
     })
   }
 }
@@ -67,6 +76,17 @@ export function emptyCompletionMessage(index: number){
     message: CompletionMessage.create({
       entryIndex: index, 
       empty: Empty.create()
+    })
+  }
+}
+
+export function invokeEntryMessage(serviceName: string, methodName: string, parameter: any){
+  return {
+    message_type: INVOKE_ENTRY_MESSAGE_TYPE, 
+    message: InvokeEntryMessage.create({
+      serviceName: serviceName, 
+      methodName: methodName,
+      parameter: Buffer.from(parameter)
     })
   }
 }

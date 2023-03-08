@@ -14,7 +14,7 @@ export class TestDriver {
         service: string, 
         instance: object,
         methodName: string,
-        journal: Array<any>
+        entries: Array<any>
     ): Promise<Array<any>> {
         const http2stream = this.mockHttp2DuplexStream();
         const restateStream = RestateDuplexStream.from(http2stream);
@@ -29,7 +29,11 @@ export class TestDriver {
 
         const desm = new DurableExecutionStateMachine(connection, restateServer.methods[methodName]);
     
-        journal.forEach(el => desm.onIncomingMessage(el.message_type, el.message));
+        // Pipe messages through the state machine
+        entries.forEach(el => desm.onIncomingMessage(el.message_type, el.message));
+
+        // Tell the connection that all messages have finished
+        connection.setAsFinished();
     
         return await connection.getResult();
     }

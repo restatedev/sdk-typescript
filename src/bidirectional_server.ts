@@ -2,6 +2,10 @@
 
 import http2 from "http2";
 import {
+  GET_STATE_ENTRY_MESSAGE_TYPE,
+  INVOKE_ENTRY_MESSAGE_TYPE,
+  OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
+  PROTOBUF_MESSAGE_BY_TYPE,
   RestateDuplexStream,
   RestateDuplexStreamEventHandler,
 } from "./protocol_stream";
@@ -67,9 +71,18 @@ export class HttpConnection implements Connection {
   }
 }
 
+// export class OutputMessage {
+//   constructor(
+//     readonly message_type: bigint,
+//     readonly message: any
+//   ){}
+// }
+
 export class TestConnection implements Connection {
 
-  result: Array<any> = [];
+  private result: Array<any> = [];
+
+  private inputFinished = false;
 
   private onClosePromise: Promise<Array<any>>;
   private resolveOnClose!: (value: Array<any>) => void;
@@ -91,9 +104,18 @@ export class TestConnection implements Connection {
     requires_ack?: boolean
   ) {
     this.result.push({message_type: message_type, message: message});
-    console.debug("Adding result to the result array. Message type: " + message_type + ", message: " + JSON.stringify(message));
+    console.debug("Adding result to the result array. Message type: " +  message_type + ", message: " + JSON.stringify(message));
 
-    this.resolveOnClose(this.result);
+    if(message_type === INVOKE_ENTRY_MESSAGE_TYPE){
+      console.debug("Parameter: " + message.parameter.toString())
+    }
+
+    // TODO some are missing here
+    const requiresFlush = [OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, INVOKE_ENTRY_MESSAGE_TYPE, GET_STATE_ENTRY_MESSAGE_TYPE]
+    if(this.inputFinished && requiresFlush.includes(message_type)){
+      console.debug(`Flushing messages`)
+      this.resolveOnClose(this.result);
+    }
   }
 
   onMessage(handler: RestateDuplexStreamEventHandler) {
@@ -103,6 +125,10 @@ export class TestConnection implements Connection {
   onClose(handler: () => void) {
     console.log("calling onClose")
     this.stream.on("close", handler);
+  }
+
+  public setAsFinished(): void {
+    this.inputFinished = true;
   }
 
   end() {
