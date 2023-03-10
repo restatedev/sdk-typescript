@@ -29,7 +29,7 @@ export class RestateServer {
     const spec = parseService(descriptor, service, instance);
     for (const method of spec.methods) {
       const url = `/${spec.packge}.${spec.name}/${method.name}`;
-      this.methods[url] = new HostedGrpcServiceMethod(instance, method);
+      this.methods[url] = new HostedGrpcServiceMethod(instance, service, method);
       // note that this log will not print all the keys.
       console.log(
         `Registering: ${url}  -> ${JSON.stringify(method, null, "\t")}`

@@ -1,31 +1,33 @@
 import { describe, expect } from "@jest/globals";
 import {
-  GET_STATE_ENTRY_MESSAGE_TYPE,
-  SET_STATE_ENTRY_MESSAGE_TYPE,
-  INVOKE_ENTRY_MESSAGE_TYPE,
-  CompletionMessage,
-  OUTPUT_STREAM_ENTRY_MESSAGE_TYPE
-} from "../src/protocol_stream";
-import {
   GreetRequest,
   GreetResponse,
   Greeter,
-  GreeterClientImpl,
   protoMetadata,
 } from "../src/generated/proto/example";
 import * as restate from "../src/public_api";
 import { TestDriver } from "../src/testdriver";
-import { getStateMessage, getStateMessageCompletion, inputMessage, setStateMessage, startMessage, completionMessage } from "../src/protoutils";
+import {
+  getStateMessageCompletion,
+  inputMessage,
+  setStateMessage,
+  startMessage,
+  completionMessage,
+  outputMessage,
+  getStateMessage,
+  greetResponse,
+  greetRequest,
+} from "./protoutils";
 
 export class GetAndSetGreeter implements Greeter {
   async greet(request: GreetRequest): Promise<GreetResponse> {
     const ctx = restate.useContext(this);
 
     // state
-    const state = (await ctx.getState<string>("STATE")) || "nobody";
+    const state = (await ctx.get<string>("STATE")) || "nobody";
     console.log("Current state is " + state);
 
-    ctx.setState("STATE", request.name);
+    ctx.set("STATE", request.name);
 
     return GreetResponse.create({ greeting: `Hello ${state}` });
   }
@@ -39,58 +41,64 @@ export class GetAndSetGreeter implements Greeter {
 
 describe("GetAndSetGreeter: With GetState and SetState", () => {
   it("should call greet", async () => {
-    TestDriver.setupAndRun(
-      protoMetadata, "Greeter", new GetAndSetGreeter(), "/dev.restate.Greeter/Greet", 
+    const result = await new TestDriver(
+      protoMetadata,
+      "Greeter",
+      new GetAndSetGreeter(),
+      "/dev.restate.Greeter/Greet",
       [
         startMessage(3),
-        inputMessage(GreetRequest.encode(GreetRequest.create({ name: "Till" })).finish()),
+        inputMessage(greetRequest("Till")),
         getStateMessageCompletion("STATE", "Francesco"),
-        setStateMessage("STATE", "Till")
-      ])
-      .then((result) => {
-          const response = GreetResponse.decode(result[0].message.value)
-          expect(response).toStrictEqual(GreetResponse.create({greeting: "Hello Francesco"}))
-      });
+        setStateMessage("STATE", "Till"),
+      ]
+    ).run();
+
+    expect(result).toStrictEqual([
+      outputMessage(greetResponse("Hello Francesco")),
+    ]);
   });
 });
 
 describe("GetAndSetGreeter: With GetState already completed", () => {
   it("should call greet", async () => {
-    const result = await TestDriver.setupAndRun(
-      protoMetadata, "Greeter", new GetAndSetGreeter(), "/dev.restate.Greeter/Greet", 
+    const result = await new TestDriver(
+      protoMetadata,
+      "Greeter",
+      new GetAndSetGreeter(),
+      "/dev.restate.Greeter/Greet",
       [
         startMessage(2),
-        inputMessage(GreetRequest.encode(GreetRequest.create({ name: 'Till' })).finish()),
-        getStateMessageCompletion("STATE", 'Francesco')
-      ])
-      expect(result[0].message_type).toStrictEqual(SET_STATE_ENTRY_MESSAGE_TYPE)
-      expect(result[0].message.key.toString()).toStrictEqual("STATE")
-      expect(JSON.parse(result[0].message.value.toString())).toStrictEqual('Till')
+        inputMessage(greetRequest("Till")),
+        getStateMessageCompletion("STATE", "Francesco"),
+      ]
+    ).run();
 
-      expect(result[1].message_type).toStrictEqual(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE)
-      const response = GreetResponse.decode(result[1].message.value)
-      expect(response).toStrictEqual(GreetResponse.create({greeting: "Hello Francesco"}))
+    expect(result).toStrictEqual([
+      setStateMessage("STATE", "Till"),
+      outputMessage(greetResponse("Hello Francesco")),
+    ]);
   });
 });
 
 describe("GetAndSetGreeter: With GetState completed later", () => {
   it("should call greet", async () => {
-    TestDriver.setupAndRun(
-      protoMetadata, "Greeter", new GetAndSetGreeter(), "/dev.restate.Greeter/Greet", 
+    const result = await new TestDriver(
+      protoMetadata,
+      "Greeter",
+      new GetAndSetGreeter(),
+      "/dev.restate.Greeter/Greet",
       [
-        startMessage(2),
-        inputMessage(GreetRequest.encode(GreetRequest.create({ name: 'Till' })).finish()),
-        completionMessage(1, JSON.stringify('Francesco'))
-      ]).then((result) => {
-        const firstEntry = result[0]
-        expect(firstEntry.message_type).toStrictEqual(SET_STATE_ENTRY_MESSAGE_TYPE)
-        expect(firstEntry.message.key.toString()).toStrictEqual("STATE")
-        expect(JSON.parse(firstEntry.message.value.toString())).toStrictEqual("Till");
-    
-        const response = GreetResponse.decode(result[1].message.value);
-        expect(response).toStrictEqual(GreetResponse.create({greeting: "Hello Francesco"}))
-      })
+        startMessage(1),
+        inputMessage(greetRequest("Till")),
+        completionMessage(1, JSON.stringify("Francesco")),
+      ]
+    ).run();
+
+    expect(result).toStrictEqual([
+      getStateMessage("STATE"),
+      setStateMessage("STATE", "Till"),
+      outputMessage(greetResponse("Hello Francesco")),
+    ]);
   });
 });
-
-

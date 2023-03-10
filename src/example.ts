@@ -17,10 +17,10 @@ export class GreeterService implements Greeter {
 
     // state
     console.log("Getting the state");
-    let seen = (await ctx.getState<number>("seen")) || 0;
+    let seen = (await ctx.get<number>("seen")) || 0;
     seen += 1;
 
-    await ctx.setState("seen", seen);
+    await ctx.set("seen", seen);
 
     // rpc
     const client = new GreeterClientImpl(ctx);

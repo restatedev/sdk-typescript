@@ -8,28 +8,24 @@ import {
 import * as restate from "../src/public_api";
 import { TestDriver } from "../src/testdriver";
 import {
-  completionMessage,
   inputMessage,
   outputMessage,
-  sideEffectMessage,
   startMessage,
+  completionMessage,
+  awakeableMessage,
   greetRequest,
   greetResponse,
+  completeAwakeableMessage,
 } from "./protoutils";
-import { SIDE_EFFECT_ENTRY_MESSAGE_TYPE } from "../src/types";
+import { AwakeableIdentifier } from "../src/types";
 
-export class SideEffectGreeter implements Greeter {
-  constructor(readonly sideEffectOutput: string) {}
-
+export class AwakeableGreeter implements Greeter {
   async greet(request: GreetRequest): Promise<GreetResponse> {
     const ctx = restate.useContext(this);
 
-    // state
-    const response = await ctx.sideEffect(async () => {
-      return this.sideEffectOutput;
-    });
+    const result = await ctx.awakeable<string>();
 
-    return GreetResponse.create({ greeting: `Hello ${response}` });
+    return GreetResponse.create({ greeting: `Hello ${result}` });
   }
 
   async multiWord(request: GreetRequest): Promise<GreetResponse> {
@@ -39,18 +35,19 @@ export class SideEffectGreeter implements Greeter {
   }
 }
 
-export class NumericSideEffectGreeter implements Greeter {
-  constructor(readonly sideEffectOutput: number) {}
-
+export class CompleteAwakeableGreeter implements Greeter {
   async greet(request: GreetRequest): Promise<GreetResponse> {
     const ctx = restate.useContext(this);
 
-    // state
-    const response = ctx.sideEffect(async () => {
-      return this.sideEffectOutput;
-    });
+    const awakeableIdentifier = new AwakeableIdentifier(
+      "Greeter",
+      Buffer.from("123"),
+      Buffer.from("abcd"),
+      1
+    );
+    await ctx.completeAwakeable(awakeableIdentifier, "hello");
 
-    return GreetResponse.create({ greeting: `Hello ${response}` });
+    return GreetResponse.create({ greeting: `Hello` });
   }
 
   async multiWord(request: GreetRequest): Promise<GreetResponse> {
@@ -60,36 +57,17 @@ export class NumericSideEffectGreeter implements Greeter {
   }
 }
 
-describe("SideEffectGreeter: without ack", () => {
+describe("AwakeableGreeter: with awakeable completion replay", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
       "Greeter",
-      new SideEffectGreeter("Francesco"),
-      "/dev.restate.Greeter/Greet",
-      [startMessage(1), inputMessage(greetRequest("Till"))]
-    ).run();
-
-    expect(result).toStrictEqual([
-      {
-        message_type: SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-        message: Buffer.from(JSON.stringify("Francesco")),
-      },
-    ]);
-  });
-});
-
-describe("SideEffectGreeter: with ack", () => {
-  it("should call greet", async () => {
-    const result = await new TestDriver(
-      protoMetadata,
-      "Greeter",
-      new SideEffectGreeter("Francesco"),
+      new AwakeableGreeter(),
       "/dev.restate.Greeter/Greet",
       [
         startMessage(2),
         inputMessage(greetRequest("Till")),
-        sideEffectMessage("Francesco"),
+        awakeableMessage("Francesco"),
       ]
     ).run();
 
@@ -99,45 +77,76 @@ describe("SideEffectGreeter: with ack", () => {
   });
 });
 
-describe("SideEffectGreeter: with completion", () => {
+describe("AwakeableGreeter: without completion", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
       "Greeter",
-      new SideEffectGreeter("Francesco"),
-      "/dev.restate.Greeter/Greet",
-      [
-        startMessage(1),
-        inputMessage(greetRequest("Till")),
-        completionMessage(1, "Francesco"),
-      ]
-    ).run();
-
-    expect(result).toStrictEqual([
-      {
-        message_type: SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-        message: Buffer.from(JSON.stringify("Francesco")),
-      },
-      outputMessage(greetResponse("Hello Francesco")),
-    ]);
-  });
-});
-
-describe("SideEffectGreeter: without ack - numeric output", () => {
-  it("should call greet", async () => {
-    const result = await new TestDriver(
-      protoMetadata,
-      "Greeter",
-      new NumericSideEffectGreeter(123),
+      new AwakeableGreeter(),
       "/dev.restate.Greeter/Greet",
       [startMessage(1), inputMessage(greetRequest("Till"))]
     ).run();
 
     expect(result).toStrictEqual([
-      {
-        message_type: SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-        message: Buffer.from(JSON.stringify(123)),
-      },
+      awakeableMessage(
+        new AwakeableIdentifier(
+          "Greeter",
+          Buffer.from("123"),
+          Buffer.from("abcd"),
+          1
+        )
+      ),
+    ]);
+  });
+});
+
+describe("AwakeableGreeter: with completion", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "Greeter",
+      new AwakeableGreeter(),
+      "/dev.restate.Greeter/Greet",
+      [
+        startMessage(1),
+        inputMessage(greetRequest("Till")),
+        completionMessage(1, JSON.stringify("Francesco")),
+      ]
+    ).run();
+
+    expect(result).toStrictEqual([
+      awakeableMessage(
+        new AwakeableIdentifier(
+          "Greeter",
+          Buffer.from("123"),
+          Buffer.from("abcd"),
+          1
+        )
+      ),
+      outputMessage(greetResponse("Hello Francesco")),
+    ]);
+  });
+});
+
+describe("CompleteAwakeableGreeter: without completion", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "Greeter",
+      new CompleteAwakeableGreeter(),
+      "/dev.restate.Greeter/Greet",
+      [startMessage(1), inputMessage(greetRequest("Till"))]
+    ).run();
+
+    expect(result).toStrictEqual([
+      completeAwakeableMessage(
+        "Greeter",
+        Buffer.from("123"),
+        Buffer.from("abcd"),
+        1,
+        "hello"
+      ),
+      outputMessage(greetResponse("Hello")),
     ]);
   });
 });

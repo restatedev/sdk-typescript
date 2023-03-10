@@ -6,6 +6,7 @@ import { GrpcServiceMethod } from "./types";
 export class HostedGrpcServiceMethod<I, O> {
   constructor(
     readonly instance: unknown,
+    readonly service: string,
     readonly method: GrpcServiceMethod<I, O>
   ) {}
 
