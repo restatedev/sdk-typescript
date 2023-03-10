@@ -16,7 +16,7 @@ import {
   greetRequest,
   greetResponse,
 } from "./protoutils";
-import { SIDE_EFFECT_ENTRY_MESSAGE_TYPE } from "../src/types";
+import { SIDE_EFFECT_ENTRY_MESSAGE_TYPE, Message } from "../src/types";
 
 export class SideEffectGreeter implements Greeter {
   constructor(readonly sideEffectOutput: string) {}
@@ -71,10 +71,10 @@ describe("SideEffectGreeter: without ack", () => {
     ).run();
 
     expect(result).toStrictEqual([
-      {
-        message_type: SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-        message: Buffer.from(JSON.stringify("Francesco")),
-      },
+      new Message(
+        SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+        Buffer.from(JSON.stringify("Francesco"))
+      ),
     ]);
   });
 });
@@ -114,10 +114,10 @@ describe("SideEffectGreeter: with completion", () => {
     ).run();
 
     expect(result).toStrictEqual([
-      {
-        message_type: SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-        message: Buffer.from(JSON.stringify("Francesco")),
-      },
+      new Message(
+        SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+        Buffer.from(JSON.stringify("Francesco"))
+      ),
       outputMessage(greetResponse("Hello Francesco")),
     ]);
   });
@@ -134,10 +134,10 @@ describe("SideEffectGreeter: without ack - numeric output", () => {
     ).run();
 
     expect(result).toStrictEqual([
-      {
-        message_type: SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-        message: Buffer.from(JSON.stringify(123)),
-      },
+      new Message(
+        SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+        Buffer.from(JSON.stringify(123))
+      ),
     ]);
   });
 });

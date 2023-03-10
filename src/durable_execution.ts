@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable @typescript-eslint/no-unused-vars */
 "use strict";
 
 import { Connection } from "./bidirectional_server";
@@ -31,9 +29,11 @@ import {
   StartMessage,
 } from "./protocol_stream";
 import { RestateContext } from "./context";
-import { AwakeableIdentifier, SIDE_EFFECT_ENTRY_MESSAGE_TYPE } from "./types";
-import { GreetResponse } from "./generated/proto/example";
-import _m0 from "protobufjs/minimal";
+import {
+  AwakeableIdentifier,
+  ProtocolMessage,
+  SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+} from "./types";
 
 enum ExecutionState {
   WAITING_FOR_START = "WAITING_FOR_START",
@@ -236,7 +236,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     }
   }
 
-  invokeInBackground(
+  async invokeInBackground(
     service: string,
     method: string,
     data: Uint8Array
@@ -271,7 +271,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     });
   }
 
-  invoke(
+  async invoke(
     service: string,
     method: string,
     data: Uint8Array
@@ -335,26 +335,29 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   async sleep(millis: number): Promise<void> {
     console.debug("Service called sleep");
 
-    this.incrementJournalIndex();
+    return new Promise((resolve, reject) => {
+      this.incrementJournalIndex();
+      this.addPromise(this.currentJournalIndex, resolve);
 
-    if (this.state === ExecutionState.PROCESSING) {
-      console.debug("Forward the SleepEntryMessage to the runtime");
-      // Forward to runtime
-      this.connection.send(
-        SLEEP_ENTRY_MESSAGE_TYPE,
-        SleepEntryMessage.create({ wakeUpTime: Date.now() + millis })
-      );
-    } else {
-      console.debug(
-        "In replay mode: Sleep message will not be forwarded to the runtime. This will be fulfilled by the next replayed journal entry."
-      );
-    }
+      if (this.state === ExecutionState.PROCESSING) {
+        console.debug("Forward the SleepEntryMessage to the runtime");
+        // Forward to runtime
+        this.connection.send(
+          SLEEP_ENTRY_MESSAGE_TYPE,
+          SleepEntryMessage.create({ wakeUpTime: Date.now() + millis })
+        );
+      } else {
+        console.debug(
+          "In replay mode: Sleep message will not be forwarded to the runtime. This will be fulfilled by the next replayed journal entry."
+        );
+      }
+    });
   }
 
   // Called for every incoming message from the runtime: start messages, input messages and replay messages.
   onIncomingMessage(
     message_type: bigint,
-    message: any,
+    message: ProtocolMessage | Buffer, // Buffer in case o
     completed_flag?: boolean,
     protocol_version?: number,
     requires_ack_flag?: boolean
@@ -405,8 +408,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         break;
       }
       case SLEEP_ENTRY_MESSAGE_TYPE: {
-        const m = message as SleepEntryMessage;
-        console.debug("Received SleepEntryMessage: " + JSON.stringify(m));
+        this.handleSleepCompletionMessage(message as SleepEntryMessage);
         break;
       }
       case INVOKE_ENTRY_MESSAGE_TYPE: {
@@ -433,7 +435,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         break;
       }
       case SIDE_EFFECT_ENTRY_MESSAGE_TYPE: {
-        this.handleSideEffectMessage(message);
+        this.handleSideEffectMessage(message as Buffer);
         break;
       }
       default: {
@@ -508,6 +510,14 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       // TODO
       console.error("Awakeable message contained failure: " + m.failure);
     }
+  }
+
+  handleSleepCompletionMessage(m: SleepEntryMessage) {
+    console.debug("Received SleepEntryMessage: " + JSON.stringify(m));
+
+    this.checkIfInReplay();
+
+    this.resolvePromise(this.replayIndex, undefined);
   }
 
   checkIfInReplay() {

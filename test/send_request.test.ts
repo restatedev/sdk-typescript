@@ -20,7 +20,6 @@ import {
   greetRequest,
   greetResponse,
 } from "./protoutils";
-import { INVOKE_ENTRY_MESSAGE_TYPE } from "../src/protocol_stream";
 
 export class ReverseAwaitOrder implements Greeter {
   async greet(request: GreetRequest): Promise<GreetResponse> {

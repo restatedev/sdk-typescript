@@ -9,7 +9,6 @@ import {
 } from "../src/protocol_stream";
 import stream from "stream";
 
-
 // The following test suite is taken from headers.rs
 describe("Header", () => {
   it("Should round trip a custom message", () => {
@@ -67,8 +66,8 @@ describe("Stream", () => {
     // this future will be resolved onces something is emmited on the stream.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result: any = new Promise((resolve) => {
-      restateStream.onMessage((message, message_type) => {
-        resolve({ message, message_type });
+      restateStream.onMessage((message_type, message) => {
+        resolve({ message_type, message });
       });
     });
 

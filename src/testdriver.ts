@@ -13,13 +13,18 @@ import {
   RestateDuplexStreamEventHandler,
   SLEEP_ENTRY_MESSAGE_TYPE,
 } from "./protocol_stream";
-import { SIDE_EFFECT_ENTRY_MESSAGE_TYPE } from "./types";
+import {
+  ProtocolMessage,
+  SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+  Message,
+  ProtoMetadata,
+} from "./types";
 import { HostedGrpcServiceMethod } from "./core";
 
 export class TestDriver<I, O> implements Connection {
   private http2stream = this.mockHttp2DuplexStream();
   private restate = RestateDuplexStream.from(this.http2stream);
-  private result: Array<any> = [];
+  private result: Array<Message> = [];
   private nbRequiredCompletions = 0;
   // For other type of messages that require flushing, check if all test input has finished.
   private requiresCompletion = [
@@ -32,19 +37,19 @@ export class TestDriver<I, O> implements Connection {
 
   private restateServer: restate.RestateServer;
   private method: HostedGrpcServiceMethod<I, O>;
-  private entries: Array<any>;
+  private entries: Array<Message>;
   private nbCompletions: number;
   private desm!: DurableExecutionStateMachine<I, O>;
 
-  private getResultPromise: Promise<Array<any>>;
-  private resolveOnClose!: (value: Array<any>) => void;
+  private getResultPromise: Promise<Array<Message>>;
+  private resolveOnClose!: (value: Array<Message>) => void;
 
   constructor(
-    descriptor: any,
+    descriptor: ProtoMetadata,
     service: string,
     instance: object,
     methodName: string,
-    entries: Array<any>
+    entries: Array<Message>
   ) {
     this.restateServer = restate.createServer().bindService({
       descriptor: descriptor,
@@ -52,25 +57,33 @@ export class TestDriver<I, O> implements Connection {
       instance: instance,
     });
 
-    this.method = this.restateServer.methodByUrl(methodName)!;
+    const hostedGrpcServiceMethod: HostedGrpcServiceMethod<I, O> | undefined =
+      this.restateServer.methodByUrl(methodName);
 
-    this.getResultPromise = new Promise<Array<any>>((resolve) => {
+    if (hostedGrpcServiceMethod) {
+      this.method = hostedGrpcServiceMethod;
+    } else {
+      throw new Error("Method not found: " + methodName);
+    }
+
+    this.getResultPromise = new Promise<Array<Message>>((resolve) => {
       this.resolveOnClose = resolve;
     });
 
     this.entries = entries;
-    const nbReplayMessages = this.entries[0].message.knownEntries;
+    const nbReplayMessages = (this.entries[0].message as StartMessage)
+      .knownEntries;
     // number of completions in the entries = length of entries array - one start message - number of replay messages
     this.nbCompletions = this.entries.length - 1 - nbReplayMessages;
   }
 
-  run(): Promise<Array<any>> {
+  run(): Promise<Array<Message>> {
     // is the use of 'this' dangerous here?
     this.desm = new DurableExecutionStateMachine(this, this.method);
 
     // Pipe messages through the state machine
     this.entries.forEach((el) => {
-      this.desm.onIncomingMessage(el.message_type, el.message);
+      this.desm.onIncomingMessage(el.messageType, el.message);
     });
 
     return this.getResultPromise;
@@ -79,11 +92,9 @@ export class TestDriver<I, O> implements Connection {
   send(
     message_type: bigint,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    message: any,
-    completed?: boolean,
-    requires_ack?: boolean
+    message: ProtocolMessage
   ) {
-    this.result.push({ message_type: message_type, message: message });
+    this.result.push(new Message(message_type, message));
     console.debug(
       "Adding result to the result array. Message type: " +
         message_type +

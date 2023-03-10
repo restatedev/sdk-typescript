@@ -1,11 +1,24 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { FileDescriptorProto } from "ts-proto-descriptors";
-
+import {
+  AwakeableEntryMessage,
+  BackgroundInvokeEntryMessage,
+  ClearStateEntryMessage,
+  CompleteAwakeableEntryMessage,
+  CompletionMessage,
+  GetStateEntryMessage,
+  InvokeEntryMessage,
+  OutputStreamEntryMessage,
+  PollInputStreamEntryMessage,
+  SetStateEntryMessage,
+  SleepEntryMessage,
+  StartMessage,
+} from "./protocol_stream";
 
 // Side effect message type for Typescript SDK
 // Side effects are custom messages because the runtime does not need to inspect them
-export const SIDE_EFFECT_ENTRY_MESSAGE_TYPE = 0xFC01n;
+export const SIDE_EFFECT_ENTRY_MESSAGE_TYPE = 0xfc01n;
 
 export class AwakeableIdentifier {
   constructor(
@@ -13,7 +26,28 @@ export class AwakeableIdentifier {
     readonly instanceKey: Buffer,
     readonly invocationId: Buffer,
     readonly entryIndex: number
-  ){}
+  ) {}
+}
+
+export type ProtocolMessage =
+  | StartMessage
+  | CompletionMessage
+  | PollInputStreamEntryMessage
+  | OutputStreamEntryMessage
+  | GetStateEntryMessage
+  | SetStateEntryMessage
+  | ClearStateEntryMessage
+  | SleepEntryMessage
+  | InvokeEntryMessage
+  | BackgroundInvokeEntryMessage
+  | AwakeableEntryMessage
+  | CompleteAwakeableEntryMessage;
+
+export class Message {
+  constructor(
+    readonly messageType: bigint,
+    readonly message: ProtocolMessage | Buffer
+  ) {}
 }
 
 //

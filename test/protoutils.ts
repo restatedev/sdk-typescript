@@ -27,118 +27,122 @@ import {
   SLEEP_ENTRY_MESSAGE_TYPE,
   SleepEntryMessage,
 } from "../src/protocol_stream";
-import { SIDE_EFFECT_ENTRY_MESSAGE_TYPE } from "../src/types";
+import {
+  SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+  Message,
+  ProtocolMessage,
+} from "../src/types";
 
-export function startMessage(knownEntries: number): any {
-  return {
-    message_type: START_MESSAGE_TYPE,
-    message: StartMessage.create({
+export function startMessage(knownEntries: number): Message {
+  return new Message(
+    START_MESSAGE_TYPE,
+    StartMessage.create({
       instanceKey: Buffer.from("123"),
       invocationId: Buffer.from("abcd"),
       knownEntries: knownEntries,
       knownServiceVersion: 1,
-    }),
-  };
+    })
+  );
 }
 
-export function inputMessage(value: Uint8Array): any {
-  return {
-    message_type: POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
-    message: PollInputStreamEntryMessage.create({
+export function inputMessage(value: Uint8Array): Message {
+  return new Message(
+    POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
+    PollInputStreamEntryMessage.create({
       value: Buffer.from(value),
-    }),
-  };
+    })
+  );
 }
 
-export function outputMessage(value: Uint8Array): any {
-  return {
-    message_type: OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
-    message: OutputStreamEntryMessage.create({
+export function outputMessage(value: Uint8Array): Message {
+  return new Message(
+    OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
+    OutputStreamEntryMessage.create({
       value: Buffer.from(value),
-    }),
-  };
+    })
+  );
 }
 
-export function getStateMessageCompletion<T>(key: string, value: T): any {
-  return {
-    message_type: GET_STATE_ENTRY_MESSAGE_TYPE,
-    message: GetStateEntryMessage.create({
+export function getStateMessageCompletion<T>(key: string, value: T): Message {
+  return new Message(
+    GET_STATE_ENTRY_MESSAGE_TYPE,
+    GetStateEntryMessage.create({
       key: Buffer.from(key),
       value: Buffer.from(JSON.stringify(value)),
-    }),
-  };
+    })
+  );
 }
 
-export function getStateMessage(key: string): any {
-  return {
-    message_type: GET_STATE_ENTRY_MESSAGE_TYPE,
-    message: GetStateEntryMessage.create({
+export function getStateMessage(key: string): Message {
+  return new Message(
+    GET_STATE_ENTRY_MESSAGE_TYPE,
+    GetStateEntryMessage.create({
       key: Buffer.from(key),
-    }),
-  };
+    })
+  );
 }
 
-export function setStateMessage<T>(key: string, value: T): any {
-  return {
-    message_type: SET_STATE_ENTRY_MESSAGE_TYPE,
-    message: SetStateEntryMessage.create({
+export function setStateMessage<T>(key: string, value: T): Message {
+  return new Message(
+    SET_STATE_ENTRY_MESSAGE_TYPE,
+    SetStateEntryMessage.create({
       key: Buffer.from(key),
       value: Buffer.from(JSON.stringify(value)),
-    }),
-  };
+    })
+  );
 }
 
-export function clearStateMessage(key: string): any {
-  return {
-    message_type: CLEAR_STATE_ENTRY_MESSAGE_TYPE,
-    message: ClearStateEntryMessage.create({
+export function clearStateMessage(key: string): Message {
+  return new Message(
+    CLEAR_STATE_ENTRY_MESSAGE_TYPE,
+    ClearStateEntryMessage.create({
       key: Buffer.from(key),
-    }),
-  };
+    })
+  );
 }
 
-export function sleepMessage(millis: number): any {
-  return {
-    message_type: SLEEP_ENTRY_MESSAGE_TYPE,
-    message: SleepEntryMessage.create({
+export function sleepMessage(millis: number): Message {
+  return new Message(
+    SLEEP_ENTRY_MESSAGE_TYPE,
+    SleepEntryMessage.create({
       wakeUpTime: Date.now() + millis,
-    }),
-  };
+    })
+  );
 }
 
-export function completionMessage(index: number, value: any) {
-  return {
-    message_type: COMPLETION_MESSAGE_TYPE,
-    message: CompletionMessage.create({
+export function completionMessage(index: number, value: any): Message {
+  return new Message(
+    COMPLETION_MESSAGE_TYPE,
+    CompletionMessage.create({
       entryIndex: index,
       value: Buffer.from(value),
-    }),
-  };
+    })
+  );
 }
 
-export function emptyCompletionMessage(index: number) {
-  return {
-    message_type: COMPLETION_MESSAGE_TYPE,
-    message: CompletionMessage.create({
+export function emptyCompletionMessage(index: number): Message {
+  return new Message(
+    COMPLETION_MESSAGE_TYPE,
+    CompletionMessage.create({
       entryIndex: index,
       empty: Empty.create(),
-    }),
-  };
+    })
+  );
 }
 
 export function invokeMessage(
   serviceName: string,
   methodName: string,
   parameter: Uint8Array
-) {
-  return {
-    message_type: INVOKE_ENTRY_MESSAGE_TYPE,
-    message: InvokeEntryMessage.create({
+): Message {
+  return new Message(
+    INVOKE_ENTRY_MESSAGE_TYPE,
+    InvokeEntryMessage.create({
       serviceName: serviceName,
       methodName: methodName,
       parameter: Buffer.from(parameter),
-    }),
-  };
+    })
+  );
 }
 
 export function invokeMessageCompletion<T>(
@@ -146,47 +150,47 @@ export function invokeMessageCompletion<T>(
   methodName: string,
   parameter: Uint8Array,
   value: Uint8Array
-) {
-  return {
-    message_type: INVOKE_ENTRY_MESSAGE_TYPE,
-    message: InvokeEntryMessage.create({
+): Message {
+  return new Message(
+    INVOKE_ENTRY_MESSAGE_TYPE,
+    InvokeEntryMessage.create({
       serviceName: serviceName,
       methodName: methodName,
       parameter: Buffer.from(parameter),
       value: Buffer.from(value),
-    }),
-  };
+    })
+  );
 }
 
 export function backgroundInvokeMessage(
   serviceName: string,
   methodName: string,
   parameter: Uint8Array
-) {
-  return {
-    message_type: BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
-    message: BackgroundInvokeEntryMessage.create({
+): Message {
+  return new Message(
+    BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
+    BackgroundInvokeEntryMessage.create({
       serviceName: serviceName,
       methodName: methodName,
       parameter: Buffer.from(parameter),
-    }),
-  };
+    })
+  );
 }
 
-export function sideEffectMessage<T>(value: T) {
-  return {
-    message_type: SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-    message: Buffer.from(JSON.stringify(value)),
-  };
+export function sideEffectMessage<T>(value: T): Message {
+  return new Message(
+    SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+    Buffer.from(JSON.stringify(value))
+  );
 }
 
-export function awakeableMessage<T>(payload: T) {
-  return {
-    message_type: AWAKEABLE_ENTRY_MESSAGE_TYPE,
-    message: AwakeableEntryMessage.create({
+export function awakeableMessage<T>(payload: T): Message {
+  return new Message(
+    AWAKEABLE_ENTRY_MESSAGE_TYPE,
+    AwakeableEntryMessage.create({
       value: Buffer.from(JSON.stringify(payload)),
-    }),
-  };
+    })
+  );
 }
 
 export function completeAwakeableMessage<T>(
@@ -195,17 +199,17 @@ export function completeAwakeableMessage<T>(
   invocationId: Buffer,
   entryIndex: number,
   payload: T
-) {
-  return {
-    message_type: COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
-    message: CompleteAwakeableEntryMessage.create({
+): Message {
+  return new Message(
+    COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
+    CompleteAwakeableEntryMessage.create({
       serviceName: serviceName,
       instanceKey: instanceKey,
       invocationId: invocationId,
       entryIndex: entryIndex,
       payload: Buffer.from(JSON.stringify(payload)),
-    }),
-  };
+    })
+  );
 }
 
 export function greetRequest(myName: string): Uint8Array {

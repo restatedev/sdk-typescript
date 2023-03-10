@@ -12,12 +12,12 @@ import {
 } from "./protocol_stream";
 import { parse as urlparse, Url } from "url";
 import { on } from "events";
-import { SIDE_EFFECT_ENTRY_MESSAGE_TYPE } from "./types";
+import { ProtocolMessage, SIDE_EFFECT_ENTRY_MESSAGE_TYPE } from "./types";
 
 export interface Connection {
   send(
     message_type: bigint,
-    message: any,
+    message: ProtocolMessage | Buffer,
     completed?: boolean | undefined,
     requires_ack?: boolean | undefined
   ): void;
@@ -55,8 +55,7 @@ export class HttpConnection implements Connection {
 
   send(
     message_type: bigint,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    message: any,
+    message: ProtocolMessage | Buffer,
     completed?: boolean,
     requires_ack?: boolean
   ) {

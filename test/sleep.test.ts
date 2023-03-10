@@ -15,6 +15,7 @@ import {
   greetRequest,
   greetResponse,
   sleepMessage,
+  emptyCompletionMessage,
 } from "./protoutils";
 import { SLEEP_ENTRY_MESSAGE_TYPE } from "../src/protocol_stream";
 
@@ -44,7 +45,7 @@ describe("SleepGreeter: With sleep not complete", () => {
       [startMessage(1), inputMessage(greetRequest("Till"))]
     ).run();
 
-    expect(result[0].message_type).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
+    expect(result[0].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
   });
 });
 
@@ -58,11 +59,11 @@ describe("SleepGreeter: With sleep already complete", () => {
       [
         startMessage(1),
         inputMessage(greetRequest("Till")),
-        completionMessage(1, undefined),
+        completionMessage(1, ""),
       ]
     ).run();
 
-    expect(result[0].message_type).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
+    expect(result[0].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
     expect(result[1]).toStrictEqual(outputMessage(greetResponse("Hello")));
   });
 });
