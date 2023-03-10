@@ -22,6 +22,10 @@ import {
   AwakeableEntryMessage,
   COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
   CompleteAwakeableEntryMessage,
+  CLEAR_STATE_ENTRY_MESSAGE_TYPE,
+  ClearStateEntryMessage,
+  SLEEP_ENTRY_MESSAGE_TYPE,
+  SleepEntryMessage,
 } from "../src/protocol_stream";
 import { SIDE_EFFECT_ENTRY_MESSAGE_TYPE } from "../src/types";
 
@@ -80,6 +84,24 @@ export function setStateMessage<T>(key: string, value: T): any {
     message: SetStateEntryMessage.create({
       key: Buffer.from(key),
       value: Buffer.from(JSON.stringify(value)),
+    }),
+  };
+}
+
+export function clearStateMessage(key: string): any {
+  return {
+    message_type: CLEAR_STATE_ENTRY_MESSAGE_TYPE,
+    message: ClearStateEntryMessage.create({
+      key: Buffer.from(key),
+    }),
+  };
+}
+
+export function sleepMessage(millis: number): any {
+  return {
+    message_type: SLEEP_ENTRY_MESSAGE_TYPE,
+    message: SleepEntryMessage.create({
+      wakeUpTime: Date.now() + millis,
     }),
   };
 }

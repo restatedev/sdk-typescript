@@ -20,7 +20,7 @@ export class TestDriver<I, O> implements Connection {
   private http2stream = this.mockHttp2DuplexStream();
   private restate = RestateDuplexStream.from(this.http2stream);
   private result: Array<any> = [];
-  private nbResultsRequiringCompletions = 0;
+  private nbRequiredCompletions = 0;
   // For other type of messages that require flushing, check if all test input has finished.
   private requiresCompletion = [
     INVOKE_ENTRY_MESSAGE_TYPE,
@@ -33,7 +33,6 @@ export class TestDriver<I, O> implements Connection {
   private restateServer: restate.RestateServer;
   private method: HostedGrpcServiceMethod<I, O>;
   private entries: Array<any>;
-  private nbReplayMessages: number;
   private nbCompletions: number;
   private desm!: DurableExecutionStateMachine<I, O>;
 
@@ -45,7 +44,7 @@ export class TestDriver<I, O> implements Connection {
     service: string,
     instance: object,
     methodName: string,
-    entriesArray: Array<any>
+    entries: Array<any>
   ) {
     this.restateServer = restate.createServer().bindService({
       descriptor: descriptor,
@@ -59,15 +58,10 @@ export class TestDriver<I, O> implements Connection {
       this.resolveOnClose = resolve;
     });
 
-    this.entries = entriesArray;
-    this.nbReplayMessages = this.entries[0].message.knownEntries;
+    this.entries = entries;
+    const nbReplayMessages = this.entries[0].message.knownEntries;
     // number of completions in the entries = length of entries array - one start message - number of replay messages
-    this.nbCompletions = this.entries.length - 1 - this.nbReplayMessages;
-    console.debug(
-      `# test entries: ${this.entries.length}; 
-      # replay messages: ${this.nbReplayMessages}; 
-      # completions: ${this.nbCompletions}`
-    );
+    this.nbCompletions = this.entries.length - 1 - nbReplayMessages;
   }
 
   run(): Promise<Array<any>> {
@@ -106,14 +100,12 @@ export class TestDriver<I, O> implements Connection {
     }
 
     if (this.requiresCompletion.includes(message_type)) {
-      this.nbResultsRequiringCompletions++;
-      if (this.nbResultsRequiringCompletions > this.nbCompletions) {
+      this.nbRequiredCompletions++;
+      if (this.nbRequiredCompletions > this.nbCompletions) {
         this.resolveOnClose(this.result);
       } else {
         console.debug(
-          `The test input is not yet finished so not yet flushing results. 
-          Results that requires completions: ${this.nbResultsRequiringCompletions}
-           While total completions in input: ${this.nbCompletions}`
+          `The test input is not yet finished so not yet flushing results.`
         );
       }
     }
