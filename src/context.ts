@@ -3,6 +3,10 @@
 import { AwakeableIdentifier } from "./types";
 
 export interface RestateContext {
+  instanceKey: Buffer;
+  serviceName: string;
+  invocationId: Buffer;
+
   request(
     service: string,
     method: string,
@@ -16,14 +20,14 @@ export interface RestateContext {
   clear(name: string): Promise<void>;
 
   inBackground<T>(call: () => Promise<T>): Promise<void>;
-  
+
   sideEffect<T>(fn: () => Promise<T>): Promise<T>;
 
   awakeable<T>(): Promise<T>;
 
   completeAwakeable<T>(id: AwakeableIdentifier, payload: T): Promise<void>;
 
-  sleep(millis: number): Promise<void>; 
+  sleep(millis: number): Promise<void>;
 }
 
 export function useContext<T>(instance: T): RestateContext {

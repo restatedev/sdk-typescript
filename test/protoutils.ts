@@ -27,11 +27,7 @@ import {
   SLEEP_ENTRY_MESSAGE_TYPE,
   SleepEntryMessage,
 } from "../src/protocol_stream";
-import {
-  SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-  Message,
-  ProtocolMessage,
-} from "../src/types";
+import { SIDE_EFFECT_ENTRY_MESSAGE_TYPE, Message } from "../src/types";
 
 export function startMessage(knownEntries: number): Message {
   return new Message(
@@ -63,23 +59,23 @@ export function outputMessage(value: Uint8Array): Message {
   );
 }
 
-export function getStateMessageCompletion<T>(key: string, value: T): Message {
-  return new Message(
-    GET_STATE_ENTRY_MESSAGE_TYPE,
-    GetStateEntryMessage.create({
-      key: Buffer.from(key),
-      value: Buffer.from(JSON.stringify(value)),
-    })
-  );
-}
-
-export function getStateMessage(key: string): Message {
-  return new Message(
-    GET_STATE_ENTRY_MESSAGE_TYPE,
-    GetStateEntryMessage.create({
-      key: Buffer.from(key),
-    })
-  );
+export function getStateMessage<T>(key: string, value?: T): Message {
+  if (!value) {
+    return new Message(
+      GET_STATE_ENTRY_MESSAGE_TYPE,
+      GetStateEntryMessage.create({
+        key: Buffer.from(key),
+      })
+    );
+  } else {
+    return new Message(
+      GET_STATE_ENTRY_MESSAGE_TYPE,
+      GetStateEntryMessage.create({
+        key: Buffer.from(key),
+        value: Buffer.from(JSON.stringify(value)),
+      })
+    );
+  }
 }
 
 export function setStateMessage<T>(key: string, value: T): Message {
@@ -110,56 +106,52 @@ export function sleepMessage(millis: number): Message {
   );
 }
 
-export function completionMessage(index: number, value: any): Message {
-  return new Message(
-    COMPLETION_MESSAGE_TYPE,
-    CompletionMessage.create({
-      entryIndex: index,
-      value: Buffer.from(value),
-    })
-  );
-}
-
-export function emptyCompletionMessage(index: number): Message {
-  return new Message(
-    COMPLETION_MESSAGE_TYPE,
-    CompletionMessage.create({
-      entryIndex: index,
-      empty: Empty.create(),
-    })
-  );
+export function completionMessage(index: number, value?: any): Message {
+  if (!value) {
+    return new Message(
+      COMPLETION_MESSAGE_TYPE,
+      CompletionMessage.create({
+        entryIndex: index,
+        empty: Empty.create(),
+      })
+    );
+  } else {
+    return new Message(
+      COMPLETION_MESSAGE_TYPE,
+      CompletionMessage.create({
+        entryIndex: index,
+        value: Buffer.from(value),
+      })
+    );
+  }
 }
 
 export function invokeMessage(
   serviceName: string,
   methodName: string,
-  parameter: Uint8Array
-): Message {
-  return new Message(
-    INVOKE_ENTRY_MESSAGE_TYPE,
-    InvokeEntryMessage.create({
-      serviceName: serviceName,
-      methodName: methodName,
-      parameter: Buffer.from(parameter),
-    })
-  );
-}
-
-export function invokeMessageCompletion<T>(
-  serviceName: string,
-  methodName: string,
   parameter: Uint8Array,
-  value: Uint8Array
+  value?: Uint8Array
 ): Message {
-  return new Message(
-    INVOKE_ENTRY_MESSAGE_TYPE,
-    InvokeEntryMessage.create({
-      serviceName: serviceName,
-      methodName: methodName,
-      parameter: Buffer.from(parameter),
-      value: Buffer.from(value),
-    })
-  );
+  if (!value) {
+    return new Message(
+      INVOKE_ENTRY_MESSAGE_TYPE,
+      InvokeEntryMessage.create({
+        serviceName: serviceName,
+        methodName: methodName,
+        parameter: Buffer.from(parameter),
+      })
+    );
+  } else {
+    return new Message(
+      INVOKE_ENTRY_MESSAGE_TYPE,
+      InvokeEntryMessage.create({
+        serviceName: serviceName,
+        methodName: methodName,
+        parameter: Buffer.from(parameter),
+        value: Buffer.from(value),
+      })
+    );
+  }
 }
 
 export function backgroundInvokeMessage(
@@ -184,13 +176,20 @@ export function sideEffectMessage<T>(value: T): Message {
   );
 }
 
-export function awakeableMessage<T>(payload: T): Message {
-  return new Message(
-    AWAKEABLE_ENTRY_MESSAGE_TYPE,
-    AwakeableEntryMessage.create({
-      value: Buffer.from(JSON.stringify(payload)),
-    })
-  );
+export function awakeableMessage<T>(payload?: T): Message {
+  if (!payload) {
+    return new Message(
+      AWAKEABLE_ENTRY_MESSAGE_TYPE,
+      AwakeableEntryMessage.create()
+    );
+  } else {
+    return new Message(
+      AWAKEABLE_ENTRY_MESSAGE_TYPE,
+      AwakeableEntryMessage.create({
+        value: Buffer.from(JSON.stringify(payload)),
+      })
+    );
+  }
 }
 
 export function completeAwakeableMessage<T>(

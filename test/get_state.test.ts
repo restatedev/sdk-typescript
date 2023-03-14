@@ -9,11 +9,9 @@ import * as restate from "../src/public_api";
 import { TestDriver } from "../src/testdriver";
 import {
   getStateMessage,
-  getStateMessageCompletion,
   inputMessage,
   startMessage,
   completionMessage,
-  emptyCompletionMessage,
   outputMessage,
   greetRequest,
   greetResponse,
@@ -47,7 +45,7 @@ describe("GetStateGreeter: With GetStateEntry already complete", () => {
       [
         startMessage(2),
         inputMessage(greetRequest("Till")),
-        getStateMessageCompletion("STATE", "Francesco"),
+        getStateMessage("STATE", "Francesco"),
       ]
     ).run();
 
@@ -102,7 +100,7 @@ describe("GetStateGreeter: Without GetStateEntry and completed with later Comple
       [
         startMessage(1),
         inputMessage(greetRequest("Till")),
-        emptyCompletionMessage(1),
+        completionMessage(1),
       ]
     ).run();
 

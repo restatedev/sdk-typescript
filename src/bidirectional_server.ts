@@ -2,17 +2,20 @@
 
 import http2 from "http2";
 import {
+  RestateDuplexStream,
+  RestateDuplexStreamEventHandler,
+} from "./protocol_stream";
+import { parse as urlparse, Url } from "url";
+import { on } from "events";
+import { ProtocolMessage } from "./types";
+import {
   AWAKEABLE_ENTRY_MESSAGE_TYPE,
   GET_STATE_ENTRY_MESSAGE_TYPE,
   INVOKE_ENTRY_MESSAGE_TYPE,
   OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
-  RestateDuplexStream,
-  RestateDuplexStreamEventHandler,
   SLEEP_ENTRY_MESSAGE_TYPE,
 } from "./protocol_stream";
-import { parse as urlparse, Url } from "url";
-import { on } from "events";
-import { ProtocolMessage, SIDE_EFFECT_ENTRY_MESSAGE_TYPE } from "./types";
+import { SIDE_EFFECT_ENTRY_MESSAGE_TYPE, Message } from "./types";
 
 export interface Connection {
   send(
@@ -30,6 +33,17 @@ export interface Connection {
 }
 
 export class HttpConnection implements Connection {
+  private result: Array<Message> = [];
+
+  private requiresCompletion = [
+    OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
+    INVOKE_ENTRY_MESSAGE_TYPE,
+    GET_STATE_ENTRY_MESSAGE_TYPE,
+    SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+    AWAKEABLE_ENTRY_MESSAGE_TYPE,
+    SLEEP_ENTRY_MESSAGE_TYPE,
+  ];
+
   constructor(
     readonly connectionId: bigint,
     readonly headers: http2.IncomingHttpHeaders,
@@ -59,7 +73,19 @@ export class HttpConnection implements Connection {
     completed?: boolean,
     requires_ack?: boolean
   ) {
-    this.restate.send(message_type, message, completed, requires_ack);
+    this.result.push(new Message(message_type, message));
+
+    // Only flush the messages if they require a completion.
+    if (this.requiresCompletion.includes(message_type)) {
+      this.flush();
+    }
+  }
+
+  flush() {
+    // TODO
+    this.result.forEach((msg) =>
+      this.restate.send(msg.messageType, msg.message)
+    );
   }
 
   onMessage(handler: RestateDuplexStreamEventHandler) {

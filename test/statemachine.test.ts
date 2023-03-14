@@ -1,5 +1,4 @@
 import { describe, expect } from "@jest/globals";
-import { INVOKE_ENTRY_MESSAGE_TYPE } from "../src/protocol_stream";
 import {
   GreetRequest,
   GreetResponse,
@@ -11,7 +10,6 @@ import * as restate from "../src/public_api";
 import { TestDriver } from "../src/testdriver";
 import {
   getStateMessage,
-  getStateMessageCompletion,
   greetRequest,
   greetResponse,
   inputMessage,
@@ -87,7 +85,7 @@ describe("Greeter/MultiWord2", () => {
       [
         startMessage(2),
         inputMessage(greetRequest("bob")),
-        getStateMessageCompletion("seen", 5),
+        getStateMessage("seen", 5),
       ]
     ).run();
 
@@ -108,7 +106,7 @@ describe("Greeter/MultiWord3", () => {
       [
         startMessage(3),
         inputMessage(greetRequest("bob")),
-        getStateMessageCompletion("seen", 5),
+        getStateMessage("seen", 5),
         setStateMessage("seen", 6),
       ]
     ).run();

@@ -101,8 +101,6 @@ export class TestDriver<I, O> implements Connection {
         ", message: " +
         JSON.stringify(message)
     );
-    console.debug("The full results array currently looks like: ");
-    this.result.forEach((el) => console.debug(el));
 
     // For an output message, flush immediately
     if (message_type === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE) {

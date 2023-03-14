@@ -8,7 +8,6 @@ import {
 import * as restate from "../src/public_api";
 import { TestDriver } from "../src/testdriver";
 import {
-  getStateMessageCompletion,
   inputMessage,
   setStateMessage,
   startMessage,
@@ -72,7 +71,7 @@ describe("GetAndSetGreeter: With GetState and SetState", () => {
       [
         startMessage(3),
         inputMessage(greetRequest("Till")),
-        getStateMessageCompletion("STATE", "Francesco"),
+        getStateMessage("STATE", "Francesco"),
         setStateMessage("STATE", "Till"),
       ]
     ).run();
@@ -93,7 +92,7 @@ describe("GetAndSetGreeter: With GetState already completed", () => {
       [
         startMessage(2),
         inputMessage(greetRequest("Till")),
-        getStateMessageCompletion("STATE", "Francesco"),
+        getStateMessage("STATE", "Francesco"),
       ]
     ).run();
 
@@ -159,7 +158,7 @@ describe("ClearState: With ClearState already completed", () => {
       [
         startMessage(4),
         inputMessage(greetRequest("Till")),
-        getStateMessageCompletion("STATE", "Francesco"),
+        getStateMessage("STATE", "Francesco"),
         setStateMessage("STATE", "Till"),
         clearStateMessage("STATE"),
       ]

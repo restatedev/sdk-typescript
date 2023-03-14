@@ -12,7 +12,6 @@ import {
   inputMessage,
   startMessage,
   invokeMessage,
-  invokeMessageCompletion,
   completionMessage,
   outputMessage,
   setStateMessage,
@@ -145,13 +144,13 @@ describe("ReverseAwaitOrder: replay all invoke messages and setstate ", () => {
       [
         startMessage(4),
         inputMessage(greetRequest("Till")),
-        invokeMessageCompletion(
+        invokeMessage(
           "dev.restate.Greeter",
           "Greet",
           greetRequest("Francesco"),
           greetResponse("FRANCESCO")
         ),
-        invokeMessageCompletion(
+        invokeMessage(
           "dev.restate.Greeter",
           "Greet",
           greetRequest("Till"),

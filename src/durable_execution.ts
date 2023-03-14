@@ -46,9 +46,10 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   private state: ExecutionState = ExecutionState.WAITING_FOR_START;
 
   // Obtained after StartMessage
-  private instanceKey!: Buffer;
-  private serviceName: string;
-  private invocationId!: Buffer;
+  // You need access to these three fields within your service, so you can deliver them to external systems to completer awakeables
+  public instanceKey!: Buffer;
+  public serviceName: string;
+  public invocationId!: Buffer;
   // Number of journal entries that will be replayed by the runtime
   private nbEntriesToReplay!: number;
   // Increments for each replay message we get from the runtime.
@@ -64,7 +65,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   // e.g.: ctx.inBackground(() => client.greet(request))
   private inBackgroundCallFlag = false;
 
-  // Promises that need to be resolved. Journal index -> promise
+  // Promises that need to be resolved. Journal index -> resolve
   private pendingPromises: Map<number, (value: any) => void> = new Map();
   // Replay messages that arrived before the user code was at that point.
   private outOfOrderReplayMessages: Map<number, any> = new Map();
@@ -85,18 +86,18 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       this.incrementJournalIndex();
       this.addPromise(this.currentJournalIndex, resolve);
 
-      if (this.state === ExecutionState.PROCESSING) {
-        console.debug("Forward the GetStateEntryMessage to the runtime");
-        // Forward to runtime
-        this.connection.send(
-          GET_STATE_ENTRY_MESSAGE_TYPE,
-          GetStateEntryMessage.create({ key: Buffer.from(name) })
-        );
-      } else {
+      if (this.state === ExecutionState.REPLAYING) {
         console.debug(
-          "In replay mode: GetState message will not be forwarded to the runtime. This will be fulfilled by the next replayed journal entry."
+          "In replay mode: GetState message will not be forwarded to the runtime. Expecting completion"
         );
+        return;
       }
+
+      console.debug("Forward the GetStateEntryMessage to the runtime");
+      this.connection.send(
+        GET_STATE_ENTRY_MESSAGE_TYPE,
+        GetStateEntryMessage.create({ key: Buffer.from(name) })
+      );
     })
       .then<T>((result: Buffer) => {
         return JSON.parse(result.toString()) as T;
@@ -110,46 +111,43 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     console.debug(
       "Service called setState: " + name + " - " + JSON.stringify(value)
     );
-    const str = JSON.stringify(value);
-    const bytes = Buffer.from(str);
 
-    return new Promise((resolve, reject) => {
-      this.incrementJournalIndex();
+    this.incrementJournalIndex();
 
-      if (this.state === ExecutionState.PROCESSING) {
-        console.debug("Forward the SetStateEntryMessage to the runtime");
-        // Forward to runtime
-        this.connection.send(
-          SET_STATE_ENTRY_MESSAGE_TYPE,
-          SetStateEntryMessage.create({
-            key: Buffer.from(name, "utf8"),
-            value: bytes,
-          })
-        );
-      } else {
-        console.debug(
-          "In replay mode: SetState message will not be forwarded to the runtime. This will be fulfilled by the next replayed journal entry."
-        );
-      }
-    });
+    if (this.state === ExecutionState.REPLAYING) {
+      console.debug(
+        "In replay mode: SetState message will not be forwarded to the runtime. Expecting completion"
+      );
+      return;
+    }
+
+    console.debug("Forward the SetStateEntryMessage to the runtime");
+    const bytes = Buffer.from(JSON.stringify(value));
+    this.connection.send(
+      SET_STATE_ENTRY_MESSAGE_TYPE,
+      SetStateEntryMessage.create({
+        key: Buffer.from(name, "utf8"),
+        value: bytes,
+      })
+    );
   }
 
   async clear(name: string): Promise<void> {
     console.debug("Service called clearState: " + name);
     this.incrementJournalIndex();
 
-    if (this.state === ExecutionState.PROCESSING) {
-      console.debug("Forward the ClearStateEntryMessage to the runtime");
-      // Forward to runtime
-      this.connection.send(
-        CLEAR_STATE_ENTRY_MESSAGE_TYPE,
-        ClearStateEntryMessage.create({ key: Buffer.from(name, "utf8") })
-      );
-    } else {
+    if (this.state === ExecutionState.REPLAYING) {
       console.debug(
-        "In replay mode: ClearState message will not be forwarded to the runtime. This will be fulfilled by the next replayed journal entry."
+        "In replay mode: ClearState message will not be forwarded to the runtime. Expecting completion"
       );
+      return;
     }
+
+    console.debug("Forward the ClearStateEntryMessage to the runtime");
+    this.connection.send(
+      CLEAR_STATE_ENTRY_MESSAGE_TYPE,
+      ClearStateEntryMessage.create({ key: Buffer.from(name, "utf8") })
+    );
   }
 
   async awakeable<T>(): Promise<T> {
@@ -159,39 +157,24 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       this.incrementJournalIndex();
       this.addPromise(this.currentJournalIndex, resolve);
 
-      if (this.state === ExecutionState.PROCESSING) {
-        console.debug("Forward the Awakeable message to the runtime");
-
-        // TODO: Don't we need to use the same proto message here as in the Java SDK?
-        // A Java service needs to be able to awake a Typescript service?
-        const awakeableIdentifier = new AwakeableIdentifier(
-          this.serviceName,
-          this.instanceKey,
-          this.invocationId,
-          this.currentJournalIndex
-        );
-        this.connection.send(
-          AWAKEABLE_ENTRY_MESSAGE_TYPE,
-          AwakeableEntryMessage.create({
-            value: Buffer.from(JSON.stringify(awakeableIdentifier)),
-          })
-        );
-      } else {
+      if (this.state === ExecutionState.REPLAYING) {
         console.debug(
-          "In replay mode: the message will not be forwarded to the runtime. This will be fulfilled by the next replayed journal entry."
+          "In replay mode: awakeable message will not be forwarded to the runtime. Expecting completion"
         );
+        return;
       }
-    })
-      .then<T>((result: Buffer) => {
-        console.debug(
-          "Received the following result: " + JSON.parse(result.toString())
-        );
-        return JSON.parse(result.toString()) as T;
-      })
-      .catch((reason) => {
-        console.debug(reason);
-        return "" as T;
-      });
+
+      console.debug("Forward the Awakeable message to the runtime");
+      this.connection.send(
+        AWAKEABLE_ENTRY_MESSAGE_TYPE,
+        AwakeableEntryMessage.create()
+      );
+    }).then<T>((result: Buffer) => {
+      console.debug(
+        "Received the following result: " + JSON.parse(result.toString())
+      );
+      return JSON.parse(result.toString()) as T;
+    });
   }
 
   async completeAwakeable<T>(
@@ -200,26 +183,26 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   ): Promise<void> {
     console.debug("Service called completeAwakeable");
 
-    return new Promise((resolve, reject) => {
-      this.incrementJournalIndex();
-      this.addPromise(this.currentJournalIndex, resolve);
+    this.incrementJournalIndex();
 
-      if (this.state === ExecutionState.PROCESSING) {
-        console.debug("Forward the CompleteAwakeable message to the runtime");
+    if (this.state === ExecutionState.REPLAYING) {
+      console.debug(
+        "In replay mode: CompleteAwakeable message will not be forwarded to the runtime. Expecting completion"
+      );
+      return;
+    }
 
-        this.connection.send(
-          COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
-          CompleteAwakeableEntryMessage.create({
-            serviceName: id.serviceName,
-            instanceKey: id.instanceKey,
-            invocationId: id.invocationId,
-            entryIndex: id.entryIndex,
-            payload: Buffer.from(JSON.stringify(payload)),
-          })
-        );
-      }
-      resolve();
-    });
+    console.debug("Forward the CompleteAwakeable message to the runtime");
+    this.connection.send(
+      COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
+      CompleteAwakeableEntryMessage.create({
+        serviceName: id.serviceName,
+        instanceKey: id.instanceKey,
+        invocationId: id.invocationId,
+        entryIndex: id.entryIndex,
+        payload: Buffer.from(JSON.stringify(payload)),
+      })
+    );
   }
 
   request(
@@ -241,34 +224,28 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     method: string,
     data: Uint8Array
   ): Promise<Uint8Array> {
-    return new Promise((resolve, reject) => {
-      this.incrementJournalIndex();
+    this.incrementJournalIndex();
 
-      if (this.state === ExecutionState.PROCESSING) {
-        console.debug(
-          "Forward the BackgroundInvokeEntryMessage to the runtime"
-        );
-        this.connection.send(
-          BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
-          BackgroundInvokeEntryMessage.create({
-            serviceName: service,
-            methodName: method,
-            parameter: Buffer.from(data),
-          })
-        );
-      } else if (this.state === ExecutionState.REPLAYING) {
-        console.debug(
-          "Ignoring background invoke call request from user. We are in replay mode. This will be fulfilled by the next journal entry."
-        );
-      } else {
-        throw new Error(
-          "Illegal state: cannot execute background calls when in state " +
-            this.state
-        );
-      }
-      // We don't care about the result, just resolve the promise. Return empty result
-      resolve(new Uint8Array());
-    });
+    if (this.state === ExecutionState.REPLAYING) {
+      console.debug(
+        "In replay mode: background invoke will not be forwarded to the runtime. Expecting journal entry."
+      );
+    } else {
+      console.debug("Forward the BackgroundInvokeEntryMessage to the runtime");
+      this.connection.send(
+        BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
+        BackgroundInvokeEntryMessage.create({
+          serviceName: service,
+          methodName: method,
+          parameter: Buffer.from(data),
+        })
+      );
+    }
+
+    // We don't care about the result, just resolve the promise. Return empty result
+    // This is a dirty solution. We need to return a Promise<Uint8Array> because that is what the generated client by proto-ts expects...
+    // We need to find a better solution here...
+    return new Uint8Array();
   }
 
   async invoke(
@@ -280,25 +257,22 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       this.incrementJournalIndex();
       this.addPromise(this.currentJournalIndex, resolve);
 
-      if (this.state === ExecutionState.PROCESSING) {
-        console.debug("Forward the InvokeEntryMessage to the runtime");
-        this.connection.send(
-          INVOKE_ENTRY_MESSAGE_TYPE,
-          InvokeEntryMessage.create({
-            serviceName: service,
-            methodName: method,
-            parameter: Buffer.from(data),
-          })
-        );
-      } else if (this.state === ExecutionState.REPLAYING) {
+      if (this.state === ExecutionState.REPLAYING) {
         console.debug(
-          "Ignoring invoke call request from user. We are in replay mode. This will be fulfilled by the next journal entry."
+          "In replay mode: invoke will not be forwarded to the runtime. Expecting completion"
         );
-      } else {
-        throw new Error(
-          `Illegal state: cannot execute invoke calls when in state ${this.state}`
-        );
+        return;
       }
+
+      console.debug("Forward the InvokeEntryMessage to the runtime");
+      this.connection.send(
+        INVOKE_ENTRY_MESSAGE_TYPE,
+        InvokeEntryMessage.create({
+          serviceName: service,
+          methodName: method,
+          parameter: Buffer.from(data),
+        })
+      );
     }).then((result) => {
       return result as Uint8Array;
     });
@@ -312,20 +286,21 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
   async sideEffect<T>(fn: () => Promise<T>): Promise<T> {
     console.debug("Service used side effect");
-    this.incrementJournalIndex();
 
     return new Promise((resolve, reject) => {
+      this.incrementJournalIndex();
       this.addPromise(this.currentJournalIndex, resolve);
 
       const sideEffectOutput = fn().then((result) => {
-        if (this.state === ExecutionState.PROCESSING) {
-          const bytes = Buffer.from(JSON.stringify(result));
-          this.connection.send(SIDE_EFFECT_ENTRY_MESSAGE_TYPE, bytes);
-        } else {
+        if (this.state === ExecutionState.REPLAYING) {
           console.debug(
-            "Ignoring side effect call from user. We are in replay mode. This will be fulfilled by the next journal entry."
+            "In replay mode: side effect will not be ignored. Expecting completion"
           );
+          return;
         }
+
+        const bytes = Buffer.from(JSON.stringify(result));
+        this.connection.send(SIDE_EFFECT_ENTRY_MESSAGE_TYPE, bytes);
         return result;
       });
       return sideEffectOutput;
@@ -339,18 +314,19 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       this.incrementJournalIndex();
       this.addPromise(this.currentJournalIndex, resolve);
 
-      if (this.state === ExecutionState.PROCESSING) {
-        console.debug("Forward the SleepEntryMessage to the runtime");
-        // Forward to runtime
-        this.connection.send(
-          SLEEP_ENTRY_MESSAGE_TYPE,
-          SleepEntryMessage.create({ wakeUpTime: Date.now() + millis })
-        );
-      } else {
+      if (this.state === ExecutionState.REPLAYING) {
         console.debug(
-          "In replay mode: Sleep message will not be forwarded to the runtime. This will be fulfilled by the next replayed journal entry."
+          "In replay mode: SleepEntryMessage will not be forwarded to the runtime. Expecting completion"
         );
+        return;
       }
+
+      console.debug("Forward the SleepEntryMessage to the runtime");
+      // Forward to runtime
+      this.connection.send(
+        SLEEP_ENTRY_MESSAGE_TYPE,
+        SleepEntryMessage.create({ wakeUpTime: Date.now() + millis })
+      );
     });
   }
 
@@ -368,27 +344,11 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         break;
       }
       case COMPLETION_MESSAGE_TYPE: {
-        const m = message as CompletionMessage;
-        console.debug("Received completion message: " + JSON.stringify(m));
-
-        if (this.state === ExecutionState.REPLAYING) {
-          throw new Error(
-            "Illegal state: received completion message but still in replay state."
-          );
-        }
-
-        this.resolvePromise(m.entryIndex, m.value);
+        this.handleCompletionMessage(message as CompletionMessage);
         break;
       }
       case POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE: {
-        const m = message as PollInputStreamEntryMessage;
-        console.debug("Received input message: " + JSON.stringify(m));
-
-        this.method.invoke(this, m.value).then(
-          (value) => this.onCallSuccess(value),
-          (failure) => this.onCallFailure(failure)
-        );
-
+        this.handleInputMessage(message as PollInputStreamEntryMessage);
         break;
       }
       case GET_STATE_ENTRY_MESSAGE_TYPE: {
@@ -460,6 +420,27 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     }
   }
 
+  handleInputMessage(m: PollInputStreamEntryMessage) {
+    console.debug("Received input message: " + JSON.stringify(m));
+
+    this.method.invoke(this, m.value).then(
+      (value) => this.onCallSuccess(value),
+      (failure) => this.onCallFailure(failure)
+    );
+  }
+
+  handleCompletionMessage(m: CompletionMessage) {
+    console.debug("Received completion message: " + JSON.stringify(m));
+
+    if (this.state === ExecutionState.REPLAYING) {
+      throw new Error(
+        "Illegal state: received completion message but still in replay state."
+      );
+    }
+
+    this.resolvePromise(m.entryIndex, m.value);
+  }
+
   handleGetStateMessage(m: GetStateEntryMessage): void {
     console.debug(
       "Received completed GetStateEntryMessage from runtime: " +
@@ -472,6 +453,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       console.debug("Resolving state to " + m.value.toString());
       this.resolvePromise(this.currentJournalIndex, m.value as Buffer);
     } else {
+      // TODO
       console.debug("Empty value");
       this.resolvePromise(this.currentJournalIndex, null);
     }
@@ -486,6 +468,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       console.debug("Resolving invoke message");
       this.resolvePromise(this.replayIndex, m.value);
     } else {
+      // TODO: we should return a failure
       console.debug("Empty value");
       this.resolvePromise(this.replayIndex, null);
     }
@@ -569,6 +552,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     ) {
       // Resolving promise
       resolve(this.outOfOrderReplayMessages.get(journalIndex));
+      this.outOfOrderReplayMessages.delete(journalIndex);
     } else {
       this.pendingPromises.set(journalIndex, resolve);
     }

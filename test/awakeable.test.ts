@@ -87,16 +87,7 @@ describe("AwakeableGreeter: without completion", () => {
       [startMessage(1), inputMessage(greetRequest("Till"))]
     ).run();
 
-    expect(result).toStrictEqual([
-      awakeableMessage(
-        new AwakeableIdentifier(
-          "Greeter",
-          Buffer.from("123"),
-          Buffer.from("abcd"),
-          1
-        )
-      ),
-    ]);
+    expect(result).toStrictEqual([awakeableMessage()]);
   });
 });
 
@@ -115,14 +106,7 @@ describe("AwakeableGreeter: with completion", () => {
     ).run();
 
     expect(result).toStrictEqual([
-      awakeableMessage(
-        new AwakeableIdentifier(
-          "Greeter",
-          Buffer.from("123"),
-          Buffer.from("abcd"),
-          1
-        )
-      ),
+      awakeableMessage(),
       outputMessage(greetResponse("Hello Francesco")),
     ]);
   });

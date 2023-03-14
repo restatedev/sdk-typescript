@@ -15,7 +15,6 @@ import {
   greetRequest,
   greetResponse,
   sleepMessage,
-  emptyCompletionMessage,
 } from "./protoutils";
 import { SLEEP_ENTRY_MESSAGE_TYPE } from "../src/protocol_stream";
 
