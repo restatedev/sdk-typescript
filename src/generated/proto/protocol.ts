@@ -1,7 +1,7 @@
 /* eslint-disable */
 import Long from "long";
 import _m0 from "protobufjs/minimal";
-import { FileDescriptorProto } from "ts-proto-descriptors";
+import { FileDescriptorProto as FileDescriptorProto1 } from "ts-proto-descriptors";
 import { Empty, protoMetadata as protoMetadata1 } from "../google/protobuf/empty";
 
 export const protobufPackage = "dev.restate.service.protocol";
@@ -195,11 +195,11 @@ export const StartMessage = {
     return obj;
   },
 
-  create<I extends Exact<DeepPartial<StartMessage>, I>>(base?: I): StartMessage {
+  create(base?: DeepPartial<StartMessage>): StartMessage {
     return StartMessage.fromPartial(base ?? {});
   },
 
-  fromPartial<I extends Exact<DeepPartial<StartMessage>, I>>(object: I): StartMessage {
+  fromPartial(object: DeepPartial<StartMessage>): StartMessage {
     const message = createBaseStartMessage();
     message.invocationId = object.invocationId ?? Buffer.alloc(0);
     message.instanceKey = object.instanceKey ?? Buffer.alloc(0);
@@ -276,11 +276,11 @@ export const CompletionMessage = {
     return obj;
   },
 
-  create<I extends Exact<DeepPartial<CompletionMessage>, I>>(base?: I): CompletionMessage {
+  create(base?: DeepPartial<CompletionMessage>): CompletionMessage {
     return CompletionMessage.fromPartial(base ?? {});
   },
 
-  fromPartial<I extends Exact<DeepPartial<CompletionMessage>, I>>(object: I): CompletionMessage {
+  fromPartial(object: DeepPartial<CompletionMessage>): CompletionMessage {
     const message = createBaseCompletionMessage();
     message.entryIndex = object.entryIndex ?? 0;
     message.empty = (object.empty !== undefined && object.empty !== null) ? Empty.fromPartial(object.empty) : undefined;
@@ -333,11 +333,11 @@ export const PollInputStreamEntryMessage = {
     return obj;
   },
 
-  create<I extends Exact<DeepPartial<PollInputStreamEntryMessage>, I>>(base?: I): PollInputStreamEntryMessage {
+  create(base?: DeepPartial<PollInputStreamEntryMessage>): PollInputStreamEntryMessage {
     return PollInputStreamEntryMessage.fromPartial(base ?? {});
   },
 
-  fromPartial<I extends Exact<DeepPartial<PollInputStreamEntryMessage>, I>>(object: I): PollInputStreamEntryMessage {
+  fromPartial(object: DeepPartial<PollInputStreamEntryMessage>): PollInputStreamEntryMessage {
     const message = createBasePollInputStreamEntryMessage();
     message.value = object.value ?? Buffer.alloc(0);
     return message;
@@ -395,11 +395,11 @@ export const OutputStreamEntryMessage = {
     return obj;
   },
 
-  create<I extends Exact<DeepPartial<OutputStreamEntryMessage>, I>>(base?: I): OutputStreamEntryMessage {
+  create(base?: DeepPartial<OutputStreamEntryMessage>): OutputStreamEntryMessage {
     return OutputStreamEntryMessage.fromPartial(base ?? {});
   },
 
-  fromPartial<I extends Exact<DeepPartial<OutputStreamEntryMessage>, I>>(object: I): OutputStreamEntryMessage {
+  fromPartial(object: DeepPartial<OutputStreamEntryMessage>): OutputStreamEntryMessage {
     const message = createBaseOutputStreamEntryMessage();
     message.value = object.value ?? undefined;
     message.failure = (object.failure !== undefined && object.failure !== null)
@@ -468,11 +468,11 @@ export const GetStateEntryMessage = {
     return obj;
   },
 
-  create<I extends Exact<DeepPartial<GetStateEntryMessage>, I>>(base?: I): GetStateEntryMessage {
+  create(base?: DeepPartial<GetStateEntryMessage>): GetStateEntryMessage {
     return GetStateEntryMessage.fromPartial(base ?? {});
   },
 
-  fromPartial<I extends Exact<DeepPartial<GetStateEntryMessage>, I>>(object: I): GetStateEntryMessage {
+  fromPartial(object: DeepPartial<GetStateEntryMessage>): GetStateEntryMessage {
     const message = createBaseGetStateEntryMessage();
     message.key = object.key ?? Buffer.alloc(0);
     message.empty = (object.empty !== undefined && object.empty !== null) ? Empty.fromPartial(object.empty) : undefined;
@@ -532,11 +532,11 @@ export const SetStateEntryMessage = {
     return obj;
   },
 
-  create<I extends Exact<DeepPartial<SetStateEntryMessage>, I>>(base?: I): SetStateEntryMessage {
+  create(base?: DeepPartial<SetStateEntryMessage>): SetStateEntryMessage {
     return SetStateEntryMessage.fromPartial(base ?? {});
   },
 
-  fromPartial<I extends Exact<DeepPartial<SetStateEntryMessage>, I>>(object: I): SetStateEntryMessage {
+  fromPartial(object: DeepPartial<SetStateEntryMessage>): SetStateEntryMessage {
     const message = createBaseSetStateEntryMessage();
     message.key = object.key ?? Buffer.alloc(0);
     message.value = object.value ?? Buffer.alloc(0);
@@ -584,11 +584,11 @@ export const ClearStateEntryMessage = {
     return obj;
   },
 
-  create<I extends Exact<DeepPartial<ClearStateEntryMessage>, I>>(base?: I): ClearStateEntryMessage {
+  create(base?: DeepPartial<ClearStateEntryMessage>): ClearStateEntryMessage {
     return ClearStateEntryMessage.fromPartial(base ?? {});
   },
 
-  fromPartial<I extends Exact<DeepPartial<ClearStateEntryMessage>, I>>(object: I): ClearStateEntryMessage {
+  fromPartial(object: DeepPartial<ClearStateEntryMessage>): ClearStateEntryMessage {
     const message = createBaseClearStateEntryMessage();
     message.key = object.key ?? Buffer.alloc(0);
     return message;
@@ -645,11 +645,11 @@ export const SleepEntryMessage = {
     return obj;
   },
 
-  create<I extends Exact<DeepPartial<SleepEntryMessage>, I>>(base?: I): SleepEntryMessage {
+  create(base?: DeepPartial<SleepEntryMessage>): SleepEntryMessage {
     return SleepEntryMessage.fromPartial(base ?? {});
   },
 
-  fromPartial<I extends Exact<DeepPartial<SleepEntryMessage>, I>>(object: I): SleepEntryMessage {
+  fromPartial(object: DeepPartial<SleepEntryMessage>): SleepEntryMessage {
     const message = createBaseSleepEntryMessage();
     message.wakeUpTime = object.wakeUpTime ?? 0;
     message.result = (object.result !== undefined && object.result !== null)
@@ -735,11 +735,11 @@ export const InvokeEntryMessage = {
     return obj;
   },
 
-  create<I extends Exact<DeepPartial<InvokeEntryMessage>, I>>(base?: I): InvokeEntryMessage {
+  create(base?: DeepPartial<InvokeEntryMessage>): InvokeEntryMessage {
     return InvokeEntryMessage.fromPartial(base ?? {});
   },
 
-  fromPartial<I extends Exact<DeepPartial<InvokeEntryMessage>, I>>(object: I): InvokeEntryMessage {
+  fromPartial(object: DeepPartial<InvokeEntryMessage>): InvokeEntryMessage {
     const message = createBaseInvokeEntryMessage();
     message.serviceName = object.serviceName ?? "";
     message.methodName = object.methodName ?? "";
@@ -811,11 +811,11 @@ export const BackgroundInvokeEntryMessage = {
     return obj;
   },
 
-  create<I extends Exact<DeepPartial<BackgroundInvokeEntryMessage>, I>>(base?: I): BackgroundInvokeEntryMessage {
+  create(base?: DeepPartial<BackgroundInvokeEntryMessage>): BackgroundInvokeEntryMessage {
     return BackgroundInvokeEntryMessage.fromPartial(base ?? {});
   },
 
-  fromPartial<I extends Exact<DeepPartial<BackgroundInvokeEntryMessage>, I>>(object: I): BackgroundInvokeEntryMessage {
+  fromPartial(object: DeepPartial<BackgroundInvokeEntryMessage>): BackgroundInvokeEntryMessage {
     const message = createBaseBackgroundInvokeEntryMessage();
     message.serviceName = object.serviceName ?? "";
     message.methodName = object.methodName ?? "";
@@ -875,11 +875,11 @@ export const AwakeableEntryMessage = {
     return obj;
   },
 
-  create<I extends Exact<DeepPartial<AwakeableEntryMessage>, I>>(base?: I): AwakeableEntryMessage {
+  create(base?: DeepPartial<AwakeableEntryMessage>): AwakeableEntryMessage {
     return AwakeableEntryMessage.fromPartial(base ?? {});
   },
 
-  fromPartial<I extends Exact<DeepPartial<AwakeableEntryMessage>, I>>(object: I): AwakeableEntryMessage {
+  fromPartial(object: DeepPartial<AwakeableEntryMessage>): AwakeableEntryMessage {
     const message = createBaseAwakeableEntryMessage();
     message.value = object.value ?? undefined;
     message.failure = (object.failure !== undefined && object.failure !== null)
@@ -972,13 +972,11 @@ export const CompleteAwakeableEntryMessage = {
     return obj;
   },
 
-  create<I extends Exact<DeepPartial<CompleteAwakeableEntryMessage>, I>>(base?: I): CompleteAwakeableEntryMessage {
+  create(base?: DeepPartial<CompleteAwakeableEntryMessage>): CompleteAwakeableEntryMessage {
     return CompleteAwakeableEntryMessage.fromPartial(base ?? {});
   },
 
-  fromPartial<I extends Exact<DeepPartial<CompleteAwakeableEntryMessage>, I>>(
-    object: I,
-  ): CompleteAwakeableEntryMessage {
+  fromPartial(object: DeepPartial<CompleteAwakeableEntryMessage>): CompleteAwakeableEntryMessage {
     const message = createBaseCompleteAwakeableEntryMessage();
     message.serviceName = object.serviceName ?? "";
     message.instanceKey = object.instanceKey ?? Buffer.alloc(0);
@@ -1039,11 +1037,11 @@ export const Failure = {
     return obj;
   },
 
-  create<I extends Exact<DeepPartial<Failure>, I>>(base?: I): Failure {
+  create(base?: DeepPartial<Failure>): Failure {
     return Failure.fromPartial(base ?? {});
   },
 
-  fromPartial<I extends Exact<DeepPartial<Failure>, I>>(object: I): Failure {
+  fromPartial(object: DeepPartial<Failure>): Failure {
     const message = createBaseFailure();
     message.code = object.code ?? 0;
     message.message = object.message ?? "";
@@ -1059,7 +1057,7 @@ type ProtoMetaMessageOptions = {
 };
 
 export interface ProtoMetadata {
-  fileDescriptor: FileDescriptorProto;
+  fileDescriptor: FileDescriptorProto1;
   references: { [key: string]: any };
   dependencies?: ProtoMetadata[];
   options?: {
@@ -1073,7 +1071,7 @@ export interface ProtoMetadata {
 }
 
 export const protoMetadata: ProtoMetadata = {
-  fileDescriptor: FileDescriptorProto.fromPartial({
+  fileDescriptor: FileDescriptorProto1.fromPartial({
     "name": "proto/protocol.proto",
     "package": "dev.restate.service.protocol",
     "dependency": ["google/protobuf/empty.proto"],
@@ -1658,46 +1656,24 @@ export const protoMetadata: ProtoMetadata = {
     "enumType": [],
     "service": [],
     "extension": [],
-    "options": {
-      "javaPackage": "dev.restate.generated.service.protocol",
-      "javaOuterClassname": "",
-      "javaMultipleFiles": false,
-      "javaGenerateEqualsAndHash": false,
-      "javaStringCheckUtf8": false,
-      "optimizeFor": 1,
-      "goPackage": "restate.dev/sdk-go/pb/service/protocol",
-      "ccGenericServices": false,
-      "javaGenericServices": false,
-      "pyGenericServices": false,
-      "phpGenericServices": false,
-      "deprecated": false,
-      "ccEnableArenas": false,
-      "objcClassPrefix": "",
-      "csharpNamespace": "",
-      "swiftPrefix": "",
-      "phpClassPrefix": "",
-      "phpNamespace": "",
-      "phpMetadataNamespace": "",
-      "rubyPackage": "",
-      "uninterpretedOption": [],
-    },
+    "options": undefined,
     "sourceCodeInfo": {
       "location": [{
         "path": [4, 0],
-        "span": [12, 0, 19, 1],
+        "span": [9, 0, 16, 1],
         "leadingComments": " Type: 0x0000 + 0\n",
         "trailingComments": "",
         "leadingDetachedComments": [" --- Core frames ---\n"],
       }, {
         "path": [4, 1],
-        "span": [23, 0, 31, 1],
+        "span": [20, 0, 28, 1],
         "leadingComments":
           " Type: 0x0000 + 1\n Note: Completions that are simply acks will use this frame without sending back any result\n",
         "trailingComments": "",
         "leadingDetachedComments": [],
       }, {
         "path": [4, 2],
-        "span": [48, 0, 50, 1],
+        "span": [45, 0, 47, 1],
         "leadingComments": " Kind: Completable JournalEntry\n Type: 0x0400 + 0\n",
         "trailingComments": "",
         "leadingDetachedComments": [
@@ -1707,61 +1683,61 @@ export const protoMetadata: ProtoMetadata = {
         ],
       }, {
         "path": [4, 3],
-        "span": [54, 0, 59, 1],
+        "span": [51, 0, 56, 1],
         "leadingComments": " Kind: Ack-able JournalEntry\n Type: 0x0400 + 1\n",
         "trailingComments": "",
         "leadingDetachedComments": [],
       }, {
         "path": [4, 4],
-        "span": [65, 0, 72, 1],
+        "span": [62, 0, 69, 1],
         "leadingComments": " Kind: Completable JournalEntry\n Type: 0x0800 + 0\n",
         "trailingComments": "",
         "leadingDetachedComments": [" ------ State access ------\n"],
       }, {
         "path": [4, 5],
-        "span": [76, 0, 79, 1],
+        "span": [73, 0, 76, 1],
         "leadingComments": " Kind: Ack-able JournalEntry\n Type: 0x0800 + 1\n",
         "trailingComments": "",
         "leadingDetachedComments": [],
       }, {
         "path": [4, 6],
-        "span": [83, 0, 85, 1],
+        "span": [80, 0, 82, 1],
         "leadingComments": " Kind: Ack-able JournalEntry\n Type: 0x0800 + 2\n",
         "trailingComments": "",
         "leadingDetachedComments": [],
       }, {
         "path": [4, 7],
-        "span": [91, 0, 96, 1],
+        "span": [88, 0, 93, 1],
         "leadingComments": " Kind: Completable JournalEntry\n Type: 0x0C00 + 0\n",
         "trailingComments": "",
         "leadingDetachedComments": [" ------ Syscalls ------\n"],
       }, {
         "path": [4, 7, 2, 0],
-        "span": [93, 2, 25],
+        "span": [90, 2, 25],
         "leadingComments": " Duration since UNIX Epoch\n",
         "trailingComments": "",
         "leadingDetachedComments": [],
       }, {
         "path": [4, 8],
-        "span": [100, 0, 110, 1],
+        "span": [97, 0, 107, 1],
         "leadingComments": " Kind: Completable JournalEntry\n Type: 0x0C00 + 1\n",
         "trailingComments": "",
         "leadingDetachedComments": [],
       }, {
         "path": [4, 9],
-        "span": [114, 0, 119, 1],
+        "span": [111, 0, 116, 1],
         "leadingComments": " Kind: Ack-able JournalEntry\n Type: 0x0C00 + 2\n",
         "trailingComments": "",
         "leadingDetachedComments": [],
       }, {
         "path": [4, 10],
-        "span": [123, 0, 128, 1],
+        "span": [120, 0, 125, 1],
         "leadingComments": " Kind: Completable JournalEntry\n Type: 0x0C00 + 3\n",
         "trailingComments": "",
         "leadingDetachedComments": [],
       }, {
         "path": [4, 11],
-        "span": [132, 0, 139, 1],
+        "span": [129, 0, 136, 1],
         "leadingComments": " Kind: Ack-able JournalEntry\n Type: 0x0C00 + 4\n",
         "trailingComments": "",
         "leadingDetachedComments": [],
@@ -1837,10 +1813,6 @@ export type DeepPartial<T> = T extends Builtin ? T
   : T extends Array<infer U> ? Array<DeepPartial<U>> : T extends ReadonlyArray<infer U> ? ReadonlyArray<DeepPartial<U>>
   : T extends {} ? { [K in keyof T]?: DeepPartial<T[K]> }
   : Partial<T>;
-
-type KeysOfUnion<T> = T extends T ? keyof T : never;
-export type Exact<P, I extends P> = P extends Builtin ? P
-  : P & { [K in keyof P]: Exact<P[K], I[K]> } & { [K in Exclude<keyof I, KeysOfUnion<P>>]: never };
 
 function longToNumber(long: Long): number {
   if (long.gt(Number.MAX_SAFE_INTEGER)) {

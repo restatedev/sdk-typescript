@@ -1,6 +1,6 @@
 /* eslint-disable */
 import _m0 from "protobufjs/minimal";
-import { FileDescriptorProto } from "ts-proto-descriptors";
+import { FileDescriptorProto as FileDescriptorProto1 } from "ts-proto-descriptors";
 
 export const protobufPackage = "google.protobuf";
 
@@ -51,11 +51,11 @@ export const Empty = {
     return obj;
   },
 
-  create<I extends Exact<DeepPartial<Empty>, I>>(base?: I): Empty {
+  create(base?: DeepPartial<Empty>): Empty {
     return Empty.fromPartial(base ?? {});
   },
 
-  fromPartial<I extends Exact<DeepPartial<Empty>, I>>(_: I): Empty {
+  fromPartial(_: DeepPartial<Empty>): Empty {
     const message = createBaseEmpty();
     return message;
   },
@@ -69,7 +69,7 @@ type ProtoMetaMessageOptions = {
 };
 
 export interface ProtoMetadata {
-  fileDescriptor: FileDescriptorProto;
+  fileDescriptor: FileDescriptorProto1;
   references: { [key: string]: any };
   dependencies?: ProtoMetadata[];
   options?: {
@@ -83,7 +83,7 @@ export interface ProtoMetadata {
 }
 
 export const protoMetadata: ProtoMetadata = {
-  fileDescriptor: FileDescriptorProto.fromPartial({
+  fileDescriptor: FileDescriptorProto1.fromPartial({
     "name": "google/protobuf/empty.proto",
     "package": "google.protobuf",
     "dependency": [],
@@ -149,7 +149,3 @@ export type DeepPartial<T> = T extends Builtin ? T
   : T extends Array<infer U> ? Array<DeepPartial<U>> : T extends ReadonlyArray<infer U> ? ReadonlyArray<DeepPartial<U>>
   : T extends {} ? { [K in keyof T]?: DeepPartial<T[K]> }
   : Partial<T>;
-
-type KeysOfUnion<T> = T extends T ? keyof T : never;
-export type Exact<P, I extends P> = P extends Builtin ? P
-  : P & { [K in keyof P]: Exact<P[K], I[K]> } & { [K in Exclude<keyof I, KeysOfUnion<P>>]: never };

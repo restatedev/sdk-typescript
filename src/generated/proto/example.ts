@@ -1,6 +1,7 @@
 /* eslint-disable */
 import _m0 from "protobufjs/minimal";
-import { FileDescriptorProto } from "ts-proto-descriptors";
+import { FileDescriptorProto as FileDescriptorProto1 } from "ts-proto-descriptors";
+import { protoMetadata as protoMetadata1 } from "./ext";
 
 export const protobufPackage = "dev.restate";
 
@@ -52,11 +53,11 @@ export const GreetRequest = {
     return obj;
   },
 
-  create<I extends Exact<DeepPartial<GreetRequest>, I>>(base?: I): GreetRequest {
+  create(base?: DeepPartial<GreetRequest>): GreetRequest {
     return GreetRequest.fromPartial(base ?? {});
   },
 
-  fromPartial<I extends Exact<DeepPartial<GreetRequest>, I>>(object: I): GreetRequest {
+  fromPartial(object: DeepPartial<GreetRequest>): GreetRequest {
     const message = createBaseGreetRequest();
     message.name = object.name ?? "";
     return message;
@@ -103,11 +104,11 @@ export const GreetResponse = {
     return obj;
   },
 
-  create<I extends Exact<DeepPartial<GreetResponse>, I>>(base?: I): GreetResponse {
+  create(base?: DeepPartial<GreetResponse>): GreetResponse {
     return GreetResponse.fromPartial(base ?? {});
   },
 
-  fromPartial<I extends Exact<DeepPartial<GreetResponse>, I>>(object: I): GreetResponse {
+  fromPartial(object: DeepPartial<GreetResponse>): GreetResponse {
     const message = createBaseGreetResponse();
     message.greeting = object.greeting ?? "";
     return message;
@@ -153,7 +154,7 @@ type ProtoMetaMessageOptions = {
 };
 
 export interface ProtoMetadata {
-  fileDescriptor: FileDescriptorProto;
+  fileDescriptor: FileDescriptorProto1;
   references: { [key: string]: any };
   dependencies?: ProtoMetadata[];
   options?: {
@@ -167,10 +168,10 @@ export interface ProtoMetadata {
 }
 
 export const protoMetadata: ProtoMetadata = {
-  fileDescriptor: FileDescriptorProto.fromPartial({
+  fileDescriptor: FileDescriptorProto1.fromPartial({
     "name": "proto/example.proto",
     "package": "dev.restate",
-    "dependency": [],
+    "dependency": ["proto/ext.proto"],
     "publicDependency": [],
     "weakDependency": [],
     "messageType": [{
@@ -185,7 +186,15 @@ export const protoMetadata: ProtoMetadata = {
         "defaultValue": "",
         "oneofIndex": 0,
         "jsonName": "name",
-        "options": undefined,
+        "options": {
+          "ctype": 0,
+          "packed": false,
+          "jstype": 0,
+          "lazy": false,
+          "deprecated": false,
+          "weak": false,
+          "uninterpretedOption": [],
+        },
         "proto3Optional": false,
       }],
       "extension": [],
@@ -238,7 +247,7 @@ export const protoMetadata: ProtoMetadata = {
         "clientStreaming": false,
         "serverStreaming": false,
       }],
-      "options": undefined,
+      "options": { "deprecated": false, "uninterpretedOption": [] },
     }],
     "extension": [],
     "options": undefined,
@@ -250,7 +259,11 @@ export const protoMetadata: ProtoMetadata = {
     ".dev.restate.GreetResponse": GreetResponse,
     ".dev.restate.Greeter": GreeterClientImpl,
   },
-  dependencies: [],
+  dependencies: [protoMetadata1],
+  options: {
+    messages: { "GreetRequest": { fields: { "name": { "field": 0 } } } },
+    services: { "Greeter": { options: { "service_type": 1 }, methods: {} } },
+  },
 };
 
 type Builtin = Date | Function | Uint8Array | string | number | boolean | undefined;
@@ -259,10 +272,6 @@ export type DeepPartial<T> = T extends Builtin ? T
   : T extends Array<infer U> ? Array<DeepPartial<U>> : T extends ReadonlyArray<infer U> ? ReadonlyArray<DeepPartial<U>>
   : T extends {} ? { [K in keyof T]?: DeepPartial<T[K]> }
   : Partial<T>;
-
-type KeysOfUnion<T> = T extends T ? keyof T : never;
-export type Exact<P, I extends P> = P extends Builtin ? P
-  : P & { [K in keyof P]: Exact<P[K], I[K]> } & { [K in Exclude<keyof I, KeysOfUnion<P>>]: never };
 
 function isSet(value: any): boolean {
   return value !== null && value !== undefined;
