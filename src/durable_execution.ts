@@ -33,13 +33,22 @@ import {
   AwakeableIdentifier,
   ProtocolMessage,
   SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+  isSet,
 } from "./types";
+import { Failure } from "./generated/proto/protocol";
 
 enum ExecutionState {
   WAITING_FOR_START = "WAITING_FOR_START",
   REPLAYING = "REPLAYING",
   PROCESSING = "PROCESSING",
   CLOSED = "CLOSED",
+}
+
+class PromiseHandler {
+  constructor(
+    readonly resolve: (value: any) => void,
+    readonly reject: (value: any) => void
+  ) {}
 }
 
 export class DurableExecutionStateMachine<I, O> implements RestateContext {
@@ -66,7 +75,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   private inBackgroundCallFlag = false;
 
   // Promises that need to be resolved. Journal index -> resolve
-  private pendingPromises: Map<number, (value: any) => void> = new Map();
+  private pendingPromises: Map<number, PromiseHandler> = new Map();
   // Replay messages that arrived before the user code was at that point.
   private outOfOrderReplayMessages: Map<number, any> = new Map();
 
@@ -84,7 +93,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
     return new Promise<Buffer>((resolve, reject) => {
       this.incrementJournalIndex();
-      this.addPromise(this.currentJournalIndex, resolve);
+      this.addPromise(this.currentJournalIndex, resolve, reject);
 
       if (this.state === ExecutionState.REPLAYING) {
         console.debug(
@@ -99,11 +108,15 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         GetStateEntryMessage.create({ key: Buffer.from(name) })
       );
     })
-      .then<T>((result: Buffer) => {
-        return JSON.parse(result.toString()) as T;
+      .then((result: Buffer | null) => {
+        if (result == null || result.toString() === "") {
+          return null;
+        } else {
+          return JSON.parse(result.toString()) as T;
+        }
       })
-      .catch<null>(() => {
-        return null;
+      .catch((e: Failure) => {
+        throw new Error(`ERROR: Code ${e.code} : ${e.message}`);
       });
   }
 
@@ -155,7 +168,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
     return new Promise<Buffer>((resolve, reject) => {
       this.incrementJournalIndex();
-      this.addPromise(this.currentJournalIndex, resolve);
+      this.addPromise(this.currentJournalIndex, resolve, reject);
 
       if (this.state === ExecutionState.REPLAYING) {
         console.debug(
@@ -169,12 +182,16 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         AWAKEABLE_ENTRY_MESSAGE_TYPE,
         AwakeableEntryMessage.create()
       );
-    }).then<T>((result: Buffer) => {
-      console.debug(
-        "Received the following result: " + JSON.parse(result.toString())
-      );
-      return JSON.parse(result.toString()) as T;
-    });
+    })
+      .then<T>((result: Buffer) => {
+        console.debug(
+          "Received the following result: " + JSON.parse(result.toString())
+        );
+        return JSON.parse(result.toString()) as T;
+      })
+      .catch((e: Failure) => {
+        throw new Error(`ERROR: Code ${e.code} : ${e.message}`);
+      });
   }
 
   async completeAwakeable<T>(
@@ -255,7 +272,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   ): Promise<Uint8Array> {
     return new Promise((resolve, reject) => {
       this.incrementJournalIndex();
-      this.addPromise(this.currentJournalIndex, resolve);
+      this.addPromise(this.currentJournalIndex, resolve, reject);
 
       if (this.state === ExecutionState.REPLAYING) {
         console.debug(
@@ -273,9 +290,13 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
           parameter: Buffer.from(data),
         })
       );
-    }).then((result) => {
-      return result as Uint8Array;
-    });
+    })
+      .then((result) => {
+        return result as Uint8Array;
+      })
+      .catch((e: Failure) => {
+        throw new Error(`ERROR: Code ${e.code} : ${e.message}`);
+      });
   }
 
   async inBackground<T>(call: () => Promise<T>): Promise<void> {
@@ -289,7 +310,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
     return new Promise((resolve, reject) => {
       this.incrementJournalIndex();
-      this.addPromise(this.currentJournalIndex, resolve);
+      this.addPromise(this.currentJournalIndex, resolve, reject);
 
       const sideEffectOutput = fn().then((result) => {
         if (this.state === ExecutionState.REPLAYING) {
@@ -312,7 +333,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
     return new Promise((resolve, reject) => {
       this.incrementJournalIndex();
-      this.addPromise(this.currentJournalIndex, resolve);
+      this.addPromise(this.currentJournalIndex, resolve, reject);
 
       if (this.state === ExecutionState.REPLAYING) {
         console.debug(
@@ -438,7 +459,12 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       );
     }
 
-    this.resolvePromise(m.entryIndex, m.value);
+    if (isSet(m.value)) {
+      this.resolvePromise(m.entryIndex, m.value);
+    } else {
+      // If the value is not set, then it is either empty or a failure
+      this.resolvePromise(m.entryIndex, m.empty, m.failure);
+    }
   }
 
   handleGetStateMessage(m: GetStateEntryMessage): void {
@@ -449,13 +475,13 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
     this.checkIfInReplay();
 
-    if (m.value != undefined) {
-      console.debug("Resolving state to " + m.value.toString());
+    if (isSet(m.value)) {
       this.resolvePromise(this.currentJournalIndex, m.value as Buffer);
+    }
+    if (isSet(m.empty)) {
+      this.resolvePromise(this.currentJournalIndex, m.empty);
     } else {
-      // TODO
-      console.debug("Empty value");
-      this.resolvePromise(this.currentJournalIndex, null);
+      console.debug("GetStateEntryMessage not yet completed.");
     }
   }
 
@@ -464,14 +490,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
     this.checkIfInReplay();
 
-    if (m.value != undefined) {
-      console.debug("Resolving invoke message");
-      this.resolvePromise(this.replayIndex, m.value);
-    } else {
-      // TODO: we should return a failure
-      console.debug("Empty value");
-      this.resolvePromise(this.replayIndex, null);
-    }
+    this.resolvePromise(this.replayIndex, m.value, m.failure);
   }
 
   handleSideEffectMessage(m: Buffer) {
@@ -485,14 +504,8 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     console.debug("Received AwakeableEntryMessage: " + m.toString());
 
     this.checkIfInReplay();
-    // We don't need to be in
-    if (m.value != undefined) {
-      console.debug("Resolving state to " + m.value.toString());
-      this.resolvePromise(this.replayIndex, m.value as Buffer);
-    } else {
-      // TODO
-      console.error("Awakeable message contained failure: " + m.failure);
-    }
+
+    this.resolvePromise(this.replayIndex, m.value, m.failure);
   }
 
   handleSleepCompletionMessage(m: SleepEntryMessage) {
@@ -500,7 +513,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
     this.checkIfInReplay();
 
-    this.resolvePromise(this.replayIndex, undefined);
+    this.resolvePromise(this.replayIndex, m.result);
   }
 
   checkIfInReplay() {
@@ -543,7 +556,11 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     }
   }
 
-  addPromise(journalIndex: number, resolve: (value: any) => void) {
+  addPromise(
+    journalIndex: number,
+    resolve: (value: any) => void,
+    reject: (value: any) => void
+  ) {
     // If we are replaying, the completion may have arrived before the user code got there.
     // Otherwise add to map.
     if (
@@ -551,14 +568,22 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       this.outOfOrderReplayMessages.has(journalIndex)
     ) {
       // Resolving promise
+      // TODO we should only resolve it if the response was not a failure
       resolve(this.outOfOrderReplayMessages.get(journalIndex));
       this.outOfOrderReplayMessages.delete(journalIndex);
     } else {
-      this.pendingPromises.set(journalIndex, resolve);
+      this.pendingPromises.set(
+        journalIndex,
+        new PromiseHandler(resolve, reject)
+      );
     }
   }
 
-  resolvePromise<T>(journalIndex: number, value: T) {
+  resolvePromise<T>(
+    journalIndex: number,
+    value?: T | undefined,
+    failure?: Failure | undefined
+  ) {
     const resolveFct = this.pendingPromises.get(journalIndex);
     if (!resolveFct) {
       // During replay, the replay completion messages might arrive before we got to that point in the user code.
@@ -570,9 +595,26 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         throw new Error(`Promise for journal index ${journalIndex} not found`);
       }
     }
+
     console.debug("Resolving the promise of journal entry " + journalIndex);
-    resolveFct(value);
-    this.pendingPromises.delete(journalIndex);
+    if (isSet(value)) {
+      resolveFct.resolve(value);
+      this.pendingPromises.delete(journalIndex);
+    } else if (isSet(failure)) {
+      resolveFct.reject(value);
+      this.pendingPromises.delete(journalIndex);
+    } else {
+      if (this.state === ExecutionState.REPLAYING) {
+        console.debug(
+          `Completion for journal index ${journalIndex} not yet received.`
+        );
+      } else {
+        // TODO is this ever allowed?
+        throw new Error(
+          "Illegal state exception: should not receive empty completion"
+        );
+      }
+    }
   }
 
   onCallSuccess(result: Uint8Array) {
@@ -584,13 +626,13 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     this.connection.end();
   }
 
-  onCallFailure(failure: any) {
+  onCallFailure(failure: Failure) {
     console.debug("Call failed: " + failure);
     // TODO parse error codes and messages
     this.connection.send(
       OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
       OutputStreamEntryMessage.create({
-        failure: { code: 1, message: failure },
+        failure: failure,
       })
     );
     this.connection.end();

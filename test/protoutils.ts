@@ -27,7 +27,7 @@ import {
   SLEEP_ENTRY_MESSAGE_TYPE,
   SleepEntryMessage,
 } from "../src/protocol_stream";
-import { SIDE_EFFECT_ENTRY_MESSAGE_TYPE, Message } from "../src/types";
+import { SIDE_EFFECT_ENTRY_MESSAGE_TYPE, Message, isSet } from "../src/types";
 
 export function startMessage(knownEntries: number): Message {
   return new Message(
@@ -97,22 +97,32 @@ export function clearStateMessage(key: string): Message {
   );
 }
 
-export function sleepMessage(millis: number): Message {
-  return new Message(
-    SLEEP_ENTRY_MESSAGE_TYPE,
-    SleepEntryMessage.create({
-      wakeUpTime: Date.now() + millis,
-    })
-  );
+export function sleepMessage(millis: number, result?: Empty): Message {
+  if (isSet(result)) {
+    return new Message(
+      SLEEP_ENTRY_MESSAGE_TYPE,
+      SleepEntryMessage.create({
+        wakeUpTime: Date.now() + millis,
+        result: result,
+      })
+    );
+  } else {
+    return new Message(
+      SLEEP_ENTRY_MESSAGE_TYPE,
+      SleepEntryMessage.create({
+        wakeUpTime: Date.now() + millis,
+      })
+    );
+  }
 }
 
 export function completionMessage(index: number, value?: any): Message {
-  if (!value) {
+  if (isSet(value)) {
     return new Message(
       COMPLETION_MESSAGE_TYPE,
       CompletionMessage.create({
         entryIndex: index,
-        empty: Empty.create(),
+        value: Buffer.from(value),
       })
     );
   } else {
@@ -120,7 +130,6 @@ export function completionMessage(index: number, value?: any): Message {
       COMPLETION_MESSAGE_TYPE,
       CompletionMessage.create({
         entryIndex: index,
-        value: Buffer.from(value),
       })
     );
   }
@@ -132,13 +141,14 @@ export function invokeMessage(
   parameter: Uint8Array,
   value?: Uint8Array
 ): Message {
-  if (!value) {
+  if (value != undefined) {
     return new Message(
       INVOKE_ENTRY_MESSAGE_TYPE,
       InvokeEntryMessage.create({
         serviceName: serviceName,
         methodName: methodName,
         parameter: Buffer.from(parameter),
+        value: Buffer.from(value),
       })
     );
   } else {
@@ -148,7 +158,6 @@ export function invokeMessage(
         serviceName: serviceName,
         methodName: methodName,
         parameter: Buffer.from(parameter),
-        value: Buffer.from(value),
       })
     );
   }

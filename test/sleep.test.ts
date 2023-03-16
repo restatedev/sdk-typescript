@@ -17,6 +17,7 @@ import {
   sleepMessage,
 } from "./protoutils";
 import { SLEEP_ENTRY_MESSAGE_TYPE } from "../src/protocol_stream";
+import { Empty } from "../src/generated/google/protobuf/empty";
 
 export class SleepGreeter implements Greeter {
   async greet(request: GreetRequest): Promise<GreetResponse> {
@@ -58,7 +59,7 @@ describe("SleepGreeter: With sleep already complete", () => {
       [
         startMessage(1),
         inputMessage(greetRequest("Till")),
-        completionMessage(1, ""),
+        completionMessage(1, Empty.encode(Empty.create({})).finish()),
       ]
     ).run();
 
@@ -74,7 +75,11 @@ describe("SleepGreeter: With sleep replayed", () => {
       "Greeter",
       new SleepGreeter(),
       "/dev.restate.Greeter/Greet",
-      [startMessage(2), inputMessage(greetRequest("Till")), sleepMessage(1000)]
+      [
+        startMessage(2),
+        inputMessage(greetRequest("Till")),
+        sleepMessage(1000, Empty.create({})),
+      ]
     ).run();
 
     expect(result[0]).toStrictEqual(outputMessage(greetResponse("Hello")));
