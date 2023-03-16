@@ -17,6 +17,11 @@ import {
   greetResponse,
 } from "./protoutils";
 import { Empty } from "../src/generated/google/protobuf/empty";
+import {
+  COMPLETION_MESSAGE_TYPE,
+  CompleteAwakeableEntryMessage,
+  CompletionMessage,
+} from "../src/protocol_stream";
 
 export class GetStateGreeter implements Greeter {
   async greet(request: GreetRequest): Promise<GreetResponse> {
@@ -101,7 +106,7 @@ describe("GetStateGreeter: Without GetStateEntry and completed with later Comple
       [
         startMessage(1),
         inputMessage(greetRequest("Till")),
-        completionMessage(1, Empty.encode(Empty.create({})).finish()),
+        completionMessage(1, undefined, true),
       ]
     ).run();
 

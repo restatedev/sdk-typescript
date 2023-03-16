@@ -36,6 +36,7 @@ import {
   isSet,
 } from "./types";
 import { Failure } from "./generated/proto/protocol";
+import { Empty } from "./generated/google/protobuf/empty";
 
 enum ExecutionState {
   WAITING_FOR_START = "WAITING_FOR_START",
@@ -109,7 +110,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       );
     })
       .then((result: Buffer | null) => {
-        if (result == null || result.toString() === "") {
+        if (result == null || JSON.stringify(result) === "{}") {
           return null;
         } else {
           return JSON.parse(result.toString()) as T;
@@ -609,7 +610,6 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
           `Completion for journal index ${journalIndex} not yet received.`
         );
       } else {
-        // TODO is this ever allowed?
         throw new Error(
           "Illegal state exception: should not receive empty completion"
         );
