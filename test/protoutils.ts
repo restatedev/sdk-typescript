@@ -116,13 +116,25 @@ export function sleepMessage(millis: number, result?: Empty): Message {
   }
 }
 
-export function completionMessage(index: number, value?: any): Message {
+export function completionMessage(
+  index: number,
+  value?: any,
+  empty?: boolean
+): Message {
   if (isSet(value)) {
     return new Message(
       COMPLETION_MESSAGE_TYPE,
       CompletionMessage.create({
         entryIndex: index,
         value: Buffer.from(value),
+      })
+    );
+  } else if (empty) {
+    return new Message(
+      COMPLETION_MESSAGE_TYPE,
+      CompletionMessage.create({
+        entryIndex: index,
+        empty: Empty.create(),
       })
     );
   } else {
