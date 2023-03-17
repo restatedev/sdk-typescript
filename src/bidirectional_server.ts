@@ -86,6 +86,7 @@ export class HttpConnection implements Connection {
     this.result.forEach((msg) =>
       this.restate.send(msg.messageType, msg.message)
     );
+    this.result = [];
   }
 
   onMessage(handler: RestateDuplexStreamEventHandler) {

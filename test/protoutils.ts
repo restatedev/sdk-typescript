@@ -27,7 +27,7 @@ import {
   SLEEP_ENTRY_MESSAGE_TYPE,
   SleepEntryMessage,
 } from "../src/protocol_stream";
-import { SIDE_EFFECT_ENTRY_MESSAGE_TYPE, Message, isSet } from "../src/types";
+import { SIDE_EFFECT_ENTRY_MESSAGE_TYPE, Message } from "../src/types";
 
 export function startMessage(knownEntries: number): Message {
   return new Message(
@@ -98,7 +98,7 @@ export function clearStateMessage(key: string): Message {
 }
 
 export function sleepMessage(millis: number, result?: Empty): Message {
-  if (isSet(result)) {
+  if (result !== undefined) {
     return new Message(
       SLEEP_ENTRY_MESSAGE_TYPE,
       SleepEntryMessage.create({
@@ -121,7 +121,7 @@ export function completionMessage(
   value?: any,
   empty?: boolean
 ): Message {
-  if (isSet(value)) {
+  if (value !== undefined) {
     return new Message(
       COMPLETION_MESSAGE_TYPE,
       CompletionMessage.create({

@@ -284,7 +284,6 @@ function stream_decoder(): stream.Transform {
             const h = buf.readBigUint64BE();
             buf = buf.subarray(8);
             header = Header.from_u64be(h);
-            console.debug(header);
             state = WAITING_FOR_BODY;
             break;
           }

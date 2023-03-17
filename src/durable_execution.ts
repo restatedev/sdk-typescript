@@ -8,10 +8,10 @@ import {
   BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
   BackgroundInvokeEntryMessage,
   CLEAR_STATE_ENTRY_MESSAGE_TYPE,
-  COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
-  COMPLETION_MESSAGE_TYPE,
   ClearStateEntryMessage,
+  COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
   CompleteAwakeableEntryMessage,
+  COMPLETION_MESSAGE_TYPE,
   CompletionMessage,
   GET_STATE_ENTRY_MESSAGE_TYPE,
   GetStateEntryMessage,
@@ -22,21 +22,15 @@ import {
   POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
   PollInputStreamEntryMessage,
   SET_STATE_ENTRY_MESSAGE_TYPE,
-  SLEEP_ENTRY_MESSAGE_TYPE,
-  START_MESSAGE_TYPE,
   SetStateEntryMessage,
+  SLEEP_ENTRY_MESSAGE_TYPE,
   SleepEntryMessage,
-  StartMessage,
+  START_MESSAGE_TYPE,
+  StartMessage
 } from "./protocol_stream";
 import { RestateContext } from "./context";
-import {
-  AwakeableIdentifier,
-  ProtocolMessage,
-  SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-  isSet,
-} from "./types";
+import { AwakeableIdentifier, ProtocolMessage, SIDE_EFFECT_ENTRY_MESSAGE_TYPE } from "./types";
 import { Failure } from "./generated/proto/protocol";
-import { Empty } from "./generated/google/protobuf/empty";
 
 enum ExecutionState {
   WAITING_FOR_START = "WAITING_FOR_START",
@@ -301,9 +295,10 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   }
 
   async inBackground<T>(call: () => Promise<T>): Promise<void> {
+    const previous = this.inBackgroundCallFlag;
     this.inBackgroundCallFlag = true;
     call();
-    this.inBackgroundCallFlag = false;
+    this.inBackgroundCallFlag = previous;
   }
 
   async sideEffect<T>(fn: () => Promise<T>): Promise<T> {
@@ -313,7 +308,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       this.incrementJournalIndex();
       this.addPromise(this.currentJournalIndex, resolve, reject);
 
-      const sideEffectOutput = fn().then((result) => {
+      return fn().then((result) => {
         if (this.state === ExecutionState.REPLAYING) {
           console.debug(
             "In replay mode: side effect will not be ignored. Expecting completion"
@@ -325,7 +320,6 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         this.connection.send(SIDE_EFFECT_ENTRY_MESSAGE_TYPE, bytes);
         return result;
       });
-      return sideEffectOutput;
     });
   }
 
@@ -460,7 +454,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       );
     }
 
-    if (isSet(m.value)) {
+    if (m.value !== undefined) {
       this.resolvePromise(m.entryIndex, m.value);
     } else {
       // If the value is not set, then it is either empty or a failure
@@ -476,10 +470,10 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
     this.checkIfInReplay();
 
-    if (isSet(m.value)) {
+    if (m.value !== undefined) {
       this.resolvePromise(this.currentJournalIndex, m.value as Buffer);
     }
-    if (isSet(m.empty)) {
+    if (m.empty !== undefined) {
       this.resolvePromise(this.currentJournalIndex, m.empty);
     } else {
       console.debug("GetStateEntryMessage not yet completed.");
@@ -563,7 +557,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     reject: (value: any) => void
   ) {
     // If we are replaying, the completion may have arrived before the user code got there.
-    // Otherwise add to map.
+    // Otherwise, add to map.
     if (
       this.state === ExecutionState.REPLAYING &&
       this.outOfOrderReplayMessages.has(journalIndex)
@@ -598,10 +592,10 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     }
 
     console.debug("Resolving the promise of journal entry " + journalIndex);
-    if (isSet(value)) {
+    if (value !== undefined) {
       resolveFct.resolve(value);
       this.pendingPromises.delete(journalIndex);
-    } else if (isSet(failure)) {
+    } else if (failure !== undefined) {
       resolveFct.reject(value);
       this.pendingPromises.delete(journalIndex);
     } else {

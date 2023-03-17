@@ -3,9 +3,7 @@
 import { ProtoMetadata, parseService } from "./types";
 import { incomingConnectionAtPort } from "./bidirectional_server";
 import { HostedGrpcServiceMethod } from "./core";
-import {
-  DurableExecutionStateMachine,
-} from "./durable_execution";
+import { DurableExecutionStateMachine } from "./durable_execution";
 
 export interface ServiceOpts {
   descriptor: ProtoMetadata;
@@ -29,7 +27,11 @@ export class RestateServer {
     const spec = parseService(descriptor, service, instance);
     for (const method of spec.methods) {
       const url = `/${spec.packge}.${spec.name}/${method.name}`;
-      this.methods[url] = new HostedGrpcServiceMethod(instance, service, method);
+      this.methods[url] = new HostedGrpcServiceMethod(
+        instance,
+        service,
+        method
+      );
       // note that this log will not print all the keys.
       console.log(
         `Registering: ${url}  -> ${JSON.stringify(method, null, "\t")}`
@@ -66,8 +68,4 @@ export class RestateServer {
       }
     }
   }
-
-  // public async fakeInvoke(url: string, buf: Uint8Array): Promise<Uint8Array> {
-  //   return await this.methods[url].invoke(new DurableExecutionContext(), buf);
-  // }
 }
