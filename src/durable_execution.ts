@@ -26,10 +26,11 @@ import {
   SLEEP_ENTRY_MESSAGE_TYPE,
   SleepEntryMessage,
   START_MESSAGE_TYPE,
-  StartMessage
+  StartMessage,
+  SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
 } from "./protocol_stream";
 import { RestateContext } from "./context";
-import { AwakeableIdentifier, ProtocolMessage, SIDE_EFFECT_ENTRY_MESSAGE_TYPE } from "./types";
+import { AwakeableIdentifier, ProtocolMessage, } from "./types";
 import { Failure } from "./generated/proto/protocol";
 
 enum ExecutionState {
@@ -69,6 +70,11 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   // e.g.: ctx.inBackground(() => client.greet(request))
   private inBackgroundCallFlag = false;
 
+  // This flag is set to true when we are executing code that is inside a side effect.
+  // We use this flag to prevent the user from doing operations on the context from within a side effect.
+  // e.g. ctx.sideEffect(() => {await ctx.get("my-state")})
+  private inSideEffectFlag = false;
+
   // Promises that need to be resolved. Journal index -> resolve
   private pendingPromises: Map<number, PromiseHandler> = new Map();
   // Replay messages that arrived before the user code was at that point.
@@ -85,6 +91,8 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
   async get<T>(name: string): Promise<T | null> {
     console.debug("Service called getState: " + name);
+
+    this.validate("get state");
 
     return new Promise<Buffer>((resolve, reject) => {
       this.incrementJournalIndex();
@@ -120,6 +128,8 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       "Service called setState: " + name + " - " + JSON.stringify(value)
     );
 
+    this.validate("set state");
+
     this.incrementJournalIndex();
 
     if (this.state === ExecutionState.REPLAYING) {
@@ -142,6 +152,9 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
   async clear(name: string): Promise<void> {
     console.debug("Service called clearState: " + name);
+
+    this.validate("clear state");
+
     this.incrementJournalIndex();
 
     if (this.state === ExecutionState.REPLAYING) {
@@ -160,6 +173,8 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
   async awakeable<T>(): Promise<T> {
     console.debug("Service called awakeable");
+
+    this.validate("awakeable");
 
     return new Promise<Buffer>((resolve, reject) => {
       this.incrementJournalIndex();
@@ -194,6 +209,8 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     payload: T
   ): Promise<void> {
     console.debug("Service called completeAwakeable");
+
+    this.validate("completeAwakeable");
 
     this.incrementJournalIndex();
 
@@ -236,6 +253,8 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     method: string,
     data: Uint8Array
   ): Promise<Uint8Array> {
+    // Validation check that we are not in a side-effect is done in inBackground() already.
+
     this.incrementJournalIndex();
 
     if (this.state === ExecutionState.REPLAYING) {
@@ -265,6 +284,8 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     method: string,
     data: Uint8Array
   ): Promise<Uint8Array> {
+    this.validate("invoke");
+
     return new Promise((resolve, reject) => {
       this.incrementJournalIndex();
       this.addPromise(this.currentJournalIndex, resolve, reject);
@@ -295,16 +316,20 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   }
 
   async inBackground<T>(call: () => Promise<T>): Promise<void> {
-    const previous = this.inBackgroundCallFlag;
+    this.validate("inBackground");
+
     this.inBackgroundCallFlag = true;
     call();
-    this.inBackgroundCallFlag = previous;
+    this.inBackgroundCallFlag = false;
   }
 
   async sideEffect<T>(fn: () => Promise<T>): Promise<T> {
     console.debug("Service used side effect");
 
+    this.validate("sideEffect");
+
     return new Promise((resolve, reject) => {
+      this.inSideEffectFlag = true
       this.incrementJournalIndex();
       this.addPromise(this.currentJournalIndex, resolve, reject);
 
@@ -318,6 +343,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
         const bytes = Buffer.from(JSON.stringify(result));
         this.connection.send(SIDE_EFFECT_ENTRY_MESSAGE_TYPE, bytes);
+        this.inSideEffectFlag = false;
         return result;
       });
     });
@@ -325,6 +351,8 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
   async sleep(millis: number): Promise<void> {
     console.debug("Service called sleep");
+
+    this.validate("sleep");
 
     return new Promise((resolve, reject) => {
       this.incrementJournalIndex();
@@ -608,6 +636,16 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
           "Illegal state exception: should not receive empty completion"
         );
       }
+    }
+  }
+
+  validate(callType: string){
+    if(this.inSideEffectFlag){
+      throw new Error(`You cannot do ${callType} calls from within a side effect.`);
+    } else if (this.inBackgroundCallFlag){
+      throw new Error(`Cannot do a side effect from within a ${callType} call. ` +
+        "Context method inBackground() can only be used to invoke other services in the background. " +
+        "e.g. ctx.inBackground(() => client.greet(my_request))" );
     }
   }
 

@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package dev.restate;
+
+import "proto/ext.proto";
+
+service TestGreeter {
+	option (dev.restate.ext.service_type) = KEYED;
+
+	rpc Greet(TestRequest) returns (TestResponse) {};
+}
+
+message TestRequest {
+	string name = 1 [(dev.restate.ext.field) = KEY];
+}
+
+message TestResponse {
+	string greeting = 1;
+}
+

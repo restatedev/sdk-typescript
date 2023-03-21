@@ -12,10 +12,10 @@ import {
   OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
   RestateDuplexStreamEventHandler,
   SLEEP_ENTRY_MESSAGE_TYPE,
+  SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
 } from "./protocol_stream";
 import {
   ProtocolMessage,
-  SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
   Message,
   ProtoMetadata,
 } from "./types";

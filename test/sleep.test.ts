@@ -1,10 +1,4 @@
 import { describe, expect } from "@jest/globals";
-import {
-  GreetRequest,
-  GreetResponse,
-  Greeter,
-  protoMetadata,
-} from "../src/generated/proto/example";
 import * as restate from "../src/public_api";
 import { TestDriver } from "../src/testdriver";
 import {
@@ -18,20 +12,15 @@ import {
 } from "./protoutils";
 import { SLEEP_ENTRY_MESSAGE_TYPE } from "../src/protocol_stream";
 import { Empty } from "../src/generated/google/protobuf/empty";
+import { protoMetadata, TestGreeter, TestRequest, TestResponse } from "../src/generated/proto/test";
 
-export class SleepGreeter implements Greeter {
-  async greet(request: GreetRequest): Promise<GreetResponse> {
+export class SleepGreeter implements TestGreeter {
+  async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     await ctx.sleep(1000);
 
-    return GreetResponse.create({ greeting: `Hello` });
-  }
-
-  async multiWord(request: GreetRequest): Promise<GreetResponse> {
-    return GreetResponse.create({
-      greeting: `YAGM (yet another greeting method) ${request.name}!`,
-    });
+    return TestResponse.create({ greeting: `Hello` });
   }
 }
 
@@ -39,9 +28,9 @@ describe("SleepGreeter: With sleep not complete", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
-      "Greeter",
+      "TestGreeter",
       new SleepGreeter(),
-      "/dev.restate.Greeter/Greet",
+      "/dev.restate.TestGreeter/Greet",
       [startMessage(1), inputMessage(greetRequest("Till"))]
     ).run();
 
@@ -53,9 +42,9 @@ describe("SleepGreeter: With sleep already complete", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
-      "Greeter",
+      "TestGreeter",
       new SleepGreeter(),
-      "/dev.restate.Greeter/Greet",
+      "/dev.restate.TestGreeter/Greet",
       [
         startMessage(1),
         inputMessage(greetRequest("Till")),
@@ -72,9 +61,9 @@ describe("SleepGreeter: With sleep replayed", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
-      "Greeter",
+      "TestGreeter",
       new SleepGreeter(),
-      "/dev.restate.Greeter/Greet",
+      "/dev.restate.TestGreeter/Greet",
       [
         startMessage(2),
         inputMessage(greetRequest("Till")),

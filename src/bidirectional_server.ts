@@ -14,8 +14,9 @@ import {
   INVOKE_ENTRY_MESSAGE_TYPE,
   OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
   SLEEP_ENTRY_MESSAGE_TYPE,
+  SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
 } from "./protocol_stream";
-import { SIDE_EFFECT_ENTRY_MESSAGE_TYPE, Message } from "./types";
+import { Message } from "./types";
 
 export interface Connection {
   send(

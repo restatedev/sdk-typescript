@@ -1,11 +1,4 @@
 import { describe, expect } from "@jest/globals";
-import {
-  GreetRequest,
-  GreetResponse,
-  Greeter,
-  protoMetadata,
-  GreeterClientImpl,
-} from "../src/generated/proto/example";
 import * as restate from "../src/public_api";
 import { TestDriver } from "../src/testdriver";
 import {
@@ -19,17 +12,24 @@ import {
   greetRequest,
   greetResponse,
 } from "./protoutils";
+import {
+  protoMetadata,
+  TestGreeter,
+  TestGreeterClientImpl,
+  TestRequest,
+  TestResponse
+} from "../src/generated/proto/test";
 
-export class ReverseAwaitOrder implements Greeter {
-  async greet(request: GreetRequest): Promise<GreetResponse> {
+export class ReverseAwaitOrder implements TestGreeter {
+  async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
-    const client = new GreeterClientImpl(ctx);
+    const client = new TestGreeterClientImpl(ctx);
     const greetingPromise1 = client.greet(
-      GreetRequest.create({ name: "Francesco" })
+      TestRequest.create({ name: "Francesco" })
     );
     const greetingPromise2 = client.greet(
-      GreetRequest.create({ name: "Till" })
+      TestRequest.create({ name: "Till" })
     );
 
     const greeting2 = await greetingPromise2;
@@ -38,34 +38,22 @@ export class ReverseAwaitOrder implements Greeter {
 
     const greeting1 = await greetingPromise1;
 
-    return GreetResponse.create({
+    return TestResponse.create({
       greeting: `Hello ${greeting1.greeting}-${greeting2.greeting}`,
-    });
-  }
-
-  async multiWord(request: GreetRequest): Promise<GreetResponse> {
-    return GreetResponse.create({
-      greeting: `YAGM (yet another greeting method) ${request.name}!`,
     });
   }
 }
 
-export class BackgroundInvokeGreeter implements Greeter {
-  async greet(request: GreetRequest): Promise<GreetResponse> {
+export class BackgroundInvokeGreeter implements TestGreeter {
+  async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
-    const client = new GreeterClientImpl(ctx);
+    const client = new TestGreeterClientImpl(ctx);
     await ctx.inBackground(() =>
-      client.greet(GreetRequest.create({ name: "Francesco" }))
+      client.greet(TestRequest.create({ name: "Francesco" }))
     );
 
-    return GreetResponse.create({ greeting: `Hello` });
-  }
-
-  async multiWord(request: GreetRequest): Promise<GreetResponse> {
-    return GreetResponse.create({
-      greeting: `YAGM (yet another greeting method) ${request.name}!`,
-    });
+    return TestResponse.create({ greeting: `Hello` });
   }
 }
 
@@ -73,15 +61,15 @@ describe("ReverseAwaitOrder: None completed", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
-      "Greeter",
+      "TestGreeter",
       new ReverseAwaitOrder(),
-      "/dev.restate.Greeter/Greet",
+      "/dev.restate.TestGreeter/Greet",
       [startMessage(1), inputMessage(greetRequest("Till"))]
     ).run();
 
     expect(result).toStrictEqual([
-      invokeMessage("dev.restate.Greeter", "Greet", greetRequest("Francesco")),
-      invokeMessage("dev.restate.Greeter", "Greet", greetRequest("Till")),
+      invokeMessage("dev.restate.TestGreeter", "Greet", greetRequest("Francesco")),
+      invokeMessage("dev.restate.TestGreeter", "Greet", greetRequest("Till")),
     ]);
   });
 });
@@ -90,9 +78,9 @@ describe("ReverseAwaitOrder: A1 and A2 completed later", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
-      "Greeter",
+      "TestGreeter",
       new ReverseAwaitOrder(),
-      "/dev.restate.Greeter/Greet",
+      "/dev.restate.TestGreeter/Greet",
       [
         startMessage(1),
         inputMessage(greetRequest("Till")),
@@ -102,8 +90,8 @@ describe("ReverseAwaitOrder: A1 and A2 completed later", () => {
     ).run();
 
     expect(result).toStrictEqual([
-      invokeMessage("dev.restate.Greeter", "Greet", greetRequest("Francesco")),
-      invokeMessage("dev.restate.Greeter", "Greet", greetRequest("Till")),
+      invokeMessage("dev.restate.TestGreeter", "Greet", greetRequest("Francesco")),
+      invokeMessage("dev.restate.TestGreeter", "Greet", greetRequest("Till")),
       setStateMessage("A2", "TILL"),
       outputMessage(greetResponse("Hello FRANCESCO-TILL")),
     ]);
@@ -114,9 +102,9 @@ describe("ReverseAwaitOrder: A2 and A1 completed later", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
-      "Greeter",
+      "TestGreeter",
       new ReverseAwaitOrder(),
-      "/dev.restate.Greeter/Greet",
+      "/dev.restate.TestGreeter/Greet",
       [
         startMessage(1),
         inputMessage(greetRequest("Till")),
@@ -126,8 +114,8 @@ describe("ReverseAwaitOrder: A2 and A1 completed later", () => {
     ).run();
 
     expect(result).toStrictEqual([
-      invokeMessage("dev.restate.Greeter", "Greet", greetRequest("Francesco")),
-      invokeMessage("dev.restate.Greeter", "Greet", greetRequest("Till")),
+      invokeMessage("dev.restate.TestGreeter", "Greet", greetRequest("Francesco")),
+      invokeMessage("dev.restate.TestGreeter", "Greet", greetRequest("Till")),
       setStateMessage("A2", "TILL"),
       outputMessage(greetResponse("Hello FRANCESCO-TILL")),
     ]);
@@ -138,20 +126,20 @@ describe("ReverseAwaitOrder: replay all invoke messages and setstate ", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
-      "Greeter",
+      "TestGreeter",
       new ReverseAwaitOrder(),
-      "/dev.restate.Greeter/Greet",
+      "/dev.restate.TestGreeter/Greet",
       [
         startMessage(4),
         inputMessage(greetRequest("Till")),
         invokeMessage(
-          "dev.restate.Greeter",
+          "dev.restate.TestGreeter",
           "Greet",
           greetRequest("Francesco"),
           greetResponse("FRANCESCO")
         ),
         invokeMessage(
-          "dev.restate.Greeter",
+          "dev.restate.TestGreeter",
           "Greet",
           greetRequest("Till"),
           greetResponse("TILL")
@@ -171,15 +159,15 @@ describe("BackgroundInvokeGreeter: background call ", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
-      "Greeter",
+      "TestGreeter",
       new BackgroundInvokeGreeter(),
-      "/dev.restate.Greeter/Greet",
+      "/dev.restate.TestGreeter/Greet",
       [startMessage(1), inputMessage(greetRequest("Till"))]
     ).run();
 
     expect(result).toStrictEqual([
       backgroundInvokeMessage(
-        "dev.restate.Greeter",
+        "dev.restate.TestGreeter",
         "Greet",
         greetRequest("Francesco")
       ),

@@ -1,10 +1,4 @@
 import { describe, expect } from "@jest/globals";
-import {
-  GreetRequest,
-  GreetResponse,
-  Greeter,
-  protoMetadata,
-} from "../src/generated/proto/example";
 import * as restate from "../src/public_api";
 import { TestDriver } from "../src/testdriver";
 import {
@@ -16,28 +10,17 @@ import {
   greetRequest,
   greetResponse,
 } from "./protoutils";
-import { Empty } from "../src/generated/google/protobuf/empty";
-import {
-  COMPLETION_MESSAGE_TYPE,
-  CompleteAwakeableEntryMessage,
-  CompletionMessage,
-} from "../src/protocol_stream";
+import { protoMetadata, TestGreeter, TestRequest, TestResponse } from "../src/generated/proto/test";
 
-export class GetStateGreeter implements Greeter {
-  async greet(request: GreetRequest): Promise<GreetResponse> {
+export class GetStateGreeter implements TestGreeter {
+  async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     // state
     const state = (await ctx.get<string>("STATE")) || "nobody";
     console.log("Current state is " + state);
 
-    return GreetResponse.create({ greeting: `Hello ${state}` });
-  }
-
-  async multiWord(request: GreetRequest): Promise<GreetResponse> {
-    return GreetResponse.create({
-      greeting: `YAGM (yet another greeting method) ${request.name}!`,
-    });
+    return TestResponse.create({ greeting: `Hello ${state}` });
   }
 }
 
@@ -45,9 +28,9 @@ describe("GetStateGreeter: With GetStateEntry already complete", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
-      "Greeter",
+      "TestGreeter",
       new GetStateGreeter(),
-      "/dev.restate.Greeter/Greet",
+      "/dev.restate.TestGreeter/Greet",
       [
         startMessage(2),
         inputMessage(greetRequest("Till")),
@@ -65,9 +48,9 @@ describe("GetStateGreeter: Without GetStateEntry", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
-      "Greeter",
+      "TestGreeter",
       new GetStateGreeter(),
-      "/dev.restate.Greeter/Greet",
+      "/dev.restate.TestGreeter/Greet",
       [startMessage(1), inputMessage(greetRequest("Till"))]
     ).run();
 
@@ -79,9 +62,9 @@ describe("GetStateGreeter: Without GetStateEntry and completed with later Comple
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
-      "Greeter",
+      "TestGreeter",
       new GetStateGreeter(),
-      "/dev.restate.Greeter/Greet",
+      "/dev.restate.TestGreeter/Greet",
       [
         startMessage(1),
         inputMessage(greetRequest("Till")),
@@ -100,9 +83,9 @@ describe("GetStateGreeter: Without GetStateEntry and completed with later Comple
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
-      "Greeter",
+      "TestGreeter",
       new GetStateGreeter(),
-      "/dev.restate.Greeter/Greet",
+      "/dev.restate.TestGreeter/Greet",
       [
         startMessage(1),
         inputMessage(greetRequest("Till")),

@@ -1,5 +1,4 @@
 /* istanbul ignore file */
-import { GreetRequest, GreetResponse } from "../src/generated/proto/example";
 import { Empty } from "../src/generated/google/protobuf/empty";
 import {
   StartMessage,
@@ -26,8 +25,10 @@ import {
   ClearStateEntryMessage,
   SLEEP_ENTRY_MESSAGE_TYPE,
   SleepEntryMessage,
+  SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
 } from "../src/protocol_stream";
-import { SIDE_EFFECT_ENTRY_MESSAGE_TYPE, Message } from "../src/types";
+import { Message } from "../src/types";
+import { TestRequest, TestResponse } from "../src/generated/proto/test";
 
 export function startMessage(knownEntries: number): Message {
   return new Message(
@@ -36,7 +37,6 @@ export function startMessage(knownEntries: number): Message {
       instanceKey: Buffer.from("123"),
       invocationId: Buffer.from("abcd"),
       knownEntries: knownEntries,
-      knownServiceVersion: 1,
     })
   );
 }
@@ -233,11 +233,11 @@ export function completeAwakeableMessage<T>(
 }
 
 export function greetRequest(myName: string): Uint8Array {
-  return GreetRequest.encode(GreetRequest.create({ name: myName })).finish();
+  return TestRequest.encode(TestRequest.create({ name: myName })).finish();
 }
 
 export function greetResponse(myGreeting: string): Uint8Array {
-  return GreetResponse.encode(
-    GreetResponse.create({ greeting: myGreeting })
+  return TestResponse.encode(
+    TestResponse.create({ greeting: myGreeting })
   ).finish();
 }

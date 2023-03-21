@@ -1,11 +1,4 @@
 import { describe, expect } from "@jest/globals";
-import {
-  GreetRequest,
-  GreetResponse,
-  Greeter,
-  GreeterClientImpl,
-  protoMetadata,
-} from "../src/generated/proto/example";
 import * as restate from "../src/public_api";
 import { TestDriver } from "../src/testdriver";
 import {
@@ -18,13 +11,16 @@ import {
   setStateMessage,
   startMessage,
 } from "./protoutils";
+import {
+  protoMetadata,
+  TestGreeter,
+  TestGreeterClientImpl,
+  TestRequest,
+  TestResponse
+} from "../src/generated/proto/test";
 
-export class GreeterService implements Greeter {
-  async greet(request: GreetRequest): Promise<GreetResponse> {
-    return GreetResponse.create({ greeting: `Hello ${request.name}` });
-  }
-
-  async multiWord(request: GreetRequest): Promise<GreetResponse> {
+export class GreeterService implements TestGreeter {
+  async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     // state
@@ -36,38 +32,25 @@ export class GreeterService implements Greeter {
     console.debug("Writing new state: " + seen);
     ctx.set<number>("seen", seen);
 
-    const client = new GreeterClientImpl(ctx);
+    const client = new TestGreeterClientImpl(ctx);
     const greeting = await client.greet(request);
 
     // return the final response
 
-    return GreetResponse.create({
+    return TestResponse.create({
       greeting: `YAGM (yet another greeting method) ${request.name}!`,
     });
   }
 }
 
-describe("Greeter/Greeter", () => {
-  it("should call greet", async () => {
+
+describe("TestGreeter/Greet", () => {
+  it("should call Greet and return the get state entry message", async () => {
     const result = await new TestDriver(
       protoMetadata,
-      "Greeter",
+      "TestGreeter",
       new GreeterService(),
-      "/dev.restate.Greeter/Greet",
-      [startMessage(1), inputMessage(greetRequest("bob"))]
-    ).run();
-
-    expect(result).toStrictEqual([outputMessage(greetResponse("Hello bob"))]);
-  });
-});
-
-describe("Greeter/MultiWord", () => {
-  it("should call multiword and return the get state entry message", async () => {
-    const result = await new TestDriver(
-      protoMetadata,
-      "Greeter",
-      new GreeterService(),
-      "/dev.restate.Greeter/MultiWord",
+      "/dev.restate.TestGreeter/Greet",
       [startMessage(1), inputMessage(greetRequest("bob"))]
     ).run();
 
@@ -75,13 +58,13 @@ describe("Greeter/MultiWord", () => {
   });
 });
 
-describe("Greeter/MultiWord2", () => {
-  it("should call multiword and have a completed get state message", async () => {
+describe("TestGreeter/Greet2", () => {
+  it("should call Greet and have a completed get state message", async () => {
     const result = await new TestDriver(
       protoMetadata,
-      "Greeter",
+      "TestGreeter",
       new GreeterService(),
-      "/dev.restate.Greeter/MultiWord",
+      "/dev.restate.TestGreeter/Greet",
       [
         startMessage(2),
         inputMessage(greetRequest("bob")),
@@ -91,18 +74,18 @@ describe("Greeter/MultiWord2", () => {
 
     expect(result).toStrictEqual([
       setStateMessage("seen", 6),
-      invokeMessage("dev.restate.Greeter", "Greet", greetRequest("bob")),
+      invokeMessage("dev.restate.TestGreeter", "Greet", greetRequest("bob")),
     ]);
   });
 });
 
-describe("Greeter/MultiWord3", () => {
-  it("should call multiword, get state, set state and then call", async () => {
+describe("TestGreeter/Greet3", () => {
+  it("should call Greet, get state, set state and then call", async () => {
     const result = await new TestDriver(
       protoMetadata,
-      "Greeter",
+      "TestGreeter",
       new GreeterService(),
-      "/dev.restate.Greeter/MultiWord",
+      "/dev.restate.TestGreeter/Greet",
       [
         startMessage(3),
         inputMessage(greetRequest("bob")),
@@ -112,7 +95,7 @@ describe("Greeter/MultiWord3", () => {
     ).run();
 
     expect(result).toStrictEqual([
-      invokeMessage("dev.restate.Greeter", "Greet", greetRequest("bob")),
+      invokeMessage("dev.restate.TestGreeter", "Greet", greetRequest("bob")),
     ]);
   });
 });

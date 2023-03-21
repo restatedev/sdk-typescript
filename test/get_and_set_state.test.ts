@@ -1,10 +1,4 @@
 import { describe, expect } from "@jest/globals";
-import {
-  GreetRequest,
-  GreetResponse,
-  Greeter,
-  protoMetadata,
-} from "../src/generated/proto/example";
 import * as restate from "../src/public_api";
 import { TestDriver } from "../src/testdriver";
 import {
@@ -18,9 +12,10 @@ import {
   greetRequest,
   clearStateMessage,
 } from "./protoutils";
+import { protoMetadata, TestGreeter, TestRequest, TestResponse } from "../src/generated/proto/test";
 
-export class GetAndSetGreeter implements Greeter {
-  async greet(request: GreetRequest): Promise<GreetResponse> {
+export class GetAndSetGreeter implements TestGreeter {
+  async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     // state
@@ -29,18 +24,12 @@ export class GetAndSetGreeter implements Greeter {
 
     ctx.set("STATE", request.name);
 
-    return GreetResponse.create({ greeting: `Hello ${state}` });
-  }
-
-  async multiWord(request: GreetRequest): Promise<GreetResponse> {
-    return GreetResponse.create({
-      greeting: `YAGM (yet another greeting method) ${request.name}!`,
-    });
+    return TestResponse.create({ greeting: `Hello ${state}` });
   }
 }
 
-export class ClearStateGreeter implements Greeter {
-  async greet(request: GreetRequest): Promise<GreetResponse> {
+export class ClearStateGreeter implements TestGreeter {
+  async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     // state
@@ -51,13 +40,7 @@ export class ClearStateGreeter implements Greeter {
 
     ctx.clear("STATE");
 
-    return GreetResponse.create({ greeting: `Hello ${state}` });
-  }
-
-  async multiWord(request: GreetRequest): Promise<GreetResponse> {
-    return GreetResponse.create({
-      greeting: `YAGM (yet another greeting method) ${request.name}!`,
-    });
+    return TestResponse.create({ greeting: `Hello ${state}` });
   }
 }
 
@@ -65,9 +48,9 @@ describe("GetAndSetGreeter: With GetState and SetState", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
-      "Greeter",
+      "TestGreeter",
       new GetAndSetGreeter(),
-      "/dev.restate.Greeter/Greet",
+      "/dev.restate.TestGreeter/Greet",
       [
         startMessage(3),
         inputMessage(greetRequest("Till")),
@@ -86,9 +69,9 @@ describe("GetAndSetGreeter: With GetState already completed", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
-      "Greeter",
+      "TestGreeter",
       new GetAndSetGreeter(),
-      "/dev.restate.Greeter/Greet",
+      "/dev.restate.TestGreeter/Greet",
       [
         startMessage(2),
         inputMessage(greetRequest("Till")),
@@ -107,9 +90,9 @@ describe("GetAndSetGreeter: With GetState completed later", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
-      "Greeter",
+      "TestGreeter",
       new GetAndSetGreeter(),
-      "/dev.restate.Greeter/Greet",
+      "/dev.restate.TestGreeter/Greet",
       [
         startMessage(1),
         inputMessage(greetRequest("Till")),
@@ -129,9 +112,9 @@ describe("ClearState: With ClearState completed later", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
-      "Greeter",
+      "TestGreeter",
       new ClearStateGreeter(),
-      "/dev.restate.Greeter/Greet",
+      "/dev.restate.TestGreeter/Greet",
       [
         startMessage(1),
         inputMessage(greetRequest("Till")),
@@ -152,9 +135,9 @@ describe("ClearState: With ClearState already completed", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
-      "Greeter",
+      "TestGreeter",
       new ClearStateGreeter(),
-      "/dev.restate.Greeter/Greet",
+      "/dev.restate.TestGreeter/Greet",
       [
         startMessage(4),
         inputMessage(greetRequest("Till")),

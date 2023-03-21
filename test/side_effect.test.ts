@@ -1,10 +1,4 @@
 import { describe, expect } from "@jest/globals";
-import {
-  GreetRequest,
-  GreetResponse,
-  Greeter,
-  protoMetadata,
-} from "../src/generated/proto/example";
 import * as restate from "../src/public_api";
 import { TestDriver } from "../src/testdriver";
 import {
@@ -16,12 +10,14 @@ import {
   greetRequest,
   greetResponse,
 } from "./protoutils";
-import { SIDE_EFFECT_ENTRY_MESSAGE_TYPE, Message } from "../src/types";
+import { SIDE_EFFECT_ENTRY_MESSAGE_TYPE, } from "../src/protocol_stream"
+import { Message } from "../src/types";
+import { protoMetadata, TestGreeter, TestRequest, TestResponse } from "../src/generated/proto/test";
 
-export class SideEffectGreeter implements Greeter {
+export class SideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: string) {}
 
-  async greet(request: GreetRequest): Promise<GreetResponse> {
+  async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     // state
@@ -29,20 +25,14 @@ export class SideEffectGreeter implements Greeter {
       return this.sideEffectOutput;
     });
 
-    return GreetResponse.create({ greeting: `Hello ${response}` });
-  }
-
-  async multiWord(request: GreetRequest): Promise<GreetResponse> {
-    return GreetResponse.create({
-      greeting: `YAGM (yet another greeting method) ${request.name}!`,
-    });
+    return TestResponse.create({ greeting: `Hello ${response}` });
   }
 }
 
-export class NumericSideEffectGreeter implements Greeter {
+export class NumericSideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: number) {}
 
-  async greet(request: GreetRequest): Promise<GreetResponse> {
+  async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     // state
@@ -50,13 +40,7 @@ export class NumericSideEffectGreeter implements Greeter {
       return this.sideEffectOutput;
     });
 
-    return GreetResponse.create({ greeting: `Hello ${response}` });
-  }
-
-  async multiWord(request: GreetRequest): Promise<GreetResponse> {
-    return GreetResponse.create({
-      greeting: `YAGM (yet another greeting method) ${request.name}!`,
-    });
+    return TestResponse.create({ greeting: `Hello ${response}` });
   }
 }
 
@@ -64,9 +48,9 @@ describe("SideEffectGreeter: without ack", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
-      "Greeter",
+      "TestGreeter",
       new SideEffectGreeter("Francesco"),
-      "/dev.restate.Greeter/Greet",
+      "/dev.restate.TestGreeter/Greet",
       [startMessage(1), inputMessage(greetRequest("Till"))]
     ).run();
 
@@ -83,9 +67,9 @@ describe("SideEffectGreeter: with ack", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
-      "Greeter",
+      "TestGreeter",
       new SideEffectGreeter("Francesco"),
-      "/dev.restate.Greeter/Greet",
+      "/dev.restate.TestGreeter/Greet",
       [
         startMessage(2),
         inputMessage(greetRequest("Till")),
@@ -103,9 +87,9 @@ describe("SideEffectGreeter: with completion", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
-      "Greeter",
+      "TestGreeter",
       new SideEffectGreeter("Francesco"),
-      "/dev.restate.Greeter/Greet",
+      "/dev.restate.TestGreeter/Greet",
       [
         startMessage(1),
         inputMessage(greetRequest("Till")),
@@ -127,9 +111,9 @@ describe("SideEffectGreeter: without ack - numeric output", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
-      "Greeter",
+      "TestGreeter",
       new NumericSideEffectGreeter(123),
-      "/dev.restate.Greeter/Greet",
+      "/dev.restate.TestGreeter/Greet",
       [startMessage(1), inputMessage(greetRequest("Till"))]
     ).run();
 

@@ -1,10 +1,4 @@
 import { describe, expect } from "@jest/globals";
-import {
-  GreetRequest,
-  GreetResponse,
-  Greeter,
-  protoMetadata,
-} from "../src/generated/proto/example";
 import * as restate from "../src/public_api";
 import { TestDriver } from "../src/testdriver";
 import {
@@ -18,42 +12,31 @@ import {
   completeAwakeableMessage,
 } from "./protoutils";
 import { AwakeableIdentifier } from "../src/types";
+import { protoMetadata, TestGreeter, TestRequest, TestResponse } from "../src/generated/proto/test";
 
-export class AwakeableGreeter implements Greeter {
-  async greet(request: GreetRequest): Promise<GreetResponse> {
+export class AwakeableGreeter implements TestGreeter {
+  async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     const result = await ctx.awakeable<string>();
 
-    return GreetResponse.create({ greeting: `Hello ${result}` });
-  }
-
-  async multiWord(request: GreetRequest): Promise<GreetResponse> {
-    return GreetResponse.create({
-      greeting: `YAGM (yet another greeting method) ${request.name}!`,
-    });
+    return TestResponse.create({ greeting: `Hello ${result}` });
   }
 }
 
-export class CompleteAwakeableGreeter implements Greeter {
-  async greet(request: GreetRequest): Promise<GreetResponse> {
+export class CompleteAwakeableGreeter implements TestGreeter {
+  async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     const awakeableIdentifier = new AwakeableIdentifier(
-      "Greeter",
+      "TestGreeter",
       Buffer.from("123"),
       Buffer.from("abcd"),
       1
     );
     await ctx.completeAwakeable(awakeableIdentifier, "hello");
 
-    return GreetResponse.create({ greeting: `Hello` });
-  }
-
-  async multiWord(request: GreetRequest): Promise<GreetResponse> {
-    return GreetResponse.create({
-      greeting: `YAGM (yet another greeting method) ${request.name}!`,
-    });
+    return TestResponse.create({ greeting: `Hello` });
   }
 }
 
@@ -61,9 +44,9 @@ describe("AwakeableGreeter: with awakeable completion replay", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
-      "Greeter",
+      "TestGreeter",
       new AwakeableGreeter(),
-      "/dev.restate.Greeter/Greet",
+      "/dev.restate.TestGreeter/Greet",
       [
         startMessage(2),
         inputMessage(greetRequest("Till")),
@@ -81,9 +64,9 @@ describe("AwakeableGreeter: without completion", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
-      "Greeter",
+      "TestGreeter",
       new AwakeableGreeter(),
-      "/dev.restate.Greeter/Greet",
+      "/dev.restate.TestGreeter/Greet",
       [startMessage(1), inputMessage(greetRequest("Till"))]
     ).run();
 
@@ -95,9 +78,9 @@ describe("AwakeableGreeter: with completion", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
-      "Greeter",
+      "TestGreeter",
       new AwakeableGreeter(),
-      "/dev.restate.Greeter/Greet",
+      "/dev.restate.TestGreeter/Greet",
       [
         startMessage(1),
         inputMessage(greetRequest("Till")),
@@ -116,15 +99,15 @@ describe("CompleteAwakeableGreeter: without completion", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
-      "Greeter",
+      "TestGreeter",
       new CompleteAwakeableGreeter(),
-      "/dev.restate.Greeter/Greet",
+      "/dev.restate.TestGreeter/Greet",
       [startMessage(1), inputMessage(greetRequest("Till"))]
     ).run();
 
     expect(result).toStrictEqual([
       completeAwakeableMessage(
-        "Greeter",
+        "TestGreeter",
         Buffer.from("123"),
         Buffer.from("abcd"),
         1,
