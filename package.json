@@ -1,6 +1,6 @@
 {
   "name": "@restatedev/restate-ts-poc",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Typescript SDK for Restate",
   "repository": {
     "type": "git",
