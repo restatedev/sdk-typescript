@@ -10,7 +10,6 @@ export const protobufPackage = "dev.restate.service.protocol";
 export interface StartMessage {
   invocationId: Buffer;
   instanceKey: Buffer;
-  knownServiceVersion: number;
   knownEntries: number;
 }
 
@@ -23,6 +22,21 @@ export interface CompletionMessage {
   empty?: Empty | undefined;
   value?: Buffer | undefined;
   failure?: Failure | undefined;
+}
+
+/**
+ * Type: 0x0000 + 2
+ * Implementations MUST send this message when suspending an invocation.
+ */
+export interface SuspensionMessage {
+  /**
+   * This list represents any of the entry_index the invocation is waiting on to progress.
+   * The runtime will resume the invocation as soon as one of the given entry_index is completed.
+   * This list MUST not be empty.
+   * False positive, entry_indexes is a valid plural of entry_indices.
+   * https://learn.microsoft.com/en-us/style-guide/a-z-word-list-term-collections/i/index-indexes-indices
+   */
+  entryIndexes: number[];
 }
 
 /**
@@ -128,7 +142,7 @@ export interface Failure {
 }
 
 function createBaseStartMessage(): StartMessage {
-  return { invocationId: Buffer.alloc(0), instanceKey: Buffer.alloc(0), knownServiceVersion: 0, knownEntries: 0 };
+  return { invocationId: Buffer.alloc(0), instanceKey: Buffer.alloc(0), knownEntries: 0 };
 }
 
 export const StartMessage = {
@@ -139,11 +153,8 @@ export const StartMessage = {
     if (message.instanceKey.length !== 0) {
       writer.uint32(18).bytes(message.instanceKey);
     }
-    if (message.knownServiceVersion !== 0) {
-      writer.uint32(24).uint32(message.knownServiceVersion);
-    }
     if (message.knownEntries !== 0) {
-      writer.uint32(32).uint32(message.knownEntries);
+      writer.uint32(24).uint32(message.knownEntries);
     }
     return writer;
   },
@@ -162,9 +173,6 @@ export const StartMessage = {
           message.instanceKey = reader.bytes() as Buffer;
           break;
         case 3:
-          message.knownServiceVersion = reader.uint32();
-          break;
-        case 4:
           message.knownEntries = reader.uint32();
           break;
         default:
@@ -179,7 +187,6 @@ export const StartMessage = {
     return {
       invocationId: isSet(object.invocationId) ? Buffer.from(bytesFromBase64(object.invocationId)) : Buffer.alloc(0),
       instanceKey: isSet(object.instanceKey) ? Buffer.from(bytesFromBase64(object.instanceKey)) : Buffer.alloc(0),
-      knownServiceVersion: isSet(object.knownServiceVersion) ? Number(object.knownServiceVersion) : 0,
       knownEntries: isSet(object.knownEntries) ? Number(object.knownEntries) : 0,
     };
   },
@@ -190,7 +197,6 @@ export const StartMessage = {
       (obj.invocationId = base64FromBytes(message.invocationId !== undefined ? message.invocationId : Buffer.alloc(0)));
     message.instanceKey !== undefined &&
       (obj.instanceKey = base64FromBytes(message.instanceKey !== undefined ? message.instanceKey : Buffer.alloc(0)));
-    message.knownServiceVersion !== undefined && (obj.knownServiceVersion = Math.round(message.knownServiceVersion));
     message.knownEntries !== undefined && (obj.knownEntries = Math.round(message.knownEntries));
     return obj;
   },
@@ -203,7 +209,6 @@ export const StartMessage = {
     const message = createBaseStartMessage();
     message.invocationId = object.invocationId ?? Buffer.alloc(0);
     message.instanceKey = object.instanceKey ?? Buffer.alloc(0);
-    message.knownServiceVersion = object.knownServiceVersion ?? 0;
     message.knownEntries = object.knownEntries ?? 0;
     return message;
   },
@@ -288,6 +293,70 @@ export const CompletionMessage = {
     message.failure = (object.failure !== undefined && object.failure !== null)
       ? Failure.fromPartial(object.failure)
       : undefined;
+    return message;
+  },
+};
+
+function createBaseSuspensionMessage(): SuspensionMessage {
+  return { entryIndexes: [] };
+}
+
+export const SuspensionMessage = {
+  encode(message: SuspensionMessage, writer: _m0.Writer = _m0.Writer.create()): _m0.Writer {
+    writer.uint32(10).fork();
+    for (const v of message.entryIndexes) {
+      writer.uint32(v);
+    }
+    writer.ldelim();
+    return writer;
+  },
+
+  decode(input: _m0.Reader | Uint8Array, length?: number): SuspensionMessage {
+    const reader = input instanceof _m0.Reader ? input : new _m0.Reader(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseSuspensionMessage();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1:
+          if ((tag & 7) === 2) {
+            const end2 = reader.uint32() + reader.pos;
+            while (reader.pos < end2) {
+              message.entryIndexes.push(reader.uint32());
+            }
+          } else {
+            message.entryIndexes.push(reader.uint32());
+          }
+          break;
+        default:
+          reader.skipType(tag & 7);
+          break;
+      }
+    }
+    return message;
+  },
+
+  fromJSON(object: any): SuspensionMessage {
+    return { entryIndexes: Array.isArray(object?.entryIndexes) ? object.entryIndexes.map((e: any) => Number(e)) : [] };
+  },
+
+  toJSON(message: SuspensionMessage): unknown {
+    const obj: any = {};
+    if (message.entryIndexes) {
+      obj.entryIndexes = message.entryIndexes.map((e) => Math.round(e));
+    } else {
+      obj.entryIndexes = [];
+    }
+    return obj;
+  },
+
+  create(base?: DeepPartial<SuspensionMessage>): SuspensionMessage {
+    return SuspensionMessage.fromPartial(base ?? {});
+  },
+
+  fromPartial(object: DeepPartial<SuspensionMessage>): SuspensionMessage {
+    const message = createBaseSuspensionMessage();
+    message.entryIndexes = object.entryIndexes?.map((e) => e) || [];
     return message;
   },
 };
@@ -1104,20 +1173,8 @@ export const protoMetadata: ProtoMetadata = {
         "options": undefined,
         "proto3Optional": false,
       }, {
-        "name": "known_service_version",
-        "number": 3,
-        "label": 1,
-        "type": 13,
-        "typeName": "",
-        "extendee": "",
-        "defaultValue": "",
-        "oneofIndex": 0,
-        "jsonName": "knownServiceVersion",
-        "options": undefined,
-        "proto3Optional": false,
-      }, {
         "name": "known_entries",
-        "number": 4,
+        "number": 3,
         "label": 1,
         "type": 13,
         "typeName": "",
@@ -1192,6 +1249,29 @@ export const protoMetadata: ProtoMetadata = {
       "enumType": [],
       "extensionRange": [],
       "oneofDecl": [{ "name": "result", "options": undefined }],
+      "options": undefined,
+      "reservedRange": [],
+      "reservedName": [],
+    }, {
+      "name": "SuspensionMessage",
+      "field": [{
+        "name": "entry_indexes",
+        "number": 1,
+        "label": 3,
+        "type": 13,
+        "typeName": "",
+        "extendee": "",
+        "defaultValue": "",
+        "oneofIndex": 0,
+        "jsonName": "entryIndexes",
+        "options": undefined,
+        "proto3Optional": false,
+      }],
+      "extension": [],
+      "nestedType": [],
+      "enumType": [],
+      "extensionRange": [],
+      "oneofDecl": [],
       "options": undefined,
       "reservedRange": [],
       "reservedName": [],
@@ -1656,24 +1736,60 @@ export const protoMetadata: ProtoMetadata = {
     "enumType": [],
     "service": [],
     "extension": [],
-    "options": undefined,
+    "options": {
+      "javaPackage": "com.dev.restate.service.protocol",
+      "javaOuterClassname": "ProtocolProto",
+      "javaMultipleFiles": true,
+      "javaGenerateEqualsAndHash": false,
+      "javaStringCheckUtf8": false,
+      "optimizeFor": 1,
+      "goPackage": "",
+      "ccGenericServices": false,
+      "javaGenericServices": false,
+      "pyGenericServices": false,
+      "phpGenericServices": false,
+      "deprecated": false,
+      "ccEnableArenas": false,
+      "objcClassPrefix": "DRSP",
+      "csharpNamespace": "Dev.Restate.Service.Protocol",
+      "swiftPrefix": "",
+      "phpClassPrefix": "",
+      "phpNamespace": "Dev\\Restate\\Service\\Protocol",
+      "phpMetadataNamespace": "Dev\\Restate\\Service\\Protocol\\GPBMetadata",
+      "rubyPackage": "Dev::Restate::Service::Protocol",
+      "uninterpretedOption": [],
+    },
     "sourceCodeInfo": {
       "location": [{
         "path": [4, 0],
-        "span": [9, 0, 16, 1],
+        "span": [9, 0, 14, 1],
         "leadingComments": " Type: 0x0000 + 0\n",
         "trailingComments": "",
         "leadingDetachedComments": [" --- Core frames ---\n"],
       }, {
         "path": [4, 1],
-        "span": [20, 0, 28, 1],
+        "span": [18, 0, 26, 1],
         "leadingComments":
           " Type: 0x0000 + 1\n Note: Completions that are simply acks will use this frame without sending back any result\n",
         "trailingComments": "",
         "leadingDetachedComments": [],
       }, {
         "path": [4, 2],
-        "span": [45, 0, 47, 1],
+        "span": [30, 0, 37, 1],
+        "leadingComments":
+          " Type: 0x0000 + 2\n Implementations MUST send this message when suspending an invocation.\n",
+        "trailingComments": "",
+        "leadingDetachedComments": [],
+      }, {
+        "path": [4, 2, 2, 0],
+        "span": [36, 2, 36],
+        "leadingComments":
+          " This list represents any of the entry_index the invocation is waiting on to progress.\n The runtime will resume the invocation as soon as one of the given entry_index is completed.\n This list MUST not be empty.\n False positive, entry_indexes is a valid plural of entry_indices.\n https://learn.microsoft.com/en-us/style-guide/a-z-word-list-term-collections/i/index-indexes-indices\n",
+        "trailingComments": " protolint:disable:this REPEATED_FIELD_NAMES_PLURALIZED\n",
+        "leadingDetachedComments": [],
+      }, {
+        "path": [4, 3],
+        "span": [54, 0, 56, 1],
         "leadingComments": " Kind: Completable JournalEntry\n Type: 0x0400 + 0\n",
         "trailingComments": "",
         "leadingDetachedComments": [
@@ -1682,62 +1798,62 @@ export const protoMetadata: ProtoMetadata = {
           " ------ Input and output ------\n",
         ],
       }, {
-        "path": [4, 3],
-        "span": [51, 0, 56, 1],
+        "path": [4, 4],
+        "span": [60, 0, 65, 1],
         "leadingComments": " Kind: Ack-able JournalEntry\n Type: 0x0400 + 1\n",
         "trailingComments": "",
         "leadingDetachedComments": [],
       }, {
-        "path": [4, 4],
-        "span": [62, 0, 69, 1],
+        "path": [4, 5],
+        "span": [71, 0, 78, 1],
         "leadingComments": " Kind: Completable JournalEntry\n Type: 0x0800 + 0\n",
         "trailingComments": "",
         "leadingDetachedComments": [" ------ State access ------\n"],
       }, {
-        "path": [4, 5],
-        "span": [73, 0, 76, 1],
+        "path": [4, 6],
+        "span": [82, 0, 85, 1],
         "leadingComments": " Kind: Ack-able JournalEntry\n Type: 0x0800 + 1\n",
         "trailingComments": "",
         "leadingDetachedComments": [],
       }, {
-        "path": [4, 6],
-        "span": [80, 0, 82, 1],
+        "path": [4, 7],
+        "span": [89, 0, 91, 1],
         "leadingComments": " Kind: Ack-able JournalEntry\n Type: 0x0800 + 2\n",
         "trailingComments": "",
         "leadingDetachedComments": [],
       }, {
-        "path": [4, 7],
-        "span": [88, 0, 93, 1],
+        "path": [4, 8],
+        "span": [97, 0, 102, 1],
         "leadingComments": " Kind: Completable JournalEntry\n Type: 0x0C00 + 0\n",
         "trailingComments": "",
         "leadingDetachedComments": [" ------ Syscalls ------\n"],
       }, {
-        "path": [4, 7, 2, 0],
-        "span": [90, 2, 25],
+        "path": [4, 8, 2, 0],
+        "span": [99, 2, 25],
         "leadingComments": " Duration since UNIX Epoch\n",
         "trailingComments": "",
         "leadingDetachedComments": [],
       }, {
-        "path": [4, 8],
-        "span": [97, 0, 107, 1],
-        "leadingComments": " Kind: Completable JournalEntry\n Type: 0x0C00 + 1\n",
-        "trailingComments": "",
-        "leadingDetachedComments": [],
-      }, {
         "path": [4, 9],
-        "span": [111, 0, 116, 1],
-        "leadingComments": " Kind: Ack-able JournalEntry\n Type: 0x0C00 + 2\n",
+        "span": [106, 0, 116, 1],
+        "leadingComments": " Kind: Completable JournalEntry\n Type: 0x0C00 + 1\n",
         "trailingComments": "",
         "leadingDetachedComments": [],
       }, {
         "path": [4, 10],
         "span": [120, 0, 125, 1],
-        "leadingComments": " Kind: Completable JournalEntry\n Type: 0x0C00 + 3\n",
+        "leadingComments": " Kind: Ack-able JournalEntry\n Type: 0x0C00 + 2\n",
         "trailingComments": "",
         "leadingDetachedComments": [],
       }, {
         "path": [4, 11],
-        "span": [129, 0, 136, 1],
+        "span": [129, 0, 134, 1],
+        "leadingComments": " Kind: Completable JournalEntry\n Type: 0x0C00 + 3\n",
+        "trailingComments": "",
+        "leadingDetachedComments": [],
+      }, {
+        "path": [4, 12],
+        "span": [138, 0, 145, 1],
         "leadingComments": " Kind: Ack-able JournalEntry\n Type: 0x0C00 + 4\n",
         "trailingComments": "",
         "leadingDetachedComments": [],
@@ -1748,6 +1864,7 @@ export const protoMetadata: ProtoMetadata = {
   references: {
     ".dev.restate.service.protocol.StartMessage": StartMessage,
     ".dev.restate.service.protocol.CompletionMessage": CompletionMessage,
+    ".dev.restate.service.protocol.SuspensionMessage": SuspensionMessage,
     ".dev.restate.service.protocol.PollInputStreamEntryMessage": PollInputStreamEntryMessage,
     ".dev.restate.service.protocol.OutputStreamEntryMessage": OutputStreamEntryMessage,
     ".dev.restate.service.protocol.GetStateEntryMessage": GetStateEntryMessage,

@@ -2,21 +2,18 @@
 
 import http2 from "http2";
 import {
-  RestateDuplexStream,
-  RestateDuplexStreamEventHandler,
-} from "./protocol_stream";
-import { parse as urlparse, Url } from "url";
-import { on } from "events";
-import { ProtocolMessage } from "./types";
-import {
   AWAKEABLE_ENTRY_MESSAGE_TYPE,
   GET_STATE_ENTRY_MESSAGE_TYPE,
   INVOKE_ENTRY_MESSAGE_TYPE,
   OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
+  RestateDuplexStream,
+  RestateDuplexStreamEventHandler,
   SLEEP_ENTRY_MESSAGE_TYPE,
-  SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
 } from "./protocol_stream";
-import { Message } from "./types";
+import {parse as urlparse, Url} from "url";
+import {on} from "events";
+import {Message, ProtocolMessage, SIDE_EFFECT_ENTRY_MESSAGE_TYPE} from "./types";
+import {ServiceDiscoveryResponse} from "./generated/proto/discovery";
 
 export interface Connection {
   send(
@@ -55,7 +52,7 @@ export class HttpConnection implements Connection {
 
   respond404() {
     this.stream.respond({
-      "content-type": "application/octet-stream",
+      "content-type": "application/restate",
       ":status": 404,
     });
     this.stream.end();
@@ -63,7 +60,7 @@ export class HttpConnection implements Connection {
 
   respondOk() {
     this.stream.respond({
-      "content-type": "application/octet-stream",
+      "content-type": "application/restate",
       ":status": 200,
     });
   }
@@ -103,7 +100,7 @@ export class HttpConnection implements Connection {
   }
 }
 
-export async function* incomingConnectionAtPort(port: number) {
+export async function* incomingConnectionAtPort(port: number, discovery: ServiceDiscoveryResponse) {
   const server = http2.createServer();
 
   server.on("error", (err) => console.error(err));
@@ -115,6 +112,16 @@ export async function* incomingConnectionAtPort(port: number) {
     const s = stream as http2.ServerHttp2Stream;
     const h = headers as http2.IncomingHttpHeaders;
     const u: Url = urlparse(h[":path"] ?? "/");
+
+    if (u.path == "/discover") {
+      s.respond({
+        ':status': 200,
+        'content-type': 'application/proto',
+      });
+      s.write(ServiceDiscoveryResponse.encode(discovery).finish())
+      s.end()
+      continue
+    }
 
     connectionId += 1n;
     const connection = new HttpConnection(

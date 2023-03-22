@@ -1,6 +1,6 @@
 {
   "name": "@restatedev/restate-ts-poc",
-  "version": "1.0.1",
+  "version": "1.0.7",
   "description": "Typescript SDK for Restate",
   "repository": {
     "type": "git",
@@ -12,7 +12,7 @@
   "main": "dist/public_api.js",
   "types": "dist/public_api.d.ts",
   "scripts": {
-    "proto": "./bin/generate-protobuf.sh",
+    "proto": "buf generate",
     "build": "tsc --noEmitOnError",
     "test": "jest",
     "lint": "eslint --ignore-path .eslintignore --ext .ts .",

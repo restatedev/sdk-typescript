@@ -54,7 +54,7 @@ export class TestDriver<I, O> implements Connection {
     });
 
     const hostedGrpcServiceMethod: HostedGrpcServiceMethod<I, O> | undefined =
-      this.restateServer.methodByUrl(methodName);
+      this.restateServer.methodByUrl("/invoke" + methodName);
 
     if (hostedGrpcServiceMethod) {
       this.method = hostedGrpcServiceMethod;
