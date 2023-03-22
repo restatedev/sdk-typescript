@@ -1,0 +1,28 @@
+/*
+  This package provides user facing Restate extensions, which the user can include in their own contracts
+ */
+syntax = "proto3";
+
+package dev.restate.ext;
+
+import "google/protobuf/descriptor.proto";
+
+enum ServiceType {
+  // protolint:disable:next ENUM_FIELD_NAMES_ZERO_VALUE_END_WITH
+  UNKEYED = 0;
+  KEYED = 1;
+  SINGLETON = 2;
+}
+
+enum FieldType {
+  // protolint:disable:next ENUM_FIELD_NAMES_ZERO_VALUE_END_WITH
+  KEY = 0;
+}
+
+extend google.protobuf.ServiceOptions {
+  optional ServiceType service_type = 51234;
+}
+
+extend google.protobuf.FieldOptions {
+  optional FieldType field = 51234;
+}

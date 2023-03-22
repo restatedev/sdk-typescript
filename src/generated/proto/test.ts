@@ -5,30 +5,30 @@ import { protoMetadata as protoMetadata1 } from "./ext";
 
 export const protobufPackage = "dev.restate";
 
-export interface GreetRequest {
+export interface TestRequest {
   name: string;
 }
 
-export interface GreetResponse {
+export interface TestResponse {
   greeting: string;
 }
 
-function createBaseGreetRequest(): GreetRequest {
+function createBaseTestRequest(): TestRequest {
   return { name: "" };
 }
 
-export const GreetRequest = {
-  encode(message: GreetRequest, writer: _m0.Writer = _m0.Writer.create()): _m0.Writer {
+export const TestRequest = {
+  encode(message: TestRequest, writer: _m0.Writer = _m0.Writer.create()): _m0.Writer {
     if (message.name !== "") {
       writer.uint32(10).string(message.name);
     }
     return writer;
   },
 
-  decode(input: _m0.Reader | Uint8Array, length?: number): GreetRequest {
+  decode(input: _m0.Reader | Uint8Array, length?: number): TestRequest {
     const reader = input instanceof _m0.Reader ? input : new _m0.Reader(input);
     let end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseGreetRequest();
+    const message = createBaseTestRequest();
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
@@ -43,43 +43,43 @@ export const GreetRequest = {
     return message;
   },
 
-  fromJSON(object: any): GreetRequest {
+  fromJSON(object: any): TestRequest {
     return { name: isSet(object.name) ? String(object.name) : "" };
   },
 
-  toJSON(message: GreetRequest): unknown {
+  toJSON(message: TestRequest): unknown {
     const obj: any = {};
     message.name !== undefined && (obj.name = message.name);
     return obj;
   },
 
-  create(base?: DeepPartial<GreetRequest>): GreetRequest {
-    return GreetRequest.fromPartial(base ?? {});
+  create(base?: DeepPartial<TestRequest>): TestRequest {
+    return TestRequest.fromPartial(base ?? {});
   },
 
-  fromPartial(object: DeepPartial<GreetRequest>): GreetRequest {
-    const message = createBaseGreetRequest();
+  fromPartial(object: DeepPartial<TestRequest>): TestRequest {
+    const message = createBaseTestRequest();
     message.name = object.name ?? "";
     return message;
   },
 };
 
-function createBaseGreetResponse(): GreetResponse {
+function createBaseTestResponse(): TestResponse {
   return { greeting: "" };
 }
 
-export const GreetResponse = {
-  encode(message: GreetResponse, writer: _m0.Writer = _m0.Writer.create()): _m0.Writer {
+export const TestResponse = {
+  encode(message: TestResponse, writer: _m0.Writer = _m0.Writer.create()): _m0.Writer {
     if (message.greeting !== "") {
       writer.uint32(10).string(message.greeting);
     }
     return writer;
   },
 
-  decode(input: _m0.Reader | Uint8Array, length?: number): GreetResponse {
+  decode(input: _m0.Reader | Uint8Array, length?: number): TestResponse {
     const reader = input instanceof _m0.Reader ? input : new _m0.Reader(input);
     let end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseGreetResponse();
+    const message = createBaseTestResponse();
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
@@ -94,51 +94,43 @@ export const GreetResponse = {
     return message;
   },
 
-  fromJSON(object: any): GreetResponse {
+  fromJSON(object: any): TestResponse {
     return { greeting: isSet(object.greeting) ? String(object.greeting) : "" };
   },
 
-  toJSON(message: GreetResponse): unknown {
+  toJSON(message: TestResponse): unknown {
     const obj: any = {};
     message.greeting !== undefined && (obj.greeting = message.greeting);
     return obj;
   },
 
-  create(base?: DeepPartial<GreetResponse>): GreetResponse {
-    return GreetResponse.fromPartial(base ?? {});
+  create(base?: DeepPartial<TestResponse>): TestResponse {
+    return TestResponse.fromPartial(base ?? {});
   },
 
-  fromPartial(object: DeepPartial<GreetResponse>): GreetResponse {
-    const message = createBaseGreetResponse();
+  fromPartial(object: DeepPartial<TestResponse>): TestResponse {
+    const message = createBaseTestResponse();
     message.greeting = object.greeting ?? "";
     return message;
   },
 };
 
-export interface Greeter {
-  greet(request: GreetRequest): Promise<GreetResponse>;
-  multiWord(request: GreetRequest): Promise<GreetResponse>;
+export interface TestGreeter {
+  greet(request: TestRequest): Promise<TestResponse>;
 }
 
-export class GreeterClientImpl implements Greeter {
+export class TestGreeterClientImpl implements TestGreeter {
   private readonly rpc: Rpc;
   private readonly service: string;
   constructor(rpc: Rpc, opts?: { service?: string }) {
-    this.service = opts?.service || "dev.restate.Greeter";
+    this.service = opts?.service || "dev.restate.TestGreeter";
     this.rpc = rpc;
     this.greet = this.greet.bind(this);
-    this.multiWord = this.multiWord.bind(this);
   }
-  greet(request: GreetRequest): Promise<GreetResponse> {
-    const data = GreetRequest.encode(request).finish();
+  greet(request: TestRequest): Promise<TestResponse> {
+    const data = TestRequest.encode(request).finish();
     const promise = this.rpc.request(this.service, "Greet", data);
-    return promise.then((data) => GreetResponse.decode(new _m0.Reader(data)));
-  }
-
-  multiWord(request: GreetRequest): Promise<GreetResponse> {
-    const data = GreetRequest.encode(request).finish();
-    const promise = this.rpc.request(this.service, "MultiWord", data);
-    return promise.then((data) => GreetResponse.decode(new _m0.Reader(data)));
+    return promise.then((data) => TestResponse.decode(new _m0.Reader(data)));
   }
 }
 
@@ -169,13 +161,13 @@ export interface ProtoMetadata {
 
 export const protoMetadata: ProtoMetadata = {
   fileDescriptor: FileDescriptorProto1.fromPartial({
-    "name": "proto/example.proto",
+    "name": "proto/test.proto",
     "package": "dev.restate",
     "dependency": ["proto/ext.proto"],
     "publicDependency": [],
     "weakDependency": [],
     "messageType": [{
-      "name": "GreetRequest",
+      "name": "TestRequest",
       "field": [{
         "name": "name",
         "number": 1,
@@ -206,7 +198,7 @@ export const protoMetadata: ProtoMetadata = {
       "reservedRange": [],
       "reservedName": [],
     }, {
-      "name": "GreetResponse",
+      "name": "TestResponse",
       "field": [{
         "name": "greeting",
         "number": 1,
@@ -231,18 +223,11 @@ export const protoMetadata: ProtoMetadata = {
     }],
     "enumType": [],
     "service": [{
-      "name": "Greeter",
+      "name": "TestGreeter",
       "method": [{
         "name": "Greet",
-        "inputType": ".dev.restate.GreetRequest",
-        "outputType": ".dev.restate.GreetResponse",
-        "options": { "deprecated": false, "idempotencyLevel": 0, "uninterpretedOption": [] },
-        "clientStreaming": false,
-        "serverStreaming": false,
-      }, {
-        "name": "MultiWord",
-        "inputType": ".dev.restate.GreetRequest",
-        "outputType": ".dev.restate.GreetResponse",
+        "inputType": ".dev.restate.TestRequest",
+        "outputType": ".dev.restate.TestResponse",
         "options": { "deprecated": false, "idempotencyLevel": 0, "uninterpretedOption": [] },
         "clientStreaming": false,
         "serverStreaming": false,
@@ -255,14 +240,14 @@ export const protoMetadata: ProtoMetadata = {
     "syntax": "proto3",
   }),
   references: {
-    ".dev.restate.GreetRequest": GreetRequest,
-    ".dev.restate.GreetResponse": GreetResponse,
-    ".dev.restate.Greeter": GreeterClientImpl,
+    ".dev.restate.TestRequest": TestRequest,
+    ".dev.restate.TestResponse": TestResponse,
+    ".dev.restate.TestGreeter": TestGreeterClientImpl,
   },
   dependencies: [protoMetadata1],
   options: {
-    messages: { "GreetRequest": { fields: { "name": { "field": 0 } } } },
-    services: { "Greeter": { options: { "service_type": 1 }, methods: {} } },
+    messages: { "TestRequest": { fields: { "name": { "field": 0 } } } },
+    services: { "TestGreeter": { options: { "service_type": 1 }, methods: {} } },
   },
 };
 

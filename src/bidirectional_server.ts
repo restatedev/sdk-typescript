@@ -7,8 +7,44 @@ import {
 } from "./protocol_stream";
 import { parse as urlparse, Url } from "url";
 import { on } from "events";
+import { ProtocolMessage } from "./types";
+import {
+  AWAKEABLE_ENTRY_MESSAGE_TYPE,
+  GET_STATE_ENTRY_MESSAGE_TYPE,
+  INVOKE_ENTRY_MESSAGE_TYPE,
+  OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
+  SLEEP_ENTRY_MESSAGE_TYPE,
+  SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+} from "./protocol_stream";
+import { Message } from "./types";
 
-export class Connection {
+export interface Connection {
+  send(
+    message_type: bigint,
+    message: ProtocolMessage | Buffer,
+    completed?: boolean | undefined,
+    requires_ack?: boolean | undefined
+  ): void;
+
+  onMessage(handler: RestateDuplexStreamEventHandler): void;
+
+  onClose(handler: () => void): void;
+
+  end(): void;
+}
+
+export class HttpConnection implements Connection {
+  private result: Array<Message> = [];
+
+  private requiresCompletion = [
+    OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
+    INVOKE_ENTRY_MESSAGE_TYPE,
+    GET_STATE_ENTRY_MESSAGE_TYPE,
+    SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+    AWAKEABLE_ENTRY_MESSAGE_TYPE,
+    SLEEP_ENTRY_MESSAGE_TYPE,
+  ];
+
   constructor(
     readonly connectionId: bigint,
     readonly headers: http2.IncomingHttpHeaders,
@@ -34,12 +70,24 @@ export class Connection {
 
   send(
     message_type: bigint,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    message: any,
+    message: ProtocolMessage | Buffer,
     completed?: boolean,
     requires_ack?: boolean
   ) {
-    this.restate.send(message_type, message, completed, requires_ack);
+    this.result.push(new Message(message_type, message));
+
+    // Only flush the messages if they require a completion.
+    if (this.requiresCompletion.includes(message_type)) {
+      this.flush();
+    }
+  }
+
+  flush() {
+    // TODO
+    this.result.forEach((msg) =>
+      this.restate.send(msg.messageType, msg.message)
+    );
+    this.result = [];
   }
 
   onMessage(handler: RestateDuplexStreamEventHandler) {
@@ -69,7 +117,7 @@ export async function* incomingConnectionAtPort(port: number) {
     const u: Url = urlparse(h[":path"] ?? "/");
 
     connectionId += 1n;
-    const connection = new Connection(
+    const connection = new HttpConnection(
       connectionId,
       h,
       u,

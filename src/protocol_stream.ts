@@ -16,6 +16,7 @@ import {
   SleepEntryMessage,
   StartMessage,
 } from "./generated/proto/protocol";
+import { ProtocolMessage } from "./types";
 
 // --- public api
 
@@ -50,13 +51,15 @@ export const INVOKE_ENTRY_MESSAGE_TYPE = 0x0c01n;
 export const BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE = 0x0c02n;
 export const AWAKEABLE_ENTRY_MESSAGE_TYPE = 0x0c03n;
 export const COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE = 0x0c04n;
+// Side effect message type for Typescript SDK
+// Side effects are custom messages because the runtime does not need to inspect them
+export const SIDE_EFFECT_ENTRY_MESSAGE_TYPE = 0xfc01n;
 
 // 3. restate DuplexStream.
 // TODO: docs.
 export type RestateDuplexStreamEventHandler = (
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  message: any,
   message_type: bigint,
+  message: ProtocolMessage | Buffer,
   completed_flag?: boolean,
   protocol_version?: number,
   requires_ack_flag?: boolean
@@ -80,7 +83,7 @@ export class RestateDuplexStream {
   send(
     message_type: bigint,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    message: any,
+    message: ProtocolMessage | Buffer,
     completed?: boolean,
     requires_ack?: boolean
   ) {
@@ -97,8 +100,8 @@ export class RestateDuplexStream {
       const { header, message } = data;
       const h = header as Header;
       handler(
-        message,
         h.message_type,
+        message,
         h.completed_flag,
         h.protocol_version,
         h.requires_ack_flag
@@ -157,7 +160,7 @@ const PROTOBUF_MESSAGES: Array<[bigint, any]> = [
   [COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE, CompleteAwakeableEntryMessage],
 ];
 
-const PROTOBUF_MESSAGE_BY_TYPE = new Map(PROTOBUF_MESSAGES);
+export const PROTOBUF_MESSAGE_BY_TYPE = new Map(PROTOBUF_MESSAGES);
 
 const CUSTOM_MESSAGE_MASK = BigInt(0xfc00);
 const COMPLETED_MASK = BigInt(0x0001_0000_0000);
@@ -340,8 +343,7 @@ function stream_encoder(): stream.Transform {
 
 interface EncoderOpts {
   message_type: bigint;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  message: any;
+  message: ProtocolMessage | Buffer;
   version?: number;
   completed?: boolean;
   requires_ack?: boolean;

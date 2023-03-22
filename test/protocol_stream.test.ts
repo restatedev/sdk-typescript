@@ -2,12 +2,12 @@ import { describe, expect } from "@jest/globals";
 import {
   Header,
   START_MESSAGE_TYPE,
+  StartMessage,
   COMPLETION_MESSAGE_TYPE,
   GET_STATE_ENTRY_MESSAGE_TYPE,
   RestateDuplexStream,
 } from "../src/protocol_stream";
 import stream from "stream";
-import { StartMessage } from "../src/generated/proto/protocol";
 
 // The following test suite is taken from headers.rs
 describe("Header", () => {
@@ -66,8 +66,8 @@ describe("Stream", () => {
     // this future will be resolved onces something is emmited on the stream.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result: any = new Promise((resolve) => {
-      restateStream.onMessage((message, message_type) => {
-        resolve({ message, message_type });
+      restateStream.onMessage((message_type, message) => {
+        resolve({ message_type, message });
       });
     });
 

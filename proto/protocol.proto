@@ -4,9 +4,6 @@ package dev.restate.service.protocol;
 
 import "google/protobuf/empty.proto";
 
-option java_package = "dev.restate.generated.service.protocol";
-option go_package = "restate.dev/sdk-go/pb/service/protocol";
-
 // --- Core frames ---
 
 // Type: 0x0000 + 0

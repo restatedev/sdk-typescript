@@ -1,15 +1,33 @@
 "use strict";
 
+import { AwakeableIdentifier } from "./types";
+
 export interface RestateContext {
+  instanceKey: Buffer;
+  serviceName: string;
+  invocationId: Buffer;
+
   request(
     service: string,
     method: string,
     data: Uint8Array
   ): Promise<Uint8Array>;
 
-  getState<T>(name: string): Promise<T | null>;
+  get<T>(name: string): Promise<T | null>;
 
-  setState<T>(name: string, value: T): Promise<void>;
+  set<T>(name: string, value: T): void;
+
+  clear(name: string): void;
+
+  inBackground<T>(call: () => Promise<T>): Promise<void>;
+
+  sideEffect<T>(fn: () => Promise<T>): Promise<T>;
+
+  awakeable<T>(): Promise<T>;
+
+  completeAwakeable<T>(id: AwakeableIdentifier, payload: T): void;
+
+  sleep(millis: number): Promise<void>;
 }
 
 export function useContext<T>(instance: T): RestateContext {

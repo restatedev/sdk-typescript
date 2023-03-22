@@ -1,6 +1,6 @@
 /* eslint-disable */
 import _m0 from "protobufjs/minimal";
-import { FileDescriptorProto } from "ts-proto-descriptors";
+import { FileDescriptorProto as FileDescriptorProto1 } from "ts-proto-descriptors";
 
 export const protobufPackage = "google.protobuf";
 
@@ -12,6 +12,8 @@ export const protobufPackage = "google.protobuf";
  *     service Foo {
  *       rpc Bar(google.protobuf.Empty) returns (google.protobuf.Empty);
  *     }
+ *
+ * The JSON representation for `Empty` is empty JSON object `{}`.
  */
 export interface Empty {
 }
@@ -49,11 +51,11 @@ export const Empty = {
     return obj;
   },
 
-  create<I extends Exact<DeepPartial<Empty>, I>>(base?: I): Empty {
+  create(base?: DeepPartial<Empty>): Empty {
     return Empty.fromPartial(base ?? {});
   },
 
-  fromPartial<I extends Exact<DeepPartial<Empty>, I>>(_: I): Empty {
+  fromPartial(_: DeepPartial<Empty>): Empty {
     const message = createBaseEmpty();
     return message;
   },
@@ -67,7 +69,7 @@ type ProtoMetaMessageOptions = {
 };
 
 export interface ProtoMetadata {
-  fileDescriptor: FileDescriptorProto;
+  fileDescriptor: FileDescriptorProto1;
   references: { [key: string]: any };
   dependencies?: ProtoMetadata[];
   options?: {
@@ -81,7 +83,7 @@ export interface ProtoMetadata {
 }
 
 export const protoMetadata: ProtoMetadata = {
-  fileDescriptor: FileDescriptorProto.fromPartial({
+  fileDescriptor: FileDescriptorProto1.fromPartial({
     "name": "google/protobuf/empty.proto",
     "package": "google.protobuf",
     "dependency": [],
@@ -109,7 +111,7 @@ export const protoMetadata: ProtoMetadata = {
       "javaGenerateEqualsAndHash": false,
       "javaStringCheckUtf8": false,
       "optimizeFor": 1,
-      "goPackage": "google.golang.org/protobuf/types/known/emptypb",
+      "goPackage": "github.com/golang/protobuf/ptypes/empty",
       "ccGenericServices": false,
       "javaGenericServices": false,
       "pyGenericServices": false,
@@ -128,9 +130,9 @@ export const protoMetadata: ProtoMetadata = {
     "sourceCodeInfo": {
       "location": [{
         "path": [4, 0],
-        "span": [50, 0, 16],
+        "span": [51, 0, 16],
         "leadingComments":
-          " A generic empty message that you can re-use to avoid defining duplicated\n empty messages in your APIs. A typical example is to use it as the request\n or the response type of an API method. For instance:\n\n     service Foo {\n       rpc Bar(google.protobuf.Empty) returns (google.protobuf.Empty);\n     }\n\n",
+          " A generic empty message that you can re-use to avoid defining duplicated\n empty messages in your APIs. A typical example is to use it as the request\n or the response type of an API method. For instance:\n\n     service Foo {\n       rpc Bar(google.protobuf.Empty) returns (google.protobuf.Empty);\n     }\n\n The JSON representation for `Empty` is empty JSON object `{}`.\n",
         "trailingComments": "",
         "leadingDetachedComments": [],
       }],
@@ -147,7 +149,3 @@ export type DeepPartial<T> = T extends Builtin ? T
   : T extends Array<infer U> ? Array<DeepPartial<U>> : T extends ReadonlyArray<infer U> ? ReadonlyArray<DeepPartial<U>>
   : T extends {} ? { [K in keyof T]?: DeepPartial<T[K]> }
   : Partial<T>;
-
-type KeysOfUnion<T> = T extends T ? keyof T : never;
-export type Exact<P, I extends P> = P extends Builtin ? P
-  : P & { [K in keyof P]: Exact<P[K], I[K]> } & { [K in Exclude<keyof I, KeysOfUnion<P>>]: never };

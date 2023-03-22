@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package dev.restate.sdk.javascript;
+
+import "proto/protocol.proto";
+
+// Type: 0xFC00 + 1
+// Flag: RequiresRuntimeAck
+message SideEffectEntryMessage {
+  oneof result {
+    bytes value = 14;
+    dev.restate.service.protocol.Failure failure = 15;
+  };
+}
