@@ -12,9 +12,14 @@ import {
 } from "./protoutils";
 import { SLEEP_ENTRY_MESSAGE_TYPE } from "../src/protocol_stream";
 import { Empty } from "../src/generated/google/protobuf/empty";
-import { protoMetadata, TestGreeter, TestRequest, TestResponse } from "../src/generated/proto/test";
+import {
+  protoMetadata,
+  TestGreeter,
+  TestRequest,
+  TestResponse,
+} from "../src/generated/proto/test";
 
-export class SleepGreeter implements TestGreeter {
+class SleepGreeter implements TestGreeter {
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 

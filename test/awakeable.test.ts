@@ -12,9 +12,14 @@ import {
   completeAwakeableMessage,
 } from "./protoutils";
 import { AwakeableIdentifier } from "../src/types";
-import { protoMetadata, TestGreeter, TestRequest, TestResponse } from "../src/generated/proto/test";
+import {
+  protoMetadata,
+  TestGreeter,
+  TestRequest,
+  TestResponse,
+} from "../src/generated/proto/test";
 
-export class AwakeableGreeter implements TestGreeter {
+class AwakeableGreeter implements TestGreeter {
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
@@ -24,7 +29,7 @@ export class AwakeableGreeter implements TestGreeter {
   }
 }
 
-export class CompleteAwakeableGreeter implements TestGreeter {
+class CompleteAwakeableGreeter implements TestGreeter {
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
@@ -34,7 +39,7 @@ export class CompleteAwakeableGreeter implements TestGreeter {
       Buffer.from("abcd"),
       1
     );
-    await ctx.completeAwakeable(awakeableIdentifier, "hello");
+    ctx.completeAwakeable(awakeableIdentifier, "hello");
 
     return TestResponse.create({ greeting: `Hello` });
   }

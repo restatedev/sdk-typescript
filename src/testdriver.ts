@@ -14,11 +14,7 @@ import {
   SLEEP_ENTRY_MESSAGE_TYPE,
   SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
 } from "./protocol_stream";
-import {
-  ProtocolMessage,
-  Message,
-  ProtoMetadata,
-} from "./types";
+import { ProtocolMessage, Message, ProtoMetadata } from "./types";
 import { HostedGrpcServiceMethod } from "./core";
 
 export class TestDriver<I, O> implements Connection {
@@ -78,7 +74,6 @@ export class TestDriver<I, O> implements Connection {
   }
 
   run(): Promise<Array<Message>> {
-    // is the use of 'this' dangerous here?
     this.desm = new DurableExecutionStateMachine(this, this.method);
 
     // Pipe messages through the state machine

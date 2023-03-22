@@ -15,9 +15,9 @@ export interface RestateContext {
 
   get<T>(name: string): Promise<T | null>;
 
-  set<T>(name: string, value: T): Promise<void>;
+  set<T>(name: string, value: T): void;
 
-  clear(name: string): Promise<void>;
+  clear(name: string): void;
 
   inBackground<T>(call: () => Promise<T>): Promise<void>;
 
@@ -25,7 +25,7 @@ export interface RestateContext {
 
   awakeable<T>(): Promise<T>;
 
-  completeAwakeable<T>(id: AwakeableIdentifier, payload: T): Promise<void>;
+  completeAwakeable<T>(id: AwakeableIdentifier, payload: T): void;
 
   sleep(millis: number): Promise<void>;
 }

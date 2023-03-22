@@ -30,21 +30,15 @@ import {
   SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
 } from "./protocol_stream";
 import { RestateContext } from "./context";
-import { AwakeableIdentifier, ProtocolMessage, } from "./types";
+import { AwakeableIdentifier, ProtocolMessage, PromiseHandler } from "./types";
 import { Failure } from "./generated/proto/protocol";
+import { SideEffectEntryMessage } from "./generated/proto/javascript";
 
 enum ExecutionState {
   WAITING_FOR_START = "WAITING_FOR_START",
   REPLAYING = "REPLAYING",
   PROCESSING = "PROCESSING",
   CLOSED = "CLOSED",
-}
-
-class PromiseHandler {
-  constructor(
-    readonly resolve: (value: any) => void,
-    readonly reject: (value: any) => void
-  ) {}
 }
 
 export class DurableExecutionStateMachine<I, O> implements RestateContext {
@@ -110,20 +104,16 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         GET_STATE_ENTRY_MESSAGE_TYPE,
         GetStateEntryMessage.create({ key: Buffer.from(name) })
       );
-    })
-      .then((result: Buffer | null) => {
-        if (result == null || JSON.stringify(result) === "{}") {
-          return null;
-        } else {
-          return JSON.parse(result.toString()) as T;
-        }
-      })
-      .catch((e: Failure) => {
-        throw new Error(`ERROR: Code ${e.code} : ${e.message}`);
-      });
+    }).then((result: Buffer | null) => {
+      if (result == null || JSON.stringify(result) === "{}") {
+        return null;
+      } else {
+        return JSON.parse(result.toString()) as T;
+      }
+    });
   }
 
-  async set<T>(name: string, value: T): Promise<void> {
+  set<T>(name: string, value: T): void {
     console.debug(
       "Service called setState: " + name + " - " + JSON.stringify(value)
     );
@@ -150,7 +140,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     );
   }
 
-  async clear(name: string): Promise<void> {
+  clear(name: string): void {
     console.debug("Service called clearState: " + name);
 
     this.validate("clear state");
@@ -192,22 +182,15 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         AWAKEABLE_ENTRY_MESSAGE_TYPE,
         AwakeableEntryMessage.create()
       );
-    })
-      .then<T>((result: Buffer) => {
-        console.debug(
-          "Received the following result: " + JSON.parse(result.toString())
-        );
-        return JSON.parse(result.toString()) as T;
-      })
-      .catch((e: Failure) => {
-        throw new Error(`ERROR: Code ${e.code} : ${e.message}`);
-      });
+    }).then<T>((result: Buffer) => {
+      console.debug(
+        "Received the following result: " + JSON.parse(result.toString())
+      );
+      return JSON.parse(result.toString()) as T;
+    });
   }
 
-  async completeAwakeable<T>(
-    id: AwakeableIdentifier,
-    payload: T
-  ): Promise<void> {
+  completeAwakeable<T>(id: AwakeableIdentifier, payload: T): void {
     console.debug("Service called completeAwakeable");
 
     this.validate("completeAwakeable");
@@ -253,7 +236,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     method: string,
     data: Uint8Array
   ): Promise<Uint8Array> {
-    // Validation check that we are not in a side-effect is done in inBackground() already.
+    // Validation check that we are not in a sideEffect is done in inBackground() already.
 
     this.incrementJournalIndex();
 
@@ -306,46 +289,82 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
           parameter: Buffer.from(data),
         })
       );
-    })
-      .then((result) => {
-        return result as Uint8Array;
-      })
-      .catch((e: Failure) => {
-        throw new Error(`ERROR: Code ${e.code} : ${e.message}`);
-      });
+    }).then((result) => {
+      return result as Uint8Array;
+    });
   }
 
   async inBackground<T>(call: () => Promise<T>): Promise<void> {
     this.validate("inBackground");
 
     this.inBackgroundCallFlag = true;
-    call();
+    await call();
     this.inBackgroundCallFlag = false;
   }
 
   async sideEffect<T>(fn: () => Promise<T>): Promise<T> {
     console.debug("Service used side effect");
-
-    this.validate("sideEffect");
-
     return new Promise((resolve, reject) => {
-      this.inSideEffectFlag = true
+      const wasAlreadyInSideEffect = this.inSideEffectFlag;
+      this.inSideEffectFlag = true;
       this.incrementJournalIndex();
       this.addPromise(this.currentJournalIndex, resolve, reject);
 
-      return fn().then((result) => {
-        if (this.state === ExecutionState.REPLAYING) {
-          console.debug(
-            "In replay mode: side effect will not be ignored. Expecting completion"
-          );
-          return;
-        }
+      if (wasAlreadyInSideEffect) {
+        console.debug("Rejecting the promise: was already in a side effect.");
+        const failure: Failure = Failure.create({
+          code: 13,
+          message: `You cannot do sideEffect calls from within a side effect.`,
+        });
+        this.connection.send(
+          SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+          SideEffectEntryMessage.create({ failure: failure })
+        );
+        return;
+      } else if (this.inBackgroundCallFlag) {
+        console.debug("Rejecting the promise");
+        const failure: Failure = Failure.create({
+          code: 13,
+          message:
+            `Cannot do a side effect from within a sideEffect call. ` +
+            "Context method inBackground() can only be used to invoke other services in the background. " +
+            "e.g. ctx.inBackground(() => client.greet(my_request))",
+        });
+        this.connection.send(
+          SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+          SideEffectEntryMessage.create({ failure: failure })
+        );
+        return;
+      }
 
-        const bytes = Buffer.from(JSON.stringify(result));
-        this.connection.send(SIDE_EFFECT_ENTRY_MESSAGE_TYPE, bytes);
-        this.inSideEffectFlag = false;
-        return result;
-      });
+      if (this.state === ExecutionState.REPLAYING) {
+        console.debug(
+          "In replay mode: side effect will be ignored. Expecting completion"
+        );
+        return;
+      }
+
+      fn()
+        .then((value) => {
+          if (value !== undefined) {
+            const bytes = Buffer.from(JSON.stringify(value));
+            this.connection.send(
+              SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+              SideEffectEntryMessage.create({ value: bytes })
+            );
+            this.inSideEffectFlag = false;
+          }
+        })
+        .catch((reason) => {
+          const failure: Failure = Failure.create({
+            code: 13,
+            message: reason.stack,
+          });
+          this.connection.send(
+            SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+            SideEffectEntryMessage.create({ failure: failure })
+          );
+        });
     });
   }
 
@@ -439,7 +458,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         break;
       }
       case SIDE_EFFECT_ENTRY_MESSAGE_TYPE: {
-        this.handleSideEffectMessage(message as Buffer);
+        this.handleSideEffectMessage(message as SideEffectEntryMessage);
         break;
       }
       default: {
@@ -483,10 +502,10 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     }
 
     if (m.value !== undefined) {
-      this.resolvePromise(m.entryIndex, m.value);
+      this.resolveOrRejectPromise(m.entryIndex, m.value);
     } else {
       // If the value is not set, then it is either empty or a failure
-      this.resolvePromise(m.entryIndex, m.empty, m.failure);
+      this.resolveOrRejectPromise(m.entryIndex, m.empty, m.failure);
     }
   }
 
@@ -499,10 +518,10 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     this.checkIfInReplay();
 
     if (m.value !== undefined) {
-      this.resolvePromise(this.currentJournalIndex, m.value as Buffer);
+      this.resolveOrRejectPromise(this.currentJournalIndex, m.value as Buffer);
     }
     if (m.empty !== undefined) {
-      this.resolvePromise(this.currentJournalIndex, m.empty);
+      this.resolveOrRejectPromise(this.currentJournalIndex, m.empty);
     } else {
       console.debug("GetStateEntryMessage not yet completed.");
     }
@@ -513,14 +532,22 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
     this.checkIfInReplay();
 
-    this.resolvePromise(this.replayIndex, m.value, m.failure);
+    this.resolveOrRejectPromise(this.replayIndex, m.value, m.failure);
   }
 
-  handleSideEffectMessage(m: Buffer) {
-    console.debug("Received SideEffectMessage: " + JSON.parse(m.toString()));
+  handleSideEffectMessage(m: SideEffectEntryMessage) {
+    console.debug("Received SideEffectMessage: " + JSON.stringify(m));
 
     this.checkIfInReplay();
-    this.resolvePromise(this.replayIndex, JSON.parse(m.toString()));
+
+    if (m.value != undefined) {
+      this.resolveOrRejectPromise(
+        this.replayIndex,
+        JSON.parse(m.value.toString())
+      );
+    } else {
+      this.resolveOrRejectPromise(this.replayIndex, undefined, m.failure);
+    }
   }
 
   handleAwakeableMessage(m: AwakeableEntryMessage) {
@@ -528,7 +555,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
     this.checkIfInReplay();
 
-    this.resolvePromise(this.replayIndex, m.value, m.failure);
+    this.resolveOrRejectPromise(this.replayIndex, m.value, m.failure);
   }
 
   handleSleepCompletionMessage(m: SleepEntryMessage) {
@@ -536,7 +563,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
     this.checkIfInReplay();
 
-    this.resolvePromise(this.replayIndex, m.result);
+    this.resolveOrRejectPromise(this.replayIndex, m.result);
   }
 
   checkIfInReplay() {
@@ -602,7 +629,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     }
   }
 
-  resolvePromise<T>(
+  resolveOrRejectPromise<T>(
     journalIndex: number,
     value?: T | undefined,
     failure?: Failure | undefined
@@ -624,7 +651,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       resolveFct.resolve(value);
       this.pendingPromises.delete(journalIndex);
     } else if (failure !== undefined) {
-      resolveFct.reject(value);
+      resolveFct.reject(failure);
       this.pendingPromises.delete(journalIndex);
     } else {
       if (this.state === ExecutionState.REPLAYING) {
@@ -639,13 +666,17 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     }
   }
 
-  validate(callType: string){
-    if(this.inSideEffectFlag){
-      throw new Error(`You cannot do ${callType} calls from within a side effect.`);
-    } else if (this.inBackgroundCallFlag){
-      throw new Error(`Cannot do a side effect from within a ${callType} call. ` +
-        "Context method inBackground() can only be used to invoke other services in the background. " +
-        "e.g. ctx.inBackground(() => client.greet(my_request))" );
+  validate(callType: string) {
+    if (this.inSideEffectFlag) {
+      throw new Error(
+        `You cannot do ${callType} calls from within a side effect.`
+      );
+    } else if (this.inBackgroundCallFlag) {
+      throw new Error(
+        `Cannot do a side effect from within a ${callType} call. ` +
+          "Context method inBackground() can only be used to invoke other services in the background. " +
+          "e.g. ctx.inBackground(() => client.greet(my_request))"
+      );
     }
   }
 
@@ -658,13 +689,26 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     this.connection.end();
   }
 
-  onCallFailure(failure: Failure) {
-    console.debug("Call failed: " + failure);
-    // TODO parse error codes and messages
+  onCallFailure(e: Error | Failure) {
+    if (e instanceof Error) {
+      console.warn(
+        `Call failed for invocation id ${this.invocationId}: ${e.message} - ${e.stack}`
+      );
+    } else {
+      console.warn(
+        `Call failed for invocation id ${this.invocationId}: ${JSON.stringify(
+          e
+        )}`
+      );
+    }
+
     this.connection.send(
       OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
       OutputStreamEntryMessage.create({
-        failure: failure,
+        failure: Failure.create({
+          code: 13,
+          message: "Uncaught exception for invocation id " + this.invocationId,
+        }),
       })
     );
     this.connection.end();

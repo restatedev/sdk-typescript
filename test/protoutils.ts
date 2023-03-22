@@ -29,6 +29,8 @@ import {
 } from "../src/protocol_stream";
 import { Message } from "../src/types";
 import { TestRequest, TestResponse } from "../src/generated/proto/test";
+import { SideEffectEntryMessage } from "../src/generated/proto/javascript";
+import { Failure } from "../src/generated/proto/protocol";
 
 export function startMessage(knownEntries: number): Message {
   return new Message(
@@ -50,13 +52,25 @@ export function inputMessage(value: Uint8Array): Message {
   );
 }
 
-export function outputMessage(value: Uint8Array): Message {
-  return new Message(
-    OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
-    OutputStreamEntryMessage.create({
-      value: Buffer.from(value),
-    })
-  );
+export function outputMessage(value?: Uint8Array): Message {
+  if (value !== undefined) {
+    return new Message(
+      OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
+      OutputStreamEntryMessage.create({
+        value: Buffer.from(value),
+      })
+    );
+  } else {
+    return new Message(
+      OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
+      OutputStreamEntryMessage.create({
+        failure: Failure.create({
+          code: 13,
+          message: `Uncaught exception for invocation id abcd`,
+        }),
+      })
+    );
+  }
 }
 
 export function getStateMessage<T>(key: string, value?: T): Message {
@@ -119,7 +133,8 @@ export function sleepMessage(millis: number, result?: Empty): Message {
 export function completionMessage(
   index: number,
   value?: any,
-  empty?: boolean
+  empty?: boolean,
+  failure?: Failure
 ): Message {
   if (value !== undefined) {
     return new Message(
@@ -135,6 +150,14 @@ export function completionMessage(
       CompletionMessage.create({
         entryIndex: index,
         empty: Empty.create(),
+      })
+    );
+  } else if (failure != undefined) {
+    return new Message(
+      COMPLETION_MESSAGE_TYPE,
+      CompletionMessage.create({
+        entryIndex: index,
+        failure: failure,
       })
     );
   } else {
@@ -190,11 +213,20 @@ export function backgroundInvokeMessage(
   );
 }
 
-export function sideEffectMessage<T>(value: T): Message {
-  return new Message(
-    SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-    Buffer.from(JSON.stringify(value))
-  );
+export function sideEffectMessage<T>(value?: T, failure?: Failure): Message {
+  if (value !== undefined) {
+    return new Message(
+      SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+      SideEffectEntryMessage.create({
+        value: Buffer.from(JSON.stringify(value)),
+      })
+    );
+  } else {
+    return new Message(
+      SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+      SideEffectEntryMessage.create({ failure: failure })
+    );
+  }
 }
 
 export function awakeableMessage<T>(payload?: T): Message {

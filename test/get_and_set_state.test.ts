@@ -12,9 +12,14 @@ import {
   greetRequest,
   clearStateMessage,
 } from "./protoutils";
-import { protoMetadata, TestGreeter, TestRequest, TestResponse } from "../src/generated/proto/test";
+import {
+  protoMetadata,
+  TestGreeter,
+  TestRequest,
+  TestResponse,
+} from "../src/generated/proto/test";
 
-export class GetAndSetGreeter implements TestGreeter {
+class GetAndSetGreeter implements TestGreeter {
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
@@ -28,7 +33,7 @@ export class GetAndSetGreeter implements TestGreeter {
   }
 }
 
-export class ClearStateGreeter implements TestGreeter {
+class ClearStateGreeter implements TestGreeter {
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 

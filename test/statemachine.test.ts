@@ -16,10 +16,10 @@ import {
   TestGreeter,
   TestGreeterClientImpl,
   TestRequest,
-  TestResponse
+  TestResponse,
 } from "../src/generated/proto/test";
 
-export class GreeterService implements TestGreeter {
+class GreeterService implements TestGreeter {
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
@@ -42,7 +42,6 @@ export class GreeterService implements TestGreeter {
     });
   }
 }
-
 
 describe("TestGreeter/Greet", () => {
   it("should call Greet and return the get state entry message", async () => {
