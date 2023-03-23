@@ -298,7 +298,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     this.validate("inBackground");
 
     this.inBackgroundCallFlag = true;
-    await call();
+    call();
     this.inBackgroundCallFlag = false;
   }
 
@@ -318,7 +318,8 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         });
         this.connection.send(
           SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-          SideEffectEntryMessage.create({ failure: failure })
+          SideEffectEntryMessage.create({ failure: failure }),
+          false, true
         );
         return;
       } else if (this.inBackgroundCallFlag) {
@@ -332,7 +333,8 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         });
         this.connection.send(
           SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-          SideEffectEntryMessage.create({ failure: failure })
+          SideEffectEntryMessage.create({ failure: failure }),
+          false, true
         );
         return;
       }
@@ -346,14 +348,14 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
       fn()
         .then((value) => {
-          if (value !== undefined) {
-            const bytes = Buffer.from(JSON.stringify(value));
-            this.connection.send(
-              SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-              SideEffectEntryMessage.create({ value: bytes })
-            );
-            this.inSideEffectFlag = false;
-          }
+          console.debug("Sending side effect to the runtime: " +value)
+          const bytes = Buffer.from(JSON.stringify(value));
+          this.connection.send(
+            SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+            SideEffectEntryMessage.encode(SideEffectEntryMessage.create({ value: bytes })).finish(),
+            false, true
+          );
+          this.inSideEffectFlag = false;
         })
         .catch((reason) => {
           const failure: Failure = Failure.create({
@@ -362,7 +364,8 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
           });
           this.connection.send(
             SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-            SideEffectEntryMessage.create({ failure: failure })
+            SideEffectEntryMessage.create({ failure: failure }),
+            false, true
           );
         });
     });
@@ -396,7 +399,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   // Called for every incoming message from the runtime: start messages, input messages and replay messages.
   onIncomingMessage(
     message_type: bigint,
-    message: ProtocolMessage | Buffer, // Buffer in case o
+    message: ProtocolMessage | Uint8Array,
     completed_flag?: boolean,
     protocol_version?: number,
     requires_ack_flag?: boolean
@@ -673,7 +676,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       );
     } else if (this.inBackgroundCallFlag) {
       throw new Error(
-        `Cannot do a side effect from within a ${callType} call. ` +
+        `Cannot do a ${callType} from within a background call. ` +
           "Context method inBackground() can only be used to invoke other services in the background. " +
           "e.g. ctx.inBackground(() => client.greet(my_request))"
       );
@@ -692,11 +695,11 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   onCallFailure(e: Error | Failure) {
     if (e instanceof Error) {
       console.warn(
-        `Call failed for invocation id ${this.invocationId}: ${e.message} - ${e.stack}`
+        `Call failed for invocation id ${this.invocationId.toString()}: ${e.message} - ${e.stack}`
       );
     } else {
       console.warn(
-        `Call failed for invocation id ${this.invocationId}: ${JSON.stringify(
+        `Call failed for invocation id ${this.invocationId.toString()}: ${JSON.stringify(
           e
         )}`
       );
@@ -707,7 +710,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       OutputStreamEntryMessage.create({
         failure: Failure.create({
           code: 13,
-          message: "Uncaught exception for invocation id " + this.invocationId,
+          message: "Uncaught exception for invocation id " + this.invocationId.toString(),
         }),
       })
     );
@@ -716,6 +719,6 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
   onClose() {
     // done.
-    console.log(`DEBUG connection ${this.connection} has been closed.`);
+    console.log(`DEBUG connection has been closed.`);
   }
 }

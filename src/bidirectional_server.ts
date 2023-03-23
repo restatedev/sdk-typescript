@@ -18,7 +18,7 @@ import {ServiceDiscoveryResponse} from "./generated/proto/discovery";
 export interface Connection {
   send(
     message_type: bigint,
-    message: ProtocolMessage | Buffer,
+    message: ProtocolMessage | Uint8Array,
     completed?: boolean | undefined,
     requires_ack?: boolean | undefined
   ): void;
@@ -67,11 +67,11 @@ export class HttpConnection implements Connection {
 
   send(
     message_type: bigint,
-    message: ProtocolMessage | Buffer,
+    message: ProtocolMessage | Uint8Array,
     completed?: boolean,
     requires_ack?: boolean
   ) {
-    this.result.push(new Message(message_type, message));
+    this.result.push(new Message(message_type, message, completed, requires_ack));
 
     // Only flush the messages if they require a completion.
     if (this.requiresCompletion.includes(message_type)) {
@@ -80,9 +80,8 @@ export class HttpConnection implements Connection {
   }
 
   flush() {
-    // TODO
     this.result.forEach((msg) =>
-      this.restate.send(msg.messageType, msg.message)
+      this.restate.send(msg.messageType, msg.message, msg.completed, msg.requires_ack)
     );
     this.result = [];
   }

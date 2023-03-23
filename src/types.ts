@@ -46,7 +46,9 @@ export type ProtocolMessage =
 export class Message {
   constructor(
     readonly messageType: bigint,
-    readonly message: ProtocolMessage | Buffer
+    readonly message: ProtocolMessage | Uint8Array,
+    readonly completed?: boolean,
+    readonly requires_ack?: boolean
   ) {}
 }
 

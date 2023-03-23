@@ -26,19 +26,24 @@ export const GreetRequest = {
   },
 
   decode(input: _m0.Reader | Uint8Array, length?: number): GreetRequest {
-    const reader = input instanceof _m0.Reader ? input : new _m0.Reader(input);
+    const reader = input instanceof _m0.Reader ? input : _m0.Reader.create(input);
     let end = length === undefined ? reader.len : reader.pos + length;
     const message = createBaseGreetRequest();
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
         case 1:
+          if (tag != 10) {
+            break;
+          }
+
           message.name = reader.string();
-          break;
-        default:
-          reader.skipType(tag & 7);
-          break;
+          continue;
       }
+      if ((tag & 7) == 4 || tag == 0) {
+        break;
+      }
+      reader.skipType(tag & 7);
     }
     return message;
   },
@@ -77,19 +82,24 @@ export const GreetResponse = {
   },
 
   decode(input: _m0.Reader | Uint8Array, length?: number): GreetResponse {
-    const reader = input instanceof _m0.Reader ? input : new _m0.Reader(input);
+    const reader = input instanceof _m0.Reader ? input : _m0.Reader.create(input);
     let end = length === undefined ? reader.len : reader.pos + length;
     const message = createBaseGreetResponse();
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
         case 1:
+          if (tag != 10) {
+            break;
+          }
+
           message.greeting = reader.string();
-          break;
-        default:
-          reader.skipType(tag & 7);
-          break;
+          continue;
       }
+      if ((tag & 7) == 4 || tag == 0) {
+        break;
+      }
+      reader.skipType(tag & 7);
     }
     return message;
   },
@@ -132,13 +142,13 @@ export class GreeterClientImpl implements Greeter {
   greet(request: GreetRequest): Promise<GreetResponse> {
     const data = GreetRequest.encode(request).finish();
     const promise = this.rpc.request(this.service, "Greet", data);
-    return promise.then((data) => GreetResponse.decode(new _m0.Reader(data)));
+    return promise.then((data) => GreetResponse.decode(_m0.Reader.create(data)));
   }
 
   multiWord(request: GreetRequest): Promise<GreetResponse> {
     const data = GreetRequest.encode(request).finish();
     const promise = this.rpc.request(this.service, "MultiWord", data);
-    return promise.then((data) => GreetResponse.decode(new _m0.Reader(data)));
+    return promise.then((data) => GreetResponse.decode(_m0.Reader.create(data)));
   }
 }
 

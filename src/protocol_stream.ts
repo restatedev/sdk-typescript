@@ -17,6 +17,7 @@ import {
   StartMessage,
 } from "./generated/proto/protocol";
 import { ProtocolMessage } from "./types";
+import { SideEffectEntryMessage } from "./generated/proto/javascript";
 
 // --- public api
 
@@ -59,7 +60,7 @@ export const SIDE_EFFECT_ENTRY_MESSAGE_TYPE = 0xfc01n;
 // TODO: docs.
 export type RestateDuplexStreamEventHandler = (
   message_type: bigint,
-  message: ProtocolMessage | Buffer,
+  message: ProtocolMessage | Uint8Array,
   completed_flag?: boolean,
   protocol_version?: number,
   requires_ack_flag?: boolean
@@ -83,7 +84,7 @@ export class RestateDuplexStream {
   send(
     message_type: bigint,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    message: ProtocolMessage | Buffer,
+    message: ProtocolMessage | Uint8Array,
     completed?: boolean,
     requires_ack?: boolean
   ) {
@@ -141,7 +142,7 @@ const KNOWN_MESSAGE_TYPES = new Set([
   INVOKE_ENTRY_MESSAGE_TYPE,
   BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
   AWAKEABLE_ENTRY_MESSAGE_TYPE,
-  COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
+  COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE
 ]);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -157,7 +158,7 @@ const PROTOBUF_MESSAGES: Array<[bigint, any]> = [
   [INVOKE_ENTRY_MESSAGE_TYPE, InvokeEntryMessage],
   [BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE, BackgroundInvokeEntryMessage],
   [AWAKEABLE_ENTRY_MESSAGE_TYPE, AwakeableEntryMessage],
-  [COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE, CompleteAwakeableEntryMessage],
+  [COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE, CompleteAwakeableEntryMessage]
 ];
 
 export const PROTOBUF_MESSAGE_BY_TYPE = new Map(PROTOBUF_MESSAGES);
@@ -325,7 +326,7 @@ function stream_decoder(): stream.Transform {
 //      - version
 //      - ack
 //      - completed
-//   I'm not sure what any of these mean, onces we'll figure out the protocol deatils we will use these, but for now
+//   I'm not sure what any of these mean, onces we'll figure out the protocol details we will use these, but for now
 //   and empty object {} works just fine, this stream transformer will create a proper header just fine.
 //
 // * message is a Protobuf message.

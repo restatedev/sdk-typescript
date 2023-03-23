@@ -217,14 +217,15 @@ export function sideEffectMessage<T>(value?: T, failure?: Failure): Message {
   if (value !== undefined) {
     return new Message(
       SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-      SideEffectEntryMessage.create({
+      SideEffectEntryMessage.encode(SideEffectEntryMessage.create({
         value: Buffer.from(JSON.stringify(value)),
-      })
+      })).finish(), false, true
     );
   } else {
     return new Message(
       SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-      SideEffectEntryMessage.create({ failure: failure })
+      SideEffectEntryMessage.encode(SideEffectEntryMessage.create({ failure: failure })).finish(),
+      false, true
     );
   }
 }
