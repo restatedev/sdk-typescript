@@ -6,6 +6,14 @@
     "type": "git",
     "url": "git+https://github.com/restatedev/typescript-sdk-expirment.git"
   },
+  "release-it": {
+    "github": {
+      "release": true
+    },
+    "npm": {
+      "release": false
+    }
+  },
   "publishConfig": {
     "@restatedev:registry": "https://npm.pkg.github.com"
   },
@@ -18,7 +26,8 @@
     "lint": "eslint --ignore-path .eslintignore --ext .ts .",
     "format": "prettier --ignore-path .eslintignore --write \"**/*.+(js|ts|json)\"",
     "example": "ts-node-dev --respawn --transpile-only ./src/example.ts",
-    "verify": "npm run test && npm run lint && npm run build"
+    "verify": "npm run test && npm run lint && npm run build",
+    "release": "release-it"
   },
   "files": [
     "dist"
