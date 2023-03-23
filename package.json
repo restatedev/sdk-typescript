@@ -11,7 +11,7 @@
       "release": true
     },
     "npm": {
-      "release": false
+      "publish": false
     }
   },
   "publishConfig": {

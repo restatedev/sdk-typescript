@@ -73,3 +73,13 @@ node dist/example.js
 ```
 
 (Please note the `.js` and not `.ts` as the `build` process will translate the TypeScript files back to .Js files)
+
+#### Release a new npm package
+
+Releasing this repo requires a github personal access token in your environment as `NPM_TOKEN`
+```bash
+# using 1password (https://developer.1password.com/docs/cli/shell-plugins/github/)
+NPM_TOKEN="op://private/GitHub Personal Access Token/token" op run -- npm run release
+# now select what type of release you want to do and say yes to the rest of the options
+```
+The actual `npm publish` is done by github actions once a github release is created
