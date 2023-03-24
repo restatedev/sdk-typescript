@@ -1,12 +1,18 @@
 "use strict";
 
-import {parseService, ProtoMetadata} from "./types";
-import {incomingConnectionAtPort} from "./bidirectional_server";
-import {HostedGrpcServiceMethod} from "./core";
-import {DurableExecutionStateMachine} from "./durable_execution";
-import {ProtocolMode, ServiceDiscoveryResponse} from "./generated/proto/discovery";
-import {FileDescriptorProto, UninterpretedOption} from "./generated/google/protobuf/descriptor";
-import {fieldTypeToJSON, serviceTypeToJSON} from "./generated/proto/ext";
+import { parseService, ProtoMetadata } from "./types";
+import { incomingConnectionAtPort } from "./bidirectional_server";
+import { HostedGrpcServiceMethod } from "./core";
+import { DurableExecutionStateMachine } from "./durable_execution";
+import {
+  ProtocolMode,
+  ServiceDiscoveryResponse,
+} from "./generated/proto/discovery";
+import {
+  FileDescriptorProto,
+  UninterpretedOption,
+} from "./generated/google/protobuf/descriptor";
+import { fieldTypeToJSON, serviceTypeToJSON } from "./generated/proto/ext";
 
 export interface ServiceOpts {
   descriptor: ProtoMetadata;
@@ -22,55 +28,77 @@ export class RestateServer {
   readonly methods: Record<string, HostedGrpcServiceMethod<unknown, unknown>> =
     {};
   readonly discovery: ServiceDiscoveryResponse = {
-    files: {file: []},
+    files: { file: [] },
     services: [],
     minProtocolVersion: 0,
     maxProtocolVersion: 0,
     protocolMode: ProtocolMode.BIDI_STREAM,
-  }
+  };
 
   addDescriptor(descriptor: ProtoMetadata) {
-    const desc = FileDescriptorProto.fromPartial(descriptor.fileDescriptor)
+    const desc = FileDescriptorProto.fromPartial(descriptor.fileDescriptor);
 
     // extract out service options and put into the fileDescriptor
     for (const name in descriptor.options?.services) {
-      if (descriptor.options?.services[name]?.options?.service_type !== undefined) {
-        desc.service.find((desc) => desc.name === name)?.options?.uninterpretedOption.push(UninterpretedOption.fromPartial({
-          name: [{namePart: "dev.restate.ext.service_type", isExtension: true}],
-          identifierValue: serviceTypeToJSON(descriptor.options?.services[name]?.options?.service_type),
-        }))
+      if (
+        descriptor.options?.services[name]?.options?.service_type !== undefined
+      ) {
+        desc.service
+          .find((desc) => desc.name === name)
+          ?.options?.uninterpretedOption.push(
+            UninterpretedOption.fromPartial({
+              name: [
+                { namePart: "dev.restate.ext.service_type", isExtension: true },
+              ],
+              identifierValue: serviceTypeToJSON(
+                descriptor.options?.services[name]?.options?.service_type
+              ),
+            })
+          );
       }
     }
 
     // extract out field options and put into the fileDescriptor
     for (const messageName in descriptor.options?.messages) {
-      for (const fieldName in descriptor.options?.messages[messageName]?.fields) {
-        const fields = descriptor.options?.messages[messageName]?.fields || {}
+      for (const fieldName in descriptor.options?.messages[messageName]
+        ?.fields) {
+        const fields = descriptor.options?.messages[messageName]?.fields || {};
         if (fields[fieldName]["field"] !== undefined) {
-          desc.messageType.find((desc) => desc.name === messageName)?.field?.find((desc) => desc.name === fieldName)?.options?.uninterpretedOption.push(UninterpretedOption.fromPartial({
-            name: [{namePart: "dev.restate.ext.field", isExtension: true}],
-            identifierValue: fieldTypeToJSON(fields[fieldName]["field"]),
-          }))
+          desc.messageType
+            .find((desc) => desc.name === messageName)
+            ?.field?.find((desc) => desc.name === fieldName)
+            ?.options?.uninterpretedOption.push(
+              UninterpretedOption.fromPartial({
+                name: [
+                  { namePart: "dev.restate.ext.field", isExtension: true },
+                ],
+                identifierValue: fieldTypeToJSON(fields[fieldName]["field"]),
+              })
+            );
         }
       }
     }
 
-    if (this.discovery.files?.file.filter((haveDesc) => desc.name === haveDesc.name).length === 0) {
-      this.discovery.files?.file.push(desc)
+    if (
+      this.discovery.files?.file.filter(
+        (haveDesc) => desc.name === haveDesc.name
+      ).length === 0
+    ) {
+      this.discovery.files?.file.push(desc);
     }
     descriptor.dependencies?.forEach((dep) => {
-      this.addDescriptor(dep)
-    })
+      this.addDescriptor(dep);
+    });
   }
 
   public bindService({
-                       descriptor,
-                       service,
-                       instance: instance,
-                     }: ServiceOpts): RestateServer {
+    descriptor,
+    service,
+    instance: instance,
+  }: ServiceOpts): RestateServer {
     const spec = parseService(descriptor, service, instance);
-    this.addDescriptor(descriptor)
-    this.discovery.services.push(`${spec.packge}.${spec.name}`)
+    this.addDescriptor(descriptor);
+    this.discovery.services.push(`${spec.packge}.${spec.name}`);
     for (const method of spec.methods) {
       const url = `/invoke/${spec.packge}.${spec.name}/${method.name}`;
       this.methods[url] = new HostedGrpcServiceMethod(
@@ -102,7 +130,10 @@ export class RestateServer {
   public async listen(port: number) {
     console.log(`listening on ${port}...`);
 
-    for await (const connection of incomingConnectionAtPort(port, this.discovery)) {
+    for await (const connection of incomingConnectionAtPort(
+      port,
+      this.discovery
+    )) {
       const method = this.methodByUrl(connection.url.path);
       if (method === undefined) {
         console.log(`INFO no service found for URL ${connection.url.path}`);

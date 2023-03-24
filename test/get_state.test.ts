@@ -17,9 +17,9 @@ import {
   TestResponse,
 } from "../src/generated/proto/test";
 import { Failure } from "../src/generated/proto/protocol";
-import exp = require("constants");
 
 class GetStateGreeter implements TestGreeter {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 

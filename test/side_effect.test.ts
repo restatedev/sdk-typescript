@@ -9,6 +9,7 @@ import {
   startMessage,
   greetRequest,
   greetResponse,
+  decodeSideEffectFromResult,
 } from "./protoutils";
 import {
   protoMetadata,
@@ -20,12 +21,12 @@ import {
   AwakeableIdentifier,
   SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
 } from "../src/types";
-import { SideEffectEntryMessage } from "../src/generated/proto/javascript";
 import { Failure } from "../src/generated/proto/protocol";
 
 class SideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: string) {}
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
@@ -41,6 +42,7 @@ class SideEffectGreeter implements TestGreeter {
 class NumericSideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: number) {}
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
@@ -55,6 +57,7 @@ class NumericSideEffectGreeter implements TestGreeter {
 class FailingSideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: number) {}
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
@@ -70,11 +73,13 @@ class FailingSideEffectGreeter implements TestGreeter {
 class FailingGetSideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: number) {}
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     // state
     const response = await ctx.sideEffect(async () => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const state = await ctx.get("state");
       return this.sideEffectOutput;
     });
@@ -86,6 +91,7 @@ class FailingGetSideEffectGreeter implements TestGreeter {
 class FailingSetSideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: number) {}
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
@@ -102,6 +108,7 @@ class FailingSetSideEffectGreeter implements TestGreeter {
 class FailingClearSideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: number) {}
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
@@ -118,12 +125,14 @@ class FailingClearSideEffectGreeter implements TestGreeter {
 class FailingNestedSideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: number) {}
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     // state
     const response = await ctx.sideEffect(async () => {
-      ctx.sideEffect(async () => {
+      // TODO if you don't await this side effect then it doesn't fail
+      await ctx.sideEffect(async () => {
         return this.sideEffectOutput;
       });
     });
@@ -135,6 +144,7 @@ class FailingNestedSideEffectGreeter implements TestGreeter {
 class FailingInBackgroundSideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: number) {}
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
@@ -152,12 +162,13 @@ class FailingInBackgroundSideEffectGreeter implements TestGreeter {
 class FailingSleepSideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: number) {}
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     // state
     const response = await ctx.sideEffect(async () => {
-      await ctx.sleep(1000)
+      await ctx.sleep(1000);
     });
 
     return TestResponse.create({ greeting: `Hello ${response}` });
@@ -167,6 +178,7 @@ class FailingSleepSideEffectGreeter implements TestGreeter {
 class FailingCompleteAwakeableSideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: number) {}
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
@@ -229,7 +241,7 @@ describe("SideEffectGreeter: with completion", () => {
       [
         startMessage(1),
         inputMessage(greetRequest("Till")),
-        completionMessage(1, "Francesco"),
+        completionMessage(1),
       ]
     ).run();
 
@@ -267,7 +279,7 @@ describe("FailingSideEffectGreeter: failing user code in side effect without ack
     expect(result.length).toStrictEqual(1);
     expect(result[0].messageType).toStrictEqual(SIDE_EFFECT_ENTRY_MESSAGE_TYPE);
     expect(
-      (result[0].message as SideEffectEntryMessage).failure?.code
+      decodeSideEffectFromResult(result[0].message).failure?.code
     ).toStrictEqual(13);
   });
 });
@@ -285,7 +297,7 @@ describe("FailingGetSideEffectGreeter: invalid get state in side effect without 
     expect(result.length).toStrictEqual(1);
     expect(result[0].messageType).toStrictEqual(SIDE_EFFECT_ENTRY_MESSAGE_TYPE);
     expect(
-      (result[0].message as SideEffectEntryMessage).failure?.code
+      decodeSideEffectFromResult(result[0].message).failure?.code
     ).toStrictEqual(13);
   });
 });
@@ -303,7 +315,7 @@ describe("FailingSetSideEffectGreeter: invalid set state in side effect without 
     expect(result.length).toStrictEqual(1);
     expect(result[0].messageType).toStrictEqual(SIDE_EFFECT_ENTRY_MESSAGE_TYPE);
     expect(
-      (result[0].message as SideEffectEntryMessage).failure?.code
+      decodeSideEffectFromResult(result[0].message).failure?.code
     ).toStrictEqual(13);
   });
 });
@@ -318,23 +330,14 @@ describe("FailingClearSideEffectGreeter: invalid clear state in side effect with
       [
         startMessage(1),
         inputMessage(greetRequest("Till")),
-        completionMessage(
-          1,
-          undefined,
-          false,
-          Failure.create({
-            code: 13,
-            message:
-              "Error: You cannot do clear state calls from within a side effect.",
-          })
-        ),
+        completionMessage(1),
       ]
     ).run();
 
     expect(result.length).toStrictEqual(2);
     expect(result[0].messageType).toStrictEqual(SIDE_EFFECT_ENTRY_MESSAGE_TYPE);
     expect(
-      (result[0].message as SideEffectEntryMessage).failure?.code
+      decodeSideEffectFromResult(result[0].message).failure?.code
     ).toStrictEqual(13);
     expect(result[1]).toStrictEqual(outputMessage());
   });
@@ -353,7 +356,7 @@ describe("FailingNestedSideEffectGreeter: invalid nested side effect in side eff
     expect(result.length).toStrictEqual(1);
     expect(result[0].messageType).toStrictEqual(SIDE_EFFECT_ENTRY_MESSAGE_TYPE);
     expect(
-      (result[0].message as SideEffectEntryMessage).failure?.code
+      decodeSideEffectFromResult(result[0].message).failure?.code
     ).toStrictEqual(13);
   });
 });
@@ -368,23 +371,14 @@ describe("FailingNestedSideEffectGreeter: invalid nested side effect in side eff
       [
         startMessage(1),
         inputMessage(greetRequest("Till")),
-        completionMessage(
-          1,
-          undefined,
-          false,
-          Failure.create({
-            code: 13,
-            message:
-              "Error: You cannot do sideEffect state calls from within a side effect.",
-          })
-        ),
+        completionMessage(1),
       ]
     ).run();
 
     expect(result.length).toStrictEqual(2);
     expect(result[0].messageType).toStrictEqual(SIDE_EFFECT_ENTRY_MESSAGE_TYPE);
     expect(
-      (result[0].message as SideEffectEntryMessage).failure?.code
+      decodeSideEffectFromResult(result[0].message).failure?.code
     ).toStrictEqual(13);
     expect(result[1]).toStrictEqual(outputMessage());
   });
@@ -429,7 +423,7 @@ describe("FailingInBackgroundSideEffectGreeter: invalid in background call in si
     expect(result.length).toStrictEqual(1);
     expect(result[0].messageType).toStrictEqual(SIDE_EFFECT_ENTRY_MESSAGE_TYPE);
     expect(
-      (result[0].message as SideEffectEntryMessage).failure?.code
+      decodeSideEffectFromResult(result[0].message).failure?.code
     ).toStrictEqual(13);
   });
 });
@@ -447,7 +441,7 @@ describe("FailingCompleteAwakeableSideEffectGreeter: invalid in complete awakeab
     expect(result.length).toStrictEqual(1);
     expect(result[0].messageType).toStrictEqual(SIDE_EFFECT_ENTRY_MESSAGE_TYPE);
     expect(
-      (result[0].message as SideEffectEntryMessage).failure?.code
+      decodeSideEffectFromResult(result[0].message).failure?.code
     ).toStrictEqual(13);
   });
 });
@@ -465,7 +459,7 @@ describe("FailingSleepSideEffectGreeter: invalid in sleep call in side effect wi
     expect(result.length).toStrictEqual(1);
     expect(result[0].messageType).toStrictEqual(SIDE_EFFECT_ENTRY_MESSAGE_TYPE);
     expect(
-      (result[0].message as SideEffectEntryMessage).failure?.code
+      decodeSideEffectFromResult(result[0].message).failure?.code
     ).toStrictEqual(13);
   });
 });

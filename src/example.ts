@@ -3,7 +3,6 @@ import {
   GreetRequest,
   GreetResponse,
   Greeter,
-  GreeterClientImpl,
   protoMetadata,
 } from "./generated/proto/example";
 
@@ -21,13 +20,6 @@ export class GreeterService implements Greeter {
     seen += 1;
 
     await ctx.set("seen", seen);
-
-    // rpc
-    const client = new GreeterClientImpl(ctx);
-    const greeting = await client.greet(request);
-
-    // background call
-    await ctx.inBackground(() => client.greet(request));
 
     // return the final response
 

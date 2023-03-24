@@ -27,7 +27,7 @@ import {
   SleepEntryMessage,
   SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
 } from "../src/protocol_stream";
-import { Message } from "../src/types";
+import { Message, ProtocolMessage } from "../src/types";
 import { TestRequest, TestResponse } from "../src/generated/proto/test";
 import { SideEffectEntryMessage } from "../src/generated/proto/javascript";
 import { Failure } from "../src/generated/proto/protocol";
@@ -132,6 +132,7 @@ export function sleepMessage(millis: number, result?: Empty): Message {
 
 export function completionMessage(
   index: number,
+  /* eslint-disable @typescript-eslint/no-explicit-any */
   value?: any,
   empty?: boolean,
   failure?: Failure
@@ -213,19 +214,36 @@ export function backgroundInvokeMessage(
   );
 }
 
+export function decodeSideEffectFromResult(msg: Uint8Array | ProtocolMessage) {
+  if (msg instanceof Uint8Array) {
+    return SideEffectEntryMessage.decode(
+      msg as Uint8Array
+    ) as SideEffectEntryMessage;
+  } else {
+    throw new Error("Can't decode message to side effect " + msg.toString());
+  }
+}
+
 export function sideEffectMessage<T>(value?: T, failure?: Failure): Message {
   if (value !== undefined) {
     return new Message(
       SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-      SideEffectEntryMessage.encode(SideEffectEntryMessage.create({
-        value: Buffer.from(JSON.stringify(value)),
-      })).finish(), false, true
+      SideEffectEntryMessage.encode(
+        SideEffectEntryMessage.create({
+          value: Buffer.from(JSON.stringify(value)),
+        })
+      ).finish(),
+      false,
+      true
     );
   } else {
     return new Message(
       SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-      SideEffectEntryMessage.encode(SideEffectEntryMessage.create({ failure: failure })).finish(),
-      false, true
+      SideEffectEntryMessage.encode(
+        SideEffectEntryMessage.create({ failure: failure })
+      ).finish(),
+      false,
+      true
     );
   }
 }

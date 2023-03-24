@@ -17,7 +17,6 @@ import {
   StartMessage,
 } from "./generated/proto/protocol";
 import { ProtocolMessage } from "./types";
-import { SideEffectEntryMessage } from "./generated/proto/javascript";
 
 // --- public api
 
@@ -142,7 +141,7 @@ const KNOWN_MESSAGE_TYPES = new Set([
   INVOKE_ENTRY_MESSAGE_TYPE,
   BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
   AWAKEABLE_ENTRY_MESSAGE_TYPE,
-  COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE
+  COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
 ]);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -158,7 +157,7 @@ const PROTOBUF_MESSAGES: Array<[bigint, any]> = [
   [INVOKE_ENTRY_MESSAGE_TYPE, InvokeEntryMessage],
   [BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE, BackgroundInvokeEntryMessage],
   [AWAKEABLE_ENTRY_MESSAGE_TYPE, AwakeableEntryMessage],
-  [COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE, CompleteAwakeableEntryMessage]
+  [COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE, CompleteAwakeableEntryMessage],
 ];
 
 export const PROTOBUF_MESSAGE_BY_TYPE = new Map(PROTOBUF_MESSAGES);
@@ -276,44 +275,48 @@ function stream_decoder(): stream.Transform {
     objectMode: true,
 
     transform(chunk, _encoding, cb) {
-      buf = Buffer.concat([buf, chunk]);
-      // eslint-disable-next-line no-constant-condition
-      while (true) {
-        switch (state) {
-          case WAITING_FOR_HEADER: {
-            if (buf.length < 8) {
-              cb();
-              return;
+      try {
+        buf = Buffer.concat([buf, chunk]);
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          switch (state) {
+            case WAITING_FOR_HEADER: {
+              if (buf.length < 8) {
+                cb();
+                return;
+              }
+              const h = buf.readBigUint64BE();
+              buf = buf.subarray(8);
+              header = Header.from_u64be(h);
+              state = WAITING_FOR_BODY;
+              break;
             }
-            const h = buf.readBigUint64BE();
-            buf = buf.subarray(8);
-            header = Header.from_u64be(h);
-            state = WAITING_FOR_BODY;
-            break;
-          }
-          case WAITING_FOR_BODY: {
-            if (buf.length < header.frame_length) {
-              cb();
-              return;
-            }
-            const frame = buf.subarray(0, header.frame_length);
-            buf = buf.subarray(header.frame_length);
-            state = WAITING_FOR_HEADER;
+            case WAITING_FOR_BODY: {
+              if (buf.length < header.frame_length) {
+                cb();
+                return;
+              }
+              const frame = buf.subarray(0, header.frame_length);
+              buf = buf.subarray(header.frame_length);
+              state = WAITING_FOR_HEADER;
 
-            const pbType = PROTOBUF_MESSAGE_BY_TYPE.get(header.message_type);
-            if (pbType === undefined) {
-              // this is a custom message.
-              // we don't know how to decode custom message
-              // so we let the user of this stream to deal with custom
-              // message serde
-              this.push({ header: header, message: frame });
-            } else {
-              const message = pbType.decode(frame);
-              this.push({ header: header, message: message });
+              const pbType = PROTOBUF_MESSAGE_BY_TYPE.get(header.message_type);
+              if (pbType === undefined) {
+                // this is a custom message.
+                // we don't know how to decode custom message
+                // so we let the user of this stream to deal with custom
+                // message serde
+                this.push({ header: header, message: frame });
+              } else {
+                const message = pbType.decode(frame);
+                this.push({ header: header, message: message });
+              }
+              break;
             }
-            break;
           }
         }
+      } catch (e: unknown) {
+        cb(e as Error, null);
       }
     },
   });
@@ -336,8 +339,12 @@ function stream_encoder(): stream.Transform {
     objectMode: true,
 
     transform(chunk, _encoding, cb) {
-      const result = encode_message(chunk);
-      cb(null, result);
+      try {
+        const result = encode_message(chunk);
+        cb(null, result);
+      } catch (e: unknown) {
+        cb(e as Error, null);
+      }
     },
   });
 }
@@ -375,6 +382,6 @@ function encode_message({
   );
   const headerBuf = Buffer.alloc(8);
   const encoded = header.to_u64be();
-  headerBuf.writeBigInt64BE(encoded);
+  headerBuf.writeBigUInt64BE(encoded);
   return Buffer.concat([headerBuf, bodyBuf]);
 }

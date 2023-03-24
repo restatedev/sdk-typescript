@@ -15,6 +15,7 @@ import {
   SleepEntryMessage,
   StartMessage,
 } from "./protocol_stream";
+import { Failure } from "./generated/proto/protocol";
 
 // Side effect message type for Typescript SDK
 // Side effects are custom messages because the runtime does not need to inspect them
@@ -54,9 +55,23 @@ export class Message {
 
 export class PromiseHandler {
   constructor(
-    readonly resolve: (value: any) => void,
-    readonly reject: (reason: any) => void
+    readonly resolve: (value: unknown) => void,
+    readonly reject: (reason: Failure | Error) => void
   ) {}
+}
+
+export class SideEffectOutput<T> {
+  constructor(readonly value?: T, readonly failure?: Failure) {}
+}
+
+export function printMessageAsJson(obj: any): string {
+  const newObj = { ...(obj as Record<string, unknown>) };
+  for (const [key, value] of Object.entries(newObj)) {
+    if (Buffer.isBuffer(value)) {
+      newObj[key] = JSON.stringify(value.toString());
+    }
+  }
+  return JSON.stringify(newObj);
 }
 
 //

@@ -22,6 +22,7 @@ import {
 import { Failure } from "../src/generated/proto/protocol";
 
 class ReverseAwaitOrder implements TestGreeter {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
@@ -44,6 +45,7 @@ class ReverseAwaitOrder implements TestGreeter {
 }
 
 class BackgroundInvokeGreeter implements TestGreeter {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
@@ -57,11 +59,21 @@ class BackgroundInvokeGreeter implements TestGreeter {
 }
 
 class FailingBackgroundInvokeGreeter implements TestGreeter {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
-    const client = new TestGreeterClientImpl(ctx);
     await ctx.inBackground(async () => ctx.set("state", 13));
+
+    return TestResponse.create({ greeting: `Hello` });
+  }
+}
+class FailingSideEffectInBackgroundInvokeGreeter implements TestGreeter {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async greet(request: TestRequest): Promise<TestResponse> {
+    const ctx = restate.useContext(this);
+
+    await ctx.inBackground(async () => ctx.sideEffect(async () => 13));
 
     return TestResponse.create({ greeting: `Hello` });
   }
@@ -231,13 +243,26 @@ describe("BackgroundInvokeGreeter: background call ", () => {
   });
 });
 
-// async calls
 describe("FailingBackgroundInvokeGreeter: failing background call ", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
       "TestGreeter",
       new FailingBackgroundInvokeGreeter(),
+      "/dev.restate.TestGreeter/Greet",
+      [startMessage(1), inputMessage(greetRequest("Till"))]
+    ).run();
+
+    expect(result).toStrictEqual([outputMessage()]);
+  });
+});
+
+describe("FailingSideEffectInBackgroundInvokeGreeter: failing background call ", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new FailingSideEffectInBackgroundInvokeGreeter(),
       "/dev.restate.TestGreeter/Greet",
       [startMessage(1), inputMessage(greetRequest("Till"))]
     ).run();

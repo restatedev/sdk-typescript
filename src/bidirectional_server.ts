@@ -10,10 +10,14 @@ import {
   RestateDuplexStreamEventHandler,
   SLEEP_ENTRY_MESSAGE_TYPE,
 } from "./protocol_stream";
-import {parse as urlparse, Url} from "url";
-import {on} from "events";
-import {Message, ProtocolMessage, SIDE_EFFECT_ENTRY_MESSAGE_TYPE} from "./types";
-import {ServiceDiscoveryResponse} from "./generated/proto/discovery";
+import { parse as urlparse, Url } from "url";
+import { on } from "events";
+import {
+  Message,
+  ProtocolMessage,
+  SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+} from "./types";
+import { ServiceDiscoveryResponse } from "./generated/proto/discovery";
 
 export interface Connection {
   send(
@@ -71,7 +75,9 @@ export class HttpConnection implements Connection {
     completed?: boolean,
     requires_ack?: boolean
   ) {
-    this.result.push(new Message(message_type, message, completed, requires_ack));
+    this.result.push(
+      new Message(message_type, message, completed, requires_ack)
+    );
 
     // Only flush the messages if they require a completion.
     if (this.requiresCompletion.includes(message_type)) {
@@ -81,7 +87,12 @@ export class HttpConnection implements Connection {
 
   flush() {
     this.result.forEach((msg) =>
-      this.restate.send(msg.messageType, msg.message, msg.completed, msg.requires_ack)
+      this.restate.send(
+        msg.messageType,
+        msg.message,
+        msg.completed,
+        msg.requires_ack
+      )
     );
     this.result = [];
   }
@@ -99,7 +110,10 @@ export class HttpConnection implements Connection {
   }
 }
 
-export async function* incomingConnectionAtPort(port: number, discovery: ServiceDiscoveryResponse) {
+export async function* incomingConnectionAtPort(
+  port: number,
+  discovery: ServiceDiscoveryResponse
+) {
   const server = http2.createServer();
 
   server.on("error", (err) => console.error(err));
@@ -114,12 +128,12 @@ export async function* incomingConnectionAtPort(port: number, discovery: Service
 
     if (u.path == "/discover") {
       s.respond({
-        ':status': 200,
-        'content-type': 'application/proto',
+        ":status": 200,
+        "content-type": "application/proto",
       });
-      s.write(ServiceDiscoveryResponse.encode(discovery).finish())
-      s.end()
-      continue
+      s.write(ServiceDiscoveryResponse.encode(discovery).finish());
+      s.end();
+      continue;
     }
 
     connectionId += 1n;

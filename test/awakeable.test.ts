@@ -20,6 +20,7 @@ import {
 } from "../src/generated/proto/test";
 
 class AwakeableGreeter implements TestGreeter {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
@@ -30,6 +31,7 @@ class AwakeableGreeter implements TestGreeter {
 }
 
 class CompleteAwakeableGreeter implements TestGreeter {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 

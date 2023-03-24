@@ -66,9 +66,20 @@ describe("Stream", () => {
     // this future will be resolved onces something is emmited on the stream.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result: any = new Promise((resolve) => {
-      restateStream.onMessage((message_type, message) => {
-        resolve({ message_type, message });
-      });
+      restateStream.onMessage(
+        (
+          message_type,
+          message,
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          completed_flag,
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          protocol_version,
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          requires_ack_flag
+        ) => {
+          resolve({ message_type, message });
+        }
+      );
     });
 
     // now, lets simulate sending a message
