@@ -201,8 +201,20 @@ export function parseService(
       const localMethod = async (instance: unknown, input: unknown) => {
         return await fn.call(instance, input);
       };
+      console.log(methodDescriptor.outputType);
       const inputMessage = meta.references[methodDescriptor.inputType];
-      const outputMessage = meta.references[methodDescriptor.outputType];
+      let outputMessage = meta.references[methodDescriptor.outputType];
+      // If the output message type is a well-known type of Google (e.g. BoolValue, Empty, etc)
+      // then we need to look for the encoders and decoders in the dependencies.
+      if(outputMessage === undefined){
+        meta.dependencies?.forEach(dep => {
+          if(dep.references[methodDescriptor.outputType] !== undefined){
+            outputMessage = dep.references[methodDescriptor.outputType]
+          }
+        })
+      }
+
+      console.log("outputMessage: " + outputMessage)
       const decoder = (buffer: Uint8Array) => inputMessage.decode(buffer);
       const encoder = (message: unknown) =>
         outputMessage.encode(message).finish();
