@@ -10,15 +10,21 @@ import {
   RestateDuplexStreamEventHandler,
   SLEEP_ENTRY_MESSAGE_TYPE,
 } from "./protocol_stream";
-import {parse as urlparse, Url} from "url";
-import {on} from "events";
-import {Message, ProtocolMessage, SIDE_EFFECT_ENTRY_MESSAGE_TYPE} from "./types";
-import {ServiceDiscoveryResponse} from "./generated/proto/discovery";
+import { parse as urlparse, Url } from "url";
+import { on } from "events";
+import {
+  Message,
+  ProtocolMessage,
+  SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+} from "./types";
+import { ServiceDiscoveryResponse } from "./generated/proto/discovery";
 
 export interface Connection {
+  addOnErrorListener(listener: () => void): void;
+
   send(
     message_type: bigint,
-    message: ProtocolMessage | Buffer,
+    message: ProtocolMessage | Uint8Array,
     completed?: boolean | undefined,
     requires_ack?: boolean | undefined
   ): void;
@@ -32,6 +38,7 @@ export interface Connection {
 
 export class HttpConnection implements Connection {
   private result: Array<Message> = [];
+  private onErrorListeners: (() => void)[] = [];
 
   private requiresCompletion = [
     OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
@@ -48,7 +55,9 @@ export class HttpConnection implements Connection {
     readonly url: Url,
     readonly stream: http2.ServerHttp2Stream,
     readonly restate: RestateDuplexStream
-  ) {}
+  ) {
+    restate.onError(this.onError.bind(this));
+  }
 
   respond404() {
     this.stream.respond({
@@ -67,11 +76,13 @@ export class HttpConnection implements Connection {
 
   send(
     message_type: bigint,
-    message: ProtocolMessage | Buffer,
+    message: ProtocolMessage | Uint8Array,
     completed?: boolean,
     requires_ack?: boolean
   ) {
-    this.result.push(new Message(message_type, message));
+    this.result.push(
+      new Message(message_type, message, completed, requires_ack)
+    );
 
     // Only flush the messages if they require a completion.
     if (this.requiresCompletion.includes(message_type)) {
@@ -80,10 +91,20 @@ export class HttpConnection implements Connection {
   }
 
   flush() {
-    // TODO
-    this.result.forEach((msg) =>
-      this.restate.send(msg.messageType, msg.message)
-    );
+    this.result.forEach((msg) => {
+      try {
+        this.restate.send(
+          msg.messageType,
+          msg.message,
+          msg.completed,
+          msg.requires_ack
+        );
+      } catch (e) {
+        console.warn(e);
+        console.log("Closing the connection and state machine.");
+        this.end();
+      }
+    });
     this.result = [];
   }
 
@@ -91,16 +112,37 @@ export class HttpConnection implements Connection {
     this.restate.onMessage(handler);
   }
 
+  onError() {
+    this.end();
+    this.emitOnErrorEvent();
+  }
+
+  // We use an error listener to notify the state machine of errors in the connection layer.
+  // When there is a connection error (decoding/encoding/...), the statemachine is closed.
+  public addOnErrorListener(listener: () => void) {
+    this.onErrorListeners.push(listener);
+  }
+
+  private emitOnErrorEvent() {
+    for (const listener of this.onErrorListeners) {
+      listener();
+    }
+  }
+
   onClose(handler: () => void) {
     this.stream.on("close", handler);
   }
 
   end() {
+    console.log("Closing the connection...");
     this.stream.end();
   }
 }
 
-export async function* incomingConnectionAtPort(port: number, discovery: ServiceDiscoveryResponse) {
+export async function* incomingConnectionAtPort(
+  port: number,
+  discovery: ServiceDiscoveryResponse
+) {
   const server = http2.createServer();
 
   server.on("error", (err) => console.error(err));
@@ -115,12 +157,12 @@ export async function* incomingConnectionAtPort(port: number, discovery: Service
 
     if (u.path == "/discover") {
       s.respond({
-        ':status': 200,
-        'content-type': 'application/proto',
+        ":status": 200,
+        "content-type": "application/proto",
       });
-      s.write(ServiceDiscoveryResponse.encode(discovery).finish())
-      s.end()
-      continue
+      s.write(ServiceDiscoveryResponse.encode(discovery).finish());
+      s.end();
+      continue;
     }
 
     connectionId += 1n;

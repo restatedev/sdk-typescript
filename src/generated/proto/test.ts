@@ -26,19 +26,24 @@ export const TestRequest = {
   },
 
   decode(input: _m0.Reader | Uint8Array, length?: number): TestRequest {
-    const reader = input instanceof _m0.Reader ? input : new _m0.Reader(input);
+    const reader = input instanceof _m0.Reader ? input : _m0.Reader.create(input);
     let end = length === undefined ? reader.len : reader.pos + length;
     const message = createBaseTestRequest();
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
         case 1:
+          if (tag != 10) {
+            break;
+          }
+
           message.name = reader.string();
-          break;
-        default:
-          reader.skipType(tag & 7);
-          break;
+          continue;
       }
+      if ((tag & 7) == 4 || tag == 0) {
+        break;
+      }
+      reader.skipType(tag & 7);
     }
     return message;
   },
@@ -77,19 +82,24 @@ export const TestResponse = {
   },
 
   decode(input: _m0.Reader | Uint8Array, length?: number): TestResponse {
-    const reader = input instanceof _m0.Reader ? input : new _m0.Reader(input);
+    const reader = input instanceof _m0.Reader ? input : _m0.Reader.create(input);
     let end = length === undefined ? reader.len : reader.pos + length;
     const message = createBaseTestResponse();
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
         case 1:
+          if (tag != 10) {
+            break;
+          }
+
           message.greeting = reader.string();
-          break;
-        default:
-          reader.skipType(tag & 7);
-          break;
+          continue;
       }
+      if ((tag & 7) == 4 || tag == 0) {
+        break;
+      }
+      reader.skipType(tag & 7);
     }
     return message;
   },
@@ -130,7 +140,7 @@ export class TestGreeterClientImpl implements TestGreeter {
   greet(request: TestRequest): Promise<TestResponse> {
     const data = TestRequest.encode(request).finish();
     const promise = this.rpc.request(this.service, "Greet", data);
-    return promise.then((data) => TestResponse.decode(new _m0.Reader(data)));
+    return promise.then((data) => TestResponse.decode(_m0.Reader.create(data)));
   }
 }
 
@@ -235,7 +245,29 @@ export const protoMetadata: ProtoMetadata = {
       "options": { "deprecated": false, "uninterpretedOption": [] },
     }],
     "extension": [],
-    "options": undefined,
+    "options": {
+      "javaPackage": "com.dev.restate",
+      "javaOuterClassname": "TestProto",
+      "javaMultipleFiles": true,
+      "javaGenerateEqualsAndHash": false,
+      "javaStringCheckUtf8": false,
+      "optimizeFor": 1,
+      "goPackage": "",
+      "ccGenericServices": false,
+      "javaGenericServices": false,
+      "pyGenericServices": false,
+      "phpGenericServices": false,
+      "deprecated": false,
+      "ccEnableArenas": false,
+      "objcClassPrefix": "DRX",
+      "csharpNamespace": "Dev.Restate",
+      "swiftPrefix": "",
+      "phpClassPrefix": "",
+      "phpNamespace": "Dev\\Restate",
+      "phpMetadataNamespace": "Dev\\Restate\\GPBMetadata",
+      "rubyPackage": "Dev::Restate",
+      "uninterpretedOption": [],
+    },
     "sourceCodeInfo": { "location": [] },
     "syntax": "proto3",
   }),

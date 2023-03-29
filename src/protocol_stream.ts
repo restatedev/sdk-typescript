@@ -59,16 +59,19 @@ export const SIDE_EFFECT_ENTRY_MESSAGE_TYPE = 0xfc01n;
 // TODO: docs.
 export type RestateDuplexStreamEventHandler = (
   message_type: bigint,
-  message: ProtocolMessage | Buffer,
+  message: ProtocolMessage | Uint8Array,
   completed_flag?: boolean,
   protocol_version?: number,
   requires_ack_flag?: boolean
 ) => void;
 
+export type RestateDuplexStreamErrorHandler = (err: Error) => void;
+
 export class RestateDuplexStream {
   // create a RestateDuplex stream from an http2 (duplex) stream.
   public static from(http2stream: stream.Duplex): RestateDuplexStream {
     const sdkInput = http2stream.pipe(stream_decoder());
+
     const sdkOutput = stream_encoder();
     sdkOutput.pipe(http2stream);
 
@@ -83,7 +86,7 @@ export class RestateDuplexStream {
   send(
     message_type: bigint,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    message: ProtocolMessage | Buffer,
+    message: ProtocolMessage | Uint8Array,
     completed?: boolean,
     requires_ack?: boolean
   ) {
@@ -106,6 +109,13 @@ export class RestateDuplexStream {
         h.protocol_version,
         h.requires_ack_flag
       );
+    });
+  }
+
+  onError(handler: RestateDuplexStreamErrorHandler) {
+    this.sdkInput.on("error", (err) => {
+      console.warn("Error in input stream: " + err.stack);
+      handler(err);
     });
   }
 }
@@ -275,44 +285,48 @@ function stream_decoder(): stream.Transform {
     objectMode: true,
 
     transform(chunk, _encoding, cb) {
-      buf = Buffer.concat([buf, chunk]);
-      // eslint-disable-next-line no-constant-condition
-      while (true) {
-        switch (state) {
-          case WAITING_FOR_HEADER: {
-            if (buf.length < 8) {
-              cb();
-              return;
+      try {
+        buf = Buffer.concat([buf, chunk]);
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          switch (state) {
+            case WAITING_FOR_HEADER: {
+              if (buf.length < 8) {
+                cb();
+                return;
+              }
+              const h = buf.readBigUInt64BE();
+              buf = buf.subarray(8);
+              header = Header.from_u64be(h);
+              state = WAITING_FOR_BODY;
+              break;
             }
-            const h = buf.readBigUint64BE();
-            buf = buf.subarray(8);
-            header = Header.from_u64be(h);
-            state = WAITING_FOR_BODY;
-            break;
-          }
-          case WAITING_FOR_BODY: {
-            if (buf.length < header.frame_length) {
-              cb();
-              return;
-            }
-            const frame = buf.subarray(0, header.frame_length);
-            buf = buf.subarray(header.frame_length);
-            state = WAITING_FOR_HEADER;
+            case WAITING_FOR_BODY: {
+              if (buf.length < header.frame_length) {
+                cb();
+                return;
+              }
+              const frame = buf.subarray(0, header.frame_length);
+              buf = buf.subarray(header.frame_length);
+              state = WAITING_FOR_HEADER;
 
-            const pbType = PROTOBUF_MESSAGE_BY_TYPE.get(header.message_type);
-            if (pbType === undefined) {
-              // this is a custom message.
-              // we don't know how to decode custom message
-              // so we let the user of this stream to deal with custom
-              // message serde
-              this.push({ header: header, message: frame });
-            } else {
-              const message = pbType.decode(frame);
-              this.push({ header: header, message: message });
+              const pbType = PROTOBUF_MESSAGE_BY_TYPE.get(header.message_type);
+              if (pbType === undefined) {
+                // this is a custom message.
+                // we don't know how to decode custom message
+                // so we let the user of this stream to deal with custom
+                // message serde
+                this.push({ header: header, message: frame });
+              } else {
+                const message = pbType.decode(frame);
+                this.push({ header: header, message: message });
+              }
+              break;
             }
-            break;
           }
         }
+      } catch (e: unknown) {
+        cb(e as Error, null);
       }
     },
   });
@@ -325,7 +339,7 @@ function stream_decoder(): stream.Transform {
 //      - version
 //      - ack
 //      - completed
-//   I'm not sure what any of these mean, onces we'll figure out the protocol deatils we will use these, but for now
+//   I'm not sure what any of these mean, onces we'll figure out the protocol details we will use these, but for now
 //   and empty object {} works just fine, this stream transformer will create a proper header just fine.
 //
 // * message is a Protobuf message.
@@ -335,6 +349,8 @@ function stream_encoder(): stream.Transform {
     objectMode: true,
 
     transform(chunk, _encoding, cb) {
+      // We do not catch errors here because we want them to be handled at the Connection level,
+      // so we can close the state machine.
       const result = encode_message(chunk);
       cb(null, result);
     },
@@ -374,6 +390,6 @@ function encode_message({
   );
   const headerBuf = Buffer.alloc(8);
   const encoded = header.to_u64be();
-  headerBuf.writeBigInt64BE(encoded);
+  headerBuf.writeBigUInt64BE(encoded);
   return Buffer.concat([headerBuf, bodyBuf]);
 }

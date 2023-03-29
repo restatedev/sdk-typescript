@@ -3,7 +3,7 @@ import _m0 from "protobufjs/minimal";
 import { FileDescriptorProto as FileDescriptorProto1 } from "ts-proto-descriptors";
 import { protoMetadata as protoMetadata1 } from "./ext";
 
-export const protobufPackage = "dev.restate";
+export const protobufPackage = "example";
 
 export interface GreetRequest {
   name: string;
@@ -26,19 +26,24 @@ export const GreetRequest = {
   },
 
   decode(input: _m0.Reader | Uint8Array, length?: number): GreetRequest {
-    const reader = input instanceof _m0.Reader ? input : new _m0.Reader(input);
+    const reader = input instanceof _m0.Reader ? input : _m0.Reader.create(input);
     let end = length === undefined ? reader.len : reader.pos + length;
     const message = createBaseGreetRequest();
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
         case 1:
+          if (tag != 10) {
+            break;
+          }
+
           message.name = reader.string();
-          break;
-        default:
-          reader.skipType(tag & 7);
-          break;
+          continue;
       }
+      if ((tag & 7) == 4 || tag == 0) {
+        break;
+      }
+      reader.skipType(tag & 7);
     }
     return message;
   },
@@ -77,19 +82,24 @@ export const GreetResponse = {
   },
 
   decode(input: _m0.Reader | Uint8Array, length?: number): GreetResponse {
-    const reader = input instanceof _m0.Reader ? input : new _m0.Reader(input);
+    const reader = input instanceof _m0.Reader ? input : _m0.Reader.create(input);
     let end = length === undefined ? reader.len : reader.pos + length;
     const message = createBaseGreetResponse();
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
         case 1:
+          if (tag != 10) {
+            break;
+          }
+
           message.greeting = reader.string();
-          break;
-        default:
-          reader.skipType(tag & 7);
-          break;
+          continue;
       }
+      if ((tag & 7) == 4 || tag == 0) {
+        break;
+      }
+      reader.skipType(tag & 7);
     }
     return message;
   },
@@ -124,7 +134,7 @@ export class GreeterClientImpl implements Greeter {
   private readonly rpc: Rpc;
   private readonly service: string;
   constructor(rpc: Rpc, opts?: { service?: string }) {
-    this.service = opts?.service || "dev.restate.Greeter";
+    this.service = opts?.service || "example.Greeter";
     this.rpc = rpc;
     this.greet = this.greet.bind(this);
     this.multiWord = this.multiWord.bind(this);
@@ -132,13 +142,13 @@ export class GreeterClientImpl implements Greeter {
   greet(request: GreetRequest): Promise<GreetResponse> {
     const data = GreetRequest.encode(request).finish();
     const promise = this.rpc.request(this.service, "Greet", data);
-    return promise.then((data) => GreetResponse.decode(new _m0.Reader(data)));
+    return promise.then((data) => GreetResponse.decode(_m0.Reader.create(data)));
   }
 
   multiWord(request: GreetRequest): Promise<GreetResponse> {
     const data = GreetRequest.encode(request).finish();
     const promise = this.rpc.request(this.service, "MultiWord", data);
-    return promise.then((data) => GreetResponse.decode(new _m0.Reader(data)));
+    return promise.then((data) => GreetResponse.decode(_m0.Reader.create(data)));
   }
 }
 
@@ -170,7 +180,7 @@ export interface ProtoMetadata {
 export const protoMetadata: ProtoMetadata = {
   fileDescriptor: FileDescriptorProto1.fromPartial({
     "name": "proto/example.proto",
-    "package": "dev.restate",
+    "package": "example",
     "dependency": ["proto/ext.proto"],
     "publicDependency": [],
     "weakDependency": [],
@@ -234,15 +244,15 @@ export const protoMetadata: ProtoMetadata = {
       "name": "Greeter",
       "method": [{
         "name": "Greet",
-        "inputType": ".dev.restate.GreetRequest",
-        "outputType": ".dev.restate.GreetResponse",
+        "inputType": ".example.GreetRequest",
+        "outputType": ".example.GreetResponse",
         "options": { "deprecated": false, "idempotencyLevel": 0, "uninterpretedOption": [] },
         "clientStreaming": false,
         "serverStreaming": false,
       }, {
         "name": "MultiWord",
-        "inputType": ".dev.restate.GreetRequest",
-        "outputType": ".dev.restate.GreetResponse",
+        "inputType": ".example.GreetRequest",
+        "outputType": ".example.GreetResponse",
         "options": { "deprecated": false, "idempotencyLevel": 0, "uninterpretedOption": [] },
         "clientStreaming": false,
         "serverStreaming": false,
@@ -251,7 +261,7 @@ export const protoMetadata: ProtoMetadata = {
     }],
     "extension": [],
     "options": {
-      "javaPackage": "com.dev.restate",
+      "javaPackage": "com.example",
       "javaOuterClassname": "ExampleProto",
       "javaMultipleFiles": true,
       "javaGenerateEqualsAndHash": false,
@@ -264,22 +274,22 @@ export const protoMetadata: ProtoMetadata = {
       "phpGenericServices": false,
       "deprecated": false,
       "ccEnableArenas": false,
-      "objcClassPrefix": "DRX",
-      "csharpNamespace": "Dev.Restate",
+      "objcClassPrefix": "EXX",
+      "csharpNamespace": "Example",
       "swiftPrefix": "",
       "phpClassPrefix": "",
-      "phpNamespace": "Dev\\Restate",
-      "phpMetadataNamespace": "Dev\\Restate\\GPBMetadata",
-      "rubyPackage": "Dev::Restate",
+      "phpNamespace": "Example",
+      "phpMetadataNamespace": "Example\\GPBMetadata",
+      "rubyPackage": "Example",
       "uninterpretedOption": [],
     },
     "sourceCodeInfo": { "location": [] },
     "syntax": "proto3",
   }),
   references: {
-    ".dev.restate.GreetRequest": GreetRequest,
-    ".dev.restate.GreetResponse": GreetResponse,
-    ".dev.restate.Greeter": GreeterClientImpl,
+    ".example.GreetRequest": GreetRequest,
+    ".example.GreetResponse": GreetResponse,
+    ".example.Greeter": GreeterClientImpl,
   },
   dependencies: [protoMetadata1],
   options: {

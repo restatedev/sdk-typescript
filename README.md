@@ -8,6 +8,10 @@
 
 #### Generate Protobufs
 
+We use Buf to generate the proto files. To install buf globally do:
+
+    npm install -g @bufbuild/buf
+
 ```bash
 npm run proto
 ```
@@ -62,7 +66,7 @@ npm run example
 Try it out using CURL 
 
 ```bash
-curl -v --http2-prior-knowledge -d '' localhost:8000/dev.restate.Greeter/Greet
+curl -v --http2-prior-knowledge -d '' localhost:8000/example.Greeter/Greet
 ```
 
 You can also, produce the final artifiact by `npm run build`, and then you can manually run

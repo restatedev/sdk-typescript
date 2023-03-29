@@ -15,6 +15,7 @@ import {
   SleepEntryMessage,
   StartMessage,
 } from "./protocol_stream";
+import { Failure } from "./generated/proto/protocol";
 
 // Side effect message type for Typescript SDK
 // Side effects are custom messages because the runtime does not need to inspect them
@@ -46,15 +47,31 @@ export type ProtocolMessage =
 export class Message {
   constructor(
     readonly messageType: bigint,
-    readonly message: ProtocolMessage | Buffer
+    readonly message: ProtocolMessage | Uint8Array,
+    readonly completed?: boolean,
+    readonly requires_ack?: boolean
   ) {}
 }
 
 export class PromiseHandler {
   constructor(
-    readonly resolve: (value: any) => void,
-    readonly reject: (reason: any) => void
+    readonly resolve: (value: unknown) => void,
+    readonly reject: (reason: Failure | Error) => void
   ) {}
+}
+
+export class SideEffectOutput<T> {
+  constructor(readonly value?: T, readonly failure?: Failure) {}
+}
+
+export function printMessageAsJson(obj: any): string {
+  const newObj = { ...(obj as Record<string, unknown>) };
+  for (const [key, value] of Object.entries(newObj)) {
+    if (Buffer.isBuffer(value)) {
+      newObj[key] = JSON.stringify(value.toString());
+    }
+  }
+  return JSON.stringify(newObj);
 }
 
 //
@@ -185,7 +202,17 @@ export function parseService(
         return await fn.call(instance, input);
       };
       const inputMessage = meta.references[methodDescriptor.inputType];
-      const outputMessage = meta.references[methodDescriptor.outputType];
+      let outputMessage = meta.references[methodDescriptor.outputType];
+      // If the output message type is not defined by use but by a dependency (e.g. BoolValue, Empty, etc)
+      // then we need to look for the encoders and decoders in the dependencies.
+      if (outputMessage === undefined) {
+        meta.dependencies?.forEach((dep) => {
+          if (dep.references[methodDescriptor.outputType] !== undefined) {
+            outputMessage = dep.references[methodDescriptor.outputType];
+          }
+        });
+      }
+
       const decoder = (buffer: Uint8Array) => inputMessage.decode(buffer);
       const encoder = (message: unknown) =>
         outputMessage.encode(message).finish();

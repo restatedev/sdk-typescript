@@ -30,22 +30,31 @@ export const SideEffectEntryMessage = {
   },
 
   decode(input: _m0.Reader | Uint8Array, length?: number): SideEffectEntryMessage {
-    const reader = input instanceof _m0.Reader ? input : new _m0.Reader(input);
+    const reader = input instanceof _m0.Reader ? input : _m0.Reader.create(input);
     let end = length === undefined ? reader.len : reader.pos + length;
     const message = createBaseSideEffectEntryMessage();
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
         case 14:
+          if (tag != 114) {
+            break;
+          }
+
           message.value = reader.bytes() as Buffer;
-          break;
+          continue;
         case 15:
+          if (tag != 122) {
+            break;
+          }
+
           message.failure = Failure.decode(reader, reader.uint32());
-          break;
-        default:
-          reader.skipType(tag & 7);
-          break;
+          continue;
       }
+      if ((tag & 7) == 4 || tag == 0) {
+        break;
+      }
+      reader.skipType(tag & 7);
     }
     return message;
   },
@@ -146,7 +155,29 @@ export const protoMetadata: ProtoMetadata = {
     "enumType": [],
     "service": [],
     "extension": [],
-    "options": undefined,
+    "options": {
+      "javaPackage": "com.dev.restate.sdk.javascript",
+      "javaOuterClassname": "JavascriptProto",
+      "javaMultipleFiles": true,
+      "javaGenerateEqualsAndHash": false,
+      "javaStringCheckUtf8": false,
+      "optimizeFor": 1,
+      "goPackage": "",
+      "ccGenericServices": false,
+      "javaGenericServices": false,
+      "pyGenericServices": false,
+      "phpGenericServices": false,
+      "deprecated": false,
+      "ccEnableArenas": false,
+      "objcClassPrefix": "DRSJ",
+      "csharpNamespace": "Dev.Restate.Sdk.Javascript",
+      "swiftPrefix": "",
+      "phpClassPrefix": "",
+      "phpNamespace": "Dev\\Restate\\Sdk\\Javascript",
+      "phpMetadataNamespace": "Dev\\Restate\\Sdk\\Javascript\\GPBMetadata",
+      "rubyPackage": "Dev::Restate::Sdk::Javascript",
+      "uninterpretedOption": [],
+    },
     "sourceCodeInfo": {
       "location": [{
         "path": [4, 0],
