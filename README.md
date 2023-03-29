@@ -2,7 +2,7 @@
 
 #### Prerequisites
 
-* A relativily recent NodeJs installed.
+* A relatively recent NodeJs installed.
 * A protobuf compiler [protoc](https://grpc.io/docs/protoc-installation/)
 * run `npm install`
 
