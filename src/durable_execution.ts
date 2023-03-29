@@ -88,6 +88,10 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     connection.onMessage(this.onIncomingMessage.bind(this));
     connection.onClose(this.onClose.bind(this));
     this.serviceName = method.service;
+
+    connection.addOnErrorListener(() => {
+      this.onClose();
+    });
   }
 
   async get<T>(name: string): Promise<T | null> {
@@ -312,6 +316,10 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   sideEffect<T>(fn: () => Promise<T>): Promise<T> {
     console.debug("Service used side effect");
 
+    // We don't call this.validate because we want different behaviour for sideEffects
+    // but we still want to check if the state machine is closed.
+    this.failIfClosed();
+
     return new Promise((resolve, reject) => {
       if (this.inSideEffectFlag) {
         console.debug(
@@ -411,8 +419,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
             true
           );
 
-          // When the runtime has ack'ed the sideEffect with an empty completion,
-          // then we resolve the promise with the result of the user-defined function.
+          // When something went wrong, then we resolve the promise with a failure.
           promiseToResolve.then(
             () => reject(failure),
             (failureFromRuntime) => reject(failureFromRuntime)
@@ -555,6 +562,8 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   handleCompletionMessage(m: CompletionMessage) {
     console.debug("Received completion message: " + printMessageAsJson(m));
 
+    this.failIfClosed();
+
     if (this.state === ExecutionState.REPLAYING) {
       throw new Error(
         "Illegal state: received completion message but still in replay state."
@@ -638,6 +647,8 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   }
 
   checkIfInReplay() {
+    this.failIfClosed();
+
     // Compare current index in the replay (starts at 0) to the number of entries to replay (starts at 1)
     if (this.replayIndex < this.nbEntriesToReplay) {
       this.replayIndex++;
@@ -651,11 +662,14 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     }
   }
 
-  transitionState(newExecState: ExecutionState): void {
+  failIfClosed() {
     if (this.state === ExecutionState.CLOSED) {
-      // Cannot move out of closed state
-      return;
+      throw new Error("State machine is closed. Canceling all execution");
     }
+  }
+
+  transitionState(newExecState: ExecutionState): void {
+    this.failIfClosed();
     console.debug(
       `Transitioning invocation state machine from ${this.state} to ${newExecState}`
     );
@@ -731,6 +745,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   }
 
   validate(callType: string) {
+    this.failIfClosed();
     if (this.inSideEffectFlag) {
       throw new Error(
         `You cannot do ${callType} calls from within a side effect.`
@@ -784,6 +799,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
   onClose() {
     // done.
+    this.transitionState(ExecutionState.CLOSED);
     console.log(`DEBUG connection has been closed.`);
   }
 }

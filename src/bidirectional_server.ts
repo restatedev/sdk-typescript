@@ -20,6 +20,8 @@ import {
 import { ServiceDiscoveryResponse } from "./generated/proto/discovery";
 
 export interface Connection {
+  addOnErrorListener(listener: () => void): void;
+
   send(
     message_type: bigint,
     message: ProtocolMessage | Uint8Array,
@@ -36,6 +38,7 @@ export interface Connection {
 
 export class HttpConnection implements Connection {
   private result: Array<Message> = [];
+  private onErrorListeners: (() => void)[] = [];
 
   private requiresCompletion = [
     OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
@@ -52,7 +55,9 @@ export class HttpConnection implements Connection {
     readonly url: Url,
     readonly stream: http2.ServerHttp2Stream,
     readonly restate: RestateDuplexStream
-  ) {}
+  ) {
+    restate.onError(this.onError.bind(this));
+  }
 
   respond404() {
     this.stream.respond({
@@ -86,14 +91,20 @@ export class HttpConnection implements Connection {
   }
 
   flush() {
-    this.result.forEach((msg) =>
-      this.restate.send(
-        msg.messageType,
-        msg.message,
-        msg.completed,
-        msg.requires_ack
-      )
-    );
+    this.result.forEach((msg) => {
+      try {
+        this.restate.send(
+          msg.messageType,
+          msg.message,
+          msg.completed,
+          msg.requires_ack
+        );
+      } catch (e) {
+        console.warn(e);
+        console.log("Closing the connection and state machine.");
+        this.end();
+      }
+    });
     this.result = [];
   }
 
@@ -101,11 +112,29 @@ export class HttpConnection implements Connection {
     this.restate.onMessage(handler);
   }
 
+  onError() {
+    this.end();
+    this.emitOnErrorEvent();
+  }
+
+  // We use an error listener to notify the state machine of errors in the connection layer.
+  // When there is a connection error (decoding/encoding/...), the statemachine is closed.
+  public addOnErrorListener(listener: () => void) {
+    this.onErrorListeners.push(listener);
+  }
+
+  private emitOnErrorEvent() {
+    for (const listener of this.onErrorListeners) {
+      listener();
+    }
+  }
+
   onClose(handler: () => void) {
     this.stream.on("close", handler);
   }
 
   end() {
+    console.log("Closing the connection...");
     this.stream.end();
   }
 }

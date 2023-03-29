@@ -65,10 +65,13 @@ export type RestateDuplexStreamEventHandler = (
   requires_ack_flag?: boolean
 ) => void;
 
+export type RestateDuplexStreamErrorHandler = (err: Error) => void;
+
 export class RestateDuplexStream {
   // create a RestateDuplex stream from an http2 (duplex) stream.
   public static from(http2stream: stream.Duplex): RestateDuplexStream {
     const sdkInput = http2stream.pipe(stream_decoder());
+
     const sdkOutput = stream_encoder();
     sdkOutput.pipe(http2stream);
 
@@ -106,6 +109,13 @@ export class RestateDuplexStream {
         h.protocol_version,
         h.requires_ack_flag
       );
+    });
+  }
+
+  onError(handler: RestateDuplexStreamErrorHandler) {
+    this.sdkInput.on("error", (err) => {
+      console.warn("Error in input stream: " + err.stack);
+      handler(err);
     });
   }
 }
@@ -285,7 +295,7 @@ function stream_decoder(): stream.Transform {
                 cb();
                 return;
               }
-              const h = buf.readBigUint64BE();
+              const h = buf.readBigInt64BE();
               buf = buf.subarray(8);
               header = Header.from_u64be(h);
               state = WAITING_FOR_BODY;
@@ -339,12 +349,10 @@ function stream_encoder(): stream.Transform {
     objectMode: true,
 
     transform(chunk, _encoding, cb) {
-      try {
-        const result = encode_message(chunk);
-        cb(null, result);
-      } catch (e: unknown) {
-        cb(e as Error, null);
-      }
+      // We do not catch errors here because we want them to be handled at the Connection level,
+      // so we can close the state machine.
+      const result = encode_message(chunk);
+      cb(null, result);
     },
   });
 }
