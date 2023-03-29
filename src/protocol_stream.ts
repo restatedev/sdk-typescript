@@ -295,7 +295,7 @@ function stream_decoder(): stream.Transform {
                 cb();
                 return;
               }
-              const h = buf.readBigInt64BE();
+              const h = buf.readBigUInt64BE();
               buf = buf.subarray(8);
               header = Header.from_u64be(h);
               state = WAITING_FOR_BODY;
