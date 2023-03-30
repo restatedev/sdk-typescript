@@ -14,6 +14,17 @@ export interface SideEffectEntryMessage {
   failure?: Failure | undefined;
 }
 
+/**
+ * Type: 0xFC00 + 2
+ * Flag: RequiresRuntimeAck
+ */
+export interface TxNotificationMessage {
+  txid: string;
+  status: string;
+  result?: Buffer | undefined;
+  failure?: Failure | undefined;
+}
+
 function createBaseSideEffectEntryMessage(): SideEffectEntryMessage {
   return { value: undefined, failure: undefined };
 }
@@ -88,6 +99,106 @@ export const SideEffectEntryMessage = {
   },
 };
 
+function createBaseTxNotificationMessage(): TxNotificationMessage {
+  return { txid: "", status: "", result: undefined, failure: undefined };
+}
+
+export const TxNotificationMessage = {
+  encode(message: TxNotificationMessage, writer: _m0.Writer = _m0.Writer.create()): _m0.Writer {
+    if (message.txid !== "") {
+      writer.uint32(10).string(message.txid);
+    }
+    if (message.status !== "") {
+      writer.uint32(18).string(message.status);
+    }
+    if (message.result !== undefined) {
+      writer.uint32(26).bytes(message.result);
+    }
+    if (message.failure !== undefined) {
+      Failure.encode(message.failure, writer.uint32(34).fork()).ldelim();
+    }
+    return writer;
+  },
+
+  decode(input: _m0.Reader | Uint8Array, length?: number): TxNotificationMessage {
+    const reader = input instanceof _m0.Reader ? input : _m0.Reader.create(input);
+    let end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseTxNotificationMessage();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1:
+          if (tag != 10) {
+            break;
+          }
+
+          message.txid = reader.string();
+          continue;
+        case 2:
+          if (tag != 18) {
+            break;
+          }
+
+          message.status = reader.string();
+          continue;
+        case 3:
+          if (tag != 26) {
+            break;
+          }
+
+          message.result = reader.bytes() as Buffer;
+          continue;
+        case 4:
+          if (tag != 34) {
+            break;
+          }
+
+          message.failure = Failure.decode(reader, reader.uint32());
+          continue;
+      }
+      if ((tag & 7) == 4 || tag == 0) {
+        break;
+      }
+      reader.skipType(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): TxNotificationMessage {
+    return {
+      txid: isSet(object.txid) ? String(object.txid) : "",
+      status: isSet(object.status) ? String(object.status) : "",
+      result: isSet(object.result) ? Buffer.from(bytesFromBase64(object.result)) : undefined,
+      failure: isSet(object.failure) ? Failure.fromJSON(object.failure) : undefined,
+    };
+  },
+
+  toJSON(message: TxNotificationMessage): unknown {
+    const obj: any = {};
+    message.txid !== undefined && (obj.txid = message.txid);
+    message.status !== undefined && (obj.status = message.status);
+    message.result !== undefined &&
+      (obj.result = message.result !== undefined ? base64FromBytes(message.result) : undefined);
+    message.failure !== undefined && (obj.failure = message.failure ? Failure.toJSON(message.failure) : undefined);
+    return obj;
+  },
+
+  create(base?: DeepPartial<TxNotificationMessage>): TxNotificationMessage {
+    return TxNotificationMessage.fromPartial(base ?? {});
+  },
+
+  fromPartial(object: DeepPartial<TxNotificationMessage>): TxNotificationMessage {
+    const message = createBaseTxNotificationMessage();
+    message.txid = object.txid ?? "";
+    message.status = object.status ?? "";
+    message.result = object.result ?? undefined;
+    message.failure = (object.failure !== undefined && object.failure !== null)
+      ? Failure.fromPartial(object.failure)
+      : undefined;
+    return message;
+  },
+};
+
 type ProtoMetaMessageOptions = {
   options?: { [key: string]: any };
   fields?: { [key: string]: { [key: string]: any } };
@@ -151,6 +262,65 @@ export const protoMetadata: ProtoMetadata = {
       "options": undefined,
       "reservedRange": [],
       "reservedName": [],
+    }, {
+      "name": "TxNotificationMessage",
+      "field": [{
+        "name": "txid",
+        "number": 1,
+        "label": 1,
+        "type": 9,
+        "typeName": "",
+        "extendee": "",
+        "defaultValue": "",
+        "oneofIndex": 0,
+        "jsonName": "txid",
+        "options": undefined,
+        "proto3Optional": false,
+      }, {
+        "name": "status",
+        "number": 2,
+        "label": 1,
+        "type": 9,
+        "typeName": "",
+        "extendee": "",
+        "defaultValue": "",
+        "oneofIndex": 0,
+        "jsonName": "status",
+        "options": undefined,
+        "proto3Optional": false,
+      }, {
+        "name": "result",
+        "number": 3,
+        "label": 1,
+        "type": 12,
+        "typeName": "",
+        "extendee": "",
+        "defaultValue": "",
+        "oneofIndex": 0,
+        "jsonName": "result",
+        "options": undefined,
+        "proto3Optional": false,
+      }, {
+        "name": "failure",
+        "number": 4,
+        "label": 1,
+        "type": 11,
+        "typeName": ".dev.restate.service.protocol.Failure",
+        "extendee": "",
+        "defaultValue": "",
+        "oneofIndex": 0,
+        "jsonName": "failure",
+        "options": undefined,
+        "proto3Optional": false,
+      }],
+      "extension": [],
+      "nestedType": [],
+      "enumType": [],
+      "extensionRange": [],
+      "oneofDecl": [{ "name": "output", "options": undefined }],
+      "options": undefined,
+      "reservedRange": [],
+      "reservedName": [],
     }],
     "enumType": [],
     "service": [],
@@ -185,11 +355,26 @@ export const protoMetadata: ProtoMetadata = {
         "leadingComments": " Type: 0xFC00 + 1\n Flag: RequiresRuntimeAck\n",
         "trailingComments": "",
         "leadingDetachedComments": [],
+      }, {
+        "path": [4, 1],
+        "span": [17, 0, 24, 1],
+        "leadingComments": " Type: 0xFC00 + 2\n Flag: RequiresRuntimeAck\n",
+        "trailingComments": "",
+        "leadingDetachedComments": [],
+      }, {
+        "path": [4, 1, 8, 0],
+        "span": [20, 2, 23, 3],
+        "leadingComments": "",
+        "trailingComments": " TODO maybe this should be named result? Or will this cause clashes?\n",
+        "leadingDetachedComments": [],
       }],
     },
     "syntax": "proto3",
   }),
-  references: { ".dev.restate.sdk.javascript.SideEffectEntryMessage": SideEffectEntryMessage },
+  references: {
+    ".dev.restate.sdk.javascript.SideEffectEntryMessage": SideEffectEntryMessage,
+    ".dev.restate.sdk.javascript.TxNotificationMessage": TxNotificationMessage,
+  },
   dependencies: [protoMetadata1],
 };
 

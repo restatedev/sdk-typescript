@@ -27,18 +27,20 @@ import {
   SleepEntryMessage,
   START_MESSAGE_TYPE,
   StartMessage,
-  SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+  SIDE_EFFECT_ENTRY_MESSAGE_TYPE, TX_NOTIFICATION_MESSAGE
 } from "./protocol_stream";
 import { RestateContext } from "./context";
 import {
   AwakeableIdentifier,
   ProtocolMessage,
   PromiseHandler,
-  printMessageAsJson,
+  printMessageAsJson
 } from "./types";
 import { Failure } from "./generated/proto/protocol";
-import { SideEffectEntryMessage } from "./generated/proto/javascript";
+import { SideEffectEntryMessage, TxNotificationMessage } from "./generated/proto/javascript";
 import { Empty } from "./generated/google/protobuf/empty";
+import { QueryTypes, Sequelize } from "sequelize";
+import { Transaction, TransactionOptions } from "sequelize/types/transaction";
 
 enum ExecutionState {
   WAITING_FOR_START = "WAITING_FOR_START",
@@ -146,7 +148,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       SET_STATE_ENTRY_MESSAGE_TYPE,
       SetStateEntryMessage.create({
         key: Buffer.from(name, "utf8"),
-        value: bytes,
+        value: bytes
       })
     );
   }
@@ -223,7 +225,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         instanceKey: id.instanceKey,
         invocationId: id.invocationId,
         entryIndex: id.entryIndex,
-        payload: Buffer.from(JSON.stringify(payload)),
+        payload: Buffer.from(JSON.stringify(payload))
       })
     );
   }
@@ -262,7 +264,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         BackgroundInvokeEntryMessage.create({
           serviceName: service,
           methodName: method,
-          parameter: Buffer.from(data),
+          parameter: Buffer.from(data)
         })
       );
     }
@@ -297,7 +299,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         InvokeEntryMessage.create({
           serviceName: service,
           methodName: method,
-          parameter: Buffer.from(data),
+          parameter: Buffer.from(data)
         })
       );
     }).then((result) => {
@@ -327,7 +329,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         );
         const nestedSideEffectFailure: Failure = Failure.create({
           code: 13,
-          message: `You cannot do sideEffect calls from within a side effect.`,
+          message: `You cannot do sideEffect calls from within a side effect.`
         });
         return reject(nestedSideEffectFailure);
       } else if (this.inBackgroundCallFlag) {
@@ -339,7 +341,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
           message:
             `Cannot do a side effect from within a background call. ` +
             "Context method inBackground() can only be used to invoke other services in the background. " +
-            "e.g. ctx.inBackground(() => client.greet(my_request))",
+            "e.g. ctx.inBackground(() => client.greet(my_request))"
         });
         return reject(sideEffectInBackgroundFailure);
       }
@@ -407,7 +409,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         .catch((reason) => {
           const failure: Failure = Failure.create({
             code: 13,
-            message: reason.stack,
+            message: reason.stack
           });
           const sideEffectMsg = SideEffectEntryMessage.encode(
             SideEffectEntryMessage.create({ failure: failure })
@@ -427,6 +429,143 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         });
     });
   }
+
+  async sequelizeTx<T>(sequelize: Sequelize, autoCallback: (t: Transaction) => PromiseLike<T>): Promise<T> {
+    console.debug("Service called sequelizeTx");
+
+    this.validate("sequelizeTx");
+
+    const transaction = await sequelize.transaction();
+    // A bit of a hack to get the transaction ID field from the sequelize transaction...
+    const txId = (transaction as unknown as { id: string }).id;
+
+    // Save the current txid in the runtime
+    // When the method has been retried multiple times, this will return a list of txids of previous attempts
+    const previousTxIds: string[] = await new Promise((resolve, reject) => {
+      this.incrementJournalIndex();
+      this.addPromise(this.currentJournalIndex, resolve, reject);
+
+      // Send the transaction ID to the runtime
+      console.log("Sending TxNotificationMessage to runtime to signal start of transaction for id " + txId);
+      this.connection.send(
+        TX_NOTIFICATION_MESSAGE,
+        TxNotificationMessage.encode(
+          TxNotificationMessage.create({ txid: txId, status: "IN_PROGRESS" })).finish(),
+        false,
+        true);
+    });
+
+    const duplicateWrite = false;
+    // if (previousTxIds.length > 0) {
+    //   previousTxIds.forEach(previousId => {
+    //     // request status of the transaction
+    //     // TODO fix this
+    //     sequelize.query(
+    //       `SELECT * FROM "Sequelize"."Transactions" WHERE "id" = '${previousId}'`,
+    //       { type: QueryTypes.SELECT }
+    //     ).then((previousTxIdStatus) => {
+    //       // if in progress
+    //       // abort them if possible, otherwise ignore
+    //
+    //       // if committed
+    //       if (previousTxIdStatus === "COMMITTED") {
+    //         duplicateWrite = true;
+    //         // save the fact that it is committed in the runtime
+    //         return new Promise((resolve, reject) => {
+    //           this.incrementJournalIndex();
+    //           this.addPromise(this.currentJournalIndex, resolve, reject);
+    //
+    //           // Send the transaction ID to the runtime
+    //           this.connection.send(TX_NOTIFICATION_MESSAGE,
+    //             TxNotificationMessage.encode(TxNotificationMessage.create({ txid: txId, status: "COMMITTED" })).finish());
+    //         });
+    //       }
+    //       // TODO what to do in this case? Mabye the user wants to be able to ask it to be retried?
+    //       else if (previousTxIdStatus === "ABORTED") {
+    //         // save the fact that it is committed in the runtime
+    //         console.debug("Database indicates that this database operation was aborted. Notifying the runtime and canceling execution...");
+    //         return new Promise((resolve, reject) => {
+    //           this.incrementJournalIndex();
+    //           this.addPromise(this.currentJournalIndex, resolve, reject);
+    //
+    //           // Send the transaction ID to the runtime
+    //           this.connection.send(TX_NOTIFICATION_MESSAGE,
+    //             TxNotificationMessage.encode(TxNotificationMessage.create({ txid: txId, status: "ABORTED" })).finish());
+    //         });
+    //       }
+    //       }
+    //     )
+    //
+    //   })
+    // }
+
+    // TODO write as promise chaining with then and catch
+    if (!duplicateWrite) {
+      let result: T;
+      try {
+        result = await autoCallback(transaction);
+      } catch (err) {
+        console.debug(err);
+        await transaction.rollback()
+          .then(() => {
+            return new Promise((resolve, reject) => {
+              this.incrementJournalIndex();
+              this.addPromise(this.currentJournalIndex, resolve, reject);
+
+              // Send the transaction ID to the runtime
+              this.connection.send(TX_NOTIFICATION_MESSAGE,
+                TxNotificationMessage.encode(
+                  TxNotificationMessage.create({
+                    txid: txId, status: "ABORTED", failure: Failure.create({ message: (err as Error).message })
+                  })).finish(),
+                false,
+                true);
+            });
+          }).catch(() => {
+            //ignore
+            // TODO probably we want to do something more here
+          })
+        throw err; // TODO probably we should reject the promise here
+      }
+      await new Promise((resolve, reject) => {
+        this.incrementJournalIndex();
+        this.addPromise(this.currentJournalIndex, resolve, reject);
+
+        // Send the transaction ID to the runtime
+        this.connection.send(TX_NOTIFICATION_MESSAGE,
+          TxNotificationMessage.encode(
+            TxNotificationMessage.create({
+              txid: txId,
+              status: "RESULT_PERSISTED",
+              result: Buffer.from(JSON.stringify(result))
+            })).finish(),
+          false,
+          true);
+      }).then(() => {
+        transaction.commit();
+      }).then(() => {
+        // maybe we can use transaction.afterCommit() for this? https://sequelize.org/docs/v6/other-topics/transactions/#the-aftercommit-hook
+        return new Promise((resolve, reject) => {
+          this.incrementJournalIndex();
+          this.addPromise(this.currentJournalIndex, resolve, reject);
+
+          // Send the transaction ID to the runtime
+          this.connection.send(TX_NOTIFICATION_MESSAGE,
+            TxNotificationMessage.encode(
+              TxNotificationMessage.create({ txid: txId, status: "COMMITTED" })
+            ).finish(),
+            false,
+            true);
+        });
+      })
+      return Promise.resolve(result);
+    } else {
+      // TODO probably we should return the previous result here if possible
+      console.debug("Duplicate write. Ignoring")
+      return Promise.reject();
+    }
+  }
+
 
   async sleep(millis: number): Promise<void> {
     console.debug("Service called sleep");
@@ -528,6 +667,10 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         this.handleSideEffectMessage(message as Uint8Array);
         break;
       }
+      case TX_NOTIFICATION_MESSAGE: {
+        this.handleSideEffectMessage(message as Uint8Array);
+        break;
+      }
       default: {
         throw new Error(
           `Received unkown message type from the runtime: { message_type: ${message_type}, message: ${message} }`
@@ -581,7 +724,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   handleGetStateMessage(m: GetStateEntryMessage): void {
     console.debug(
       "Received completed GetStateEntryMessage from runtime: " +
-        printMessageAsJson(m)
+      printMessageAsJson(m)
     );
 
     this.checkIfInReplay();
@@ -606,24 +749,24 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
   handleSideEffectMessage(m: Uint8Array) {
     console.debug(
-      "Received SideEffectMessage: " +
-        printMessageAsJson(
-          SideEffectEntryMessage.decode(
-            m as Uint8Array
-          ) as SideEffectEntryMessage
-        )
+      "Received TxNotificationMessage: " +
+      printMessageAsJson(
+        TxNotificationMessage.decode(
+          m as Uint8Array
+        ) as TxNotificationMessage
+      )
     );
 
     this.checkIfInReplay();
 
-    const msg: SideEffectEntryMessage = SideEffectEntryMessage.decode(
+    const msg: TxNotificationMessage = TxNotificationMessage.decode(
       m as Uint8Array
     );
 
-    if (msg.value != undefined) {
+    if (msg.result != undefined) {
       this.resolveOrRejectPromise(
         this.replayIndex,
-        JSON.parse(msg.value.toString())
+        JSON.parse(msg.result.toString())
       );
     } else {
       this.resolveOrRejectPromise(this.replayIndex, undefined, msg.failure);
@@ -753,8 +896,8 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     } else if (this.inBackgroundCallFlag) {
       throw new Error(
         `Cannot do a ${callType} from within a background call. ` +
-          "Context method inBackground() can only be used to invoke other services in the background. " +
-          "e.g. ctx.inBackground(() => client.greet(my_request))"
+        "Context method inBackground() can only be used to invoke other services in the background. " +
+        "e.g. ctx.inBackground(() => client.greet(my_request))"
       );
     }
   }
@@ -790,8 +933,8 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
           code: 13,
           message:
             "Uncaught exception for invocation id " +
-            this.invocationId.toString(),
-        }),
+            this.invocationId.toString()
+        })
       })
     );
     this.connection.end();

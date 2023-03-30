@@ -8,7 +8,7 @@ import {
   OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
   RestateDuplexStream,
   RestateDuplexStreamEventHandler,
-  SLEEP_ENTRY_MESSAGE_TYPE,
+  SLEEP_ENTRY_MESSAGE_TYPE, TX_NOTIFICATION_MESSAGE
 } from "./protocol_stream";
 import { parse as urlparse, Url } from "url";
 import { on } from "events";
@@ -45,6 +45,7 @@ export class HttpConnection implements Connection {
     INVOKE_ENTRY_MESSAGE_TYPE,
     GET_STATE_ENTRY_MESSAGE_TYPE,
     SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+    TX_NOTIFICATION_MESSAGE,
     AWAKEABLE_ENTRY_MESSAGE_TYPE,
     SLEEP_ENTRY_MESSAGE_TYPE,
   ];

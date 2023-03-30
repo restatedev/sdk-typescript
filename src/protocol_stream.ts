@@ -54,6 +54,7 @@ export const COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE = 0x0c04n;
 // Side effect message type for Typescript SDK
 // Side effects are custom messages because the runtime does not need to inspect them
 export const SIDE_EFFECT_ENTRY_MESSAGE_TYPE = 0xfc01n;
+export const TX_NOTIFICATION_MESSAGE = 0xfc02n;
 
 // 3. restate DuplexStream.
 // TODO: docs.

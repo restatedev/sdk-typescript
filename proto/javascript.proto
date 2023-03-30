@@ -12,3 +12,14 @@ message SideEffectEntryMessage {
     dev.restate.service.protocol.Failure failure = 15;
   };
 }
+
+// Type: 0xFC00 + 2
+// Flag: RequiresRuntimeAck
+message TxNotificationMessage {
+  string txid = 1;
+  string status = 2;
+  oneof output { // TODO maybe this should be named result? Or will this cause clashes?
+    bytes result = 3;
+    dev.restate.service.protocol.Failure failure = 4;
+  }
+}

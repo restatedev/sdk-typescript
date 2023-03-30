@@ -1,6 +1,8 @@
 "use strict";
 
 import { AwakeableIdentifier } from "./types";
+import { Sequelize } from "sequelize";
+import { Transaction, TransactionOptions } from "sequelize/types/transaction";
 
 export interface RestateContext {
   instanceKey: Buffer;
@@ -28,6 +30,8 @@ export interface RestateContext {
   completeAwakeable<T>(id: AwakeableIdentifier, payload: T): void;
 
   sleep(millis: number): Promise<void>;
+
+  sequelizeTx<T>(sequelize: Sequelize, autoCallback: (t: Transaction) => PromiseLike<T>): Promise<T>;
 }
 
 export function useContext<T>(instance: T): RestateContext {
