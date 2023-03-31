@@ -16,6 +16,7 @@ import {
   StartMessage,
 } from "./protocol_stream";
 import { Failure } from "./generated/proto/protocol";
+import { TxNotificationMessage } from "./generated/proto/javascript";
 
 // Side effect message type for Typescript SDK
 // Side effects are custom messages because the runtime does not need to inspect them
@@ -60,8 +61,29 @@ export class PromiseHandler {
   ) {}
 }
 
-export class SideEffectOutput<T> {
-  constructor(readonly value?: T, readonly failure?: Failure) {}
+export class DbTransactionState {
+
+  lastStatus = "IN_PROGRESS";
+  messages: TxNotificationMessage[] = [];
+
+  result?: Buffer;
+
+  failure?: Failure;
+
+  addTxNotificationMsg(msg: TxNotificationMessage){
+    if(msg.status === "RESULT_PERSISTED"){
+      if(msg.result !== undefined){
+        this.result = msg.result;
+        // we can forget all the previous transactions
+        // TODO check if this is valid
+        this.messages = [];
+      } else {
+        this.failure = msg.failure;
+      }
+    }
+    this.messages.push(msg);
+    this.lastStatus = msg.status;
+  }
 }
 
 export function printMessageAsJson(obj: any): string {

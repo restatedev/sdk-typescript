@@ -34,13 +34,13 @@ import {
   AwakeableIdentifier,
   ProtocolMessage,
   PromiseHandler,
-  printMessageAsJson
+  printMessageAsJson, DbTransactionState
 } from "./types";
 import { Failure } from "./generated/proto/protocol";
 import { SideEffectEntryMessage, TxNotificationMessage } from "./generated/proto/javascript";
 import { Empty } from "./generated/google/protobuf/empty";
 import { QueryTypes, Sequelize } from "sequelize";
-import { Transaction, TransactionOptions } from "sequelize/types/transaction";
+import { Transaction } from "sequelize/types/transaction";
 
 enum ExecutionState {
   WAITING_FOR_START = "WAITING_FOR_START",
@@ -82,6 +82,9 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   // Replay messages that arrived before the user code was at that point.
   /* eslint-disable @typescript-eslint/no-explicit-any */
   private outOfOrderReplayMessages: Map<number, any> = new Map();
+
+  // This object will buffer information when we are replaying a database transaction
+  private replayedDbTransactions = new DbTransactionState();
 
   constructor(
     private readonly connection: Connection,
@@ -437,67 +440,90 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
     const transaction = await sequelize.transaction();
     // A bit of a hack to get the transaction ID field from the sequelize transaction...
-    const txId = (transaction as unknown as { id: string }).id;
+    const sequelizeTxId = (transaction as unknown as { id: string }).id;
+
+    // A bit of a hack to get the transaction ID field from the postgres transaction...
+    const txId = await sequelize.query(
+      `SELECT txid_current();`,
+      { type: QueryTypes.SELECT, transaction: transaction }
+    ).then((value) =>
+      (value[0] as { txid_current: string }).txid_current
+    );
 
     // Save the current txid in the runtime
     // When the method has been retried multiple times, this will return a list of txids of previous attempts
-    const previousTxIds: string[] = await new Promise((resolve, reject) => {
+    const txState: DbTransactionState | undefined = await new Promise((resolve, reject) => {
       this.incrementJournalIndex();
       this.addPromise(this.currentJournalIndex, resolve, reject);
 
-      // Send the transaction ID to the runtime
-      console.log("Sending TxNotificationMessage to runtime to signal start of transaction for id " + txId);
-      this.connection.send(
-        TX_NOTIFICATION_MESSAGE,
-        TxNotificationMessage.encode(
-          TxNotificationMessage.create({ txid: txId, status: "IN_PROGRESS" })).finish(),
-        false,
-        true);
+      // If we are not replaying we just increase the index, send the txid to the runtime and wait for a response
+      // The promise will be resolved with an empty array because this will be the first attempt
+      if (this.state === ExecutionState.PROCESSING) {
+        // Send the transaction ID to the runtime
+        console.debug(`Signaling tx start to Restate: pgTxId = ${txId} and sequelizeTxId = ${sequelizeTxId}`);
+        this.connection.send(
+          TX_NOTIFICATION_MESSAGE,
+          TxNotificationMessage.encode(
+            TxNotificationMessage.create({ txid: txId, status: "IN_PROGRESS" })).finish(),
+          false,
+          true);
+      }
     });
 
-    const duplicateWrite = false;
-    // if (previousTxIds.length > 0) {
-    //   previousTxIds.forEach(previousId => {
-    //     // request status of the transaction
-    //     // TODO fix this
-    //     sequelize.query(
-    //       `SELECT * FROM "Sequelize"."Transactions" WHERE "id" = '${previousId}'`,
-    //       { type: QueryTypes.SELECT }
-    //     ).then((previousTxIdStatus) => {
-    //       // if in progress
-    //       // abort them if possible, otherwise ignore
-    //
-    //       // if committed
-    //       if (previousTxIdStatus === "COMMITTED") {
-    //         duplicateWrite = true;
-    //         // save the fact that it is committed in the runtime
-    //         return new Promise((resolve, reject) => {
-    //           this.incrementJournalIndex();
-    //           this.addPromise(this.currentJournalIndex, resolve, reject);
-    //
-    //           // Send the transaction ID to the runtime
-    //           this.connection.send(TX_NOTIFICATION_MESSAGE,
-    //             TxNotificationMessage.encode(TxNotificationMessage.create({ txid: txId, status: "COMMITTED" })).finish());
-    //         });
-    //       }
-    //       // TODO what to do in this case? Mabye the user wants to be able to ask it to be retried?
-    //       else if (previousTxIdStatus === "ABORTED") {
-    //         // save the fact that it is committed in the runtime
-    //         console.debug("Database indicates that this database operation was aborted. Notifying the runtime and canceling execution...");
-    //         return new Promise((resolve, reject) => {
-    //           this.incrementJournalIndex();
-    //           this.addPromise(this.currentJournalIndex, resolve, reject);
-    //
-    //           // Send the transaction ID to the runtime
-    //           this.connection.send(TX_NOTIFICATION_MESSAGE,
-    //             TxNotificationMessage.encode(TxNotificationMessage.create({ txid: txId, status: "ABORTED" })).finish());
-    //         });
-    //       }
-    //       }
-    //     )
-    //
-    //   })
-    // }
+    let duplicateWrite = false;
+    if (txState != undefined) {
+      if (txState.lastStatus === "COMMITTED" && txState.result != undefined) {
+        return Promise.resolve(JSON.parse(txState.result.toString()));
+      } else if (txState.lastStatus === "ABORTED" && txState.failure != undefined) {
+        return Promise.reject(txState.failure);
+      } else if (txState.lastStatus === "RESULTS_PERSISTED") {
+        // TODO this only happens if it crashes on the commit itself...
+        // Either infrastructure crash or lost connection to the database...
+        // but how to be sure that the status of txid_status is correct
+        //
+        // if we cannot see the txid_status then then we can look at the txmin and txmax of the data rows.
+        // if the current txid is larger than txmin and txmax then...........
+        //
+      } else if (txState.lastStatus === "IN_PROGRESS") {
+        for (const txMsg of txState.messages){
+          const status = await sequelize.query(`SELECT txid_status(BIGINT '${txId}');`,
+            { type: QueryTypes.SELECT, transaction: transaction }
+          ).then((value) => (value[0] as { txid_status: string }).txid_status)
+          // if in progress
+          // abort them if possible, otherwise ignore
+
+          // if committed
+          if (status === "committed") {
+            duplicateWrite = true;
+            // save the fact that it is committed in the runtime
+            return new Promise((resolve, reject) => {
+              this.incrementJournalIndex();
+              this.addPromise(this.currentJournalIndex, resolve, reject);
+
+              // Send the transaction ID to the runtime
+              this.connection.send(TX_NOTIFICATION_MESSAGE,
+                TxNotificationMessage.encode(TxNotificationMessage.create({
+                  txid: txId,
+                  status: "COMMITTED"
+                })).finish());
+            });
+          }
+          // TODO what to do in this case? Mabye the user wants to be able to ask it to be retried?
+          else if (status === "aborted") {
+            // save the fact that it is committed in the runtime
+            console.debug("Database indicates that this database operation was aborted. Notifying the runtime and canceling execution...");
+            return new Promise((resolve, reject) => {
+              this.incrementJournalIndex();
+              this.addPromise(this.currentJournalIndex, resolve, reject);
+
+              // Send the transaction ID to the runtime
+              this.connection.send(TX_NOTIFICATION_MESSAGE,
+                TxNotificationMessage.encode(TxNotificationMessage.create({ txid: txId, status: "ABORTED" })).finish());
+            });
+          }
+        }
+      }
+    }
 
     // TODO write as promise chaining with then and catch
     if (!duplicateWrite) {
@@ -512,7 +538,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
               this.incrementJournalIndex();
               this.addPromise(this.currentJournalIndex, resolve, reject);
 
-              // Send the transaction ID to the runtime
+              console.debug(`Signaling tx abort to Restate: pgTxId = ${txId} and sequelizeTxId = ${sequelizeTxId}`);
               this.connection.send(TX_NOTIFICATION_MESSAGE,
                 TxNotificationMessage.encode(
                   TxNotificationMessage.create({
@@ -527,21 +553,24 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
           })
         throw err; // TODO probably we should reject the promise here
       }
+      // We have a result from our query! Now we need to persist it, before we commit the transaction.
       await new Promise((resolve, reject) => {
         this.incrementJournalIndex();
         this.addPromise(this.currentJournalIndex, resolve, reject);
 
-        // Send the transaction ID to the runtime
+        // Persist the result in the runtime
+        console.debug(`Persisting tx result in Restate: pgTxId = ${txId} and sequelizeTxId = ${sequelizeTxId}`);
         this.connection.send(TX_NOTIFICATION_MESSAGE,
           TxNotificationMessage.encode(
             TxNotificationMessage.create({
               txid: txId,
               status: "RESULT_PERSISTED",
-              result: Buffer.from(JSON.stringify(result))
+              result: result ? Buffer.from(JSON.stringify(result)) : Buffer.alloc(0)
             })).finish(),
           false,
           true);
       }).then(() => {
+        // commit the transaction in the database
         transaction.commit();
       }).then(() => {
         // maybe we can use transaction.afterCommit() for this? https://sequelize.org/docs/v6/other-topics/transactions/#the-aftercommit-hook
@@ -550,6 +579,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
           this.addPromise(this.currentJournalIndex, resolve, reject);
 
           // Send the transaction ID to the runtime
+          console.debug(`Signaling tx commit in Restate: pgTxId = ${txId} and sequelizeTxId = ${sequelizeTxId}`);
           this.connection.send(TX_NOTIFICATION_MESSAGE,
             TxNotificationMessage.encode(
               TxNotificationMessage.create({ txid: txId, status: "COMMITTED" })
@@ -668,7 +698,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         break;
       }
       case TX_NOTIFICATION_MESSAGE: {
-        this.handleSideEffectMessage(message as Uint8Array);
+        this.handleTxNotificationMessage(message as Uint8Array);
         break;
       }
       default: {
@@ -749,28 +779,58 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
   handleSideEffectMessage(m: Uint8Array) {
     console.debug(
-      "Received TxNotificationMessage: " +
+      "Received SideEffectMessage: " +
       printMessageAsJson(
-        TxNotificationMessage.decode(
+        SideEffectEntryMessage.decode(
           m as Uint8Array
-        ) as TxNotificationMessage
+        ) as SideEffectEntryMessage
       )
     );
 
     this.checkIfInReplay();
 
-    const msg: TxNotificationMessage = TxNotificationMessage.decode(
+    const msg: SideEffectEntryMessage = SideEffectEntryMessage.decode(
       m as Uint8Array
     );
 
-    if (msg.result != undefined) {
+    if (msg.value != undefined) {
       this.resolveOrRejectPromise(
         this.replayIndex,
-        JSON.parse(msg.result.toString())
+        JSON.parse(msg.value.toString())
       );
     } else {
       this.resolveOrRejectPromise(this.replayIndex, undefined, msg.failure);
     }
+  }
+
+  handleTxNotificationMessage(m: Uint8Array) {
+    const msg: TxNotificationMessage = TxNotificationMessage.decode(
+      m as Uint8Array
+    );
+    console.debug(`Received TxNotificationMessage: ${printMessageAsJson(msg)}`);
+
+    this.checkIfInReplay();
+
+    this.replayedDbTransactions.addTxNotificationMsg(msg);
+
+    if(msg.status === "IN_PROGRESS" || msg.status === "RESULT_PERSISTED"){
+      // Add the entry to the buffer
+
+      // if there are more messages to be replayed: don't resolve the promise yet
+      // if there are no more messages to be replayed, this means that the transaction was interrupted
+      // resolve the promise with the list of txids for which we need to check the status in the database
+      const nbMessagesLeftInReplay = this.nbEntriesToReplay - 1 - this.replayIndex
+      if(nbMessagesLeftInReplay === 0) {
+        this.resolveOrRejectPromise(this.replayIndex, this.replayedDbTransactions);
+      }
+    } else if(msg.status === "COMMITTED" || msg.status === "ABORTED"){
+      this.resolveOrRejectPromise(this.replayIndex, this.replayedDbTransactions);
+    } else {
+      throw new Error(`Database transaction is in illegal state ${msg.status}`)
+    }
+
+    // Clear the replay buffer for the database transactions
+    this.replayedDbTransactions = new DbTransactionState();
   }
 
   handleAwakeableMessage(m: AwakeableEntryMessage) {

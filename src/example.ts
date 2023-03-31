@@ -9,31 +9,7 @@ import { Sequelize } from "sequelize";
 
 export class GreeterService implements Greeter {
   async greet(request: GreetRequest): Promise<GreetResponse> {
-    const ctx = restate.useContext(this);
-
-    const sequelize = await this.connect();
-
-    const result = await ctx.sequelizeTx(sequelize,
-      async (t) => {
-        return await sequelize.query("SELECT * FROM product WHERE id = '12'",
-          { transaction: t });
-      }
-    )
-
-    console.log(result);
-
     return GreetResponse.create({ greeting: `Hello ${request.name}` });
-  }
-
-  async connect(): Promise<Sequelize> {
-    const sequelize = new Sequelize('postgres://restatedb:restatedb@localhost:5432/productsdb');
-    try {
-      await sequelize.authenticate();
-      console.log('Connection has been established successfully.');
-    } catch (error) {
-      console.error('Unable to connect to the database:', error);
-    }
-    return sequelize;
   }
 
   async multiWord(request: GreetRequest): Promise<GreetResponse> {
