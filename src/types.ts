@@ -201,9 +201,19 @@ export function parseService(
       const localMethod = async (instance: unknown, input: unknown) => {
         return await fn.call(instance, input);
       };
-      const inputMessage = meta.references[methodDescriptor.inputType];
+      let inputMessage = meta.references[methodDescriptor.inputType];
+      // If the input message type is not defined by the proto files of the service but by a dependency (e.g. BoolValue, Empty, etc)
+      // then we need to look for the encoders and decoders in the dependencies.
+      if (inputMessage === undefined) {
+        meta.dependencies?.forEach((dep) => {
+          if (dep.references[methodDescriptor.inputType] !== undefined) {
+            inputMessage = dep.references[methodDescriptor.inputType];
+          }
+        });
+      }
+
       let outputMessage = meta.references[methodDescriptor.outputType];
-      // If the output message type is not defined by use but by a dependency (e.g. BoolValue, Empty, etc)
+      // If the output message type is not defined by use but by the proto defs of the service (e.g. BoolValue, Empty, etc)
       // then we need to look for the encoders and decoders in the dependencies.
       if (outputMessage === undefined) {
         meta.dependencies?.forEach((dep) => {

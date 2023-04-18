@@ -1,10 +1,10 @@
 {
-  "name": "@restatedev/restate-ts-poc",
+  "name": "@restatedev/restate-sdk",
   "version": "1.0.10",
   "description": "Typescript SDK for Restate",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/restatedev/typescript-sdk-expirment.git"
+    "url": "git+https://github.com/restatedev/sdk-typescript.git"
   },
   "release-it": {
     "github": {
