@@ -24,7 +24,7 @@
   "license": "BUSL",
   "email": "code@restate.dev",
   "scripts": {
-    "proto": "buf generate",
+    "proto": "npx buf generate",
     "build": "tsc --noEmitOnError",
     "test": "jest",
     "lint": "eslint --ignore-path .eslintignore --ext .ts .",
@@ -41,6 +41,7 @@
     "ts-proto": "^1.140.0"
   },
   "devDependencies": {
+    "@bufbuild/buf": "^1.15.0",
     "@types/jest": "^29.4.0",
     "@types/node": "^18.14.2",
     "@typescript-eslint/eslint-plugin": "^5.53.0",
