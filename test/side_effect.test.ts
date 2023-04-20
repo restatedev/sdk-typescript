@@ -1,6 +1,6 @@
 import { describe, expect } from "@jest/globals";
 import * as restate from "../src/public_api";
-import { TestDriver } from "../src/testdriver";
+import { TestDriver } from "./testdriver";
 import {
   completionMessage,
   inputMessage,
@@ -17,11 +17,9 @@ import {
   TestRequest,
   TestResponse,
 } from "../src/generated/proto/test";
-import {
-  AwakeableIdentifier,
-  SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-} from "../src/types";
+import { AwakeableIdentifier } from "../src/types";
 import { Failure } from "../src/generated/proto/protocol";
+import { SIDE_EFFECT_ENTRY_MESSAGE_TYPE } from "../src/protocol_stream";
 
 class SideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: string) {}

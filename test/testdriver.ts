@@ -1,10 +1,10 @@
 "use strict";
 
-import { RestateDuplexStream, StartMessage } from "./protocol_stream";
+import { RestateDuplexStream, StartMessage } from "../src/protocol_stream";
 import * as restate from "../src/public_api";
-import { Connection } from "./bidirectional_server";
+import { Connection } from "../src/bidirectional_server";
 import stream from "stream";
-import { DurableExecutionStateMachine } from "./durable_execution";
+import { DurableExecutionStateMachine } from "../src/durable_execution";
 import {
   AWAKEABLE_ENTRY_MESSAGE_TYPE,
   GET_STATE_ENTRY_MESSAGE_TYPE,
@@ -13,14 +13,14 @@ import {
   RestateDuplexStreamEventHandler,
   SLEEP_ENTRY_MESSAGE_TYPE,
   SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-} from "./protocol_stream";
+} from "../src/protocol_stream";
 import {
   ProtocolMessage,
   Message,
   ProtoMetadata,
   printMessageAsJson,
-} from "./types";
-import { HostedGrpcServiceMethod } from "./core";
+} from "../src/types";
+import { HostedGrpcServiceMethod } from "../src/core";
 
 export class TestDriver<I, O> implements Connection {
   private http2stream = this.mockHttp2DuplexStream();

@@ -2,21 +2,17 @@
 
 import http2 from "http2";
 import {
-  AWAKEABLE_ENTRY_MESSAGE_TYPE,
-  GET_STATE_ENTRY_MESSAGE_TYPE,
-  INVOKE_ENTRY_MESSAGE_TYPE,
+  MESSAGES_REQUIRING_COMPLETION,
+  MESSAGES_TRIGGERING_SUSPENSION,
   OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
   RestateDuplexStream,
   RestateDuplexStreamEventHandler,
-  SLEEP_ENTRY_MESSAGE_TYPE,
+  SUSPENSION_MESSAGE_TYPE,
+  SuspensionMessage,
 } from "./protocol_stream";
 import { parse as urlparse, Url } from "url";
 import { on } from "events";
-import {
-  Message,
-  ProtocolMessage,
-  SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-} from "./types";
+import { Message, ProtocolMessage } from "./types";
 import { ServiceDiscoveryResponse } from "./generated/proto/discovery";
 
 export interface Connection {
@@ -26,7 +22,8 @@ export interface Connection {
     message_type: bigint,
     message: ProtocolMessage | Uint8Array,
     completed?: boolean | undefined,
-    requires_ack?: boolean | undefined
+    requires_ack?: boolean | undefined,
+    completable_indices?: number[] | undefined
   ): void;
 
   onMessage(handler: RestateDuplexStreamEventHandler): void;
@@ -39,15 +36,6 @@ export interface Connection {
 export class HttpConnection implements Connection {
   private result: Array<Message> = [];
   private onErrorListeners: (() => void)[] = [];
-
-  private requiresCompletion = [
-    OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
-    INVOKE_ENTRY_MESSAGE_TYPE,
-    GET_STATE_ENTRY_MESSAGE_TYPE,
-    SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-    AWAKEABLE_ENTRY_MESSAGE_TYPE,
-    SLEEP_ENTRY_MESSAGE_TYPE,
-  ];
 
   constructor(
     readonly connectionId: bigint,
@@ -77,15 +65,37 @@ export class HttpConnection implements Connection {
   send(
     message_type: bigint,
     message: ProtocolMessage | Uint8Array,
-    completed?: boolean,
-    requires_ack?: boolean
+    completed?: boolean | undefined,
+    requires_ack?: boolean | undefined,
+    completable_indices?: number[] | undefined
   ) {
+    // Add the message to the result set
     this.result.push(
       new Message(message_type, message, completed, requires_ack)
     );
 
-    // Only flush the messages if they require a completion.
-    if (this.requiresCompletion.includes(message_type)) {
+    // If the messages require a completion, then flush.
+    if (MESSAGES_REQUIRING_COMPLETION.includes(message_type)) {
+      // If the message leads to a suspension, then add a suspension message before the flush.
+      if (MESSAGES_TRIGGERING_SUSPENSION.includes(message_type)) {
+        if (completable_indices == undefined) {
+          throw new Error(
+            "Invocation requires completion but no completable entry indices known."
+          );
+        }
+        const suspensionMsg = SuspensionMessage.create({
+          entryIndexes: completable_indices,
+        });
+        this.result.push(
+          new Message(SUSPENSION_MESSAGE_TYPE, suspensionMsg, false, false)
+        );
+      }
+
+      this.flush();
+    }
+
+    // If we have a response for the invocation, flush.
+    if (message_type === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE) {
       this.flush();
     }
   }

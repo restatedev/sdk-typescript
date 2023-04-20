@@ -28,6 +28,7 @@ import {
   START_MESSAGE_TYPE,
   StartMessage,
   SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+  MESSAGES_REQUIRING_COMPLETION,
 } from "./protocol_stream";
 import { RestateContext } from "./context";
 import {
@@ -111,7 +112,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       }
 
       console.debug("Forward the GetStateEntryMessage to the runtime");
-      this.connection.send(
+      this.send(
         GET_STATE_ENTRY_MESSAGE_TYPE,
         GetStateEntryMessage.create({ key: Buffer.from(name) })
       );
@@ -142,7 +143,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
     console.debug("Forward the SetStateEntryMessage to the runtime");
     const bytes = Buffer.from(JSON.stringify(value));
-    this.connection.send(
+    this.send(
       SET_STATE_ENTRY_MESSAGE_TYPE,
       SetStateEntryMessage.create({
         key: Buffer.from(name, "utf8"),
@@ -166,7 +167,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     }
 
     console.debug("Forward the ClearStateEntryMessage to the runtime");
-    this.connection.send(
+    this.send(
       CLEAR_STATE_ENTRY_MESSAGE_TYPE,
       ClearStateEntryMessage.create({ key: Buffer.from(name, "utf8") })
     );
@@ -189,10 +190,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       }
 
       console.debug("Forward the Awakeable message to the runtime");
-      this.connection.send(
-        AWAKEABLE_ENTRY_MESSAGE_TYPE,
-        AwakeableEntryMessage.create()
-      );
+      this.send(AWAKEABLE_ENTRY_MESSAGE_TYPE, AwakeableEntryMessage.create());
     }).then<T>((result: Buffer) => {
       console.debug(
         "Received the following result: " + JSON.parse(result.toString())
@@ -216,7 +214,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     }
 
     console.debug("Forward the CompleteAwakeable message to the runtime");
-    this.connection.send(
+    this.send(
       COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
       CompleteAwakeableEntryMessage.create({
         serviceName: id.serviceName,
@@ -257,7 +255,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       );
     } else {
       console.debug("Forward the BackgroundInvokeEntryMessage to the runtime");
-      this.connection.send(
+      this.send(
         BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
         BackgroundInvokeEntryMessage.create({
           serviceName: service,
@@ -292,7 +290,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       }
 
       console.debug("Forward the InvokeEntryMessage to the runtime");
-      this.connection.send(
+      this.send(
         INVOKE_ENTRY_MESSAGE_TYPE,
         InvokeEntryMessage.create({
           serviceName: service,
@@ -389,12 +387,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
             SideEffectEntryMessage.create({ value: bytes })
           ).finish();
 
-          this.connection.send(
-            SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-            sideEffectMsg,
-            false,
-            true
-          );
+          this.send(SIDE_EFFECT_ENTRY_MESSAGE_TYPE, sideEffectMsg, false, true);
           this.inSideEffectFlag = false;
 
           // When the runtime has ack'ed the sideEffect with an empty completion,
@@ -412,12 +405,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
           const sideEffectMsg = SideEffectEntryMessage.encode(
             SideEffectEntryMessage.create({ failure: failure })
           ).finish();
-          this.connection.send(
-            SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-            sideEffectMsg,
-            false,
-            true
-          );
+          this.send(SIDE_EFFECT_ENTRY_MESSAGE_TYPE, sideEffectMsg, false, true);
 
           // When something went wrong, then we resolve the promise with a failure.
           promiseToResolve.then(
@@ -446,11 +434,34 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
       console.debug("Forward the SleepEntryMessage to the runtime");
       // Forward to runtime
-      this.connection.send(
+      this.send(
         SLEEP_ENTRY_MESSAGE_TYPE,
         SleepEntryMessage.create({ wakeUpTime: Date.now() + millis })
       );
     });
+  }
+
+  send(
+    message_type: bigint,
+    message: ProtocolMessage | Uint8Array,
+    completed_flag?: boolean,
+    requires_ack_flag?: boolean
+  ): void {
+    // If the message triggers a suspension, then we need to send the journal indices for which we are awaiting a completion.
+    // For request-response, we suspend for every interaction with the runtime,
+    // so we add these indices for all message types that requrie completion
+    const completableIndices = MESSAGES_REQUIRING_COMPLETION.includes(
+      message_type
+    )
+      ? [...this.pendingPromises.keys()]
+      : undefined;
+    this.connection.send(
+      message_type,
+      message,
+      completed_flag,
+      requires_ack_flag,
+      completableIndices
+    );
   }
 
   // Called for every incoming message from the runtime: start messages, input messages and replay messages.
@@ -761,7 +772,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
   onCallSuccess(result: Uint8Array) {
     console.debug("Call successfully completed");
-    this.connection.send(
+    this.send(
       OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
       OutputStreamEntryMessage.create({ value: Buffer.from(result) })
     );
@@ -783,7 +794,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       );
     }
 
-    this.connection.send(
+    this.send(
       OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
       OutputStreamEntryMessage.create({
         failure: Failure.create({

@@ -1,11 +1,17 @@
-import * as restate from "./public_api";
+import * as restate from "../src/public_api";
 import {
   GreetRequest,
   GreetResponse,
   Greeter,
   protoMetadata,
-} from "./generated/proto/example";
+} from "../src/generated/proto/example";
 
+/**
+ * Example of a Lambda function implemented with the Restate Typescript SDK
+ * This is a Lambda function that can execute two gRPC methods: Greet and MultiWord
+ * The only difference with the long-running implementation is in the handler
+ * that is exported at the end of this file.
+ */
 export class GreeterService implements Greeter {
   async greet(request: GreetRequest): Promise<GreetResponse> {
     return GreetResponse.create({ greeting: `Hello ${request.name}` });
@@ -22,18 +28,14 @@ export class GreeterService implements Greeter {
     await ctx.set("seen", seen);
 
     // return the final response
-
     return GreetResponse.create({
       greeting: `YAGM (yet another greeting method) ${request.name}!`,
     });
   }
 }
 
-restate
-  .createServer()
-  .bindService({
-    descriptor: protoMetadata,
-    service: "Greeter",
-    instance: new GreeterService(),
-  })
-  .listen(8000);
+export const handler = restate.lambdaHandler().bindService({
+  descriptor: protoMetadata,
+  service: "Greeter",
+  instance: new GreeterService(),
+}).create();

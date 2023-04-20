@@ -14,12 +14,9 @@ import {
   SetStateEntryMessage,
   SleepEntryMessage,
   StartMessage,
+  SuspensionMessage,
 } from "./protocol_stream";
 import { Failure } from "./generated/proto/protocol";
-
-// Side effect message type for Typescript SDK
-// Side effects are custom messages because the runtime does not need to inspect them
-export const SIDE_EFFECT_ENTRY_MESSAGE_TYPE = 0xfc01n;
 
 export class AwakeableIdentifier {
   constructor(
@@ -33,6 +30,7 @@ export class AwakeableIdentifier {
 export type ProtocolMessage =
   | StartMessage
   | CompletionMessage
+  | SuspensionMessage
   | PollInputStreamEntryMessage
   | OutputStreamEntryMessage
   | GetStateEntryMessage
@@ -58,10 +56,6 @@ export class PromiseHandler {
     readonly resolve: (value: unknown) => void,
     readonly reject: (reason: Failure | Error) => void
   ) {}
-}
-
-export class SideEffectOutput<T> {
-  constructor(readonly value?: T, readonly failure?: Failure) {}
 }
 
 export function printMessageAsJson(obj: any): string {
@@ -211,9 +205,8 @@ export function parseService(
           }
         });
       }
-
       let outputMessage = meta.references[methodDescriptor.outputType];
-      // If the output message type is not defined by use but by the proto defs of the service (e.g. BoolValue, Empty, etc)
+      // If the output message type is not defined by use but by the proto files of the service (e.g. BoolValue, Empty, etc)
       // then we need to look for the encoders and decoders in the dependencies.
       if (outputMessage === undefined) {
         meta.dependencies?.forEach((dep) => {

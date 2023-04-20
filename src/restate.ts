@@ -24,16 +24,9 @@ export function createServer(): RestateServer {
   return new RestateServer();
 }
 
-export class RestateServer {
-  readonly methods: Record<string, HostedGrpcServiceMethod<unknown, unknown>> =
-    {};
-  readonly discovery: ServiceDiscoveryResponse = {
-    files: { file: [] },
-    services: [],
-    minProtocolVersion: 0,
-    maxProtocolVersion: 0,
-    protocolMode: ProtocolMode.BIDI_STREAM,
-  };
+export abstract class BaseRestateServer {
+  abstract methods: Record<string, HostedGrpcServiceMethod<unknown, unknown>>;
+  abstract discovery: ServiceDiscoveryResponse;
 
   addDescriptor(descriptor: ProtoMetadata) {
     const desc = FileDescriptorProto.fromPartial(descriptor.fileDescriptor);
@@ -91,11 +84,7 @@ export class RestateServer {
     });
   }
 
-  public bindService({
-    descriptor,
-    service,
-    instance: instance,
-  }: ServiceOpts): RestateServer {
+  public bindService({ descriptor, service, instance: instance }: ServiceOpts) {
     const spec = parseService(descriptor, service, instance);
     this.addDescriptor(descriptor);
     this.discovery.services.push(`${spec.packge}.${spec.name}`);
@@ -111,7 +100,6 @@ export class RestateServer {
         `Registering: ${url}  -> ${JSON.stringify(method, null, "\t")}`
       );
     }
-    return this;
   }
 
   methodByUrl<I, O>(
@@ -125,6 +113,31 @@ export class RestateServer {
       return undefined;
     }
     return method as HostedGrpcServiceMethod<I, O>;
+  }
+}
+
+export class RestateServer extends BaseRestateServer {
+  readonly methods: Record<string, HostedGrpcServiceMethod<unknown, unknown>> =
+    {};
+  readonly discovery: ServiceDiscoveryResponse = {
+    files: { file: [] },
+    services: [],
+    minProtocolVersion: 0,
+    maxProtocolVersion: 0,
+    protocolMode: ProtocolMode.BIDI_STREAM,
+  };
+
+  public bindService({
+    descriptor,
+    service,
+    instance: instance,
+  }: ServiceOpts): RestateServer {
+    super.bindService({
+      descriptor,
+      service,
+      instance: instance,
+    });
+    return this;
   }
 
   public async listen(port: number) {

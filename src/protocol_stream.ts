@@ -15,13 +15,11 @@ import {
   SetStateEntryMessage,
   SleepEntryMessage,
   StartMessage,
+  SuspensionMessage,
 } from "./generated/proto/protocol";
 import { ProtocolMessage } from "./types";
 
-// --- public api
-
-// 1. re-export the protobuf messages.
-
+// Re-export the protobuf messages.
 export {
   AwakeableEntryMessage,
   BackgroundInvokeEntryMessage,
@@ -35,12 +33,13 @@ export {
   SetStateEntryMessage,
   SleepEntryMessage,
   StartMessage,
+  SuspensionMessage,
 } from "./generated/proto/protocol";
 
-// 2. export the protocol message types as defined by the restate protocol.
-
+// Export the protocol message types as defined by the restate protocol.
 export const START_MESSAGE_TYPE = 0x0000n;
 export const COMPLETION_MESSAGE_TYPE = 0x0001n;
+export const SUSPENSION_MESSAGE_TYPE = 0x0002n;
 export const POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE = 0x0400n;
 export const OUTPUT_STREAM_ENTRY_MESSAGE_TYPE = 0x0401n;
 export const GET_STATE_ENTRY_MESSAGE_TYPE = 0x0800n;
@@ -55,8 +54,7 @@ export const COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE = 0x0c04n;
 // Side effects are custom messages because the runtime does not need to inspect them
 export const SIDE_EFFECT_ENTRY_MESSAGE_TYPE = 0xfc01n;
 
-// 3. restate DuplexStream.
-// TODO: docs.
+// Restate DuplexStream
 export type RestateDuplexStreamEventHandler = (
   message_type: bigint,
   message: ProtocolMessage | Uint8Array,
@@ -72,7 +70,7 @@ export class RestateDuplexStream {
   public static from(http2stream: stream.Duplex): RestateDuplexStream {
     const sdkInput = http2stream.pipe(stream_decoder());
 
-    const sdkOutput = stream_encoder();
+    const sdkOutput = streamEncoder();
     sdkOutput.pipe(http2stream);
 
     return new RestateDuplexStream(sdkInput, sdkOutput);
@@ -120,28 +118,12 @@ export class RestateDuplexStream {
   }
 }
 
-// --------------------------------------------------------------------------------------------------
-// implemention details.
-//
-// The, following section is about parsing a Header. A Header is encoded as a Big endian 64 bit value,
-// with various masked sections. It is not yet well documented, the the code below is my attempt to reverse
-// eng the encoding and decoding.
-//
-// TODO: Add some test data to verify this.
-//
-// The good news are that you don't have to work with headers directly, and they are used in stream_encoder and stream_decoder below,
-// to parse/encode frames as they are coming from the restate runtime, and sent back.
-// to is somewhat similar to Netty's pipelines that transform a chunked stream of ByteBufs to high level objects (and back).
-//
-// NOTE: in JavaScript native numbers have 53 bits, so we need to use BigInts here.
-//
-// source: header.rs in the restate repo.
-//
-// --------------------------------------------------------------------------------------------------
-
+// Message types in the protocol.
+// Custom message types (per SDK) such as side effect entry message should not be included here.
 const KNOWN_MESSAGE_TYPES = new Set([
   START_MESSAGE_TYPE,
   COMPLETION_MESSAGE_TYPE,
+  SUSPENSION_MESSAGE_TYPE,
   POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
   OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
   GET_STATE_ENTRY_MESSAGE_TYPE,
@@ -158,6 +140,7 @@ const KNOWN_MESSAGE_TYPES = new Set([
 const PROTOBUF_MESSAGES: Array<[bigint, any]> = [
   [START_MESSAGE_TYPE, StartMessage],
   [COMPLETION_MESSAGE_TYPE, CompletionMessage],
+  [SUSPENSION_MESSAGE_TYPE, SuspensionMessage],
   [POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE, PollInputStreamEntryMessage],
   [OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, OutputStreamEntryMessage],
   [GET_STATE_ENTRY_MESSAGE_TYPE, GetStateEntryMessage],
@@ -171,6 +154,23 @@ const PROTOBUF_MESSAGES: Array<[bigint, any]> = [
 ];
 
 export const PROTOBUF_MESSAGE_BY_TYPE = new Map(PROTOBUF_MESSAGES);
+
+// These message types require a completion from the runtime.
+// For request-response these types also require a suspension
+export const MESSAGES_REQUIRING_COMPLETION = [
+  INVOKE_ENTRY_MESSAGE_TYPE,
+  GET_STATE_ENTRY_MESSAGE_TYPE,
+  SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+  AWAKEABLE_ENTRY_MESSAGE_TYPE,
+  SLEEP_ENTRY_MESSAGE_TYPE,
+];
+
+// On these message types, the invocation will be suspended
+export const MESSAGES_TRIGGERING_SUSPENSION = [
+  INVOKE_ENTRY_MESSAGE_TYPE,
+  AWAKEABLE_ENTRY_MESSAGE_TYPE,
+  SLEEP_ENTRY_MESSAGE_TYPE,
+];
 
 const CUSTOM_MESSAGE_MASK = BigInt(0xfc00);
 const COMPLETED_MASK = BigInt(0x0001_0000_0000);
@@ -188,7 +188,7 @@ class MessageType {
     throw new Error(`Unknown message type ${message_type_id}`);
   }
 
-  static has_completed_flag(message_type: bigint): boolean {
+  static hasCompletedFlag(message_type: bigint): boolean {
     return (
       message_type === POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE ||
       message_type === GET_STATE_ENTRY_MESSAGE_TYPE ||
@@ -197,7 +197,7 @@ class MessageType {
     );
   }
 
-  static has_protocol_version(message_type: bigint): boolean {
+  static hasProtocolVersion(message_type: bigint): boolean {
     return message_type == START_MESSAGE_TYPE;
   }
 
@@ -205,7 +205,7 @@ class MessageType {
     return !KNOWN_MESSAGE_TYPES.has(message_type_id);
   }
 
-  static has_requires_ack_flag(message_type_id: bigint): boolean {
+  static hasRequiresAckFlag(message_type_id: bigint): boolean {
     return this.is_custom(message_type_id);
   }
 }
@@ -220,19 +220,19 @@ export class Header {
     readonly requires_ack_flag?: boolean
   ) {}
 
-  public static from_u64be(value: bigint): Header {
+  public static fromU64be(value: bigint): Header {
     const ty_code: bigint = (value >> 48n) & 0xffffn;
     MessageType.assert_valid(ty_code);
 
     const completed_flag =
-      MessageType.has_completed_flag(ty_code) && (value & COMPLETED_MASK) !== 0n
+      MessageType.hasCompletedFlag(ty_code) && (value & COMPLETED_MASK) !== 0n
         ? true
         : undefined;
-    const protocol_version = MessageType.has_protocol_version(ty_code)
+    const protocol_version = MessageType.hasProtocolVersion(ty_code)
       ? Number(((value & VERSION_MASK) >> 32n) & 0xffffn)
       : undefined;
     const requires_ack_flag =
-      MessageType.has_requires_ack_flag(ty_code) &&
+      MessageType.hasRequiresAckFlag(ty_code) &&
       (value & REQUIRES_ACK_MASK) !== 0n
         ? true
         : undefined;
@@ -247,7 +247,7 @@ export class Header {
     );
   }
 
-  public to_u64be(): bigint {
+  public toU64be(): bigint {
     let res = (this.message_type << 48n) | BigInt(this.frame_length);
     if (this.completed_flag) {
       res = res | COMPLETED_MASK;
@@ -297,7 +297,7 @@ function stream_decoder(): stream.Transform {
               }
               const h = buf.readBigUInt64BE();
               buf = buf.subarray(8);
-              header = Header.from_u64be(h);
+              header = Header.fromU64be(h);
               state = WAITING_FOR_BODY;
               break;
             }
@@ -331,19 +331,7 @@ function stream_decoder(): stream.Transform {
     },
   });
 }
-
-// Same as the stream_decoder but this time to convert from a high level stream of objects
-// of the type { header: headerOpts , message: message} to a raw stream of bytes.
-// * headerOpts is a dictonary, can be the empty dict {} and it might contain the following keys
-//      - ty
-//      - version
-//      - ack
-//      - completed
-//   I'm not sure what any of these mean, onces we'll figure out the protocol details we will use these, but for now
-//   and empty object {} works just fine, this stream transformer will create a proper header just fine.
-//
-// * message is a Protobuf message.
-function stream_encoder(): stream.Transform {
+function streamEncoder(): stream.Transform {
   return new stream.Transform({
     writableObjectMode: true,
     objectMode: true,
@@ -351,7 +339,7 @@ function stream_encoder(): stream.Transform {
     transform(chunk, _encoding, cb) {
       // We do not catch errors here because we want them to be handled at the Connection level,
       // so we can close the state machine.
-      const result = encode_message(chunk);
+      const result = encodeMessage(chunk);
       cb(null, result);
     },
   });
@@ -359,13 +347,13 @@ function stream_encoder(): stream.Transform {
 
 interface EncoderOpts {
   message_type: bigint;
-  message: ProtocolMessage | Buffer;
+  message: ProtocolMessage | Uint8Array;
   version?: number;
   completed?: boolean;
   requires_ack?: boolean;
 }
 
-function encode_message({
+export function encodeMessage({
   message_type,
   message,
   version,
@@ -389,7 +377,14 @@ function encode_message({
     requires_ack
   );
   const headerBuf = Buffer.alloc(8);
-  const encoded = header.to_u64be();
+  const encoded = header.toU64be();
   headerBuf.writeBigUInt64BE(encoded);
   return Buffer.concat([headerBuf, bodyBuf]);
+}
+
+export class InputEntry {
+  constructor(
+    readonly header: Header,
+    readonly message: ProtocolMessage | Buffer
+  ) {}
 }

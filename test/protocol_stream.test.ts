@@ -13,7 +13,7 @@ import stream from "stream";
 describe("Header", () => {
   it("Should round trip a custom message", () => {
     const a = new Header(0xfc00n, 10);
-    const b = Header.from_u64be(a.to_u64be());
+    const b = Header.fromU64be(a.toU64be());
 
     expect(b).toStrictEqual(a);
   });
@@ -127,7 +127,7 @@ function sameTruthness<A, B>(a: A, b: B) {
 }
 
 function roundtrip_test(a: Header) {
-  const b = Header.from_u64be(a.to_u64be());
+  const b = Header.fromU64be(a.toU64be());
   expect(b.message_type).toStrictEqual(a.message_type);
   expect(b.frame_length).toStrictEqual(a.frame_length);
   expect(b.protocol_version).toStrictEqual(a.protocol_version);

@@ -1,6 +1,6 @@
 import { describe, expect } from "@jest/globals";
 import * as restate from "../src/public_api";
-import { TestDriver } from "../src/testdriver";
+import { TestDriver } from "./testdriver";
 import {
   getStateMessage,
   inputMessage,
