@@ -1,10 +1,10 @@
 import * as restate from "../src/public_api";
 import {
-  GreetRequest,
-  GreetResponse,
-  Greeter,
+  TestRequest,
+  TestResponse,
+  TestGreeter,
   protoMetadata,
-} from "../src/generated/proto/example";
+} from "../src/generated/proto/test";
 
 /**
  * Example of a Lambda function implemented with the Restate Typescript SDK
@@ -12,12 +12,12 @@ import {
  * The only difference with the long-running implementation is in the handler
  * that is exported at the end of this file.
  */
-export class GreeterService implements Greeter {
-  async greet(request: GreetRequest): Promise<GreetResponse> {
-    return GreetResponse.create({ greeting: `Hello ${request.name}` });
+export class GreeterService implements TestGreeter {
+  async greet(request: TestRequest): Promise<TestResponse> {
+    return TestResponse.create({ greeting: `Hello ${request.name}` });
   }
 
-  async multiWord(request: GreetRequest): Promise<GreetResponse> {
+  async multiWord(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     // state
@@ -28,7 +28,7 @@ export class GreeterService implements Greeter {
     await ctx.set("seen", seen);
 
     // return the final response
-    return GreetResponse.create({
+    return TestResponse.create({
       greeting: `YAGM (yet another greeting method) ${request.name}!`,
     });
   }
