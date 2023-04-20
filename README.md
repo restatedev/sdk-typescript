@@ -8,9 +8,6 @@
 
 #### Generate Protobufs
 
-We use Buf to generate the proto files. To install buf globally do:
-
-    npm install -g @bufbuild/buf
 
 ```bash
 npm run proto
