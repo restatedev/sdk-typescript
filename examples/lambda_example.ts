@@ -34,8 +34,11 @@ export class GreeterService implements Greeter {
   }
 }
 
-export const handler = restate.lambdaHandler().bindService({
-  descriptor: protoMetadata,
-  service: "Greeter",
-  instance: new GreeterService(),
-}).create();
+export const handler = restate
+  .lambdaHandler()
+  .bindService({
+    descriptor: protoMetadata,
+    service: "Greeter",
+    instance: new GreeterService(),
+  })
+  .create();

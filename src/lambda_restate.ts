@@ -24,7 +24,7 @@ export class LambdaRestateServer extends BaseRestateServer {
     protocolMode: ProtocolMode.REQUEST_RESPONSE,
   };
 
-  create(): (event: APIGatewayProxyEvent) =>  Promise<APIGatewayProxyResult> {
+  create(): (event: APIGatewayProxyEvent) => Promise<APIGatewayProxyResult> {
     // return the handler and bind the current context to it, so that it can find the other methods in this class.
     return this.handleRequest.bind(this);
   }
@@ -50,8 +50,11 @@ export class LambdaRestateServer extends BaseRestateServer {
 
     const pathSegments = event.path.split("/");
 
-    if(pathSegments.length < 3 ){
-      throw new Error("Path doesn't match the pattern /invoke/SvcName/MethodName: " + event.path);
+    if (pathSegments.length < 3) {
+      throw new Error(
+        "Path doesn't match the pattern /invoke/SvcName/MethodName: " +
+          event.path
+      );
     }
 
     const service = pathSegments[pathSegments.length - 2];

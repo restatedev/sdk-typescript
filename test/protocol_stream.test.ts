@@ -24,14 +24,10 @@ describe("Header", () => {
     roundtripTest(newHeader(COMPLETION_MESSAGE_TYPE, 22)));
 
   it("completed_get_state", () =>
-    roundtripTest(
-      newCompletableEntry(GET_STATE_ENTRY_MESSAGE_TYPE, true, 0)
-    ));
+    roundtripTest(newCompletableEntry(GET_STATE_ENTRY_MESSAGE_TYPE, true, 0)));
 
   it("not_completed_get_state", () =>
-    roundtripTest(
-      newCompletableEntry(GET_STATE_ENTRY_MESSAGE_TYPE, false, 0)
-    ));
+    roundtripTest(newCompletableEntry(GET_STATE_ENTRY_MESSAGE_TYPE, false, 0)));
 
   it("completed_get_state_with_len", () =>
     roundtripTest(

@@ -36,11 +36,14 @@ class LambdaGreeter implements TestGreeter {
 
 describe("LambdaGreeter: Invoke Lambda function - getState", () => {
   it("should call greet", async () => {
-    const handler = restate.lambdaHandler().bindService({
-      descriptor: protoMetadata,
-      service: "TestGreeter",
-      instance: new LambdaGreeter(),
-    }).create();
+    const handler = restate
+      .lambdaHandler()
+      .bindService({
+        descriptor: protoMetadata,
+        service: "TestGreeter",
+        instance: new LambdaGreeter(),
+      })
+      .create();
 
     const request = apiProxyGatewayEvent(
       "/invoke/dev.restate.TestGreeter/Greet",
@@ -65,11 +68,14 @@ describe("LambdaGreeter: Invoke Lambda function - getState", () => {
 
 describe("LambdaGreeter: Invoke Lambda function - output message response", () => {
   it("should call greet", async () => {
-    const handler = restate.lambdaHandler().bindService({
-      descriptor: protoMetadata,
-      service: "TestGreeter",
-      instance: new LambdaGreeter(),
-    }).create();
+    const handler = restate
+      .lambdaHandler()
+      .bindService({
+        descriptor: protoMetadata,
+        service: "TestGreeter",
+        instance: new LambdaGreeter(),
+      })
+      .create();
 
     const request = apiProxyGatewayEvent(
       "/invoke/dev.restate.TestGreeter/Greet",
@@ -91,11 +97,14 @@ describe("LambdaGreeter: Invoke Lambda function - output message response", () =
 
 describe("LambdaGreeter: discovery of Lambda function", () => {
   it("should call greet", async () => {
-    const handler = restate.lambdaHandler().bindService({
-      descriptor: protoMetadata,
-      service: "TestGreeter",
-      instance: new LambdaGreeter(),
-    }).create();
+    const handler = restate
+      .lambdaHandler()
+      .bindService({
+        descriptor: protoMetadata,
+        service: "TestGreeter",
+        instance: new LambdaGreeter(),
+      })
+      .create();
 
     const request: APIGatewayProxyEvent = {
       resource: "",
@@ -109,7 +118,7 @@ describe("LambdaGreeter: discovery of Lambda function", () => {
       headers: { "content-type": "application/proto" },
       queryStringParameters: {},
       pathParameters: {},
-      requestContext: {} as any,
+      requestContext: {} as never,
       multiValueHeaders: {},
       multiValueQueryStringParameters: {},
       path: "/discover",

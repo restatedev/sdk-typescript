@@ -70,9 +70,7 @@ export class HttpConnection implements Connection {
     completableIndices?: number[] | undefined
   ) {
     // Add the message to the result set
-    this.result.push(
-      new Message(messageType, message, completed, requiresAck)
-    );
+    this.result.push(new Message(messageType, message, completed, requiresAck));
 
     // If the messages require a completion, then flush.
     if (MESSAGES_REQUIRING_COMPLETION.includes(messageType)) {
