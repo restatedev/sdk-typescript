@@ -12,7 +12,10 @@ import {
   FileDescriptorProto,
   UninterpretedOption,
 } from "./generated/google/protobuf/descriptor";
-import { fieldTypeToJSON, serviceTypeToJSON } from "./generated/proto/ext";
+import {
+  fieldTypeToJSON,
+  serviceTypeToJSON,
+} from "./generated/dev/restate/ext";
 
 export interface ServiceOpts {
   descriptor: ProtoMetadata;
