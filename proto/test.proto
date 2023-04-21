@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package dev.restate;
 
-import "proto/ext.proto";
+import "dev/restate/ext.proto";
 
 service TestGreeter {
 	option (dev.restate.ext.service_type) = KEYED;

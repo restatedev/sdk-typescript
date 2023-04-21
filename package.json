@@ -24,7 +24,7 @@
   "license": "BUSL",
   "email": "code@restate.dev",
   "scripts": {
-    "proto": "npx buf generate",
+    "proto": "npx buf mod update && npx buf generate",
     "build": "tsc --noEmitOnError && tsc --p ./examples/ --noEmit",
     "test": "jest",
     "lint": "eslint --ignore-path .eslintignore --ext .ts .",
