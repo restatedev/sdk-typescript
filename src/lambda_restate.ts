@@ -32,18 +32,6 @@ export class LambdaRestateServer extends BaseRestateServer {
   async handleRequest(
     event: APIGatewayProxyEvent
   ): Promise<APIGatewayProxyResult> {
-    const pathsegments = event.path.split("/");
-
-    if(pathsegments.length < 3 ){
-      throw new Error("Path doesn't match the pattern /invoke/SvcName/MethodName: " + event.path);
-    }
-
-    const service = pathsegments[pathsegments.length - 2];
-    const methodName = pathsegments[pathsegments.length - 1];
-    const url = `/invoke/${service}/${methodName}`;
-
-    console.log("The event: " + JSON.stringify(event))
-
     // Answer service discovery request
     if (event.path.endsWith("/discover")) {
       // return discovery information
@@ -59,6 +47,16 @@ export class LambdaRestateServer extends BaseRestateServer {
         ).toString("base64"),
       };
     }
+
+    const pathSegments = event.path.split("/");
+
+    if(pathSegments.length < 3 ){
+      throw new Error("Path doesn't match the pattern /invoke/SvcName/MethodName: " + event.path);
+    }
+
+    const service = pathSegments[pathSegments.length - 2];
+    const methodName = pathSegments[pathSegments.length - 1];
+    const url = `/invoke/${service}/${methodName}`;
 
     const method = this.methodByUrl(url);
     const connection = new LambdaConnection(event.body);

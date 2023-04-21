@@ -115,7 +115,6 @@ describe("LambdaGreeter: discovery of Lambda function", () => {
       path: "/discover",
       isBase64Encoded: true,
     };
-    console.log(request)
 
     const result = await handler(request);
 
