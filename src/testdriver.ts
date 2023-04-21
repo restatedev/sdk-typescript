@@ -103,7 +103,9 @@ export class TestDriver<I, O> implements Connection {
       "Adding result to the result array. Message type: " +
         message_type +
         ", message: " +
-        printMessageAsJson(message)
+        (message instanceof Uint8Array
+          ? (message as Uint8Array).toString()
+          : printMessageAsJson(message))
     );
 
     // For an output message, flush immediately
