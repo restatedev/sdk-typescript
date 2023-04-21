@@ -29,7 +29,6 @@
     "test": "jest",
     "lint": "eslint --ignore-path .eslintignore --ext .ts .",
     "format": "prettier --ignore-path .eslintignore --write \"**/*.+(js|ts|json)\"",
-    "example": "ts-node-dev --respawn --transpile-only ./src/example.ts",
     "verify": "npm run test && npm run lint && npm run build",
     "release": "release-it"
   },
@@ -50,7 +49,6 @@
     "prettier": "^2.8.4",
     "protobufjs-cli": "^1.1.1",
     "ts-jest": "^29.0.5",
-    "ts-node-dev": "^1.1.1",
     "typescript": "^4.9.5"
   }
 }
