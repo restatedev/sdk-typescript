@@ -26,7 +26,7 @@
   "scripts": {
     "proto": "npx buf mod update && npx buf generate",
     "build": "tsc --noEmitOnError",
-    "test": "jest",
+    "test": "jest --silent",
     "lint": "eslint --ignore-path .eslintignore --ext .ts .",
     "format": "prettier --ignore-path .eslintignore --write \"**/*.+(js|ts|json)\"",
     "verify": "npm run test && npm run lint && npm run build",
