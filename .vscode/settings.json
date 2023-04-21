@@ -10,5 +10,9 @@
     "**/.git/subtree-cache/**": true,
     "**/node_modules/*/**": true,
     "**/.hg/store/**": true
+  },
+
+  "[markdown]": {
+    "editor.formatOnSave": false
   }
 }
