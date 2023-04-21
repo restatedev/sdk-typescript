@@ -147,10 +147,10 @@ function serializeMessages(messages: Message[]): string {
 
   messages.forEach((msg: Message) => {
     const msgBuf = encodeMessage({
-      message_type: msg.messageType,
+      messageType: msg.messageType,
       message: msg.message,
       completed: msg.completed,
-      requires_ack: msg.requires_ack,
+      requiresAck: msg.requiresAck,
     });
 
     buf = Buffer.concat([buf, msgBuf]);
@@ -161,6 +161,6 @@ function serializeMessages(messages: Message[]): string {
 
 function deserializeMessages(body: string): Array<Message> {
   return LambdaConnection.decodeMessage(Buffer.from(body, "base64")).map(
-    (entry) => new Message(entry.header.message_type, entry.message)
+    (entry) => new Message(entry.header.messageType, entry.message)
   );
 }

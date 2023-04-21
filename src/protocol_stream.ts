@@ -56,11 +56,11 @@ export const SIDE_EFFECT_ENTRY_MESSAGE_TYPE = 0xfc01n;
 
 // Restate DuplexStream
 export type RestateDuplexStreamEventHandler = (
-  message_type: bigint,
+  messageType: bigint,
   message: ProtocolMessage | Uint8Array,
-  completed_flag?: boolean,
-  protocol_version?: number,
-  requires_ack_flag?: boolean
+  completedFlag?: boolean,
+  protocolVersion?: number,
+  requiresAckFlag?: boolean
 ) => void;
 
 export type RestateDuplexStreamErrorHandler = (err: Error) => void;
@@ -68,7 +68,7 @@ export type RestateDuplexStreamErrorHandler = (err: Error) => void;
 export class RestateDuplexStream {
   // create a RestateDuplex stream from an http2 (duplex) stream.
   public static from(http2stream: stream.Duplex): RestateDuplexStream {
-    const sdkInput = http2stream.pipe(stream_decoder());
+    const sdkInput = http2stream.pipe(streamDecoder());
 
     const sdkOutput = streamEncoder();
     sdkOutput.pipe(http2stream);
@@ -82,17 +82,17 @@ export class RestateDuplexStream {
   ) {}
 
   send(
-    message_type: bigint,
+    messageType: bigint,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     message: ProtocolMessage | Uint8Array,
     completed?: boolean,
-    requires_ack?: boolean
+    requiresAck?: boolean
   ) {
     this.sdkOutput.write({
-      message_type,
+      messageType: messageType,
       message,
       completed,
-      requires_ack,
+      requiresAck: requiresAck,
     });
   }
 
@@ -101,11 +101,11 @@ export class RestateDuplexStream {
       const { header, message } = data;
       const h = header as Header;
       handler(
-        h.message_type,
+        h.messageType,
         message,
-        h.completed_flag,
-        h.protocol_version,
-        h.requires_ack_flag
+        h.completedFlag,
+        h.protocolVersion,
+        h.requiresAckFlag
       );
     });
   }
@@ -178,84 +178,84 @@ const VERSION_MASK = BigInt(0x03ff_0000_0000);
 const REQUIRES_ACK_MASK = BigInt(0x0001_0000_0000);
 
 class MessageType {
-  static assert_valid(message_type_id: bigint) {
-    if (KNOWN_MESSAGE_TYPES.has(message_type_id)) {
+  static assertValid(messageTypeId: bigint) {
+    if (KNOWN_MESSAGE_TYPES.has(messageTypeId)) {
       return;
     }
-    if ((message_type_id & CUSTOM_MESSAGE_MASK) !== 0n) {
+    if ((messageTypeId & CUSTOM_MESSAGE_MASK) !== 0n) {
       return;
     }
-    throw new Error(`Unknown message type ${message_type_id}`);
+    throw new Error(`Unknown message type ${messageTypeId}`);
   }
 
-  static hasCompletedFlag(message_type: bigint): boolean {
+  static hasCompletedFlag(messageType: bigint): boolean {
     return (
-      message_type === POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE ||
-      message_type === GET_STATE_ENTRY_MESSAGE_TYPE ||
-      message_type === SLEEP_ENTRY_MESSAGE_TYPE ||
-      message_type === AWAKEABLE_ENTRY_MESSAGE_TYPE
+      messageType === POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE ||
+      messageType === GET_STATE_ENTRY_MESSAGE_TYPE ||
+      messageType === SLEEP_ENTRY_MESSAGE_TYPE ||
+      messageType === AWAKEABLE_ENTRY_MESSAGE_TYPE
     );
   }
 
-  static hasProtocolVersion(message_type: bigint): boolean {
-    return message_type == START_MESSAGE_TYPE;
+  static hasProtocolVersion(messageType: bigint): boolean {
+    return messageType == START_MESSAGE_TYPE;
   }
 
-  static is_custom(message_type_id: bigint): boolean {
-    return !KNOWN_MESSAGE_TYPES.has(message_type_id);
+  static isCustom(messageTypeId: bigint): boolean {
+    return !KNOWN_MESSAGE_TYPES.has(messageTypeId);
   }
 
-  static hasRequiresAckFlag(message_type_id: bigint): boolean {
-    return this.is_custom(message_type_id);
+  static hasRequiresAckFlag(messageTypeId: bigint): boolean {
+    return this.isCustom(messageTypeId);
   }
 }
 
 // The header is exported but only for tests.
 export class Header {
   constructor(
-    readonly message_type: bigint,
-    readonly frame_length: number,
-    readonly completed_flag?: boolean,
-    readonly protocol_version?: number,
-    readonly requires_ack_flag?: boolean
+    readonly messageType: bigint,
+    readonly frameLength: number,
+    readonly completedFlag?: boolean,
+    readonly protocolVersion?: number,
+    readonly requiresAckFlag?: boolean
   ) {}
 
   public static fromU64be(value: bigint): Header {
-    const ty_code: bigint = (value >> 48n) & 0xffffn;
-    MessageType.assert_valid(ty_code);
+    const tyCode: bigint = (value >> 48n) & 0xffffn;
+    MessageType.assertValid(tyCode);
 
-    const completed_flag =
-      MessageType.hasCompletedFlag(ty_code) && (value & COMPLETED_MASK) !== 0n
+    const completedFlag =
+      MessageType.hasCompletedFlag(tyCode) && (value & COMPLETED_MASK) !== 0n
         ? true
         : undefined;
-    const protocol_version = MessageType.hasProtocolVersion(ty_code)
+    const protocolVersion = MessageType.hasProtocolVersion(tyCode)
       ? Number(((value & VERSION_MASK) >> 32n) & 0xffffn)
       : undefined;
-    const requires_ack_flag =
-      MessageType.hasRequiresAckFlag(ty_code) &&
+    const requiresAckFlag =
+      MessageType.hasRequiresAckFlag(tyCode) &&
       (value & REQUIRES_ACK_MASK) !== 0n
         ? true
         : undefined;
-    const frame_length = Number(value & 0xffffffffn);
+    const frameLength = Number(value & 0xffffffffn);
 
     return new Header(
-      ty_code,
-      frame_length,
-      completed_flag,
-      protocol_version,
-      requires_ack_flag
+      tyCode,
+      frameLength,
+      completedFlag,
+      protocolVersion,
+      requiresAckFlag
     );
   }
 
   public toU64be(): bigint {
-    let res = (this.message_type << 48n) | BigInt(this.frame_length);
-    if (this.completed_flag) {
+    let res = (this.messageType << 48n) | BigInt(this.frameLength);
+    if (this.completedFlag) {
       res = res | COMPLETED_MASK;
     }
-    if (this.protocol_version !== undefined) {
-      res = res | (BigInt(this.protocol_version) << 32n);
+    if (this.protocolVersion !== undefined) {
+      res = res | (BigInt(this.protocolVersion) << 32n);
     }
-    if (this.requires_ack_flag) {
+    if (this.requiresAckFlag) {
       res = res | REQUIRES_ACK_MASK;
     }
     return res;
@@ -269,13 +269,13 @@ export class Header {
 //
 // To use this one would need to do the following:
 //
-// let decoded_stream = stream.pipe(stream_decoder());
+// let decodedStream = stream.pipe(streamDecoder());
 //
-// at this point the decoded_stream is a high level stream of objects {header, message}
+// at this point the decodedStream is a high level stream of objects {header, message}
 const WAITING_FOR_HEADER = 0;
 const WAITING_FOR_BODY = 1;
 
-function stream_decoder(): stream.Transform {
+function streamDecoder(): stream.Transform {
   let buf = Buffer.alloc(0);
   let state = WAITING_FOR_HEADER;
   let header: Header;
@@ -302,15 +302,15 @@ function stream_decoder(): stream.Transform {
               break;
             }
             case WAITING_FOR_BODY: {
-              if (buf.length < header.frame_length) {
+              if (buf.length < header.frameLength) {
                 cb();
                 return;
               }
-              const frame = buf.subarray(0, header.frame_length);
-              buf = buf.subarray(header.frame_length);
+              const frame = buf.subarray(0, header.frameLength);
+              buf = buf.subarray(header.frameLength);
               state = WAITING_FOR_HEADER;
 
-              const pbType = PROTOBUF_MESSAGE_BY_TYPE.get(header.message_type);
+              const pbType = PROTOBUF_MESSAGE_BY_TYPE.get(header.messageType);
               if (pbType === undefined) {
                 // this is a custom message.
                 // we don't know how to decode custom message
@@ -346,21 +346,21 @@ function streamEncoder(): stream.Transform {
 }
 
 interface EncoderOpts {
-  message_type: bigint;
+  messageType: bigint;
   message: ProtocolMessage | Uint8Array;
   version?: number;
   completed?: boolean;
-  requires_ack?: boolean;
+  requiresAck?: boolean;
 }
 
 export function encodeMessage({
-  message_type,
+  messageType,
   message,
   version,
   completed,
-  requires_ack,
+  requiresAck,
 }: EncoderOpts): Uint8Array {
-  const pbType = PROTOBUF_MESSAGE_BY_TYPE.get(BigInt(message_type));
+  const pbType = PROTOBUF_MESSAGE_BY_TYPE.get(BigInt(messageType));
   let bodyBuf;
   if (pbType === undefined) {
     // this is a custom message.
@@ -370,11 +370,11 @@ export function encodeMessage({
     bodyBuf = pbType.encode(message).finish();
   }
   const header = new Header(
-    BigInt(message_type),
+    BigInt(messageType),
     bodyBuf.length,
     completed,
     version,
-    requires_ack
+    requiresAck
   );
   const headerBuf = Buffer.alloc(8);
   const encoded = header.toU64be();

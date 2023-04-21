@@ -39,38 +39,38 @@ export class LambdaConnection implements Connection {
 
   // Send a message back to the runtime
   send(
-    message_type: bigint,
+    messageType: bigint,
     message: ProtocolMessage | Uint8Array,
     completed?: boolean | undefined,
-    requires_ack?: boolean | undefined,
-    completable_indices?: number[] | undefined
+    requiresAck?: boolean | undefined,
+    completableIndices?: number[] | undefined
   ): void {
     // Add the header and the body to buffer and add to the output buffer
     const msgBuffer = encodeMessage({
-      message_type: message_type,
+      messageType: messageType,
       message: message,
       completed: completed,
-      requires_ack: requires_ack,
+      requiresAck: requiresAck,
     });
     this.outputBuffer = Buffer.concat([this.outputBuffer, msgBuffer]);
 
     // Handle message types which require a completion or ack from the runtime
     // In request-response mode, this requires a suspension.
-    if (MESSAGES_REQUIRING_COMPLETION.includes(message_type)) {
-      if (completable_indices == undefined) {
+    if (MESSAGES_REQUIRING_COMPLETION.includes(messageType)) {
+      if (completableIndices == undefined) {
         throw new Error(
           "Invocation requires completion but no completable entry indices known."
         );
       }
 
       const suspensionMsg = SuspensionMessage.create({
-        entryIndexes: completable_indices,
+        entryIndexes: completableIndices,
       });
       const suspensionMsgBuffer = encodeMessage({
-        message_type: SUSPENSION_MESSAGE_TYPE,
+        messageType: SUSPENSION_MESSAGE_TYPE,
         message: suspensionMsg,
         completed: false,
-        requires_ack: false,
+        requiresAck: false,
       });
 
       this.outputBuffer = Buffer.concat([
@@ -82,7 +82,7 @@ export class LambdaConnection implements Connection {
       this.resolveOnCompleted(this.outputBuffer);
     }
 
-    if (message_type === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE) {
+    if (messageType === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE) {
       // An output message is the end of a Lambda invocation
       this.resolveOnCompleted(this.outputBuffer);
     }
@@ -95,11 +95,11 @@ export class LambdaConnection implements Connection {
     const decodedEntries = LambdaConnection.decodeMessage(this.inputBuffer);
     decodedEntries.forEach((entry) =>
       handler(
-        entry.header.message_type,
+        entry.header.messageType,
         entry.message,
-        entry.header.completed_flag,
-        entry.header.protocol_version,
-        entry.header.requires_ack_flag
+        entry.header.completedFlag,
+        entry.header.protocolVersion,
+        entry.header.requiresAckFlag
       )
     );
     return;
@@ -155,17 +155,17 @@ export class LambdaConnection implements Connection {
                 "Parsing body, while header was not parsed yet"
             );
           }
-          if (buf.length < header.frame_length) {
+          if (buf.length < header.frameLength) {
             throw new Error(
               "Parsing error: SDK cannot parse the message. " +
-                `Buffer length (${buf.length}) is smaller than frame length (${header.frame_length})`
+                `Buffer length (${buf.length}) is smaller than frame length (${header.frameLength})`
             );
           }
-          const frame = buf.subarray(0, header.frame_length);
-          buf = buf.subarray(header.frame_length);
+          const frame = buf.subarray(0, header.frameLength);
+          buf = buf.subarray(header.frameLength);
           state = WAITING_FOR_HEADER;
 
-          const pbType = PROTOBUF_MESSAGE_BY_TYPE.get(header.message_type);
+          const pbType = PROTOBUF_MESSAGE_BY_TYPE.get(header.messageType);
           if (pbType === undefined) {
             // this is a custom message.
             // we don't know how to decode custom message

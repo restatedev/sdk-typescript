@@ -19,11 +19,11 @@ export interface Connection {
   addOnErrorListener(listener: () => void): void;
 
   send(
-    message_type: bigint,
+    messageType: bigint,
     message: ProtocolMessage | Uint8Array,
     completed?: boolean | undefined,
-    requires_ack?: boolean | undefined,
-    completable_indices?: number[] | undefined
+    requiresAck?: boolean | undefined,
+    completableIndices?: number[] | undefined
   ): void;
 
   onMessage(handler: RestateDuplexStreamEventHandler): void;
@@ -63,28 +63,28 @@ export class HttpConnection implements Connection {
   }
 
   send(
-    message_type: bigint,
+    messageType: bigint,
     message: ProtocolMessage | Uint8Array,
     completed?: boolean | undefined,
-    requires_ack?: boolean | undefined,
-    completable_indices?: number[] | undefined
+    requiresAck?: boolean | undefined,
+    completableIndices?: number[] | undefined
   ) {
     // Add the message to the result set
     this.result.push(
-      new Message(message_type, message, completed, requires_ack)
+      new Message(messageType, message, completed, requiresAck)
     );
 
     // If the messages require a completion, then flush.
-    if (MESSAGES_REQUIRING_COMPLETION.includes(message_type)) {
+    if (MESSAGES_REQUIRING_COMPLETION.includes(messageType)) {
       // If the message leads to a suspension, then add a suspension message before the flush.
-      if (MESSAGES_TRIGGERING_SUSPENSION.includes(message_type)) {
-        if (completable_indices == undefined) {
+      if (MESSAGES_TRIGGERING_SUSPENSION.includes(messageType)) {
+        if (completableIndices == undefined) {
           throw new Error(
             "Invocation requires completion but no completable entry indices known."
           );
         }
         const suspensionMsg = SuspensionMessage.create({
-          entryIndexes: completable_indices,
+          entryIndexes: completableIndices,
         });
         this.result.push(
           new Message(SUSPENSION_MESSAGE_TYPE, suspensionMsg, false, false)
@@ -95,7 +95,7 @@ export class HttpConnection implements Connection {
     }
 
     // If we have a response for the invocation, flush.
-    if (message_type === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE) {
+    if (messageType === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE) {
       this.flush();
     }
   }
@@ -107,7 +107,7 @@ export class HttpConnection implements Connection {
           msg.messageType,
           msg.message,
           msg.completed,
-          msg.requires_ack
+          msg.requiresAck
         );
       } catch (e) {
         console.warn(e);

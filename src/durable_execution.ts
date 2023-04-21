@@ -442,40 +442,40 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   }
 
   send(
-    message_type: bigint,
+    messageType: bigint,
     message: ProtocolMessage | Uint8Array,
-    completed_flag?: boolean,
-    requires_ack_flag?: boolean
+    completedFlag?: boolean,
+    requiresAckFlag?: boolean
   ): void {
     // If the message triggers a suspension, then we need to send the journal indices for which we are awaiting a completion.
     // For request-response, we suspend for every interaction with the runtime,
     // so we add these indices for all message types that requrie completion
     const completableIndices = MESSAGES_REQUIRING_COMPLETION.includes(
-      message_type
+      messageType
     )
       ? [...this.pendingPromises.keys()]
       : undefined;
     this.connection.send(
-      message_type,
+      messageType,
       message,
-      completed_flag,
-      requires_ack_flag,
+      completedFlag,
+      requiresAckFlag,
       completableIndices
     );
   }
 
   // Called for every incoming message from the runtime: start messages, input messages and replay messages.
   onIncomingMessage(
-    message_type: bigint,
+    messageType: bigint,
     message: ProtocolMessage | Uint8Array,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    completed_flag?: boolean,
+    completedFlag?: boolean,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    protocol_version?: number,
+    protocolVersion?: number,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    requires_ack_flag?: boolean
+    requiresAckFlag?: boolean
   ) {
-    switch (message_type) {
+    switch (messageType) {
       case START_MESSAGE_TYPE: {
         this.handleStartMessage(message as StartMessage);
         break;
@@ -541,7 +541,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       }
       default: {
         throw new Error(
-          `Received unkown message type from the runtime: { message_type: ${message_type}, message: ${message} }`
+          `Received unkown message type from the runtime: { message_type: ${messageType}, message: ${message} }`
         );
       }
     }
