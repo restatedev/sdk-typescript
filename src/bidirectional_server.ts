@@ -77,9 +77,12 @@ export class HttpConnection implements Connection {
       // If the message leads to a suspension, then add a suspension message before the flush.
       if (MESSAGES_TRIGGERING_SUSPENSION.includes(messageType)) {
         if (completableIndices == undefined) {
-          throw new Error(
+          console.error(
             "Invocation requires completion but no completable entry indices known."
           );
+          console.trace();
+          console.log("Closing the connection and state machine.");
+          this.onError();
         }
         const suspensionMsg = SuspensionMessage.create({
           entryIndexes: completableIndices,
@@ -108,9 +111,10 @@ export class HttpConnection implements Connection {
           msg.requiresAck
         );
       } catch (e) {
-        console.warn(e);
+        console.error(e);
+        console.trace();
         console.log("Closing the connection and state machine.");
-        this.end();
+        this.onError();
       }
     });
     this.result = [];

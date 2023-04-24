@@ -7,7 +7,10 @@ import {
   TestResponse,
 } from "../src/generated/proto/test";
 import { APIGatewayProxyEvent } from "aws-lambda";
-import { ServiceDiscoveryRequest } from "../src/generated/proto/discovery";
+import {
+  ServiceDiscoveryRequest,
+  ServiceDiscoveryResponse,
+} from "../src/generated/proto/discovery";
 import { encodeMessage } from "../src/protocol_stream";
 import { Message } from "../src/types";
 import {
@@ -34,6 +37,84 @@ class LambdaGreeter implements TestGreeter {
   }
 }
 
+describe("Lambda: decodeMessage", () => {
+  it("should return a list of decoded messages", async () => {
+    const messages: Message[] = [
+      startMessage(2),
+      inputMessage(greetRequest("Pete")),
+      getStateMessage("STATE", "Foo"),
+    ];
+    const serializedMsgs = serializeMessages(messages);
+
+    const decodedMessages = LambdaConnection.decodeMessage(serializedMsgs);
+
+    expect(
+      decodedMessages.map(
+        (entry) => new Message(entry.header.messageType, entry.message)
+      )
+    ).toStrictEqual(messages);
+  });
+});
+
+describe("Lambda: decodeMessage", () => {
+  it("should return a list of decoded messages", async () => {
+    const messages: Message[] = [
+      startMessage(2),
+      inputMessage(greetRequest("Pete")),
+      getStateMessage("STATE", "Foo"),
+    ];
+    const serializedMsgs = serializeMessages(messages);
+
+    const decodedMessages = LambdaConnection.decodeMessage(serializedMsgs);
+
+    expect(
+      decodedMessages.map(
+        (entry) => new Message(entry.header.messageType, entry.message)
+      )
+    ).toStrictEqual(messages);
+  });
+});
+
+describe("Lambda: decodeMessage", () => {
+  it("should fail on an invalid input message", async () => {
+    const messages: Message[] = [
+      startMessage(2),
+      inputMessage(greetRequest("Pete")),
+      getStateMessage("STATE", "Fooo"),
+    ];
+
+    // appending random character to the base 64 encoded message
+    const serializedMsgs = serializeMessages(messages) + "a";
+
+    const decodedMessages = () =>
+      LambdaConnection.decodeMessage(serializedMsgs);
+
+    expect(decodedMessages).toThrow(
+      "Parsing error: SDK cannot parse the message. Message was not valid base64 encoded."
+    );
+  });
+});
+
+describe("Lambda: decodeMessage", () => {
+  it("should fail on an invalid input message", async () => {
+    const messages: Message[] = [
+      startMessage(2),
+      inputMessage(greetRequest("Pete")),
+      getStateMessage("STATE", "Fooo"),
+    ];
+
+    // appending random character to the base 64 encoded message
+    const serializedMsgs = "a" + serializeMessages(messages);
+
+    const decodedMessages = () =>
+      LambdaConnection.decodeMessage(serializedMsgs);
+
+    expect(decodedMessages).toThrow(
+      "Parsing error: SDK cannot parse the message. Message was not valid base64 encoded."
+    );
+  });
+});
+
 describe("LambdaGreeter: Invoke Lambda function - getState", () => {
   it("should call greet", async () => {
     const handler = restate
@@ -47,6 +128,7 @@ describe("LambdaGreeter: Invoke Lambda function - getState", () => {
 
     const request = apiProxyGatewayEvent(
       "/invoke/dev.restate.TestGreeter/Greet",
+      "application/restate",
       serializeMessages([
         startMessage(1),
         inputMessage(
@@ -79,6 +161,7 @@ describe("LambdaGreeter: Invoke Lambda function - output message response", () =
 
     const request = apiProxyGatewayEvent(
       "/invoke/dev.restate.TestGreeter/Greet",
+      "application/restate",
       serializeMessages([
         startMessage(2),
         inputMessage(greetRequest("Pete")),
@@ -88,6 +171,9 @@ describe("LambdaGreeter: Invoke Lambda function - output message response", () =
     const result = await handler(request);
 
     expect(result.statusCode).toStrictEqual(200);
+    expect(result.headers).toStrictEqual({
+      "content-type": "application/restate",
+    });
     expect(result.isBase64Encoded).toStrictEqual(true);
     expect(deserializeMessages(result.body)).toStrictEqual([
       outputMessage(greetResponse("Hello Foo")),
@@ -106,33 +192,43 @@ describe("LambdaGreeter: discovery of Lambda function", () => {
       })
       .create();
 
-    const request: APIGatewayProxyEvent = {
-      resource: "",
-      stageVariables: null,
-      body: Buffer.from(
-        ServiceDiscoveryRequest.encode(
-          ServiceDiscoveryRequest.create()
-        ).finish()
-      ).toString("base64"),
-      httpMethod: "POST",
-      headers: { "content-type": "application/proto" },
-      queryStringParameters: {},
-      pathParameters: {},
-      requestContext: {} as never,
-      multiValueHeaders: {},
-      multiValueQueryStringParameters: {},
-      path: "/discover",
-      isBase64Encoded: true,
-    };
+    const discoverRequest = Buffer.from(
+      ServiceDiscoveryRequest.encode(ServiceDiscoveryRequest.create()).finish()
+    ).toString("base64");
+    const request: APIGatewayProxyEvent = apiProxyGatewayEvent(
+      "/discover",
+      "application/proto",
+      discoverRequest
+    );
 
     const result = await handler(request);
 
     console.log(result);
+
+    expect(result.statusCode).toStrictEqual(200);
+    expect(result.headers).toStrictEqual({
+      "content-type": "application/proto",
+    });
+    expect(result.isBase64Encoded).toStrictEqual(true);
+
+    const decodedResponse = ServiceDiscoveryResponse.decode(
+      Buffer.from(result.body, "base64")
+    );
+
+    expect(decodedResponse.services).toContain("dev.restate.TestGreeter");
+    expect(decodedResponse.files?.file.map((el) => el.name)).toEqual(
+      expect.arrayContaining([
+        "proto/ext.proto",
+        "google/protobuf/descriptor.proto",
+        "proto/test.proto",
+      ])
+    );
   });
 });
 
 function apiProxyGatewayEvent(
   invokePath: string,
+  contentType: string,
   messagesBase64: string
 ): APIGatewayProxyEvent {
   return {
@@ -140,7 +236,7 @@ function apiProxyGatewayEvent(
     stageVariables: null,
     body: messagesBase64,
     httpMethod: "POST",
-    headers: { "content-type": "application/restate" },
+    headers: { "content-type": contentType },
     queryStringParameters: {},
     pathParameters: {},
     requestContext: {} as never,
@@ -169,7 +265,7 @@ function serializeMessages(messages: Message[]): string {
 }
 
 function deserializeMessages(body: string): Array<Message> {
-  return LambdaConnection.decodeMessage(Buffer.from(body, "base64")).map(
+  return LambdaConnection.decodeMessage(body).map(
     (entry) => new Message(entry.header.messageType, entry.message)
   );
 }
