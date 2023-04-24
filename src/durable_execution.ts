@@ -523,10 +523,14 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     // then set a timeout to send the suspension message.
     // The suspension will only be sent if the timeout is not cancelled due to a completion.
     if (this.suspensionTriggers.includes(messageType)) {
-        console.debug("Setting timeout for sending suspension to the runtime");
-        return setTimeout(() => {
-          const completableIndices = [...this.pendingPromises.keys()];
+      console.debug("Setting timeout for sending suspension to the runtime");
+      return setTimeout(() => {
+        const completableIndices = [...this.pendingPromises.keys()];
 
+        // If the state is not processing anymore then we either already send a suspension
+        // or something else bad happened...
+        if (this.state === ExecutionState.PROCESSING) {
+          // There need to be journal entries to complete, otherwise this timeout should have been removed.
           if (completableIndices.length > 0) {
             this.connection.send(
               SUSPENSION_MESSAGE_TYPE,
@@ -545,9 +549,10 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
                 "This timeout should have been removed."
             );
           }
-        }, this.suspensionTimeout);
-      }
+        }
+      }, this.suspensionTimeout);
     }
+  }
 
   // Called for every incoming message from the runtime: start messages, input messages and replay messages.
   onIncomingMessage(
