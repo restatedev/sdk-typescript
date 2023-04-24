@@ -6,13 +6,11 @@ import {
   encodeMessage,
   Header,
   InputEntry,
-  MESSAGES_REQUIRING_COMPLETION,
   OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
   PROTOBUF_MESSAGE_BY_TYPE,
   RestateDuplexStreamEventHandler,
   SUSPENSION_MESSAGE_TYPE,
 } from "./protocol_stream";
-import { SuspensionMessage } from "./generated/proto/protocol";
 
 const WAITING_FOR_HEADER = 0;
 const WAITING_FOR_BODY = 1;
@@ -49,8 +47,7 @@ export class LambdaConnection implements Connection {
     messageType: bigint,
     message: ProtocolMessage | Uint8Array,
     completed?: boolean | undefined,
-    requiresAck?: boolean | undefined,
-    completableIndices?: number[] | undefined
+    requiresAck?: boolean | undefined
   ): void {
     // Add the header and the body to buffer and add to the output buffer
     const msgBuffer = encodeMessage({
@@ -61,48 +58,17 @@ export class LambdaConnection implements Connection {
     });
     this.outputBuffer = Buffer.concat([this.outputBuffer, msgBuffer]);
 
-    // Handle message types which require a completion or ack from the runtime
-    // In request-response mode, this requires a suspension.
-    if (MESSAGES_REQUIRING_COMPLETION.includes(messageType)) {
-      if (completableIndices == undefined) {
-        console.error(
-          "Error while handling Lambda response: " +
-            "Invocation requires completion but no completable entry indices provided."
-        );
-        console.trace();
-        console.log("Closing the connection and state machine.");
-        this.onError();
-      }
-
-      const suspensionMsg = SuspensionMessage.create({
-        entryIndexes: completableIndices,
-      });
-      const suspensionMsgBuffer = encodeMessage({
-        messageType: SUSPENSION_MESSAGE_TYPE,
-        message: suspensionMsg,
-        completed: false,
-        requiresAck: false,
-      });
-
-      this.outputBuffer = Buffer.concat([
-        this.outputBuffer,
-        suspensionMsgBuffer,
-      ]);
-
-      // A suspension is the end of a Lambda invocation
-      this.resolveOnCompleted(this.outputBuffer);
-    }
-
     // An output message is the end of a Lambda invocation
-    if (messageType === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE) {
+    if (
+      messageType === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE ||
+      messageType === SUSPENSION_MESSAGE_TYPE
+    ) {
       this.resolveOnCompleted(this.outputBuffer);
     }
   }
 
   // Process the incoming invocation message from the runtime
   onMessage(handler: RestateDuplexStreamEventHandler): void {
-    console.debug("LambdaConnection: Called onMessage");
-
     try {
       const decodedEntries = LambdaConnection.decodeMessage(this.inputBase64);
       decodedEntries.forEach((entry) =>
@@ -170,7 +136,6 @@ export class LambdaConnection implements Connection {
     while (buf.length > 0) {
       switch (state) {
         case WAITING_FOR_HEADER: {
-          console.debug("Parsing header");
           if (buf.length < 8) {
             throw new Error(
               "Parsing error: SDK cannot parse the message. Buffer was not empty but was too small to contain another header."
@@ -179,12 +144,10 @@ export class LambdaConnection implements Connection {
           const h = buf.readBigUInt64BE();
           buf = buf.subarray(8);
           header = Header.fromU64be(h);
-          console.debug(header);
           state = WAITING_FOR_BODY;
           break;
         }
         case WAITING_FOR_BODY: {
-          console.debug("Parsing body");
           if (header == null) {
             throw new Error(
               "Parsing error: SDK cannot parse the message. " +
@@ -209,7 +172,6 @@ export class LambdaConnection implements Connection {
             decodedEntries.push(new InputEntry(header, frame));
           } else {
             const message = pbType.decode(frame);
-            console.debug(message);
             decodedEntries.push(new InputEntry(header, message));
           }
 

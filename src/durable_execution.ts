@@ -23,23 +23,27 @@ import {
   PollInputStreamEntryMessage,
   SET_STATE_ENTRY_MESSAGE_TYPE,
   SetStateEntryMessage,
+  SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
   SLEEP_ENTRY_MESSAGE_TYPE,
   SleepEntryMessage,
   START_MESSAGE_TYPE,
   StartMessage,
-  SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-  MESSAGES_REQUIRING_COMPLETION,
+  SUSPENSION_MESSAGE_TYPE,
+  SUSPENSION_TRIGGERS,
+  SuspensionMessage,
 } from "./protocol_stream";
 import { RestateContext } from "./context";
 import {
   AwakeableIdentifier,
-  ProtocolMessage,
-  PromiseHandler,
   printMessageAsJson,
+  PromiseHandler,
+  ProtocolMessage,
 } from "./types";
 import { Failure } from "./generated/proto/protocol";
 import { SideEffectEntryMessage } from "./generated/proto/javascript";
 import { Empty } from "./generated/google/protobuf/empty";
+import { ProtocolMode } from "./generated/proto/discovery";
+import { clearTimeout } from "timers";
 
 enum ExecutionState {
   WAITING_FOR_START = "WAITING_FOR_START",
@@ -82,13 +86,28 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   /* eslint-disable @typescript-eslint/no-explicit-any */
   private outOfOrderReplayMessages: Map<number, any> = new Map();
 
+  private suspensionTriggers: bigint[];
+  private readonly suspensionTimeout;
+
   constructor(
     private readonly connection: Connection,
-    private readonly method: HostedGrpcServiceMethod<I, O>
+    private readonly method: HostedGrpcServiceMethod<I, O>,
+    private readonly protocolMode: ProtocolMode
   ) {
     connection.onMessage(this.onIncomingMessage.bind(this));
     connection.onClose(this.onClose.bind(this));
     this.serviceName = method.service;
+
+    if (SUSPENSION_TRIGGERS.has(protocolMode)) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      this.suspensionTriggers = SUSPENSION_TRIGGERS.get(protocolMode)!;
+    } else {
+      throw new Error(
+        "Unknown protocol mode. Protocol mode does not have suspension triggers defined."
+      );
+    }
+    this.suspensionTimeout =
+      this.protocolMode === ProtocolMode.REQUEST_RESPONSE ? 0 : 100;
 
     connection.addOnErrorListener(() => {
       this.onClose();
@@ -112,6 +131,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       }
 
       console.debug("Forward the GetStateEntryMessage to the runtime");
+
       this.send(
         GET_STATE_ENTRY_MESSAGE_TYPE,
         GetStateEntryMessage.create({ key: Buffer.from(name) })
@@ -178,6 +198,8 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
     this.validate("awakeable");
 
+    let suspensionTimeout: NodeJS.Timeout;
+
     return new Promise<Buffer>((resolve, reject) => {
       this.incrementJournalIndex();
       this.addPromise(this.currentJournalIndex, resolve, reject);
@@ -190,8 +212,28 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       }
 
       console.debug("Forward the Awakeable message to the runtime");
-      this.send(AWAKEABLE_ENTRY_MESSAGE_TYPE, AwakeableEntryMessage.create());
+      const timeout = this.send(
+        AWAKEABLE_ENTRY_MESSAGE_TYPE,
+        AwakeableEntryMessage.create()
+      );
+
+      // an awakeable should trigger a suspension
+      if (timeout) {
+        suspensionTimeout = timeout;
+      } else {
+        throw new Error(
+          "Illegal state: An awakeable should always set a suspension timeout"
+        );
+      }
     }).then<T>((result: Buffer) => {
+      // If the promise gets completed before the suspension gets triggered then clear the timeout
+      if (suspensionTimeout) {
+        console.debug(
+          "Completion arrived for awakeable before suspension was send. Clearing suspension timeout."
+        );
+        clearTimeout(suspensionTimeout);
+      }
+
       console.debug(
         "Received the following result: " + JSON.parse(result.toString())
       );
@@ -278,6 +320,8 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   ): Promise<Uint8Array> {
     this.validate("invoke");
 
+    let suspensionTimeout: NodeJS.Timeout;
+
     return new Promise((resolve, reject) => {
       this.incrementJournalIndex();
       this.addPromise(this.currentJournalIndex, resolve, reject);
@@ -290,7 +334,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       }
 
       console.debug("Forward the InvokeEntryMessage to the runtime");
-      this.send(
+      const timeout = this.send(
         INVOKE_ENTRY_MESSAGE_TYPE,
         InvokeEntryMessage.create({
           serviceName: service,
@@ -298,7 +342,21 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
           parameter: Buffer.from(data),
         })
       );
+
+      // an invoke should trigger a suspension
+      if (timeout) {
+        suspensionTimeout = timeout;
+      } else {
+        throw new Error(
+          "Illegal state: An invoke should always set a suspension timeout"
+        );
+      }
     }).then((result) => {
+      // If the promise gets completed before the suspension gets triggered then clear the timeout
+      if (suspensionTimeout) {
+        clearTimeout(suspensionTimeout);
+      }
+
       return result as Uint8Array;
     });
   }
@@ -421,7 +479,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
     this.validate("sleep");
 
-    return new Promise((resolve, reject) => {
+    return new Promise<NodeJS.Timeout>((resolve, reject) => {
       this.incrementJournalIndex();
       this.addPromise(this.currentJournalIndex, resolve, reject);
 
@@ -434,35 +492,62 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
       console.debug("Forward the SleepEntryMessage to the runtime");
       // Forward to runtime
-      this.send(
+      const timeout = this.send(
         SLEEP_ENTRY_MESSAGE_TYPE,
         SleepEntryMessage.create({ wakeUpTime: Date.now() + millis })
       );
+
+      if (!timeout) {
+        throw new Error(
+          "Illegal state: A sleep should always set a suspension timeout"
+        );
+      }
+      return timeout;
+    }).then((timeout: NodeJS.Timeout) => {
+      clearTimeout(timeout);
+      return;
     });
   }
 
+  // Sends the message and returns the suspensionTimeout if set
   send(
     messageType: bigint,
     message: ProtocolMessage | Uint8Array,
     completedFlag?: boolean,
     requiresAckFlag?: boolean
-  ): void {
-    // If the message triggers a suspension, then we need to send the journal indices for which we are awaiting a completion.
-    // For request-response, we suspend for every interaction with the runtime,
-    // so we add these indices for all message types that requrie completion
-    const completableIndices = MESSAGES_REQUIRING_COMPLETION.includes(
-      messageType
-    )
-      ? [...this.pendingPromises.keys()]
-      : undefined;
-    this.connection.send(
-      messageType,
-      message,
-      completedFlag,
-      requiresAckFlag,
-      completableIndices
-    );
-  }
+  ): NodeJS.Timeout | void {
+    // send the message
+    this.connection.send(messageType, message, completedFlag, requiresAckFlag);
+
+    // If the suspension triggers for this protocol mode (set in constructor) include the message type
+    // then set a timeout to send the suspension message.
+    // The suspension will only be sent if the timeout is not cancelled due to a completion.
+    if (this.suspensionTriggers.includes(messageType)) {
+        console.debug("Setting timeout for sending suspension to the runtime");
+        return setTimeout(() => {
+          const completableIndices = [...this.pendingPromises.keys()];
+
+          if (completableIndices.length > 0) {
+            this.connection.send(
+              SUSPENSION_MESSAGE_TYPE,
+              SuspensionMessage.create({
+                entryIndexes: completableIndices,
+              }),
+              undefined,
+              undefined
+            );
+
+            this.onClose();
+            this.connection.end();
+          } else {
+            throw new Error(
+              "Illegal state: Not able to send suspension message because no pending promises. " +
+                "This timeout should have been removed."
+            );
+          }
+        }, this.suspensionTimeout);
+      }
+    }
 
   // Called for every incoming message from the runtime: start messages, input messages and replay messages.
   onIncomingMessage(

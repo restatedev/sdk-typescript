@@ -18,6 +18,7 @@ import {
   SuspensionMessage,
 } from "./generated/proto/protocol";
 import { ProtocolMessage } from "./types";
+import { ProtocolMode } from "./generated/proto/discovery";
 
 // Re-export the protobuf messages.
 export {
@@ -155,22 +156,28 @@ const PROTOBUF_MESSAGES: Array<[bigint, any]> = [
 
 export const PROTOBUF_MESSAGE_BY_TYPE = new Map(PROTOBUF_MESSAGES);
 
-// These message types require a completion from the runtime.
-// For request-response these types also require a suspension
-export const MESSAGES_REQUIRING_COMPLETION = [
-  INVOKE_ENTRY_MESSAGE_TYPE,
-  GET_STATE_ENTRY_MESSAGE_TYPE,
-  SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-  AWAKEABLE_ENTRY_MESSAGE_TYPE,
-  SLEEP_ENTRY_MESSAGE_TYPE,
-];
-
-// On these message types, the invocation will be suspended
-export const MESSAGES_TRIGGERING_SUSPENSION = [
-  INVOKE_ENTRY_MESSAGE_TYPE,
-  AWAKEABLE_ENTRY_MESSAGE_TYPE,
-  SLEEP_ENTRY_MESSAGE_TYPE,
-];
+// These message types will trigger sending a suspension message from the runtime
+// for each of the protocol modes
+export const SUSPENSION_TRIGGERS: Map<ProtocolMode, bigint[]> = new Map([
+  [
+    ProtocolMode.BIDI_STREAM,
+    [
+      INVOKE_ENTRY_MESSAGE_TYPE,
+      AWAKEABLE_ENTRY_MESSAGE_TYPE,
+      SLEEP_ENTRY_MESSAGE_TYPE,
+    ],
+  ],
+  [
+    ProtocolMode.REQUEST_RESPONSE,
+    [
+      INVOKE_ENTRY_MESSAGE_TYPE,
+      GET_STATE_ENTRY_MESSAGE_TYPE,
+      SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+      AWAKEABLE_ENTRY_MESSAGE_TYPE,
+      SLEEP_ENTRY_MESSAGE_TYPE,
+    ],
+  ],
+]);
 
 const CUSTOM_MESSAGE_MASK = BigInt(0xfc00);
 const COMPLETED_MASK = BigInt(0x0001_0000_0000);

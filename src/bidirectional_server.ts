@@ -2,17 +2,12 @@
 
 import http2 from "http2";
 import {
-  MESSAGES_REQUIRING_COMPLETION,
-  MESSAGES_TRIGGERING_SUSPENSION,
-  OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
   RestateDuplexStream,
   RestateDuplexStreamEventHandler,
-  SUSPENSION_MESSAGE_TYPE,
-  SuspensionMessage,
 } from "./protocol_stream";
 import { parse as urlparse, Url } from "url";
 import { on } from "events";
-import { Message, ProtocolMessage } from "./types";
+import { ProtocolMessage } from "./types";
 import { ServiceDiscoveryResponse } from "./generated/proto/discovery";
 
 export interface Connection {
@@ -22,8 +17,7 @@ export interface Connection {
     messageType: bigint,
     message: ProtocolMessage | Uint8Array,
     completed?: boolean | undefined,
-    requiresAck?: boolean | undefined,
-    completableIndices?: number[] | undefined
+    requiresAck?: boolean | undefined
   ): void;
 
   onMessage(handler: RestateDuplexStreamEventHandler): void;
@@ -34,7 +28,6 @@ export interface Connection {
 }
 
 export class HttpConnection implements Connection {
-  private result: Array<Message> = [];
   private onErrorListeners: (() => void)[] = [];
 
   constructor(
@@ -66,58 +59,10 @@ export class HttpConnection implements Connection {
     messageType: bigint,
     message: ProtocolMessage | Uint8Array,
     completed?: boolean | undefined,
-    requiresAck?: boolean | undefined,
-    completableIndices?: number[] | undefined
+    requiresAck?: boolean | undefined
   ) {
     // Add the message to the result set
-    this.result.push(new Message(messageType, message, completed, requiresAck));
-
-    // If the messages require a completion, then flush.
-    if (MESSAGES_REQUIRING_COMPLETION.includes(messageType)) {
-      // If the message leads to a suspension, then add a suspension message before the flush.
-      if (MESSAGES_TRIGGERING_SUSPENSION.includes(messageType)) {
-        if (completableIndices == undefined) {
-          console.error(
-            "Invocation requires completion but no completable entry indices known."
-          );
-          console.trace();
-          console.log("Closing the connection and state machine.");
-          this.onError();
-        }
-        const suspensionMsg = SuspensionMessage.create({
-          entryIndexes: completableIndices,
-        });
-        this.result.push(
-          new Message(SUSPENSION_MESSAGE_TYPE, suspensionMsg, false, false)
-        );
-      }
-
-      this.flush();
-    }
-
-    // If we have a response for the invocation, flush.
-    if (messageType === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE) {
-      this.flush();
-    }
-  }
-
-  flush() {
-    this.result.forEach((msg) => {
-      try {
-        this.restate.send(
-          msg.messageType,
-          msg.message,
-          msg.completed,
-          msg.requiresAck
-        );
-      } catch (e) {
-        console.error(e);
-        console.trace();
-        console.log("Closing the connection and state machine.");
-        this.onError();
-      }
-    });
-    this.result = [];
+    this.restate.send(messageType, message, completed, requiresAck);
   }
 
   onMessage(handler: RestateDuplexStreamEventHandler) {

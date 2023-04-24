@@ -2,13 +2,14 @@ import { describe, expect } from "@jest/globals";
 import * as restate from "../src/public_api";
 import { TestDriver } from "./testdriver";
 import {
-  inputMessage,
-  startMessage,
   completionMessage,
-  outputMessage,
   greetRequest,
   greetResponse,
+  inputMessage,
+  outputMessage,
   sleepMessage,
+  startMessage,
+  suspensionMessage,
 } from "./protoutils";
 import { SLEEP_ENTRY_MESSAGE_TYPE } from "../src/protocol_stream";
 import { Empty } from "../src/generated/google/protobuf/empty";
@@ -18,6 +19,7 @@ import {
   TestRequest,
   TestResponse,
 } from "../src/generated/proto/test";
+import { ProtocolMode } from "../src/generated/proto/discovery";
 
 class SleepGreeter implements TestGreeter {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -41,6 +43,23 @@ describe("SleepGreeter: With sleep not complete", () => {
     ).run();
 
     expect(result[0].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
+    expect(result[1]).toStrictEqual(suspensionMessage([1]));
+  });
+});
+
+describe("SleepGreeter: Request-response with sleep not complete", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new SleepGreeter(),
+      "/dev.restate.TestGreeter/Greet",
+      [startMessage(1), inputMessage(greetRequest("Till"))],
+      ProtocolMode.REQUEST_RESPONSE
+    ).run();
+
+    expect(result[0].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
+    expect(result[1]).toStrictEqual(suspensionMessage([1]));
   });
 });
 

@@ -20,7 +20,6 @@ import {
   inputMessage,
   outputMessage,
   startMessage,
-  suspensionMessage,
 } from "./protoutils";
 import { LambdaConnection } from "../src/lambda_connection";
 
@@ -112,39 +111,6 @@ describe("Lambda: decodeMessage", () => {
     expect(decodedMessages).toThrow(
       "Parsing error: SDK cannot parse the message. Message was not valid base64 encoded."
     );
-  });
-});
-
-describe("LambdaGreeter: Invoke Lambda function - getState", () => {
-  it("should call greet", async () => {
-    const handler = restate
-      .lambdaHandler()
-      .bindService({
-        descriptor: protoMetadata,
-        service: "TestGreeter",
-        instance: new LambdaGreeter(),
-      })
-      .create();
-
-    const request = apiProxyGatewayEvent(
-      "/invoke/dev.restate.TestGreeter/Greet",
-      "application/restate",
-      serializeMessages([
-        startMessage(1),
-        inputMessage(
-          TestRequest.encode(TestRequest.create({ name: "Pete" })).finish()
-        ),
-      ])
-    );
-    console.log(JSON.stringify(request));
-    const result = await handler(request);
-
-    expect(result.statusCode).toStrictEqual(200);
-    expect(result.isBase64Encoded).toStrictEqual(true);
-    expect(deserializeMessages(result.body)).toStrictEqual([
-      getStateMessage("STATE"),
-      suspensionMessage([1]),
-    ]);
   });
 });
 

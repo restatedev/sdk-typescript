@@ -67,7 +67,11 @@ export class LambdaRestateServer extends BaseRestateServer {
       console.log(`INFO no service found for URL ${url}`);
     } else {
       console.log(`INFO new stream for ${url}`);
-      new DurableExecutionStateMachine(connection, method);
+      new DurableExecutionStateMachine(
+        connection,
+        method,
+        ProtocolMode.REQUEST_RESPONSE
+      );
     }
 
     const result = await connection.getResult();

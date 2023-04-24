@@ -2,15 +2,16 @@ import { describe, expect } from "@jest/globals";
 import * as restate from "../src/public_api";
 import { TestDriver } from "./testdriver";
 import {
+  clearStateMessage,
+  completionMessage,
+  getStateMessage,
+  greetRequest,
+  greetResponse,
   inputMessage,
+  outputMessage,
   setStateMessage,
   startMessage,
-  completionMessage,
-  outputMessage,
-  getStateMessage,
-  greetResponse,
-  greetRequest,
-  clearStateMessage,
+  suspensionMessage,
 } from "./protoutils";
 import {
   protoMetadata,
@@ -18,6 +19,7 @@ import {
   TestRequest,
   TestResponse,
 } from "../src/generated/proto/test";
+import { ProtocolMode } from "../src/generated/proto/discovery";
 
 class GetAndSetGreeter implements TestGreeter {
   async greet(request: TestRequest): Promise<TestResponse> {
@@ -109,6 +111,24 @@ describe("GetAndSetGreeter: With GetState completed later", () => {
       getStateMessage("STATE"),
       setStateMessage("STATE", "Till"),
       outputMessage(greetResponse("Hello Francesco")),
+    ]);
+  });
+});
+
+describe("GetAndSetGreeter: Request-response with GetState and suspension", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new GetAndSetGreeter(),
+      "/dev.restate.TestGreeter/Greet",
+      [startMessage(1), inputMessage(greetRequest("Till"))],
+      ProtocolMode.REQUEST_RESPONSE
+    ).run();
+
+    expect(result).toStrictEqual([
+      getStateMessage("STATE"),
+      suspensionMessage([1]),
     ]);
   });
 });

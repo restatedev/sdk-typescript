@@ -2,14 +2,15 @@ import { describe, expect } from "@jest/globals";
 import * as restate from "../src/public_api";
 import { TestDriver } from "./testdriver";
 import {
+  awakeableMessage,
+  completeAwakeableMessage,
+  completionMessage,
+  greetRequest,
+  greetResponse,
   inputMessage,
   outputMessage,
   startMessage,
-  completionMessage,
-  awakeableMessage,
-  greetRequest,
-  greetResponse,
-  completeAwakeableMessage,
+  suspensionMessage,
 } from "./protoutils";
 import { AwakeableIdentifier } from "../src/types";
 import {
@@ -18,6 +19,7 @@ import {
   TestRequest,
   TestResponse,
 } from "../src/generated/proto/test";
+import { ProtocolMode } from "../src/generated/proto/discovery";
 
 class AwakeableGreeter implements TestGreeter {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -77,7 +79,22 @@ describe("AwakeableGreeter: without completion", () => {
       [startMessage(1), inputMessage(greetRequest("Till"))]
     ).run();
 
-    expect(result).toStrictEqual([awakeableMessage()]);
+    expect(result).toStrictEqual([awakeableMessage(), suspensionMessage([1])]);
+  });
+});
+
+describe("AwakeableGreeter: request-response case", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new AwakeableGreeter(),
+      "/dev.restate.TestGreeter/Greet",
+      [startMessage(1), inputMessage(greetRequest("Till"))],
+      ProtocolMode.REQUEST_RESPONSE
+    ).run();
+
+    expect(result).toStrictEqual([awakeableMessage(), suspensionMessage([1])]);
   });
 });
 
@@ -95,6 +112,7 @@ describe("AwakeableGreeter: with completion", () => {
       ]
     ).run();
 
+    // BIDI mode: No suspension message because the completion will arrive before the timeout.
     expect(result).toStrictEqual([
       awakeableMessage(),
       outputMessage(greetResponse("Hello Francesco")),

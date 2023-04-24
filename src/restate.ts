@@ -154,7 +154,11 @@ export class RestateServer extends BaseRestateServer {
       } else {
         console.log(`INFO new stream for ${connection.url.path}`);
         connection.respondOk();
-        new DurableExecutionStateMachine(connection, method);
+        new DurableExecutionStateMachine(
+          connection,
+          method,
+          ProtocolMode.BIDI_STREAM
+        );
       }
     }
   }
