@@ -58,7 +58,7 @@ export class LambdaConnection implements Connection {
     });
     this.outputBuffer = Buffer.concat([this.outputBuffer, msgBuffer]);
 
-    // An output message is the end of a Lambda invocation
+    // An output message or suspension message is the end of a Lambda invocation
     if (
       messageType === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE ||
       messageType === SUSPENSION_MESSAGE_TYPE
@@ -109,6 +109,7 @@ export class LambdaConnection implements Connection {
     }
   }
 
+  // This function is bind to the onClose() of the state machine
   onClose(): void {
     // Trigger cleanup
     this.end();

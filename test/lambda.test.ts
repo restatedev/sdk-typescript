@@ -56,26 +56,7 @@ describe("Lambda: decodeMessage", () => {
 });
 
 describe("Lambda: decodeMessage", () => {
-  it("should return a list of decoded messages", async () => {
-    const messages: Message[] = [
-      startMessage(2),
-      inputMessage(greetRequest("Pete")),
-      getStateMessage("STATE", "Foo"),
-    ];
-    const serializedMsgs = serializeMessages(messages);
-
-    const decodedMessages = LambdaConnection.decodeMessage(serializedMsgs);
-
-    expect(
-      decodedMessages.map(
-        (entry) => new Message(entry.header.messageType, entry.message)
-      )
-    ).toStrictEqual(messages);
-  });
-});
-
-describe("Lambda: decodeMessage", () => {
-  it("should fail on an invalid input message", async () => {
+  it("should fail on an invalid input message with random signs at end of message", async () => {
     const messages: Message[] = [
       startMessage(2),
       inputMessage(greetRequest("Pete")),
@@ -95,7 +76,7 @@ describe("Lambda: decodeMessage", () => {
 });
 
 describe("Lambda: decodeMessage", () => {
-  it("should fail on an invalid input message", async () => {
+  it("should fail on an invalid input message with random signs in front of message", async () => {
     const messages: Message[] = [
       startMessage(2),
       inputMessage(greetRequest("Pete")),
