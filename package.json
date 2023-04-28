@@ -21,7 +21,7 @@
   "main": "dist/public_api.js",
   "types": "dist/public_api.d.ts",
   "author": "Restate Developers",
-  "license": "BUSL",
+  "license": "MIT",
   "email": "code@restate.dev",
   "scripts": {
     "proto": "npx buf mod update && npx buf generate",
