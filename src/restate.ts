@@ -148,11 +148,13 @@ export class RestateServer extends BaseRestateServer {
     return this;
   }
 
-  public async listen(port: number) {
-    console.info(`listening on ${port}...`);
+  public async listen(port: number | undefined | null) {
+    // Infer the port if not specified, or default it
+    const actualPort = port ?? parseInt(process.env.PORT ?? "8080");
+    console.info(`listening on ${actualPort}...`);
 
     for await (const connection of incomingConnectionAtPort(
-      port,
+      actualPort,
       this.discovery
     )) {
       const method = this.methodByUrl(connection.url.path);
