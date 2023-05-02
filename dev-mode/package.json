@@ -1,0 +1,53 @@
+{
+  "name": "@restatedev/restate-sdk-dev",
+  "version": "1.0.12",
+  "description": "Development mode for Restate Typescript SDK",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/restatedev/sdk-typescript.git"
+  },
+  "release-it": {
+    "github": {
+      "release": true
+    },
+    "npm": {
+      "publish": false
+    }
+  },
+  "publishConfig": {
+    "@restatedev:registry": "https://npm.pkg.github.com"
+  },
+  "type": "commonjs",
+  "main": "./main.js",
+  "bin": {
+    "restate-dev-mode": "./main.js"
+  },
+  "author": "Restate Developers",
+  "license": "BUSL",
+  "email": "code@restate.dev",
+  "scripts": {
+    "build": "tsc --noEmitOnError",
+    "lint": "eslint --ignore-path ../.eslintignore --ext .ts .",
+    "format": "prettier --ignore-path ../.eslintignore --write \"**/*.+(js|ts|json)\"",
+    "verify": "npm run lint && npm run build",
+    "release": "release-it"
+  },
+  "files": [
+    "dist",
+    "main.js"
+  ],
+  "dependencies": {
+    "commander": "^10.0.1",
+    "ts-proto": "^1.146.0",
+    "tsc-watch": "^6.0.4"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.1",
+    "@types/node": "^18.16.3",
+    "@typescript-eslint/eslint-plugin": "^5.59.2",
+    "@typescript-eslint/parser": "^5.59.2",
+    "eslint": "^8.39.0",
+    "prettier": "^2.8.8",
+    "typescript": "^5.0.4"
+  }
+}
