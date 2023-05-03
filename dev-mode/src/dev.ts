@@ -4,7 +4,7 @@
 //
 // The script operates as follows:
 // * Uses tsc-watch to implement JS/TS source watching, re-compilation and reload
-// * When the service endpoint it's starting, it sends a `docker restart` signal to the local docker/podman daemon
+// * When the service endpoint is starting, it sends a `docker restart` signal to the local docker/podman daemon
 // * Waits for the restart using `docker ps`
 // * Once the runtime started, sends a discovery request to rediscover the endpoint
 //
@@ -78,14 +78,17 @@ async function restartRuntimeAndWaitRunningStatus(
     return;
   }
   throw new Error(
-    "Giving up on waiting for the container to be in running state"
+    "giving up on waiting for the container to be in running state"
   );
 }
 
-async function registerService(serviceUri: string, metaRestatePort: number) {
+async function registerService(
+  serviceUri: string,
+  metaRestatePort: number
+): Promise<number> {
   // Loop until the registration request succeeds.
   // Don't retry on failures of the request itself,
-  // as most likely is a bad contract or some other misconfiguration to fix.
+  // as most likely it is a bad contract or some other misconfiguration to fix.
   for (let tryCount = 0; tryCount < 20; tryCount++) {
     try {
       const registrationResponse = await fetch(
@@ -102,7 +105,7 @@ async function registerService(serviceUri: string, metaRestatePort: number) {
           jsonData
         )}`
       );
-      return;
+      return registrationResponse.status;
     } catch (error) {
       console.log(
         `[restate-dev-mode] Error when performing the registration request`,
@@ -112,7 +115,7 @@ async function registerService(serviceUri: string, metaRestatePort: number) {
     }
   }
   throw new Error(
-    "Giving up on waiting for the registration request to succeed. Most likely the Restate container didn't start properly."
+    "giving up on waiting for the registration request to succeed"
   );
 }
 
@@ -137,10 +140,31 @@ function startWatch(executablePath: string, options: { project: string }) {
   client.on("started", async () => {
     try {
       await restartRuntimeAndWaitRunningStatus(restateContainerName);
-      await registerService(serviceUri, metaRestatePort);
+      const registrationStatus = await registerService(
+        serviceUri,
+        metaRestatePort
+      );
+      if (registrationStatus > 299) {
+        throw new Error(
+          `got status code ${registrationStatus} when executing service discovery`
+        );
+      }
     } catch (error) {
+      let networkSuggestion =
+        "Make sure you started the container with '--net=host' enabled";
+      if (process.platform === "darwin") {
+        networkSuggestion =
+          "Make sure you have forwarded the ports 8081, 9090 and 9091, e.g. '-p 8081:8081 -p 9091:9091 -p 9090:9090'";
+      }
+
       console.log(
-        `[restate-dev-mode] Development mode cannot correctly reload the service. ${error}`
+        `[restate-dev-mode] Development mode cannot reload the service. Reason: ${error}.
+
+Tips:
+* Check the local container daemon is up and running and the user running the script has the required privileges to interact with the daemon.
+* Check if the Restate container is correctly running using 'docker logs -f ${restateContainerName}'. If not, try to restart it manually or remove and re-create it with 'docker stop ${restateContainerName} && docker rm ${restateContainerName}'.
+* Check the container ports can be reached. ${networkSuggestion}.
+* If the registration failed, most likely it hints to a problem in the service contract. Make sure to fix it before restarting.`
       );
       client.kill();
     }
@@ -159,7 +183,7 @@ function startWatch(executablePath: string, options: { project: string }) {
 // CLI command
 const program = new Command();
 program
-  .name("string-util")
+  .name("restate-dev-mode")
   .argument("[exec]", "Built executable path", "./dist/app.js")
   .option("--project <path>", "tsconfig.json path", "./tsconfig.json")
   .action(startWatch);
