@@ -30,7 +30,7 @@ class LambdaGreeter implements TestGreeter {
 
     // state
     const state = (await ctx.get<string>("STATE")) || "nobody";
-    console.log("Current state is " + state);
+    console.info("Current state is " + state);
 
     return TestResponse.create({ greeting: `Hello ${state}` });
   }
@@ -98,7 +98,7 @@ describe("Lambda: decodeMessage", () => {
 describe("LambdaGreeter: Invoke Lambda function - output message response", () => {
   it("should call greet", async () => {
     const handler = restate
-      .lambdaHandler()
+      .lambdaApiGatewayHandler()
       .bindService({
         descriptor: protoMetadata,
         service: "TestGreeter",
@@ -131,7 +131,7 @@ describe("LambdaGreeter: Invoke Lambda function - output message response", () =
 describe("LambdaGreeter: discovery of Lambda function", () => {
   it("should call greet", async () => {
     const handler = restate
-      .lambdaHandler()
+      .lambdaApiGatewayHandler()
       .bindService({
         descriptor: protoMetadata,
         service: "TestGreeter",
@@ -149,8 +149,6 @@ describe("LambdaGreeter: discovery of Lambda function", () => {
     );
 
     const result = await handler(request);
-
-    console.log(result);
 
     expect(result.statusCode).toStrictEqual(200);
     expect(result.headers).toStrictEqual({

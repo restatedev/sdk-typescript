@@ -91,7 +91,7 @@ export class HttpConnection implements Connection {
   }
 
   end() {
-    console.log("Closing the connection...");
+    console.info("Closing the connection...");
     this.stream.end();
   }
 }

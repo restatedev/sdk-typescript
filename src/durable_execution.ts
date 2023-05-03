@@ -901,6 +901,6 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   onClose() {
     // done.
     this.transitionState(ExecutionState.CLOSED);
-    console.log(`DEBUG connection has been closed.`);
+    console.debug(`DEBUG connection has been closed.`);
   }
 }

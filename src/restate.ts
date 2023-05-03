@@ -96,7 +96,7 @@ export abstract class BaseRestateServer {
         method
       );
       // note that this log will not print all the keys.
-      console.log(
+      console.info(
         `Registering: ${url}  -> ${JSON.stringify(method, null, "\t")}`
       );
     }
@@ -141,7 +141,7 @@ export class RestateServer extends BaseRestateServer {
   }
 
   public async listen(port: number) {
-    console.log(`listening on ${port}...`);
+    console.info(`listening on ${port}...`);
 
     for await (const connection of incomingConnectionAtPort(
       port,
@@ -149,10 +149,10 @@ export class RestateServer extends BaseRestateServer {
     )) {
       const method = this.methodByUrl(connection.url.path);
       if (method === undefined) {
-        console.log(`INFO no service found for URL ${connection.url.path}`);
+        console.info(`INFO no service found for URL ${connection.url.path}`);
         connection.respond404();
       } else {
-        console.log(`INFO new stream for ${connection.url.path}`);
+        console.info(`INFO new stream for ${connection.url.path}`);
         connection.respondOk();
         new DurableExecutionStateMachine(
           connection,

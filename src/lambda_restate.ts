@@ -10,7 +10,7 @@ import { BaseRestateServer, ServiceOpts } from "./restate";
 import { DurableExecutionStateMachine } from "./durable_execution";
 import { LambdaConnection } from "./lambda_connection";
 
-export function lambdaHandler(): LambdaRestateServer {
+export function lambdaApiGatewayHandler(): LambdaRestateServer {
   return new LambdaRestateServer();
 }
 
@@ -24,7 +24,11 @@ export class LambdaRestateServer extends BaseRestateServer {
     protocolMode: ProtocolMode.REQUEST_RESPONSE,
   };
 
-  create(): (event: APIGatewayProxyEvent) => Promise<APIGatewayProxyResult> {
+  // We use any types to prevent requiring the @types/aws-lambda dependency
+  // in the user project.
+  // In essence, create() is of type (event: APIGatewayProxyEvent) => Promise<APIGatewayProxyResult>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  create(): (event: any) => Promise<any> {
     // return the handler and bind the current context to it, so that it can find the other methods in this class.
     return this.handleRequest.bind(this);
   }
@@ -35,7 +39,6 @@ export class LambdaRestateServer extends BaseRestateServer {
     // Answer service discovery request
     if (event.path.endsWith("/discover")) {
       // return discovery information
-      console.log(JSON.stringify(this.discovery));
       return {
         headers: {
           "content-type": "application/proto",
@@ -64,9 +67,9 @@ export class LambdaRestateServer extends BaseRestateServer {
     const method = this.methodByUrl(url);
     const connection = new LambdaConnection(event.body);
     if (method === undefined) {
-      console.log(`INFO no service found for URL ${url}`);
+      console.info(`INFO no service found for URL ${url}`);
     } else {
-      console.log(`INFO new stream for ${url}`);
+      console.info(`INFO new stream for ${url}`);
       new DurableExecutionStateMachine(
         connection,
         method,

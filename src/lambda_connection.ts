@@ -83,7 +83,7 @@ export class LambdaConnection implements Connection {
     } catch (e) {
       console.error(e);
       console.trace();
-      console.log("Closing the connection and state machine.");
+      console.info("Closing the connection and state machine.");
       this.onError();
     }
   }
@@ -116,7 +116,7 @@ export class LambdaConnection implements Connection {
   }
 
   end(): void {
-    console.log("Handler cleanup...");
+    console.info("Handler cleanup...");
     this.inputBase64 = "";
     this.outputBuffer = Buffer.alloc(0);
   }
