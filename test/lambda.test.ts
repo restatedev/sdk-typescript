@@ -246,7 +246,7 @@ describe("LambdaGreeter: discovery of Lambda function", () => {
     expect(decodedResponse.services).toContain("dev.restate.TestGreeter");
     expect(decodedResponse.files?.file.map((el) => el.name)).toEqual(
       expect.arrayContaining([
-        "proto/ext.proto",
+        "dev/restate/ext.proto",
         "google/protobuf/descriptor.proto",
         "proto/test.proto",
       ])
