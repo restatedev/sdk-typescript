@@ -40,7 +40,10 @@ export class LambdaRestateServer extends BaseRestateServer {
     // If that is the case, treat it as an invocation.
     // 2. See of the last one is discover, answer with discovery.
     // 3. Else report invalid path.
-    if (pathSegments.length >= 3 && pathSegments[pathSegments.length - 3] === "invoke") {
+    if (
+      pathSegments.length >= 3 &&
+      pathSegments[pathSegments.length - 3] === "invoke"
+    ) {
       const url = "/" + pathSegments.slice(-3).join("/");
       return await this.handleInvoke(url, event);
     } else if (pathSegments[pathSegments.length - 1] === "discover") {
@@ -81,12 +84,12 @@ export class LambdaRestateServer extends BaseRestateServer {
     }
     const connection = new LambdaConnection(event.body);
     if (method === undefined) {
-      if(url.includes("?")){
-        const msg = `ERROR Invalid path: path URL seems to include query parameters: ${url}`
+      if (url.includes("?")) {
+        const msg = `ERROR Invalid path: path URL seems to include query parameters: ${url}`;
         console.error(msg);
         return this.toErrorResponse(500, msg);
       } else {
-        const msg = `ERROR no service found for URL: ${url}`
+        const msg = `ERROR no service found for URL: ${url}`;
         console.error(msg);
         return this.toErrorResponse(404, msg);
       }
