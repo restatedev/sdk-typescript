@@ -97,14 +97,7 @@ describe("Lambda: decodeMessage", () => {
 
 describe("LambdaGreeter: Invoke Lambda function - output message response", () => {
   it("should call greet", async () => {
-    const handler = restate
-      .lambdaApiGatewayHandler()
-      .bindService({
-        descriptor: protoMetadata,
-        service: "TestGreeter",
-        instance: new LambdaGreeter(),
-      })
-      .create();
+    const handler = getTestHandler();
 
     const request = apiProxyGatewayEvent(
       "/invoke/dev.restate.TestGreeter/Greet",
@@ -128,16 +121,106 @@ describe("LambdaGreeter: Invoke Lambda function - output message response", () =
   });
 });
 
+describe("LambdaGreeter: Invoke Lambda function - fail on query parameters in path", () => {
+  it("should call greet", async () => {
+    const handler = getTestHandler();
+
+    const request = apiProxyGatewayEvent(
+      "/invoke/dev.restate.TestGreeter/Greet?count=5",
+      "application/restate",
+      serializeMessages([
+        startMessage(1),
+        inputMessage(greetRequest("Pete"))
+      ])
+    );
+    const result = await handler(request);
+
+    expect(result.statusCode).toStrictEqual(500);
+    expect(result.headers).toStrictEqual({
+      "content-type": "application/restate",
+    });
+    expect(result.isBase64Encoded).toStrictEqual(true);
+    expect(Buffer.from(result.body, 'base64').toString()).toContain(
+      "ERROR Invalid path: path URL seems to include query parameters: /invoke/dev.restate.TestGreeter/Greet?count=5");
+  });
+});
+
+describe("LambdaGreeter: Invoke Lambda function - invalid path", () => {
+  it("should call greet", async () => {
+    const handler = getTestHandler();
+
+    const request = apiProxyGatewayEvent(
+      "/invoke/dev.restate.TestGreeter",
+      "application/restate",
+      serializeMessages([
+        startMessage(1),
+        inputMessage(greetRequest("Pete"))
+      ])
+    );
+    const result = await handler(request);
+
+    expect(result.statusCode).toStrictEqual(500);
+    expect(result.headers).toStrictEqual({
+      "content-type": "application/restate",
+    });
+    expect(result.isBase64Encoded).toStrictEqual(true);
+    expect(Buffer.from(result.body, 'base64').toString()).toContain(
+      "Invalid path: path doesn't end in /invoke/SvcName/MethodName and also not in /discover: /invoke/dev.restate.TestGreeter");
+  });
+});
+
+describe("LambdaGreeter: Invoke Lambda function - invalid path no 'invoke' or 'discover'", () => {
+  it("should call greet", async () => {
+    const handler = getTestHandler();
+
+    const request = apiProxyGatewayEvent(
+      "/something/dev.restate.TestGreeter/Greet",
+      "application/restate",
+      serializeMessages([
+        startMessage(1),
+        inputMessage(greetRequest("Pete"))
+      ])
+    );
+    const result = await handler(request);
+
+    expect(result.statusCode).toStrictEqual(500);
+    expect(result.headers).toStrictEqual({
+      "content-type": "application/restate",
+    });
+    expect(result.isBase64Encoded).toStrictEqual(true);
+    expect(Buffer.from(result.body, 'base64').toString()).toContain(
+      "Invalid path: path doesn't end in /invoke/SvcName/MethodName and also not in /discover: /something/dev.restate.TestGreeter/Greet");
+  });
+});
+
+describe("LambdaGreeter: Invoke Lambda function - invalid path non-existing URL", () => {
+  it("should call greet", async () => {
+    const handler = getTestHandler();
+
+    const request = apiProxyGatewayEvent(
+      "/invoke/dev.restate.TestGreeter/Greets",
+      "application/restate",
+      serializeMessages([
+        startMessage(1),
+        inputMessage(greetRequest("Pete"))
+      ])
+    );
+    const result = await handler(request);
+
+    expect(result.statusCode).toStrictEqual(404);
+    expect(result.headers).toStrictEqual({
+      "content-type": "application/restate",
+    });
+    expect(result.isBase64Encoded).toStrictEqual(true);
+    expect(Buffer.from(result.body, 'base64').toString()).toContain(
+      "ERROR no service found for URL: /invoke/dev.restate.TestGreeter/Greets");
+  });
+});
+
+
 describe("LambdaGreeter: discovery of Lambda function", () => {
   it("should call greet", async () => {
-    const handler = restate
-      .lambdaApiGatewayHandler()
-      .bindService({
-        descriptor: protoMetadata,
-        service: "TestGreeter",
-        instance: new LambdaGreeter(),
-      })
-      .create();
+    const handler = getTestHandler();
 
     const discoverRequest = Buffer.from(
       ServiceDiscoveryRequest.encode(ServiceDiscoveryRequest.create()).finish()
@@ -170,6 +253,17 @@ describe("LambdaGreeter: discovery of Lambda function", () => {
     );
   });
 });
+
+function getTestHandler(){
+  return restate
+    .lambdaApiGatewayHandler()
+    .bindService({
+      descriptor: protoMetadata,
+      service: "TestGreeter",
+      instance: new LambdaGreeter(),
+    })
+    .create();
+}
 
 function apiProxyGatewayEvent(
   invokePath: string,

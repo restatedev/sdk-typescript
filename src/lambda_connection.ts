@@ -28,11 +28,7 @@ export class LambdaConnection implements Connection {
   private static base64regex =
     /^([0-9a-zA-Z+/]{4})*(([0-9a-zA-Z+/]{2}==)|([0-9a-zA-Z+/]{3}=))?$/;
 
-  constructor(body: string | null) {
-    if (body == null) {
-      throw Error("The incoming message body was null");
-    }
-
+  constructor(body: string) {
     // Decode the body coming from API Gateway (base64 encoded).
     this.inputBase64 = body;
 

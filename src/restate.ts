@@ -25,8 +25,19 @@ export function createServer(): RestateServer {
 }
 
 export abstract class BaseRestateServer {
-  abstract methods: Record<string, HostedGrpcServiceMethod<unknown, unknown>>;
-  abstract discovery: ServiceDiscoveryResponse;
+  readonly methods: Record<string, HostedGrpcServiceMethod<unknown, unknown>> =
+    {};
+  readonly discovery: ServiceDiscoveryResponse;
+
+  protected constructor(protocolMode: ProtocolMode) {
+    this.discovery = {
+      files: { file: [] },
+      services: [],
+      minProtocolVersion: 0,
+      maxProtocolVersion: 0,
+      protocolMode: protocolMode,
+    };
+  }
 
   addDescriptor(descriptor: ProtoMetadata) {
     const desc = FileDescriptorProto.fromPartial(descriptor.fileDescriptor);
@@ -117,15 +128,9 @@ export abstract class BaseRestateServer {
 }
 
 export class RestateServer extends BaseRestateServer {
-  readonly methods: Record<string, HostedGrpcServiceMethod<unknown, unknown>> =
-    {};
-  readonly discovery: ServiceDiscoveryResponse = {
-    files: { file: [] },
-    services: [],
-    minProtocolVersion: 0,
-    maxProtocolVersion: 0,
-    protocolMode: ProtocolMode.BIDI_STREAM,
-  };
+  constructor() {
+    super(ProtocolMode.BIDI_STREAM);
+  }
 
   public bindService({
     descriptor,
