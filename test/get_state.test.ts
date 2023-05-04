@@ -1,14 +1,15 @@
 import { describe, expect } from "@jest/globals";
 import * as restate from "../src/public_api";
-import { TestDriver } from "../src/testdriver";
+import { TestDriver } from "./testdriver";
 import {
-  getStateMessage,
-  inputMessage,
-  startMessage,
   completionMessage,
-  outputMessage,
+  getStateMessage,
   greetRequest,
   greetResponse,
+  inputMessage,
+  outputMessage,
+  startMessage,
+  suspensionMessage,
 } from "./protoutils";
 import {
   protoMetadata,
@@ -17,6 +18,7 @@ import {
   TestResponse,
 } from "../src/generated/proto/test";
 import { Failure } from "../src/generated/proto/protocol";
+import { ProtocolMode } from "../src/generated/proto/discovery";
 
 class GetStateGreeter implements TestGreeter {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -25,7 +27,7 @@ class GetStateGreeter implements TestGreeter {
 
     // state
     const state = (await ctx.get<string>("STATE")) || "nobody";
-    console.log("Current state is " + state);
+    console.info("Current state is " + state);
 
     return TestResponse.create({ greeting: `Hello ${state}` });
   }
@@ -51,17 +53,21 @@ describe("GetStateGreeter: With GetStateEntry already complete", () => {
   });
 });
 
-describe("GetStateGreeter: Without GetStateEntry", () => {
+describe("GetStateGreeter: Request-response GetStateEntry", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
       "TestGreeter",
       new GetStateGreeter(),
       "/dev.restate.TestGreeter/Greet",
-      [startMessage(1), inputMessage(greetRequest("Till"))]
+      [startMessage(1), inputMessage(greetRequest("Till"))],
+      ProtocolMode.REQUEST_RESPONSE
     ).run();
 
-    expect(result).toStrictEqual([getStateMessage("STATE")]);
+    expect(result).toStrictEqual([
+      getStateMessage("STATE"),
+      suspensionMessage([1]),
+    ]);
   });
 });
 

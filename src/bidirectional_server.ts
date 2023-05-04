@@ -2,31 +2,22 @@
 
 import http2 from "http2";
 import {
-  AWAKEABLE_ENTRY_MESSAGE_TYPE,
-  GET_STATE_ENTRY_MESSAGE_TYPE,
-  INVOKE_ENTRY_MESSAGE_TYPE,
-  OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
   RestateDuplexStream,
   RestateDuplexStreamEventHandler,
-  SLEEP_ENTRY_MESSAGE_TYPE,
 } from "./protocol_stream";
 import { parse as urlparse, Url } from "url";
 import { on } from "events";
-import {
-  Message,
-  ProtocolMessage,
-  SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-} from "./types";
+import { ProtocolMessage } from "./types";
 import { ServiceDiscoveryResponse } from "./generated/proto/discovery";
 
 export interface Connection {
   addOnErrorListener(listener: () => void): void;
 
   send(
-    message_type: bigint,
+    messageType: bigint,
     message: ProtocolMessage | Uint8Array,
     completed?: boolean | undefined,
-    requires_ack?: boolean | undefined
+    requiresAck?: boolean | undefined
   ): void;
 
   onMessage(handler: RestateDuplexStreamEventHandler): void;
@@ -37,17 +28,7 @@ export interface Connection {
 }
 
 export class HttpConnection implements Connection {
-  private result: Array<Message> = [];
   private onErrorListeners: (() => void)[] = [];
-
-  private requiresCompletion = [
-    OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
-    INVOKE_ENTRY_MESSAGE_TYPE,
-    GET_STATE_ENTRY_MESSAGE_TYPE,
-    SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-    AWAKEABLE_ENTRY_MESSAGE_TYPE,
-    SLEEP_ENTRY_MESSAGE_TYPE,
-  ];
 
   constructor(
     readonly connectionId: bigint,
@@ -75,37 +56,13 @@ export class HttpConnection implements Connection {
   }
 
   send(
-    message_type: bigint,
+    messageType: bigint,
     message: ProtocolMessage | Uint8Array,
-    completed?: boolean,
-    requires_ack?: boolean
+    completed?: boolean | undefined,
+    requiresAck?: boolean | undefined
   ) {
-    this.result.push(
-      new Message(message_type, message, completed, requires_ack)
-    );
-
-    // Only flush the messages if they require a completion.
-    if (this.requiresCompletion.includes(message_type)) {
-      this.flush();
-    }
-  }
-
-  flush() {
-    this.result.forEach((msg) => {
-      try {
-        this.restate.send(
-          msg.messageType,
-          msg.message,
-          msg.completed,
-          msg.requires_ack
-        );
-      } catch (e) {
-        console.warn(e);
-        console.log("Closing the connection and state machine.");
-        this.end();
-      }
-    });
-    this.result = [];
+    // Add the message to the result set
+    this.restate.send(messageType, message, completed, requiresAck);
   }
 
   onMessage(handler: RestateDuplexStreamEventHandler) {
@@ -134,7 +91,7 @@ export class HttpConnection implements Connection {
   }
 
   end() {
-    console.log("Closing the connection...");
+    console.info("Closing the connection...");
     this.stream.end();
   }
 }

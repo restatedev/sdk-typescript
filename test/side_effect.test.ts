@@ -1,6 +1,6 @@
 import { describe, expect } from "@jest/globals";
 import * as restate from "../src/public_api";
-import { TestDriver } from "../src/testdriver";
+import { TestDriver } from "./testdriver";
 import {
   completionMessage,
   inputMessage,
@@ -17,11 +17,9 @@ import {
   TestRequest,
   TestResponse,
 } from "../src/generated/proto/test";
-import {
-  AwakeableIdentifier,
-  SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-} from "../src/types";
+import { AwakeableIdentifier } from "../src/types";
 import { Failure } from "../src/generated/proto/protocol";
+import { SIDE_EFFECT_ENTRY_MESSAGE_TYPE } from "../src/protocol_stream";
 
 class SideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: string) {}
@@ -197,20 +195,6 @@ class FailingCompleteAwakeableSideEffectGreeter implements TestGreeter {
   }
 }
 
-describe("SideEffectGreeter: without ack", () => {
-  it("should call greet", async () => {
-    const result = await new TestDriver(
-      protoMetadata,
-      "TestGreeter",
-      new SideEffectGreeter("Francesco"),
-      "/dev.restate.TestGreeter/Greet",
-      [startMessage(1), inputMessage(greetRequest("Till"))]
-    ).run();
-
-    expect(result).toStrictEqual([sideEffectMessage("Francesco")]);
-  });
-});
-
 describe("SideEffectGreeter: with ack", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
@@ -259,64 +243,86 @@ describe("SideEffectGreeter: without ack - numeric output", () => {
       "TestGreeter",
       new NumericSideEffectGreeter(123),
       "/dev.restate.TestGreeter/Greet",
-      [startMessage(1), inputMessage(greetRequest("Till"))]
+      [
+        startMessage(1),
+        inputMessage(greetRequest("Till")),
+        completionMessage(1),
+      ]
     ).run();
 
-    expect(result).toStrictEqual([sideEffectMessage(123)]);
+    expect(result).toStrictEqual([
+      sideEffectMessage(123),
+      outputMessage(greetResponse("Hello 123")),
+    ]);
   });
 });
 
-describe("FailingSideEffectGreeter: failing user code in side effect without ack", () => {
+describe("FailingSideEffectGreeter: failing user code in side effect with ack", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
       "TestGreeter",
       new FailingSideEffectGreeter(123),
       "/dev.restate.TestGreeter/Greet",
-      [startMessage(1), inputMessage(greetRequest("Till"))]
+      [
+        startMessage(1),
+        inputMessage(greetRequest("Till")),
+        completionMessage(1),
+      ]
     ).run();
 
-    expect(result.length).toStrictEqual(1);
+    expect(result.length).toStrictEqual(2);
     expect(result[0].messageType).toStrictEqual(SIDE_EFFECT_ENTRY_MESSAGE_TYPE);
     expect(
       decodeSideEffectFromResult(result[0].message).failure?.code
     ).toStrictEqual(13);
+    expect(result[1]).toStrictEqual(outputMessage());
   });
 });
 
-describe("FailingGetSideEffectGreeter: invalid get state in side effect without ack", () => {
+describe("FailingGetSideEffectGreeter: invalid get state in side effect with ack", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
       "TestGreeter",
       new FailingGetSideEffectGreeter(123),
       "/dev.restate.TestGreeter/Greet",
-      [startMessage(1), inputMessage(greetRequest("Till"))]
+      [
+        startMessage(1),
+        inputMessage(greetRequest("Till")),
+        completionMessage(1),
+      ]
     ).run();
 
-    expect(result.length).toStrictEqual(1);
+    expect(result.length).toStrictEqual(2);
     expect(result[0].messageType).toStrictEqual(SIDE_EFFECT_ENTRY_MESSAGE_TYPE);
     expect(
       decodeSideEffectFromResult(result[0].message).failure?.code
     ).toStrictEqual(13);
+    expect(result[1]).toStrictEqual(outputMessage());
   });
 });
 
-describe("FailingSetSideEffectGreeter: invalid set state in side effect without ack", () => {
+describe("FailingSetSideEffectGreeter: invalid set state in side effect with ack", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
       "TestGreeter",
       new FailingSetSideEffectGreeter(123),
       "/dev.restate.TestGreeter/Greet",
-      [startMessage(1), inputMessage(greetRequest("Till"))]
+      [
+        startMessage(1),
+        inputMessage(greetRequest("Till")),
+        completionMessage(1),
+      ]
     ).run();
 
-    expect(result.length).toStrictEqual(1);
+    expect(result.length).toStrictEqual(2);
     expect(result[0].messageType).toStrictEqual(SIDE_EFFECT_ENTRY_MESSAGE_TYPE);
     expect(
       decodeSideEffectFromResult(result[0].message).failure?.code
     ).toStrictEqual(13);
+    expect(result[1]).toStrictEqual(outputMessage());
   });
 });
 
@@ -340,24 +346,6 @@ describe("FailingClearSideEffectGreeter: invalid clear state in side effect with
       decodeSideEffectFromResult(result[0].message).failure?.code
     ).toStrictEqual(13);
     expect(result[1]).toStrictEqual(outputMessage());
-  });
-});
-
-describe("FailingNestedSideEffectGreeter: invalid nested side effect in side effect without ack", () => {
-  it("should call greet", async () => {
-    const result = await new TestDriver(
-      protoMetadata,
-      "TestGreeter",
-      new FailingNestedSideEffectGreeter(123),
-      "/dev.restate.TestGreeter/Greet",
-      [startMessage(1), inputMessage(greetRequest("Till"))]
-    ).run();
-
-    expect(result.length).toStrictEqual(1);
-    expect(result[0].messageType).toStrictEqual(SIDE_EFFECT_ENTRY_MESSAGE_TYPE);
-    expect(
-      decodeSideEffectFromResult(result[0].message).failure?.code
-    ).toStrictEqual(13);
   });
 });
 
@@ -417,14 +405,19 @@ describe("FailingInBackgroundSideEffectGreeter: invalid in background call in si
       "TestGreeter",
       new FailingInBackgroundSideEffectGreeter(123),
       "/dev.restate.TestGreeter/Greet",
-      [startMessage(1), inputMessage(greetRequest("Till"))]
+      [
+        startMessage(1),
+        inputMessage(greetRequest("Till")),
+        completionMessage(1),
+      ]
     ).run();
 
-    expect(result.length).toStrictEqual(1);
+    expect(result.length).toStrictEqual(2);
     expect(result[0].messageType).toStrictEqual(SIDE_EFFECT_ENTRY_MESSAGE_TYPE);
     expect(
       decodeSideEffectFromResult(result[0].message).failure?.code
     ).toStrictEqual(13);
+    expect(result[1]).toStrictEqual(outputMessage());
   });
 });
 
@@ -435,14 +428,19 @@ describe("FailingCompleteAwakeableSideEffectGreeter: invalid in complete awakeab
       "TestGreeter",
       new FailingCompleteAwakeableSideEffectGreeter(123),
       "/dev.restate.TestGreeter/Greet",
-      [startMessage(1), inputMessage(greetRequest("Till"))]
+      [
+        startMessage(1),
+        inputMessage(greetRequest("Till")),
+        completionMessage(1),
+      ]
     ).run();
 
-    expect(result.length).toStrictEqual(1);
+    expect(result.length).toStrictEqual(2);
     expect(result[0].messageType).toStrictEqual(SIDE_EFFECT_ENTRY_MESSAGE_TYPE);
     expect(
       decodeSideEffectFromResult(result[0].message).failure?.code
     ).toStrictEqual(13);
+    expect(result[1]).toStrictEqual(outputMessage());
   });
 });
 
@@ -453,13 +451,18 @@ describe("FailingSleepSideEffectGreeter: invalid in sleep call in side effect wi
       "TestGreeter",
       new FailingSleepSideEffectGreeter(123),
       "/dev.restate.TestGreeter/Greet",
-      [startMessage(1), inputMessage(greetRequest("Till"))]
+      [
+        startMessage(1),
+        inputMessage(greetRequest("Till")),
+        completionMessage(1),
+      ]
     ).run();
 
-    expect(result.length).toStrictEqual(1);
+    expect(result.length).toStrictEqual(2);
     expect(result[0].messageType).toStrictEqual(SIDE_EFFECT_ENTRY_MESSAGE_TYPE);
     expect(
       decodeSideEffectFromResult(result[0].message).failure?.code
     ).toStrictEqual(13);
+    expect(result[1]).toStrictEqual(outputMessage());
   });
 });

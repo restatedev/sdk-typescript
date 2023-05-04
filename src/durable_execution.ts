@@ -23,22 +23,27 @@ import {
   PollInputStreamEntryMessage,
   SET_STATE_ENTRY_MESSAGE_TYPE,
   SetStateEntryMessage,
+  SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
   SLEEP_ENTRY_MESSAGE_TYPE,
   SleepEntryMessage,
   START_MESSAGE_TYPE,
   StartMessage,
-  SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+  SUSPENSION_MESSAGE_TYPE,
+  SUSPENSION_TRIGGERS,
+  SuspensionMessage,
 } from "./protocol_stream";
 import { RestateContext } from "./context";
 import {
   AwakeableIdentifier,
-  ProtocolMessage,
-  PromiseHandler,
   printMessageAsJson,
+  PromiseHandler,
+  ProtocolMessage,
 } from "./types";
 import { Failure } from "./generated/proto/protocol";
 import { SideEffectEntryMessage } from "./generated/proto/javascript";
 import { Empty } from "./generated/google/protobuf/empty";
+import { ProtocolMode } from "./generated/proto/discovery";
+import { clearTimeout } from "timers";
 
 enum ExecutionState {
   WAITING_FOR_START = "WAITING_FOR_START",
@@ -81,13 +86,28 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   /* eslint-disable @typescript-eslint/no-explicit-any */
   private outOfOrderReplayMessages: Map<number, any> = new Map();
 
+  private suspensionTriggers: bigint[];
+  private readonly suspensionTimeout;
+
   constructor(
     private readonly connection: Connection,
-    private readonly method: HostedGrpcServiceMethod<I, O>
+    private readonly method: HostedGrpcServiceMethod<I, O>,
+    private readonly protocolMode: ProtocolMode
   ) {
     connection.onMessage(this.onIncomingMessage.bind(this));
     connection.onClose(this.onClose.bind(this));
     this.serviceName = method.service;
+
+    if (SUSPENSION_TRIGGERS.has(protocolMode)) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      this.suspensionTriggers = SUSPENSION_TRIGGERS.get(protocolMode)!;
+    } else {
+      throw new Error(
+        "Unknown protocol mode. Protocol mode does not have suspension triggers defined."
+      );
+    }
+    this.suspensionTimeout =
+      this.protocolMode === ProtocolMode.REQUEST_RESPONSE ? 0 : 100;
 
     connection.addOnErrorListener(() => {
       this.onClose();
@@ -111,7 +131,8 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       }
 
       console.debug("Forward the GetStateEntryMessage to the runtime");
-      this.connection.send(
+
+      this.send(
         GET_STATE_ENTRY_MESSAGE_TYPE,
         GetStateEntryMessage.create({ key: Buffer.from(name) })
       );
@@ -142,7 +163,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
     console.debug("Forward the SetStateEntryMessage to the runtime");
     const bytes = Buffer.from(JSON.stringify(value));
-    this.connection.send(
+    this.send(
       SET_STATE_ENTRY_MESSAGE_TYPE,
       SetStateEntryMessage.create({
         key: Buffer.from(name, "utf8"),
@@ -166,7 +187,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     }
 
     console.debug("Forward the ClearStateEntryMessage to the runtime");
-    this.connection.send(
+    this.send(
       CLEAR_STATE_ENTRY_MESSAGE_TYPE,
       ClearStateEntryMessage.create({ key: Buffer.from(name, "utf8") })
     );
@@ -176,6 +197,8 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     console.debug("Service called awakeable");
 
     this.validate("awakeable");
+
+    let suspensionTimeout: NodeJS.Timeout;
 
     return new Promise<Buffer>((resolve, reject) => {
       this.incrementJournalIndex();
@@ -189,11 +212,28 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       }
 
       console.debug("Forward the Awakeable message to the runtime");
-      this.connection.send(
+      const timeout = this.send(
         AWAKEABLE_ENTRY_MESSAGE_TYPE,
         AwakeableEntryMessage.create()
       );
+
+      // an awakeable should trigger a suspension
+      if (timeout) {
+        suspensionTimeout = timeout;
+      } else {
+        throw new Error(
+          "Illegal state: An awakeable should always set a suspension timeout"
+        );
+      }
     }).then<T>((result: Buffer) => {
+      // If the promise gets completed before the suspension gets triggered then clear the timeout
+      if (suspensionTimeout) {
+        console.debug(
+          "Completion arrived for awakeable before suspension was send. Clearing suspension timeout."
+        );
+        clearTimeout(suspensionTimeout);
+      }
+
       console.debug(
         "Received the following result: " + JSON.parse(result.toString())
       );
@@ -216,7 +256,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     }
 
     console.debug("Forward the CompleteAwakeable message to the runtime");
-    this.connection.send(
+    this.send(
       COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
       CompleteAwakeableEntryMessage.create({
         serviceName: id.serviceName,
@@ -257,7 +297,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       );
     } else {
       console.debug("Forward the BackgroundInvokeEntryMessage to the runtime");
-      this.connection.send(
+      this.send(
         BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
         BackgroundInvokeEntryMessage.create({
           serviceName: service,
@@ -280,6 +320,8 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   ): Promise<Uint8Array> {
     this.validate("invoke");
 
+    let suspensionTimeout: NodeJS.Timeout;
+
     return new Promise((resolve, reject) => {
       this.incrementJournalIndex();
       this.addPromise(this.currentJournalIndex, resolve, reject);
@@ -292,7 +334,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       }
 
       console.debug("Forward the InvokeEntryMessage to the runtime");
-      this.connection.send(
+      const timeout = this.send(
         INVOKE_ENTRY_MESSAGE_TYPE,
         InvokeEntryMessage.create({
           serviceName: service,
@@ -300,7 +342,21 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
           parameter: Buffer.from(data),
         })
       );
+
+      // an invoke should trigger a suspension
+      if (timeout) {
+        suspensionTimeout = timeout;
+      } else {
+        throw new Error(
+          "Illegal state: An invoke should always set a suspension timeout"
+        );
+      }
     }).then((result) => {
+      // If the promise gets completed before the suspension gets triggered then clear the timeout
+      if (suspensionTimeout) {
+        clearTimeout(suspensionTimeout);
+      }
+
       return result as Uint8Array;
     });
   }
@@ -389,12 +445,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
             SideEffectEntryMessage.create({ value: bytes })
           ).finish();
 
-          this.connection.send(
-            SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-            sideEffectMsg,
-            false,
-            true
-          );
+          this.send(SIDE_EFFECT_ENTRY_MESSAGE_TYPE, sideEffectMsg, false, true);
           this.inSideEffectFlag = false;
 
           // When the runtime has ack'ed the sideEffect with an empty completion,
@@ -412,12 +463,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
           const sideEffectMsg = SideEffectEntryMessage.encode(
             SideEffectEntryMessage.create({ failure: failure })
           ).finish();
-          this.connection.send(
-            SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-            sideEffectMsg,
-            false,
-            true
-          );
+          this.send(SIDE_EFFECT_ENTRY_MESSAGE_TYPE, sideEffectMsg, false, true);
 
           // When something went wrong, then we resolve the promise with a failure.
           promiseToResolve.then(
@@ -433,7 +479,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
     this.validate("sleep");
 
-    return new Promise((resolve, reject) => {
+    return new Promise<NodeJS.Timeout>((resolve, reject) => {
       this.incrementJournalIndex();
       this.addPromise(this.currentJournalIndex, resolve, reject);
 
@@ -446,25 +492,80 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
       console.debug("Forward the SleepEntryMessage to the runtime");
       // Forward to runtime
-      this.connection.send(
+      const timeout = this.send(
         SLEEP_ENTRY_MESSAGE_TYPE,
         SleepEntryMessage.create({ wakeUpTime: Date.now() + millis })
       );
+
+      if (!timeout) {
+        throw new Error(
+          "Illegal state: A sleep should always set a suspension timeout"
+        );
+      }
+      return timeout;
+    }).then((timeout: NodeJS.Timeout) => {
+      clearTimeout(timeout);
+      return;
     });
+  }
+
+  // Sends the message and returns the suspensionTimeout if set
+  send(
+    messageType: bigint,
+    message: ProtocolMessage | Uint8Array,
+    completedFlag?: boolean,
+    requiresAckFlag?: boolean
+  ): NodeJS.Timeout | void {
+    // send the message
+    this.connection.send(messageType, message, completedFlag, requiresAckFlag);
+
+    // If the suspension triggers for this protocol mode (set in constructor) include the message type
+    // then set a timeout to send the suspension message.
+    // The suspension will only be sent if the timeout is not cancelled due to a completion.
+    if (this.suspensionTriggers.includes(messageType)) {
+      console.debug("Setting timeout for sending suspension to the runtime");
+      return setTimeout(() => {
+        const completableIndices = [...this.pendingPromises.keys()];
+
+        // If the state is not processing anymore then we either already send a suspension
+        // or something else bad happened...
+        if (this.state === ExecutionState.PROCESSING) {
+          // There need to be journal entries to complete, otherwise this timeout should have been removed.
+          if (completableIndices.length > 0) {
+            this.connection.send(
+              SUSPENSION_MESSAGE_TYPE,
+              SuspensionMessage.create({
+                entryIndexes: completableIndices,
+              }),
+              undefined,
+              undefined
+            );
+
+            this.onClose();
+            this.connection.end();
+          } else {
+            throw new Error(
+              "Illegal state: Not able to send suspension message because no pending promises. " +
+                "This timeout should have been removed."
+            );
+          }
+        }
+      }, this.suspensionTimeout);
+    }
   }
 
   // Called for every incoming message from the runtime: start messages, input messages and replay messages.
   onIncomingMessage(
-    message_type: bigint,
+    messageType: bigint,
     message: ProtocolMessage | Uint8Array,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    completed_flag?: boolean,
+    completedFlag?: boolean,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    protocol_version?: number,
+    protocolVersion?: number,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    requires_ack_flag?: boolean
+    requiresAckFlag?: boolean
   ) {
-    switch (message_type) {
+    switch (messageType) {
       case START_MESSAGE_TYPE: {
         this.handleStartMessage(message as StartMessage);
         break;
@@ -530,7 +631,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       }
       default: {
         throw new Error(
-          `Received unkown message type from the runtime: { message_type: ${message_type}, message: ${message} }`
+          `Received unkown message type from the runtime: { message_type: ${messageType}, message: ${message} }`
         );
       }
     }
@@ -761,7 +862,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
   onCallSuccess(result: Uint8Array) {
     console.debug("Call successfully completed");
-    this.connection.send(
+    this.send(
       OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
       OutputStreamEntryMessage.create({ value: Buffer.from(result) })
     );
@@ -783,7 +884,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       );
     }
 
-    this.connection.send(
+    this.send(
       OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
       OutputStreamEntryMessage.create({
         failure: Failure.create({
@@ -800,6 +901,6 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   onClose() {
     // done.
     this.transitionState(ExecutionState.CLOSED);
-    console.log(`DEBUG connection has been closed.`);
+    console.debug(`DEBUG connection has been closed.`);
   }
 }

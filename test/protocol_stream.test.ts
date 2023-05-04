@@ -13,35 +13,31 @@ import stream from "stream";
 describe("Header", () => {
   it("Should round trip a custom message", () => {
     const a = new Header(0xfc00n, 10);
-    const b = Header.from_u64be(a.to_u64be());
+    const b = Header.fromU64be(a.toU64be());
 
     expect(b).toStrictEqual(a);
   });
 
-  it("invoke_test", () => roundtrip_test(new_start(1, 25)));
+  it("invoke_test", () => roundtripTest(newStart(1, 25)));
 
   it("completion_test", () =>
-    roundtrip_test(new_header(COMPLETION_MESSAGE_TYPE, 22)));
+    roundtripTest(newHeader(COMPLETION_MESSAGE_TYPE, 22)));
 
   it("completed_get_state", () =>
-    roundtrip_test(
-      new_completable_entry(GET_STATE_ENTRY_MESSAGE_TYPE, true, 0)
-    ));
+    roundtripTest(newCompletableEntry(GET_STATE_ENTRY_MESSAGE_TYPE, true, 0)));
 
   it("not_completed_get_state", () =>
-    roundtrip_test(
-      new_completable_entry(GET_STATE_ENTRY_MESSAGE_TYPE, false, 0)
-    ));
+    roundtripTest(newCompletableEntry(GET_STATE_ENTRY_MESSAGE_TYPE, false, 0)));
 
   it("completed_get_state_with_len", () =>
-    roundtrip_test(
-      new_completable_entry(GET_STATE_ENTRY_MESSAGE_TYPE, true, 10341)
+    roundtripTest(
+      newCompletableEntry(GET_STATE_ENTRY_MESSAGE_TYPE, true, 10341)
     ));
 
-  it("custom_entry", () => roundtrip_test(new_header(0xfc00n, 10341)));
+  it("custom_entry", () => roundtripTest(newHeader(0xfc00n, 10341)));
 
   it("custom_entry_with_requires_ack", () =>
-    roundtrip_test(new Header(0xfc00n, 10341, undefined, undefined, true)));
+    roundtripTest(new Header(0xfc00n, 10341, undefined, undefined, true)));
 });
 
 describe("Stream", () => {
@@ -68,16 +64,16 @@ describe("Stream", () => {
     const result: any = new Promise((resolve) => {
       restateStream.onMessage(
         (
-          message_type,
+          messageType,
           message,
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          completed_flag,
+          completedFlag,
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          protocol_version,
+          protocolVersion,
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          requires_ack_flag
+          requiresAckFlag
         ) => {
-          resolve({ message_type, message });
+          resolve({ messageType: messageType, message });
         }
       );
     });
@@ -94,23 +90,23 @@ describe("Stream", () => {
     http2stream.end();
 
     // and collect what was written
-    const { message, message_type } = await result;
+    const { message, messageType: messageType } = await result;
 
-    expect(message_type).toStrictEqual(START_MESSAGE_TYPE);
+    expect(messageType).toStrictEqual(START_MESSAGE_TYPE);
     expect(message.knownEntries).toStrictEqual(1337);
   });
 });
 
 // The following is taken from headers.rs tests
-function new_header(message_type_id: bigint, length: number): Header {
-  return new Header(message_type_id, length);
+function newHeader(messageTypeId: bigint, length: number): Header {
+  return new Header(messageTypeId, length);
 }
 
-function new_start(protocol_version: number, length: number): Header {
-  return new Header(START_MESSAGE_TYPE, length, undefined, protocol_version);
+function newStart(protocolVersion: number, length: number): Header {
+  return new Header(START_MESSAGE_TYPE, length, undefined, protocolVersion);
 }
 
-function new_completable_entry(
+function newCompletableEntry(
   ty: bigint,
   completed: boolean,
   length: number
@@ -126,13 +122,13 @@ function sameTruthness<A, B>(a: A, b: B) {
   }
 }
 
-function roundtrip_test(a: Header) {
-  const b = Header.from_u64be(a.to_u64be());
-  expect(b.message_type).toStrictEqual(a.message_type);
-  expect(b.frame_length).toStrictEqual(a.frame_length);
-  expect(b.protocol_version).toStrictEqual(a.protocol_version);
-  sameTruthness(a.completed_flag, b.completed_flag);
-  sameTruthness(a.requires_ack_flag, b.requires_ack_flag);
+function roundtripTest(a: Header) {
+  const b = Header.fromU64be(a.toU64be());
+  expect(b.messageType).toStrictEqual(a.messageType);
+  expect(b.frameLength).toStrictEqual(a.frameLength);
+  expect(b.protocolVersion).toStrictEqual(a.protocolVersion);
+  sameTruthness(a.completedFlag, b.completedFlag);
+  sameTruthness(a.requiresAckFlag, b.requiresAckFlag);
 }
 
 function mockHttp2DuplexStream() {

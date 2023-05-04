@@ -25,10 +25,12 @@
   "email": "code@restate.dev",
   "scripts": {
     "proto": "npx buf mod update && npx buf generate",
-    "build": "tsc --noEmitOnError",
+    "build": "tsc --noEmitOnError && tsc --p ./examples/ --noEmit",
     "test": "jest --silent",
     "lint": "eslint --ignore-path .eslintignore --ext .ts .",
     "format": "prettier --ignore-path .eslintignore --write \"**/*.+(js|ts|json)\"",
+    "example": "ts-node-dev --respawn --transpile-only ./examples/example.ts",
+    "lambda-example": "ts-node-dev --respawn --transpile-only ./examples/lambda_example.ts",
     "verify": "npm run test && npm run lint && npm run build",
     "release": "release-it"
   },
@@ -45,6 +47,7 @@
     "@types/node": "^18.14.2",
     "@typescript-eslint/eslint-plugin": "^5.53.0",
     "@typescript-eslint/parser": "^5.53.0",
+    "@types/aws-lambda": "^8.10.115",
     "eslint": "^8.35.0",
     "prettier": "^2.8.4",
     "ts-jest": "^29.0.5",

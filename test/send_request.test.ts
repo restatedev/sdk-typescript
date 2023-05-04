@@ -1,16 +1,17 @@
 import { describe, expect } from "@jest/globals";
 import * as restate from "../src/public_api";
-import { TestDriver } from "../src/testdriver";
+import { TestDriver } from "./testdriver";
 import {
-  inputMessage,
-  startMessage,
-  invokeMessage,
-  completionMessage,
-  outputMessage,
-  setStateMessage,
   backgroundInvokeMessage,
+  completionMessage,
   greetRequest,
   greetResponse,
+  inputMessage,
+  invokeMessage,
+  outputMessage,
+  setStateMessage,
+  startMessage,
+  suspensionMessage,
 } from "./protoutils";
 import {
   protoMetadata,
@@ -20,6 +21,7 @@ import {
   TestResponse,
 } from "../src/generated/proto/test";
 import { Failure } from "../src/generated/proto/protocol";
+import { ProtocolMode } from "../src/generated/proto/discovery";
 
 class ReverseAwaitOrder implements TestGreeter {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -96,6 +98,30 @@ describe("ReverseAwaitOrder: None completed", () => {
         greetRequest("Francesco")
       ),
       invokeMessage("dev.restate.TestGreeter", "Greet", greetRequest("Till")),
+      suspensionMessage([1, 2]),
+    ]);
+  });
+});
+
+describe("ReverseAwaitOrder: Request-response: None completed", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new ReverseAwaitOrder(),
+      "/dev.restate.TestGreeter/Greet",
+      [startMessage(1), inputMessage(greetRequest("Till"))],
+      ProtocolMode.REQUEST_RESPONSE
+    ).run();
+
+    expect(result).toStrictEqual([
+      invokeMessage(
+        "dev.restate.TestGreeter",
+        "Greet",
+        greetRequest("Francesco")
+      ),
+      invokeMessage("dev.restate.TestGreeter", "Greet", greetRequest("Till")),
+      suspensionMessage([1, 2]),
     ]);
   });
 });

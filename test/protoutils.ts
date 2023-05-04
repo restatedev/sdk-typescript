@@ -26,6 +26,8 @@ import {
   SLEEP_ENTRY_MESSAGE_TYPE,
   SleepEntryMessage,
   SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+  SUSPENSION_MESSAGE_TYPE,
+  SuspensionMessage,
 } from "../src/protocol_stream";
 import { Message, ProtocolMessage } from "../src/types";
 import { TestRequest, TestResponse } from "../src/generated/proto/test";
@@ -279,6 +281,15 @@ export function completeAwakeableMessage<T>(
       invocationId: invocationId,
       entryIndex: entryIndex,
       payload: Buffer.from(JSON.stringify(payload)),
+    })
+  );
+}
+
+export function suspensionMessage(entryIndices: number[]): Message {
+  return new Message(
+    SUSPENSION_MESSAGE_TYPE,
+    SuspensionMessage.create({
+      entryIndexes: entryIndices,
     })
   );
 }

@@ -1,42 +1,33 @@
 "use strict";
 
-import { RestateDuplexStream, StartMessage } from "./protocol_stream";
-import * as restate from "../src/public_api";
-import { Connection } from "./bidirectional_server";
-import stream from "stream";
-import { DurableExecutionStateMachine } from "./durable_execution";
 import {
-  AWAKEABLE_ENTRY_MESSAGE_TYPE,
-  GET_STATE_ENTRY_MESSAGE_TYPE,
-  INVOKE_ENTRY_MESSAGE_TYPE,
   OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
+  RestateDuplexStream,
   RestateDuplexStreamEventHandler,
-  SLEEP_ENTRY_MESSAGE_TYPE,
-  SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-} from "./protocol_stream";
+  StartMessage,
+  SUSPENSION_MESSAGE_TYPE,
+} from "../src/protocol_stream";
+import * as restate from "../src/public_api";
+import { Connection } from "../src/bidirectional_server";
+import stream from "stream";
+import { DurableExecutionStateMachine } from "../src/durable_execution";
 import {
-  ProtocolMessage,
   Message,
-  ProtoMetadata,
   printMessageAsJson,
-} from "./types";
-import { HostedGrpcServiceMethod } from "./core";
+  ProtocolMessage,
+  ProtoMetadata,
+} from "../src/types";
+import { HostedGrpcServiceMethod } from "../src/core";
+import { ProtocolMode } from "../src/generated/proto/discovery";
 
 export class TestDriver<I, O> implements Connection {
   private http2stream = this.mockHttp2DuplexStream();
   private restate = RestateDuplexStream.from(this.http2stream);
   private result: Array<Message> = [];
   private nbRequiredCompletions = 0;
-  // For other type of messages that require flushing, check if all test input has finished.
-  private requiresCompletion = [
-    INVOKE_ENTRY_MESSAGE_TYPE,
-    GET_STATE_ENTRY_MESSAGE_TYPE,
-    SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-    AWAKEABLE_ENTRY_MESSAGE_TYPE,
-    SLEEP_ENTRY_MESSAGE_TYPE,
-  ];
 
   private restateServer: restate.RestateServer;
+  private protocolMode = ProtocolMode.BIDI_STREAM;
   private method: HostedGrpcServiceMethod<I, O>;
   private entries: Array<Message>;
   private nbCompletions: number;
@@ -50,13 +41,18 @@ export class TestDriver<I, O> implements Connection {
     service: string,
     instance: object,
     methodName: string,
-    entries: Array<Message>
+    entries: Array<Message>,
+    protocolMode?: ProtocolMode
   ) {
     this.restateServer = restate.createServer().bindService({
       descriptor: descriptor,
       service: service,
       instance: instance,
     });
+
+    if (protocolMode) {
+      this.protocolMode = protocolMode;
+    }
 
     const hostedGrpcServiceMethod: HostedGrpcServiceMethod<I, O> | undefined =
       this.restateServer.methodByUrl("/invoke" + methodName);
@@ -79,7 +75,11 @@ export class TestDriver<I, O> implements Connection {
   }
 
   run(): Promise<Array<Message>> {
-    this.desm = new DurableExecutionStateMachine(this, this.method);
+    this.desm = new DurableExecutionStateMachine(
+      this,
+      this.method,
+      this.protocolMode
+    );
 
     // Pipe messages through the state machine
     this.entries.forEach((el) => {
@@ -109,20 +109,12 @@ export class TestDriver<I, O> implements Connection {
     );
 
     // For an output message, flush immediately
-    if (message_type === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE) {
+    if (
+      message_type === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE ||
+      message_type === SUSPENSION_MESSAGE_TYPE
+    ) {
       console.debug("End of test: Flushing test results");
       this.resolveOnClose(this.result);
-    }
-
-    if (this.requiresCompletion.includes(message_type)) {
-      this.nbRequiredCompletions++;
-      if (this.nbRequiredCompletions > this.nbCompletions) {
-        this.resolveOnClose(this.result);
-      } else {
-        console.debug(
-          `The test input is not yet finished so not yet flushing results.`
-        );
-      }
     }
   }
 
@@ -131,7 +123,7 @@ export class TestDriver<I, O> implements Connection {
   }
 
   onClose(handler: () => void) {
-    console.log("calling onClose");
+    console.debug("calling onClose");
     this.http2stream.on("close", handler);
   }
 

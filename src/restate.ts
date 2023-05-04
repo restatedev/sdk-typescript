@@ -27,16 +27,20 @@ export function createServer(): RestateServer {
   return new RestateServer();
 }
 
-export class RestateServer {
+export abstract class BaseRestateServer {
   readonly methods: Record<string, HostedGrpcServiceMethod<unknown, unknown>> =
     {};
-  readonly discovery: ServiceDiscoveryResponse = {
-    files: { file: [] },
-    services: [],
-    minProtocolVersion: 0,
-    maxProtocolVersion: 0,
-    protocolMode: ProtocolMode.BIDI_STREAM,
-  };
+  readonly discovery: ServiceDiscoveryResponse;
+
+  protected constructor(protocolMode: ProtocolMode) {
+    this.discovery = {
+      files: { file: [] },
+      services: [],
+      minProtocolVersion: 0,
+      maxProtocolVersion: 0,
+      protocolMode: protocolMode,
+    };
+  }
 
   addDescriptor(descriptor: ProtoMetadata) {
     const desc = FileDescriptorProto.fromPartial(descriptor.fileDescriptor);
@@ -94,11 +98,7 @@ export class RestateServer {
     });
   }
 
-  public bindService({
-    descriptor,
-    service,
-    instance: instance,
-  }: ServiceOpts): RestateServer {
+  public bindService({ descriptor, service, instance: instance }: ServiceOpts) {
     const spec = parseService(descriptor, service, instance);
     this.addDescriptor(descriptor);
     this.discovery.services.push(`${spec.packge}.${spec.name}`);
@@ -110,11 +110,10 @@ export class RestateServer {
         method
       );
       // note that this log will not print all the keys.
-      console.log(
+      console.info(
         `Registering: ${url}  -> ${JSON.stringify(method, null, "\t")}`
       );
     }
-    return this;
   }
 
   methodByUrl<I, O>(
@@ -129,11 +128,30 @@ export class RestateServer {
     }
     return method as HostedGrpcServiceMethod<I, O>;
   }
+}
+
+export class RestateServer extends BaseRestateServer {
+  constructor() {
+    super(ProtocolMode.BIDI_STREAM);
+  }
+
+  public bindService({
+    descriptor,
+    service,
+    instance: instance,
+  }: ServiceOpts): RestateServer {
+    super.bindService({
+      descriptor,
+      service,
+      instance: instance,
+    });
+    return this;
+  }
 
   public async listen(port: number | undefined | null) {
     // Infer the port if not specified, or default it
     const actualPort = port ?? parseInt(process.env.PORT ?? "8080");
-    console.log(`listening on ${actualPort}...`);
+    console.info(`listening on ${actualPort}...`);
 
     for await (const connection of incomingConnectionAtPort(
       actualPort,
@@ -141,12 +159,16 @@ export class RestateServer {
     )) {
       const method = this.methodByUrl(connection.url.path);
       if (method === undefined) {
-        console.log(`INFO no service found for URL ${connection.url.path}`);
+        console.info(`INFO no service found for URL ${connection.url.path}`);
         connection.respond404();
       } else {
-        console.log(`INFO new stream for ${connection.url.path}`);
+        console.info(`INFO new stream for ${connection.url.path}`);
         connection.respondOk();
-        new DurableExecutionStateMachine(connection, method);
+        new DurableExecutionStateMachine(
+          connection,
+          method,
+          ProtocolMode.BIDI_STREAM
+        );
       }
     }
   }
