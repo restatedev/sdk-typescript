@@ -3,8 +3,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-inferrable-types */
 
-import { RestateContext } from "./context";
-import { RestateError } from "./errors";
+import { RestateContext } from "../restate_context";
+import { RestateError } from "../types/errors";
 
 /**
  * Calls a side effect function and retries the call on failure, with a timed backoff.
@@ -146,3 +146,15 @@ export async function retryExceptionalSideEffectWithBackoff<T>(
     delayMs = Math.min(delayMs * 2, maxDelayMs);
   }
 }
+
+
+export function printMessageAsJson(obj: any): string {
+  const newObj = { ...(obj as Record<string, unknown>) };
+  for (const [key, value] of Object.entries(newObj)) {
+    if (Buffer.isBuffer(value)) {
+      newObj[key] = JSON.stringify(value.toString());
+    }
+  }
+  return JSON.stringify(newObj);
+}
+

@@ -11,8 +11,8 @@ import {
   ServiceDiscoveryRequest,
   ServiceDiscoveryResponse,
 } from "../src/generated/proto/discovery";
-import { encodeMessage } from "../src/protocol_stream";
-import { Message } from "../src/types";
+import { encodeMessage } from "../src/io/encoder";
+import { Message } from "../src/types/types";
 import {
   getStateMessage,
   greetRequest,
@@ -21,7 +21,7 @@ import {
   outputMessage,
   startMessage,
 } from "./protoutils";
-import { LambdaConnection } from "../src/lambda_connection";
+import { LambdaConnection } from "../src/connection/lambda_connection";
 
 class LambdaGreeter implements TestGreeter {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars

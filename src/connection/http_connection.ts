@@ -1,31 +1,12 @@
 "use strict";
 
 import http2 from "http2";
-import {
-  RestateDuplexStream,
-  RestateDuplexStreamEventHandler,
-} from "./protocol_stream";
 import { parse as urlparse, Url } from "url";
+import { RestateDuplexStream, RestateDuplexStreamEventHandler } from "./restate_duplex_stream";
+import { ProtocolMessage } from "../types/protocol";
+import { ServiceDiscoveryResponse } from "../generated/proto/discovery";
 import { on } from "events";
-import { ProtocolMessage } from "./types";
-import { ServiceDiscoveryResponse } from "./generated/proto/discovery";
-
-export interface Connection {
-  addOnErrorListener(listener: () => void): void;
-
-  send(
-    messageType: bigint,
-    message: ProtocolMessage | Uint8Array,
-    completed?: boolean | undefined,
-    requiresAck?: boolean | undefined
-  ): void;
-
-  onMessage(handler: RestateDuplexStreamEventHandler): void;
-
-  onClose(handler: () => void): void;
-
-  end(): void;
-}
+import { Connection } from "./connection";
 
 export class HttpConnection implements Connection {
   private onErrorListeners: (() => void)[] = [];

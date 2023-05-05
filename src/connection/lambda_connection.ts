@@ -1,16 +1,15 @@
 "use strict";
 
-import { Connection } from "./bidirectional_server";
-import { ProtocolMessage } from "./types";
+import { Connection } from "./connection";
+import { ProtocolMessage } from "../types/protocol";
+import {encodeMessage} from "../io/encoder";
+import { InputEntry, Header } from "../types/types"
 import {
-  encodeMessage,
-  Header,
-  InputEntry,
   OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
   PROTOBUF_MESSAGE_BY_TYPE,
-  RestateDuplexStreamEventHandler,
   SUSPENSION_MESSAGE_TYPE,
-} from "./protocol_stream";
+} from "../types/protocol";
+import { RestateDuplexStreamEventHandler } from "./restate_duplex_stream";
 
 const WAITING_FOR_HEADER = 0;
 const WAITING_FOR_BODY = 1;

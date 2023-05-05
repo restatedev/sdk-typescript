@@ -3,9 +3,9 @@
 
 import { describe, expect } from "@jest/globals";
 import { TestingContext } from "./test_context";
-import * as restate_utils from "../src/utils";
-import { RestateError } from "../src/errors";
-import { RestateContext } from "../src/context";
+import * as RestateUtils from "../src/utils/utils";
+import { RestateError } from "../src/types/errors";
+import { RestateContext } from "../src/restate_context";
 
 async function exceptionOnFalse(x: Promise<boolean>): Promise<boolean> {
   return (await x) ? x : Promise.reject(new Error("test error"));
@@ -17,28 +17,28 @@ async function exceptionOnFalse(x: Promise<boolean>): Promise<boolean> {
 describe("retrySideEffectWithBackoff()", () => {
   it("should return immediately upon success", async () => {
     await testReturnImmediatelyUponSuccess(
-      restate_utils.retrySideEffectWithBackoff,
+      RestateUtils.retrySideEffectWithBackoff,
       true
     );
   });
 
   it("should retry until success", async () => {
     await testRetryUntilSuccess(
-      restate_utils.retrySideEffectWithBackoff,
+      RestateUtils.retrySideEffectWithBackoff,
       async (x) => x
     );
   });
 
   it("should retry until the maximum attemps", async () => {
-    await testRetryMaxAttempts(restate_utils.retrySideEffectWithBackoff);
+    await testRetryMaxAttempts(RestateUtils.retrySideEffectWithBackoff);
   });
 
   it("should initially sleep the minimum time", async () => {
-    await testInitialSleepTime(restate_utils.retrySideEffectWithBackoff);
+    await testInitialSleepTime(RestateUtils.retrySideEffectWithBackoff);
   });
 
   it("should ultimately sleep the maximum time", async () => {
-    await testUltimateSleepTime(restate_utils.retrySideEffectWithBackoff);
+    await testUltimateSleepTime(RestateUtils.retrySideEffectWithBackoff);
   });
 });
 
@@ -48,7 +48,7 @@ describe("retrySideEffectWithBackoff()", () => {
 describe("retryExceptionalSideEffectWithBackoff()", () => {
   it("should return immediately upon success", async () => {
     const result = await testReturnImmediatelyUponSuccess(
-      restate_utils.retryExceptionalSideEffectWithBackoff,
+      RestateUtils.retryExceptionalSideEffectWithBackoff,
       "great!"
     );
 
@@ -61,7 +61,7 @@ describe("retryExceptionalSideEffectWithBackoff()", () => {
       val ? finalValue : Promise.reject(new Error("..."));
 
     const result = await testRetryUntilSuccess(
-      restate_utils.retryExceptionalSideEffectWithBackoff,
+      RestateUtils.retryExceptionalSideEffectWithBackoff,
       resultProducer
     );
 
@@ -70,21 +70,21 @@ describe("retryExceptionalSideEffectWithBackoff()", () => {
 
   it("should retry until the maximum attemps", async () => {
     await testRetryMaxAttempts(
-      restate_utils.retryExceptionalSideEffectWithBackoff<boolean>,
+      RestateUtils.retryExceptionalSideEffectWithBackoff<boolean>,
       exceptionOnFalse
     );
   });
 
   it("should initially sleep the minimum time", async () => {
     await testInitialSleepTime(
-      restate_utils.retryExceptionalSideEffectWithBackoff<boolean>,
+      RestateUtils.retryExceptionalSideEffectWithBackoff<boolean>,
       exceptionOnFalse
     );
   });
 
   it("should ultimately sleep the maximum time", async () => {
     await testUltimateSleepTime(
-      restate_utils.retryExceptionalSideEffectWithBackoff<boolean>,
+      RestateUtils.retryExceptionalSideEffectWithBackoff<boolean>,
       exceptionOnFalse
     );
   });

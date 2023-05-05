@@ -1,7 +1,7 @@
 "use strict";
 
-import { RestateContext } from "../src/context";
-import { AwakeableIdentifier } from "../src/types";
+import { RestateContext } from "../src/restate_context";
+import { AwakeableIdentifier } from "../src/types/protocol";
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
