@@ -21,7 +21,7 @@ import {
   outputMessage,
   startMessage,
 } from "./protoutils";
-import { LambdaConnection } from "../src/connection/lambda_connection";
+import { decodeLambdaBody } from "../src/io/decoder";
 
 class LambdaGreeter implements TestGreeter {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -45,7 +45,7 @@ describe("Lambda: decodeMessage", () => {
     ];
     const serializedMsgs = serializeMessages(messages);
 
-    const decodedMessages = LambdaConnection.decodeMessage(serializedMsgs);
+    const decodedMessages = decodeLambdaBody(serializedMsgs);
 
     expect(
       decodedMessages.map(
@@ -67,7 +67,7 @@ describe("Lambda: decodeMessage", () => {
     const serializedMsgs = serializeMessages(messages) + "a";
 
     const decodedMessages = () =>
-      LambdaConnection.decodeMessage(serializedMsgs);
+      decodeLambdaBody(serializedMsgs);
 
     expect(decodedMessages).toThrow(
       "Parsing error: SDK cannot parse the message. Message was not valid base64 encoded."
@@ -87,7 +87,7 @@ describe("Lambda: decodeMessage", () => {
     const serializedMsgs = "a" + serializeMessages(messages);
 
     const decodedMessages = () =>
-      LambdaConnection.decodeMessage(serializedMsgs);
+      decodeLambdaBody(serializedMsgs);
 
     expect(decodedMessages).toThrow(
       "Parsing error: SDK cannot parse the message. Message was not valid base64 encoded."
@@ -295,7 +295,7 @@ function serializeMessages(messages: Message[]): string {
 }
 
 function deserializeMessages(body: string): Array<Message> {
-  return LambdaConnection.decodeMessage(body).map(
+  return decodeLambdaBody(body).map(
     (entry) => new Message(entry.header.messageType, entry.message)
   );
 }

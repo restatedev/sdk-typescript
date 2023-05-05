@@ -12,7 +12,7 @@
 // at this point the decodedStream is a high level stream of objects {header, message}
 import stream from "stream";
 import { PROTOBUF_MESSAGE_BY_TYPE } from "../types/protocol";
-import { Header } from "../types/types";
+import { Header, InputEntry } from "../types/types";
 
 const WAITING_FOR_HEADER = 0;
 const WAITING_FOR_BODY = 1;
@@ -58,10 +58,10 @@ export function streamDecoder(): stream.Transform {
                 // we don't know how to decode custom message
                 // so we let the user of this stream to deal with custom
                 // message serde
-                this.push({ header: header, message: frame });
+                this.push(new InputEntry(header, frame));
               } else {
                 const message = pbType.decode(frame);
-                this.push({ header: header, message: message });
+                this.push(new InputEntry(header, message));
               }
               break;
             }
@@ -72,4 +72,70 @@ export function streamDecoder(): stream.Transform {
       }
     },
   });
+}
+
+// Decodes messages from Lambda requests to an array of headers + protocol messages
+const base64regex =
+  /^([0-9a-zA-Z+/]{4})*(([0-9a-zA-Z+/]{2}==)|([0-9a-zA-Z+/]{3}=))?$/;
+export function decodeLambdaBody(msgBase64: string): InputEntry[] {
+  if (!base64regex.test(msgBase64)) {
+    throw new Error(
+      "Parsing error: SDK cannot parse the message. Message was not valid base64 encoded."
+    );
+  }
+
+  let buf = Buffer.from(msgBase64, "base64");
+  let state = WAITING_FOR_HEADER;
+  let header: Header | null = null;
+  const decodedEntries: InputEntry[] = [];
+
+  while (buf.length > 0) {
+    switch (state) {
+      case WAITING_FOR_HEADER: {
+        if (buf.length < 8) {
+          throw new Error(
+            "Parsing error: SDK cannot parse the message. Buffer was not empty but was too small to contain another header."
+          );
+        }
+        const h = buf.readBigUInt64BE();
+        buf = buf.subarray(8);
+        header = Header.fromU64be(h);
+        state = WAITING_FOR_BODY;
+        break;
+      }
+      case WAITING_FOR_BODY: {
+        if (header == null) {
+          throw new Error(
+            "Parsing error: SDK cannot parse the message. " +
+            "Parsing body, while header was not parsed yet"
+          );
+        }
+        if (buf.length < header.frameLength) {
+          throw new Error(
+            "Parsing error: SDK cannot parse the message. " +
+            `Buffer length (${buf.length}) is smaller than frame length (${header.frameLength})`
+          );
+        }
+        const frame = buf.subarray(0, header.frameLength);
+        buf = buf.subarray(header.frameLength);
+
+        const pbType = PROTOBUF_MESSAGE_BY_TYPE.get(header.messageType);
+        if (pbType === undefined) {
+          // this is a custom message.
+          // we don't know how to decode custom message
+          // so we let the user of this stream to deal with custom
+          // message serde
+          decodedEntries.push(new InputEntry(header, frame));
+        } else {
+          const message = pbType.decode(frame);
+          decodedEntries.push(new InputEntry(header, message));
+        }
+
+        // Reset the state and the header, to start parsing the next msg
+        state = WAITING_FOR_HEADER;
+        header = null;
+      }
+    }
+  }
+  return decodedEntries;
 }

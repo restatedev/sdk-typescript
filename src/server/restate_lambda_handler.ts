@@ -5,7 +5,7 @@ import {
   ProtocolMode,
   ServiceDiscoveryResponse,
 } from "../generated/proto/discovery";
-import { BaseRestateServer, ServiceOpts } from "./abstract_restate_server";
+import { BaseRestateServer, ServiceOpts } from "./base_restate_server";
 import { DurableExecutionStateMachine } from "../state_machine";
 import { LambdaConnection } from "../connection/lambda_connection";
 

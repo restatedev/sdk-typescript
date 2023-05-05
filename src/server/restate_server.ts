@@ -3,7 +3,7 @@
 import { ProtocolMode } from "../generated/proto/discovery";
 import { incomingConnectionAtPort } from "../connection/http_connection";
 import { DurableExecutionStateMachine } from "../state_machine";
-import { BaseRestateServer, ServiceOpts } from "./abstract_restate_server";
+import { BaseRestateServer, ServiceOpts } from "./base_restate_server";
 
 export function createServer(): RestateServer {
   return new RestateServer();
