@@ -17,9 +17,9 @@ import {
   TestRequest,
   TestResponse,
 } from "../src/generated/proto/test";
-import { AwakeableIdentifier } from "../src/types";
+import { AwakeableIdentifier } from "../src/types/protocol";
 import { Failure } from "../src/generated/proto/protocol";
-import { SIDE_EFFECT_ENTRY_MESSAGE_TYPE } from "../src/protocol_stream";
+import { SIDE_EFFECT_ENTRY_MESSAGE_TYPE } from "../src/types/protocol";
 
 class SideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: string) {}

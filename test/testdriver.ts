@@ -2,22 +2,21 @@
 
 import {
   OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
-  RestateDuplexStream,
-  RestateDuplexStreamEventHandler,
   StartMessage,
   SUSPENSION_MESSAGE_TYPE,
-} from "../src/protocol_stream";
-import * as restate from "../src/public_api";
-import { Connection } from "../src/bidirectional_server";
-import stream from "stream";
-import { DurableExecutionStateMachine } from "../src/durable_execution";
-import {
-  Message,
-  printMessageAsJson,
   ProtocolMessage,
-  ProtoMetadata,
-} from "../src/types";
-import { HostedGrpcServiceMethod } from "../src/core";
+} from "../src/types/protocol";
+import {
+  RestateDuplexStream,
+  RestateDuplexStreamEventHandler,
+} from "../src/connection/restate_duplex_stream";
+import * as restate from "../src/public_api";
+import { Connection } from "../src/connection/connection";
+import stream from "stream";
+import { DurableExecutionStateMachine } from "../src/state_machine";
+import { printMessageAsJson } from "../src/utils/utils";
+import { Message } from "../src/types/types";
+import { HostedGrpcServiceMethod, ProtoMetadata } from "../src/types/grpc";
 import { ProtocolMode } from "../src/generated/proto/discovery";
 
 export class TestDriver<I, O> implements Connection {

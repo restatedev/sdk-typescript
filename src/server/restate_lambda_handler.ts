@@ -4,10 +4,10 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import {
   ProtocolMode,
   ServiceDiscoveryResponse,
-} from "./generated/proto/discovery";
-import { BaseRestateServer, ServiceOpts } from "./restate";
-import { DurableExecutionStateMachine } from "./durable_execution";
-import { LambdaConnection } from "./lambda_connection";
+} from "../generated/proto/discovery";
+import { BaseRestateServer, ServiceOpts } from "./abstract_restate_server";
+import { DurableExecutionStateMachine } from "../state_machine";
+import { LambdaConnection } from "../connection/lambda_connection";
 
 export function lambdaApiGatewayHandler(): LambdaRestateServer {
   return new LambdaRestateServer();

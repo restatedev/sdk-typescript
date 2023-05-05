@@ -1,7 +1,7 @@
 "use strict";
 
-import { Connection } from "./bidirectional_server";
-import { HostedGrpcServiceMethod } from "./core";
+import { Connection } from "./connection/connection";
+import { HostedGrpcServiceMethod } from "./types/grpc";
 import {
   AWAKEABLE_ENTRY_MESSAGE_TYPE,
   AwakeableEntryMessage,
@@ -31,14 +31,11 @@ import {
   SUSPENSION_MESSAGE_TYPE,
   SUSPENSION_TRIGGERS,
   SuspensionMessage,
-} from "./protocol_stream";
-import { RestateContext } from "./context";
-import {
-  AwakeableIdentifier,
-  printMessageAsJson,
-  PromiseHandler,
   ProtocolMessage,
-} from "./types";
+  AwakeableIdentifier,
+} from "./types/protocol";
+import { RestateContext } from "./restate_context";
+import { printMessageAsJson } from "./utils/utils";
 import { Failure } from "./generated/proto/protocol";
 import { SideEffectEntryMessage } from "./generated/proto/javascript";
 import { Empty } from "./generated/google/protobuf/empty";
@@ -50,6 +47,13 @@ enum ExecutionState {
   REPLAYING = "REPLAYING",
   PROCESSING = "PROCESSING",
   CLOSED = "CLOSED",
+}
+
+export class PromiseHandler {
+  constructor(
+    readonly resolve: (value: unknown) => void,
+    readonly reject: (reason: Failure | Error) => void
+  ) {}
 }
 
 export class DurableExecutionStateMachine<I, O> implements RestateContext {

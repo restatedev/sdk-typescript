@@ -1,6 +1,6 @@
 "use strict";
 
-import { AwakeableIdentifier } from "./types";
+import { AwakeableIdentifier } from "./types/protocol";
 
 export interface RestateContext {
   instanceKey: Buffer;

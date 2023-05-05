@@ -28,8 +28,9 @@ import {
   SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
   SUSPENSION_MESSAGE_TYPE,
   SuspensionMessage,
-} from "../src/protocol_stream";
-import { Message, ProtocolMessage } from "../src/types";
+  ProtocolMessage,
+} from "../src/types/protocol";
+import { Message } from "../src/types/types";
 import { TestRequest, TestResponse } from "../src/generated/proto/test";
 import { SideEffectEntryMessage } from "../src/generated/proto/javascript";
 import { Failure } from "../src/generated/proto/protocol";

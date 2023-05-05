@@ -12,7 +12,7 @@ import {
   startMessage,
   suspensionMessage,
 } from "./protoutils";
-import { AwakeableIdentifier } from "../src/types";
+import { AwakeableIdentifier } from "../src/types/protocol";
 import {
   protoMetadata,
   TestGreeter,

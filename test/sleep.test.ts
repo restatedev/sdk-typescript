@@ -11,7 +11,7 @@ import {
   startMessage,
   suspensionMessage,
 } from "./protoutils";
-import { SLEEP_ENTRY_MESSAGE_TYPE } from "../src/protocol_stream";
+import { SLEEP_ENTRY_MESSAGE_TYPE } from "../src/types/protocol";
 import { Empty } from "../src/generated/google/protobuf/empty";
 import {
   protoMetadata,
