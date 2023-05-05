@@ -147,7 +147,6 @@ export async function retryExceptionalSideEffectWithBackoff<T>(
   }
 }
 
-
 export function printMessageAsJson(obj: any): string {
   const newObj = { ...(obj as Record<string, unknown>) };
   for (const [key, value] of Object.entries(newObj)) {
@@ -157,4 +156,3 @@ export function printMessageAsJson(obj: any): string {
   }
   return JSON.stringify(newObj);
 }
-

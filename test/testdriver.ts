@@ -4,7 +4,8 @@ import {
   OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
   StartMessage,
   SUSPENSION_MESSAGE_TYPE,
-  ProtocolMessage } from "../src/types/protocol"
+  ProtocolMessage,
+} from "../src/types/protocol";
 import {
   RestateDuplexStream,
   RestateDuplexStreamEventHandler,
@@ -13,11 +14,8 @@ import * as restate from "../src/public_api";
 import { Connection } from "../src/connection/connection";
 import stream from "stream";
 import { DurableExecutionStateMachine } from "../src/state_machine";
-import {
-  printMessageAsJson} from "../src/utils/utils"
-import {
-  Message,
-} from "../src/types/types";
+import { printMessageAsJson } from "../src/utils/utils";
+import { Message } from "../src/types/types";
 import { HostedGrpcServiceMethod, ProtoMetadata } from "../src/types/grpc";
 import { ProtocolMode } from "../src/generated/proto/discovery";
 

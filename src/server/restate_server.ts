@@ -9,17 +9,16 @@ export function createServer(): RestateServer {
   return new RestateServer();
 }
 
-
 export class RestateServer extends BaseRestateServer {
   constructor() {
     super(ProtocolMode.BIDI_STREAM);
   }
 
   public bindService({
-                       descriptor,
-                       service,
-                       instance: instance,
-                     }: ServiceOpts): RestateServer {
+    descriptor,
+    service,
+    instance: instance,
+  }: ServiceOpts): RestateServer {
     super.bindService({
       descriptor,
       service,

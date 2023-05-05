@@ -3,8 +3,8 @@
 import { ProtocolMessage } from "../types/protocol";
 import stream from "stream";
 import { Header } from "../types/types";
-import { streamEncoder } from "../io/encoder"
-import { streamDecoder } from "../io/decoder"
+import { streamEncoder } from "../io/encoder";
+import { streamDecoder } from "../io/decoder";
 
 export type RestateDuplexStreamEventHandler = (
   messageType: bigint,

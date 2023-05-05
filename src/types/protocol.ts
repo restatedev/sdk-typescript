@@ -1,6 +1,5 @@
 "use strict";
 
-
 import {
   AwakeableEntryMessage,
   BackgroundInvokeEntryMessage,
@@ -49,7 +48,6 @@ export const INVOKE_ENTRY_MESSAGE_TYPE = 0x0c01n;
 export const BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE = 0x0c02n;
 export const AWAKEABLE_ENTRY_MESSAGE_TYPE = 0x0c03n;
 export const COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE = 0x0c04n;
-
 
 // Restate DuplexStream
 

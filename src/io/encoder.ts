@@ -27,12 +27,12 @@ export function streamEncoder(): stream.Transform {
 }
 
 export function encodeMessage({
-                                messageType,
-                                message,
-                                version,
-                                completed,
-                                requiresAck,
-                              }: EncoderOpts): Uint8Array {
+  messageType,
+  message,
+  version,
+  completed,
+  requiresAck,
+}: EncoderOpts): Uint8Array {
   const pbType = PROTOBUF_MESSAGE_BY_TYPE.get(BigInt(messageType));
   let bodyBuf;
   if (pbType === undefined) {

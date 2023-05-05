@@ -52,17 +52,17 @@ export class LambdaRestateServer extends BaseRestateServer {
       return this.toErrorResponse(
         500,
         "Invalid path: path doesn't end in /invoke/SvcName/MethodName and also not in /discover: " +
-        event.path
+          event.path
       );
     }
   }
 
   // override needed to type the return value to the more concrete LambdaRestateServer type
   public bindService({
-                       descriptor,
-                       service,
-                       instance: instance,
-                     }: ServiceOpts): LambdaRestateServer {
+    descriptor,
+    service,
+    instance: instance,
+  }: ServiceOpts): LambdaRestateServer {
     super.bindService({
       descriptor,
       service,
@@ -118,7 +118,7 @@ export class LambdaRestateServer extends BaseRestateServer {
     // return discovery information
     console.debug(
       "DEBUG discovered services at endpoint. Discovery response: " +
-      JSON.stringify(this.discovery)
+        JSON.stringify(this.discovery)
     );
     return {
       headers: {

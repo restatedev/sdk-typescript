@@ -3,10 +3,10 @@ import {
   START_MESSAGE_TYPE,
   StartMessage,
   COMPLETION_MESSAGE_TYPE,
-  GET_STATE_ENTRY_MESSAGE_TYPE
+  GET_STATE_ENTRY_MESSAGE_TYPE,
 } from "../src/types/protocol";
-import { RestateDuplexStream } from "../src/connection/restate_duplex_stream"
-import { Header } from "../src/types/types"
+import { RestateDuplexStream } from "../src/connection/restate_duplex_stream";
+import { Header } from "../src/types/types";
 import stream from "stream";
 
 // The following test suite is taken from headers.rs

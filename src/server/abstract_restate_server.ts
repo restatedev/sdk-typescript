@@ -1,16 +1,29 @@
 "use strict";
 
-import { GrpcService, GrpcServiceMethod, HostedGrpcServiceMethod, ProtoMetadata } from "../types/grpc";
-import { ProtocolMode, ServiceDiscoveryResponse } from "../generated/proto/discovery";
-import { FileDescriptorProto, UninterpretedOption } from "../generated/google/protobuf/descriptor";
-import { fieldTypeToJSON, serviceTypeToJSON } from "../generated/dev/restate/ext";
+import {
+  GrpcService,
+  GrpcServiceMethod,
+  HostedGrpcServiceMethod,
+  ProtoMetadata,
+} from "../types/grpc";
+import {
+  ProtocolMode,
+  ServiceDiscoveryResponse,
+} from "../generated/proto/discovery";
+import {
+  FileDescriptorProto,
+  UninterpretedOption,
+} from "../generated/google/protobuf/descriptor";
+import {
+  fieldTypeToJSON,
+  serviceTypeToJSON,
+} from "../generated/dev/restate/ext";
 
 export interface ServiceOpts {
   descriptor: ProtoMetadata;
   service: string;
   instance: unknown;
 }
-
 
 export abstract class BaseRestateServer {
   readonly methods: Record<string, HostedGrpcServiceMethod<unknown, unknown>> =
@@ -38,15 +51,15 @@ export abstract class BaseRestateServer {
         desc.service
           .find((desc) => desc.name === name)
           ?.options?.uninterpretedOption.push(
-          UninterpretedOption.fromPartial({
-            name: [
-              { namePart: "dev.restate.ext.service_type", isExtension: true },
-            ],
-            identifierValue: serviceTypeToJSON(
-              descriptor.options?.services[name]?.options?.service_type
-            ),
-          })
-        );
+            UninterpretedOption.fromPartial({
+              name: [
+                { namePart: "dev.restate.ext.service_type", isExtension: true },
+              ],
+              identifierValue: serviceTypeToJSON(
+                descriptor.options?.services[name]?.options?.service_type
+              ),
+            })
+          );
       }
     }
 
@@ -60,13 +73,13 @@ export abstract class BaseRestateServer {
             .find((desc) => desc.name === messageName)
             ?.field?.find((desc) => desc.name === fieldName)
             ?.options?.uninterpretedOption.push(
-            UninterpretedOption.fromPartial({
-              name: [
-                { namePart: "dev.restate.ext.field", isExtension: true },
-              ],
-              identifierValue: fieldTypeToJSON(fields[fieldName]["field"]),
-            })
-          );
+              UninterpretedOption.fromPartial({
+                name: [
+                  { namePart: "dev.restate.ext.field", isExtension: true },
+                ],
+                identifierValue: fieldTypeToJSON(fields[fieldName]["field"]),
+              })
+            );
         }
       }
     }
@@ -114,7 +127,6 @@ export abstract class BaseRestateServer {
     return method as HostedGrpcServiceMethod<I, O>;
   }
 }
-
 
 // Given:
 // * an instance of a class that implements a gRPC TypeScript interface,

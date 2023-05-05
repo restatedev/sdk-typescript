@@ -32,12 +32,10 @@ import {
   SUSPENSION_TRIGGERS,
   SuspensionMessage,
   ProtocolMessage,
-  AwakeableIdentifier
+  AwakeableIdentifier,
 } from "./types/protocol";
 import { RestateContext } from "./restate_context";
-import {
-  printMessageAsJson,
-} from "./utils/utils";
+import { printMessageAsJson } from "./utils/utils";
 import { Failure } from "./generated/proto/protocol";
 import { SideEffectEntryMessage } from "./generated/proto/javascript";
 import { Empty } from "./generated/google/protobuf/empty";

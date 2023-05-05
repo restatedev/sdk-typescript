@@ -2,8 +2,8 @@
 
 import { Connection } from "./connection";
 import { ProtocolMessage } from "../types/protocol";
-import {encodeMessage} from "../io/encoder";
-import { InputEntry, Header } from "../types/types"
+import { encodeMessage } from "../io/encoder";
+import { InputEntry, Header } from "../types/types";
 import {
   OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
   PROTOBUF_MESSAGE_BY_TYPE,

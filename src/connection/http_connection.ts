@@ -2,7 +2,10 @@
 
 import http2 from "http2";
 import { parse as urlparse, Url } from "url";
-import { RestateDuplexStream, RestateDuplexStreamEventHandler } from "./restate_duplex_stream";
+import {
+  RestateDuplexStream,
+  RestateDuplexStreamEventHandler,
+} from "./restate_duplex_stream";
 import { ProtocolMessage } from "../types/protocol";
 import { ServiceDiscoveryResponse } from "../generated/proto/discovery";
 import { on } from "events";

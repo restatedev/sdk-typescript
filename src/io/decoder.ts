@@ -12,7 +12,7 @@
 // at this point the decodedStream is a high level stream of objects {header, message}
 import stream from "stream";
 import { PROTOBUF_MESSAGE_BY_TYPE } from "../types/protocol";
-import { Header } from "../types/types"
+import { Header } from "../types/types";
 
 const WAITING_FOR_HEADER = 0;
 const WAITING_FOR_BODY = 1;
