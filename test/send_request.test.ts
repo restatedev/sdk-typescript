@@ -91,11 +91,7 @@ describe("ReverseAwaitOrder: None completed", () => {
     ).run();
 
     expect(result).toStrictEqual([
-      invokeMessage(
-        "test.TestGreeter",
-        "Greet",
-        greetRequest("Francesco")
-      ),
+      invokeMessage("test.TestGreeter", "Greet", greetRequest("Francesco")),
       invokeMessage("test.TestGreeter", "Greet", greetRequest("Till")),
       suspensionMessage([1, 2]),
     ]);
@@ -114,11 +110,7 @@ describe("ReverseAwaitOrder: Request-response: None completed", () => {
     ).run();
 
     expect(result).toStrictEqual([
-      invokeMessage(
-        "test.TestGreeter",
-        "Greet",
-        greetRequest("Francesco")
-      ),
+      invokeMessage("test.TestGreeter", "Greet", greetRequest("Francesco")),
       invokeMessage("test.TestGreeter", "Greet", greetRequest("Till")),
       suspensionMessage([1, 2]),
     ]);
@@ -141,11 +133,7 @@ describe("ReverseAwaitOrder: A1 and A2 completed later", () => {
     ).run();
 
     expect(result).toStrictEqual([
-      invokeMessage(
-        "test.TestGreeter",
-        "Greet",
-        greetRequest("Francesco")
-      ),
+      invokeMessage("test.TestGreeter", "Greet", greetRequest("Francesco")),
       invokeMessage("test.TestGreeter", "Greet", greetRequest("Till")),
       setStateMessage("A2", "TILL"),
       outputMessage(greetResponse("Hello FRANCESCO-TILL")),
@@ -169,11 +157,7 @@ describe("ReverseAwaitOrder: A2 and A1 completed later", () => {
     ).run();
 
     expect(result).toStrictEqual([
-      invokeMessage(
-        "test.TestGreeter",
-        "Greet",
-        greetRequest("Francesco")
-      ),
+      invokeMessage("test.TestGreeter", "Greet", greetRequest("Francesco")),
       invokeMessage("test.TestGreeter", "Greet", greetRequest("Till")),
       setStateMessage("A2", "TILL"),
       outputMessage(greetResponse("Hello FRANCESCO-TILL")),
@@ -234,11 +218,7 @@ describe("ReverseAwaitOrder: Failing A1", () => {
     ).run();
 
     expect(result).toStrictEqual([
-      invokeMessage(
-        "test.TestGreeter",
-        "Greet",
-        greetRequest("Francesco")
-      ),
+      invokeMessage("test.TestGreeter", "Greet", greetRequest("Francesco")),
       invokeMessage("test.TestGreeter", "Greet", greetRequest("Till")),
       setStateMessage("A2", "TILL"),
       outputMessage(), // failure

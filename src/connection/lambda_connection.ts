@@ -8,7 +8,6 @@ import {
 } from "../types/protocol";
 import { decodeLambdaBody } from "../io/decoder";
 import { Message } from "../types/types";
-import { printMessageAsJson } from "../utils/utils";
 
 export class LambdaConnection implements Connection {
   // Buffer with input messages
@@ -41,7 +40,7 @@ export class LambdaConnection implements Connection {
       msg.messageType === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE ||
       msg.messageType === SUSPENSION_MESSAGE_TYPE
     ) {
-      console.debug("Flushing output buffer...")
+      console.debug("Flushing output buffer...");
       this.resolveOnCompleted(this.outputBuffer);
     }
   }

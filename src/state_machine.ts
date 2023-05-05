@@ -32,7 +32,7 @@ import {
   StartMessage,
   SUSPENSION_MESSAGE_TYPE,
   SUSPENSION_TRIGGERS,
-  SuspensionMessage
+  SuspensionMessage,
 } from "./types/protocol";
 import { RestateContext } from "./restate_context";
 import { printMessageAsJson, uuidV7FromBuffer } from "./utils/utils";
@@ -134,11 +134,14 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       }
 
       const msg = GetStateEntryMessage.create({ key: Buffer.from(name) });
-      console.debug(`${this.logPrefix} Adding message to output buffer: type: GetState, message: ${printMessageAsJson(msg)}`)
-      this.send(
-        GET_STATE_ENTRY_MESSAGE_TYPE,
-        msg
+      console.debug(
+        `${
+          this.logPrefix
+        } Adding message to output buffer: type: GetState, message: ${printMessageAsJson(
+          msg
+        )}`
       );
+      this.send(GET_STATE_ENTRY_MESSAGE_TYPE, msg);
     }).then((result: Buffer | null) => {
       if (result == null || JSON.stringify(result) === "{}") {
         return null;
@@ -162,11 +165,14 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       key: Buffer.from(name, "utf8"),
       value: bytes,
     });
-    console.debug(`${this.logPrefix} Adding message to output buffer: type: SetState, message: ${printMessageAsJson(msg)}`)
-    this.send(
-      SET_STATE_ENTRY_MESSAGE_TYPE,
-      msg
+    console.debug(
+      `${
+        this.logPrefix
+      } Adding message to output buffer: type: SetState, message: ${printMessageAsJson(
+        msg
+      )}`
     );
+    this.send(SET_STATE_ENTRY_MESSAGE_TYPE, msg);
   }
 
   clear(name: string): void {
@@ -178,12 +184,17 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       return;
     }
 
-    const msg = ClearStateEntryMessage.create({ key: Buffer.from(name, "utf8") });
-    console.debug(`${this.logPrefix} Adding message to output buffer: type: ClearState, message: ${printMessageAsJson(msg)}`)
-    this.send(
-      CLEAR_STATE_ENTRY_MESSAGE_TYPE,
-      msg
+    const msg = ClearStateEntryMessage.create({
+      key: Buffer.from(name, "utf8"),
+    });
+    console.debug(
+      `${
+        this.logPrefix
+      } Adding message to output buffer: type: ClearState, message: ${printMessageAsJson(
+        msg
+      )}`
     );
+    this.send(CLEAR_STATE_ENTRY_MESSAGE_TYPE, msg);
   }
 
   async awakeable<T>(): Promise<T> {
@@ -201,11 +212,14 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       }
 
       const msg = AwakeableEntryMessage.create();
-      console.debug(`${this.logPrefix} Adding message to output buffer: type: Awakeable, message: ${printMessageAsJson(msg)}`)
-      const timeout = this.send(
-        AWAKEABLE_ENTRY_MESSAGE_TYPE,
-        msg
+      console.debug(
+        `${
+          this.logPrefix
+        } Adding message to output buffer: type: Awakeable, message: ${printMessageAsJson(
+          msg
+        )}`
       );
+      const timeout = this.send(AWAKEABLE_ENTRY_MESSAGE_TYPE, msg);
 
       // an awakeable should trigger a suspension
       if (timeout) {
@@ -241,11 +255,14 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       entryIndex: id.entryIndex,
       payload: Buffer.from(JSON.stringify(payload)),
     });
-    console.debug(`${this.logPrefix} Adding message to output buffer: type: CompleteAwakeable, message: ${printMessageAsJson(msg)}`)
-    this.send(
-      COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
-      msg
+    console.debug(
+      `${
+        this.logPrefix
+      } Adding message to output buffer: type: CompleteAwakeable, message: ${printMessageAsJson(
+        msg
+      )}`
     );
+    this.send(COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE, msg);
   }
 
   request(
@@ -277,11 +294,14 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         methodName: method,
         parameter: Buffer.from(data),
       });
-      console.debug(`${this.logPrefix} Adding message to output buffer: type: BackgroundInvoke, message: ${printMessageAsJson(msg)}`)
-      this.send(
-        BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
-        msg
+      console.debug(
+        `${
+          this.logPrefix
+        } Adding message to output buffer: type: BackgroundInvoke, message: ${printMessageAsJson(
+          msg
+        )}`
       );
+      this.send(BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE, msg);
     }
 
     // We don't care about the result, just resolve the promise. Return empty result
@@ -313,11 +333,14 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         methodName: method,
         parameter: Buffer.from(data),
       });
-      console.debug(`${this.logPrefix} Adding message to output buffer: type: Invoke, message: ${printMessageAsJson(msg)}`)
-      const timeout = this.send(
-        INVOKE_ENTRY_MESSAGE_TYPE,
-        msg
+      console.debug(
+        `${
+          this.logPrefix
+        } Adding message to output buffer: type: Invoke, message: ${printMessageAsJson(
+          msg
+        )}`
       );
+      const timeout = this.send(INVOKE_ENTRY_MESSAGE_TYPE, msg);
 
       // Invoke should trigger a suspension
       if (timeout) {
@@ -353,7 +376,8 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     return new Promise((resolve, reject) => {
       if (this.inSideEffectFlag) {
         console.error(
-          this.logPrefix + "Rejecting the promise: invalid user code - you cannot nest side effects."
+          this.logPrefix +
+            "Rejecting the promise: invalid user code - you cannot nest side effects."
         );
         console.trace();
         const nestedSideEffectFailure: Failure = Failure.create({
@@ -363,7 +387,8 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         return reject(nestedSideEffectFailure);
       } else if (this.inBackgroundCallFlag) {
         console.error(
-          this.logPrefix + "Rejecting the promise: invalid user code - you cannot do a side effect inside a background call"
+          this.logPrefix +
+            "Rejecting the promise: invalid user code - you cannot do a side effect inside a background call"
         );
         console.trace();
         const sideEffectInBackgroundFailure: Failure = Failure.create({
@@ -418,7 +443,13 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
             SideEffectEntryMessage.create({ value: bytes })
           ).finish();
 
-          console.debug(`${this.logPrefix} Adding message to output buffer: type: SideEffect, message: ${printMessageAsJson(sideEffectMsg)}`)
+          console.debug(
+            `${
+              this.logPrefix
+            } Adding message to output buffer: type: SideEffect, message: ${printMessageAsJson(
+              sideEffectMsg
+            )}`
+          );
           this.send(
             SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
             sideEffectMsg,
@@ -444,7 +475,13 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
             SideEffectEntryMessage.create({ failure: failure })
           ).finish();
 
-          console.debug(`${this.logPrefix} Adding message to output buffer: type: SideEffect, message: ${printMessageAsJson(sideEffectMsg)}`)
+          console.debug(
+            `${
+              this.logPrefix
+            } Adding message to output buffer: type: SideEffect, message: ${printMessageAsJson(
+              sideEffectMsg
+            )}`
+          );
           this.send(
             SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
             sideEffectMsg,
@@ -476,11 +513,14 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
       // Forward to runtime
       const msg = SleepEntryMessage.create({ wakeUpTime: Date.now() + millis });
-      console.debug(`${this.logPrefix} Adding message to output buffer: type: Sleep, message: ${printMessageAsJson(msg)}`)
-      const timeout = this.send(
-        SLEEP_ENTRY_MESSAGE_TYPE,
-        msg
+      console.debug(
+        `${
+          this.logPrefix
+        } Adding message to output buffer: type: Sleep, message: ${printMessageAsJson(
+          msg
+        )}`
       );
+      const timeout = this.send(SLEEP_ENTRY_MESSAGE_TYPE, msg);
 
       if (!timeout) {
         throw new Error(
@@ -624,8 +664,9 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   handleInputMessage(m: PollInputStreamEntryMessage) {
     const invocationIdString = uuidV7FromBuffer(this.invocationId);
     this.logPrefix = `[${this.serviceName}] [${this.method.method.name}] [${invocationIdString}]`;
-    console.debug(`${this.logPrefix} Received input message: ${printMessageAsJson(m)}`);
-
+    console.debug(
+      `${this.logPrefix} Received input message: ${printMessageAsJson(m)}`
+    );
 
     this.method.invoke(this, m.value).then(
       (value) => this.onCallSuccess(value),
@@ -772,8 +813,14 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     }
 
     if (failure !== undefined) {
-      if(this.state !== ExecutionState.REPLAYING){
-        console.debug(`${this.logPrefix} Received new completion from the runtime: ${printMessageAsJson(failure)}`)
+      if (this.state !== ExecutionState.REPLAYING) {
+        console.debug(
+          `${
+            this.logPrefix
+          } Received new completion from the runtime: ${printMessageAsJson(
+            failure
+          )}`
+        );
       }
       resolveFct.reject(failure);
       this.pendingPromises.delete(journalIndex);
@@ -800,28 +847,21 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   }
 
   onCallSuccess(result: Uint8Array) {
-    const msg = OutputStreamEntryMessage.create({ value: Buffer.from(result) })
-    console.debug(`${this.logPrefix} Call ended successful, output message: ${printMessageAsJson(msg)}`)
-    this.send(
-      OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
-      msg
+    const msg = OutputStreamEntryMessage.create({ value: Buffer.from(result) });
+    console.debug(
+      `${
+        this.logPrefix
+      } Call ended successful, output message: ${printMessageAsJson(msg)}`
     );
+    this.send(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, msg);
     this.connection.end();
   }
 
   onCallFailure(e: Error | Failure) {
     if (e instanceof Error) {
-      console.warn(
-        `${this.logPrefix} Call failed: ${
-          e.message
-        } - ${e.stack}`
-      );
+      console.warn(`${this.logPrefix} Call failed: ${e.message} - ${e.stack}`);
     } else {
-      console.warn(
-        `${this.logPrefix} Call failed: ${printMessageAsJson(
-          e
-        )}`
-      );
+      console.warn(`${this.logPrefix} Call failed: ${printMessageAsJson(e)}`);
     }
 
     this.send(

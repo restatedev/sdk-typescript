@@ -7,7 +7,6 @@ import { ServiceDiscoveryResponse } from "../generated/proto/discovery";
 import { on } from "events";
 import { Connection } from "./connection";
 import { Message } from "../types/types";
-import { printMessageAsJson } from "../utils/utils";
 
 export class HttpConnection implements Connection {
   private onErrorListeners: (() => void)[] = [];
@@ -91,7 +90,7 @@ export async function* incomingConnectionAtPort(
     if (u.path == "/discover") {
       console.info(
         "Answering discovery request. Registering these services: " +
-        JSON.stringify(discovery.services)
+          JSON.stringify(discovery.services)
       );
       s.respond({
         ":status": 200,

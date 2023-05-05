@@ -120,7 +120,7 @@ export class LambdaRestateServer extends BaseRestateServer {
     // return discovery information
     console.info(
       "Answering discovery request. Registering these services: " +
-      JSON.stringify(this.discovery.services)
+        JSON.stringify(this.discovery.services)
     );
     return {
       headers: {

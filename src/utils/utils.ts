@@ -163,6 +163,11 @@ export function uuidV7FromBuffer(buffer: Buffer): string {
   //   throw new Error('Invalid UUIDv7 buffer length');
   // }
   const bytes = new Uint8Array(buffer);
-  const uuid = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
-  return `${uuid.slice(0,8)}-${uuid.slice(8, 12)}-${uuid.slice(12, 16)}-${uuid.slice(16,20)}-${uuid.slice(20)}`;
+  const uuid = Array.from(bytes, (byte) =>
+    byte.toString(16).padStart(2, "0")
+  ).join("");
+  return `${uuid.slice(0, 8)}-${uuid.slice(8, 12)}-${uuid.slice(
+    12,
+    16
+  )}-${uuid.slice(16, 20)}-${uuid.slice(20)}`;
 }

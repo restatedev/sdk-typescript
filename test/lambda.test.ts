@@ -132,7 +132,7 @@ describe("LambdaGreeter: Invoke Lambda function - fail on query parameters in pa
     expect(result.isBase64Encoded).toStrictEqual(true);
     expect(Buffer.from(result.body, "base64").toString()).toContain(
       "" +
-      "Invalid path: path URL seems to include query parameters: /invoke/test.TestGreeter/Greet?count=5"
+        "Invalid path: path URL seems to include query parameters: /invoke/test.TestGreeter/Greet?count=5"
     );
   });
 });

@@ -12,9 +12,10 @@ const originalConsole = {
   trace: console.trace,
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const prefixedLog = (
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   originalFn: (...args: any[]) => void,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   args: any[],
   prefix: string
 ) => {
