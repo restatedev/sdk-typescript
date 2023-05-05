@@ -47,11 +47,7 @@ describe("Lambda: decodeMessage", () => {
 
     const decodedMessages = decodeLambdaBody(serializedMsgs);
 
-    expect(
-      decodedMessages.map(
-        (entry) => new Message(entry.header.messageType, entry.message)
-      )
-    ).toStrictEqual(messages);
+    expect(decodedMessages).toStrictEqual(messages);
   });
 });
 
@@ -66,8 +62,7 @@ describe("Lambda: decodeMessage", () => {
     // appending random character to the base 64 encoded message
     const serializedMsgs = serializeMessages(messages) + "a";
 
-    const decodedMessages = () =>
-      decodeLambdaBody(serializedMsgs);
+    const decodedMessages = () => decodeLambdaBody(serializedMsgs);
 
     expect(decodedMessages).toThrow(
       "Parsing error: SDK cannot parse the message. Message was not valid base64 encoded."
@@ -86,8 +81,7 @@ describe("Lambda: decodeMessage", () => {
     // appending random character to the base 64 encoded message
     const serializedMsgs = "a" + serializeMessages(messages);
 
-    const decodedMessages = () =>
-      decodeLambdaBody(serializedMsgs);
+    const decodedMessages = () => decodeLambdaBody(serializedMsgs);
 
     expect(decodedMessages).toThrow(
       "Parsing error: SDK cannot parse the message. Message was not valid base64 encoded."
@@ -281,12 +275,7 @@ function serializeMessages(messages: Message[]): string {
   let buf = Buffer.alloc(0);
 
   messages.forEach((msg: Message) => {
-    const msgBuf = encodeMessage({
-      messageType: msg.messageType,
-      message: msg.message,
-      completed: msg.completed,
-      requiresAck: msg.requiresAck,
-    });
+    const msgBuf = encodeMessage(msg);
 
     buf = Buffer.concat([buf, msgBuf]);
   });
@@ -295,7 +284,5 @@ function serializeMessages(messages: Message[]): string {
 }
 
 function deserializeMessages(body: string): Array<Message> {
-  return decodeLambdaBody(body).map(
-    (entry) => new Message(entry.header.messageType, entry.message)
-  );
+  return decodeLambdaBody(body);
 }

@@ -41,6 +41,7 @@ import { SideEffectEntryMessage } from "./generated/proto/javascript";
 import { Empty } from "./generated/google/protobuf/empty";
 import { ProtocolMode } from "./generated/proto/discovery";
 import { clearTimeout } from "timers";
+import { Message } from "./types/types";
 
 enum ExecutionState {
   WAITING_FOR_START = "WAITING_FOR_START",
@@ -449,7 +450,13 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
             SideEffectEntryMessage.create({ value: bytes })
           ).finish();
 
-          this.send(SIDE_EFFECT_ENTRY_MESSAGE_TYPE, sideEffectMsg, false, true);
+          this.send(
+            SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+            sideEffectMsg,
+            false,
+            undefined,
+            true
+          );
           this.inSideEffectFlag = false;
 
           // When the runtime has ack'ed the sideEffect with an empty completion,
@@ -467,7 +474,13 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
           const sideEffectMsg = SideEffectEntryMessage.encode(
             SideEffectEntryMessage.create({ failure: failure })
           ).finish();
-          this.send(SIDE_EFFECT_ENTRY_MESSAGE_TYPE, sideEffectMsg, false, true);
+          this.send(
+            SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+            sideEffectMsg,
+            false,
+            undefined,
+            true
+          );
 
           // When something went wrong, then we resolve the promise with a failure.
           promiseToResolve.then(
@@ -518,10 +531,19 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     messageType: bigint,
     message: ProtocolMessage | Uint8Array,
     completedFlag?: boolean,
+    protocolVersion?: number,
     requiresAckFlag?: boolean
   ): NodeJS.Timeout | void {
     // send the message
-    this.connection.send(messageType, message, completedFlag, requiresAckFlag);
+    this.connection.send(
+      new Message(
+        messageType,
+        message,
+        completedFlag,
+        protocolVersion,
+        requiresAckFlag
+      )
+    );
 
     // If the suspension triggers for this protocol mode (set in constructor) include the message type
     // then set a timeout to send the suspension message.
@@ -537,12 +559,15 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
           // There need to be journal entries to complete, otherwise this timeout should have been removed.
           if (completableIndices.length > 0) {
             this.connection.send(
-              SUSPENSION_MESSAGE_TYPE,
-              SuspensionMessage.create({
-                entryIndexes: completableIndices,
-              }),
-              undefined,
-              undefined
+              new Message(
+                SUSPENSION_MESSAGE_TYPE,
+                SuspensionMessage.create({
+                  entryIndexes: completableIndices,
+                }),
+                undefined,
+                undefined,
+                undefined
+              )
             );
 
             this.onClose();
@@ -559,35 +584,26 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   }
 
   // Called for every incoming message from the runtime: start messages, input messages and replay messages.
-  onIncomingMessage(
-    messageType: bigint,
-    message: ProtocolMessage | Uint8Array,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    completedFlag?: boolean,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    protocolVersion?: number,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    requiresAckFlag?: boolean
-  ) {
-    switch (messageType) {
+  onIncomingMessage(msg: Message) {
+    switch (msg.messageType) {
       case START_MESSAGE_TYPE: {
-        this.handleStartMessage(message as StartMessage);
+        this.handleStartMessage(msg.message as StartMessage);
         break;
       }
       case COMPLETION_MESSAGE_TYPE: {
-        this.handleCompletionMessage(message as CompletionMessage);
+        this.handleCompletionMessage(msg.message as CompletionMessage);
         break;
       }
       case POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE: {
-        this.handleInputMessage(message as PollInputStreamEntryMessage);
+        this.handleInputMessage(msg.message as PollInputStreamEntryMessage);
         break;
       }
       case GET_STATE_ENTRY_MESSAGE_TYPE: {
-        this.handleGetStateMessage(message as GetStateEntryMessage);
+        this.handleGetStateMessage(msg.message as GetStateEntryMessage);
         break;
       }
       case SET_STATE_ENTRY_MESSAGE_TYPE: {
-        const m = message as SetStateEntryMessage;
+        const m = msg.message as SetStateEntryMessage;
         console.debug(
           "Received SetStateEntryMessage: " + printMessageAsJson(m)
         );
@@ -595,7 +611,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         break;
       }
       case CLEAR_STATE_ENTRY_MESSAGE_TYPE: {
-        const m = message as ClearStateEntryMessage;
+        const m = msg.message as ClearStateEntryMessage;
         console.debug(
           "Received ClearStateEntryMessage: " + printMessageAsJson(m)
         );
@@ -603,15 +619,15 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         break;
       }
       case SLEEP_ENTRY_MESSAGE_TYPE: {
-        this.handleSleepCompletionMessage(message as SleepEntryMessage);
+        this.handleSleepCompletionMessage(msg.message as SleepEntryMessage);
         break;
       }
       case INVOKE_ENTRY_MESSAGE_TYPE: {
-        this.handleInvokeEntryMessage(message as InvokeEntryMessage);
+        this.handleInvokeEntryMessage(msg.message as InvokeEntryMessage);
         break;
       }
       case BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE: {
-        const m = message as BackgroundInvokeEntryMessage;
+        const m = msg.message as BackgroundInvokeEntryMessage;
         console.debug(
           "Received BackgroundInvokeEntryMessage: " + printMessageAsJson(m)
         );
@@ -619,23 +635,23 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         break;
       }
       case AWAKEABLE_ENTRY_MESSAGE_TYPE: {
-        this.handleAwakeableMessage(message as AwakeableEntryMessage);
+        this.handleAwakeableMessage(msg.message as AwakeableEntryMessage);
         break;
       }
       case COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE: {
-        const m = message as CompleteAwakeableEntryMessage;
+        const m = msg.message as CompleteAwakeableEntryMessage;
         console.debug(
           "Received CompleteAwakeableEntryMessage: " + printMessageAsJson(m)
         );
         break;
       }
       case SIDE_EFFECT_ENTRY_MESSAGE_TYPE: {
-        this.handleSideEffectMessage(message as Uint8Array);
+        this.handleSideEffectMessage(msg.message as Uint8Array);
         break;
       }
       default: {
         throw new Error(
-          `Received unkown message type from the runtime: { message_type: ${messageType}, message: ${message} }`
+          `Received unkown message type from the runtime: { message_type: ${msg.messageType}, message: ${msg.message} }`
         );
       }
     }

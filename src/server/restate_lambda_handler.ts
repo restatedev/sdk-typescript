@@ -38,7 +38,7 @@ export class LambdaRestateServer extends BaseRestateServer {
     // Logic:
     // 1. Check whether there are at least three segments in the path and whether the third-last one is invoke.
     // If that is the case, treat it as an invocation.
-    // 2. See of the last one is discover, answer with discovery.
+    // 2. See if the last one is discover, answer with discovery.
     // 3. Else report invalid path.
     if (
       pathSegments.length >= 3 &&

@@ -2,14 +2,11 @@
 
 import http2 from "http2";
 import { parse as urlparse, Url } from "url";
-import {
-  RestateDuplexStream,
-  RestateDuplexStreamEventHandler,
-} from "./restate_duplex_stream";
-import { ProtocolMessage } from "../types/protocol";
+import { RestateDuplexStream } from "./restate_duplex_stream";
 import { ServiceDiscoveryResponse } from "../generated/proto/discovery";
 import { on } from "events";
 import { Connection } from "./connection";
+import { Message } from "../types/types";
 
 export class HttpConnection implements Connection {
   private onErrorListeners: (() => void)[] = [];
@@ -39,17 +36,12 @@ export class HttpConnection implements Connection {
     });
   }
 
-  send(
-    messageType: bigint,
-    message: ProtocolMessage | Uint8Array,
-    completed?: boolean | undefined,
-    requiresAck?: boolean | undefined
-  ) {
+  send(msg: Message) {
     // Add the message to the result set
-    this.restate.send(messageType, message, completed, requiresAck);
+    this.restate.send(msg);
   }
 
-  onMessage(handler: RestateDuplexStreamEventHandler) {
+  onMessage(handler: (msg: Message) => void) {
     this.restate.onMessage(handler);
   }
 

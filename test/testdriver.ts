@@ -4,12 +4,8 @@ import {
   OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
   StartMessage,
   SUSPENSION_MESSAGE_TYPE,
-  ProtocolMessage,
 } from "../src/types/protocol";
-import {
-  RestateDuplexStream,
-  RestateDuplexStreamEventHandler,
-} from "../src/connection/restate_duplex_stream";
+import { RestateDuplexStream } from "../src/connection/restate_duplex_stream";
 import * as restate from "../src/public_api";
 import { Connection } from "../src/connection/connection";
 import stream from "stream";
@@ -23,7 +19,6 @@ export class TestDriver<I, O> implements Connection {
   private http2stream = this.mockHttp2DuplexStream();
   private restate = RestateDuplexStream.from(this.http2stream);
   private result: Array<Message> = [];
-  private nbRequiredCompletions = 0;
 
   private restateServer: restate.RestateServer;
   private protocolMode = ProtocolMode.BIDI_STREAM;
@@ -82,42 +77,34 @@ export class TestDriver<I, O> implements Connection {
 
     // Pipe messages through the state machine
     this.entries.forEach((el) => {
-      this.desm.onIncomingMessage(el.messageType, el.message);
+      this.desm.onIncomingMessage(el);
     });
 
     return this.getResultPromise;
   }
 
-  send(
-    message_type: bigint,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    message: ProtocolMessage | Uint8Array,
-    completed?: boolean,
-    requires_ack?: boolean
-  ) {
-    this.result.push(
-      new Message(message_type, message, completed, requires_ack)
-    );
+  send(msg: Message) {
+    this.result.push(msg);
     console.debug(
       "Adding result to the result array. Message type: " +
-        message_type +
+        msg.messageType +
         ", message: " +
-        (message instanceof Uint8Array
-          ? (message as Uint8Array).toString()
-          : printMessageAsJson(message))
+        (msg.message instanceof Uint8Array
+          ? (msg.message as Uint8Array).toString()
+          : printMessageAsJson(msg.message))
     );
 
     // For an output message, flush immediately
     if (
-      message_type === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE ||
-      message_type === SUSPENSION_MESSAGE_TYPE
+      msg.messageType === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE ||
+      msg.messageType === SUSPENSION_MESSAGE_TYPE
     ) {
       console.debug("End of test: Flushing test results");
       this.resolveOnClose(this.result);
     }
   }
 
-  onMessage(handler: RestateDuplexStreamEventHandler) {
+  onMessage(handler: (msg: Message) => void) {
     this.restate.onMessage(handler);
   }
 

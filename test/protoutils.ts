@@ -42,7 +42,10 @@ export function startMessage(knownEntries: number): Message {
       instanceKey: Buffer.from("123"),
       invocationId: Buffer.from("abcd"),
       knownEntries: knownEntries,
-    })
+    }),
+    undefined,
+    0,
+    undefined
   );
 }
 
@@ -237,6 +240,7 @@ export function sideEffectMessage<T>(value?: T, failure?: Failure): Message {
         })
       ).finish(),
       false,
+      undefined,
       true
     );
   } else {
@@ -246,6 +250,7 @@ export function sideEffectMessage<T>(value?: T, failure?: Failure): Message {
         SideEffectEntryMessage.create({ failure: failure })
       ).finish(),
       false,
+      undefined,
       true
     );
   }

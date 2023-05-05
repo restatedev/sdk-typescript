@@ -1,14 +1,13 @@
 "use strict";
 
 import { Connection } from "./connection";
-import { ProtocolMessage } from "../types/protocol";
 import { encodeMessage } from "../io/encoder";
 import {
   OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
   SUSPENSION_MESSAGE_TYPE,
 } from "../types/protocol";
-import { RestateDuplexStreamEventHandler } from "./restate_duplex_stream";
 import { decodeLambdaBody } from "../io/decoder";
+import { Message } from "../types/types";
 
 export class LambdaConnection implements Connection {
   // Buffer with input messages
@@ -31,43 +30,25 @@ export class LambdaConnection implements Connection {
   }
 
   // Send a message back to the runtime
-  send(
-    messageType: bigint,
-    message: ProtocolMessage | Uint8Array,
-    completed?: boolean | undefined,
-    requiresAck?: boolean | undefined
-  ): void {
+  send(msg: Message): void {
     // Add the header and the body to buffer and add to the output buffer
-    const msgBuffer = encodeMessage({
-      messageType: messageType,
-      message: message,
-      completed: completed,
-      requiresAck: requiresAck,
-    });
+    const msgBuffer = encodeMessage(msg);
     this.outputBuffer = Buffer.concat([this.outputBuffer, msgBuffer]);
 
     // An output message or suspension message is the end of a Lambda invocation
     if (
-      messageType === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE ||
-      messageType === SUSPENSION_MESSAGE_TYPE
+      msg.messageType === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE ||
+      msg.messageType === SUSPENSION_MESSAGE_TYPE
     ) {
       this.resolveOnCompleted(this.outputBuffer);
     }
   }
 
   // Process the incoming invocation message from the runtime
-  onMessage(handler: RestateDuplexStreamEventHandler): void {
+  onMessage(handler: (msg: Message) => void): void {
     try {
       const decodedEntries = decodeLambdaBody(this.inputBase64);
-      decodedEntries.forEach((entry) =>
-        handler(
-          entry.header.messageType,
-          entry.message,
-          entry.header.completedFlag,
-          entry.header.protocolVersion,
-          entry.header.requiresAckFlag
-        )
-      );
+      decodedEntries.forEach((msg) => handler(msg));
     } catch (e) {
       console.error(e);
       console.trace();

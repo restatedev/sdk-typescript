@@ -12,7 +12,7 @@
 // at this point the decodedStream is a high level stream of objects {header, message}
 import stream from "stream";
 import { PROTOBUF_MESSAGE_BY_TYPE } from "../types/protocol";
-import { Header, InputEntry } from "../types/types";
+import { Header, Message } from "../types/types";
 
 const WAITING_FOR_HEADER = 0;
 const WAITING_FOR_BODY = 1;
@@ -58,10 +58,27 @@ export function streamDecoder(): stream.Transform {
                 // we don't know how to decode custom message
                 // so we let the user of this stream to deal with custom
                 // message serde
-                this.push(new InputEntry(header, frame));
+
+                this.push(
+                  new Message(
+                    header.messageType,
+                    frame,
+                    header.completedFlag,
+                    header.protocolVersion,
+                    header.requiresAckFlag
+                  )
+                );
               } else {
                 const message = pbType.decode(frame);
-                this.push(new InputEntry(header, message));
+                this.push(
+                  new Message(
+                    header.messageType,
+                    message,
+                    header.completedFlag,
+                    header.protocolVersion,
+                    header.requiresAckFlag
+                  )
+                );
               }
               break;
             }
@@ -77,7 +94,7 @@ export function streamDecoder(): stream.Transform {
 // Decodes messages from Lambda requests to an array of headers + protocol messages
 const base64regex =
   /^([0-9a-zA-Z+/]{4})*(([0-9a-zA-Z+/]{2}==)|([0-9a-zA-Z+/]{3}=))?$/;
-export function decodeLambdaBody(msgBase64: string): InputEntry[] {
+export function decodeLambdaBody(msgBase64: string): Message[] {
   if (!base64regex.test(msgBase64)) {
     throw new Error(
       "Parsing error: SDK cannot parse the message. Message was not valid base64 encoded."
@@ -87,7 +104,7 @@ export function decodeLambdaBody(msgBase64: string): InputEntry[] {
   let buf = Buffer.from(msgBase64, "base64");
   let state = WAITING_FOR_HEADER;
   let header: Header | null = null;
-  const decodedEntries: InputEntry[] = [];
+  const decodedEntries: Message[] = [];
 
   while (buf.length > 0) {
     switch (state) {
@@ -107,13 +124,13 @@ export function decodeLambdaBody(msgBase64: string): InputEntry[] {
         if (header == null) {
           throw new Error(
             "Parsing error: SDK cannot parse the message. " +
-            "Parsing body, while header was not parsed yet"
+              "Parsing body, while header was not parsed yet"
           );
         }
         if (buf.length < header.frameLength) {
           throw new Error(
             "Parsing error: SDK cannot parse the message. " +
-            `Buffer length (${buf.length}) is smaller than frame length (${header.frameLength})`
+              `Buffer length (${buf.length}) is smaller than frame length (${header.frameLength})`
           );
         }
         const frame = buf.subarray(0, header.frameLength);
@@ -125,10 +142,26 @@ export function decodeLambdaBody(msgBase64: string): InputEntry[] {
           // we don't know how to decode custom message
           // so we let the user of this stream to deal with custom
           // message serde
-          decodedEntries.push(new InputEntry(header, frame));
+          decodedEntries.push(
+            new Message(
+              header.messageType,
+              frame,
+              header.completedFlag,
+              header.protocolVersion,
+              header.requiresAckFlag
+            )
+          );
         } else {
           const message = pbType.decode(frame);
-          decodedEntries.push(new InputEntry(header, message));
+          decodedEntries.push(
+            new Message(
+              header.messageType,
+              message,
+              header.completedFlag,
+              header.protocolVersion,
+              header.requiresAckFlag
+            )
+          );
         }
 
         // Reset the state and the header, to start parsing the next msg

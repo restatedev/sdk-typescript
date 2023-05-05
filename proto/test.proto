@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package dev.restate;
+package test;
 
 import "dev/restate/ext.proto";
 

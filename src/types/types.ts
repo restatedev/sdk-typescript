@@ -10,18 +10,12 @@ import {
   START_MESSAGE_TYPE,
 } from "./protocol";
 
-export class InputEntry {
-  constructor(
-    readonly header: Header,
-    readonly message: ProtocolMessage | Buffer
-  ) {}
-}
-
 export class Message {
   constructor(
     readonly messageType: bigint,
     readonly message: ProtocolMessage | Uint8Array,
     readonly completed?: boolean,
+    readonly protocolVersion?: number,
     readonly requiresAck?: boolean
   ) {}
 }

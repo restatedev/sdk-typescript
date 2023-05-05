@@ -36,7 +36,7 @@ restate
   .createServer()
   .bindService({
     descriptor: protoMetadata,
-    service: "Greeter",
+    service: "TestGreeter",
     instance: new GreeterService(),
   })
   .listen(8000);

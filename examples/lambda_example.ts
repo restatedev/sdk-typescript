@@ -38,7 +38,7 @@ export const handler = restate
   .lambdaApiGatewayHandler()
   .bindService({
     descriptor: protoMetadata,
-    service: "Greeter",
+    service: "TestGreeter",
     instance: new GreeterService(),
   })
   .create();
