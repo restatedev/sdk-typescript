@@ -40,9 +40,12 @@ export function startMessage(knownEntries: number): Message {
     START_MESSAGE_TYPE,
     StartMessage.create({
       instanceKey: Buffer.from("123"),
-      invocationId: Buffer.from("abcd"),
+      invocationId: Buffer.from("0187ec34-7600-7557-820c-da483d3e4d56"),
       knownEntries: knownEntries,
-    })
+    }),
+    undefined,
+    0,
+    undefined
   );
 }
 
@@ -69,7 +72,7 @@ export function outputMessage(value?: Uint8Array): Message {
       OutputStreamEntryMessage.create({
         failure: Failure.create({
           code: 13,
-          message: `Uncaught exception for invocation id abcd`,
+          message: `Uncaught exception for invocation id 0187ec34-7600-7557-820c-da483d3e4d56`,
         }),
       })
     );
@@ -237,6 +240,7 @@ export function sideEffectMessage<T>(value?: T, failure?: Failure): Message {
         })
       ).finish(),
       false,
+      undefined,
       true
     );
   } else {
@@ -246,6 +250,7 @@ export function sideEffectMessage<T>(value?: T, failure?: Failure): Message {
         SideEffectEntryMessage.create({ failure: failure })
       ).finish(),
       false,
+      undefined,
       true
     );
   }

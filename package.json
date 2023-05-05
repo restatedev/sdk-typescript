@@ -30,7 +30,6 @@
     "lint": "eslint --ignore-path .eslintignore --ext .ts .",
     "format": "prettier --ignore-path .eslintignore --write \"**/*.+(js|ts|json)\"",
     "example": "ts-node-dev --respawn --transpile-only ./examples/example.ts",
-    "lambda-example": "ts-node-dev --respawn --transpile-only ./examples/lambda_example.ts",
     "verify": "npm run test && npm run lint && npm run build",
     "release": "release-it"
   },

@@ -1,20 +1,9 @@
 "use strict";
 
-import { ProtocolMessage } from "../types/protocol";
 import stream from "stream";
-import { Header } from "../types/types";
+import { Message } from "../types/types";
 import { streamEncoder } from "../io/encoder";
 import { streamDecoder } from "../io/decoder";
-
-export type RestateDuplexStreamEventHandler = (
-  messageType: bigint,
-  message: ProtocolMessage | Uint8Array,
-  completedFlag?: boolean,
-  protocolVersion?: number,
-  requiresAckFlag?: boolean
-) => void;
-
-export type RestateDuplexStreamErrorHandler = (err: Error) => void;
 
 export class RestateDuplexStream {
   // create a RestateDuplex stream from an http2 (duplex) stream.
@@ -32,36 +21,17 @@ export class RestateDuplexStream {
     private readonly sdkOutput: stream.Writable
   ) {}
 
-  send(
-    messageType: bigint,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    message: ProtocolMessage | Uint8Array,
-    completed?: boolean,
-    requiresAck?: boolean
-  ) {
-    this.sdkOutput.write({
-      messageType: messageType,
-      message,
-      completed,
-      requiresAck: requiresAck,
-    });
+  send(msg: Message) {
+    this.sdkOutput.write(msg);
   }
 
-  onMessage(handler: RestateDuplexStreamEventHandler) {
+  onMessage(handler: (msg: Message) => void) {
     this.sdkInput.on("data", (data) => {
-      const { header, message } = data;
-      const h = header as Header;
-      handler(
-        h.messageType,
-        message,
-        h.completedFlag,
-        h.protocolVersion,
-        h.requiresAckFlag
-      );
+      handler(data);
     });
   }
 
-  onError(handler: RestateDuplexStreamErrorHandler) {
+  onError(handler: (err: Error) => void) {
     this.sdkInput.on("error", (err) => {
       console.warn("Error in input stream: " + err.stack);
       handler(err);

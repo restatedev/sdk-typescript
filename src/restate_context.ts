@@ -2,6 +2,9 @@
 
 import { AwakeableIdentifier } from "./types/protocol";
 
+// Use our prefixed logger instead of default console logging
+import "./utils/logger";
+
 export interface RestateContext {
   instanceKey: Buffer;
   serviceName: string;

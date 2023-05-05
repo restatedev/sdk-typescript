@@ -27,7 +27,6 @@ class GetAndSetGreeter implements TestGreeter {
 
     // state
     const state = (await ctx.get<string>("STATE")) || "nobody";
-    console.info("Current state is " + state);
 
     ctx.set("STATE", request.name);
 
@@ -41,7 +40,6 @@ class ClearStateGreeter implements TestGreeter {
 
     // state
     const state = (await ctx.get<string>("STATE")) || "nobody";
-    console.info("Current state is " + state);
 
     ctx.set("STATE", request.name);
 
@@ -57,7 +55,7 @@ describe("GetAndSetGreeter: With GetState and SetState", () => {
       protoMetadata,
       "TestGreeter",
       new GetAndSetGreeter(),
-      "/dev.restate.TestGreeter/Greet",
+      "/test.TestGreeter/Greet",
       [
         startMessage(3),
         inputMessage(greetRequest("Till")),
@@ -78,7 +76,7 @@ describe("GetAndSetGreeter: With GetState already completed", () => {
       protoMetadata,
       "TestGreeter",
       new GetAndSetGreeter(),
-      "/dev.restate.TestGreeter/Greet",
+      "/test.TestGreeter/Greet",
       [
         startMessage(2),
         inputMessage(greetRequest("Till")),
@@ -99,7 +97,7 @@ describe("GetAndSetGreeter: With GetState completed later", () => {
       protoMetadata,
       "TestGreeter",
       new GetAndSetGreeter(),
-      "/dev.restate.TestGreeter/Greet",
+      "/test.TestGreeter/Greet",
       [
         startMessage(1),
         inputMessage(greetRequest("Till")),
@@ -121,7 +119,7 @@ describe("GetAndSetGreeter: Request-response with GetState and suspension", () =
       protoMetadata,
       "TestGreeter",
       new GetAndSetGreeter(),
-      "/dev.restate.TestGreeter/Greet",
+      "/test.TestGreeter/Greet",
       [startMessage(1), inputMessage(greetRequest("Till"))],
       ProtocolMode.REQUEST_RESPONSE
     ).run();
@@ -139,7 +137,7 @@ describe("ClearState: With ClearState completed later", () => {
       protoMetadata,
       "TestGreeter",
       new ClearStateGreeter(),
-      "/dev.restate.TestGreeter/Greet",
+      "/test.TestGreeter/Greet",
       [
         startMessage(1),
         inputMessage(greetRequest("Till")),
@@ -162,7 +160,7 @@ describe("ClearState: With ClearState already completed", () => {
       protoMetadata,
       "TestGreeter",
       new ClearStateGreeter(),
-      "/dev.restate.TestGreeter/Greet",
+      "/test.TestGreeter/Greet",
       [
         startMessage(4),
         inputMessage(greetRequest("Till")),

@@ -1,18 +1,13 @@
 "use strict";
 
 import { Connection } from "./connection";
-import { ProtocolMessage } from "../types/protocol";
 import { encodeMessage } from "../io/encoder";
-import { InputEntry, Header } from "../types/types";
 import {
   OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
-  PROTOBUF_MESSAGE_BY_TYPE,
   SUSPENSION_MESSAGE_TYPE,
 } from "../types/protocol";
-import { RestateDuplexStreamEventHandler } from "./restate_duplex_stream";
-
-const WAITING_FOR_HEADER = 0;
-const WAITING_FOR_BODY = 1;
+import { decodeLambdaBody } from "../io/decoder";
+import { Message } from "../types/types";
 
 export class LambdaConnection implements Connection {
   // Buffer with input messages
@@ -23,9 +18,6 @@ export class LambdaConnection implements Connection {
   private completionPromise: Promise<Buffer>;
   private resolveOnCompleted!: (value: Buffer | PromiseLike<Buffer>) => void;
   private onErrorListeners: (() => void)[] = [];
-
-  private static base64regex =
-    /^([0-9a-zA-Z+/]{4})*(([0-9a-zA-Z+/]{2}==)|([0-9a-zA-Z+/]{3}=))?$/;
 
   constructor(body: string) {
     // Decode the body coming from API Gateway (base64 encoded).
@@ -38,47 +30,30 @@ export class LambdaConnection implements Connection {
   }
 
   // Send a message back to the runtime
-  send(
-    messageType: bigint,
-    message: ProtocolMessage | Uint8Array,
-    completed?: boolean | undefined,
-    requiresAck?: boolean | undefined
-  ): void {
+  send(msg: Message): void {
     // Add the header and the body to buffer and add to the output buffer
-    const msgBuffer = encodeMessage({
-      messageType: messageType,
-      message: message,
-      completed: completed,
-      requiresAck: requiresAck,
-    });
+    const msgBuffer = encodeMessage(msg);
     this.outputBuffer = Buffer.concat([this.outputBuffer, msgBuffer]);
 
     // An output message or suspension message is the end of a Lambda invocation
     if (
-      messageType === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE ||
-      messageType === SUSPENSION_MESSAGE_TYPE
+      msg.messageType === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE ||
+      msg.messageType === SUSPENSION_MESSAGE_TYPE
     ) {
+      console.debug("Flushing output buffer...");
       this.resolveOnCompleted(this.outputBuffer);
     }
   }
 
   // Process the incoming invocation message from the runtime
-  onMessage(handler: RestateDuplexStreamEventHandler): void {
+  onMessage(handler: (msg: Message) => void): void {
     try {
-      const decodedEntries = LambdaConnection.decodeMessage(this.inputBase64);
-      decodedEntries.forEach((entry) =>
-        handler(
-          entry.header.messageType,
-          entry.message,
-          entry.header.completedFlag,
-          entry.header.protocolVersion,
-          entry.header.requiresAckFlag
-        )
-      );
+      const decodedEntries = decodeLambdaBody(this.inputBase64);
+      decodedEntries.forEach((msg) => handler(msg));
     } catch (e) {
       console.error(e);
       console.trace();
-      console.info("Closing the connection and state machine.");
+      console.debug("Closing the connection and state machine.");
       this.onError();
     }
   }
@@ -111,73 +86,7 @@ export class LambdaConnection implements Connection {
   }
 
   end(): void {
-    console.info("Handler cleanup...");
     this.inputBase64 = "";
     this.outputBuffer = Buffer.alloc(0);
-  }
-
-  // Decodes messages from Lambda requests to an array of headers + protocol messages
-  static decodeMessage(msgBase64: string): InputEntry[] {
-    if (!this.base64regex.test(msgBase64)) {
-      throw new Error(
-        "Parsing error: SDK cannot parse the message. Message was not valid base64 encoded."
-      );
-    }
-
-    let buf = Buffer.from(msgBase64, "base64");
-    let state = WAITING_FOR_HEADER;
-    let header: Header | null = null;
-    const decodedEntries: InputEntry[] = [];
-
-    while (buf.length > 0) {
-      switch (state) {
-        case WAITING_FOR_HEADER: {
-          if (buf.length < 8) {
-            throw new Error(
-              "Parsing error: SDK cannot parse the message. Buffer was not empty but was too small to contain another header."
-            );
-          }
-          const h = buf.readBigUInt64BE();
-          buf = buf.subarray(8);
-          header = Header.fromU64be(h);
-          state = WAITING_FOR_BODY;
-          break;
-        }
-        case WAITING_FOR_BODY: {
-          if (header == null) {
-            throw new Error(
-              "Parsing error: SDK cannot parse the message. " +
-                "Parsing body, while header was not parsed yet"
-            );
-          }
-          if (buf.length < header.frameLength) {
-            throw new Error(
-              "Parsing error: SDK cannot parse the message. " +
-                `Buffer length (${buf.length}) is smaller than frame length (${header.frameLength})`
-            );
-          }
-          const frame = buf.subarray(0, header.frameLength);
-          buf = buf.subarray(header.frameLength);
-
-          const pbType = PROTOBUF_MESSAGE_BY_TYPE.get(header.messageType);
-          if (pbType === undefined) {
-            // this is a custom message.
-            // we don't know how to decode custom message
-            // so we let the user of this stream to deal with custom
-            // message serde
-            decodedEntries.push(new InputEntry(header, frame));
-          } else {
-            const message = pbType.decode(frame);
-            decodedEntries.push(new InputEntry(header, message));
-          }
-
-          // Reset the state and the header, to start parsing the next msg
-          state = WAITING_FOR_HEADER;
-          header = null;
-        }
-      }
-    }
-
-    return decodedEntries;
   }
 }

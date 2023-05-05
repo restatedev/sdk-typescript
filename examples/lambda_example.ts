@@ -21,7 +21,6 @@ export class GreeterService implements TestGreeter {
     const ctx = restate.useContext(this);
 
     // state
-    console.info("Getting the state");
     let seen = (await ctx.get<number>("seen")) || 0;
     seen += 1;
 
@@ -38,7 +37,7 @@ export const handler = restate
   .lambdaApiGatewayHandler()
   .bindService({
     descriptor: protoMetadata,
-    service: "Greeter",
+    service: "TestGreeter",
     instance: new GreeterService(),
   })
   .create();

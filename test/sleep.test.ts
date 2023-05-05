@@ -38,7 +38,7 @@ describe("SleepGreeter: With sleep not complete", () => {
       protoMetadata,
       "TestGreeter",
       new SleepGreeter(),
-      "/dev.restate.TestGreeter/Greet",
+      "/test.TestGreeter/Greet",
       [startMessage(1), inputMessage(greetRequest("Till"))]
     ).run();
 
@@ -53,7 +53,7 @@ describe("SleepGreeter: Request-response with sleep not complete", () => {
       protoMetadata,
       "TestGreeter",
       new SleepGreeter(),
-      "/dev.restate.TestGreeter/Greet",
+      "/test.TestGreeter/Greet",
       [startMessage(1), inputMessage(greetRequest("Till"))],
       ProtocolMode.REQUEST_RESPONSE
     ).run();
@@ -69,7 +69,7 @@ describe("SleepGreeter: With sleep already complete", () => {
       protoMetadata,
       "TestGreeter",
       new SleepGreeter(),
-      "/dev.restate.TestGreeter/Greet",
+      "/test.TestGreeter/Greet",
       [
         startMessage(1),
         inputMessage(greetRequest("Till")),
@@ -88,7 +88,7 @@ describe("SleepGreeter: With sleep replayed", () => {
       protoMetadata,
       "TestGreeter",
       new SleepGreeter(),
-      "/dev.restate.TestGreeter/Greet",
+      "/test.TestGreeter/Greet",
       [
         startMessage(2),
         inputMessage(greetRequest("Till")),

@@ -6,7 +6,7 @@ import {
   GET_STATE_ENTRY_MESSAGE_TYPE,
 } from "../src/types/protocol";
 import { RestateDuplexStream } from "../src/connection/restate_duplex_stream";
-import { Header } from "../src/types/types";
+import { Header, Message } from "../src/types/types";
 import stream from "stream";
 
 // The following test suite is taken from headers.rs
@@ -42,58 +42,40 @@ describe("Header", () => {
 
 describe("Stream", () => {
   it("should demonstrate how an SDK can use encoder/decoder.", async () => {
-    // imagine that the HTTP2 request handler hands to you a bi-directional (duplex in node's lingo)
+    // imagine that the HTTP2 request handler hands to you a bidirectional (duplex in node's lingo)
     // binary stream, that you can read from and write to.
     const http2stream = mockHttp2DuplexStream();
 
-    // the following demonstrate how to use a stream_encoder/decoder to convert
-    // a raw duplex stream to a highlevel stream of restate's protocol messages and headers.
+    // the following demonstrates how to use a stream_encoder/decoder to convert
+    // a raw duplex stream to a high-level stream of Restate's protocol messages and headers.
     const restateStream = RestateDuplexStream.from(http2stream);
 
-    // the following commented lines are how you would actually use it
-    // but in a test we need to await the result.
-    //
-    //  restateStream.onMessage((header, message) => {
-    //      // do something with this message
-    //  });
-    //
-
     // here we need to create a promise for the sake of this test.
-    // this future will be resolved onces something is emmited on the stream.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result: any = new Promise((resolve) => {
-      restateStream.onMessage(
-        (
-          messageType,
-          message,
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          completedFlag,
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          protocolVersion,
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          requiresAckFlag
-        ) => {
-          resolve({ messageType: messageType, message });
-        }
-      );
+    // this future will be resolved once something is emitted on the stream.
+    const result = new Promise<Message>((resolve) => {
+      restateStream.onMessage((msg: Message) => {
+        resolve(msg);
+      });
     });
 
-    // now, lets simulate sending a message
+    // now, let's simulate sending a message
     restateStream.send(
-      START_MESSAGE_TYPE,
-      StartMessage.create({
-        invocationId: Buffer.from("abcd"),
-        knownEntries: 1337,
-      })
+      new Message(
+        START_MESSAGE_TYPE,
+        StartMessage.create({
+          invocationId: Buffer.from("abcd"),
+          knownEntries: 1337,
+        })
+      )
     );
 
     http2stream.end();
 
     // and collect what was written
-    const { message, messageType: messageType } = await result;
+    const msg = await result;
 
-    expect(messageType).toStrictEqual(START_MESSAGE_TYPE);
-    expect(message.knownEntries).toStrictEqual(1337);
+    expect(msg.messageType).toStrictEqual(START_MESSAGE_TYPE);
+    expect((msg.message as StartMessage).knownEntries).toStrictEqual(1337);
   });
 });
 

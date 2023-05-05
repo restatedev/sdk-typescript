@@ -21,7 +21,7 @@ import {
   outputMessage,
   startMessage,
 } from "./protoutils";
-import { LambdaConnection } from "../src/connection/lambda_connection";
+import { decodeLambdaBody } from "../src/io/decoder";
 
 class LambdaGreeter implements TestGreeter {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -30,7 +30,6 @@ class LambdaGreeter implements TestGreeter {
 
     // state
     const state = (await ctx.get<string>("STATE")) || "nobody";
-    console.info("Current state is " + state);
 
     return TestResponse.create({ greeting: `Hello ${state}` });
   }
@@ -45,13 +44,9 @@ describe("Lambda: decodeMessage", () => {
     ];
     const serializedMsgs = serializeMessages(messages);
 
-    const decodedMessages = LambdaConnection.decodeMessage(serializedMsgs);
+    const decodedMessages = decodeLambdaBody(serializedMsgs);
 
-    expect(
-      decodedMessages.map(
-        (entry) => new Message(entry.header.messageType, entry.message)
-      )
-    ).toStrictEqual(messages);
+    expect(decodedMessages).toStrictEqual(messages);
   });
 });
 
@@ -66,8 +61,7 @@ describe("Lambda: decodeMessage", () => {
     // appending random character to the base 64 encoded message
     const serializedMsgs = serializeMessages(messages) + "a";
 
-    const decodedMessages = () =>
-      LambdaConnection.decodeMessage(serializedMsgs);
+    const decodedMessages = () => decodeLambdaBody(serializedMsgs);
 
     expect(decodedMessages).toThrow(
       "Parsing error: SDK cannot parse the message. Message was not valid base64 encoded."
@@ -86,8 +80,7 @@ describe("Lambda: decodeMessage", () => {
     // appending random character to the base 64 encoded message
     const serializedMsgs = "a" + serializeMessages(messages);
 
-    const decodedMessages = () =>
-      LambdaConnection.decodeMessage(serializedMsgs);
+    const decodedMessages = () => decodeLambdaBody(serializedMsgs);
 
     expect(decodedMessages).toThrow(
       "Parsing error: SDK cannot parse the message. Message was not valid base64 encoded."
@@ -100,7 +93,7 @@ describe("LambdaGreeter: Invoke Lambda function - output message response", () =
     const handler = getTestHandler();
 
     const request = apiProxyGatewayEvent(
-      "/invoke/dev.restate.TestGreeter/Greet",
+      "/invoke/test.TestGreeter/Greet",
       "application/restate",
       serializeMessages([
         startMessage(2),
@@ -126,7 +119,7 @@ describe("LambdaGreeter: Invoke Lambda function - fail on query parameters in pa
     const handler = getTestHandler();
 
     const request = apiProxyGatewayEvent(
-      "/invoke/dev.restate.TestGreeter/Greet?count=5",
+      "/invoke/test.TestGreeter/Greet?count=5",
       "application/restate",
       serializeMessages([startMessage(1), inputMessage(greetRequest("Pete"))])
     );
@@ -138,7 +131,8 @@ describe("LambdaGreeter: Invoke Lambda function - fail on query parameters in pa
     });
     expect(result.isBase64Encoded).toStrictEqual(true);
     expect(Buffer.from(result.body, "base64").toString()).toContain(
-      "ERROR Invalid path: path URL seems to include query parameters: /invoke/dev.restate.TestGreeter/Greet?count=5"
+      "" +
+        "Invalid path: path URL seems to include query parameters: /invoke/test.TestGreeter/Greet?count=5"
     );
   });
 });
@@ -148,7 +142,7 @@ describe("LambdaGreeter: Invoke Lambda function - invalid path", () => {
     const handler = getTestHandler();
 
     const request = apiProxyGatewayEvent(
-      "/invoke/dev.restate.TestGreeter",
+      "/invoke/test.TestGreeter",
       "application/restate",
       serializeMessages([startMessage(1), inputMessage(greetRequest("Pete"))])
     );
@@ -160,7 +154,7 @@ describe("LambdaGreeter: Invoke Lambda function - invalid path", () => {
     });
     expect(result.isBase64Encoded).toStrictEqual(true);
     expect(Buffer.from(result.body, "base64").toString()).toContain(
-      "Invalid path: path doesn't end in /invoke/SvcName/MethodName and also not in /discover: /invoke/dev.restate.TestGreeter"
+      "Invalid path: path doesn't end in /invoke/SvcName/MethodName and also not in /discover: /invoke/test.TestGreeter"
     );
   });
 });
@@ -170,7 +164,7 @@ describe("LambdaGreeter: Invoke Lambda function - invalid path no 'invoke' or 'd
     const handler = getTestHandler();
 
     const request = apiProxyGatewayEvent(
-      "/something/dev.restate.TestGreeter/Greet",
+      "/something/test.TestGreeter/Greet",
       "application/restate",
       serializeMessages([startMessage(1), inputMessage(greetRequest("Pete"))])
     );
@@ -182,7 +176,7 @@ describe("LambdaGreeter: Invoke Lambda function - invalid path no 'invoke' or 'd
     });
     expect(result.isBase64Encoded).toStrictEqual(true);
     expect(Buffer.from(result.body, "base64").toString()).toContain(
-      "Invalid path: path doesn't end in /invoke/SvcName/MethodName and also not in /discover: /something/dev.restate.TestGreeter/Greet"
+      "Invalid path: path doesn't end in /invoke/SvcName/MethodName and also not in /discover: /something/test.TestGreeter/Greet"
     );
   });
 });
@@ -192,7 +186,7 @@ describe("LambdaGreeter: Invoke Lambda function - invalid path non-existing URL"
     const handler = getTestHandler();
 
     const request = apiProxyGatewayEvent(
-      "/invoke/dev.restate.TestGreeter/Greets",
+      "/invoke/test.TestGreeter/Greets",
       "application/restate",
       serializeMessages([startMessage(1), inputMessage(greetRequest("Pete"))])
     );
@@ -204,7 +198,7 @@ describe("LambdaGreeter: Invoke Lambda function - invalid path non-existing URL"
     });
     expect(result.isBase64Encoded).toStrictEqual(true);
     expect(Buffer.from(result.body, "base64").toString()).toContain(
-      "ERROR no service found for URL: /invoke/dev.restate.TestGreeter/Greets"
+      "No service found for URL: /invoke/test.TestGreeter/Greets"
     );
   });
 });
@@ -234,7 +228,7 @@ describe("LambdaGreeter: discovery of Lambda function", () => {
       Buffer.from(result.body, "base64")
     );
 
-    expect(decodedResponse.services).toContain("dev.restate.TestGreeter");
+    expect(decodedResponse.services).toContain("test.TestGreeter");
     expect(decodedResponse.files?.file.map((el) => el.name)).toEqual(
       expect.arrayContaining([
         "dev/restate/ext.proto",
@@ -281,12 +275,7 @@ function serializeMessages(messages: Message[]): string {
   let buf = Buffer.alloc(0);
 
   messages.forEach((msg: Message) => {
-    const msgBuf = encodeMessage({
-      messageType: msg.messageType,
-      message: msg.message,
-      completed: msg.completed,
-      requiresAck: msg.requiresAck,
-    });
+    const msgBuf = encodeMessage(msg);
 
     buf = Buffer.concat([buf, msgBuf]);
   });
@@ -295,7 +284,5 @@ function serializeMessages(messages: Message[]): string {
 }
 
 function deserializeMessages(body: string): Array<Message> {
-  return LambdaConnection.decodeMessage(body).map(
-    (entry) => new Message(entry.header.messageType, entry.message)
-  );
+  return decodeLambdaBody(body);
 }

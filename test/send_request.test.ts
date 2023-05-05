@@ -35,7 +35,6 @@ class ReverseAwaitOrder implements TestGreeter {
     const greetingPromise2 = client.greet(TestRequest.create({ name: "Till" }));
 
     const greeting2 = await greetingPromise2;
-    console.debug("Greeting 2 is " + greeting2.greeting);
     ctx.set<string>("A2", greeting2.greeting);
 
     const greeting1 = await greetingPromise1;
@@ -87,17 +86,13 @@ describe("ReverseAwaitOrder: None completed", () => {
       protoMetadata,
       "TestGreeter",
       new ReverseAwaitOrder(),
-      "/dev.restate.TestGreeter/Greet",
+      "/test.TestGreeter/Greet",
       [startMessage(1), inputMessage(greetRequest("Till"))]
     ).run();
 
     expect(result).toStrictEqual([
-      invokeMessage(
-        "dev.restate.TestGreeter",
-        "Greet",
-        greetRequest("Francesco")
-      ),
-      invokeMessage("dev.restate.TestGreeter", "Greet", greetRequest("Till")),
+      invokeMessage("test.TestGreeter", "Greet", greetRequest("Francesco")),
+      invokeMessage("test.TestGreeter", "Greet", greetRequest("Till")),
       suspensionMessage([1, 2]),
     ]);
   });
@@ -109,18 +104,14 @@ describe("ReverseAwaitOrder: Request-response: None completed", () => {
       protoMetadata,
       "TestGreeter",
       new ReverseAwaitOrder(),
-      "/dev.restate.TestGreeter/Greet",
+      "/test.TestGreeter/Greet",
       [startMessage(1), inputMessage(greetRequest("Till"))],
       ProtocolMode.REQUEST_RESPONSE
     ).run();
 
     expect(result).toStrictEqual([
-      invokeMessage(
-        "dev.restate.TestGreeter",
-        "Greet",
-        greetRequest("Francesco")
-      ),
-      invokeMessage("dev.restate.TestGreeter", "Greet", greetRequest("Till")),
+      invokeMessage("test.TestGreeter", "Greet", greetRequest("Francesco")),
+      invokeMessage("test.TestGreeter", "Greet", greetRequest("Till")),
       suspensionMessage([1, 2]),
     ]);
   });
@@ -132,7 +123,7 @@ describe("ReverseAwaitOrder: A1 and A2 completed later", () => {
       protoMetadata,
       "TestGreeter",
       new ReverseAwaitOrder(),
-      "/dev.restate.TestGreeter/Greet",
+      "/test.TestGreeter/Greet",
       [
         startMessage(1),
         inputMessage(greetRequest("Till")),
@@ -142,12 +133,8 @@ describe("ReverseAwaitOrder: A1 and A2 completed later", () => {
     ).run();
 
     expect(result).toStrictEqual([
-      invokeMessage(
-        "dev.restate.TestGreeter",
-        "Greet",
-        greetRequest("Francesco")
-      ),
-      invokeMessage("dev.restate.TestGreeter", "Greet", greetRequest("Till")),
+      invokeMessage("test.TestGreeter", "Greet", greetRequest("Francesco")),
+      invokeMessage("test.TestGreeter", "Greet", greetRequest("Till")),
       setStateMessage("A2", "TILL"),
       outputMessage(greetResponse("Hello FRANCESCO-TILL")),
     ]);
@@ -160,7 +147,7 @@ describe("ReverseAwaitOrder: A2 and A1 completed later", () => {
       protoMetadata,
       "TestGreeter",
       new ReverseAwaitOrder(),
-      "/dev.restate.TestGreeter/Greet",
+      "/test.TestGreeter/Greet",
       [
         startMessage(1),
         inputMessage(greetRequest("Till")),
@@ -170,12 +157,8 @@ describe("ReverseAwaitOrder: A2 and A1 completed later", () => {
     ).run();
 
     expect(result).toStrictEqual([
-      invokeMessage(
-        "dev.restate.TestGreeter",
-        "Greet",
-        greetRequest("Francesco")
-      ),
-      invokeMessage("dev.restate.TestGreeter", "Greet", greetRequest("Till")),
+      invokeMessage("test.TestGreeter", "Greet", greetRequest("Francesco")),
+      invokeMessage("test.TestGreeter", "Greet", greetRequest("Till")),
       setStateMessage("A2", "TILL"),
       outputMessage(greetResponse("Hello FRANCESCO-TILL")),
     ]);
@@ -188,18 +171,18 @@ describe("ReverseAwaitOrder: replay all invoke messages and setstate ", () => {
       protoMetadata,
       "TestGreeter",
       new ReverseAwaitOrder(),
-      "/dev.restate.TestGreeter/Greet",
+      "/test.TestGreeter/Greet",
       [
         startMessage(4),
         inputMessage(greetRequest("Till")),
         invokeMessage(
-          "dev.restate.TestGreeter",
+          "test.TestGreeter",
           "Greet",
           greetRequest("Francesco"),
           greetResponse("FRANCESCO")
         ),
         invokeMessage(
-          "dev.restate.TestGreeter",
+          "test.TestGreeter",
           "Greet",
           greetRequest("Till"),
           greetResponse("TILL")
@@ -220,7 +203,7 @@ describe("ReverseAwaitOrder: Failing A1", () => {
       protoMetadata,
       "TestGreeter",
       new ReverseAwaitOrder(),
-      "/dev.restate.TestGreeter/Greet",
+      "/test.TestGreeter/Greet",
       [
         startMessage(1),
         inputMessage(greetRequest("Till")),
@@ -235,12 +218,8 @@ describe("ReverseAwaitOrder: Failing A1", () => {
     ).run();
 
     expect(result).toStrictEqual([
-      invokeMessage(
-        "dev.restate.TestGreeter",
-        "Greet",
-        greetRequest("Francesco")
-      ),
-      invokeMessage("dev.restate.TestGreeter", "Greet", greetRequest("Till")),
+      invokeMessage("test.TestGreeter", "Greet", greetRequest("Francesco")),
+      invokeMessage("test.TestGreeter", "Greet", greetRequest("Till")),
       setStateMessage("A2", "TILL"),
       outputMessage(), // failure
     ]);
@@ -254,13 +233,13 @@ describe("BackgroundInvokeGreeter: background call ", () => {
       protoMetadata,
       "TestGreeter",
       new BackgroundInvokeGreeter(),
-      "/dev.restate.TestGreeter/Greet",
+      "/test.TestGreeter/Greet",
       [startMessage(1), inputMessage(greetRequest("Till"))]
     ).run();
 
     expect(result).toStrictEqual([
       backgroundInvokeMessage(
-        "dev.restate.TestGreeter",
+        "test.TestGreeter",
         "Greet",
         greetRequest("Francesco")
       ),
@@ -275,7 +254,7 @@ describe("FailingBackgroundInvokeGreeter: failing background call ", () => {
       protoMetadata,
       "TestGreeter",
       new FailingBackgroundInvokeGreeter(),
-      "/dev.restate.TestGreeter/Greet",
+      "/test.TestGreeter/Greet",
       [startMessage(1), inputMessage(greetRequest("Till"))]
     ).run();
 
@@ -289,7 +268,7 @@ describe("FailingSideEffectInBackgroundInvokeGreeter: failing background call ",
       protoMetadata,
       "TestGreeter",
       new FailingSideEffectInBackgroundInvokeGreeter(),
-      "/dev.restate.TestGreeter/Greet",
+      "/test.TestGreeter/Greet",
       [startMessage(1), inputMessage(greetRequest("Till"))]
     ).run();
 

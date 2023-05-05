@@ -1,19 +1,13 @@
 "use strict";
 
-import { ProtocolMessage } from "../types/protocol";
-import { RestateDuplexStreamEventHandler } from "./restate_duplex_stream";
+import { Message } from "../types/types";
 
 export interface Connection {
   addOnErrorListener(listener: () => void): void;
 
-  send(
-    messageType: bigint,
-    message: ProtocolMessage | Uint8Array,
-    completed?: boolean | undefined,
-    requiresAck?: boolean | undefined
-  ): void;
+  send(msg: Message): void;
 
-  onMessage(handler: RestateDuplexStreamEventHandler): void;
+  onMessage(handler: (msg: Message) => void): void;
 
   onClose(handler: () => void): void;
 

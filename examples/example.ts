@@ -12,14 +12,9 @@ import {
  */
 export class GreeterService implements TestGreeter {
   async greet(request: TestRequest): Promise<TestResponse> {
-    return TestResponse.create({ greeting: `Hello ${request.name}` });
-  }
-
-  async multiWord(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     // state
-    console.info("Getting the state");
     let seen = (await ctx.get<number>("seen")) || 0;
     seen += 1;
 
@@ -27,7 +22,7 @@ export class GreeterService implements TestGreeter {
 
     // return the final response
     return TestResponse.create({
-      greeting: `YAGM (yet another greeting method) ${request.name}!`,
+      greeting: `Hello ${request.name}!`,
     });
   }
 }
@@ -36,7 +31,7 @@ restate
   .createServer()
   .bindService({
     descriptor: protoMetadata,
-    service: "Greeter",
+    service: "TestGreeter",
     instance: new GreeterService(),
   })
   .listen(8000);
