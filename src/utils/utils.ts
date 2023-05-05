@@ -47,11 +47,11 @@ export async function retrySideEffectWithBackoff(
   let retriesLeft = maxRetries;
 
   while (!(await ctx.sideEffect(sideEffectAction))) {
-    console.info(`Unsuccessful execution of side effect '${name}'.`);
+    console.debug(`Unsuccessful execution of side effect '${name}'.`);
     if (retriesLeft > 0) {
-      console.info(`Retrying in ${delayMs}ms`);
+      console.debug(`Retrying in ${delayMs}ms`);
     } else {
-      console.info("No retries left.");
+      console.debug("No retries left.");
       throw new RestateError(`Retries exhaused for '${name}'.`);
     }
 
@@ -128,14 +128,14 @@ export async function retryExceptionalSideEffectWithBackoff<T>(
         errorMessage = JSON.stringify(e);
       }
 
-      console.info(
+      console.debug(
         `Error while executing side effect '${name}': ${errorName} - ${errorMessage}`
       );
 
       if (retriesLeft > 0) {
-        console.info(`Retrying in ${delayMs}ms`);
+        console.debug(`Retrying in ${delayMs}ms`);
       } else {
-        console.info("No retries left.");
+        console.debug("No retries left.");
         throw new RestateError(`Retries exhaused for {name}`, lastError);
       }
     }
@@ -151,8 +151,18 @@ export function printMessageAsJson(obj: any): string {
   const newObj = { ...(obj as Record<string, unknown>) };
   for (const [key, value] of Object.entries(newObj)) {
     if (Buffer.isBuffer(value)) {
-      newObj[key] = JSON.stringify(value.toString());
+      newObj[key] = value.toString().trim();
     }
   }
   return JSON.stringify(newObj);
+}
+
+// Only used for logging the invocation ID in debug logging mode
+export function uuidV7FromBuffer(buffer: Buffer): string {
+  // if (buffer.length !== 16) {
+  //   throw new Error('Invalid UUIDv7 buffer length');
+  // }
+  const bytes = new Uint8Array(buffer);
+  const uuid = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return `${uuid.slice(0,8)}-${uuid.slice(8, 12)}-${uuid.slice(12, 16)}-${uuid.slice(16,20)}-${uuid.slice(20)}`;
 }

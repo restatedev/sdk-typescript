@@ -55,7 +55,7 @@ describe("AwakeableGreeter: with awakeable completion replay", () => {
       protoMetadata,
       "TestGreeter",
       new AwakeableGreeter(),
-      "/dev.restate.TestGreeter/Greet",
+      "/test.TestGreeter/Greet",
       [
         startMessage(2),
         inputMessage(greetRequest("Till")),
@@ -75,7 +75,7 @@ describe("AwakeableGreeter: without completion", () => {
       protoMetadata,
       "TestGreeter",
       new AwakeableGreeter(),
-      "/dev.restate.TestGreeter/Greet",
+      "/test.TestGreeter/Greet",
       [startMessage(1), inputMessage(greetRequest("Till"))]
     ).run();
 
@@ -89,7 +89,7 @@ describe("AwakeableGreeter: request-response case", () => {
       protoMetadata,
       "TestGreeter",
       new AwakeableGreeter(),
-      "/dev.restate.TestGreeter/Greet",
+      "/test.TestGreeter/Greet",
       [startMessage(1), inputMessage(greetRequest("Till"))],
       ProtocolMode.REQUEST_RESPONSE
     ).run();
@@ -104,7 +104,7 @@ describe("AwakeableGreeter: with completion", () => {
       protoMetadata,
       "TestGreeter",
       new AwakeableGreeter(),
-      "/dev.restate.TestGreeter/Greet",
+      "/test.TestGreeter/Greet",
       [
         startMessage(1),
         inputMessage(greetRequest("Till")),
@@ -126,7 +126,7 @@ describe("CompleteAwakeableGreeter: without completion", () => {
       protoMetadata,
       "TestGreeter",
       new CompleteAwakeableGreeter(),
-      "/dev.restate.TestGreeter/Greet",
+      "/test.TestGreeter/Greet",
       [startMessage(1), inputMessage(greetRequest("Till"))]
     ).run();
 

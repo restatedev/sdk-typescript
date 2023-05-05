@@ -52,9 +52,9 @@ describe("Stream", () => {
 
     // here we need to create a promise for the sake of this test.
     // this future will be resolved once something is emitted on the stream.
-    const result: any = new Promise((resolve) => {
+    const result = new Promise<Message>((resolve) => {
       restateStream.onMessage((msg: Message) => {
-        resolve({ messageType: msg.messageType, message: msg.message });
+        resolve(msg);
       });
     });
 
@@ -72,10 +72,10 @@ describe("Stream", () => {
     http2stream.end();
 
     // and collect what was written
-    const { message, messageType: messageType } = await result;
+    const msg = await result;
 
-    expect(messageType).toStrictEqual(START_MESSAGE_TYPE);
-    expect(message.knownEntries).toStrictEqual(1337);
+    expect(msg.messageType).toStrictEqual(START_MESSAGE_TYPE);
+    expect((msg.message as StartMessage).knownEntries).toStrictEqual(1337);
   });
 });
 

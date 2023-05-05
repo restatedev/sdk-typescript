@@ -7,6 +7,7 @@ import { ServiceDiscoveryResponse } from "../generated/proto/discovery";
 import { on } from "events";
 import { Connection } from "./connection";
 import { Message } from "../types/types";
+import { printMessageAsJson } from "../utils/utils";
 
 export class HttpConnection implements Connection {
   private onErrorListeners: (() => void)[] = [];
@@ -67,7 +68,6 @@ export class HttpConnection implements Connection {
   }
 
   end() {
-    console.info("Closing the connection...");
     this.stream.end();
   }
 }
@@ -89,6 +89,10 @@ export async function* incomingConnectionAtPort(
     const u: Url = urlparse(h[":path"] ?? "/");
 
     if (u.path == "/discover") {
+      console.info(
+        "Answering discovery request. Registering these services: " +
+        JSON.stringify(discovery.services)
+      );
       s.respond({
         ":status": 200,
         "content-type": "application/proto",

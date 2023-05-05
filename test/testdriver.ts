@@ -109,7 +109,6 @@ export class TestDriver<I, O> implements Connection {
   }
 
   onClose(handler: () => void) {
-    console.debug("calling onClose");
     this.http2stream.on("close", handler);
   }
 

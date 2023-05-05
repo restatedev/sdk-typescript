@@ -76,15 +76,19 @@ docker run -e RUST_LOG=info,restate=debug ghcr.io/restatedev/restate-dist:latest
 ```
 
 Discover the TestGreeter:
+- On Linux:
 ```shell
 curl -X POST http://localhost:8081/services/discover -H 'content-type: application/json' -d '{"uri": "http://localhost:8000"}'
+```
+- On macOS:
+```shell
+curl -X POST http://localhost:8081/services/discover -H 'content-type: application/json' -d '{"uri": "http://host.docker.internal:8000"}'
 ```
 
 Send a Greet request via curl:
 ```shell
 curl -X POST http://localhost:9090/test.TestGreeter/Greet -H 'content-type: application/json' -d '{"name": "Pete"}'
 ```
-
 
 # Releasing the package
 

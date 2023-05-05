@@ -30,7 +30,7 @@ export class RestateServer extends BaseRestateServer {
   public async listen(port: number | undefined | null) {
     // Infer the port if not specified, or default it
     const actualPort = port ?? parseInt(process.env.PORT ?? "8080");
-    console.info(`listening on ${actualPort}...`);
+    console.info(`Listening on ${actualPort}...`);
 
     for await (const connection of incomingConnectionAtPort(
       actualPort,
@@ -38,10 +38,10 @@ export class RestateServer extends BaseRestateServer {
     )) {
       const method = this.methodByUrl(connection.url.path);
       if (method === undefined) {
-        console.info(`INFO no service found for URL ${connection.url.path}`);
+        console.error(`No service found for URL ${connection.url.path}`);
+        console.trace();
         connection.respond404();
       } else {
-        console.info(`INFO new stream for ${connection.url.path}`);
         connection.respondOk();
         new DurableExecutionStateMachine(
           connection,

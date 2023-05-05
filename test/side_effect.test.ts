@@ -201,7 +201,7 @@ describe("SideEffectGreeter: with ack", () => {
       protoMetadata,
       "TestGreeter",
       new SideEffectGreeter("Francesco"),
-      "/dev.restate.TestGreeter/Greet",
+      "/test.TestGreeter/Greet",
       [
         startMessage(2),
         inputMessage(greetRequest("Till")),
@@ -221,7 +221,7 @@ describe("SideEffectGreeter: with completion", () => {
       protoMetadata,
       "TestGreeter",
       new SideEffectGreeter("Francesco"),
-      "/dev.restate.TestGreeter/Greet",
+      "/test.TestGreeter/Greet",
       [
         startMessage(1),
         inputMessage(greetRequest("Till")),
@@ -242,7 +242,7 @@ describe("SideEffectGreeter: without ack - numeric output", () => {
       protoMetadata,
       "TestGreeter",
       new NumericSideEffectGreeter(123),
-      "/dev.restate.TestGreeter/Greet",
+      "/test.TestGreeter/Greet",
       [
         startMessage(1),
         inputMessage(greetRequest("Till")),
@@ -263,7 +263,7 @@ describe("FailingSideEffectGreeter: failing user code in side effect with ack", 
       protoMetadata,
       "TestGreeter",
       new FailingSideEffectGreeter(123),
-      "/dev.restate.TestGreeter/Greet",
+      "/test.TestGreeter/Greet",
       [
         startMessage(1),
         inputMessage(greetRequest("Till")),
@@ -286,7 +286,7 @@ describe("FailingGetSideEffectGreeter: invalid get state in side effect with ack
       protoMetadata,
       "TestGreeter",
       new FailingGetSideEffectGreeter(123),
-      "/dev.restate.TestGreeter/Greet",
+      "/test.TestGreeter/Greet",
       [
         startMessage(1),
         inputMessage(greetRequest("Till")),
@@ -309,7 +309,7 @@ describe("FailingSetSideEffectGreeter: invalid set state in side effect with ack
       protoMetadata,
       "TestGreeter",
       new FailingSetSideEffectGreeter(123),
-      "/dev.restate.TestGreeter/Greet",
+      "/test.TestGreeter/Greet",
       [
         startMessage(1),
         inputMessage(greetRequest("Till")),
@@ -332,7 +332,7 @@ describe("FailingClearSideEffectGreeter: invalid clear state in side effect with
       protoMetadata,
       "TestGreeter",
       new FailingClearSideEffectGreeter(123),
-      "/dev.restate.TestGreeter/Greet",
+      "/test.TestGreeter/Greet",
       [
         startMessage(1),
         inputMessage(greetRequest("Till")),
@@ -355,7 +355,7 @@ describe("FailingNestedSideEffectGreeter: invalid nested side effect in side eff
       protoMetadata,
       "TestGreeter",
       new FailingNestedSideEffectGreeter(123),
-      "/dev.restate.TestGreeter/Greet",
+      "/test.TestGreeter/Greet",
       [
         startMessage(1),
         inputMessage(greetRequest("Till")),
@@ -378,7 +378,7 @@ describe("FailingNestedSideEffectGreeter: invalid nested side effect in side eff
       protoMetadata,
       "TestGreeter",
       new FailingNestedSideEffectGreeter(123),
-      "/dev.restate.TestGreeter/Greet",
+      "/test.TestGreeter/Greet",
       [
         startMessage(2),
         inputMessage(greetRequest("Till")),
@@ -404,7 +404,7 @@ describe("FailingInBackgroundSideEffectGreeter: invalid in background call in si
       protoMetadata,
       "TestGreeter",
       new FailingInBackgroundSideEffectGreeter(123),
-      "/dev.restate.TestGreeter/Greet",
+      "/test.TestGreeter/Greet",
       [
         startMessage(1),
         inputMessage(greetRequest("Till")),
@@ -427,7 +427,7 @@ describe("FailingCompleteAwakeableSideEffectGreeter: invalid in complete awakeab
       protoMetadata,
       "TestGreeter",
       new FailingCompleteAwakeableSideEffectGreeter(123),
-      "/dev.restate.TestGreeter/Greet",
+      "/test.TestGreeter/Greet",
       [
         startMessage(1),
         inputMessage(greetRequest("Till")),
@@ -450,7 +450,7 @@ describe("FailingSleepSideEffectGreeter: invalid in sleep call in side effect wi
       protoMetadata,
       "TestGreeter",
       new FailingSleepSideEffectGreeter(123),
-      "/dev.restate.TestGreeter/Greet",
+      "/test.TestGreeter/Greet",
       [
         startMessage(1),
         inputMessage(greetRequest("Till")),

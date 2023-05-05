@@ -27,7 +27,6 @@ class GetStateGreeter implements TestGreeter {
 
     // state
     const state = (await ctx.get<string>("STATE")) || "nobody";
-    console.info("Current state is " + state);
 
     return TestResponse.create({ greeting: `Hello ${state}` });
   }
@@ -39,7 +38,7 @@ describe("GetStateGreeter: With GetStateEntry already complete", () => {
       protoMetadata,
       "TestGreeter",
       new GetStateGreeter(),
-      "/dev.restate.TestGreeter/Greet",
+      "/test.TestGreeter/Greet",
       [
         startMessage(2),
         inputMessage(greetRequest("Till")),
@@ -59,7 +58,7 @@ describe("GetStateGreeter: Request-response GetStateEntry", () => {
       protoMetadata,
       "TestGreeter",
       new GetStateGreeter(),
-      "/dev.restate.TestGreeter/Greet",
+      "/test.TestGreeter/Greet",
       [startMessage(1), inputMessage(greetRequest("Till"))],
       ProtocolMode.REQUEST_RESPONSE
     ).run();
@@ -77,7 +76,7 @@ describe("GetStateGreeter: Without GetStateEntry and completed with later Comple
       protoMetadata,
       "TestGreeter",
       new GetStateGreeter(),
-      "/dev.restate.TestGreeter/Greet",
+      "/test.TestGreeter/Greet",
       [
         startMessage(1),
         inputMessage(greetRequest("Till")),
@@ -98,7 +97,7 @@ describe("GetStateGreeter: Without GetStateEntry and completed with later Comple
       protoMetadata,
       "TestGreeter",
       new GetStateGreeter(),
-      "/dev.restate.TestGreeter/Greet",
+      "/test.TestGreeter/Greet",
       [
         startMessage(1),
         inputMessage(greetRequest("Till")),
@@ -119,7 +118,7 @@ describe("GetStateGreeter: GetState gets a failure back from the runtime", () =>
       protoMetadata,
       "TestGreeter",
       new GetStateGreeter(),
-      "/dev.restate.TestGreeter/Greet",
+      "/test.TestGreeter/Greet",
       [
         startMessage(1),
         inputMessage(greetRequest("Till")),

@@ -36,10 +36,10 @@ export class LambdaRestateServer extends BaseRestateServer {
     // (e.g. /default)
     // So we only check the ending of the path on correctness.
     // Logic:
-    // 1. Check whether there are at least three segments in the path and whether the third-last one is invoke.
+    // 1. Check whether there are at least three segments in the path and whether the third-last one is "invoke".
     // If that is the case, treat it as an invocation.
-    // 2. See if the last one is discover, answer with discovery.
-    // 3. Else report invalid path.
+    // 2. See if the last one is "discover", answer with discovery.
+    // 3. Else report "invalid path".
     if (
       pathSegments.length >= 3 &&
       pathSegments[pathSegments.length - 3] === "invoke"
@@ -49,11 +49,12 @@ export class LambdaRestateServer extends BaseRestateServer {
     } else if (pathSegments[pathSegments.length - 1] === "discover") {
       return this.handleDiscovery();
     } else {
-      return this.toErrorResponse(
-        500,
+      const msg =
         "Invalid path: path doesn't end in /invoke/SvcName/MethodName and also not in /discover: " +
-          event.path
-      );
+        event.path;
+      console.error(msg);
+      console.trace();
+      return this.toErrorResponse(500, msg);
     }
   }
 
@@ -77,24 +78,25 @@ export class LambdaRestateServer extends BaseRestateServer {
   ): Promise<APIGatewayProxyResult> {
     const method = this.methodByUrl(url);
     if (event.body == null) {
-      return this.toErrorResponse(
-        500,
-        "ERROR the incoming message body was null"
-      );
+      const msg = "The incoming message body was null";
+      console.error(msg);
+      console.trace();
+      return this.toErrorResponse(500, msg);
     }
     const connection = new LambdaConnection(event.body);
     if (method === undefined) {
       if (url.includes("?")) {
-        const msg = `ERROR Invalid path: path URL seems to include query parameters: ${url}`;
+        const msg = `Invalid path: path URL seems to include query parameters: ${url}`;
         console.error(msg);
+        console.trace();
         return this.toErrorResponse(500, msg);
       } else {
-        const msg = `ERROR no service found for URL: ${url}`;
+        const msg = `No service found for URL: ${url}`;
         console.error(msg);
+        console.trace();
         return this.toErrorResponse(404, msg);
       }
     } else {
-      console.info(`INFO new stream for ${url}`);
       new DurableExecutionStateMachine(
         connection,
         method,
@@ -116,9 +118,9 @@ export class LambdaRestateServer extends BaseRestateServer {
 
   private handleDiscovery(): APIGatewayProxyResult {
     // return discovery information
-    console.debug(
-      "DEBUG discovered services at endpoint. Discovery response: " +
-        JSON.stringify(this.discovery)
+    console.info(
+      "Answering discovery request. Registering these services: " +
+      JSON.stringify(this.discovery.services)
     );
     return {
       headers: {

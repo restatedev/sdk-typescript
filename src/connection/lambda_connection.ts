@@ -8,6 +8,7 @@ import {
 } from "../types/protocol";
 import { decodeLambdaBody } from "../io/decoder";
 import { Message } from "../types/types";
+import { printMessageAsJson } from "../utils/utils";
 
 export class LambdaConnection implements Connection {
   // Buffer with input messages
@@ -40,6 +41,7 @@ export class LambdaConnection implements Connection {
       msg.messageType === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE ||
       msg.messageType === SUSPENSION_MESSAGE_TYPE
     ) {
+      console.debug("Flushing output buffer...")
       this.resolveOnCompleted(this.outputBuffer);
     }
   }
@@ -52,7 +54,7 @@ export class LambdaConnection implements Connection {
     } catch (e) {
       console.error(e);
       console.trace();
-      console.info("Closing the connection and state machine.");
+      console.debug("Closing the connection and state machine.");
       this.onError();
     }
   }
@@ -85,7 +87,6 @@ export class LambdaConnection implements Connection {
   }
 
   end(): void {
-    console.info("Handler cleanup...");
     this.inputBase64 = "";
     this.outputBuffer = Buffer.alloc(0);
   }
