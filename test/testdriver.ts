@@ -86,12 +86,13 @@ export class TestDriver<I, O> implements Connection {
   send(msg: Message) {
     this.result.push(msg);
     console.debug(
-      "Adding result to the result array. Message type: " +
-        msg.messageType +
-        ", message: " +
-        (msg.message instanceof Uint8Array
-          ? (msg.message as Uint8Array).toString()
-          : printMessageAsJson(msg.message))
+      `Adding result to the result array. Message type: ${msg.messageType},
+        message: 
+        ${
+          msg.message instanceof Uint8Array
+            ? (msg.message as Uint8Array).toString()
+            : printMessageAsJson(msg.message)
+        }`
     );
 
     // For an output message, flush immediately

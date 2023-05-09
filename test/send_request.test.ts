@@ -500,7 +500,7 @@ describe("FailingBackgroundInvokeGreeter: failing background call ", () => {
     expect(result.length).toStrictEqual(1);
     checkError(
       result[0],
-      "Cannot do a set state from within a background call. Context method inBackground() can only be used to invoke other services in the background. e.g. ctx.inBackground(() => client.greet(my_request))"
+      "Cannot do a set state from within a background call."
     );
   });
 });

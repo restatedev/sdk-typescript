@@ -40,6 +40,7 @@ export class RestateServer extends BaseRestateServer {
       if (method === undefined) {
         console.error(`No service found for URL ${connection.url.path}`);
         console.trace();
+        // Respons 404 and end the stream.
         connection.respond404();
       } else {
         connection.respondOk();
