@@ -2,15 +2,15 @@ import { describe, expect } from "@jest/globals";
 import * as restate from "../src/public_api";
 import { TestDriver } from "./testdriver";
 import {
-  awakeableMessage,
+  awakeableMessage, checkError,
   completeAwakeableMessage,
   completionMessage,
   greetRequest,
   greetResponse,
-  inputMessage,
+  inputMessage, invokeMessage,
   outputMessage,
   startMessage,
-  suspensionMessage,
+  suspensionMessage
 } from "./protoutils";
 import { AwakeableIdentifier } from "../src/types/protocol";
 import {
@@ -66,6 +66,32 @@ describe("AwakeableGreeter: with awakeable completion replay", () => {
     expect(result).toStrictEqual([
       outputMessage(greetResponse("Hello Francesco")),
     ]);
+  });
+});
+
+
+describe("AwakeableGreeter: journal mismatch on AwakeableMessage. Completed with CompleteAwakeable during replay.", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new AwakeableGreeter(),
+      "/test.TestGreeter/Greet",
+      [
+        startMessage(2),
+        inputMessage(greetRequest("Till")),
+        completeAwakeableMessage(
+          "TestGreeter",
+          Buffer.from("123"),
+          Buffer.from("abcd"),
+          1,
+          "hello"
+        ), // should have been an awakeableMessage
+      ]
+    ).run();
+
+    expect(result.length).toStrictEqual(1);
+    checkError(result[0], "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!")
   });
 });
 
@@ -142,3 +168,124 @@ describe("CompleteAwakeableGreeter: without completion", () => {
     ]);
   });
 });
+
+describe("CompleteAwakeableGreeter: journal mismatch on CompleteAwakeable. Completed with invoke during replay.", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new CompleteAwakeableGreeter(),
+      "/test.TestGreeter/Greet",
+      [startMessage(2),
+        inputMessage(greetRequest("Till")),
+        invokeMessage(
+          "test.TestGreeter",
+          "Greet",
+          greetRequest("Till"),
+          greetResponse("TILL")
+        ), // this should have been a completeawakeable
+      ]
+    ).run();
+
+    expect(result.length).toStrictEqual(1);
+    checkError(result[0], "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!")
+  });
+});
+
+describe("CompleteAwakeableGreeter: journal mismatch on CompleteAwakeable. Completed with wrong service name", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new CompleteAwakeableGreeter(),
+      "/test.TestGreeter/Greet",
+      [startMessage(2),
+        inputMessage(greetRequest("Till")),
+        completeAwakeableMessage(
+          "TestGreeterzzz", // this should have been TestGreeter
+          Buffer.from("123"),
+          Buffer.from("abcd"),
+          1,
+          "hello"
+        ),
+      ]
+    ).run();
+
+    expect(result.length).toStrictEqual(1);
+    checkError(result[0], "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!")
+  });
+});
+
+describe("CompleteAwakeableGreeter: journal mismatch on CompleteAwakeable. Completed with wrong instance key.", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new CompleteAwakeableGreeter(),
+      "/test.TestGreeter/Greet",
+      [startMessage(2),
+        inputMessage(greetRequest("Till")),
+        completeAwakeableMessage(
+          "TestGreeter",
+          Buffer.from("1234"), // this should have been a Buffer.from("123")
+          Buffer.from("abcd"),
+          1,
+          "hello"
+        ),
+      ]
+    ).run();
+
+    expect(result.length).toStrictEqual(1);
+    checkError(result[0], "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!")
+  });
+});
+
+describe("CompleteAwakeableGreeter: journal mismatch on CompleteAwakeable. Completed with wrong invocation id.", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new CompleteAwakeableGreeter(),
+      "/test.TestGreeter/Greet",
+      [startMessage(2),
+        inputMessage(greetRequest("Till")),
+        completeAwakeableMessage(
+          "TestGreeter",
+          Buffer.from("123"),
+          Buffer.from("abcde"), // this should have been a Buffer.from("abcd")
+          1,
+          "hello"
+        ),
+      ]
+    ).run();
+
+    expect(result.length).toStrictEqual(1);
+    checkError(result[0], "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!")
+  });
+});
+
+describe("CompleteAwakeableGreeter: journal mismatch on CompleteAwakeable. Completed with wrong entry index.", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new CompleteAwakeableGreeter(),
+      "/test.TestGreeter/Greet",
+      [startMessage(2),
+        inputMessage(greetRequest("Till")),
+        completeAwakeableMessage(
+          "TestGreeter",
+          Buffer.from("123"),
+          Buffer.from("abcde"),
+          2, // this should have been 1
+          "hello"
+        ),
+      ]
+    ).run();
+
+    expect(result.length).toStrictEqual(1);
+    checkError(result[0], "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!")
+  });
+});
+
+

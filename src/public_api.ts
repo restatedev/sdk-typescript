@@ -4,3 +4,4 @@ export {
   LambdaRestateServer,
   lambdaApiGatewayHandler,
 } from "./server/restate_lambda_handler";
+export * as RestateUtils from "./utils/public_utils";

@@ -3,7 +3,7 @@
 
 import { describe, expect } from "@jest/globals";
 import { TestingContext } from "./test_context";
-import * as RestateUtils from "../src/utils/utils";
+import * as RestateUtils from "../src/utils/public_utils";
 import { RestateError } from "../src/types/errors";
 import { RestateContext } from "../src/restate_context";
 

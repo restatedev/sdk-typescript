@@ -22,6 +22,22 @@ export interface RestateContext {
 
   clear(name: string): void;
 
+  /**
+   * Use this to call other Restate services in the background ( = async / not waiting on response).
+   * To do this, wrap the call via the proto-ts client with inBackground, as shown in the example below.
+   *
+   * NOTE: this returns a Promise because we override the gRPC clients provided by proto-ts.
+   * So we are required to return a Promise.
+   *
+   * @param call Invoke another service by using the generated proto-ts client.
+   *
+   * @example
+   *     const client = new GreeterClientImpl(ctx);
+   *     await ctx.inBackground(() =>
+   *       client.greet(Request.create({ name: "Peter" }))
+   *     );
+   *
+   */
   inBackground<T>(call: () => Promise<T>): Promise<void>;
 
   sideEffect<T>(fn: () => Promise<T>): Promise<T>;

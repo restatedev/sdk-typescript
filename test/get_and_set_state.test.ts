@@ -2,6 +2,7 @@ import { describe, expect } from "@jest/globals";
 import * as restate from "../src/public_api";
 import { TestDriver } from "./testdriver";
 import {
+  checkError,
   clearStateMessage,
   completionMessage,
   getStateMessage,
@@ -11,7 +12,7 @@ import {
   outputMessage,
   setStateMessage,
   startMessage,
-  suspensionMessage,
+  suspensionMessage
 } from "./protoutils";
 import {
   protoMetadata,
@@ -70,6 +71,106 @@ describe("GetAndSetGreeter: With GetState and SetState", () => {
   });
 });
 
+describe("GetAndSetGreeter: journal mismatch on GetState. Completed with SetState during replay.", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new GetAndSetGreeter(),
+      "/test.TestGreeter/Greet",
+      [
+        startMessage(3),
+        inputMessage(greetRequest("Till")),
+        setStateMessage("STATE", "Francesco"), // should have been getStateMessage
+        setStateMessage("STATE", "Till"),
+      ]
+    ).run();
+
+    expect(result.length).toStrictEqual(1);
+    checkError(result[0], "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!")
+  });
+});
+
+describe("GetAndSetGreeter: journal mismatch on SetState. Completed with GetState during replay.", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new GetAndSetGreeter(),
+      "/test.TestGreeter/Greet",
+      [
+        startMessage(3),
+        inputMessage(greetRequest("Till")),
+        getStateMessage("STATE", "Francesco"),
+        getStateMessage("STATE", "Till"), // should have been setStateMessage
+      ]
+    ).run();
+
+    expect(result.length).toStrictEqual(1);
+    checkError(result[0], "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!")
+  });
+});
+
+describe("GetAndSetGreeter: journal mismatch on SetState. Completed with ClearState during replay.", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new GetAndSetGreeter(),
+      "/test.TestGreeter/Greet",
+      [
+        startMessage(3),
+        inputMessage(greetRequest("Till")),
+        getStateMessage("STATE", "Francesco"),
+        clearStateMessage("STATE"), // should have been setStateMessage
+      ]
+    ).run();
+
+    expect(result.length).toStrictEqual(1);
+    checkError(result[0], "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!")
+  });
+});
+
+describe("GetAndSetGreeter: journal mismatch on SetState. Completed with different key.", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new GetAndSetGreeter(),
+      "/test.TestGreeter/Greet",
+      [
+        startMessage(3),
+        inputMessage(greetRequest("Till")),
+        getStateMessage("STATE", "Francesco"),
+        setStateMessage("STATEE", "Till"), // should have been STATE
+      ]
+    ).run();
+
+    expect(result.length).toStrictEqual(1);
+    checkError(result[0], "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!")
+  });
+});
+
+describe("GetAndSetGreeter: journal mismatch on SetState. Completed with different value.", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new GetAndSetGreeter(),
+      "/test.TestGreeter/Greet",
+      [
+        startMessage(3),
+        inputMessage(greetRequest("Till")),
+        getStateMessage("STATE", "Francesco"),
+        setStateMessage("STATE", "AnotherName"), // should have been Francesco
+      ]
+    ).run();
+
+    expect(result.length).toStrictEqual(1);
+    checkError(result[0], "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!")
+  });
+});
+
 describe("GetAndSetGreeter: With GetState already completed", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
@@ -88,6 +189,44 @@ describe("GetAndSetGreeter: With GetState already completed", () => {
       setStateMessage("STATE", "Till"),
       outputMessage(greetResponse("Hello Francesco")),
     ]);
+  });
+});
+
+describe("GetAndSetGreeter: Journal mismatch GetState gets completed with setState during replay.", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new GetAndSetGreeter(),
+      "/test.TestGreeter/Greet",
+      [
+        startMessage(2),
+        inputMessage(greetRequest("Till")),
+        setStateMessage("STATE", "Francesco"), // should have been getStateMessage
+      ]
+    ).run();
+
+    expect(result.length).toStrictEqual(1);
+    checkError(result[0], "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!")
+  });
+});
+
+describe("GetAndSetGreeter: Journal mismatch GetState gets completed with different key.", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new GetAndSetGreeter(),
+      "/test.TestGreeter/Greet",
+      [
+        startMessage(2),
+        inputMessage(greetRequest("Till")),
+        getStateMessage("STATEE"), // should have been STATE
+      ]
+    ).run();
+
+    expect(result.length).toStrictEqual(1);
+    checkError(result[0], "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!")
   });
 });
 
@@ -173,5 +312,72 @@ describe("ClearState: With ClearState already completed", () => {
     expect(result).toStrictEqual([
       outputMessage(greetResponse("Hello Francesco")),
     ]);
+  });
+});
+
+/**
+ * ClearState journal mismatch checks
+ */
+
+describe("ClearState: ClearState journal mismatch check on ClearState - completion with GetState during replay.", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new ClearStateGreeter(),
+      "/test.TestGreeter/Greet",
+      [
+        startMessage(4),
+        inputMessage(greetRequest("Till")),
+        getStateMessage("STATE", "Francesco"),
+        setStateMessage("STATE", "Till"),
+        getStateMessage("STATE"), // this should have been a clearStateMessage
+      ]
+    ).run();
+
+    expect(result.length).toStrictEqual(1);
+    checkError(result[0], "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!")
+  });
+});
+
+describe("ClearState: ClearState journal mismatch check on ClearState - completion with setState during replay.", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new ClearStateGreeter(),
+      "/test.TestGreeter/Greet",
+      [
+        startMessage(4),
+        inputMessage(greetRequest("Till")),
+        getStateMessage("STATE", "Francesco"),
+        setStateMessage("STATE", "Till"),
+        setStateMessage("STATE", "Till"), // this should have been a clearStateMessage
+      ]
+    ).run();
+
+    expect(result.length).toStrictEqual(1);
+    checkError(result[0], "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!")
+  });
+});
+
+describe("ClearState: ClearState journal mismatch check on ClearState - completion with different state key.", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new ClearStateGreeter(),
+      "/test.TestGreeter/Greet",
+      [
+        startMessage(4),
+        inputMessage(greetRequest("Till")),
+        getStateMessage("STATE", "Francesco"),
+        setStateMessage("STATE", "Till"),
+        clearStateMessage("STATEE"), // this should have been STATE
+      ]
+    ).run();
+
+    expect(result.length).toStrictEqual(1);
+    checkError(result[0], "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!")
   });
 });
