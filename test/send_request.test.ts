@@ -2,7 +2,8 @@ import { describe, expect } from "@jest/globals";
 import * as restate from "../src/public_api";
 import { TestDriver } from "./testdriver";
 import {
-  backgroundInvokeMessage, checkError,
+  backgroundInvokeMessage,
+  checkError,
   completionMessage,
   greetRequest,
   greetResponse,
@@ -11,7 +12,7 @@ import {
   outputMessage,
   setStateMessage,
   startMessage,
-  suspensionMessage
+  suspensionMessage,
 } from "./protoutils";
 import {
   protoMetadata,
@@ -224,7 +225,10 @@ describe("ReverseAwaitOrder: journal mismatch on Invoke - different service duri
     ).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(result[0], "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!");
+    checkError(
+      result[0],
+      "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    );
   });
 });
 
@@ -255,7 +259,10 @@ describe("ReverseAwaitOrder: journal mismatch on Invoke - different method durin
     ).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(result[0], "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!");
+    checkError(
+      result[0],
+      "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    );
   });
 });
 
@@ -286,7 +293,10 @@ describe("ReverseAwaitOrder: journal mismatch on Invoke - different request duri
     ).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(result[0], "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!");
+    checkError(
+      result[0],
+      "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    );
   });
 });
 
@@ -316,7 +326,10 @@ describe("ReverseAwaitOrder: journal mismatch on Invoke - completed with Backgro
     ).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(result[0], "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!");
+    checkError(
+      result[0],
+      "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    );
   });
 });
 
@@ -341,10 +354,14 @@ describe("ReverseAwaitOrder: Failing A1", () => {
     ).run();
 
     expect(result.length).toStrictEqual(4);
-      expect(result[0]).toStrictEqual(invokeMessage("test.TestGreeter", "Greet", greetRequest("Francesco")))
-      expect(result[1]).toStrictEqual(invokeMessage("test.TestGreeter", "Greet", greetRequest("Till")))
-      expect(result[2]).toStrictEqual(setStateMessage("A2", "TILL"))
-      checkError(result[3], "Error") // Error comes from the failed completion
+    expect(result[0]).toStrictEqual(
+      invokeMessage("test.TestGreeter", "Greet", greetRequest("Francesco"))
+    );
+    expect(result[1]).toStrictEqual(
+      invokeMessage("test.TestGreeter", "Greet", greetRequest("Till"))
+    );
+    expect(result[2]).toStrictEqual(setStateMessage("A2", "TILL"));
+    checkError(result[3], "Error"); // Error comes from the failed completion
   });
 });
 
@@ -377,18 +394,18 @@ describe("BackgroundInvokeGreeter: journal mismatch on BackgroundInvoke - Comple
       "TestGreeter",
       new BackgroundInvokeGreeter(),
       "/test.TestGreeter/Greet",
-      [startMessage(2),
+      [
+        startMessage(2),
         inputMessage(greetRequest("Till")),
-        invokeMessage(
-          "test.TestGreeter",
-          "Greet",
-          greetRequest("Francesco")
-        ), // should have been BackgroundInvoke
+        invokeMessage("test.TestGreeter", "Greet", greetRequest("Francesco")), // should have been BackgroundInvoke
       ]
     ).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(result[0], "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!");
+    checkError(
+      result[0],
+      "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    );
   });
 });
 
@@ -399,17 +416,22 @@ describe("BackgroundInvokeGreeter: journal mismatch on BackgroundInvoke - Comple
       "TestGreeter",
       new BackgroundInvokeGreeter(),
       "/test.TestGreeter/Greet",
-      [startMessage(2),
+      [
+        startMessage(2),
         inputMessage(greetRequest("Till")),
         backgroundInvokeMessage(
           "test.TestGreeterWrong", // should have been "test.TestGreeter"
           "Greet",
           greetRequest("Francesco")
-        ),]
+        ),
+      ]
     ).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(result[0], "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!");
+    checkError(
+      result[0],
+      "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    );
   });
 });
 
@@ -420,17 +442,22 @@ describe("BackgroundInvokeGreeter: journal mismatch on BackgroundInvoke - Comple
       "TestGreeter",
       new BackgroundInvokeGreeter(),
       "/test.TestGreeter/Greet",
-      [startMessage(2),
+      [
+        startMessage(2),
         inputMessage(greetRequest("Till")),
         backgroundInvokeMessage(
           "test.TestGreeter",
           "Greetzzz", // should have been "Greet"
           greetRequest("Francesco")
-        ),]
+        ),
+      ]
     ).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(result[0], "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!");
+    checkError(
+      result[0],
+      "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    );
   });
 });
 
@@ -441,17 +468,22 @@ describe("BackgroundInvokeGreeter: journal mismatch on BackgroundInvoke - Comple
       "TestGreeter",
       new BackgroundInvokeGreeter(),
       "/test.TestGreeter/Greet",
-      [startMessage(2),
+      [
+        startMessage(2),
         inputMessage(greetRequest("Till")),
         backgroundInvokeMessage(
           "test.TestGreeter",
           "Greet", // should have been "Greet"
           greetRequest("AnotherName")
-        ),]
+        ),
+      ]
     ).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(result[0], "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!");
+    checkError(
+      result[0],
+      "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    );
   });
 });
 
@@ -466,7 +498,10 @@ describe("FailingBackgroundInvokeGreeter: failing background call ", () => {
     ).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(result[0], "Cannot do a set state from within a background call. Context method inBackground() can only be used to invoke other services in the background. e.g. ctx.inBackground(() => client.greet(my_request))");
+    checkError(
+      result[0],
+      "Cannot do a set state from within a background call. Context method inBackground() can only be used to invoke other services in the background. e.g. ctx.inBackground(() => client.greet(my_request))"
+    );
   });
 });
 
@@ -481,7 +516,10 @@ describe("FailingSideEffectInBackgroundInvokeGreeter: failing background call ",
     ).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(result[0], "Cannot do a side effect from within a background call. Context method inBackground() can only be used to invoke other services in the background. e.g. ctx.inBackground(() => client.greet(my_request))")
+    checkError(
+      result[0],
+      "Cannot do a side effect from within a background call. Context method inBackground() can only be used to invoke other services in the background. e.g. ctx.inBackground(() => client.greet(my_request))"
+    );
   });
 });
 

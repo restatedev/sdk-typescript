@@ -10,6 +10,7 @@ import {
   SleepEntryMessage,
 } from "../generated/proto/protocol";
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 export function printMessageAsJson(obj: any): string {
   const newObj = { ...(obj as Record<string, unknown>) };
   for (const [key, value] of Object.entries(newObj)) {

@@ -91,7 +91,9 @@ export class PendingMessage {
 type CompletionResult = {
   journalIndex: number;
   messageType: bigint;
+  /* eslint-disable @typescript-eslint/no-explicit-any */
   message: any;
+  /* eslint-disable @typescript-eslint/no-explicit-any */
   comparisonFct: (msg1: any, msg2: any) => boolean;
   value?: any;
   failure?: Failure;
@@ -153,11 +155,14 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     this.serviceName = method.service;
 
     if (SUSPENSION_TRIGGERS.has(protocolMode)) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       this.suspensionTriggers = SUSPENSION_TRIGGERS.get(protocolMode)!;
     } else {
-      this.method.reject(Error(
-        "Unknown protocol mode. Protocol mode does not have suspension triggers defined."
-      ));
+      this.method.reject(
+        Error(
+          "Unknown protocol mode. Protocol mode does not have suspension triggers defined."
+        )
+      );
     }
     this.suspensionMillis =
       this.protocolMode === ProtocolMode.REQUEST_RESPONSE ? 0 : 100;
@@ -309,14 +314,16 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
           "Illegal state: An awakeable should always set a suspension timeout"
         );
       }
-    }).then<T>((result: Buffer) => {
-      return JSON.parse(result.toString()) as T;
-    }).finally(() => {
-      // If the promise gets completed before the suspension gets triggered, then clear the timeout
-      if (suspensionTimeout) {
-        clearTimeout(suspensionTimeout);
-      }
-    });
+    })
+      .then<T>((result: Buffer) => {
+        return JSON.parse(result.toString()) as T;
+      })
+      .finally(() => {
+        // If the promise gets completed before the suspension gets triggered, then clear the timeout
+        if (suspensionTimeout) {
+          clearTimeout(suspensionTimeout);
+        }
+      });
   }
 
   completeAwakeable<T>(id: AwakeableIdentifier, payload: T): void {
@@ -456,14 +463,16 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
           "Illegal state: An invoke should always set a suspension timeout"
         );
       }
-    }).then((result) => {
-      return result as Uint8Array;
-    }).finally(() =>{
-      // If the promise gets completed before the suspension gets triggered, then clear the timeout
-      if (suspensionTimeout) {
-        clearTimeout(suspensionTimeout);
-      }
-    });
+    })
+      .then((result) => {
+        return result as Uint8Array;
+      })
+      .finally(() => {
+        // If the promise gets completed before the suspension gets triggered, then clear the timeout
+        if (suspensionTimeout) {
+          clearTimeout(suspensionTimeout);
+        }
+      });
   }
 
   /**
@@ -656,8 +665,8 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       const timeout = this.send(SLEEP_ENTRY_MESSAGE_TYPE, msg);
 
       if (timeout) {
-        suspensionTimeout = timeout
-      }else {
+        suspensionTimeout = timeout;
+      } else {
         throw new Error(
           "Illegal state: A sleep should always set a suspension timeout"
         );
@@ -715,10 +724,12 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
             this.onClose();
             this.connection.end();
           } else {
-            this.method.reject(new Error(
-              "Illegal state: Not able to send suspension message because no pending promises. " +
-                "This timeout should have been removed."
-            ));
+            this.method.reject(
+              new Error(
+                "Illegal state: Not able to send suspension message because no pending promises. " +
+                  "This timeout should have been removed."
+              )
+            );
           }
         }
       }, this.suspensionMillis);
@@ -781,9 +792,11 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         break;
       }
       default: {
-        this.method.reject(new Error(
-          `Received unkown message type from the runtime: { message_type: ${msg.messageType}, message: ${msg.message} }`
-        ));
+        this.method.reject(
+          new Error(
+            `Received unkown message type from the runtime: { message_type: ${msg.messageType}, message: ${msg.message} }`
+          )
+        );
       }
     }
   }
@@ -823,9 +836,11 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     );
 
     if (this.state === ExecutionState.REPLAYING) {
-      this.method.reject(new Error(
-        "Illegal state: received completion message but still in replay state."
-      ));
+      this.method.reject(
+        new Error(
+          "Illegal state: received completion message but still in replay state."
+        )
+      );
     }
 
     // It is possible that value, empty and failure are all undefined.
@@ -963,15 +978,19 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     if (this.replayIndex < this.nbEntriesToReplay) {
       this.replayIndex++;
     } else {
-      this.method.reject(new Error(
-        "Illegal state: We received a replay message from the runtime but we are not in replay mode."
-      ));
+      this.method.reject(
+        new Error(
+          "Illegal state: We received a replay message from the runtime but we are not in replay mode."
+        )
+      );
     }
   }
 
   failIfClosed() {
     if (this.state === ExecutionState.CLOSED) {
-      this.method.reject(new Error("State machine is closed. Canceling all execution"));
+      this.method.reject(
+        new Error("State machine is closed. Canceling all execution")
+      );
     }
   }
 
@@ -1011,6 +1030,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       this.state === ExecutionState.REPLAYING &&
       this.outOfOrderReplayMessages.has(journalIndex)
     ) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const completionResult = this.outOfOrderReplayMessages.get(journalIndex)!;
       this.handlePendingMessage(
         completionResult.journalIndex,
@@ -1057,9 +1077,11 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         });
         return;
       } else {
-        this.method.reject(new Error(
-          `No pending message found for this journal index: ${journalIndex}`
-        ));
+        this.method.reject(
+          new Error(
+            `No pending message found for this journal index: ${journalIndex}`
+          )
+        );
       }
     }
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
@@ -1071,14 +1093,16 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         !comparisonFct(resultMessage, pendingMessage.message! as I))
     ) {
-      this.method.reject(new Error(`Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!
+      this.method.reject(
+        new Error(`Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!
       The journal entry at position ${journalIndex} was:
       - In the user code: type: ${
         pendingMessage.messageType
       }, message:${printMessageAsJson(pendingMessage.message)}
       - In the replayed messages: type: ${resultMessageType}, message: ${printMessageAsJson(
-        resultMessage
-      )}`));
+          resultMessage
+        )}`)
+      );
     }
 
     // If we do not require a result, then just remove the message from the map.
@@ -1094,26 +1118,34 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
     // If we do require a result and have a result then resolve or reject the promise and remove the pending message from the map
     else if (value !== undefined) {
-      if(pendingMessage.resolve !== undefined){
+      if (pendingMessage.resolve !== undefined) {
         pendingMessage.resolve(value);
         this.indexToPendingMsgMap.delete(journalIndex);
       } else {
-        this.method.reject(new Error("SDK bug: No resolve method found to resolve the pending message."))
+        this.method.reject(
+          new Error(
+            "SDK bug: No resolve method found to resolve the pending message."
+          )
+        );
       }
     } else if (failure !== undefined) {
-      if(pendingMessage.reject !== undefined){
-        pendingMessage.reject!(failure);
+      if (pendingMessage.reject !== undefined) {
+        pendingMessage.reject(failure);
         this.indexToPendingMsgMap.delete(journalIndex);
       } else {
-        this.method.reject(new Error("SDK bug: No resolve method found to resolve the pending message."))
+        this.method.reject(
+          new Error(
+            "SDK bug: No resolve method found to resolve the pending message."
+          )
+        );
       }
     }
     // In case of a side effect completion, we don't get a value or failure back but still need to ack the completion.
     else if (pendingMessage.messageType === SIDE_EFFECT_ENTRY_MESSAGE_TYPE) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       pendingMessage.resolve!(undefined);
       this.indexToPendingMsgMap.delete(journalIndex);
     }
-
   }
 
   validate(callType: string) {
@@ -1154,8 +1186,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       OutputStreamEntryMessage.create({
         failure: Failure.create({
           code: 13,
-          message:
-            `Uncaught exception for invocation id ${this.invocationIdString}: ${e.message}`,
+          message: `Uncaught exception for invocation id ${this.invocationIdString}: ${e.message}`,
         }),
       })
     );

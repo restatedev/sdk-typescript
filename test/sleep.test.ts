@@ -2,7 +2,8 @@ import { describe, expect } from "@jest/globals";
 import * as restate from "../src/public_api";
 import { TestDriver } from "./testdriver";
 import {
-  awakeableMessage, checkError,
+  awakeableMessage,
+  checkError,
   completionMessage,
   greetRequest,
   greetResponse,
@@ -10,7 +11,7 @@ import {
   outputMessage,
   sleepMessage,
   startMessage,
-  suspensionMessage
+  suspensionMessage,
 } from "./protoutils";
 import { SLEEP_ENTRY_MESSAGE_TYPE } from "../src/types/protocol";
 import { Empty } from "../src/generated/google/protobuf/empty";
@@ -22,8 +23,7 @@ import {
 } from "../src/generated/proto/test";
 import { ProtocolMode } from "../src/generated/proto/discovery";
 
-
-const wakeupTime= 1835661783000;
+const wakeupTime = 1835661783000;
 
 class SleepGreeter implements TestGreeter {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -119,7 +119,10 @@ describe("SleepGreeter: journal mismatch checks on sleep: Completed with awakeab
     ).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(result[0], "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!");
+    checkError(
+      result[0],
+      "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    );
   });
 });
 
@@ -138,6 +141,9 @@ describe("SleepGreeter: journal mismatch checks on sleep: Completed with differe
     ).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(result[0], "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!");
+    checkError(
+      result[0],
+      "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    );
   });
 });

@@ -12,7 +12,7 @@ import {
   outputMessage,
   setStateMessage,
   startMessage,
-  suspensionMessage
+  suspensionMessage,
 } from "./protoutils";
 import {
   protoMetadata,
@@ -87,7 +87,10 @@ describe("GetAndSetGreeter: journal mismatch on GetState. Completed with SetStat
     ).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(result[0], "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!")
+    checkError(
+      result[0],
+      "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    );
   });
 });
 
@@ -107,7 +110,10 @@ describe("GetAndSetGreeter: journal mismatch on SetState. Completed with GetStat
     ).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(result[0], "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!")
+    checkError(
+      result[0],
+      "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    );
   });
 });
 
@@ -127,7 +133,10 @@ describe("GetAndSetGreeter: journal mismatch on SetState. Completed with ClearSt
     ).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(result[0], "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!")
+    checkError(
+      result[0],
+      "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    );
   });
 });
 
@@ -147,7 +156,10 @@ describe("GetAndSetGreeter: journal mismatch on SetState. Completed with differe
     ).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(result[0], "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!")
+    checkError(
+      result[0],
+      "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    );
   });
 });
 
@@ -167,7 +179,10 @@ describe("GetAndSetGreeter: journal mismatch on SetState. Completed with differe
     ).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(result[0], "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!")
+    checkError(
+      result[0],
+      "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    );
   });
 });
 
@@ -207,7 +222,10 @@ describe("GetAndSetGreeter: Journal mismatch GetState gets completed with setSta
     ).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(result[0], "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!")
+    checkError(
+      result[0],
+      "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    );
   });
 });
 
@@ -226,7 +244,10 @@ describe("GetAndSetGreeter: Journal mismatch GetState gets completed with differ
     ).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(result[0], "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!")
+    checkError(
+      result[0],
+      "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    );
   });
 });
 
@@ -336,7 +357,10 @@ describe("ClearState: ClearState journal mismatch check on ClearState - completi
     ).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(result[0], "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!")
+    checkError(
+      result[0],
+      "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    );
   });
 });
 
@@ -357,7 +381,10 @@ describe("ClearState: ClearState journal mismatch check on ClearState - completi
     ).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(result[0], "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!")
+    checkError(
+      result[0],
+      "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    );
   });
 });
 
@@ -378,6 +405,9 @@ describe("ClearState: ClearState journal mismatch check on ClearState - completi
     ).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(result[0], "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!")
+    checkError(
+      result[0],
+      "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    );
   });
 });
