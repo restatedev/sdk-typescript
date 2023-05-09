@@ -158,10 +158,13 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       this.suspensionTriggers = SUSPENSION_TRIGGERS.get(protocolMode)!;
     } else {
-      this.method.reject(
-        Error(
-          "Unknown protocol mode. Protocol mode does not have suspension triggers defined."
-        )
+      // cannot use method.reject here because it is not defined yet!
+      // This will also not get picked up in onCallFailure because it happens earlier.
+      // So we need to close the state machine and the connection and throw an error.
+      this.onClose();
+      this.connection.end();
+      throw new Error(
+        "Unknown protocol mode. Protocol mode does not have suspension triggers defined."
       );
     }
     this.suspensionMillis =
@@ -173,7 +176,9 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   }
 
   async get<T>(name: string): Promise<T | null> {
-    this.validate("get state");
+    if (!this.isValidState("get state")) {
+      return Promise.reject();
+    }
 
     return new Promise<Buffer>((resolve, reject) => {
       this.incrementJournalIndex();
@@ -210,7 +215,9 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   }
 
   set<T>(name: string, value: T): void {
-    this.validate("set state");
+    if (!this.isValidState("set state")) {
+      return;
+    }
     this.incrementJournalIndex();
 
     const bytes = Buffer.from(JSON.stringify(value));
@@ -244,7 +251,9 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   }
 
   clear(name: string): void {
-    this.validate("clear state");
+    if (!this.isValidState("clear state")) {
+      return;
+    }
     this.incrementJournalIndex();
 
     const msg = ClearStateEntryMessage.create({
@@ -276,7 +285,9 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   }
 
   async awakeable<T>(): Promise<T> {
-    this.validate("awakeable");
+    if (!this.isValidState("awakeable")) {
+      return Promise.reject();
+    }
 
     let suspensionTimeout: NodeJS.Timeout;
 
@@ -327,7 +338,9 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   }
 
   completeAwakeable<T>(id: AwakeableIdentifier, payload: T): void {
-    this.validate("completeAwakeable");
+    if (!this.isValidState("completeAwakeable")) {
+      return;
+    }
     this.incrementJournalIndex();
 
     const msg = CompleteAwakeableEntryMessage.create({
@@ -421,7 +434,9 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     method: string,
     data: Uint8Array
   ): Promise<Uint8Array> {
-    this.validate("invoke");
+    if (!this.isValidState("invoke")) {
+      return Promise.reject();
+    }
 
     let suspensionTimeout: NodeJS.Timeout;
 
@@ -489,7 +504,9 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
    * @param call
    */
   async inBackground<T>(call: () => Promise<T>): Promise<void> {
-    this.validate("inBackground");
+    if (!this.isValidState("inBackground")) {
+      return Promise.reject();
+    }
 
     this.inBackgroundCallFlag = true;
     await call();
@@ -503,24 +520,14 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
     return new Promise((resolve, reject) => {
       if (this.inSideEffectFlag) {
-        // Log
-        console.error(
-          this.logPrefix + "Invalid user code: you cannot nest side effects."
-        );
-        console.trace();
-
-        // Reject the promise
         const nestedSideEffectFailure: Failure = Failure.create({
           code: 13,
           message: `You cannot do sideEffect calls from within a side effect.`,
         });
-        return reject(nestedSideEffectFailure);
+        this.method.reject(nestedSideEffectFailure);
+        this.onClose();
+        return;
       } else if (this.inBackgroundCallFlag) {
-        console.error(
-          this.logPrefix +
-            "Invalid user code: you cannot do a side effect inside a background call"
-        );
-        console.trace();
         const sideEffectInBackgroundFailure: Failure = Failure.create({
           code: 13,
           message:
@@ -528,7 +535,9 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
             "Context method inBackground() can only be used to invoke other services in the background. " +
             "e.g. ctx.inBackground(() => client.greet(my_request))",
         });
-        return reject(sideEffectInBackgroundFailure);
+        this.method.reject(sideEffectInBackgroundFailure);
+        this.onClose();
+        return;
       }
 
       this.inSideEffectFlag = true;
@@ -601,10 +610,15 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
           );
         })
         .catch((reason) => {
-          const failure: Failure = Failure.create({
-            code: 13,
-            message: reason.message,
-          });
+          // Reason is either a failure or an Error
+          const failure: Failure =
+            reason instanceof Error
+              ? Failure.create({
+                  code: 13,
+                  message: reason.message,
+                })
+              : reason;
+
           const sideEffectMsg = SideEffectEntryMessage.encode(
             SideEffectEntryMessage.create({ failure: failure })
           ).finish();
@@ -634,7 +648,9 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   }
 
   async sleep(millis: number): Promise<void> {
-    this.validate("sleep");
+    if (!this.isValidState("sleep")) {
+      return Promise.reject();
+    }
 
     let suspensionTimeout: NodeJS.Timeout;
 
@@ -678,6 +694,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   }
 
   // Sends the message and returns the suspensionMillis if set
+  // Note that onCallSuccess and onCallFailure do not use this and send the message straight over the connection.
   send(
     messageType: bigint,
     message: ProtocolMessage | Uint8Array,
@@ -685,6 +702,14 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     protocolVersion?: number,
     requiresAckFlag?: boolean
   ): NodeJS.Timeout | void {
+    if (this.state === ExecutionState.CLOSED) {
+      console.debug(
+        "State machine is closed. Not sending message " +
+          printMessageAsJson(message)
+      );
+      return;
+    }
+
     // send the message
     // Right now for bidi streaming mode, we flush after every message.
     this.connection.send(
@@ -724,6 +749,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
             this.onClose();
             this.connection.end();
           } else {
+            // leads to onCallFailure call
             this.method.reject(
               new Error(
                 "Illegal state: Not able to send suspension message because no pending promises. " +
@@ -792,6 +818,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         break;
       }
       default: {
+        // leads to onCallFailure call
         this.method.reject(
           new Error(
             `Received unkown message type from the runtime: { message_type: ${msg.messageType}, message: ${msg.message} }`
@@ -827,7 +854,13 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   }
 
   handleCompletionMessage(m: CompletionMessage) {
-    this.failIfClosed();
+    if (this.state === ExecutionState.CLOSED) {
+      console.debug(
+        "State machine is closed. Not processing completion message: " +
+          printMessageAsJson(m)
+      );
+      return;
+    }
 
     console.debug(
       `${
@@ -836,6 +869,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     );
 
     if (this.state === ExecutionState.REPLAYING) {
+      // leads to onCallFailure call
       this.method.reject(
         new Error(
           "Illegal state: received completion message but still in replay state."
@@ -978,6 +1012,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     if (this.replayIndex < this.nbEntriesToReplay) {
       this.replayIndex++;
     } else {
+      // leads to onCallFailure call
       this.method.reject(
         new Error(
           "Illegal state: We received a replay message from the runtime but we are not in replay mode."
@@ -988,9 +1023,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
   failIfClosed() {
     if (this.state === ExecutionState.CLOSED) {
-      this.method.reject(
-        new Error("State machine is closed. Canceling all execution")
-      );
+      throw new Error("State machine is closed. Canceling all execution");
     }
   }
 
@@ -1077,6 +1110,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         });
         return;
       } else {
+        // leads to onCallFailure call
         this.method.reject(
           new Error(
             `No pending message found for this journal index: ${journalIndex}`
@@ -1093,6 +1127,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         !comparisonFct(resultMessage, pendingMessage.message! as I))
     ) {
+      // leads to onCallFailure call
       this.method.reject(
         new Error(`Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!
       The journal entry at position ${journalIndex} was:
@@ -1122,6 +1157,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         pendingMessage.resolve(value);
         this.indexToPendingMsgMap.delete(journalIndex);
       } else {
+        // leads to onCallFailure call
         this.method.reject(
           new Error(
             "SDK bug: No resolve method found to resolve the pending message."
@@ -1133,6 +1169,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         pendingMessage.reject(failure);
         this.indexToPendingMsgMap.delete(journalIndex);
       } else {
+        // leads to onCallFailure call
         this.method.reject(
           new Error(
             "SDK bug: No resolve method found to resolve the pending message."
@@ -1148,18 +1185,37 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     }
   }
 
-  validate(callType: string) {
+  /**
+   * Checks if we are in a valid state to execute the action.
+   * Checks:
+   * - if the state machine is not closed
+   * - if we are not doing a context call from within a side effect
+   * - if we are not doing an invalid context call from within an inBackground call
+   */
+  isValidState(callType: string): boolean {
     this.failIfClosed();
     if (this.inSideEffectFlag) {
-      throw new Error(
-        `You cannot do ${callType} calls from within a side effect.`
+      this.method.reject(
+        Failure.create({
+          code: 13,
+          message: `You cannot do ${callType} calls from within a side effect.`,
+        })
       );
+      this.onClose();
+      return false;
     } else if (this.inBackgroundCallFlag) {
-      throw new Error(
-        `Cannot do a ${callType} from within a background call. ` +
-          "Context method inBackground() can only be used to invoke other services in the background. " +
-          "e.g. ctx.inBackground(() => client.greet(my_request))"
+      this.method.reject(
+        Failure.create({
+          code: 13,
+          message: `Cannot do a ${callType} from within a background call.
+          Context method inBackground() can only be used to invoke other services in the background.
+          e.g. ctx.inBackground(() => client.greet(my_request))`,
+        })
       );
+      this.onClose();
+      return false;
+    } else {
+      return true;
     }
   }
 
@@ -1170,7 +1226,9 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         this.logPrefix
       } Call ended successful, output message: ${printMessageAsJson(msg)}`
     );
-    this.send(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, msg);
+    // We send the message straight over the connection
+    this.connection.send(new Message(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, msg));
+    this.onClose();
     this.connection.end();
   }
 
@@ -1181,20 +1239,28 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       console.warn(`${this.logPrefix} Call failed: ${printMessageAsJson(e)}`);
     }
 
-    this.send(
-      OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
-      OutputStreamEntryMessage.create({
-        failure: Failure.create({
-          code: 13,
-          message: `Uncaught exception for invocation id ${this.invocationIdString}: ${e.message}`,
-        }),
-      })
+    // We send the message straight over the connection
+    // We do not use this.send because that does not allow us to send back failures after the state machine was closed.
+    this.connection.send(
+      new Message(
+        OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
+        OutputStreamEntryMessage.create({
+          failure: Failure.create({
+            code: 13,
+            message: `Uncaught exception for invocation id ${this.invocationIdString}: ${e.message}`,
+          }),
+        })
+      )
     );
+    this.onClose();
     this.connection.end();
   }
 
   onClose() {
     // done.
-    this.transitionState(ExecutionState.CLOSED);
+    if (this.state !== ExecutionState.CLOSED) {
+      console.debug("Closing the state machine");
+      this.transitionState(ExecutionState.CLOSED);
+    }
   }
 }

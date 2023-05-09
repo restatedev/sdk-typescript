@@ -52,7 +52,6 @@ export class LambdaConnection implements Connection {
       decodedEntries.forEach((msg) => handler(msg));
     } catch (e) {
       console.error(e);
-      console.trace();
       console.debug("Closing the connection and state machine.");
       this.onError();
     }
