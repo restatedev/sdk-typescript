@@ -86,8 +86,9 @@ export class TestDriver<I, O> implements Connection {
 
   send(msg: Message) {
     this.result.push(msg);
-    rlog.debug(
-      `Adding result to the result array. Message type: ${msg.messageType},
+    rlog.debugExpensive(
+      () =>
+        `Adding result to the result array. Message type: ${msg.messageType},
         message: 
         ${
           msg.message instanceof Uint8Array

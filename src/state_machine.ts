@@ -197,12 +197,13 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         return;
       }
 
-      rlog.debug(
-        `${
-          this.logPrefix
-        } Adding message to output buffer: type: GetState, message: ${printMessageAsJson(
-          msg
-        )}`
+      rlog.debugExpensive(
+        () =>
+          `${
+            this.logPrefix
+          } Adding message to output buffer: type: GetState, message: ${printMessageAsJson(
+            msg
+          )}`
       );
       this.send(GET_STATE_ENTRY_MESSAGE_TYPE, msg);
     }).then((result: Buffer | null) => {
@@ -240,12 +241,13 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       return;
     }
 
-    rlog.debug(
-      `${
-        this.logPrefix
-      } Adding message to output buffer: type: SetState, message: ${printMessageAsJson(
-        msg
-      )}`
+    rlog.debugExpensive(
+      () =>
+        `${
+          this.logPrefix
+        } Adding message to output buffer: type: SetState, message: ${printMessageAsJson(
+          msg
+        )}`
     );
     this.send(SET_STATE_ENTRY_MESSAGE_TYPE, msg);
   }
@@ -274,12 +276,13 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       return;
     }
 
-    rlog.debug(
-      `${
-        this.logPrefix
-      } Adding message to output buffer: type: ClearState, message: ${printMessageAsJson(
-        msg
-      )}`
+    rlog.debugExpensive(
+      () =>
+        `${
+          this.logPrefix
+        } Adding message to output buffer: type: ClearState, message: ${printMessageAsJson(
+          msg
+        )}`
     );
     this.send(CLEAR_STATE_ENTRY_MESSAGE_TYPE, msg);
   }
@@ -320,12 +323,13 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         return;
       }
 
-      rlog.debug(
-        `${
-          this.logPrefix
-        } Adding message to output buffer: type: Awakeable, message: ${printMessageAsJson(
-          msg
-        )}`
+      rlog.debugExpensive(
+        () =>
+          `${
+            this.logPrefix
+          } Adding message to output buffer: type: Awakeable, message: ${printMessageAsJson(
+            msg
+          )}`
       );
       const timeout = this.send(AWAKEABLE_ENTRY_MESSAGE_TYPE, msg);
 
@@ -389,12 +393,13 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       );
       return;
     }
-    rlog.debug(
-      `${
-        this.logPrefix
-      } Adding message to output buffer: type: CompleteAwakeable, message: ${printMessageAsJson(
-        msg
-      )}`
+    rlog.debugExpensive(
+      () =>
+        `${
+          this.logPrefix
+        } Adding message to output buffer: type: CompleteAwakeable, message: ${printMessageAsJson(
+          msg
+        )}`
     );
     this.send(COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE, msg);
   }
@@ -438,12 +443,13 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         msg
       );
     } else {
-      rlog.debug(
-        `${
-          this.logPrefix
-        } Adding message to output buffer: type: BackgroundInvoke, message: ${printMessageAsJson(
-          msg
-        )}`
+      rlog.debugExpensive(
+        () =>
+          `${
+            this.logPrefix
+          } Adding message to output buffer: type: BackgroundInvoke, message: ${printMessageAsJson(
+            msg
+          )}`
       );
       this.send(BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE, msg);
     }
@@ -486,12 +492,13 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         return;
       }
 
-      rlog.debug(
-        `${
-          this.logPrefix
-        } Adding message to output buffer: type: Invoke, message: ${printMessageAsJson(
-          msg
-        )}`
+      rlog.debugExpensive(
+        () =>
+          `${
+            this.logPrefix
+          } Adding message to output buffer: type: Invoke, message: ${printMessageAsJson(
+            msg
+          )}`
       );
       const timeout = this.send(INVOKE_ENTRY_MESSAGE_TYPE, msg);
 
@@ -611,12 +618,13 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
             SideEffectEntryMessage.create({ value: bytes })
           ).finish();
 
-          rlog.debug(
-            `${
-              this.logPrefix
-            } Adding message to output buffer: type: SideEffect, message: ${printMessageAsJson(
-              sideEffectMsg
-            )}`
+          rlog.debugExpensive(
+            () =>
+              `${
+                this.logPrefix
+              } Adding message to output buffer: type: SideEffect, message: ${printMessageAsJson(
+                sideEffectMsg
+              )}`
           );
           this.send(
             SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
@@ -648,12 +656,13 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
             SideEffectEntryMessage.create({ failure: failure })
           ).finish();
 
-          rlog.debug(
-            `${
-              this.logPrefix
-            } Adding message to output buffer: type: SideEffect, message: ${printMessageAsJson(
-              sideEffectMsg
-            )}`
+          rlog.debugExpensive(
+            () =>
+              `${
+                this.logPrefix
+              } Adding message to output buffer: type: SideEffect, message: ${printMessageAsJson(
+                sideEffectMsg
+              )}`
           );
           this.send(
             SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
@@ -696,12 +705,13 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         return;
       }
 
-      rlog.debug(
-        `${
-          this.logPrefix
-        } Adding message to output buffer: type: Sleep, message: ${printMessageAsJson(
-          msg
-        )}`
+      rlog.debugExpensive(
+        () =>
+          `${
+            this.logPrefix
+          } Adding message to output buffer: type: Sleep, message: ${printMessageAsJson(
+            msg
+          )}`
       );
       const timeout = this.send(SLEEP_ENTRY_MESSAGE_TYPE, msg);
 
@@ -868,8 +878,8 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   handleInputMessage(m: PollInputStreamEntryMessage) {
     this.invocationIdString = uuidV7FromBuffer(this.invocationId);
     this.logPrefix = `[${this.serviceName}] [${this.method.method.name}] [${this.invocationIdString}]`;
-    rlog.debug(
-      `${this.logPrefix} Received input message: ${printMessageAsJson(m)}`
+    rlog.debugExpensive(
+      () => `${this.logPrefix} Received input message: ${printMessageAsJson(m)}`
     );
 
     this.method.invoke(this, m.value).then(
@@ -887,10 +897,11 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       return;
     }
 
-    rlog.debug(
-      `${
-        this.logPrefix
-      } Received new completion from the runtime: ${printMessageAsJson(m)}`
+    rlog.debugExpensive(
+      () =>
+        `${
+          this.logPrefix
+        } Received new completion from the runtime: ${printMessageAsJson(m)}`
     );
 
     if (this.state === ExecutionState.REPLAYING) {
@@ -1246,10 +1257,11 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
   onCallSuccess(result: Uint8Array) {
     const msg = OutputStreamEntryMessage.create({ value: Buffer.from(result) });
-    rlog.debug(
-      `${
-        this.logPrefix
-      } Call ended successful, output message: ${printMessageAsJson(msg)}`
+    rlog.debugExpensive(
+      () =>
+        `${
+          this.logPrefix
+        } Call ended successful, output message: ${printMessageAsJson(msg)}`
     );
     // We send the message straight over the connection
     this.connection.send(new Message(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, msg));

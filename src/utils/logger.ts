@@ -1,5 +1,15 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+/**
+ * Simple extension of the Console interface, to add debug loggin with
+ * lazy construction, to support cases where message construction is
+ * expensive and should not happen message tracing is actually active.
+ */
+interface RestateConsole extends Console {
+  enableExpensiveDebugMessages: boolean;
+  debugExpensive(lazyMessage: () => string): void;
+}
+
 // effectively duplicate the console object (new object with same prototype)
 // to override some specific methods
 const restate_logger = Object.create(console);
@@ -48,6 +58,14 @@ restate_logger.trace = (message?: any, ...optionalParams: any[]) => {
   );
 };
 
+// add the tracing properties
+restate_logger.enableExpensiveDebugMessages = false;
+restate_logger.debugExpensive = function (lazyMessage: () => string): void {
+  if (restate_logger.enableExpensiveDebugMessages === true) {
+    console.debug(lazyMessage());
+  }
+};
+
 /**
  * The RestateLogger lets us add some extra information to logging statements:
  * [restate] [timestamp] INFO/WARN/ERROR/DEBUG/TRACE <log-message>.
@@ -55,4 +73,4 @@ restate_logger.trace = (message?: any, ...optionalParams: any[]) => {
  * We don't override the console here, to make sure that this only applies to Restate
  * log lines, and not to logging from application code.
  */
-export const rlog = restate_logger as Console;
+export const rlog = restate_logger as RestateConsole;
