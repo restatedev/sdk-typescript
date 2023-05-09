@@ -107,34 +107,34 @@ export interface RestateContext {
   /**
    * Register an awakeable and pause the processing until the awakeable ID has been returned to the service
    * (via ctx.completeAwakeable(...)).
-   * @returns the payload that was supplied by the service which completed the awakeable
+   * @returns
+   * - id: the string ID that has to be used to complete the awakaeble by some external service
+   * - promise: the Promise that needs to be awaited and that is resolved with the payload that was supplied by the service which completed the awakeable
    *
    * @example
    * const ctx = restate.useContext(this);
-   * const result = await ctx.awakeable<string>();
+   * const awakeable = ctx.awakeable<string>();
+   *
+   * // send the awakeable ID to some external service that will wake this one back up
+   * // The ID can be retrieved by:
+   * const id = awakeable.id;
+   *
+   * // ... send to external service ...
+   *
+   * // Wait for the external service to wake this service back up
+   * const result = await awakeable.promise;
    */
   awakeable<T>(): { id: string; promise: Promise<T> };
 
   /**
    * Complete an awakeable of another service.
-   * @param id the ID of the awakeable
-   * This is an object that contains the following fields:
-   * {
-   *   serviceName: string,
-   *   instanceKey: Buffer,
-   *   invocationId: Buffer,
-   *   entryIndex: number
-   * }
+   * @param id the string ID of the awakeable.
+   * This is supplied by the service that needs to be woken up.
    * @param payload the payload to pass to the service that is woken up
    *
    * @example
    * const ctx = restate.useContext(this);
-   * const awakeableIdentifier = new AwakeableIdentifier(
-   *   "TestGreeter",
-   *   Buffer.from("123"),
-   *   Buffer.from("abcd"),
-   *   1
-   * );
+   * // The sleeping service should have sent the awakeableIdentifier string to this service.
    * ctx.completeAwakeable(awakeableIdentifier, "hello");
    */
   completeAwakeable<T>(id: string, payload: T): void;
