@@ -284,15 +284,27 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     this.send(CLEAR_STATE_ENTRY_MESSAGE_TYPE, msg);
   }
 
-  async awakeable<T>(): Promise<T> {
+  awakeable<T>(): { id: string; promise: Promise<T> } {
     if (!this.isValidState("awakeable")) {
-      return Promise.reject();
+      // We need to throw here because we cannot return void or Promise.reject...
+      // This will have the same end result because it gets caught by onCallFailure
+      throw new Error();
     }
 
     let suspensionTimeout: NodeJS.Timeout;
 
-    return new Promise<Buffer>((resolve, reject) => {
+    let awakeableIdentifier;
+
+    const awakeablePromise = new Promise<Buffer>((resolve, reject) => {
       this.incrementJournalIndex();
+
+      // This couldn't be done earlier because the index was not incremented yet.
+      awakeableIdentifier = new AwakeableIdentifier(
+        this.serviceName,
+        this.instanceKey,
+        this.invocationId,
+        this.currentJournalIndex
+      );
 
       const msg = AwakeableEntryMessage.create();
       this.storePendingMsg(
@@ -335,19 +347,32 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
           clearTimeout(suspensionTimeout);
         }
       });
+
+    return {
+      id: JSON.stringify(awakeableIdentifier),
+      promise: awakeablePromise,
+    };
   }
 
-  completeAwakeable<T>(id: AwakeableIdentifier, payload: T): void {
+  completeAwakeable<T>(id: string, payload: T): void {
     if (!this.isValidState("completeAwakeable")) {
       return;
     }
     this.incrementJournalIndex();
 
+    // Parse the string to an awakeable identifier
+    const awakeableIdentifier = JSON.parse(id, (key, value) => {
+      if (value && value.type === "Buffer") {
+        return Buffer.from(value.data);
+      }
+      return value;
+    }) as AwakeableIdentifier;
+
     const msg = CompleteAwakeableEntryMessage.create({
-      serviceName: id.serviceName,
-      instanceKey: id.instanceKey,
-      invocationId: id.invocationId,
-      entryIndex: id.entryIndex,
+      serviceName: awakeableIdentifier.serviceName,
+      instanceKey: awakeableIdentifier.instanceKey,
+      invocationId: awakeableIdentifier.invocationId,
+      entryIndex: awakeableIdentifier.entryIndex,
       payload: Buffer.from(JSON.stringify(payload)),
     });
 

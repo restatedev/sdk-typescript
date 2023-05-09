@@ -1,7 +1,6 @@
 "use strict";
 
 import { RestateContext } from "../src/restate_context";
-import { AwakeableIdentifier } from "../src/types/protocol";
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
@@ -51,10 +50,10 @@ export class TestingContext implements RestateContext {
     // we simply call the side effect here
     return fn();
   }
-  awakeable<T>(): Promise<T> {
+  awakeable<T>(): { id: string; promise: Promise<T> } {
     throw new Error("Method not implemented.");
   }
-  completeAwakeable<T>(id: AwakeableIdentifier, payload: T): void {
+  completeAwakeable<T>(id: string, payload: T): void {
     throw new Error("Method not implemented.");
   }
   sleep(millis: number): Promise<void> {

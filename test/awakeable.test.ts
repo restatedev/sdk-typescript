@@ -6,6 +6,7 @@ import {
   checkError,
   completeAwakeableMessage,
   completionMessage,
+  getAwakeableId,
   greetRequest,
   greetResponse,
   inputMessage,
@@ -14,7 +15,6 @@ import {
   startMessage,
   suspensionMessage,
 } from "./protoutils";
-import { AwakeableIdentifier } from "../src/types/protocol";
 import {
   protoMetadata,
   TestGreeter,
@@ -28,9 +28,13 @@ class AwakeableGreeter implements TestGreeter {
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
-    const result = await ctx.awakeable<string>();
+    const awakeable = ctx.awakeable<string>();
 
-    return TestResponse.create({ greeting: `Hello ${result}` });
+    const result = await awakeable.promise;
+
+    return TestResponse.create({
+      greeting: `Hello ${result} for ${awakeable.id}`,
+    });
   }
 }
 
@@ -39,12 +43,7 @@ class CompleteAwakeableGreeter implements TestGreeter {
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
-    const awakeableIdentifier = new AwakeableIdentifier(
-      "TestGreeter",
-      Buffer.from("123"),
-      Buffer.from("abcd"),
-      1
-    );
+    const awakeableIdentifier = getAwakeableId(1);
     ctx.completeAwakeable(awakeableIdentifier, "hello");
 
     return TestResponse.create({ greeting: `Hello` });
@@ -66,7 +65,7 @@ describe("AwakeableGreeter: with awakeable completion replay", () => {
     ).run();
 
     expect(result).toStrictEqual([
-      outputMessage(greetResponse("Hello Francesco")),
+      outputMessage(greetResponse(`Hello Francesco for ${getAwakeableId(1)}`)),
     ]);
   });
 });
@@ -145,7 +144,7 @@ describe("AwakeableGreeter: with completion", () => {
     // BIDI mode: No suspension message because the completion will arrive before the timeout.
     expect(result).toStrictEqual([
       awakeableMessage(),
-      outputMessage(greetResponse("Hello Francesco")),
+      outputMessage(greetResponse(`Hello Francesco for ${getAwakeableId(1)}`)),
     ]);
   });
 });
@@ -297,7 +296,7 @@ describe("CompleteAwakeableGreeter: journal mismatch on CompleteAwakeable. Compl
         completeAwakeableMessage(
           "TestGreeter",
           Buffer.from("123"),
-          Buffer.from("abcde"),
+          Buffer.from("abcd"),
           2, // this should have been 1
           "hello"
         ),

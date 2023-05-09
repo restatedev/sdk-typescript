@@ -12,6 +12,7 @@ import {
   decodeSideEffectFromResult,
   checkError,
   invokeMessage,
+  getAwakeableId,
 } from "./protoutils";
 import {
   protoMetadata,
@@ -19,7 +20,6 @@ import {
   TestRequest,
   TestResponse,
 } from "../src/generated/proto/test";
-import { AwakeableIdentifier } from "../src/types/protocol";
 import { Failure } from "../src/generated/proto/protocol";
 import { SIDE_EFFECT_ENTRY_MESSAGE_TYPE } from "../src/types/protocol";
 
@@ -201,13 +201,24 @@ class FailingCompleteAwakeableSideEffectGreeter implements TestGreeter {
 
     // state
     const response = await ctx.sideEffect(async () => {
-      const awakeableIdentifier = new AwakeableIdentifier(
-        "TestGreeter",
-        Buffer.from("123"),
-        Buffer.from("abcd"),
-        1
-      );
+      const awakeableIdentifier = getAwakeableId(1);
       ctx.completeAwakeable(awakeableIdentifier, "hello");
+    });
+
+    return TestResponse.create({ greeting: `Hello ${response}` });
+  }
+}
+
+class FailingAwakeableSideEffectGreeter implements TestGreeter {
+  constructor(readonly sideEffectOutput: number) {}
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async greet(request: TestRequest): Promise<TestResponse> {
+    const ctx = restate.useContext(this);
+
+    // state
+    const response = await ctx.sideEffect(async () => {
+      ctx.awakeable<string>();
     });
 
     return TestResponse.create({ greeting: `Hello ${response}` });
@@ -550,6 +561,28 @@ describe("FailingSleepSideEffectGreeter: invalid in sleep call in side effect wi
     checkError(
       result[0],
       "You cannot do sleep calls from within a side effect."
+    );
+  });
+});
+
+describe("FailingAwakeableSideEffectGreeter: invalid in awakeable call in side effect without ack", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new FailingAwakeableSideEffectGreeter(123),
+      "/test.TestGreeter/Greet",
+      [
+        startMessage(1),
+        inputMessage(greetRequest("Till")),
+        completionMessage(1),
+      ]
+    ).run();
+
+    expect(result.length).toStrictEqual(1);
+    checkError(
+      result[0],
+      "You cannot do awakeable calls from within a side effect."
     );
   });
 });
