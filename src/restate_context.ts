@@ -6,25 +6,78 @@ import { AwakeableIdentifier } from "./types/protocol";
 import "./utils/logger";
 
 export interface RestateContext {
+  /**
+   * Id of the service instance.
+   */
   instanceKey: Buffer;
+  /**
+   * Name of the service.
+   */
   serviceName: string;
+  /**
+   * Id of the ongoing invocation.
+   */
   invocationId: Buffer;
 
+  /**
+   * Synchronously call other Restate services ( = wait on response).
+   * It is not recommended to use this.
+   * It is recommended
+   * to do the request via the proto-ts client that was generated based on the Protobuf service definitions,
+   * as shown in the example.
+   * These clients use this request method under-the-hood.
+   * @param service name of the service to call
+   * @param method name of the method to call
+   * @param data payload as Uint8Array
+   * @returns a Promise that is resolved with the response of the called service
+   *
+
+   * @example
+   * const ctx = restate.useContext(this);
+   * const client = new GreeterClientImpl(ctx);
+   * client.greet(Request.create({ name: "Peter" }))
+   */
   request(
     service: string,
     method: string,
     data: Uint8Array
   ): Promise<Uint8Array>;
 
+  /**
+   * Get/retrieve state from the Restate runtime.
+   * @param name key of the state to retrieve
+   * @returns a Promise that is resolved with the value of the state key
+   *
+   * @example
+   * const ctx = restate.useContext(this);
+   * const state = await ctx.get<string>("STATE");
+   */
   get<T>(name: string): Promise<T | null>;
 
+  /**
+   * Set/store state in the Restate runtime.
+   * @param name key of the state to set
+   * @param value value to set
+   *
+   * @example
+   * const ctx = restate.useContext(this);
+   * const state = ctx.set("STATE", "Hello");
+   */
   set<T>(name: string, value: T): void;
 
+  /**
+   * Clear/delete state in the Restate runtime.
+   * @param name key of the state to delete
+   *
+   * @example
+   * const ctx = restate.useContext(this);
+   * const state = ctx.clear("STATE");
+   */
   clear(name: string): void;
 
   /**
-   * Use this to call other Restate services in the background ( = async / not waiting on response).
-   * To do this, wrap the call via the proto-ts client with inBackground, as shown in the example below.
+   * Call other Restate services in the background ( = async / not waiting on response).
+   * To do this, wrap the call via the proto-ts client with inBackground, as shown in the example.
    *
    * NOTE: this returns a Promise because we override the gRPC clients provided by proto-ts.
    * So we are required to return a Promise.
@@ -32,20 +85,71 @@ export interface RestateContext {
    * @param call Invoke another service by using the generated proto-ts client.
    *
    * @example
-   *     const client = new GreeterClientImpl(ctx);
-   *     await ctx.inBackground(() =>
-   *       client.greet(Request.create({ name: "Peter" }))
-   *     );
-   *
+   * const ctx = restate.useContext(this);
+   * const client = new GreeterClientImpl(ctx);
+   * await ctx.inBackground(() =>
+   *   client.greet(Request.create({ name: "Peter" }))
+   * )
    */
   inBackground<T>(call: () => Promise<T>): Promise<void>;
 
+  /**
+   * Execute a side effect and store the result in the Restate runtime.
+   * @param fn user-defined function to execute.
+   * The result is saved in the Restate runtime and reused on replays.
+   * @returns a Promise that gets resolved with the result of the user-defined function,
+   * once it has been saved in the Restate runtime.
+   *
+   * @example
+   * const ctx = restate.useContext(this);
+   * const result = await ctx.sideEffect<string>(async () => { return randomUUID(); })
+   */
   sideEffect<T>(fn: () => Promise<T>): Promise<T>;
 
+  /**
+   * Register an awakeable and pause the processing until the awakeable ID has been returned to the service
+   * (via ctx.completeAwakeable(...)).
+   * @returns the payload that was supplied by the service which completed the awakeable
+   *
+   * @example
+   * const ctx = restate.useContext(this);
+   * const result = await ctx.awakeable<string>();
+   */
   awakeable<T>(): Promise<T>;
 
+  /**
+   * Complete an awakeable of another service.
+   * @param id the ID of the awakeable
+   * This is an object that contains the following fields:
+   * {
+   *   serviceName: string,
+   *   instanceKey: Buffer,
+   *   invocationId: Buffer,
+   *   entryIndex: number
+   * }
+   * @param payload the payload to pass to the service that is woken up
+   *
+   * @example
+   * const ctx = restate.useContext(this);
+   * const awakeableIdentifier = new AwakeableIdentifier(
+   *   "TestGreeter",
+   *   Buffer.from("123"),
+   *   Buffer.from("abcd"),
+   *   1
+   * );
+   * ctx.completeAwakeable(awakeableIdentifier, "hello");
+   */
   completeAwakeable<T>(id: AwakeableIdentifier, payload: T): void;
 
+  /**
+   * Sleep until a timeout has passed.
+   * @param millis duration of the sleep in millis.
+   * This is a lower-bound.
+   *
+   * @example
+   * const ctx = restate.useContext(this);
+   * await ctx.sleep(1000);
+   */
   sleep(millis: number): Promise<void>;
 }
 
