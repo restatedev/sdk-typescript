@@ -27,7 +27,7 @@ export class RestateServer extends BaseRestateServer {
     return this;
   }
 
-  public async listen(port: number | undefined | null) {
+  public async listen(port?: number) {
     // Infer the port if not specified, or default it
     const actualPort = port ?? parseInt(process.env.PORT ?? "8080");
     console.info(`Listening on ${actualPort}...`);
