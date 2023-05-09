@@ -14,6 +14,7 @@ import { printMessageAsJson } from "../src/utils/utils";
 import { Message } from "../src/types/types";
 import { HostedGrpcServiceMethod, ProtoMetadata } from "../src/types/grpc";
 import { ProtocolMode } from "../src/generated/proto/discovery";
+import { rlog } from "../src/utils/logger";
 
 export class TestDriver<I, O> implements Connection {
   private http2stream = this.mockHttp2DuplexStream();
@@ -85,7 +86,7 @@ export class TestDriver<I, O> implements Connection {
 
   send(msg: Message) {
     this.result.push(msg);
-    console.debug(
+    rlog.debug(
       `Adding result to the result array. Message type: ${msg.messageType},
         message: 
         ${
@@ -100,7 +101,7 @@ export class TestDriver<I, O> implements Connection {
       msg.messageType === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE ||
       msg.messageType === SUSPENSION_MESSAGE_TYPE
     ) {
-      console.debug("End of test: Flushing test results");
+      rlog.debug("End of test: Flushing test results");
       this.resolveOnClose(this.result);
     }
   }

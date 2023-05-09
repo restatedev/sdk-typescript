@@ -7,6 +7,7 @@ import { ServiceDiscoveryResponse } from "../generated/proto/discovery";
 import { on } from "events";
 import { Connection } from "./connection";
 import { Message } from "../types/types";
+import { rlog } from "../utils/logger";
 
 export class HttpConnection implements Connection {
   private onErrorListeners: (() => void)[] = [];
@@ -77,7 +78,7 @@ export async function* incomingConnectionAtPort(
 ) {
   const server = http2.createServer();
 
-  server.on("error", (err) => console.error(err));
+  server.on("error", (err) => rlog.error(err));
   server.listen(port);
 
   let connectionId = BigInt(1);
@@ -88,7 +89,7 @@ export async function* incomingConnectionAtPort(
     const u: Url = urlparse(h[":path"] ?? "/");
 
     if (u.path == "/discover") {
-      console.info(
+      rlog.info(
         "Answering discovery request. Registering these services: " +
           JSON.stringify(discovery.services)
       );

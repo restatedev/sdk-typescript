@@ -1,61 +1,58 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+// effectively duplicate the console object (new object with same prototype)
+// to override some specific methods
+const restate_logger = Object.create(console);
+
+restate_logger.log = (message?: any, ...optionalParams: any[]) => {
+  console.log("[restate] [%s] LOG: " + message, new Date(), ...optionalParams);
+};
+
+restate_logger.info = (message?: any, ...optionalParams: any[]) => {
+  console.info(
+    "[restate] [%s] INFO: " + message,
+    new Date(),
+    ...optionalParams
+  );
+};
+
+restate_logger.warn = (message?: any, ...optionalParams: any[]) => {
+  console.warn(
+    "[restate] [%s] WARN: " + message,
+    new Date(),
+    ...optionalParams
+  );
+};
+
+restate_logger.error = (message?: any, ...optionalParams: any[]) => {
+  console.error(
+    "[restate] [%s] ERROR: " + message,
+    new Date(),
+    ...optionalParams
+  );
+};
+
+restate_logger.debug = (message?: any, ...optionalParams: any[]) => {
+  console.debug(
+    "[restate] [%s] DEBUG: " + message,
+    new Date(),
+    ...optionalParams
+  );
+};
+
+restate_logger.trace = (message?: any, ...optionalParams: any[]) => {
+  console.trace(
+    "[restate] [%s] TRACE: " + message,
+    new Date(),
+    ...optionalParams
+  );
+};
+
 /**
- * To add some extra information to logging statements:
- * [restate] [timestamp] INFO/WARN/ERROR/DEBUG/TRACE <log-message>
+ * The RestateLogger lets us add some extra information to logging statements:
+ * [restate] [timestamp] INFO/WARN/ERROR/DEBUG/TRACE <log-message>.
+ *
+ * We don't override the console here, to make sure that this only applies to Restate
+ * log lines, and not to logging from application code.
  */
-
-const originalConsole = {
-  log: console.log,
-  info: console.info,
-  warn: console.warn,
-  error: console.error,
-  debug: console.debug,
-  trace: console.trace,
-};
-
-const prefixedLog = (
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  originalFn: (...args: any[]) => void,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  args: any[],
-  prefix: string
-) => {
-  originalFn(prefix, ...args);
-};
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-console.log = (...args: any[]) => {
-  const logPrefix = `[restate] [${new Date().toLocaleString()}] LOG`;
-  prefixedLog(originalConsole.log, args, logPrefix);
-};
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-console.info = (...args: any[]) => {
-  const logPrefix = `[restate] [${new Date().toLocaleString()}] INFO:`;
-  prefixedLog(originalConsole.info, args, logPrefix);
-};
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-console.warn = (...args: any[]) => {
-  const logPrefix = `[restate] [${new Date().toLocaleString()}] WARN:`;
-  prefixedLog(originalConsole.warn, args, logPrefix);
-};
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-console.error = (...args: any[]) => {
-  const logPrefix = `[restate] [${new Date().toLocaleString()}] ERROR:`;
-  prefixedLog(originalConsole.error, args, logPrefix);
-};
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-console.debug = (...args: any[]) => {
-  const logPrefix = `[restate] [${new Date().toLocaleString()}] DEBUG:`;
-  prefixedLog(originalConsole.debug, args, logPrefix);
-};
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-console.trace = (...args: any[]) => {
-  const logPrefix = `[restate] [${new Date().toLocaleString()}] ERROR:`;
-  prefixedLog(originalConsole.trace, args, logPrefix);
-};
-
-global.console = console;
+export const rlog = restate_logger as Console;

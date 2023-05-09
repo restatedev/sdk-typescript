@@ -1,5 +1,6 @@
 "use strict";
 
+import { rlog } from "../utils/logger";
 import {
   GrpcService,
   GrpcServiceMethod,
@@ -108,7 +109,7 @@ export abstract class BaseRestateServer {
         method
       );
       // note that this log will not print all the keys.
-      console.info(
+      rlog.info(
         `Registering: ${url}  -> ${JSON.stringify(method, null, "\t")}`
       );
     }

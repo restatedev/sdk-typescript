@@ -4,6 +4,7 @@ import stream from "stream";
 import { Message } from "../types/types";
 import { streamEncoder } from "../io/encoder";
 import { streamDecoder } from "../io/decoder";
+import { rlog } from "../utils/logger";
 
 export class RestateDuplexStream {
   // create a RestateDuplex stream from an http2 (duplex) stream.
@@ -33,7 +34,7 @@ export class RestateDuplexStream {
 
   onError(handler: (err: Error) => void) {
     this.sdkInput.on("error", (err) => {
-      console.warn("Error in input stream: " + err.stack);
+      rlog.warn("Error in input stream: " + err.stack);
       handler(err);
     });
   }

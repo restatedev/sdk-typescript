@@ -2,6 +2,7 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-inferrable-types */
+import { rlog } from "../utils/logger";
 import { RestateContext } from "../restate_context";
 import { RestateError } from "../types/errors";
 
@@ -46,11 +47,11 @@ export async function retrySideEffectWithBackoff(
   let retriesLeft = maxRetries;
 
   while (!(await ctx.sideEffect(sideEffectAction))) {
-    console.debug(`Unsuccessful execution of side effect '${name}'.`);
+    rlog.debug(`Unsuccessful execution of side effect '${name}'.`);
     if (retriesLeft > 0) {
-      console.debug(`Retrying in ${delayMs}ms`);
+      rlog.debug(`Retrying in ${delayMs}ms`);
     } else {
-      console.debug("No retries left.");
+      rlog.debug("No retries left.");
       throw new RestateError(`Retries exhaused for '${name}'.`);
     }
 
@@ -127,14 +128,14 @@ export async function retryExceptionalSideEffectWithBackoff<T>(
         errorMessage = JSON.stringify(e);
       }
 
-      console.debug(
+      rlog.debug(
         `Error while executing side effect '${name}': ${errorName} - ${errorMessage}`
       );
 
       if (retriesLeft > 0) {
-        console.debug(`Retrying in ${delayMs}ms`);
+        rlog.debug(`Retrying in ${delayMs}ms`);
       } else {
-        console.debug("No retries left.");
+        rlog.debug("No retries left.");
         throw new RestateError(`Retries exhaused for {name}`, lastError);
       }
     }

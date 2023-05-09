@@ -1,5 +1,6 @@
 "use strict";
 
+import { rlog } from "../utils/logger";
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import {
   ProtocolMode,
@@ -52,8 +53,8 @@ export class LambdaRestateServer extends BaseRestateServer {
       const msg =
         "Invalid path: path doesn't end in /invoke/SvcName/MethodName and also not in /discover: " +
         event.path;
-      console.error(msg);
-      console.trace();
+      rlog.error(msg);
+      rlog.trace();
       return this.toErrorResponse(500, msg);
     }
   }
@@ -79,21 +80,21 @@ export class LambdaRestateServer extends BaseRestateServer {
     const method = this.methodByUrl(url);
     if (event.body == null) {
       const msg = "The incoming message body was null";
-      console.error(msg);
-      console.trace();
+      rlog.error(msg);
+      rlog.trace();
       return this.toErrorResponse(500, msg);
     }
     const connection = new LambdaConnection(event.body);
     if (method === undefined) {
       if (url.includes("?")) {
         const msg = `Invalid path: path URL seems to include query parameters: ${url}`;
-        console.error(msg);
-        console.trace();
+        rlog.error(msg);
+        rlog.trace();
         return this.toErrorResponse(500, msg);
       } else {
         const msg = `No service found for URL: ${url}`;
-        console.error(msg);
-        console.trace();
+        rlog.error(msg);
+        rlog.trace();
         return this.toErrorResponse(404, msg);
       }
     } else {
@@ -118,7 +119,7 @@ export class LambdaRestateServer extends BaseRestateServer {
 
   private handleDiscovery(): APIGatewayProxyResult {
     // return discovery information
-    console.info(
+    rlog.info(
       "Answering discovery request. Registering these services: " +
         JSON.stringify(this.discovery.services)
     );

@@ -50,6 +50,7 @@ import { Empty } from "./generated/google/protobuf/empty";
 import { ProtocolMode } from "./generated/proto/discovery";
 import { clearTimeout } from "timers";
 import { Message } from "./types/types";
+import { rlog } from "./utils/logger";
 
 enum ExecutionState {
   WAITING_FOR_START = "WAITING_FOR_START",
@@ -196,7 +197,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         return;
       }
 
-      console.debug(
+      rlog.debug(
         `${
           this.logPrefix
         } Adding message to output buffer: type: GetState, message: ${printMessageAsJson(
@@ -239,7 +240,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       return;
     }
 
-    console.debug(
+    rlog.debug(
       `${
         this.logPrefix
       } Adding message to output buffer: type: SetState, message: ${printMessageAsJson(
@@ -273,7 +274,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       return;
     }
 
-    console.debug(
+    rlog.debug(
       `${
         this.logPrefix
       } Adding message to output buffer: type: ClearState, message: ${printMessageAsJson(
@@ -319,7 +320,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         return;
       }
 
-      console.debug(
+      rlog.debug(
         `${
           this.logPrefix
         } Adding message to output buffer: type: Awakeable, message: ${printMessageAsJson(
@@ -388,7 +389,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       );
       return;
     }
-    console.debug(
+    rlog.debug(
       `${
         this.logPrefix
       } Adding message to output buffer: type: CompleteAwakeable, message: ${printMessageAsJson(
@@ -437,7 +438,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         msg
       );
     } else {
-      console.debug(
+      rlog.debug(
         `${
           this.logPrefix
         } Adding message to output buffer: type: BackgroundInvoke, message: ${printMessageAsJson(
@@ -485,7 +486,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         return;
       }
 
-      console.debug(
+      rlog.debug(
         `${
           this.logPrefix
         } Adding message to output buffer: type: Invoke, message: ${printMessageAsJson(
@@ -610,7 +611,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
             SideEffectEntryMessage.create({ value: bytes })
           ).finish();
 
-          console.debug(
+          rlog.debug(
             `${
               this.logPrefix
             } Adding message to output buffer: type: SideEffect, message: ${printMessageAsJson(
@@ -647,7 +648,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
             SideEffectEntryMessage.create({ failure: failure })
           ).finish();
 
-          console.debug(
+          rlog.debug(
             `${
               this.logPrefix
             } Adding message to output buffer: type: SideEffect, message: ${printMessageAsJson(
@@ -695,7 +696,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         return;
       }
 
-      console.debug(
+      rlog.debug(
         `${
           this.logPrefix
         } Adding message to output buffer: type: Sleep, message: ${printMessageAsJson(
@@ -727,7 +728,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     requiresAckFlag?: boolean
   ): NodeJS.Timeout | void {
     if (this.state === ExecutionState.CLOSED) {
-      console.debug(
+      rlog.debug(
         "State machine is closed. Not sending message " +
           printMessageAsJson(message)
       );
@@ -867,7 +868,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   handleInputMessage(m: PollInputStreamEntryMessage) {
     this.invocationIdString = uuidV7FromBuffer(this.invocationId);
     this.logPrefix = `[${this.serviceName}] [${this.method.method.name}] [${this.invocationIdString}]`;
-    console.debug(
+    rlog.debug(
       `${this.logPrefix} Received input message: ${printMessageAsJson(m)}`
     );
 
@@ -879,14 +880,14 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
   handleCompletionMessage(m: CompletionMessage) {
     if (this.state === ExecutionState.CLOSED) {
-      console.debug(
+      rlog.debug(
         "State machine is closed. Not processing completion message: " +
           printMessageAsJson(m)
       );
       return;
     }
 
-    console.debug(
+    rlog.debug(
       `${
         this.logPrefix
       } Received new completion from the runtime: ${printMessageAsJson(m)}`
@@ -1245,7 +1246,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
   onCallSuccess(result: Uint8Array) {
     const msg = OutputStreamEntryMessage.create({ value: Buffer.from(result) });
-    console.debug(
+    rlog.debug(
       `${
         this.logPrefix
       } Call ended successful, output message: ${printMessageAsJson(msg)}`
@@ -1258,9 +1259,9 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
   onCallFailure(e: Error | Failure) {
     if (e instanceof Error) {
-      console.warn(`${this.logPrefix} Call failed: ${e.message} - ${e.stack}`);
+      rlog.warn(`${this.logPrefix} Call failed: ${e.message} - ${e.stack}`);
     } else {
-      console.warn(`${this.logPrefix} Call failed: ${printMessageAsJson(e)}`);
+      rlog.warn(`${this.logPrefix} Call failed: ${printMessageAsJson(e)}`);
     }
 
     // We send the message straight over the connection
@@ -1283,7 +1284,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   onClose() {
     // done.
     if (this.state !== ExecutionState.CLOSED) {
-      console.debug("Closing the state machine");
+      rlog.debug("Closing the state machine");
       this.transitionState(ExecutionState.CLOSED);
     }
   }
