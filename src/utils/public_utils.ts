@@ -47,9 +47,9 @@ export async function retrySideEffectWithBackoff(
   let retriesLeft = maxRetries;
 
   while (!(await ctx.sideEffect(sideEffectAction))) {
-    rlog.debug(`Unsuccessful execution of side effect '${name}'.`);
+    rlog.debug("Unsuccessful execution of side effect '%s'.", name);
     if (retriesLeft > 0) {
-      rlog.debug(`Retrying in ${delayMs}ms`);
+      rlog.debug("Retrying in %d ms", delayMs);
     } else {
       rlog.debug("No retries left.");
       throw new RestateError(`Retries exhaused for '${name}'.`);
@@ -129,11 +129,14 @@ export async function retryExceptionalSideEffectWithBackoff<T>(
       }
 
       rlog.debug(
-        `Error while executing side effect '${name}': ${errorName} - ${errorMessage}`
+        "Error while executing side effect '%s': %s - %s",
+        name,
+        errorName,
+        errorMessage
       );
 
       if (retriesLeft > 0) {
-        rlog.debug(`Retrying in ${delayMs}ms`);
+        rlog.debug("Retrying in %d ms", delayMs);
       } else {
         rlog.debug("No retries left.");
         throw new RestateError(`Retries exhaused for {name}`, lastError);
