@@ -29,6 +29,7 @@ import {
   SUSPENSION_MESSAGE_TYPE,
   SuspensionMessage,
   ProtocolMessage,
+  AwakeableIdentifier,
 } from "../src/types/protocol";
 import { Message } from "../src/types/types";
 import { TestRequest, TestResponse } from "../src/generated/proto/test";
@@ -41,7 +42,7 @@ export function startMessage(knownEntries: number): Message {
     START_MESSAGE_TYPE,
     StartMessage.create({
       instanceKey: Buffer.from("123"),
-      invocationId: Buffer.from("0187ec34-7600-7557-820c-da483d3e4d56"),
+      invocationId: Buffer.from("abcd"),
       knownEntries: knownEntries,
     }),
     undefined,
@@ -73,7 +74,7 @@ export function outputMessage(value?: Uint8Array): Message {
       OutputStreamEntryMessage.create({
         failure: Failure.create({
           code: 13,
-          message: `Uncaught exception for invocation id 0187ec34-7600-7557-820c-da483d3e4d56`,
+          message: `Uncaught exception for invocation id abcd`,
         }),
       })
     );
@@ -316,4 +317,15 @@ export function checkError(outputMsg: Message, errorMessage: string) {
   expect(
     (outputMsg.message as OutputStreamEntryMessage).failure?.message
   ).toContain(errorMessage);
+}
+
+export function getAwakeableId(entryIndex: number): string {
+  return JSON.stringify(
+    new AwakeableIdentifier(
+      "TestGreeter",
+      Buffer.from("123"),
+      Buffer.from("abcd"),
+      entryIndex
+    )
+  );
 }

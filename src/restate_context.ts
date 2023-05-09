@@ -1,7 +1,5 @@
 "use strict";
 
-import { AwakeableIdentifier } from "./types/protocol";
-
 // Use our prefixed logger instead of default console logging
 import "./utils/logger";
 
@@ -115,7 +113,7 @@ export interface RestateContext {
    * const ctx = restate.useContext(this);
    * const result = await ctx.awakeable<string>();
    */
-  awakeable<T>(): Promise<T>;
+  awakeable<T>(): { id: string; promise: Promise<T> };
 
   /**
    * Complete an awakeable of another service.
@@ -139,7 +137,7 @@ export interface RestateContext {
    * );
    * ctx.completeAwakeable(awakeableIdentifier, "hello");
    */
-  completeAwakeable<T>(id: AwakeableIdentifier, payload: T): void;
+  completeAwakeable<T>(id: string, payload: T): void;
 
   /**
    * Sleep until a timeout has passed.
