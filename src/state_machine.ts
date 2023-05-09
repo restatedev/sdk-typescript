@@ -35,7 +35,16 @@ import {
   SuspensionMessage,
 } from "./types/protocol";
 import { RestateContext } from "./restate_context";
-import { printMessageAsJson, uuidV7FromBuffer } from "./utils/utils";
+import {
+  clearStateMsgEquality,
+  completeAwakeableMsgEquality,
+  getStateMsgEquality,
+  invokeMsgEquality,
+  printMessageAsJson,
+  setStateMsgEquality,
+  sleepMsgEquality,
+  uuidV7FromBuffer,
+} from "./utils/utils";
 import { Failure } from "./generated/proto/protocol";
 import { SideEffectEntryMessage } from "./generated/proto/javascript";
 import { Empty } from "./generated/google/protobuf/empty";
@@ -50,12 +59,43 @@ enum ExecutionState {
   CLOSED = "CLOSED",
 }
 
-export class PromiseHandler {
+/**
+ * We use this for two purposes:
+ * 1. To route completions of the runtime back to their original promise.
+ * For example, get state and side effects.
+ * 2. To do journal mismatch checks during replays.
+ * Journal mismatch checks:
+ * - During replay: message type and message content have to be the same as in the replayed journal entries.
+ * Side effects during replay: only the message type is checked. To avoid having to re-execute the side effect code during replay
+ * - During normal execution:
+ * no journal mismatch checks --> You don't have any info in the completion message to do that.
+ *
+ * message: filled in for everything except side effects because we don't want to redo the side effect during replay.
+ * resolve: filled in if this message requires a completion
+ * reject: filled in if this message requires a completion
+ */
+export class PendingMessage {
   constructor(
-    readonly resolve: (value: unknown) => void,
-    readonly reject: (reason: Failure | Error) => void
+    readonly messageType: bigint,
+    readonly message?: ProtocolMessage | Uint8Array,
+    readonly resolve?: (value: unknown) => void,
+    readonly reject?: (reason: Failure | Error) => void
   ) {}
 }
+
+/**
+ * During replay: if replay message from the runtime are processed faster than that the user code progresses,
+ * then we store the out-of-order replay messages in a map (see below).
+ * The CompletionResult is the data of those out-of-order messages that we store in the map.
+ */
+type CompletionResult = {
+  journalIndex: number;
+  messageType: bigint;
+  message: any;
+  comparisonFct: (msg1: any, msg2: any) => boolean;
+  value?: any;
+  failure?: Failure;
+};
 
 export class DurableExecutionStateMachine<I, O> implements RestateContext {
   private state: ExecutionState = ExecutionState.WAITING_FOR_START;
@@ -65,6 +105,8 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   public instanceKey!: Buffer;
   public serviceName: string;
   public invocationId!: Buffer;
+  // Parsed string representation of the invocationId
+  public invocationIdString!: string;
   // We set the log prefix to [service-name] [method-name] [invocation-id] upon receiving the start message
   private logPrefix = "";
   // Number of journal entries that will be replayed by the runtime
@@ -87,14 +129,19 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   // e.g. ctx.sideEffect(() => {await ctx.get("my-state")})
   private inSideEffectFlag = false;
 
-  // Promises that need to be resolved. Journal index -> resolve
-  private pendingPromises: Map<number, PromiseHandler> = new Map();
+  // Promises that need to be resolved.
+  // Journal index -> PendingMessage(messageType, message?, resolve?, reject?)
+  // This map contains:
+  // - During replay: all the journal entries, to be able to check for journal mismatches.
+  // - During normal execution: only the journal entries that require an ack/completion from the runtime.
+  private indexToPendingMsgMap: Map<number, PendingMessage> = new Map();
   // Replay messages that arrived before the user code was at that point.
+  // When the runtime message are replayed faster than the user code progresses.
   /* eslint-disable @typescript-eslint/no-explicit-any */
-  private outOfOrderReplayMessages: Map<number, any> = new Map();
+  private outOfOrderReplayMessages: Map<number, CompletionResult> = new Map();
 
-  private suspensionTriggers: bigint[];
-  private readonly suspensionTimeout;
+  private suspensionTriggers!: bigint[];
+  private readonly suspensionMillis;
 
   constructor(
     private readonly connection: Connection,
@@ -106,14 +153,13 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     this.serviceName = method.service;
 
     if (SUSPENSION_TRIGGERS.has(protocolMode)) {
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       this.suspensionTriggers = SUSPENSION_TRIGGERS.get(protocolMode)!;
     } else {
-      throw new Error(
+      this.method.reject(Error(
         "Unknown protocol mode. Protocol mode does not have suspension triggers defined."
-      );
+      ));
     }
-    this.suspensionTimeout =
+    this.suspensionMillis =
       this.protocolMode === ProtocolMode.REQUEST_RESPONSE ? 0 : 100;
 
     connection.addOnErrorListener(() => {
@@ -126,14 +172,21 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
     return new Promise<Buffer>((resolve, reject) => {
       this.incrementJournalIndex();
-      this.addPromise(this.currentJournalIndex, resolve, reject);
+
+      const msg = GetStateEntryMessage.create({ key: Buffer.from(name) });
+      this.storePendingMsg(
+        this.currentJournalIndex,
+        GET_STATE_ENTRY_MESSAGE_TYPE,
+        msg,
+        resolve,
+        reject
+      );
 
       if (this.state === ExecutionState.REPLAYING) {
-        // In replay mode: GetState message will not be forwarded to the runtime. Expecting completion"
+        // In replay mode: GetState message will not be forwarded to the runtime. Expecting completion.
         return;
       }
 
-      const msg = GetStateEntryMessage.create({ key: Buffer.from(name) });
       console.debug(
         `${
           this.logPrefix
@@ -155,16 +208,26 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     this.validate("set state");
     this.incrementJournalIndex();
 
-    if (this.state === ExecutionState.REPLAYING) {
-      // In replay mode: SetState message will not be forwarded to the runtime. Expecting completion.
-      return;
-    }
-
     const bytes = Buffer.from(JSON.stringify(value));
     const msg = SetStateEntryMessage.create({
       key: Buffer.from(name, "utf8"),
       value: bytes,
     });
+
+    if (this.state === ExecutionState.REPLAYING) {
+      // In replay mode: SetState message will not be forwarded to the runtime. Expecting completion.
+      // Adding to pending messages to do journal mismatch checks during replay.
+      // During normal execution (non-replay),
+      // we don't expect a completion from the runtime, so we don't add this message to the pending messages.
+      // There is no completion during replay either, so we don't add resolve and reject.
+      this.storePendingMsg(
+        this.currentJournalIndex,
+        SET_STATE_ENTRY_MESSAGE_TYPE,
+        msg
+      );
+      return;
+    }
+
     console.debug(
       `${
         this.logPrefix
@@ -179,14 +242,24 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     this.validate("clear state");
     this.incrementJournalIndex();
 
-    if (this.state === ExecutionState.REPLAYING) {
-      //In replay mode: ClearState message will not be forwarded to the runtime. Expecting completion.
-      return;
-    }
-
     const msg = ClearStateEntryMessage.create({
       key: Buffer.from(name, "utf8"),
     });
+
+    if (this.state === ExecutionState.REPLAYING) {
+      //In replay mode: ClearState message will not be forwarded to the runtime. Expecting completion.
+      // Adding to pending messages to do journal mismatch checks during replay.
+      // During normal execution (non-replay),
+      // we don't expect a completion from the runtime, so we don't add this message to the pending messages.
+      // There is no completion during replay either, so we don't add resolve and reject.
+      this.storePendingMsg(
+        this.currentJournalIndex,
+        CLEAR_STATE_ENTRY_MESSAGE_TYPE,
+        msg
+      );
+      return;
+    }
+
     console.debug(
       `${
         this.logPrefix
@@ -204,14 +277,21 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
     return new Promise<Buffer>((resolve, reject) => {
       this.incrementJournalIndex();
-      this.addPromise(this.currentJournalIndex, resolve, reject);
+
+      const msg = AwakeableEntryMessage.create();
+      this.storePendingMsg(
+        this.currentJournalIndex,
+        AWAKEABLE_ENTRY_MESSAGE_TYPE,
+        msg,
+        resolve,
+        reject
+      );
 
       if (this.state === ExecutionState.REPLAYING) {
-        // In replay mode: awakeable message will not be forwarded to the runtime. Expecting completion
+        // In replay mode: awakeable message will not be forwarded to the runtime. Expecting completion.
         return;
       }
 
-      const msg = AwakeableEntryMessage.create();
       console.debug(
         `${
           this.logPrefix
@@ -230,23 +310,18 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         );
       }
     }).then<T>((result: Buffer) => {
+      return JSON.parse(result.toString()) as T;
+    }).finally(() => {
       // If the promise gets completed before the suspension gets triggered, then clear the timeout
       if (suspensionTimeout) {
         clearTimeout(suspensionTimeout);
       }
-
-      return JSON.parse(result.toString()) as T;
     });
   }
 
   completeAwakeable<T>(id: AwakeableIdentifier, payload: T): void {
     this.validate("completeAwakeable");
     this.incrementJournalIndex();
-
-    if (this.state === ExecutionState.REPLAYING) {
-      //In replay mode: CompleteAwakeable message will not be forwarded to the runtime. Expecting completion.
-      return;
-    }
 
     const msg = CompleteAwakeableEntryMessage.create({
       serviceName: id.serviceName,
@@ -255,6 +330,20 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       entryIndex: id.entryIndex,
       payload: Buffer.from(JSON.stringify(payload)),
     });
+
+    if (this.state === ExecutionState.REPLAYING) {
+      //In replay mode: CompleteAwakeable message will not be forwarded to the runtime. Expecting completion.
+      // Adding to pending messages to do journal mismatch checks during replay.
+      // During normal execution (non-replay),
+      // we don't expect a completion from the runtime, so we don't add this message to the pending messages.
+      // There is no completion during replay either, so we don't add resolve and reject.
+      this.storePendingMsg(
+        this.currentJournalIndex,
+        COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
+        msg
+      );
+      return;
+    }
     console.debug(
       `${
         this.logPrefix
@@ -283,17 +372,27 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     data: Uint8Array
   ): Promise<Uint8Array> {
     // Validation check that we are not in a sideEffect is done in inBackground() already.
-
     this.incrementJournalIndex();
 
+    const msg = BackgroundInvokeEntryMessage.create({
+      serviceName: service,
+      methodName: method,
+      parameter: Buffer.from(data),
+    });
+
     if (this.state === ExecutionState.REPLAYING) {
-      // In replay mode: background invoke will not be forwarded to the runtime. Expecting journal entry.
+      // In replay mode: background invoke will not be forwarded to the runtime.
+      // Expecting completion.
+      // Adding to pending messages to do journal mismatch checks during replay.
+      // During normal execution (non-replay),
+      // we don't expect a completion from the runtime, so we don't add this message to the pending messages.
+      // There is no completion during replay either, so we don't add resolve and reject.
+      this.storePendingMsg(
+        this.currentJournalIndex,
+        BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
+        msg
+      );
     } else {
-      const msg = BackgroundInvokeEntryMessage.create({
-        serviceName: service,
-        methodName: method,
-        parameter: Buffer.from(data),
-      });
       console.debug(
         `${
           this.logPrefix
@@ -321,18 +420,25 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
     return new Promise((resolve, reject) => {
       this.incrementJournalIndex();
-      this.addPromise(this.currentJournalIndex, resolve, reject);
-
-      if (this.state === ExecutionState.REPLAYING) {
-        // In replay mode: invoke will not be forwarded to the runtime. Expecting completion.
-        return;
-      }
 
       const msg = InvokeEntryMessage.create({
         serviceName: service,
         methodName: method,
         parameter: Buffer.from(data),
       });
+      this.storePendingMsg(
+        this.currentJournalIndex,
+        INVOKE_ENTRY_MESSAGE_TYPE,
+        msg,
+        resolve,
+        reject
+      );
+
+      if (this.state === ExecutionState.REPLAYING) {
+        // In replay mode: invoke will not be forwarded to the runtime. Expecting completion.
+        return;
+      }
+
       console.debug(
         `${
           this.logPrefix
@@ -351,15 +457,28 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         );
       }
     }).then((result) => {
+      return result as Uint8Array;
+    }).finally(() =>{
       // If the promise gets completed before the suspension gets triggered, then clear the timeout
       if (suspensionTimeout) {
         clearTimeout(suspensionTimeout);
       }
-
-      return result as Uint8Array;
     });
   }
 
+  /**
+   * When you call inBackground, a flag is set that you want the nested call to be executed in the background.
+   * Then you use the client to do the call to the other Restate service.
+   * When you do the call, the overridden request method gets called.
+   * That one checks if the inBackgroundFlag is set.
+   * If so, it doesn't care about a response and just returns back an empty UInt8Array, and otherwise it waits for the response.
+   * The reason for this is that we use the generated clients of proto-ts to do invokes.
+   * And we override the request method that is called by that client to do the Restate related things.
+   * The request method of the proto-ts client requires returning a Promise.
+   * So until we find a cleaner solution for this, in which we can still use the generated clients but are not required to return a promise,
+   * this will return a void Promise.
+   * @param call
+   */
   async inBackground<T>(call: () => Promise<T>): Promise<void> {
     this.validate("inBackground");
 
@@ -375,11 +494,13 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
     return new Promise((resolve, reject) => {
       if (this.inSideEffectFlag) {
+        // Log
         console.error(
-          this.logPrefix +
-            "Rejecting the promise: invalid user code - you cannot nest side effects."
+          this.logPrefix + "Invalid user code: you cannot nest side effects."
         );
         console.trace();
+
+        // Reject the promise
         const nestedSideEffectFailure: Failure = Failure.create({
           code: 13,
           message: `You cannot do sideEffect calls from within a side effect.`,
@@ -388,7 +509,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       } else if (this.inBackgroundCallFlag) {
         console.error(
           this.logPrefix +
-            "Rejecting the promise: invalid user code - you cannot do a side effect inside a background call"
+            "Invalid user code: you cannot do a side effect inside a background call"
         );
         console.trace();
         const sideEffectInBackgroundFailure: Failure = Failure.create({
@@ -406,13 +527,17 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
       // This promise will be resolved when the runtime has acked the side effect value
       // This promise can be resolved with a completion with undefined value (streaming case)
-      // or with a value of type T during replay
+      // or with a value of type T during replay.
       // If it gets resolved with a completion, we need to resolve the outer promise with the result of executing fn()
-      // If we are replaying, it needs to be resolved by the value of the replayed SideEffectEntryMessage
+      // If we are replaying, it needs to be resolved by the value of the replayed SideEffectEntryMessage.
+      // For journal mismatch checks during replay,
+      // we only check the message type to avoid having to re-execute the user code.
       const promiseToResolve = new Promise<T | undefined>(
         (resolveWithCompletion, rejectWithCompletion) => {
-          this.addPromise(
+          this.storePendingMsg(
             this.currentJournalIndex,
+            SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+            undefined,
             resolveWithCompletion,
             rejectWithCompletion
           );
@@ -420,7 +545,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       );
 
       if (this.state === ExecutionState.REPLAYING) {
-        // In replay mode: side effect will be ignored. Expecting completion
+        // In replay mode: side effect will be ignored. Expecting completion.
         // During replay, the promise for the runtime ack will get resolved
         // with a SideEffectEntryMessage with a value of type T or a Failure.
         return promiseToResolve.then(
@@ -469,7 +594,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         .catch((reason) => {
           const failure: Failure = Failure.create({
             code: 13,
-            message: reason.stack,
+            message: reason.message,
           });
           const sideEffectMsg = SideEffectEntryMessage.encode(
             SideEffectEntryMessage.create({ failure: failure })
@@ -502,17 +627,25 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   async sleep(millis: number): Promise<void> {
     this.validate("sleep");
 
-    return new Promise<NodeJS.Timeout>((resolve, reject) => {
+    let suspensionTimeout: NodeJS.Timeout;
+
+    return new Promise<void>((resolve, reject) => {
       this.incrementJournalIndex();
-      this.addPromise(this.currentJournalIndex, resolve, reject);
+
+      const msg = SleepEntryMessage.create({ wakeUpTime: Date.now() + millis });
+      this.storePendingMsg(
+        this.currentJournalIndex,
+        SLEEP_ENTRY_MESSAGE_TYPE,
+        msg,
+        resolve,
+        reject
+      );
 
       if (this.state === ExecutionState.REPLAYING) {
         // In replay mode: SleepEntryMessage will not be forwarded to the runtime. Expecting completion
         return;
       }
 
-      // Forward to runtime
-      const msg = SleepEntryMessage.create({ wakeUpTime: Date.now() + millis });
       console.debug(
         `${
           this.logPrefix
@@ -522,19 +655,20 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       );
       const timeout = this.send(SLEEP_ENTRY_MESSAGE_TYPE, msg);
 
-      if (!timeout) {
+      if (timeout) {
+        suspensionTimeout = timeout
+      }else {
         throw new Error(
           "Illegal state: A sleep should always set a suspension timeout"
         );
       }
-      return timeout;
-    }).then((timeout: NodeJS.Timeout) => {
-      clearTimeout(timeout);
       return;
+    }).finally(() => {
+      clearTimeout(suspensionTimeout);
     });
   }
 
-  // Sends the message and returns the suspensionTimeout if set
+  // Sends the message and returns the suspensionMillis if set
   send(
     messageType: bigint,
     message: ProtocolMessage | Uint8Array,
@@ -554,12 +688,12 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       )
     );
 
-    // If the suspension triggers for this protocol mode (set in constructor) include the message type
+    // If the message type requires a suspension for this protocol mode (set in constructor),
     // then set a timeout to send the suspension message.
-    // The suspension will only be sent if the timeout is not cancelled due to a completion.
+    // The suspension will only be sent if the timeout is not canceled due to a completion.
     if (this.suspensionTriggers.includes(messageType)) {
       return setTimeout(() => {
-        const completableIndices = [...this.pendingPromises.keys()];
+        const completableIndices = [...this.indexToPendingMsgMap.keys()];
 
         // If the state is not processing anymore then we either already send a suspension
         // or something else bad happened...
@@ -581,13 +715,13 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
             this.onClose();
             this.connection.end();
           } else {
-            throw new Error(
+            this.method.reject(new Error(
               "Illegal state: Not able to send suspension message because no pending promises. " +
                 "This timeout should have been removed."
-            );
+            ));
           }
         }
-      }, this.suspensionTimeout);
+      }, this.suspensionMillis);
     }
   }
 
@@ -611,11 +745,11 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         break;
       }
       case SET_STATE_ENTRY_MESSAGE_TYPE: {
-        this.checkIfInReplay();
+        this.handleSetStateMessage(msg.message as SetStateEntryMessage);
         break;
       }
       case CLEAR_STATE_ENTRY_MESSAGE_TYPE: {
-        this.checkIfInReplay();
+        this.handleClearStateMessage(msg.message as ClearStateEntryMessage);
         break;
       }
       case SLEEP_ENTRY_MESSAGE_TYPE: {
@@ -627,7 +761,9 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         break;
       }
       case BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE: {
-        this.checkIfInReplay();
+        this.handleInBackgroundInvokeMessage(
+          msg.message as BackgroundInvokeEntryMessage
+        );
         break;
       }
       case AWAKEABLE_ENTRY_MESSAGE_TYPE: {
@@ -635,6 +771,9 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         break;
       }
       case COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE: {
+        this.handleCompleteAwakeableMessage(
+          msg.message as CompleteAwakeableEntryMessage
+        );
         break;
       }
       case SIDE_EFFECT_ENTRY_MESSAGE_TYPE: {
@@ -642,9 +781,9 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         break;
       }
       default: {
-        throw new Error(
+        this.method.reject(new Error(
           `Received unkown message type from the runtime: { message_type: ${msg.messageType}, message: ${msg.message} }`
-        );
+        ));
       }
     }
   }
@@ -662,8 +801,8 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   }
 
   handleInputMessage(m: PollInputStreamEntryMessage) {
-    const invocationIdString = uuidV7FromBuffer(this.invocationId);
-    this.logPrefix = `[${this.serviceName}] [${this.method.method.name}] [${invocationIdString}]`;
+    this.invocationIdString = uuidV7FromBuffer(this.invocationId);
+    this.logPrefix = `[${this.serviceName}] [${this.method.method.name}] [${this.invocationIdString}]`;
     console.debug(
       `${this.logPrefix} Received input message: ${printMessageAsJson(m)}`
     );
@@ -677,35 +816,80 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   handleCompletionMessage(m: CompletionMessage) {
     this.failIfClosed();
 
+    console.debug(
+      `${
+        this.logPrefix
+      } Received new completion from the runtime: ${printMessageAsJson(m)}`
+    );
+
     if (this.state === ExecutionState.REPLAYING) {
-      throw new Error(
+      this.method.reject(new Error(
         "Illegal state: received completion message but still in replay state."
-      );
+      ));
     }
 
-    if (m.value !== undefined) {
-      this.resolveOrRejectPromise(m.entryIndex, m.value);
-    } else {
-      // If the value is not set, then it is either Empty, a failure, or undefined (side effect)
-      this.resolveOrRejectPromise(m.entryIndex, m.empty, m.failure);
-    }
+    // It is possible that value, empty and failure are all undefined.
+    this.handlePendingMessage(
+      m.entryIndex,
+      COMPLETION_MESSAGE_TYPE,
+      m,
+      () => true,
+      m.value || m.empty,
+      m.failure
+    );
   }
 
   handleGetStateMessage(m: GetStateEntryMessage): void {
     this.checkIfInReplay();
-
-    if (m.value !== undefined) {
-      this.resolveOrRejectPromise(this.currentJournalIndex, m.value as Buffer);
-    } else if (m.empty !== undefined) {
-      this.resolveOrRejectPromise(this.currentJournalIndex, m.empty);
-    }
-    // Else: GetStateEntryMessage not yet completed. So we wait for a completion
+    this.handlePendingMessage(
+      this.replayIndex,
+      GET_STATE_ENTRY_MESSAGE_TYPE,
+      m,
+      getStateMsgEquality,
+      m.value || m.empty
+    );
   }
 
   handleInvokeEntryMessage(m: InvokeEntryMessage) {
     this.checkIfInReplay();
+    this.handlePendingMessage(
+      this.replayIndex,
+      INVOKE_ENTRY_MESSAGE_TYPE,
+      m,
+      invokeMsgEquality,
+      m.value,
+      m.failure
+    );
+  }
 
-    this.resolveOrRejectPromise(this.replayIndex, m.value, m.failure);
+  handleInBackgroundInvokeMessage(m: BackgroundInvokeEntryMessage) {
+    this.checkIfInReplay();
+    this.handlePendingMessage(
+      this.replayIndex,
+      BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
+      m,
+      invokeMsgEquality
+    );
+  }
+
+  handleSetStateMessage(m: SetStateEntryMessage) {
+    this.checkIfInReplay();
+    this.handlePendingMessage(
+      this.replayIndex,
+      SET_STATE_ENTRY_MESSAGE_TYPE,
+      m,
+      setStateMsgEquality
+    );
+  }
+
+  handleClearStateMessage(m: ClearStateEntryMessage) {
+    this.checkIfInReplay();
+    this.handlePendingMessage(
+      this.replayIndex,
+      CLEAR_STATE_ENTRY_MESSAGE_TYPE,
+      m,
+      clearStateMsgEquality
+    );
   }
 
   handleSideEffectMessage(m: Uint8Array) {
@@ -716,23 +900,60 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     );
 
     if (msg.value != undefined) {
-      this.resolveOrRejectPromise(
+      // We don't compare the value the side effect messages because we do not re-execute side effects upon replay,
+      // so there is nothing to compare to.
+      this.handlePendingMessage(
         this.replayIndex,
+        SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+        msg,
+        () => true,
         JSON.parse(msg.value.toString())
       );
-    } else {
-      this.resolveOrRejectPromise(this.replayIndex, undefined, msg.failure);
+    } else if (msg.failure != undefined) {
+      this.handlePendingMessage(
+        this.replayIndex,
+        SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+        msg,
+        () => true,
+        undefined,
+        msg.failure
+      );
     }
   }
 
   handleAwakeableMessage(m: AwakeableEntryMessage) {
     this.checkIfInReplay();
-    this.resolveOrRejectPromise(this.replayIndex, m.value, m.failure);
+
+    // Note: an AwakeableEntryMessage does not have any filled fields pre-completion so no comparison function
+    this.handlePendingMessage(
+      this.replayIndex,
+      AWAKEABLE_ENTRY_MESSAGE_TYPE,
+      m,
+      () => true,
+      m.value,
+      m.failure
+    );
+  }
+
+  handleCompleteAwakeableMessage(m: CompleteAwakeableEntryMessage) {
+    this.checkIfInReplay();
+    this.handlePendingMessage(
+      this.replayIndex,
+      COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
+      m,
+      completeAwakeableMsgEquality
+    );
   }
 
   handleSleepCompletionMessage(m: SleepEntryMessage) {
     this.checkIfInReplay();
-    this.resolveOrRejectPromise(this.replayIndex, m.result);
+    this.handlePendingMessage(
+      this.replayIndex,
+      SLEEP_ENTRY_MESSAGE_TYPE,
+      m,
+      sleepMsgEquality,
+      m.result
+    );
   }
 
   checkIfInReplay() {
@@ -742,15 +963,15 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     if (this.replayIndex < this.nbEntriesToReplay) {
       this.replayIndex++;
     } else {
-      throw new Error(
+      this.method.reject(new Error(
         "Illegal state: We received a replay message from the runtime but we are not in replay mode."
-      );
+      ));
     }
   }
 
   failIfClosed() {
     if (this.state === ExecutionState.CLOSED) {
-      throw new Error("State machine is closed. Canceling all execution");
+      this.method.reject(new Error("State machine is closed. Canceling all execution"));
     }
   }
 
@@ -770,65 +991,129 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     }
   }
 
-  addPromise(
+  storePendingMsg(
     journalIndex: number,
+    messageType: bigint,
+    message?: ProtocolMessage | Uint8Array,
     /* eslint-disable @typescript-eslint/no-explicit-any */
-    resolve: (value: any) => void,
+    resolve?: (value: any) => void,
     /* eslint-disable @typescript-eslint/no-explicit-any */
-    reject: (value: any) => void
+    reject?: (value: any) => void
   ) {
     // If we are replaying, the completion may have arrived before the user code got there.
     // Otherwise, add to map.
+    // TODO make this more efficient and only add it to the map if we don't have the result ready
+    this.indexToPendingMsgMap.set(
+      journalIndex,
+      new PendingMessage(messageType, message, resolve, reject)
+    );
     if (
       this.state === ExecutionState.REPLAYING &&
       this.outOfOrderReplayMessages.has(journalIndex)
     ) {
-      // Resolving promise
-      // TODO we should only resolve it if the response was not a failure
-      resolve(this.outOfOrderReplayMessages.get(journalIndex));
-      this.outOfOrderReplayMessages.delete(journalIndex);
-    } else {
-      this.pendingPromises.set(
-        journalIndex,
-        new PromiseHandler(resolve, reject)
+      const completionResult = this.outOfOrderReplayMessages.get(journalIndex)!;
+      this.handlePendingMessage(
+        completionResult.journalIndex,
+        completionResult.messageType,
+        completionResult.message,
+        completionResult.comparisonFct,
+        completionResult.value,
+        completionResult.failure
       );
+      this.outOfOrderReplayMessages.delete(journalIndex);
     }
   }
 
-  resolveOrRejectPromise<T>(
+  /**
+   * Used to resolve the pending messages/user actions/promises
+   * @param journalIndex: journal index for which we are resolving the result
+   * @param resultMessageType: the message type as expected by the runtime replay
+   * @param resultMessage: the message as expected by the runtime replay
+   * @param comparisonFct: a function to compare equality for this message type (Different for every message type)
+   * @param value: the value that is returned from the runtime as the
+   * @param failure: the failure message of the completion
+   */
+  handlePendingMessage<T, I>(
     journalIndex: number,
-    value?: T | undefined,
-    failure?: Failure | undefined
+    resultMessageType: bigint, // only for journal mismatch checks during replay
+    resultMessage: I, // only for journal mismatch checks during replay
+    comparisonFct: (msg1: I, msg2: I) => boolean, // only for journal mismatch checks during replay
+    value?: T,
+    failure?: Failure
   ) {
-    const resolveFct = this.pendingPromises.get(journalIndex);
-    if (!resolveFct) {
+    const optionalPendingMessage = this.indexToPendingMsgMap.get(journalIndex);
+
+    if (optionalPendingMessage === undefined) {
       // During replay, the replay completion messages might arrive before we got to that point in the user code.
       // In that case, we wouldn't find a promise yet. So add the message to the map.
       if (this.state === ExecutionState.REPLAYING) {
-        this.outOfOrderReplayMessages.set(this.replayIndex, value);
+        this.outOfOrderReplayMessages.set(journalIndex, {
+          journalIndex: journalIndex,
+          messageType: resultMessageType,
+          message: resultMessage,
+          comparisonFct: comparisonFct,
+          value: value,
+          failure: failure,
+        });
         return;
       } else {
-        throw new Error(`Promise for journal index ${journalIndex} not found`);
+        this.method.reject(new Error(
+          `No pending message found for this journal index: ${journalIndex}`
+        ));
       }
+    }
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    const pendingMessage: PendingMessage = optionalPendingMessage!;
+
+    if (
+      this.state === ExecutionState.REPLAYING &&
+      (pendingMessage.messageType !== resultMessageType ||
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        !comparisonFct(resultMessage, pendingMessage.message! as I))
+    ) {
+      this.method.reject(new Error(`Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!
+      The journal entry at position ${journalIndex} was:
+      - In the user code: type: ${
+        pendingMessage.messageType
+      }, message:${printMessageAsJson(pendingMessage.message)}
+      - In the replayed messages: type: ${resultMessageType}, message: ${printMessageAsJson(
+        resultMessage
+      )}`));
     }
 
-    if (failure !== undefined) {
-      if (this.state !== ExecutionState.REPLAYING) {
-        console.debug(
-          `${
-            this.logPrefix
-          } Received new completion from the runtime: ${printMessageAsJson(
-            failure
-          )}`
-        );
-      }
-      resolveFct.reject(failure);
-      this.pendingPromises.delete(journalIndex);
-    } else {
-      // value can be of type T, empty (e.g. getState) or undefined (e.g. sideEffect)
-      resolveFct.resolve(value);
-      this.pendingPromises.delete(journalIndex);
+    // If we do not require a result, then just remove the message from the map.
+    // Replay validation for journal mismatches has succeeded when we end up here.
+    else if (
+      pendingMessage.messageType === SET_STATE_ENTRY_MESSAGE_TYPE ||
+      pendingMessage.messageType === CLEAR_STATE_ENTRY_MESSAGE_TYPE ||
+      pendingMessage.messageType === COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE ||
+      pendingMessage.messageType === BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE
+    ) {
+      this.indexToPendingMsgMap.delete(journalIndex);
     }
+
+    // If we do require a result and have a result then resolve or reject the promise and remove the pending message from the map
+    else if (value !== undefined) {
+      if(pendingMessage.resolve !== undefined){
+        pendingMessage.resolve(value);
+        this.indexToPendingMsgMap.delete(journalIndex);
+      } else {
+        this.method.reject(new Error("SDK bug: No resolve method found to resolve the pending message."))
+      }
+    } else if (failure !== undefined) {
+      if(pendingMessage.reject !== undefined){
+        pendingMessage.reject!(failure);
+        this.indexToPendingMsgMap.delete(journalIndex);
+      } else {
+        this.method.reject(new Error("SDK bug: No resolve method found to resolve the pending message."))
+      }
+    }
+    // In case of a side effect completion, we don't get a value or failure back but still need to ack the completion.
+    else if (pendingMessage.messageType === SIDE_EFFECT_ENTRY_MESSAGE_TYPE) {
+      pendingMessage.resolve!(undefined);
+      this.indexToPendingMsgMap.delete(journalIndex);
+    }
+
   }
 
   validate(callType: string) {
@@ -870,8 +1155,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         failure: Failure.create({
           code: 13,
           message:
-            "Uncaught exception for invocation id " +
-            this.invocationId.toString(),
+            `Uncaught exception for invocation id ${this.invocationIdString}: ${e.message}`,
         }),
       })
     );

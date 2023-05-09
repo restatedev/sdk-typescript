@@ -2,6 +2,7 @@ import { describe, expect } from "@jest/globals";
 import * as restate from "../src/public_api";
 import { TestDriver } from "./testdriver";
 import {
+  awakeableMessage, checkError,
   completionMessage,
   greetRequest,
   greetResponse,
@@ -9,7 +10,7 @@ import {
   outputMessage,
   sleepMessage,
   startMessage,
-  suspensionMessage,
+  suspensionMessage
 } from "./protoutils";
 import { SLEEP_ENTRY_MESSAGE_TYPE } from "../src/types/protocol";
 import { Empty } from "../src/generated/google/protobuf/empty";
@@ -21,12 +22,15 @@ import {
 } from "../src/generated/proto/test";
 import { ProtocolMode } from "../src/generated/proto/discovery";
 
+
+const wakeupTime= 1835661783000;
+
 class SleepGreeter implements TestGreeter {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
-    await ctx.sleep(1000);
+    await ctx.sleep(wakeupTime - Date.now());
 
     return TestResponse.create({ greeting: `Hello` });
   }
@@ -92,10 +96,48 @@ describe("SleepGreeter: With sleep replayed", () => {
       [
         startMessage(2),
         inputMessage(greetRequest("Till")),
-        sleepMessage(1000, Empty.create({})),
+        sleepMessage(wakeupTime, Empty.create({})),
       ]
     ).run();
 
     expect(result[0]).toStrictEqual(outputMessage(greetResponse("Hello")));
+  });
+});
+
+describe("SleepGreeter: journal mismatch checks on sleep: Completed with awakeable on replay.", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new SleepGreeter(),
+      "/test.TestGreeter/Greet",
+      [
+        startMessage(2),
+        inputMessage(greetRequest("Till")),
+        awakeableMessage(""), // should have been a sleep message
+      ]
+    ).run();
+
+    expect(result.length).toStrictEqual(1);
+    checkError(result[0], "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!");
+  });
+});
+
+describe("SleepGreeter: journal mismatch checks on sleep: Completed with different wakeupTime on replay.", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new SleepGreeter(),
+      "/test.TestGreeter/Greet",
+      [
+        startMessage(2),
+        inputMessage(greetRequest("Till")),
+        sleepMessage(wakeupTime + 5, Empty.create({})), // should have been wakeupTime instead of wakeupTime + 5
+      ]
+    ).run();
+
+    expect(result.length).toStrictEqual(1);
+    checkError(result[0], "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!");
   });
 });

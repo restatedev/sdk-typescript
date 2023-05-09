@@ -2,7 +2,7 @@ import { describe, expect } from "@jest/globals";
 import * as restate from "../src/public_api";
 import { TestDriver } from "./testdriver";
 import {
-  backgroundInvokeMessage,
+  backgroundInvokeMessage, checkError,
   completionMessage,
   greetRequest,
   greetResponse,
@@ -11,7 +11,7 @@ import {
   outputMessage,
   setStateMessage,
   startMessage,
-  suspensionMessage,
+  suspensionMessage
 } from "./protoutils";
 import {
   protoMetadata,
@@ -197,6 +197,129 @@ describe("ReverseAwaitOrder: replay all invoke messages and setstate ", () => {
   });
 });
 
+describe("ReverseAwaitOrder: journal mismatch on Invoke - different service during replay", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new ReverseAwaitOrder(),
+      "/test.TestGreeter/Greet",
+      [
+        startMessage(4),
+        inputMessage(greetRequest("Till")),
+        invokeMessage(
+          "test.TestGreeterWrong", // should have been test.TestGreeter
+          "Greet",
+          greetRequest("Francesco"),
+          greetResponse("FRANCESCO")
+        ),
+        invokeMessage(
+          "test.TestGreeter",
+          "Greet",
+          greetRequest("Till"),
+          greetResponse("TILL")
+        ),
+        setStateMessage("A2", "TILL"),
+      ]
+    ).run();
+
+    expect(result.length).toStrictEqual(1);
+    checkError(result[0], "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!");
+  });
+});
+
+describe("ReverseAwaitOrder: journal mismatch on Invoke - different method during replay", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new ReverseAwaitOrder(),
+      "/test.TestGreeter/Greet",
+      [
+        startMessage(4),
+        inputMessage(greetRequest("Till")),
+        invokeMessage(
+          "test.TestGreeter",
+          "Greetzz", // should have been Greet
+          greetRequest("Francesco"),
+          greetResponse("FRANCESCO")
+        ),
+        invokeMessage(
+          "test.TestGreeter",
+          "Greet",
+          greetRequest("Till"),
+          greetResponse("TILL")
+        ),
+        setStateMessage("A2", "TILL"),
+      ]
+    ).run();
+
+    expect(result.length).toStrictEqual(1);
+    checkError(result[0], "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!");
+  });
+});
+
+describe("ReverseAwaitOrder: journal mismatch on Invoke - different request during replay", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new ReverseAwaitOrder(),
+      "/test.TestGreeter/Greet",
+      [
+        startMessage(4),
+        inputMessage(greetRequest("Till")),
+        invokeMessage(
+          "test.TestGreeter",
+          "Greet", // should have been Greet
+          greetRequest("AnotherName"),
+          greetResponse("FRANCESCO")
+        ),
+        invokeMessage(
+          "test.TestGreeter",
+          "Greet",
+          greetRequest("Till"),
+          greetResponse("TILL")
+        ),
+        setStateMessage("A2", "TILL"),
+      ]
+    ).run();
+
+    expect(result.length).toStrictEqual(1);
+    checkError(result[0], "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!");
+  });
+});
+
+describe("ReverseAwaitOrder: journal mismatch on Invoke - completed with BackgroundInvoke during replay", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new ReverseAwaitOrder(),
+      "/test.TestGreeter/Greet",
+      [
+        startMessage(4),
+        inputMessage(greetRequest("Till")),
+        invokeMessage(
+          "test.TestGreeter",
+          "Greet", // should have been Greet
+          greetRequest("Francesco"),
+          greetResponse("FRANCESCO")
+        ),
+        backgroundInvokeMessage(
+          "test.TestGreeter",
+          "Greet",
+          greetRequest("Till")
+        ), // should have been an invoke message
+        setStateMessage("A2", "TILL"),
+      ]
+    ).run();
+
+    expect(result.length).toStrictEqual(1);
+    checkError(result[0], "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!");
+  });
+});
+
 describe("ReverseAwaitOrder: Failing A1", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
@@ -217,12 +340,11 @@ describe("ReverseAwaitOrder: Failing A1", () => {
       ]
     ).run();
 
-    expect(result).toStrictEqual([
-      invokeMessage("test.TestGreeter", "Greet", greetRequest("Francesco")),
-      invokeMessage("test.TestGreeter", "Greet", greetRequest("Till")),
-      setStateMessage("A2", "TILL"),
-      outputMessage(), // failure
-    ]);
+    expect(result.length).toStrictEqual(4);
+      expect(result[0]).toStrictEqual(invokeMessage("test.TestGreeter", "Greet", greetRequest("Francesco")))
+      expect(result[1]).toStrictEqual(invokeMessage("test.TestGreeter", "Greet", greetRequest("Till")))
+      expect(result[2]).toStrictEqual(setStateMessage("A2", "TILL"))
+      checkError(result[3], "Error") // Error comes from the failed completion
   });
 });
 
@@ -248,6 +370,91 @@ describe("BackgroundInvokeGreeter: background call ", () => {
   });
 });
 
+describe("BackgroundInvokeGreeter: journal mismatch on BackgroundInvoke - Completed with invoke during replay. ", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new BackgroundInvokeGreeter(),
+      "/test.TestGreeter/Greet",
+      [startMessage(2),
+        inputMessage(greetRequest("Till")),
+        invokeMessage(
+          "test.TestGreeter",
+          "Greet",
+          greetRequest("Francesco")
+        ), // should have been BackgroundInvoke
+      ]
+    ).run();
+
+    expect(result.length).toStrictEqual(1);
+    checkError(result[0], "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!");
+  });
+});
+
+describe("BackgroundInvokeGreeter: journal mismatch on BackgroundInvoke - Completed with BackgroundInvoke with different service name. ", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new BackgroundInvokeGreeter(),
+      "/test.TestGreeter/Greet",
+      [startMessage(2),
+        inputMessage(greetRequest("Till")),
+        backgroundInvokeMessage(
+          "test.TestGreeterWrong", // should have been "test.TestGreeter"
+          "Greet",
+          greetRequest("Francesco")
+        ),]
+    ).run();
+
+    expect(result.length).toStrictEqual(1);
+    checkError(result[0], "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!");
+  });
+});
+
+describe("BackgroundInvokeGreeter: journal mismatch on BackgroundInvoke - Completed with BackgroundInvoke with different method. ", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new BackgroundInvokeGreeter(),
+      "/test.TestGreeter/Greet",
+      [startMessage(2),
+        inputMessage(greetRequest("Till")),
+        backgroundInvokeMessage(
+          "test.TestGreeter",
+          "Greetzzz", // should have been "Greet"
+          greetRequest("Francesco")
+        ),]
+    ).run();
+
+    expect(result.length).toStrictEqual(1);
+    checkError(result[0], "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!");
+  });
+});
+
+describe("BackgroundInvokeGreeter: journal mismatch on BackgroundInvoke - Completed with BackgroundInvoke with different request. ", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new BackgroundInvokeGreeter(),
+      "/test.TestGreeter/Greet",
+      [startMessage(2),
+        inputMessage(greetRequest("Till")),
+        backgroundInvokeMessage(
+          "test.TestGreeter",
+          "Greet", // should have been "Greet"
+          greetRequest("AnotherName")
+        ),]
+    ).run();
+
+    expect(result.length).toStrictEqual(1);
+    checkError(result[0], "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!");
+  });
+});
+
 describe("FailingBackgroundInvokeGreeter: failing background call ", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
@@ -258,7 +465,8 @@ describe("FailingBackgroundInvokeGreeter: failing background call ", () => {
       [startMessage(1), inputMessage(greetRequest("Till"))]
     ).run();
 
-    expect(result).toStrictEqual([outputMessage()]);
+    expect(result.length).toStrictEqual(1);
+    checkError(result[0], "Cannot do a set state from within a background call. Context method inBackground() can only be used to invoke other services in the background. e.g. ctx.inBackground(() => client.greet(my_request))");
   });
 });
 
@@ -272,7 +480,8 @@ describe("FailingSideEffectInBackgroundInvokeGreeter: failing background call ",
       [startMessage(1), inputMessage(greetRequest("Till"))]
     ).run();
 
-    expect(result).toStrictEqual([outputMessage()]);
+    expect(result.length).toStrictEqual(1);
+    checkError(result[0], "Cannot do a side effect from within a background call. Context method inBackground() can only be used to invoke other services in the background. e.g. ctx.inBackground(() => client.greet(my_request))")
   });
 });
 

@@ -23,6 +23,8 @@ export class GrpcService {
 }
 
 export class HostedGrpcServiceMethod<I, O> {
+  public reject!:  (reason: any) => void;
+
   constructor(
     readonly instance: unknown,
     readonly service: string,
@@ -33,11 +35,20 @@ export class HostedGrpcServiceMethod<I, O> {
     context: RestateContext,
     inBytes: Uint8Array
   ): Promise<Uint8Array> {
-    const instanceWithContext = setContext(this.instance, context);
-    const input = this.method.inputDecoder(inBytes);
-    const output = await this.method.localFn(instanceWithContext, input);
-    const outBytes = this.method.outputEncoder(output);
-    return outBytes;
+    return new Promise<Uint8Array>((resolve, reject) => {
+      this.reject = reject;
+      const instanceWithContext = setContext(this.instance, context);
+      const input = this.method.inputDecoder(inBytes);
+      this.method.localFn(instanceWithContext, input)
+        .then(output => {
+            const outBytes = this.method.outputEncoder(output);
+            resolve(outBytes);
+        })
+        .catch(error => {
+          reject(error);
+        })
+      }
+    )
   }
 }
 

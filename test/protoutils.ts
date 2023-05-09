@@ -34,6 +34,7 @@ import { Message } from "../src/types/types";
 import { TestRequest, TestResponse } from "../src/generated/proto/test";
 import { SideEffectEntryMessage } from "../src/generated/proto/javascript";
 import { Failure } from "../src/generated/proto/protocol";
+import { expect } from "@jest/globals";
 
 export function startMessage(knownEntries: number): Message {
   return new Message(
@@ -117,12 +118,12 @@ export function clearStateMessage(key: string): Message {
   );
 }
 
-export function sleepMessage(millis: number, result?: Empty): Message {
+export function sleepMessage(wakeupTime: number, result?: Empty): Message {
   if (result !== undefined) {
     return new Message(
       SLEEP_ENTRY_MESSAGE_TYPE,
       SleepEntryMessage.create({
-        wakeUpTime: Date.now() + millis,
+        wakeUpTime: wakeupTime,
         result: result,
       })
     );
@@ -130,7 +131,7 @@ export function sleepMessage(millis: number, result?: Empty): Message {
     return new Message(
       SLEEP_ENTRY_MESSAGE_TYPE,
       SleepEntryMessage.create({
-        wakeUpTime: Date.now() + millis,
+        wakeUpTime: wakeupTime,
       })
     );
   }
@@ -309,3 +310,9 @@ export function greetResponse(myGreeting: string): Uint8Array {
     TestResponse.create({ greeting: myGreeting })
   ).finish();
 }
+
+export function checkError(outputMsg: Message, errorMessage: string){
+  expect(outputMsg.messageType).toEqual(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE)
+  expect((outputMsg.message as OutputStreamEntryMessage).failure?.message).toContain(errorMessage);
+}
+

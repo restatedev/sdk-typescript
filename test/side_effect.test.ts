@@ -9,7 +9,7 @@ import {
   startMessage,
   greetRequest,
   greetResponse,
-  decodeSideEffectFromResult,
+  decodeSideEffectFromResult, checkError, invokeMessage
 } from "./protoutils";
 import {
   protoMetadata,
@@ -215,6 +215,30 @@ describe("SideEffectGreeter: with ack", () => {
   });
 });
 
+describe("SideEffectGreeter: journal mismatch check on sideEffect - completed with Invoke", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new SideEffectGreeter("Francesco"),
+      "/test.TestGreeter/Greet",
+      [
+        startMessage(2),
+        inputMessage(greetRequest("Till")),
+        invokeMessage(
+          "test.TestGreeter",
+          "Greet", // should have been Greet
+          greetRequest("Francesco"),
+          greetResponse("FRANCESCO")
+        ),
+      ]
+    ).run();
+
+    expect(result.length).toStrictEqual(1);
+    checkError(result[0], "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!");
+  });
+});
+
 describe("SideEffectGreeter: with completion", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
@@ -276,7 +300,7 @@ describe("FailingSideEffectGreeter: failing user code in side effect with ack", 
     expect(
       decodeSideEffectFromResult(result[0].message).failure?.code
     ).toStrictEqual(13);
-    expect(result[1]).toStrictEqual(outputMessage());
+    checkError(result[1], "Failing user code");
   });
 });
 
@@ -299,7 +323,7 @@ describe("FailingGetSideEffectGreeter: invalid get state in side effect with ack
     expect(
       decodeSideEffectFromResult(result[0].message).failure?.code
     ).toStrictEqual(13);
-    expect(result[1]).toStrictEqual(outputMessage());
+    checkError(result[1], "You cannot do get state calls from within a side effect.");
   });
 });
 
@@ -322,7 +346,7 @@ describe("FailingSetSideEffectGreeter: invalid set state in side effect with ack
     expect(
       decodeSideEffectFromResult(result[0].message).failure?.code
     ).toStrictEqual(13);
-    expect(result[1]).toStrictEqual(outputMessage());
+    checkError(result[1], "You cannot do set state calls from within a side effect.");
   });
 });
 
@@ -345,7 +369,7 @@ describe("FailingClearSideEffectGreeter: invalid clear state in side effect with
     expect(
       decodeSideEffectFromResult(result[0].message).failure?.code
     ).toStrictEqual(13);
-    expect(result[1]).toStrictEqual(outputMessage());
+    checkError(result[1], "You cannot do clear state calls from within a side effect");
   });
 });
 
@@ -368,7 +392,7 @@ describe("FailingNestedSideEffectGreeter: invalid nested side effect in side eff
     expect(
       decodeSideEffectFromResult(result[0].message).failure?.code
     ).toStrictEqual(13);
-    expect(result[1]).toStrictEqual(outputMessage());
+    checkError(result[1], "You cannot do sideEffect calls from within a side effect.");
   });
 });
 
@@ -394,7 +418,7 @@ describe("FailingNestedSideEffectGreeter: invalid nested side effect in side eff
     ).run();
 
     expect(result.length).toStrictEqual(1);
-    expect(result).toStrictEqual([outputMessage()]);
+    checkError(result[0],"You cannot do sideEffect state calls from within a side effect");
   });
 });
 
@@ -417,7 +441,7 @@ describe("FailingInBackgroundSideEffectGreeter: invalid in background call in si
     expect(
       decodeSideEffectFromResult(result[0].message).failure?.code
     ).toStrictEqual(13);
-    expect(result[1]).toStrictEqual(outputMessage());
+    checkError(result[1], "You cannot do inBackground calls from within a side effect");
   });
 });
 
@@ -440,7 +464,7 @@ describe("FailingCompleteAwakeableSideEffectGreeter: invalid in complete awakeab
     expect(
       decodeSideEffectFromResult(result[0].message).failure?.code
     ).toStrictEqual(13);
-    expect(result[1]).toStrictEqual(outputMessage());
+    checkError(result[1], "You cannot do completeAwakeable calls from within a side effect.");
   });
 });
 
@@ -463,6 +487,6 @@ describe("FailingSleepSideEffectGreeter: invalid in sleep call in side effect wi
     expect(
       decodeSideEffectFromResult(result[0].message).failure?.code
     ).toStrictEqual(13);
-    expect(result[1]).toStrictEqual(outputMessage());
+    checkError(result[1], "You cannot do sleep calls from within a side effect.");
   });
 });
