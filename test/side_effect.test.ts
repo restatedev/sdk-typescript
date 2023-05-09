@@ -257,10 +257,10 @@ describe("SideEffectGreeter: journal mismatch check on sideEffect - completed wi
         inputMessage(greetRequest("Till")),
         invokeMessage(
           "test.TestGreeter",
-          "Greet", // should have been Greet
+          "Greet",
           greetRequest("Francesco"),
           greetResponse("FRANCESCO")
-        ),
+        ), // should have been side effect
       ]
     ).run();
 

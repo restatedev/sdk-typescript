@@ -70,6 +70,18 @@ class FailingBackgroundInvokeGreeter implements TestGreeter {
     return TestResponse.create({ greeting: `Hello` });
   }
 }
+
+class FailingAwakeableInBackgroundInvokeGreeter implements TestGreeter {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async greet(request: TestRequest): Promise<TestResponse> {
+    const ctx = restate.useContext(this);
+
+    await ctx.inBackground(async () => ctx.awakeable<string>());
+
+    return TestResponse.create({ greeting: `Hello` });
+  }
+}
+
 class FailingSideEffectInBackgroundInvokeGreeter implements TestGreeter {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
@@ -278,8 +290,8 @@ describe("ReverseAwaitOrder: journal mismatch on Invoke - different request duri
         inputMessage(greetRequest("Till")),
         invokeMessage(
           "test.TestGreeter",
-          "Greet", // should have been Greet
-          greetRequest("AnotherName"),
+          "Greet",
+          greetRequest("AnotherName"), // should have been Francesco
           greetResponse("FRANCESCO")
         ),
         invokeMessage(
@@ -312,7 +324,7 @@ describe("ReverseAwaitOrder: journal mismatch on Invoke - completed with Backgro
         inputMessage(greetRequest("Till")),
         invokeMessage(
           "test.TestGreeter",
-          "Greet", // should have been Greet
+          "Greet",
           greetRequest("Francesco"),
           greetResponse("FRANCESCO")
         ),
@@ -473,8 +485,8 @@ describe("BackgroundInvokeGreeter: journal mismatch on BackgroundInvoke - Comple
         inputMessage(greetRequest("Till")),
         backgroundInvokeMessage(
           "test.TestGreeter",
-          "Greet", // should have been "Greet"
-          greetRequest("AnotherName")
+          "Greet",
+          greetRequest("AnotherName") // should have been "Francesco"
         ),
       ]
     ).run();
@@ -501,6 +513,24 @@ describe("FailingBackgroundInvokeGreeter: failing background call ", () => {
     checkError(
       result[0],
       "Cannot do a set state from within a background call."
+    );
+  });
+});
+
+describe("FailingAwakeableInBackgroundInvokeGreeter: failing background call ", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new FailingAwakeableInBackgroundInvokeGreeter(),
+      "/test.TestGreeter/Greet",
+      [startMessage(1), inputMessage(greetRequest("Till"))]
+    ).run();
+
+    expect(result.length).toStrictEqual(1);
+    checkError(
+      result[0],
+      "Cannot do a awakeable from within a background call."
     );
   });
 });

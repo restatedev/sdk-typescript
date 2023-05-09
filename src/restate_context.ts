@@ -17,29 +17,6 @@ export interface RestateContext {
    */
   invocationId: Buffer;
 
-  /**
-   * Synchronously call other Restate services ( = wait on response).
-   * It is not recommended to use this.
-   * It is recommended
-   * to do the request via the proto-ts client that was generated based on the Protobuf service definitions,
-   * as shown in the example.
-   * These clients use this request method under-the-hood.
-   * @param service name of the service to call
-   * @param method name of the method to call
-   * @param data payload as Uint8Array
-   * @returns a Promise that is resolved with the response of the called service
-   *
-
-   * @example
-   * const ctx = restate.useContext(this);
-   * const client = new GreeterClientImpl(ctx);
-   * client.greet(Request.create({ name: "Peter" }))
-   */
-  request(
-    service: string,
-    method: string,
-    data: Uint8Array
-  ): Promise<Uint8Array>;
 
   /**
    * Get/retrieve state from the Restate runtime.
@@ -100,7 +77,7 @@ export interface RestateContext {
    *
    * @example
    * const ctx = restate.useContext(this);
-   * const result = await ctx.sideEffect<string>(async () => { return randomUUID(); })
+   * const result = await ctx.sideEffect<string>(async () => { return doSomething(); })
    */
   sideEffect<T>(fn: () => Promise<T>): Promise<T>;
 
@@ -149,6 +126,30 @@ export interface RestateContext {
    * await ctx.sleep(1000);
    */
   sleep(millis: number): Promise<void>;
+
+  /**
+   * Synchronously call other Restate services ( = wait on response).
+   * It is not recommended to use this.
+   * It is recommended
+   * to do the request via the proto-ts client that was generated based on the Protobuf service definitions,
+   * as shown in the example.
+   * These clients use this request method under-the-hood.
+   * @param service name of the service to call
+   * @param method name of the method to call
+   * @param data payload as Uint8Array
+   * @returns a Promise that is resolved with the response of the called service
+   *
+
+   * @example
+   * const ctx = restate.useContext(this);
+   * const client = new GreeterClientImpl(ctx);
+   * client.greet(Request.create({ name: "Peter" }))
+   */
+  request(
+    service: string,
+    method: string,
+    data: Uint8Array
+  ): Promise<Uint8Array>;
 }
 
 export function useContext<T>(instance: T): RestateContext {
