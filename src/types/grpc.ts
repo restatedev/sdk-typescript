@@ -23,7 +23,8 @@ export class GrpcService {
 }
 
 export class HostedGrpcServiceMethod<I, O> {
-  public reject!:  (reason: any) => void;
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  public reject!: (reason: any) => void;
 
   constructor(
     readonly instance: unknown,
@@ -39,16 +40,16 @@ export class HostedGrpcServiceMethod<I, O> {
       this.reject = reject;
       const instanceWithContext = setContext(this.instance, context);
       const input = this.method.inputDecoder(inBytes);
-      this.method.localFn(instanceWithContext, input)
-        .then(output => {
-            const outBytes = this.method.outputEncoder(output);
-            resolve(outBytes);
+      this.method
+        .localFn(instanceWithContext, input)
+        .then((output) => {
+          const outBytes = this.method.outputEncoder(output);
+          resolve(outBytes);
         })
-        .catch(error => {
+        .catch((error) => {
           reject(error);
-        })
-      }
-    )
+        });
+    });
   }
 }
 

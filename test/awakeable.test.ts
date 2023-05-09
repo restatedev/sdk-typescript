@@ -2,15 +2,17 @@ import { describe, expect } from "@jest/globals";
 import * as restate from "../src/public_api";
 import { TestDriver } from "./testdriver";
 import {
-  awakeableMessage, checkError,
+  awakeableMessage,
+  checkError,
   completeAwakeableMessage,
   completionMessage,
   greetRequest,
   greetResponse,
-  inputMessage, invokeMessage,
+  inputMessage,
+  invokeMessage,
   outputMessage,
   startMessage,
-  suspensionMessage
+  suspensionMessage,
 } from "./protoutils";
 import { AwakeableIdentifier } from "../src/types/protocol";
 import {
@@ -69,7 +71,6 @@ describe("AwakeableGreeter: with awakeable completion replay", () => {
   });
 });
 
-
 describe("AwakeableGreeter: journal mismatch on AwakeableMessage. Completed with CompleteAwakeable during replay.", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
@@ -91,7 +92,10 @@ describe("AwakeableGreeter: journal mismatch on AwakeableMessage. Completed with
     ).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(result[0], "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!")
+    checkError(
+      result[0],
+      "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    );
   });
 });
 
@@ -176,7 +180,8 @@ describe("CompleteAwakeableGreeter: journal mismatch on CompleteAwakeable. Compl
       "TestGreeter",
       new CompleteAwakeableGreeter(),
       "/test.TestGreeter/Greet",
-      [startMessage(2),
+      [
+        startMessage(2),
         inputMessage(greetRequest("Till")),
         invokeMessage(
           "test.TestGreeter",
@@ -188,7 +193,10 @@ describe("CompleteAwakeableGreeter: journal mismatch on CompleteAwakeable. Compl
     ).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(result[0], "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!")
+    checkError(
+      result[0],
+      "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    );
   });
 });
 
@@ -199,7 +207,8 @@ describe("CompleteAwakeableGreeter: journal mismatch on CompleteAwakeable. Compl
       "TestGreeter",
       new CompleteAwakeableGreeter(),
       "/test.TestGreeter/Greet",
-      [startMessage(2),
+      [
+        startMessage(2),
         inputMessage(greetRequest("Till")),
         completeAwakeableMessage(
           "TestGreeterzzz", // this should have been TestGreeter
@@ -212,7 +221,10 @@ describe("CompleteAwakeableGreeter: journal mismatch on CompleteAwakeable. Compl
     ).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(result[0], "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!")
+    checkError(
+      result[0],
+      "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    );
   });
 });
 
@@ -223,7 +235,8 @@ describe("CompleteAwakeableGreeter: journal mismatch on CompleteAwakeable. Compl
       "TestGreeter",
       new CompleteAwakeableGreeter(),
       "/test.TestGreeter/Greet",
-      [startMessage(2),
+      [
+        startMessage(2),
         inputMessage(greetRequest("Till")),
         completeAwakeableMessage(
           "TestGreeter",
@@ -236,7 +249,10 @@ describe("CompleteAwakeableGreeter: journal mismatch on CompleteAwakeable. Compl
     ).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(result[0], "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!")
+    checkError(
+      result[0],
+      "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    );
   });
 });
 
@@ -247,7 +263,8 @@ describe("CompleteAwakeableGreeter: journal mismatch on CompleteAwakeable. Compl
       "TestGreeter",
       new CompleteAwakeableGreeter(),
       "/test.TestGreeter/Greet",
-      [startMessage(2),
+      [
+        startMessage(2),
         inputMessage(greetRequest("Till")),
         completeAwakeableMessage(
           "TestGreeter",
@@ -260,7 +277,10 @@ describe("CompleteAwakeableGreeter: journal mismatch on CompleteAwakeable. Compl
     ).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(result[0], "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!")
+    checkError(
+      result[0],
+      "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    );
   });
 });
 
@@ -271,7 +291,8 @@ describe("CompleteAwakeableGreeter: journal mismatch on CompleteAwakeable. Compl
       "TestGreeter",
       new CompleteAwakeableGreeter(),
       "/test.TestGreeter/Greet",
-      [startMessage(2),
+      [
+        startMessage(2),
         inputMessage(greetRequest("Till")),
         completeAwakeableMessage(
           "TestGreeter",
@@ -284,8 +305,9 @@ describe("CompleteAwakeableGreeter: journal mismatch on CompleteAwakeable. Compl
     ).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(result[0], "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!")
+    checkError(
+      result[0],
+      "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    );
   });
 });
-
-

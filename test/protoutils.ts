@@ -311,8 +311,9 @@ export function greetResponse(myGreeting: string): Uint8Array {
   ).finish();
 }
 
-export function checkError(outputMsg: Message, errorMessage: string){
-  expect(outputMsg.messageType).toEqual(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE)
-  expect((outputMsg.message as OutputStreamEntryMessage).failure?.message).toContain(errorMessage);
+export function checkError(outputMsg: Message, errorMessage: string) {
+  expect(outputMsg.messageType).toEqual(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE);
+  expect(
+    (outputMsg.message as OutputStreamEntryMessage).failure?.message
+  ).toContain(errorMessage);
 }
-
