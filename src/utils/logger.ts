@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable no-console */
 
 /**
  * Simple extension of the Console interface, to add debug loggin with
