@@ -28,7 +28,7 @@ export class LambdaRestateServer extends BaseRestateServer {
     return this.handleRequest.bind(this);
   }
 
-  async handleRequest(
+  private async handleRequest(
     event: APIGatewayProxyEvent
   ): Promise<APIGatewayProxyResult> {
     const pathSegments = event.path.split("/");

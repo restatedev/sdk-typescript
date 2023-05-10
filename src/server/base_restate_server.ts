@@ -27,9 +27,11 @@ export interface ServiceOpts {
 }
 
 export abstract class BaseRestateServer {
-  readonly methods: Record<string, HostedGrpcServiceMethod<unknown, unknown>> =
-    {};
-  readonly discovery: ServiceDiscoveryResponse;
+  protected readonly methods: Record<
+    string,
+    HostedGrpcServiceMethod<unknown, unknown>
+  > = {};
+  protected readonly discovery: ServiceDiscoveryResponse;
 
   protected constructor(protocolMode: ProtocolMode) {
     this.discovery = {
@@ -41,7 +43,7 @@ export abstract class BaseRestateServer {
     };
   }
 
-  addDescriptor(descriptor: ProtoMetadata) {
+  protected addDescriptor(descriptor: ProtoMetadata) {
     const desc = FileDescriptorProto.fromPartial(descriptor.fileDescriptor);
 
     // extract out service options and put into the fileDescriptor
@@ -115,7 +117,7 @@ export abstract class BaseRestateServer {
     }
   }
 
-  methodByUrl<I, O>(
+  protected methodByUrl<I, O>(
     url: string | undefined | null
   ): HostedGrpcServiceMethod<I, O> | undefined {
     if (url == undefined || url === null) {

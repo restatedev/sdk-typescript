@@ -21,7 +21,7 @@ export class TestDriver<I, O> implements Connection {
   private restate = RestateDuplexStream.from(this.http2stream);
   private result: Array<Message> = [];
 
-  private restateServer: restate.RestateServer;
+  private restateServer: TestRestateServer;
   private protocolMode = ProtocolMode.BIDI_STREAM;
   private method: HostedGrpcServiceMethod<I, O>;
   private entries: Array<Message>;
@@ -39,7 +39,8 @@ export class TestDriver<I, O> implements Connection {
     entries: Array<Message>,
     protocolMode?: ProtocolMode
   ) {
-    this.restateServer = restate.createServer().bindService({
+    this.restateServer = new TestRestateServer();
+    this.restateServer.bindService({
       descriptor: descriptor,
       service: service,
       instance: instance,
@@ -135,5 +136,19 @@ export class TestDriver<I, O> implements Connection {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   addOnErrorListener(listener: () => void): void {
     return;
+  }
+}
+
+/**
+ * This class' only purpose is to make certain methods accessible in tests.
+ * Those methods are otherwise protected, to reduce the public interface and
+ * make it simpler for users to understand what methods are relevant for them,
+ * and which ones are not.
+ */
+class TestRestateServer extends restate.RestateServer {
+  public methodByUrl<I, O>(
+    url: string | null | undefined
+  ): HostedGrpcServiceMethod<I, O> | undefined {
+    return super.methodByUrl(url);
   }
 }
