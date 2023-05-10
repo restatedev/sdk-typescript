@@ -15,16 +15,8 @@ export class RestateServer extends BaseRestateServer {
     super(ProtocolMode.BIDI_STREAM);
   }
 
-  public bindService({
-    descriptor,
-    service,
-    instance: instance,
-  }: ServiceOpts): RestateServer {
-    super.bindService({
-      descriptor,
-      service,
-      instance: instance,
-    });
+  public bindService(serviceOpts: ServiceOpts): RestateServer {
+    super.bindService(serviceOpts);
     return this;
   }
 

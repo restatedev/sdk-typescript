@@ -60,16 +60,8 @@ export class LambdaRestateServer extends BaseRestateServer {
   }
 
   // override needed to type the return value to the more concrete LambdaRestateServer type
-  public bindService({
-    descriptor,
-    service,
-    instance: instance,
-  }: ServiceOpts): LambdaRestateServer {
-    super.bindService({
-      descriptor,
-      service,
-      instance: instance,
-    });
+  public bindService(serviceOpts: ServiceOpts): LambdaRestateServer {
+    super.bindService(serviceOpts);
     return this;
   }
 

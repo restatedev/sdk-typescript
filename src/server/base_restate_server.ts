@@ -99,7 +99,7 @@ export abstract class BaseRestateServer {
     });
   }
 
-  public bindService({ descriptor, service, instance: instance }: ServiceOpts) {
+  protected bindService({ descriptor, service, instance }: ServiceOpts) {
     const spec = parseService(descriptor, service, instance);
     this.addDescriptor(descriptor);
     this.discovery.services.push(`${spec.packge}.${spec.name}`);
