@@ -7,7 +7,6 @@ import {
   GetStateEntryMessage,
   InvokeEntryMessage,
   SetStateEntryMessage,
-  SleepEntryMessage,
 } from "../generated/proto/protocol";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -85,13 +84,7 @@ export const completeAwakeableMsgEquality = (
     msg1.serviceName === msg2.serviceName &&
     msg1.instanceKey.equals(msg2.instanceKey) &&
     msg1.invocationId.equals(msg2.invocationId) &&
-    msg1.entryIndex === msg2.entryIndex
+    msg1.entryIndex === msg2.entryIndex &&
+    msg1.payload.equals(msg2.payload)
   );
-};
-
-export const sleepMsgEquality = (
-  msg1: SleepEntryMessage,
-  msg2: SleepEntryMessage
-) => {
-  return msg1.wakeUpTime === msg2.wakeUpTime;
 };

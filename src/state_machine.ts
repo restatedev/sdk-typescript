@@ -42,7 +42,6 @@ import {
   invokeMsgEquality,
   printMessageAsJson,
   setStateMsgEquality,
-  sleepMsgEquality,
   uuidV7FromBuffer,
 } from "./utils/utils";
 import { Failure } from "./generated/proto/protocol";
@@ -1025,7 +1024,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       this.replayIndex,
       SLEEP_ENTRY_MESSAGE_TYPE,
       m,
-      sleepMsgEquality,
+      () => true,
       m.result
     );
   }

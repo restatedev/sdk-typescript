@@ -125,25 +125,3 @@ describe("SleepGreeter: journal mismatch checks on sleep: Completed with awakeab
     );
   });
 });
-
-describe("SleepGreeter: journal mismatch checks on sleep: Completed with different wakeupTime on replay.", () => {
-  it("should call greet", async () => {
-    const result = await new TestDriver(
-      protoMetadata,
-      "TestGreeter",
-      new SleepGreeter(),
-      "/test.TestGreeter/Greet",
-      [
-        startMessage(2),
-        inputMessage(greetRequest("Till")),
-        sleepMessage(wakeupTime + 5, Empty.create({})), // should have been wakeupTime instead of wakeupTime + 5
-      ]
-    ).run();
-
-    expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
-    );
-  });
-});

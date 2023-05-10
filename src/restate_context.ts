@@ -17,7 +17,6 @@ export interface RestateContext {
    */
   invocationId: Buffer;
 
-
   /**
    * Get/retrieve state from the Restate runtime.
    * @param name key of the state to retrieve
