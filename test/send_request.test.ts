@@ -21,7 +21,6 @@ import {
   TestRequest,
   TestResponse,
 } from "../src/generated/proto/test";
-import { Failure } from "../src/generated/proto/protocol";
 import { ProtocolMode } from "../src/generated/proto/discovery";
 
 class ReverseAwaitOrder implements TestGreeter {

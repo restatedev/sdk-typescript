@@ -333,6 +333,10 @@ export function getAwakeableId(entryIndex: number): string {
 }
 
 // a utility function to print the results of a test
-export function printResults(results: Message[]){
-  rlog.info(results.map(el => el.messageType + " - " + printMessageAsJson(el.message) + "\n"));
+export function printResults(results: Message[]) {
+  rlog.info(
+    results.map(
+      (el) => el.messageType + " - " + printMessageAsJson(el.message) + "\n"
+    )
+  );
 }
