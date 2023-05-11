@@ -112,6 +112,7 @@ export class TestDriver<I, O> implements Connection {
     ) {
       rlog.debug("End of test: Flushing test results");
       this.resolveOnClose(this.result);
+      this.end()
     }
   }
 

@@ -12,7 +12,7 @@ import {
   decodeSideEffectFromResult,
   checkError,
   invokeMessage,
-  getAwakeableId,
+  getAwakeableId, printResults, backgroundInvokeMessage
 } from "./protoutils";
 import {
   protoMetadata,
@@ -66,14 +66,32 @@ class SideEffectAndInvokeGreeter implements TestGreeter {
 
     // state
     const result = await ctx.sideEffect<string>(async () => "abcd");
-    rlog.log(result)
 
     const greetingPromise1 = await client.greet(
       TestRequest.create({ name: result })
     );
-    rlog.log(greetingPromise1.greeting);
 
     return TestResponse.create({ greeting: `Hello ${greetingPromise1.greeting}` });
+  }
+}
+
+class SideEffectAndBackgroundInvokeGreeter implements TestGreeter {
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async greet(request: TestRequest): Promise<TestResponse> {
+    const ctx = restate.useContext(this);
+
+    const client = new TestGreeterClientImpl(ctx);
+
+    // state
+    const result = await ctx.sideEffect<string>(async () => "abcd");
+
+    await ctx.inBackground(() => client.greet(
+      TestRequest.create({ name: result })
+    ));
+    const response = await client.greet(TestRequest.create({ name: result }))
+
+    return TestResponse.create({ greeting: `Hello ${response.greeting}` });
   }
 }
 
@@ -333,6 +351,31 @@ describe("SideEffectAndInvokeGreeter: side effect and then invoke. Side effect r
     ).run();
 
     expect(result).toStrictEqual([
+      invokeMessage("test.TestGreeter", "Greet", greetRequest("abcd")),
+      outputMessage(greetResponse("Hello FRANCESCO")),
+    ]);
+  });
+});
+
+// Checks if the side effect flag is put back to false when we are in replay and do not execute the side effect
+describe("SideEffectAndBackgroundInvokeGreeter: side effect and then invoke. Side effect replayed.", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new SideEffectAndBackgroundInvokeGreeter(),
+      "/test.TestGreeter/Greet",
+      [
+        startMessage(1),
+        inputMessage(greetRequest("Till")),
+        completionMessage(1),
+        completionMessage(3, greetResponse("FRANCESCO")),
+      ]
+    ).run();
+
+    expect(result).toStrictEqual([
+      sideEffectMessage("abcd"),
+      backgroundInvokeMessage("test.TestGreeter", "Greet", greetRequest("abcd")),
       invokeMessage("test.TestGreeter", "Greet", greetRequest("abcd")),
       outputMessage(greetResponse("Hello FRANCESCO")),
     ]);
