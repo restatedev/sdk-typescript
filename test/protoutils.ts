@@ -36,6 +36,8 @@ import { TestRequest, TestResponse } from "../src/generated/proto/test";
 import { SideEffectEntryMessage } from "../src/generated/proto/javascript";
 import { Failure } from "../src/generated/proto/protocol";
 import { expect } from "@jest/globals";
+import { rlog } from "../src/utils/logger";
+import { printMessageAsJson } from "../src/utils/utils";
 
 export function startMessage(knownEntries: number): Message {
   return new Message(
@@ -326,6 +328,15 @@ export function getAwakeableId(entryIndex: number): string {
       Buffer.from("123"),
       Buffer.from("abcd"),
       entryIndex
+    )
+  );
+}
+
+// a utility function to print the results of a test
+export function printResults(results: Message[]) {
+  rlog.info(
+    results.map(
+      (el) => el.messageType + " - " + printMessageAsJson(el.message) + "\n"
     )
   );
 }
