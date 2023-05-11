@@ -22,6 +22,7 @@ import {
   TestResponse,
 } from "../src/generated/proto/test";
 import { ProtocolMode } from "../src/generated/proto/discovery";
+import { Failure } from "../src/generated/proto/protocol";
 
 class ReverseAwaitOrder implements TestGreeter {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -89,6 +90,36 @@ class FailingSideEffectInBackgroundInvokeGreeter implements TestGreeter {
     await ctx.inBackground(async () => ctx.sideEffect(async () => 13));
 
     return TestResponse.create({ greeting: `Hello` });
+  }
+}
+
+class FailingForwardGreetingService implements TestGreeter {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async greet(request: TestRequest): Promise<TestResponse> {
+    const ctx = restate.useContext(this);
+
+    const client = new TestGreeterClientImpl(ctx);
+
+    try {
+      // This will get an failure back as a completion or replay message
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const greeting = await client.greet(
+        TestRequest.create({ name: "Francesco" })
+      );
+    } catch (error) {
+      if (error instanceof Error) {
+        // If we call another service and get back a failure.
+        // The failure should be thrown in the user code.
+        return TestResponse.create({
+          greeting: `Hello ${error.message}`,
+        });
+      }
+      throw new Error("Error is not instanceof Error: " + typeof error);
+    }
+
+    return TestResponse.create({
+      greeting: `Hello, you shouldn't be here...`,
+    });
   }
 }
 
@@ -399,6 +430,68 @@ This gives the following error:
 //     checkError(result[3], "Error"); // Error comes from the failed completion
 //   });
 // });
+
+describe("FailingForwardGreetingService: call failed - replay", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new FailingForwardGreetingService(),
+      "/test.TestGreeter/Greet",
+      [
+        startMessage(2),
+        inputMessage(greetRequest("Till")),
+        invokeMessage(
+          "test.TestGreeter",
+          "Greet",
+          greetRequest("Francesco"),
+          undefined,
+          Failure.create({
+            code: 13,
+            message: "Sorry, something went terribly wrong...",
+          })
+        ),
+      ]
+    ).run();
+
+    expect(result).toStrictEqual([
+      outputMessage(
+        greetResponse("Hello Sorry, something went terribly wrong...")
+      ),
+    ]);
+  });
+});
+
+describe("FailingForwardGreetingService: call failed - completion", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new FailingForwardGreetingService(),
+      "/test.TestGreeter/Greet",
+      [
+        startMessage(1),
+        inputMessage(greetRequest("Till")),
+        completionMessage(
+          1,
+          undefined,
+          undefined,
+          Failure.create({
+            code: 13,
+            message: "Sorry, something went terribly wrong...",
+          })
+        ),
+      ]
+    ).run();
+
+    expect(result).toStrictEqual([
+      invokeMessage("test.TestGreeter", "Greet", greetRequest("Francesco")),
+      outputMessage(
+        greetResponse("Hello Sorry, something went terribly wrong...")
+      ),
+    ]);
+  });
+});
 
 // async calls
 describe("BackgroundInvokeGreeter: background call ", () => {

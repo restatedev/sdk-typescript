@@ -1206,7 +1206,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       }
     } else if (failure !== undefined) {
       if (pendingMessage.reject !== undefined) {
-        pendingMessage.reject(failure);
+        pendingMessage.reject(new Error(failure.message));
         this.indexToPendingMsgMap.delete(journalIndex);
       } else {
         // leads to onCallFailure call

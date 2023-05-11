@@ -185,7 +185,8 @@ export function invokeMessage(
   serviceName: string,
   methodName: string,
   parameter: Uint8Array,
-  value?: Uint8Array
+  value?: Uint8Array,
+  failure?: Failure
 ): Message {
   if (value != undefined) {
     return new Message(
@@ -195,6 +196,16 @@ export function invokeMessage(
         methodName: methodName,
         parameter: Buffer.from(parameter),
         value: Buffer.from(value),
+      })
+    );
+  } else if (failure != undefined) {
+    return new Message(
+      INVOKE_ENTRY_MESSAGE_TYPE,
+      InvokeEntryMessage.create({
+        serviceName: serviceName,
+        methodName: methodName,
+        parameter: Buffer.from(parameter),
+        failure: failure,
       })
     );
   } else {
