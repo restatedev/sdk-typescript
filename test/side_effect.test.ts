@@ -16,12 +16,13 @@ import {
 } from "./protoutils";
 import {
   protoMetadata,
-  TestGreeter,
+  TestGreeter, TestGreeterClientImpl,
   TestRequest,
-  TestResponse,
+  TestResponse
 } from "../src/generated/proto/test";
 import { Failure } from "../src/generated/proto/protocol";
 import { SIDE_EFFECT_ENTRY_MESSAGE_TYPE } from "../src/types/protocol";
+import { rlog } from "../src/utils/logger";
 
 class SideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: string) {}
@@ -54,6 +55,28 @@ class NumericSideEffectGreeter implements TestGreeter {
     return TestResponse.create({ greeting: `Hello ${response}` });
   }
 }
+
+class SideEffectAndInvokeGreeter implements TestGreeter {
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async greet(request: TestRequest): Promise<TestResponse> {
+    const ctx = restate.useContext(this);
+
+    const client = new TestGreeterClientImpl(ctx);
+
+    // state
+    const result = await ctx.sideEffect<string>(async () => "abcd");
+    rlog.log(result)
+
+    const greetingPromise1 = await client.greet(
+      TestRequest.create({ name: result })
+    );
+    rlog.log(greetingPromise1.greeting);
+
+    return TestResponse.create({ greeting: `Hello ${greetingPromise1.greeting}` });
+  }
+}
+
 class FailingSideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: number) {}
 
@@ -289,6 +312,52 @@ describe("SideEffectGreeter: with completion", () => {
     expect(result).toStrictEqual([
       sideEffectMessage("Francesco"),
       outputMessage(greetResponse("Hello Francesco")),
+    ]);
+  });
+});
+
+// Checks if the side effect flag is put back to false when we are in replay and do not execute the side effect
+describe("SideEffectAndInvokeGreeter: side effect and then invoke. Side effect replayed.", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new SideEffectAndInvokeGreeter(),
+      "/test.TestGreeter/Greet",
+      [
+        startMessage(2),
+        inputMessage(greetRequest("Till")),
+        sideEffectMessage("abcd"),
+        completionMessage(2, greetResponse("FRANCESCO")),
+      ]
+    ).run();
+
+    expect(result).toStrictEqual([
+      invokeMessage("test.TestGreeter", "Greet", greetRequest("abcd")),
+      outputMessage(greetResponse("Hello FRANCESCO")),
+    ]);
+  });
+});
+
+describe("SideEffectAndInvokeGreeter: side effect and then invoke. Side effect completed.", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new SideEffectAndInvokeGreeter(),
+      "/test.TestGreeter/Greet",
+      [
+        startMessage(1),
+        inputMessage(greetRequest("Till")),
+        completionMessage(1),
+        completionMessage(2, greetResponse("FRANCESCO")),
+      ]
+    ).run();
+
+    expect(result).toStrictEqual([
+      sideEffectMessage("abcd"),
+      invokeMessage("test.TestGreeter", "Greet", greetRequest("abcd")),
+      outputMessage(greetResponse("Hello FRANCESCO")),
     ]);
   });
 });

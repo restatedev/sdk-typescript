@@ -596,6 +596,10 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
       if (this.state === ExecutionState.REPLAYING) {
         // In replay mode: side effect will be ignored. Expecting completion.
+
+        // We put the flag back to false.
+        this.inSideEffectFlag = false;
+
         // During replay, the promise for the runtime ack will get resolved
         // with a SideEffectEntryMessage with a value of type T or a Failure.
         return promiseToResolve.then(

@@ -1,9 +1,10 @@
 "use strict";
 
 import {
+  COMPLETION_MESSAGE_TYPE,
   OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
   StartMessage,
-  SUSPENSION_MESSAGE_TYPE,
+  SUSPENSION_MESSAGE_TYPE
 } from "../src/types/protocol";
 import { RestateDuplexStream } from "../src/connection/restate_duplex_stream";
 import * as restate from "../src/public_api";
@@ -79,7 +80,13 @@ export class TestDriver<I, O> implements Connection {
 
     // Pipe messages through the state machine
     this.entries.forEach((el) => {
-      this.desm.onIncomingMessage(el);
+      // First eagerly send the replay messages, then send the completion messages at the end of the task queue (setTimeout)
+      if(el.messageType !== COMPLETION_MESSAGE_TYPE){
+        this.desm.onIncomingMessage(el);
+      } else {
+        // we use set timeout here to add the sending of the messages to the end of the task queue
+        setTimeout(() => this.desm.onIncomingMessage(el));
+      }
     });
 
     return this.getResultPromise;
