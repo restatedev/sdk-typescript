@@ -65,7 +65,7 @@ export interface RestateContext {
    *   client.greet(Request.create({ name: "Peter" }))
    * )
    */
-  inBackground<T>(call: () => Promise<T>): Promise<void>;
+  inBackground<T>(call: () => Promise<T>, delayMillis?: number): void;
 
   /**
    * Execute a side effect and store the result in the Restate runtime.

@@ -123,6 +123,39 @@ class FailingForwardGreetingService implements TestGreeter {
   }
 }
 
+const delayedCallTime = 1835661783000;
+class DelayedInBackgroundInvokeGreeter implements TestGreeter {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async greet(request: TestRequest): Promise<TestResponse> {
+    const ctx = restate.useContext(this);
+
+    const client = new TestGreeterClientImpl(ctx);
+    await ctx.inBackground(
+      () => client.greet(TestRequest.create({ name: "Francesco" })),
+      delayedCallTime - Date.now()
+    );
+
+    return TestResponse.create({ greeting: `Hello` });
+  }
+}
+class DelayedAndNormalInBackgroundInvokesGreeter implements TestGreeter {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async greet(request: TestRequest): Promise<TestResponse> {
+    const ctx = restate.useContext(this);
+
+    const client = new TestGreeterClientImpl(ctx);
+    await ctx.inBackground(
+      () => client.greet(TestRequest.create({ name: "Francesco" })),
+      delayedCallTime - Date.now()
+    );
+    await ctx.inBackground(() =>
+      client.greet(TestRequest.create({ name: "Francesco" }))
+    );
+
+    return TestResponse.create({ greeting: `Hello` });
+  }
+}
+
 describe("ReverseAwaitOrder: None completed", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
@@ -666,6 +699,100 @@ describe("FailingSideEffectInBackgroundInvokeGreeter: failing background call ",
       result[0],
       "Cannot do a side effect from within a background call. Context method inBackground() can only be used to invoke other services in the background. e.g. ctx.inBackground(() => client.greet(my_request))"
     );
+  });
+});
+
+describe("DelayedInBackgroundInvokeGreeter: delayed in back ground call without completion", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new DelayedInBackgroundInvokeGreeter(),
+      "/test.TestGreeter/Greet",
+      [startMessage(1), inputMessage(greetRequest("Till"))]
+    ).run();
+
+    expect(result).toStrictEqual([
+      backgroundInvokeMessage(
+        "test.TestGreeter",
+        "Greet",
+        greetRequest("Francesco"),
+        delayedCallTime
+      ),
+      outputMessage(greetResponse("Hello")),
+    ]);
+  });
+});
+
+describe("DelayedInBackgroundInvokeGreeter: delayed in background call with replay", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new DelayedInBackgroundInvokeGreeter(),
+      "/test.TestGreeter/Greet",
+      [
+        startMessage(2),
+        inputMessage(greetRequest("Till")),
+        backgroundInvokeMessage(
+          "test.TestGreeter",
+          "Greet",
+          greetRequest("Francesco"),
+          delayedCallTime
+        ),
+      ]
+    ).run();
+
+    expect(result).toStrictEqual([outputMessage(greetResponse("Hello"))]);
+  });
+});
+
+describe("DelayedInBackgroundInvokeGreeter: delayed in background call with journal mismatch", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new DelayedInBackgroundInvokeGreeter(),
+      "/test.TestGreeter/Greet",
+      [
+        startMessage(2),
+        inputMessage(greetRequest("Till")),
+        invokeMessage("test.TestGreeter", "Greet", greetRequest("Francesco")),
+      ]
+    ).run();
+
+    expect(result.length).toStrictEqual(1);
+    checkError(
+      result[0],
+      "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    );
+  });
+});
+
+describe("DelayedAndNormalInBackgroundInvokesGreeter: two async calls. One with delay, one normal.", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new DelayedAndNormalInBackgroundInvokesGreeter(),
+      "/test.TestGreeter/Greet",
+      [startMessage(1), inputMessage(greetRequest("Till"))]
+    ).run();
+
+    expect(result).toStrictEqual([
+      backgroundInvokeMessage(
+        "test.TestGreeter",
+        "Greet",
+        greetRequest("Francesco"),
+        delayedCallTime
+      ),
+      backgroundInvokeMessage(
+        "test.TestGreeter",
+        "Greet",
+        greetRequest("Francesco")
+      ),
+      outputMessage(greetResponse("Hello")),
+    ]);
   });
 });
 

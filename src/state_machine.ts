@@ -125,6 +125,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   // So to be able to know if a request is a background request or not, the user first sets this flag:
   // e.g.: ctx.inBackground(() => client.greet(request))
   private inBackgroundCallFlag = false;
+  private inBackgroundCallDelay = 0;
 
   // This flag is set to true when we are executing code that is inside a side effect.
   // We use this flag to prevent the user from doing operations on the context from within a side effect.
@@ -424,11 +425,19 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     // Validation check that we are not in a sideEffect is done in inBackground() already.
     this.incrementJournalIndex();
 
-    const msg = BackgroundInvokeEntryMessage.create({
-      serviceName: service,
-      methodName: method,
-      parameter: Buffer.from(data),
-    });
+    const msg =
+      this.inBackgroundCallDelay > 0
+        ? BackgroundInvokeEntryMessage.create({
+            serviceName: service,
+            methodName: method,
+            parameter: Buffer.from(data),
+            invokeTime: Date.now() + this.inBackgroundCallDelay,
+          })
+        : BackgroundInvokeEntryMessage.create({
+            serviceName: service,
+            methodName: method,
+            parameter: Buffer.from(data),
+          });
 
     if (this.state === ExecutionState.REPLAYING) {
       // In replay mode: background invoke will not be forwarded to the runtime.
@@ -522,26 +531,28 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       });
   }
 
-  /**
-   * When you call inBackground, a flag is set that you want the nested call to be executed in the background.
-   * Then you use the client to do the call to the other Restate service.
-   * When you do the call, the overridden request method gets called.
-   * That one checks if the inBackgroundFlag is set.
-   * If so, it doesn't care about a response and just returns back an empty UInt8Array, and otherwise it waits for the response.
-   * The reason for this is that we use the generated clients of proto-ts to do invokes.
-   * And we override the request method that is called by that client to do the Restate related things.
-   * The request method of the proto-ts client requires returning a Promise.
-   * So until we find a cleaner solution for this, in which we can still use the generated clients but are not required to return a promise,
-   * this will return a void Promise.
-   * @param call
-   */
-  async inBackground<T>(call: () => Promise<T>): Promise<void> {
+  // When you call inBackground, a flag is set that you want the nested call to be executed in the background.
+  // Then you use the client to do the call to the other Restate service.
+  // When you do the call, the overridden request method gets called.
+  // That one checks if the inBackgroundFlag is set.
+  // If so, it doesn't care about a response and just returns back an empty UInt8Array, and otherwise it waits for the response.
+  // The reason for this is that we use the generated clients of proto-ts to do invokes.
+  // And we override the request method that is called by that client to do the Restate related things.
+  // The request method of the proto-ts client requires returning a Promise.
+  // So until we find a cleaner solution for this, in which we can still use the generated clients but are not required to return a promise,
+  // this will return a void Promise.
+  async inBackground<T>(
+    call: () => Promise<T>,
+    delayMillis?: number
+  ): Promise<void> {
     if (!this.isValidState("inBackground")) {
       return Promise.reject();
     }
 
     this.inBackgroundCallFlag = true;
+    this.inBackgroundCallDelay = delayMillis || 0;
     await call();
+    this.inBackgroundCallDelay = 0;
     this.inBackgroundCallFlag = false;
   }
 

@@ -223,16 +223,27 @@ export function invokeMessage(
 export function backgroundInvokeMessage(
   serviceName: string,
   methodName: string,
-  parameter: Uint8Array
+  parameter: Uint8Array,
+  invokeTime?: number
 ): Message {
-  return new Message(
-    BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
-    BackgroundInvokeEntryMessage.create({
-      serviceName: serviceName,
-      methodName: methodName,
-      parameter: Buffer.from(parameter),
-    })
-  );
+  return invokeTime
+    ? new Message(
+        BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
+        BackgroundInvokeEntryMessage.create({
+          serviceName: serviceName,
+          methodName: methodName,
+          parameter: Buffer.from(parameter),
+          invokeTime: invokeTime,
+        })
+      )
+    : new Message(
+        BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
+        BackgroundInvokeEntryMessage.create({
+          serviceName: serviceName,
+          methodName: methodName,
+          parameter: Buffer.from(parameter),
+        })
+      );
 }
 
 export function decodeSideEffectFromResult(msg: Uint8Array | ProtocolMessage) {
