@@ -2,6 +2,7 @@
 
 import { RestateContext, setContext } from "../restate_context";
 import { FileDescriptorProto } from "ts-proto-descriptors";
+import { SuspensionMessage } from "../generated/proto/protocol";
 
 export class GrpcServiceMethod<I, O> {
   constructor(
@@ -23,8 +24,16 @@ export class GrpcService {
 }
 
 export class HostedGrpcServiceMethod<I, O> {
+  // used to fail the invocation on an error
   /* eslint-disable @typescript-eslint/no-explicit-any */
   public reject!: (reason: any) => void;
+  // used to resolve the invocation on suspensions (so when we have no output response yet)
+  public resolve!: (
+    value:
+      | Uint8Array
+      | SuspensionMessage
+      | PromiseLike<Uint8Array | SuspensionMessage>
+  ) => void;
 
   constructor(
     readonly instance: unknown,
@@ -32,12 +41,14 @@ export class HostedGrpcServiceMethod<I, O> {
     readonly method: GrpcServiceMethod<I, O>
   ) {}
 
+  // The end of an invoke is either a response (Uint8Array) or a SuspensionMessage
   async invoke(
     context: RestateContext,
     inBytes: Uint8Array
-  ): Promise<Uint8Array> {
-    return new Promise<Uint8Array>((resolve, reject) => {
+  ): Promise<Uint8Array | SuspensionMessage> {
+    return new Promise<Uint8Array | SuspensionMessage>((resolve, reject) => {
       this.reject = reject;
+      this.resolve = resolve;
       const instanceWithContext = setContext(this.instance, context);
       const input = this.method.inputDecoder(inBytes);
       this.method

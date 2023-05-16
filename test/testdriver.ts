@@ -88,6 +88,9 @@ export class TestDriver<I, O> implements Connection {
         setTimeout(() => this.desm.onIncomingMessage(el));
       }
     });
+    // Set the input channel to closed a bit after sending the messages
+    // to make the service finish up the work it can do and suspend or send back a response.
+    setTimeout(() => this.desm.setInputChannelToClosed(), 50);
 
     return this.getResultPromise;
   }
@@ -112,7 +115,6 @@ export class TestDriver<I, O> implements Connection {
     ) {
       rlog.debug("End of test: Flushing test results");
       this.resolveOnClose(this.result);
-      this.end();
     }
   }
 

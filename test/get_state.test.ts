@@ -51,6 +51,23 @@ describe("GetStateGreeter: With GetStateEntry already complete", () => {
   });
 });
 
+describe("GetStateGreeter: With GetStateEntry bidi stream sends suspension", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new GetStateGreeter(),
+      "/test.TestGreeter/Greet",
+      [startMessage(1), inputMessage(greetRequest("Till"))]
+    ).run();
+
+    expect(result).toStrictEqual([
+      getStateMessage("STATE"),
+      suspensionMessage([1]),
+    ]);
+  });
+});
+
 describe("GetStateGreeter: Request-response GetStateEntry", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(

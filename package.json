@@ -26,7 +26,7 @@
   "scripts": {
     "proto": "npx buf mod update && npx buf generate",
     "build": "tsc --noEmitOnError && tsc --p ./examples/ --noEmit",
-    "test": "jest --silent",
+    "test": "jest --silent --maxWorkers=1",
     "lint": "eslint --ignore-path .eslintignore --ext .ts .",
     "format": "prettier --ignore-path .eslintignore --write \"**/*.+(js|ts|json)\"",
     "example": "RESTATE_DEBUG_LOG=LOG ts-node-dev --respawn --transpile-only ./examples/example.ts",
