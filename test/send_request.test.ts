@@ -22,7 +22,11 @@ import {
   TestResponse,
 } from "../src/generated/proto/test";
 import { ProtocolMode } from "../src/generated/proto/discovery";
-import { Failure } from "../src/generated/proto/protocol";
+import {
+  BackgroundInvokeEntryMessage,
+  Failure,
+} from "../src/generated/proto/protocol";
+import { BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE } from "../src/types/protocol";
 
 class ReverseAwaitOrder implements TestGreeter {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -712,15 +716,17 @@ describe("DelayedInBackgroundInvokeGreeter: delayed in back ground call without 
       [startMessage(1), inputMessage(greetRequest("Till"))]
     ).run();
 
-    expect(result).toStrictEqual([
-      backgroundInvokeMessage(
-        "test.TestGreeter",
-        "Greet",
-        greetRequest("Francesco"),
-        delayedCallTime
-      ),
-      outputMessage(greetResponse("Hello")),
-    ]);
+    // Delayed call time is slightly larger or smaller based on test execution speed... So test the range
+    expect(result[0].messageType).toStrictEqual(
+      BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE
+    );
+    const msg = result[0].message as BackgroundInvokeEntryMessage;
+    expect(msg.serviceName).toStrictEqual("test.TestGreeter");
+    expect(msg.methodName).toStrictEqual("Greet");
+    expect(msg.parameter.toString().trim()).toStrictEqual("Francesco");
+    expect(msg.invokeTime).toBeGreaterThanOrEqual(delayedCallTime);
+    expect(msg.invokeTime).toBeLessThanOrEqual(delayedCallTime + 10);
+    expect(result[1]).toStrictEqual(outputMessage(greetResponse("Hello")));
   });
 });
 
@@ -779,20 +785,23 @@ describe("DelayedAndNormalInBackgroundInvokesGreeter: two async calls. One with 
       [startMessage(1), inputMessage(greetRequest("Till"))]
     ).run();
 
-    expect(result).toStrictEqual([
-      backgroundInvokeMessage(
-        "test.TestGreeter",
-        "Greet",
-        greetRequest("Francesco"),
-        delayedCallTime
-      ),
+    expect(result[0].messageType).toStrictEqual(
+      BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE
+    );
+    const msg = result[0].message as BackgroundInvokeEntryMessage;
+    expect(msg.serviceName).toStrictEqual("test.TestGreeter");
+    expect(msg.methodName).toStrictEqual("Greet");
+    expect(msg.parameter.toString().trim()).toStrictEqual("Francesco");
+    expect(msg.invokeTime).toBeGreaterThanOrEqual(delayedCallTime);
+    expect(msg.invokeTime).toBeLessThanOrEqual(delayedCallTime + 10);
+    expect(result[1]).toStrictEqual(
       backgroundInvokeMessage(
         "test.TestGreeter",
         "Greet",
         greetRequest("Francesco")
-      ),
-      outputMessage(greetResponse("Hello")),
-    ]);
+      )
+    );
+    expect(result[2]).toStrictEqual(outputMessage(greetResponse("Hello")));
   });
 });
 

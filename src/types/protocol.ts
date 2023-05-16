@@ -15,7 +15,6 @@ import {
   StartMessage,
   SuspensionMessage,
 } from "../generated/proto/protocol";
-import { ProtocolMode } from "../generated/proto/discovery";
 
 // Re-export the protobuf messages.
 export {
@@ -118,23 +117,10 @@ export class AwakeableIdentifier {
 
 // These message types will trigger sending a suspension message from the runtime
 // for each of the protocol modes
-export const SUSPENSION_TRIGGERS: Map<ProtocolMode, bigint[]> = new Map([
-  [
-    ProtocolMode.BIDI_STREAM,
-    [
-      INVOKE_ENTRY_MESSAGE_TYPE,
-      AWAKEABLE_ENTRY_MESSAGE_TYPE,
-      SLEEP_ENTRY_MESSAGE_TYPE,
-    ],
-  ],
-  [
-    ProtocolMode.REQUEST_RESPONSE,
-    [
-      INVOKE_ENTRY_MESSAGE_TYPE,
-      GET_STATE_ENTRY_MESSAGE_TYPE,
-      SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-      AWAKEABLE_ENTRY_MESSAGE_TYPE,
-      SLEEP_ENTRY_MESSAGE_TYPE,
-    ],
-  ],
-]);
+export const SUSPENSION_TRIGGERS: bigint[] = [
+  INVOKE_ENTRY_MESSAGE_TYPE,
+  GET_STATE_ENTRY_MESSAGE_TYPE,
+  SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+  AWAKEABLE_ENTRY_MESSAGE_TYPE,
+  SLEEP_ENTRY_MESSAGE_TYPE,
+];

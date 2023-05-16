@@ -143,8 +143,13 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   /* eslint-disable @typescript-eslint/no-explicit-any */
   private outOfOrderReplayMessages: Map<number, CompletionResult> = new Map();
 
-  private suspensionTriggers!: bigint[];
-  private readonly suspensionMillis;
+  // Suspension timeout that gets set and cleared based on completion messages;
+  private suspensionTimeout?: NodeJS.Timeout;
+
+  // Whether the input channel (runtime -> service) is closed
+  // If it is closed, then we suspend immediately upon the next suspension point
+  // If it is open, then we suspend later because we might still get completions
+  private inputChannelClosed = false;
 
   constructor(
     private readonly connection: Connection,
@@ -152,27 +157,11 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     private readonly protocolMode: ProtocolMode
   ) {
     connection.onMessage(this.onIncomingMessage.bind(this));
-    connection.onClose(this.onClose.bind(this));
+    connection.onClose(this.setInputChannelToClosed.bind(this));
     this.serviceName = method.service;
 
-    if (SUSPENSION_TRIGGERS.has(protocolMode)) {
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      this.suspensionTriggers = SUSPENSION_TRIGGERS.get(protocolMode)!;
-    } else {
-      // cannot use method.reject here because it is not defined yet!
-      // This will also not get picked up in onCallFailure because it happens earlier.
-      // So we need to close the state machine and the connection and throw an error.
-      this.onClose();
-      this.connection.end();
-      throw new Error(
-        "Unknown protocol mode. Protocol mode does not have suspension triggers defined."
-      );
-    }
-    this.suspensionMillis =
-      this.protocolMode === ProtocolMode.REQUEST_RESPONSE ? 0 : 100;
-
     connection.addOnErrorListener(() => {
-      this.onClose();
+      this.onError();
     });
   }
 
@@ -295,8 +284,6 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       throw new Error();
     }
 
-    let suspensionTimeout: NodeJS.Timeout;
-
     let awakeableIdentifier;
 
     const awakeablePromise = new Promise<Buffer>((resolve, reject) => {
@@ -332,26 +319,10 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
             msg
           )}`
       );
-      const timeout = this.send(AWAKEABLE_ENTRY_MESSAGE_TYPE, msg);
-
-      // an awakeable should trigger a suspension
-      if (timeout) {
-        suspensionTimeout = timeout;
-      } else {
-        throw new Error(
-          "Illegal state: An awakeable should always set a suspension timeout"
-        );
-      }
-    })
-      .then<T>((result: Buffer) => {
-        return JSON.parse(result.toString()) as T;
-      })
-      .finally(() => {
-        // If the promise gets completed before the suspension gets triggered, then clear the timeout
-        if (suspensionTimeout) {
-          clearTimeout(suspensionTimeout);
-        }
-      });
+      this.send(AWAKEABLE_ENTRY_MESSAGE_TYPE, msg);
+    }).then<T>((result: Buffer) => {
+      return JSON.parse(result.toString()) as T;
+    });
 
     return {
       id: JSON.stringify(awakeableIdentifier),
@@ -478,8 +449,6 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       return Promise.reject();
     }
 
-    let suspensionTimeout: NodeJS.Timeout;
-
     return new Promise((resolve, reject) => {
       this.incrementJournalIndex();
 
@@ -509,26 +478,10 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
             msg
           )}`
       );
-      const timeout = this.send(INVOKE_ENTRY_MESSAGE_TYPE, msg);
-
-      // Invoke should trigger a suspension
-      if (timeout) {
-        suspensionTimeout = timeout;
-      } else {
-        throw new Error(
-          "Illegal state: An invoke should always set a suspension timeout"
-        );
-      }
-    })
-      .then((result) => {
-        return result as Uint8Array;
-      })
-      .finally(() => {
-        // If the promise gets completed before the suspension gets triggered, then clear the timeout
-        if (suspensionTimeout) {
-          clearTimeout(suspensionTimeout);
-        }
-      });
+      this.send(INVOKE_ENTRY_MESSAGE_TYPE, msg);
+    }).then((result) => {
+      return result as Uint8Array;
+    });
   }
 
   // When you call inBackground, a flag is set that you want the nested call to be executed in the background.
@@ -568,7 +521,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
           message: `You cannot do sideEffect calls from within a side effect.`,
         });
         this.method.reject(nestedSideEffectFailure);
-        this.onClose();
+        this.onError();
         return;
       } else if (this.inBackgroundCallFlag) {
         const sideEffectInBackgroundFailure: Failure = Failure.create({
@@ -579,7 +532,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
             "e.g. ctx.inBackground(() => client.greet(my_request))",
         });
         this.method.reject(sideEffectInBackgroundFailure);
-        this.onClose();
+        this.onError();
         return;
       }
 
@@ -701,8 +654,6 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       return Promise.reject();
     }
 
-    let suspensionTimeout: NodeJS.Timeout;
-
     return new Promise<void>((resolve, reject) => {
       this.incrementJournalIndex();
 
@@ -728,18 +679,9 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
             msg
           )}`
       );
-      const timeout = this.send(SLEEP_ENTRY_MESSAGE_TYPE, msg);
+      this.send(SLEEP_ENTRY_MESSAGE_TYPE, msg);
 
-      if (timeout) {
-        suspensionTimeout = timeout;
-      } else {
-        throw new Error(
-          "Illegal state: A sleep should always set a suspension timeout"
-        );
-      }
       return;
-    }).finally(() => {
-      clearTimeout(suspensionTimeout);
     });
   }
 
@@ -751,7 +693,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     completedFlag?: boolean,
     protocolVersion?: number,
     requiresAckFlag?: boolean
-  ): NodeJS.Timeout | void {
+  ): void {
     if (this.state === ExecutionState.CLOSED) {
       rlog.debug(
         "State machine is closed. Not sending message " +
@@ -775,41 +717,46 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     // If the message type requires a suspension for this protocol mode (set in constructor),
     // then set a timeout to send the suspension message.
     // The suspension will only be sent if the timeout is not canceled due to a completion.
-    if (this.suspensionTriggers.includes(messageType)) {
-      return setTimeout(() => {
-        const completableIndices = [...this.indexToPendingMsgMap.keys()];
-
-        // If the state is not processing anymore then we either already send a suspension
-        // or something else bad happened...
-        if (this.state === ExecutionState.PROCESSING) {
-          // There need to be journal entries to complete, otherwise this timeout should have been removed.
-          if (completableIndices.length > 0) {
-            this.connection.send(
-              new Message(
-                SUSPENSION_MESSAGE_TYPE,
-                SuspensionMessage.create({
-                  entryIndexes: completableIndices,
-                }),
-                undefined,
-                undefined,
-                undefined
-              )
-            );
-
-            this.onClose();
-            this.connection.end();
-          } else {
-            // leads to onCallFailure call
-            this.method.reject(
-              new Error(
-                "Illegal state: Not able to send suspension message because no pending promises. " +
-                  "This timeout should have been removed."
-              )
-            );
-          }
-        }
-      }, this.suspensionMillis);
+    if (SUSPENSION_TRIGGERS.includes(messageType)) {
+      this.scheduleSuspensionTimeout();
     }
+  }
+
+  scheduleSuspensionTimeout(): void {
+    // If there was already a timeout set, we want to reset the time to postpone suspension as long as we make progress.
+    // So we first clear the old timeout, and then we set a new one.
+    if (this.suspensionTimeout) {
+      clearTimeout(this.suspensionTimeout);
+    }
+
+    // Set a new suspension with a new timeout
+    // The suspension will only be sent if the timeout is not canceled due to a completion.
+    this.suspensionTimeout = setTimeout(() => {
+      const completableIndices = [...this.indexToPendingMsgMap.keys()];
+
+      // If the state is not processing anymore then we either already send a suspension
+      // or something else bad happened...
+      if (this.state === ExecutionState.PROCESSING) {
+        // There need to be journal entries to complete, otherwise this timeout should have been removed.
+        if (completableIndices.length > 0) {
+          // A suspension message is the end of the invocation.
+          // Resolve the root call with the suspension message
+          // This will lead to a onCallSuccess call where this msg will be sent.
+          const msg = SuspensionMessage.create({
+            entryIndexes: completableIndices,
+          });
+          this.method.resolve(msg);
+        } else {
+          // leads to onCallFailure call
+          this.method.reject(
+            new Error(
+              "Illegal state: Not able to send suspension message because no pending promises. " +
+                "This timeout should have been removed."
+            )
+          );
+        }
+      }
+    }, this.getSuspensionMillis());
   }
 
   // Called for every incoming message from the runtime: start messages, input messages and replay messages.
@@ -840,7 +787,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         break;
       }
       case SLEEP_ENTRY_MESSAGE_TYPE: {
-        this.handleSleepCompletionMessage(msg.message as SleepEntryMessage);
+        this.handleSleepMessage(msg.message as SleepEntryMessage);
         break;
       }
       case INVOKE_ENTRY_MESSAGE_TYPE: {
@@ -918,15 +865,6 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
           this.logPrefix
         } Received new completion from the runtime: ${printMessageAsJson(m)}`
     );
-
-    if (this.state === ExecutionState.REPLAYING) {
-      // leads to onCallFailure call
-      this.method.reject(
-        new Error(
-          "Illegal state: received completion message but still in replay state."
-        )
-      );
-    }
 
     // It is possible that value, empty and failure are all undefined.
     this.handlePendingMessage(
@@ -1045,7 +983,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     );
   }
 
-  handleSleepCompletionMessage(m: SleepEntryMessage) {
+  handleSleepMessage(m: SleepEntryMessage) {
     this.checkIfInReplay();
     this.handlePendingMessage(
       this.replayIndex,
@@ -1103,7 +1041,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     /* eslint-disable @typescript-eslint/no-explicit-any */
     reject?: (value: any) => void
   ) {
-    // If we are replaying, the completion may have arrived before the user code got there.
+    // If we are replaying, the replayed message may have arrived before the user code got there.
     // Otherwise, add to map.
     // TODO make this more efficient and only add it to the map if we don't have the result ready
     this.indexToPendingMsgMap.set(
@@ -1148,17 +1086,53 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     const optionalPendingMessage = this.indexToPendingMsgMap.get(journalIndex);
 
     if (optionalPendingMessage === undefined) {
-      // During replay, the replay completion messages might arrive before we got to that point in the user code.
+      // During replay, the replay messages might arrive before we got to that point in the user code.
       // In that case, we wouldn't find a promise yet. So add the message to the map.
       if (this.state === ExecutionState.REPLAYING) {
-        this.outOfOrderReplayMessages.set(journalIndex, {
-          journalIndex: journalIndex,
-          messageType: resultMessageType,
-          message: resultMessage,
-          comparisonFct: comparisonFct,
-          value: value,
-          failure: failure,
-        });
+        // It is possible that we first get the uncompleted replay messages (e.g. unfinished sleep) and then the completion message of the sleep
+        // before we are fully through the replay from the user code perspective.
+        // In this case we need to update the value/failure of the replay message in outOfOrderReplayMessages
+        // We keep the rest of the info to do journal mismatch checks.
+        if (this.outOfOrderReplayMessages.has(journalIndex)) {
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+          if (resultMessageType !== COMPLETION_MESSAGE_TYPE) {
+            this.method.reject(
+              new Error(
+                `Illegal state: Received multiple replay messages for the same journal index.`
+              )
+            );
+          }
+
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+          const replayMsg = this.outOfOrderReplayMessages.get(journalIndex)!;
+          if (
+            replayMsg.value !== undefined ||
+            replayMsg.failure !== undefined
+          ) {
+            this.method.reject(
+              new Error(
+                `Illegal state: Received a completion message a journal index that had already been completed by a replay message`
+              )
+            );
+          }
+          this.outOfOrderReplayMessages.set(journalIndex, {
+            journalIndex: journalIndex,
+            messageType: replayMsg.messageType,
+            message: replayMsg.message,
+            comparisonFct: replayMsg.comparisonFct,
+            value: value, // optional value based on completion message
+            failure: failure, // optional failure based on completion message
+          });
+        } else {
+          this.outOfOrderReplayMessages.set(journalIndex, {
+            journalIndex: journalIndex,
+            messageType: resultMessageType,
+            message: resultMessage,
+            comparisonFct: comparisonFct,
+            value: value,
+            failure: failure,
+          });
+        }
         return;
       } else {
         // leads to onCallFailure call
@@ -1174,6 +1148,9 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
     if (
       this.state === ExecutionState.REPLAYING &&
+      // We can get completions during replay if the user code has progressed slower than the replay of journal messages
+      // The user code decides when to switch to "PROCESSING". This is not based on the replay of the journal entries.
+      resultMessageType !== COMPLETION_MESSAGE_TYPE &&
       (pendingMessage.messageType !== resultMessageType ||
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         !comparisonFct(resultMessage, pendingMessage.message! as I))
@@ -1189,24 +1166,37 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
           resultMessage
         )}`)
       );
+      return;
     }
 
     // If we do not require a result, then just remove the message from the map.
     // Replay validation for journal mismatches has succeeded when we end up here.
-    else if (
+    if (
       pendingMessage.messageType === SET_STATE_ENTRY_MESSAGE_TYPE ||
       pendingMessage.messageType === CLEAR_STATE_ENTRY_MESSAGE_TYPE ||
       pendingMessage.messageType === COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE ||
       pendingMessage.messageType === BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE
     ) {
       this.indexToPendingMsgMap.delete(journalIndex);
+      return;
+    }
+
+    // In case of a side effect completion, we don't get a value or failure back but still need to ack the completion.
+    if (
+      resultMessageType === COMPLETION_MESSAGE_TYPE &&
+      pendingMessage.messageType === SIDE_EFFECT_ENTRY_MESSAGE_TYPE
+    ) {
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      pendingMessage.resolve!(undefined);
+      this.indexToPendingMsgMap.delete(journalIndex);
     }
 
     // If we do require a result and have a result then resolve or reject the promise and remove the pending message from the map
-    else if (value !== undefined) {
+    if (value !== undefined) {
       if (pendingMessage.resolve !== undefined) {
         pendingMessage.resolve(value);
         this.indexToPendingMsgMap.delete(journalIndex);
+        return;
       } else {
         // leads to onCallFailure call
         this.method.reject(
@@ -1214,11 +1204,13 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
             "SDK bug: No resolve method found to resolve the pending message."
           )
         );
+        return;
       }
     } else if (failure !== undefined) {
       if (pendingMessage.reject !== undefined) {
         pendingMessage.reject(new Error(failure.message));
         this.indexToPendingMsgMap.delete(journalIndex);
+        return;
       } else {
         // leads to onCallFailure call
         this.method.reject(
@@ -1226,14 +1218,28 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
             "SDK bug: No resolve method found to resolve the pending message."
           )
         );
+        return;
       }
     }
-    // In case of a side effect completion, we don't get a value or failure back but still need to ack the completion.
-    else if (pendingMessage.messageType === SIDE_EFFECT_ENTRY_MESSAGE_TYPE) {
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      pendingMessage.resolve!(undefined);
-      this.indexToPendingMsgMap.delete(journalIndex);
+
+    // Clear the suspension timeout if this completion message leads to zero pending promises
+    // In this case, we are not waiting on any completions from the runtime
+    if (this.suspensionTimeout && this.indexToPendingMsgMap.size === 0) {
+      clearTimeout(this.suspensionTimeout);
     }
+  }
+
+  // Suspension timeouts:
+  // Lambda case: suspend immediately when control is back in the user code
+  // Bidi streaming case:
+  // - suspend after 10 seconds if input channel is still open (can still get completions)
+  // - suspend immediately if input channel is closed (cannot get completions)
+  getSuspensionMillis(): number {
+    return this.protocolMode === ProtocolMode.REQUEST_RESPONSE
+      ? 0
+      : this.inputChannelClosed
+      ? 0
+      : 1000;
   }
 
   /**
@@ -1252,7 +1258,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
           message: `You cannot do ${callType} calls from within a side effect.`,
         })
       );
-      this.onClose();
+      this.onError();
       return false;
     } else if (this.inBackgroundCallFlag) {
       this.method.reject(
@@ -1263,23 +1269,41 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
           e.g. ctx.inBackground(() => client.greet(my_request))`,
         })
       );
-      this.onClose();
+      this.onError();
       return false;
     } else {
       return true;
     }
   }
 
-  onCallSuccess(result: Uint8Array) {
-    const msg = OutputStreamEntryMessage.create({ value: Buffer.from(result) });
-    rlog.debugExpensive(
-      () =>
-        `${
-          this.logPrefix
-        } Call ended successful, output message: ${printMessageAsJson(msg)}`
-    );
-    // We send the message straight over the connection
-    this.connection.send(new Message(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, msg));
+  onCallSuccess(result: Uint8Array | SuspensionMessage) {
+    if (result instanceof Uint8Array) {
+      const msg = OutputStreamEntryMessage.create({
+        value: Buffer.from(result),
+      });
+      rlog.debugExpensive(
+        () =>
+          `${
+            this.logPrefix
+          } Call ended successful, output message: ${printMessageAsJson(msg)}`
+      );
+      // We send the message straight over the connection
+      this.connection.send(new Message(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, msg));
+    } else {
+      rlog.debugExpensive(
+        () => `${this.logPrefix} Call suspending: ${printMessageAsJson(result)}`
+      );
+      this.connection.send(
+        new Message(
+          SUSPENSION_MESSAGE_TYPE,
+          result,
+          undefined,
+          undefined,
+          undefined
+        )
+      );
+    }
+
     this.onClose();
     this.connection.end();
   }
@@ -1308,10 +1332,25 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     this.connection.end();
   }
 
+  // If the runtime closes the connection then, the state machine continues processing
+  // until it needs a completion for something.
+  // So schedule a new timeout with the suspension on a timeout of 0
+  setInputChannelToClosed() {
+    if (this.state !== ExecutionState.CLOSED) {
+      this.inputChannelClosed = true;
+      this.scheduleSuspensionTimeout();
+    }
+  }
+
   onClose() {
     // done.
     if (this.state !== ExecutionState.CLOSED) {
-      rlog.debug("Closing the state machine");
+      this.transitionState(ExecutionState.CLOSED);
+    }
+  }
+
+  onError() {
+    if (this.state !== ExecutionState.CLOSED) {
       this.transitionState(ExecutionState.CLOSED);
     }
   }
