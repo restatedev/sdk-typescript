@@ -1256,11 +1256,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       // We send the message straight over the connection
       this.connection.send(new Message(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, msg));
     } else {
-      rlog.debugJournalMessage(
-        this.logPrefix,
-        "Call suspending: ",
-        result
-      );
+      rlog.debugJournalMessage(this.logPrefix, "Call suspending: ", result);
       this.connection.send(
         new Message(
           SUSPENSION_MESSAGE_TYPE,
