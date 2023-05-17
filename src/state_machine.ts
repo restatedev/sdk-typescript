@@ -1302,7 +1302,10 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   setInputChannelToClosed() {
     if (this.state !== ExecutionState.CLOSED) {
       this.inputChannelClosed = true;
-      this.scheduleSuspensionTimeout();
+      // If there is a timeout planned, reset the timout to execute immediately when the work is done.
+      if(this.suspensionTimeout){
+        this.scheduleSuspensionTimeout();
+      }
     }
   }
 
