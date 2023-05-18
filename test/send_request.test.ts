@@ -86,6 +86,30 @@ class FailingAwakeableInBackgroundInvokeGreeter implements TestGreeter {
   }
 }
 
+class CatchTwoFailingInvokeGreeter implements TestGreeter {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async greet(request: TestRequest): Promise<TestResponse> {
+    const ctx = restate.useContext(this);
+
+    // Do a failing async call
+    try {
+      await ctx.inBackground(async () => {
+        throw new Error("This fails.");
+      });
+    } catch (e) {
+      // do nothing
+    }
+
+    // Do a succeeding async call
+    const client = new TestGreeterClientImpl(ctx);
+    await ctx.inBackground(() =>
+      client.greet(TestRequest.create({ name: "Pete" }))
+    );
+
+    return TestResponse.create({ greeting: `Hello` });
+  }
+}
+
 class FailingSideEffectInBackgroundInvokeGreeter implements TestGreeter {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
@@ -685,6 +709,29 @@ describe("FailingAwakeableInBackgroundInvokeGreeter: failing background call ", 
       result[0],
       "Cannot do a awakeable from within a background call."
     );
+  });
+});
+
+describe("CatchTwoFailingInvokeGreeter: failing background call ", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new CatchTwoFailingInvokeGreeter(),
+      "/test.TestGreeter/Greet",
+      [startMessage(1), inputMessage(greetRequest("Till"))]
+    ).run();
+
+    expect(result.length).toStrictEqual(2);
+    expect(result).toStrictEqual([
+      backgroundInvokeMessage(
+        "test.TestGreeter",
+        "Greet",
+        greetRequest("Pete"),
+        undefined
+      ),
+      outputMessage(greetResponse("Hello")),
+    ]);
   });
 });
 
