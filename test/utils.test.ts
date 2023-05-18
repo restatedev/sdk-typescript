@@ -6,6 +6,31 @@ import { TestingContext } from "./test_context";
 import * as RestateUtils from "../src/utils/public_utils";
 import { RestateError } from "../src/types/errors";
 import { RestateContext } from "../src/restate_context";
+import {
+  protoMetadata,
+  TestGreeter,
+  TestRequest,
+  TestResponse,
+} from "../src/generated/proto/test";
+import * as restate from "../src/public_api";
+import { TestDriver } from "./testdriver";
+import {
+  checkError,
+  completionMessage,
+  decodeSideEffectFromResult,
+  greetRequest,
+  greetResponse,
+  inputMessage,
+  outputMessage,
+  printResults,
+  startMessage,
+} from "./protoutils";
+import { rlog } from "../src/utils/logger";
+import {
+  SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+  SLEEP_ENTRY_MESSAGE_TYPE,
+} from "../src/types/protocol";
+import { Message } from "../src/types/types";
 
 async function exceptionOnFalse(x: Promise<boolean>): Promise<boolean> {
   return (await x) ? x : Promise.reject(new Error("test error"));
@@ -68,23 +93,23 @@ describe("retryExceptionalSideEffectWithBackoff()", () => {
     expect(result).toStrictEqual(finalValue);
   });
 
-  it("should retry until the maximum attemps", async () => {
+  it("should retry until the maximum attempts", async () => {
     await testRetryMaxAttempts(
-      RestateUtils.retryExceptionalSideEffectWithBackoff<boolean>,
+      RestateUtils.retryExceptionalSideEffectWithBackoff,
       exceptionOnFalse
     );
   });
 
   it("should initially sleep the minimum time", async () => {
     await testInitialSleepTime(
-      RestateUtils.retryExceptionalSideEffectWithBackoff<boolean>,
+      RestateUtils.retryExceptionalSideEffectWithBackoff,
       exceptionOnFalse
     );
   });
 
   it("should ultimately sleep the maximum time", async () => {
     await testUltimateSleepTime(
-      RestateUtils.retryExceptionalSideEffectWithBackoff<boolean>,
+      RestateUtils.retryExceptionalSideEffectWithBackoff,
       exceptionOnFalse
     );
   });
@@ -238,4 +263,211 @@ async function testUltimateSleepTime<R>(
   await method(ctx, wrappedAction, 10, 100, 100000, "test action");
 
   expect(lastSleepTime).toStrictEqual(100);
+}
+
+class FailingExceptionalSideEffectGreeter implements TestGreeter {
+  constructor(readonly attempts: number) {}
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async greet(request: TestRequest): Promise<TestResponse> {
+    const ctx = restate.useContext(this);
+
+    // state
+    const doCall = async () => failingCall(this.attempts);
+    const success = await RestateUtils.retryExceptionalSideEffectWithBackoff(
+      ctx,
+      doCall,
+      100,
+      500,
+      3
+    );
+
+    return TestResponse.create({ greeting: `${success}` });
+  }
+}
+
+class FailingRetrySideEffectGreeter implements TestGreeter {
+  constructor(readonly attempts: number) {}
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async greet(request: TestRequest): Promise<TestResponse> {
+    const ctx = restate.useContext(this);
+
+    // state
+    const doCall = async () => callReturningFalse(this.attempts);
+    await RestateUtils.retrySideEffectWithBackoff(ctx, doCall, 100, 500, 3);
+
+    return TestResponse.create({ greeting: `Passed` });
+  }
+}
+
+let i = 0;
+
+async function callReturningFalse(attempts: number): Promise<boolean> {
+  if (i >= attempts) {
+    rlog.debug("Call succeeded");
+    return true;
+  } else {
+    rlog.debug("Call failed");
+    i = i + 1;
+    return false;
+  }
+}
+
+async function failingCall(attempts: number): Promise<boolean> {
+  if (i >= attempts) {
+    rlog.debug("Call succeeded");
+    i = 0;
+    return true;
+  } else {
+    rlog.debug("Call failed");
+    i = i + 1;
+    throw new Error("Call failed");
+  }
+}
+
+describe("FailingSideEffectGreeter: finally succeeds", () => {
+  it("retries two times and then succeeds", async () => {
+    i = 0;
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new FailingExceptionalSideEffectGreeter(2),
+      "/test.TestGreeter/Greet",
+      [
+        startMessage(1),
+        inputMessage(greetRequest("Till")),
+        completionMessage(1), // fail
+        completionMessage(2, undefined, true), // sleep
+        completionMessage(3), // fail
+        completionMessage(4, undefined, true), // sleep
+        completionMessage(5), // success
+      ]
+    ).run();
+
+    expect(result.length).toStrictEqual(6);
+    checkIfSideEffectReturnsCallFailed(result[0]);
+    expect(result[1].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
+    checkIfSideEffectReturnsCallFailed(result[2]);
+    expect(result[3].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
+    expect(result[4].messageType).toStrictEqual(SIDE_EFFECT_ENTRY_MESSAGE_TYPE);
+    expect(decodeSideEffectFromResult(result[4].message).value).toStrictEqual(
+      Buffer.from(JSON.stringify(true))
+    );
+    expect(result[5]).toStrictEqual(outputMessage(greetResponse("true")));
+  });
+});
+
+describe("FailingSideEffectGreeter: never succeeds", () => {
+  it("retries three times and then fails", async () => {
+    i = 0;
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new FailingExceptionalSideEffectGreeter(4),
+      "/test.TestGreeter/Greet",
+      [
+        startMessage(1),
+        inputMessage(greetRequest("Till")),
+        completionMessage(1), // fail
+        completionMessage(2, undefined, true), // sleep
+        completionMessage(3), // fail
+        completionMessage(4, undefined, true), // sleep
+        completionMessage(5), // fail
+        completionMessage(6, undefined, true), // sleep
+        completionMessage(7), // fail
+      ]
+    ).run();
+
+    expect(result.length).toStrictEqual(8);
+    checkIfSideEffectReturnsCallFailed(result[0]);
+    expect(result[1].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
+    checkIfSideEffectReturnsCallFailed(result[2]);
+    expect(result[3].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
+    checkIfSideEffectReturnsCallFailed(result[4]);
+    expect(result[5].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
+    checkIfSideEffectReturnsCallFailed(result[6]);
+    checkError(result[7], "Retries exhausted for ");
+  });
+});
+
+describe("FailingRetrySideEffectGreeter: finally succeeds", () => {
+  it("retries two times and then succeeds", async () => {
+    i = 0;
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new FailingRetrySideEffectGreeter(2),
+      "/test.TestGreeter/Greet",
+      [
+        startMessage(1),
+        inputMessage(greetRequest("Till")),
+        completionMessage(1), // fail
+        completionMessage(2, undefined, true), // sleep
+        completionMessage(3), // fail
+        completionMessage(4, undefined, true), // sleep
+        completionMessage(5), // success
+      ]
+    ).run();
+
+    expect(result.length).toStrictEqual(6);
+    checkIfSideEffectReturnsFalse(result[0]);
+    expect(result[1].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
+    checkIfSideEffectReturnsFalse(result[2]);
+    expect(result[3].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
+    expect(result[4].messageType).toStrictEqual(SIDE_EFFECT_ENTRY_MESSAGE_TYPE);
+    expect(
+      decodeSideEffectFromResult(result[4].message).value?.toString()
+    ).toStrictEqual("true");
+    expect(result[5]).toStrictEqual(outputMessage(greetResponse("Passed")));
+  });
+});
+
+describe("FailingRetrySideEffectGreeter: never succeeds", () => {
+  it("retries three times and then fails", async () => {
+    i = 0;
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new FailingRetrySideEffectGreeter(4),
+      "/test.TestGreeter/Greet",
+      [
+        startMessage(1),
+        inputMessage(greetRequest("Till")),
+        completionMessage(1), // fail
+        completionMessage(2, undefined, true), // sleep
+        completionMessage(3), // fail
+        completionMessage(4, undefined, true), // sleep
+        completionMessage(5), // fail
+        completionMessage(6, undefined, true), // sleep
+        completionMessage(7), // fail
+      ]
+    ).run();
+
+    printResults(result);
+
+    expect(result.length).toStrictEqual(8);
+    checkIfSideEffectReturnsFalse(result[0]);
+    expect(result[1].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
+    checkIfSideEffectReturnsFalse(result[2]);
+    expect(result[3].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
+    checkIfSideEffectReturnsFalse(result[4]);
+    expect(result[5].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
+    checkIfSideEffectReturnsFalse(result[6]);
+    checkError(result[7], "Retries exhausted for ");
+  });
+});
+
+function checkIfSideEffectReturnsFalse(msg: Message) {
+  expect(msg.messageType).toStrictEqual(SIDE_EFFECT_ENTRY_MESSAGE_TYPE);
+  expect(
+    decodeSideEffectFromResult(msg.message).value?.toString()
+  ).toStrictEqual("false");
+}
+
+function checkIfSideEffectReturnsCallFailed(msg: Message) {
+  expect(msg.messageType).toStrictEqual(SIDE_EFFECT_ENTRY_MESSAGE_TYPE);
+  expect(
+    decodeSideEffectFromResult(msg.message).failure?.message
+  ).toStrictEqual("Call failed");
 }

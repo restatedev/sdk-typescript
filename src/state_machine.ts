@@ -612,6 +612,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
             undefined,
             true
           );
+          this.inSideEffectFlag = false;
 
           // When something went wrong, then we resolve the promise with a failure.
           promiseToResolve.then(
@@ -1256,7 +1257,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       // We send the message straight over the connection
       this.connection.send(new Message(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, msg));
     } else {
-      rlog.debugJournalMessage(this.logPrefix, "Call suspending: ", result);
+      rlog.debugJournalMessage(this.logPrefix, "Call suspending. ", result);
       this.connection.send(
         new Message(
           SUSPENSION_MESSAGE_TYPE,
@@ -1303,7 +1304,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     if (this.state !== ExecutionState.CLOSED) {
       this.inputChannelClosed = true;
       // If there is a timeout planned, reset the timout to execute immediately when the work is done.
-      if(this.suspensionTimeout){
+      if (this.suspensionTimeout) {
         this.scheduleSuspensionTimeout();
       }
     }
