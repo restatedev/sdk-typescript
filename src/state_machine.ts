@@ -393,6 +393,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
             serviceName: service,
             methodName: method,
             parameter: Buffer.from(data),
+            invokeTime: undefined,
           });
 
     if (this.state === ExecutionState.REPLAYING) {
@@ -483,9 +484,10 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
     this.inBackgroundCallFlag = true;
     this.inBackgroundCallDelay = delayMillis || 0;
-    await call();
-    this.inBackgroundCallDelay = 0;
-    this.inBackgroundCallFlag = false;
+    await call().finally(() => {
+      this.inBackgroundCallDelay = 0;
+      this.inBackgroundCallFlag = false;
+    });
   }
 
   sideEffect<T>(fn: () => Promise<T>): Promise<T> {
