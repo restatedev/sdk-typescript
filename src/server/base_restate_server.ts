@@ -127,7 +127,8 @@ export abstract class BaseRestateServer {
     if (method === null || method === undefined) {
       return undefined;
     }
-    return method as HostedGrpcServiceMethod<I, O>;
+    // create new instance each time as reject and resolve must not be shared across invocations
+    return new HostedGrpcServiceMethod<I, O>(method.instance, method.service, method.method as GrpcServiceMethod<I, O>)
   }
 }
 
