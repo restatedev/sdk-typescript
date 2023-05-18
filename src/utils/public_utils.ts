@@ -7,7 +7,7 @@ import { RestateContext } from "../restate_context";
 import { RestateError } from "../types/errors";
 
 /**
- * Calls a side effect function and retries the call on failure, with a timed backoff.
+ * Calls a side effect function and retries when the result is false, with a timed backoff.
  * The side effect function is retried until it returns true or until it throws an error.
  *
  * Between retries, the call this function will do a suspendable Restate sleep.
@@ -52,7 +52,7 @@ export async function retrySideEffectWithBackoff(
       rlog.debug("Retrying in %d ms", delayMs);
     } else {
       rlog.debug("No retries left.");
-      throw new RestateError(`Retries exhaused for '${name}'.`);
+      throw new RestateError(`Retries exhausted for '${name}'.`);
     }
 
     await ctx.sleep(delayMs);
@@ -139,7 +139,7 @@ export async function retryExceptionalSideEffectWithBackoff<T>(
         rlog.debug("Retrying in %d ms", delayMs);
       } else {
         rlog.debug("No retries left.");
-        throw new RestateError(`Retries exhaused for {name}`, lastError);
+        throw new RestateError(`Retries exhausted for ${name}.`, lastError);
       }
     }
 
