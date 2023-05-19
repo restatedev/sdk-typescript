@@ -686,13 +686,6 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         requiresAckFlag
       )
     );
-
-    // If the message type requires a suspension for this protocol mode (set in constructor),
-    // then set a timeout to send the suspension message.
-    // The suspension will only be sent if the timeout is not canceled due to a completion.
-    if (SUSPENSION_TRIGGERS.includes(messageType)) {
-      this.scheduleSuspensionTimeout();
-    }
   }
 
   scheduleSuspensionTimeout(): void {
@@ -705,11 +698,22 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     // Set a new suspension with a new timeout
     // The suspension will only be sent if the timeout is not canceled due to a completion.
     this.suspensionTimeout = setTimeout(() => {
-      const completableIndices = [...this.indexToPendingMsgMap.keys()];
 
-      // If the state is not processing anymore then we either already send a suspension
+      let completableIndices;
+      if(this.state === ExecutionState.REPLAYING){
+        // During replay, the pending message can contain replay messages waiting for a journal mismatch check
+        // So we then need to filter out the messages that require completion.
+        completableIndices = [...this.indexToPendingMsgMap.entries()]
+          .filter( it => {
+            return SUSPENSION_TRIGGERS.includes(it[1].messageType);
+          }).map( el => el[0])
+      } else {
+        completableIndices = [...this.indexToPendingMsgMap.keys()];
+      }
+
+      // If the state is closed then we either already send a suspension
       // or something else bad happened...
-      if (this.state === ExecutionState.PROCESSING) {
+      if (this.state !== ExecutionState.CLOSED) {
         // There need to be journal entries to complete, otherwise this timeout should have been removed.
         if (completableIndices.length > 0) {
           // A suspension message is the end of the invocation.
@@ -1018,6 +1022,11 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       journalIndex,
       new PendingMessage(messageType, message, resolve, reject)
     );
+
+    if (SUSPENSION_TRIGGERS.includes(messageType)) {
+      this.scheduleSuspensionTimeout();
+    }
+
     if (
       this.state === ExecutionState.REPLAYING &&
       this.outOfOrderReplayMessages.has(journalIndex)
@@ -1055,6 +1064,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   ) {
     const optionalPendingMessage = this.indexToPendingMsgMap.get(journalIndex);
 
+    // 1. Handle out-of-order messages
     if (optionalPendingMessage === undefined) {
       // During replay, the replay messages might arrive before we got to that point in the user code.
       // In that case, we wouldn't find a promise yet. So add the message to the map.
@@ -1116,6 +1126,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const pendingMessage: PendingMessage = optionalPendingMessage!;
 
+    // 2. Journal mismatch checks
     if (
       this.state === ExecutionState.REPLAYING &&
       // We can get completions during replay if the user code has progressed slower than the replay of journal messages
@@ -1139,6 +1150,8 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       return;
     }
 
+    // 3. Handle replays that don't require completion
+
     // If we do not require a result, then just remove the message from the map.
     // Replay validation for journal mismatches has succeeded when we end up here.
     if (
@@ -1151,6 +1164,8 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       return;
     }
 
+    // 4. Handle side effect acks
+
     // In case of a side effect completion, we don't get a value or failure back but still need to ack the completion.
     if (
       resultMessageType === COMPLETION_MESSAGE_TYPE &&
@@ -1161,7 +1176,11 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       this.indexToPendingMsgMap.delete(journalIndex);
     }
 
-    // If we do require a result and have a result then resolve or reject the promise and remove the pending message from the map
+    // 5. Handle journal entries that require result
+
+    // If the result is a value, then resolve and remove the pending message from the map
+    // If the result is a failure, then reject and remove the pending message from the map
+    // If the result is still missing, do nothing
     if (value !== undefined) {
       if (pendingMessage.resolve !== undefined) {
         pendingMessage.resolve(value);
@@ -1202,7 +1221,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   // Suspension timeouts:
   // Lambda case: suspend immediately when control is back in the user code
   // Bidi streaming case:
-  // - suspend after 10 seconds if input channel is still open (can still get completions)
+  // - suspend after 1 seconds if input channel is still open (can still get completions)
   // - suspend immediately if input channel is closed (cannot get completions)
   getSuspensionMillis(): number {
     return this.protocolMode === ProtocolMode.REQUEST_RESPONSE
