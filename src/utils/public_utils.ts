@@ -67,13 +67,13 @@ export async function retrySideEffectWithBackoff(
  * The side effect function is retried when it throws an Error, until returns a successfully
  * resolved Promise.
  *
- * Between retries, the call this function will do a suspendable Restate sleep.
+ * Between retries, this function will do a suspendable Restate sleep.
  * The sleep time starts with the 'initialDelayMs' value and doubles on each retry, up to
  * a maximum of maxDelayMs.
  *
- * The returned Promise will be resolved successfully once the side effect actions completes
+ * The returned Promise will be resolved successfully once the side effect action completes
  * successfully and will be rejected with an error if the maximum number of retries
- * (as specified by 'maxRetries') is exhausted .
+ * (as specified by 'maxRetries') is exhausted.
  *
  * @example
  * const ctx = restate.useContext(this);
@@ -85,7 +85,7 @@ export async function retrySideEffectWithBackoff(
  *     return result.isSuccess;
  *   }
  * }
- * boolean paymentAccepted =
+ * const paymentAccepted: boolean =
  *   await retryExceptionalSideEffectWithBackoff(ctx, paymentAction, 1000, 60000, 10);
  *
  * @param ctx              The RestateContext object to call the side effect to sleep on.

@@ -151,6 +151,15 @@ export interface RestateContext {
   ): Promise<Uint8Array>;
 }
 
+/**
+ * Returns the RestateContext which is the entrypoint for all interaction with Restate.
+ * Use this from within a method to retrieve the RestateContext.
+ * The context is bounded to a single invocation.
+ *
+ * @example
+ * const ctx = restate.useContext(this);
+ *
+ */
 export function useContext<T>(instance: T): RestateContext {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const wrapper = instance as any;
