@@ -698,15 +698,15 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     // Set a new suspension with a new timeout
     // The suspension will only be sent if the timeout is not canceled due to a completion.
     this.suspensionTimeout = setTimeout(() => {
-
       let completableIndices;
-      if(this.state === ExecutionState.REPLAYING){
+      if (this.state === ExecutionState.REPLAYING) {
         // During replay, the pending message can contain replay messages waiting for a journal mismatch check
         // So we then need to filter out the messages that require completion.
         completableIndices = [...this.indexToPendingMsgMap.entries()]
-          .filter( it => {
+          .filter((it) => {
             return SUSPENSION_TRIGGERS.includes(it[1].messageType);
-          }).map( el => el[0])
+          })
+          .map((el) => el[0]);
       } else {
         completableIndices = [...this.indexToPendingMsgMap.keys()];
       }
