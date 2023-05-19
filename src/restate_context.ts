@@ -19,6 +19,9 @@ export interface RestateContext {
 
   /**
    * Get/retrieve state from the Restate runtime.
+   * Note that state objects are serialized with `Buffer.from(JSON.stringify(theObject))`
+   * and deserialized with `JSON.parse(value.toString()) as T`.
+   *
    * @param name key of the state to retrieve
    * @returns a Promise that is resolved with the value of the state key
    *
@@ -30,6 +33,9 @@ export interface RestateContext {
 
   /**
    * Set/store state in the Restate runtime.
+   * Note that state objects are serialized with `Buffer.from(JSON.stringify(theObject))`
+   * and deserialized with `JSON.parse(value.toString()) as T`.
+   *
    * @param name key of the state to set
    * @param value value to set
    *
