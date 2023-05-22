@@ -824,9 +824,8 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   handleInputMessage(m: PollInputStreamEntryMessage) {
     this.invocationIdString = uuidV7FromBuffer(this.invocationId);
     this.logPrefix = `[${this.method.packge}.${this.method.service}-${this.instanceKey.toString('base64')}-${this.invocationIdString}] [${this.method.method.name}]`;
-    rlog.debugJournalMessage(this.logPrefix, "Received input message.", m);
 
-    this.method.invoke(this, m.value).then(
+    this.method.invoke(this, m.value, this.logPrefix).then(
       (value) => this.onCallSuccess(value),
       (failure) => this.onCallFailure(failure)
     );
