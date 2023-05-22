@@ -1236,7 +1236,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
    * Checks:
    * - if the state machine is not closed
    * - if we are not doing a context call from within a side effect
-   * - if we are not doing an invalid context call from within an one way call
+   * - if we are not doing an invalid context call from within an one-way call
    */
   isValidState(callType: string): boolean {
     this.failIfClosed();
