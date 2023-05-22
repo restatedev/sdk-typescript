@@ -3,6 +3,7 @@
 import { RestateContext, setContext } from "../restate_context";
 import { FileDescriptorProto } from "ts-proto-descriptors";
 import { SuspensionMessage } from "../generated/proto/protocol";
+import { rlog } from "../utils/logger";
 
 export class GrpcServiceMethod<I, O> {
   constructor(
@@ -45,13 +46,15 @@ export class HostedGrpcServiceMethod<I, O> {
   // The end of an invoke is either a response (Uint8Array) or a SuspensionMessage
   async invoke(
     context: RestateContext,
-    inBytes: Uint8Array
+    inBytes: Uint8Array,
+    logPrefix: string
   ): Promise<Uint8Array | SuspensionMessage> {
     return new Promise<Uint8Array | SuspensionMessage>((resolve, reject) => {
       this.reject = reject;
       this.resolve = resolve;
       const instanceWithContext = setContext(this.instance, context);
       const input = this.method.inputDecoder(inBytes);
+      rlog.debugJournalMessage(logPrefix, "Received input message.", input);
       this.method
         .localFn(instanceWithContext, input)
         .then((output) => {
