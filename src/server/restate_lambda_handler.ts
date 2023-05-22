@@ -15,7 +15,7 @@ import { LambdaConnection } from "../connection/lambda_connection";
  * through API Gateway.
  *
  * Register services on this entrypoint via {@link LambdaRestateServer.bindService } and
- * then create the Lambda invocation handler via {@link LambdaRestateServer.create }.
+ * then create the Lambda invocation handler via {@link LambdaRestateServer.handle }.
  *
  * @example
  * A typical AWS Lambda entry point would look like this
@@ -23,16 +23,16 @@ import { LambdaConnection } from "../connection/lambda_connection";
  * import * as restate from "@restatedev/restate-sdk";
  *
  * export const handler = restate
- *   .lambdaApiGatewayHandler()
+ *   .createLambdaApiGatewayHandler()
  *   .bindService({
  *      service: "MyService",
  *      instance: new myService.MyServiceImpl(),
  *      descriptor: myService.protoMetadata,
  *    })
- *   .create();
+ *   .handle();
  * ```
  */
-export function lambdaApiGatewayHandler(): LambdaRestateServer {
+export function createLambdaApiGatewayHandler(): LambdaRestateServer {
   return new LambdaRestateServer();
 }
 
@@ -101,19 +101,19 @@ export class LambdaRestateServer extends BaseRestateServer {
    * import * as restate from "@restatedev/restate-sdk";
    *
    * export const handler = restate
-   *   .lambdaApiGatewayHandler()
+   *   .createLambdaApiGatewayHandler()
    *   .bindService({
    *      service: "MyService",
    *      instance: new myService.MyServiceImpl(),
    *      descriptor: myService.protoMetadata,
    *    })
-   *   .create();
+   *   .handle();
    * ```
    *
    * @returns The invocation handler function for to be called by AWS Lambda.
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  public create(): (event: any) => Promise<any> {
+  public handle(): (event: any) => Promise<any> {
     // return the handler and bind the current context to it, so that it can find the other methods in this class.
     return this.handleRequest.bind(this);
   }

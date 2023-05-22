@@ -34,10 +34,10 @@ export class GreeterService implements TestGreeter {
 }
 
 export const handler = restate
-  .lambdaApiGatewayHandler()
+  .createLambdaApiGatewayHandler()
   .bindService({
     descriptor: protoMetadata,
     service: "TestGreeter",
     instance: new GreeterService(),
   })
-  .create();
+  .handle();

@@ -241,13 +241,13 @@ describe("LambdaGreeter: discovery of Lambda function", () => {
 
 function getTestHandler() {
   return restate
-    .lambdaApiGatewayHandler()
+    .createLambdaApiGatewayHandler()
     .bindService({
       descriptor: protoMetadata,
       service: "TestGreeter",
       instance: new LambdaGreeter(),
     })
-    .create();
+    .handle();
 }
 
 function apiProxyGatewayEvent(
