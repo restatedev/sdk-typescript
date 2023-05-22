@@ -56,22 +56,22 @@ export interface RestateContext {
   clear(name: string): void;
 
   /**
-   * Call other Restate services in the background ( = async / not waiting on response).
-   * To do this, wrap the call via the proto-ts client with inBackground, as shown in the example.
+   * Unidirectional call to other Restate services ( = in background / async / not waiting on response).
+   * To do this, wrap the call via the proto-ts client with oneWayCall, as shown in the example.
    *
    * NOTE: this returns a Promise because we override the gRPC clients provided by proto-ts.
    * So we are required to return a Promise.
    *
    * @param call Invoke another service by using the generated proto-ts client.
-   *
+   * @param delayMillis millisecond delay duration to delay the execution of the call
    * @example
    * const ctx = restate.useContext(this);
    * const client = new GreeterClientImpl(ctx);
-   * await ctx.inBackground(() =>
+   * await ctx.oneWayCall(() =>
    *   client.greet(Request.create({ name: "Peter" }))
    * )
    */
-  inBackground<T>(call: () => Promise<T>, delayMillis?: number): void;
+  oneWayCall<T>(call: () => Promise<T>, delayMillis?: number): void;
 
   /**
    * Execute a side effect and store the result in the Restate runtime.

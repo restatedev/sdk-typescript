@@ -120,12 +120,12 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   // Current journal index from user code perspective (as opposed to replay perspective)
   private currentJournalIndex = 0;
 
-  // This flag is set to true when an inter-service request is done that needs to happen in the background.
-  // Both types of requests (background or sync) call the same request() method.
-  // So to be able to know if a request is a background request or not, the user first sets this flag:
-  // e.g.: ctx.inBackground(() => client.greet(request))
-  private inBackgroundCallFlag = false;
-  private inBackgroundCallDelay = 0;
+  // This flag is set to true when a unidirectional call follows.
+  // Both types of requests (unidirectional or request-response) call the same request() method.
+  // So to be able to know if a request is a unidirectional request or not, the user first sets this flag:
+  // e.g.: ctx.oneWayCall(() => client.greet(request))
+  private oneWayCallFlag = false;
+  private oneWayCallDelay = 0;
 
   // This flag is set to true when we are executing code that is inside a side effect.
   // We use this flag to prevent the user from doing operations on the context from within a side effect.
@@ -366,28 +366,28 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     method: string,
     data: Uint8Array
   ): Promise<Uint8Array> {
-    if (this.inBackgroundCallFlag) {
-      return this.invokeInBackground(service, method, data);
+    if (this.oneWayCallFlag) {
+      return this.invokeOneWay(service, method, data);
     } else {
       return this.invoke(service, method, data);
     }
   }
 
-  async invokeInBackground(
+  async invokeOneWay(
     service: string,
     method: string,
     data: Uint8Array
   ): Promise<Uint8Array> {
-    // Validation check that we are not in a sideEffect is done in inBackground() already.
+    // Validation check that we are not in a sideEffect is done in oneWayCall() already.
     this.incrementJournalIndex();
 
     const msg =
-      this.inBackgroundCallDelay > 0
+      this.oneWayCallDelay > 0
         ? BackgroundInvokeEntryMessage.create({
             serviceName: service,
             methodName: method,
             parameter: Buffer.from(data),
-            invokeTime: Date.now() + this.inBackgroundCallDelay,
+            invokeTime: Date.now() + this.oneWayCallDelay,
           })
         : BackgroundInvokeEntryMessage.create({
             serviceName: service,
@@ -397,7 +397,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
           });
 
     if (this.state === ExecutionState.REPLAYING) {
-      // In replay mode: background invoke will not be forwarded to the runtime.
+      // In replay mode: one way call will not be forwarded to the runtime.
       // Expecting completion.
       // Adding to pending messages to do journal mismatch checks during replay.
       // During normal execution (non-replay),
@@ -411,7 +411,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     } else {
       rlog.debugJournalMessage(
         this.logPrefix,
-        "Adding message to output buffer: type: BackgroundInvoke",
+        "Adding message to output buffer: type: BackgroundInvoke (one-way call)",
         msg
       );
       this.send(BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE, msg);
@@ -464,29 +464,29 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     });
   }
 
-  // When you call inBackground, a flag is set that you want the nested call to be executed in the background.
+  // When you call ctx.oneWayCall(), a flag is set that you want the nested call to be executed unidirectionally.
   // Then you use the client to do the call to the other Restate service.
   // When you do the call, the overridden request method gets called.
-  // That one checks if the inBackgroundFlag is set.
+  // That one checks if the oneWayCallFlag is set.
   // If so, it doesn't care about a response and just returns back an empty UInt8Array, and otherwise it waits for the response.
   // The reason for this is that we use the generated clients of proto-ts to do invokes.
   // And we override the request method that is called by that client to do the Restate related things.
   // The request method of the proto-ts client requires returning a Promise.
   // So until we find a cleaner solution for this, in which we can still use the generated clients but are not required to return a promise,
   // this will return a void Promise.
-  async inBackground<T>(
+  async oneWayCall<T>(
     call: () => Promise<T>,
     delayMillis?: number
   ): Promise<void> {
-    if (!this.isValidState("inBackground")) {
+    if (!this.isValidState("oneWayCall")) {
       return Promise.reject();
     }
 
-    this.inBackgroundCallFlag = true;
-    this.inBackgroundCallDelay = delayMillis || 0;
+    this.oneWayCallFlag = true;
+    this.oneWayCallDelay = delayMillis || 0;
     await call().finally(() => {
-      this.inBackgroundCallDelay = 0;
-      this.inBackgroundCallFlag = false;
+      this.oneWayCallDelay = 0;
+      this.oneWayCallFlag = false;
     });
   }
 
@@ -504,15 +504,15 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         this.method.reject(nestedSideEffectFailure);
         this.onError();
         return;
-      } else if (this.inBackgroundCallFlag) {
-        const sideEffectInBackgroundFailure: Failure = Failure.create({
+      } else if (this.oneWayCallFlag) {
+        const failure: Failure = Failure.create({
           code: 13,
           message:
-            `Cannot do a side effect from within a background call. ` +
-            "Context method inBackground() can only be used to invoke other services in the background. " +
-            "e.g. ctx.inBackground(() => client.greet(my_request))",
+            `Cannot do a side effect from within ctx.oneWayCall(...). ` +
+            "Context method ctx.oneWayCall() can only be used to invoke other services unidirectionally. " +
+            "e.g. ctx.oneWayCall(() => client.greet(my_request))",
         });
-        this.method.reject(sideEffectInBackgroundFailure);
+        this.method.reject(failure);
         this.onError();
         return;
       }
@@ -1236,7 +1236,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
    * Checks:
    * - if the state machine is not closed
    * - if we are not doing a context call from within a side effect
-   * - if we are not doing an invalid context call from within an inBackground call
+   * - if we are not doing an invalid context call from within an one way call
    */
   isValidState(callType: string): boolean {
     this.failIfClosed();
@@ -1249,13 +1249,13 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       );
       this.onError();
       return false;
-    } else if (this.inBackgroundCallFlag) {
+    } else if (this.oneWayCallFlag) {
       this.method.reject(
         Failure.create({
           code: 13,
-          message: `Cannot do a ${callType} from within a background call.
-          Context method inBackground() can only be used to invoke other services in the background.
-          e.g. ctx.inBackground(() => client.greet(my_request))`,
+          message: `Cannot do a ${callType} from within ctx.oneWayCall(...).
+          Context method oneWayCall() can only be used to invoke other services in the background.
+          e.g. ctx.oneWayCall(() => client.greet(my_request))`,
         })
       );
       this.onError();

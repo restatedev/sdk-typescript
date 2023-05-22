@@ -43,7 +43,7 @@ export class TestingContext implements RestateContext {
   clear(name: string): void {
     throw new Error("Method not implemented.");
   }
-  inBackground<T>(call: () => Promise<T>, delayMillis?: number): Promise<void> {
+  oneWayCall<T>(call: () => Promise<T>, delayMillis?: number): Promise<void> {
     throw new Error("Method not implemented.");
   }
   sideEffect<T>(fn: () => Promise<T>): Promise<T> {
