@@ -68,7 +68,7 @@ export class HttpConnection implements Connection {
   }
 
   end() {
-    this.stream.end();
+    this.restate.end();
   }
 }
 
