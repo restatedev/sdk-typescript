@@ -1,50 +1,49 @@
 # Restate Typescript SDK
 
+This repository contains the Restate SDK for writing services in Typescript. 
+
+Restate is a system for easily building resilient applications using **distributed durable RPC & async/await**.
+
+❓ Learn more about Restate from the [Restate documentation](https://github.com/restatedev/documentation).
+
 # Prerequisites
-
 * NodeJS
-* A protobuf compiler [protoc](https://grpc.io/docs/protoc-installation/)
-* run `npm install`
 
-# Building and testing the SDK
-## Useful editor plugins
-If you are using Visual Studio Code, install the following extensions:
-* Typescript plugin by Microsoft.
-* ESLint
-* Prettier ESLint
-* Jest
+# Building the SDK
+Install the NodeJS dependencies:
+```shell
+npm install
+```
 
-## Generating Protobuf Typescript code
-
+Generate the Protobuf definitions for the Restate protocol: 
 ```bash
 npm run proto
 ```
 
-## Building the SDK
+Build the SDK:
 ```bash
 npm run build
 ```
 
 If everything goes well, the artifact would be created at `dist/`.
 
-## Running the tests 
+## Testing the SDK
+You can run the tests via:
 
 ```bash
 npm run test
 ```
 
-## Running the linter
-
+## Linter / formatter
+Run the linter with:
 ```bash
 npm run lint
 ```
 
-## Formatting the code
-
+Format the code with:
 ```bash
 npm run format
 ```
-
 
 ## Running the example during development
 An example of a long-running service and a Lambda handler have been implemented in the `examples` folder.
