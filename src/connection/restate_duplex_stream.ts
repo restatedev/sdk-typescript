@@ -26,6 +26,10 @@ export class RestateDuplexStream {
     this.sdkOutput.write(msg);
   }
 
+  end() {
+    this.sdkOutput.end();
+  }
+
   onMessage(handler: (msg: Message) => void) {
     this.sdkInput.on("data", (data) => {
       handler(data);
