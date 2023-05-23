@@ -5,8 +5,7 @@ import { Message } from "../types/types";
 import { streamEncoder } from "../io/encoder";
 import { streamDecoder } from "../io/decoder";
 import { rlog } from "../utils/logger";
-import { promisify } from "util";
-const pipeline = promisify(stream.pipeline);
+import {pipeline} from "stream/promises";
 
 export class RestateDuplexStream {
   // create a RestateDuplex stream from an http2 (duplex) stream.
@@ -25,8 +24,16 @@ export class RestateDuplexStream {
   ) {}
 
   async send(msgs: Message[]): Promise<void> {
-    const readable = stream.Readable.from(msgs);
-    await pipeline(readable, this.sdkOutput, { end: false });
+    const max = this.sdkOutput.getMaxListeners()
+    // pipeline creates a huge number of listeners, but it is not a leak; they are cleaned up by the time we complete
+    // set to unlimited briefly
+    this.sdkOutput.setMaxListeners(0)
+    await pipeline(
+      stream.Readable.from(msgs),
+      this.sdkOutput,
+    { end: false }
+    )
+    this.sdkOutput.setMaxListeners(max)
   }
 
   end() {
