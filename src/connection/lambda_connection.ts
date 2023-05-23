@@ -15,6 +15,7 @@ export class LambdaConnection implements Connection {
   private inputBase64: string;
   // Empty buffer to store journal output messages
   private outputBuffer: Buffer = Buffer.alloc(0);
+  private suspendedOrCompleted = false;
   // Callback to resolve the invocation promise of the Lambda handler when the response is ready
   private completionPromise: Promise<Buffer>;
   private resolveOnCompleted!: (value: Buffer | PromiseLike<Buffer>) => void;
@@ -31,7 +32,7 @@ export class LambdaConnection implements Connection {
   }
 
   // Send a message back to the runtime
-  send(msg: Message): void {
+  buffer(msg: Message): void {
     // Add the header and the body to buffer and add to the output buffer
     const msgBuffer = encodeMessage(msg);
     this.outputBuffer = Buffer.concat([this.outputBuffer, msgBuffer]);
@@ -41,6 +42,12 @@ export class LambdaConnection implements Connection {
       msg.messageType === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE ||
       msg.messageType === SUSPENSION_MESSAGE_TYPE
     ) {
+      this.suspendedOrCompleted = true
+    }
+  }
+
+  async flush(): Promise<void> {
+    if (this.suspendedOrCompleted) {
       rlog.debug("Flushing output buffer...");
       this.resolveOnCompleted(this.outputBuffer);
     }

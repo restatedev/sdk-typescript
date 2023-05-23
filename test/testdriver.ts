@@ -95,7 +95,7 @@ export class TestDriver<I, O> implements Connection {
     return this.getResultPromise;
   }
 
-  send(msg: Message) {
+  buffer(msg: Message): void {
     this.result.push(msg);
     rlog.debug(
       `Adding result to the result array. Message type: ${
@@ -107,11 +107,17 @@ export class TestDriver<I, O> implements Connection {
             : printMessageAsJson(msg.message)
         }`
     );
+  }
 
+  async flush(): Promise<void> {
+    if (this.result.length == 0) {
+      return
+    }
+    const tail = this.result[this.result.length - 1]
     // For an output message, flush immediately
     if (
-      msg.messageType === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE ||
-      msg.messageType === SUSPENSION_MESSAGE_TYPE
+      tail.messageType === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE ||
+      tail.messageType === SUSPENSION_MESSAGE_TYPE
     ) {
       rlog.debug("End of test: Flushing test results");
       this.resolveOnClose(this.result);
