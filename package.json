@@ -1,6 +1,6 @@
 {
   "name": "@restatedev/restate-sdk",
-  "version": "1.0.22",
+  "version": "1.0.23",
   "description": "Typescript SDK for Restate",
   "repository": {
     "type": "git",
