@@ -37,6 +37,7 @@ export class HostedGrpcServiceMethod<I, O> {
 
   constructor(
     readonly instance: unknown,
+    readonly packge: string,
     readonly service: string,
     readonly method: GrpcServiceMethod<I, O>
   ) {}

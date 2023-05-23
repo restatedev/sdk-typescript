@@ -100,7 +100,7 @@ restate_logger.debugJournalMessage = function (
     ? " message: " + printMessageAsJson(journalMessageObject)
     : "";
   console.debug(
-    `[restate] [${new Date().toISOString()}] ${invocationInfo} : ${logMessage}${journalEvent}`
+    `[restate] [${new Date().toISOString()}] DEBUG: ${invocationInfo} : ${logMessage}${journalEvent}`
   );
 };
 

@@ -109,7 +109,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   public invocationId!: Buffer;
   // Parsed string representation of the invocationId
   public invocationIdString!: string;
-  // We set the log prefix to [service-name] [method-name] [invocation-id] upon receiving the start message
+  // We set the log prefix to [sid] [method-name] upon receiving the start message
   private logPrefix = "";
   // Number of journal entries that will be replayed by the runtime
   private nbEntriesToReplay!: number;
@@ -823,7 +823,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
   handleInputMessage(m: PollInputStreamEntryMessage) {
     this.invocationIdString = uuidV7FromBuffer(this.invocationId);
-    this.logPrefix = `[${this.serviceName}] [${this.method.method.name}] [${this.invocationIdString}]`;
+    this.logPrefix = `[${this.method.packge}.${this.method.service}-${this.instanceKey.toString('base64')}-${this.invocationIdString}] [${this.method.method.name}]`;
     rlog.debugJournalMessage(this.logPrefix, "Received input message.", m);
 
     this.method.invoke(this, m.value).then(
