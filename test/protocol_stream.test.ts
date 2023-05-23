@@ -59,7 +59,7 @@ describe("Stream", () => {
     });
 
     // now, let's simulate sending a message
-    restateStream.send(
+    await restateStream.send([
       new Message(
         START_MESSAGE_TYPE,
         StartMessage.create({
@@ -67,7 +67,7 @@ describe("Stream", () => {
           knownEntries: 1337,
         })
       )
-    );
+    ]);
 
     http2stream.end();
 

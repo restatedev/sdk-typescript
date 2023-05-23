@@ -8,9 +8,11 @@ import { on } from "events";
 import { Connection } from "./connection";
 import { Message } from "../types/types";
 import { rlog } from "../utils/logger";
+import {Stream} from "stream";
 
 export class HttpConnection implements Connection {
   private onErrorListeners: (() => void)[] = [];
+  private _buffer: Message[] = [];
 
   constructor(
     readonly connectionId: bigint,
@@ -37,9 +39,17 @@ export class HttpConnection implements Connection {
     });
   }
 
-  send(msg: Message) {
-    // Add the message to the result set
-    this.restate.send(msg);
+  buffer(msg: Message): void {
+    this._buffer.push(msg)
+  }
+
+  async flush(): Promise<void> {
+    if (this._buffer.length == 0) {
+      return
+    }
+    const buffer = this._buffer
+    this._buffer = []
+    await this.restate.send(buffer)
   }
 
   onMessage(handler: (msg: Message) => void) {
