@@ -107,6 +107,7 @@ export abstract class BaseRestateServer {
       const url = `/invoke/${spec.packge}.${spec.name}/${method.name}`;
       this.methods[url] = new HostedGrpcServiceMethod(
         instance,
+        spec.packge,
         service,
         method
       );
@@ -130,6 +131,7 @@ export abstract class BaseRestateServer {
     // create new instance each time as reject and resolve must not be shared across invocations
     return new HostedGrpcServiceMethod<I, O>(
       method.instance,
+      method.packge,
       method.service,
       method.method as GrpcServiceMethod<I, O>
     );
