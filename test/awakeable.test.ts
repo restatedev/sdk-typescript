@@ -161,7 +161,7 @@ describe("CompleteAwakeableGreeter: without completion", () => {
 
     expect(result).toStrictEqual([
       completeAwakeableMessage(
-        "TestGreeter",
+        "test.TestGreeter",
         Buffer.from("123"),
         Buffer.from("abcd"),
         1,

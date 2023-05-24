@@ -346,7 +346,7 @@ export function checkError(outputMsg: Message, errorMessage: string) {
 export function getAwakeableId(entryIndex: number): string {
   return JSON.stringify(
     new AwakeableIdentifier(
-      "TestGreeter",
+      "test.TestGreeter",
       Buffer.from("123"),
       Buffer.from("abcd"),
       entryIndex
