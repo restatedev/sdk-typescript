@@ -29,8 +29,8 @@ class GetStateGreeter implements TestGreeter {
 
     // state
     let state = await ctx.get<string>("STATE");
-    if(state === null){
-      state = "nobody"
+    if (state === null) {
+      state = "nobody";
     }
 
     return TestResponse.create({ greeting: `Hello ${state}` });
@@ -44,8 +44,6 @@ class NumberGetStateGreeter implements TestGreeter {
 
     // state
     const state = (await ctx.get<number>("STATE")) || 0;
-    const mynum: number = state as any as number;
-    rlog.debug(mynum + 1)
 
     return TestResponse.create({ greeting: `Hello ${state}` });
   }
@@ -58,8 +56,10 @@ class NumberListGetStateGreeter implements TestGreeter {
 
     // state
     const state = await ctx.get<number[]>("STATE");
-    if(state){
-      return TestResponse.create({ greeting: `Hello index 0: ${state[0]} - index 1: ${state[1]}` });
+    if (state) {
+      return TestResponse.create({
+        greeting: `Hello index 0: ${state[0]} - index 1: ${state[1]}`,
+      });
     } else {
       return TestResponse.create({ greeting: `Hello no state found` });
     }
@@ -265,7 +265,9 @@ describe("NumberListGetStateGreeter: Without GetStateEntry and completed with la
     // but still recognize it as a list
     expect(result).toStrictEqual([
       getStateMessage("STATE"),
-      outputMessage(greetResponse("Hello index 0: undefined - index 1: undefined")),
+      outputMessage(
+        greetResponse("Hello index 0: undefined - index 1: undefined")
+      ),
     ]);
   });
 });

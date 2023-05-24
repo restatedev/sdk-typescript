@@ -198,11 +198,11 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
     if (result instanceof Buffer) {
       const resultString = result.toString();
-      if(resultString === "0"){
+      if (resultString === "0") {
         return resultString as T;
       }
 
-      return  JSON.parse(resultString) as T;
+      return JSON.parse(resultString) as T;
     } else {
       return null;
     }
