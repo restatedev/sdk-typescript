@@ -20,7 +20,6 @@ import {
   TestResponse,
 } from "../src/generated/proto/test";
 import { ProtocolMode } from "../src/generated/proto/discovery";
-import { rlog } from "../src/utils/logger";
 
 class GetStateGreeter implements TestGreeter {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
