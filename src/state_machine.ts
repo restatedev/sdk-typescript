@@ -174,7 +174,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
     const msg = GetStateEntryMessage.create({ key: Buffer.from(name) });
 
-    const promise = this.storePendingMsg(
+    const promise = this.storePendingMsg<Buffer | Empty>(
       this.currentJournalIndex,
       GET_STATE_ENTRY_MESSAGE_TYPE,
       msg
@@ -193,10 +193,15 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
     const result = await promise;
 
-    if (result == null || JSON.stringify(result) === "{}") {
-      return null;
+    if (result instanceof Buffer) {
+      const resultString = result.toString();
+      if (resultString === "0") {
+        return resultString as T;
+      }
+
+      return JSON.parse(resultString) as T;
     } else {
-      return JSON.parse(result.toString()) as T;
+      return null;
     }
   }
 
