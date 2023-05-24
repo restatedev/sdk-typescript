@@ -282,7 +282,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
     // This couldn't be done earlier because the index was not incremented yet.
     const awakeableIdentifier = new AwakeableIdentifier(
-      this.serviceName,
+      `${this.method.packge}.${this.method.service}`,
       this.instanceKey,
       this.invocationId,
       this.currentJournalIndex
