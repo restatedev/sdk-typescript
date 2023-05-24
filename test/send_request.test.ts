@@ -50,13 +50,13 @@ class ReverseAwaitOrder implements TestGreeter {
   }
 }
 
-class BackgroundInvokeGreeter implements TestGreeter {
+class OneWayCallGreeter implements TestGreeter {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     const client = new TestGreeterClientImpl(ctx);
-    await ctx.inBackground(() =>
+    await ctx.oneWayCall(() =>
       client.greet(TestRequest.create({ name: "Francesco" }))
     );
 
@@ -64,23 +64,23 @@ class BackgroundInvokeGreeter implements TestGreeter {
   }
 }
 
-class FailingBackgroundInvokeGreeter implements TestGreeter {
+class FailingOneWayCallGreeter implements TestGreeter {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
-    await ctx.inBackground(async () => ctx.set("state", 13));
+    await ctx.oneWayCall(async () => ctx.set("state", 13));
 
     return TestResponse.create({ greeting: `Hello` });
   }
 }
 
-class FailingAwakeableInBackgroundInvokeGreeter implements TestGreeter {
+class FailingAwakeableOneWayCallGreeter implements TestGreeter {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
-    await ctx.inBackground(async () => ctx.awakeable<string>());
+    await ctx.oneWayCall(async () => ctx.awakeable<string>());
 
     return TestResponse.create({ greeting: `Hello` });
   }
@@ -93,7 +93,7 @@ class CatchTwoFailingInvokeGreeter implements TestGreeter {
 
     // Do a failing async call
     try {
-      await ctx.inBackground(async () => {
+      await ctx.oneWayCall(async () => {
         throw new Error("This fails.");
       });
     } catch (e) {
@@ -102,7 +102,7 @@ class CatchTwoFailingInvokeGreeter implements TestGreeter {
 
     // Do a succeeding async call
     const client = new TestGreeterClientImpl(ctx);
-    await ctx.inBackground(() =>
+    await ctx.oneWayCall(() =>
       client.greet(TestRequest.create({ name: "Pete" }))
     );
 
@@ -110,12 +110,12 @@ class CatchTwoFailingInvokeGreeter implements TestGreeter {
   }
 }
 
-class FailingSideEffectInBackgroundInvokeGreeter implements TestGreeter {
+class FailingSideEffectInOneWayCallGreeter implements TestGreeter {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
-    await ctx.inBackground(async () => ctx.sideEffect(async () => 13));
+    await ctx.oneWayCall(async () => ctx.sideEffect(async () => 13));
 
     return TestResponse.create({ greeting: `Hello` });
   }
@@ -152,13 +152,13 @@ class FailingForwardGreetingService implements TestGreeter {
 }
 
 const delayedCallTime = 1835661783000;
-class DelayedInBackgroundInvokeGreeter implements TestGreeter {
+class DelayedOneWayCallGreeter implements TestGreeter {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     const client = new TestGreeterClientImpl(ctx);
-    await ctx.inBackground(
+    await ctx.oneWayCall(
       () => client.greet(TestRequest.create({ name: "Francesco" })),
       delayedCallTime - Date.now()
     );
@@ -166,17 +166,17 @@ class DelayedInBackgroundInvokeGreeter implements TestGreeter {
     return TestResponse.create({ greeting: `Hello` });
   }
 }
-class DelayedAndNormalInBackgroundInvokesGreeter implements TestGreeter {
+class DelayedAndNormalInOneWayCallGreeter implements TestGreeter {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     const client = new TestGreeterClientImpl(ctx);
-    await ctx.inBackground(
+    await ctx.oneWayCall(
       () => client.greet(TestRequest.create({ name: "Francesco" })),
       delayedCallTime - Date.now()
     );
-    await ctx.inBackground(() =>
+    await ctx.oneWayCall(() =>
       client.greet(TestRequest.create({ name: "Francesco" }))
     );
 
@@ -555,12 +555,12 @@ describe("FailingForwardGreetingService: call failed - completion", () => {
 });
 
 // async calls
-describe("BackgroundInvokeGreeter: background call ", () => {
+describe("OneWayCallGreeter: one way call ", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
       "TestGreeter",
-      new BackgroundInvokeGreeter(),
+      new OneWayCallGreeter(),
       "/test.TestGreeter/Greet",
       [startMessage(1), inputMessage(greetRequest("Till"))]
     ).run();
@@ -576,12 +576,12 @@ describe("BackgroundInvokeGreeter: background call ", () => {
   });
 });
 
-describe("BackgroundInvokeGreeter: journal mismatch on BackgroundInvoke - Completed with invoke during replay. ", () => {
+describe("OneWayCallGreeter: journal mismatch on BackgroundInvoke - Completed with invoke during replay. ", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
       "TestGreeter",
-      new BackgroundInvokeGreeter(),
+      new OneWayCallGreeter(),
       "/test.TestGreeter/Greet",
       [
         startMessage(2),
@@ -598,12 +598,12 @@ describe("BackgroundInvokeGreeter: journal mismatch on BackgroundInvoke - Comple
   });
 });
 
-describe("BackgroundInvokeGreeter: journal mismatch on BackgroundInvoke - Completed with BackgroundInvoke with different service name. ", () => {
+describe("OneWayCallGreeter: journal mismatch on BackgroundInvoke - Completed with BackgroundInvoke with different service name. ", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
       "TestGreeter",
-      new BackgroundInvokeGreeter(),
+      new OneWayCallGreeter(),
       "/test.TestGreeter/Greet",
       [
         startMessage(2),
@@ -624,12 +624,12 @@ describe("BackgroundInvokeGreeter: journal mismatch on BackgroundInvoke - Comple
   });
 });
 
-describe("BackgroundInvokeGreeter: journal mismatch on BackgroundInvoke - Completed with BackgroundInvoke with different method. ", () => {
+describe("OneWayCallGreeter: journal mismatch on BackgroundInvoke - Completed with BackgroundInvoke with different method. ", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
       "TestGreeter",
-      new BackgroundInvokeGreeter(),
+      new OneWayCallGreeter(),
       "/test.TestGreeter/Greet",
       [
         startMessage(2),
@@ -650,12 +650,12 @@ describe("BackgroundInvokeGreeter: journal mismatch on BackgroundInvoke - Comple
   });
 });
 
-describe("BackgroundInvokeGreeter: journal mismatch on BackgroundInvoke - Completed with BackgroundInvoke with different request. ", () => {
+describe("OneWayCallGreeter: journal mismatch on BackgroundInvoke - Completed with BackgroundInvoke with different request. ", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
       "TestGreeter",
-      new BackgroundInvokeGreeter(),
+      new OneWayCallGreeter(),
       "/test.TestGreeter/Greet",
       [
         startMessage(2),
@@ -676,12 +676,12 @@ describe("BackgroundInvokeGreeter: journal mismatch on BackgroundInvoke - Comple
   });
 });
 
-describe("FailingBackgroundInvokeGreeter: failing background call ", () => {
+describe("FailingOneWayCallGreeter: failing one way call ", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
       "TestGreeter",
-      new FailingBackgroundInvokeGreeter(),
+      new FailingOneWayCallGreeter(),
       "/test.TestGreeter/Greet",
       [startMessage(1), inputMessage(greetRequest("Till"))]
     ).run();
@@ -689,17 +689,17 @@ describe("FailingBackgroundInvokeGreeter: failing background call ", () => {
     expect(result.length).toStrictEqual(1);
     checkError(
       result[0],
-      "Cannot do a set state from within a background call."
+      "Cannot do a set state from within ctx.oneWayCall(...)."
     );
   });
 });
 
-describe("FailingAwakeableInBackgroundInvokeGreeter: failing background call ", () => {
+describe("FailingAwakeableOneWayCallGreeter: failing one way call ", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
       "TestGreeter",
-      new FailingAwakeableInBackgroundInvokeGreeter(),
+      new FailingAwakeableOneWayCallGreeter(),
       "/test.TestGreeter/Greet",
       [startMessage(1), inputMessage(greetRequest("Till"))]
     ).run();
@@ -707,12 +707,12 @@ describe("FailingAwakeableInBackgroundInvokeGreeter: failing background call ", 
     expect(result.length).toStrictEqual(1);
     checkError(
       result[0],
-      "Cannot do a awakeable from within a background call."
+      "Cannot do a awakeable from within ctx.oneWayCall(...)."
     );
   });
 });
 
-describe("CatchTwoFailingInvokeGreeter: failing background call ", () => {
+describe("CatchTwoFailingInvokeGreeter: failing one way call ", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
@@ -735,12 +735,12 @@ describe("CatchTwoFailingInvokeGreeter: failing background call ", () => {
   });
 });
 
-describe("FailingSideEffectInBackgroundInvokeGreeter: failing background call ", () => {
+describe("FailingSideEffectInOneWayCallGreeter: failing one way call ", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
       "TestGreeter",
-      new FailingSideEffectInBackgroundInvokeGreeter(),
+      new FailingSideEffectInOneWayCallGreeter(),
       "/test.TestGreeter/Greet",
       [startMessage(1), inputMessage(greetRequest("Till"))]
     ).run();
@@ -748,17 +748,17 @@ describe("FailingSideEffectInBackgroundInvokeGreeter: failing background call ",
     expect(result.length).toStrictEqual(1);
     checkError(
       result[0],
-      "Cannot do a side effect from within a background call. Context method inBackground() can only be used to invoke other services in the background. e.g. ctx.inBackground(() => client.greet(my_request))"
+      "Cannot do a side effect from within ctx.oneWayCall(...). Context method ctx.oneWayCall() can only be used to invoke other services unidirectionally. e.g. ctx.oneWayCall(() => client.greet(my_request))"
     );
   });
 });
 
-describe("DelayedInBackgroundInvokeGreeter: delayed in back ground call without completion", () => {
+describe("DelayedOneWayCallGreeter: delayed one-way call without completion", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
       "TestGreeter",
-      new DelayedInBackgroundInvokeGreeter(),
+      new DelayedOneWayCallGreeter(),
       "/test.TestGreeter/Greet",
       [startMessage(1), inputMessage(greetRequest("Till"))]
     ).run();
@@ -777,12 +777,12 @@ describe("DelayedInBackgroundInvokeGreeter: delayed in back ground call without 
   });
 });
 
-describe("DelayedInBackgroundInvokeGreeter: delayed in background call with replay", () => {
+describe("DelayedOneWayCallGreeter: delayed one-way call with replay", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
       "TestGreeter",
-      new DelayedInBackgroundInvokeGreeter(),
+      new DelayedOneWayCallGreeter(),
       "/test.TestGreeter/Greet",
       [
         startMessage(2),
@@ -800,12 +800,12 @@ describe("DelayedInBackgroundInvokeGreeter: delayed in background call with repl
   });
 });
 
-describe("DelayedInBackgroundInvokeGreeter: delayed in background call with journal mismatch", () => {
+describe("DelayedOneWayCallGreeter: delayed one-way call with journal mismatch", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
       "TestGreeter",
-      new DelayedInBackgroundInvokeGreeter(),
+      new DelayedOneWayCallGreeter(),
       "/test.TestGreeter/Greet",
       [
         startMessage(2),
@@ -822,12 +822,12 @@ describe("DelayedInBackgroundInvokeGreeter: delayed in background call with jour
   });
 });
 
-describe("DelayedAndNormalInBackgroundInvokesGreeter: two async calls. One with delay, one normal.", () => {
+describe("DelayedAndNormalInOneWayCallGreeter: two async calls. One with delay, one normal.", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
       "TestGreeter",
-      new DelayedAndNormalInBackgroundInvokesGreeter(),
+      new DelayedAndNormalInOneWayCallGreeter(),
       "/test.TestGreeter/Greet",
       [startMessage(1), inputMessage(greetRequest("Till"))]
     ).run();

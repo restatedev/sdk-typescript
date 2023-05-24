@@ -34,4 +34,4 @@ restate
     service: "TestGreeter",
     instance: new GreeterService(),
   })
-  .listen(8000);
+  .listen(8080);

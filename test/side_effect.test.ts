@@ -77,7 +77,7 @@ class SideEffectAndInvokeGreeter implements TestGreeter {
   }
 }
 
-class SideEffectAndBackgroundInvokeGreeter implements TestGreeter {
+class SideEffectAndOneWayCallGreeter implements TestGreeter {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
@@ -87,7 +87,7 @@ class SideEffectAndBackgroundInvokeGreeter implements TestGreeter {
     // state
     const result = await ctx.sideEffect<string>(async () => "abcd");
 
-    await ctx.inBackground(() =>
+    await ctx.oneWayCall(() =>
       client.greet(TestRequest.create({ name: result }))
     );
     const response = await client.greet(TestRequest.create({ name: result }));
@@ -200,7 +200,7 @@ class FailingNestedWithoutAwaitSideEffectGreeter implements TestGreeter {
   }
 }
 
-class FailingInBackgroundSideEffectGreeter implements TestGreeter {
+class FailingOneWayCallInSideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: number) {}
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -209,7 +209,7 @@ class FailingInBackgroundSideEffectGreeter implements TestGreeter {
 
     // state
     const response = await ctx.sideEffect(async () => {
-      await ctx.inBackground(async () => {
+      await ctx.oneWayCall(async () => {
         return;
       });
     });
@@ -382,12 +382,12 @@ describe("SideEffectAndInvokeGreeter: side effect and then invoke. Side effect c
 });
 
 // Checks if the side effect flag is put back to false when we are in replay and do not execute the side effect
-describe("SideEffectAndBackgroundInvokeGreeter: side effect and then invoke. Side effect replayed.", () => {
+describe("SideEffectAndOneWayCallGreeter: side effect and then invoke. Side effect replayed.", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
       "TestGreeter",
-      new SideEffectAndBackgroundInvokeGreeter(),
+      new SideEffectAndOneWayCallGreeter(),
       "/test.TestGreeter/Greet",
       [
         startMessage(1),
@@ -616,12 +616,12 @@ describe("FailingNestedWithoutAwaitSideEffectGreeter: invalid nested side effect
   });
 });
 
-describe("FailingInBackgroundSideEffectGreeter: invalid in background call in side effect without ack", () => {
+describe("FailingOneWayCallInSideEffectGreeter: invalid one-way call in side effect without ack", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
       protoMetadata,
       "TestGreeter",
-      new FailingInBackgroundSideEffectGreeter(123),
+      new FailingOneWayCallInSideEffectGreeter(123),
       "/test.TestGreeter/Greet",
       [
         startMessage(1),
@@ -633,7 +633,7 @@ describe("FailingInBackgroundSideEffectGreeter: invalid in background call in si
     expect(result.length).toStrictEqual(1);
     checkError(
       result[0],
-      "You cannot do inBackground calls from within a side effect"
+      "You cannot do oneWayCall calls from within a side effect"
     );
   });
 });

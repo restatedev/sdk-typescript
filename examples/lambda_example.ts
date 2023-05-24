@@ -14,10 +14,6 @@ import {
  */
 export class GreeterService implements TestGreeter {
   async greet(request: TestRequest): Promise<TestResponse> {
-    return TestResponse.create({ greeting: `Hello ${request.name}` });
-  }
-
-  async multiWord(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     // state
@@ -28,7 +24,7 @@ export class GreeterService implements TestGreeter {
 
     // return the final response
     return TestResponse.create({
-      greeting: `YAGM (yet another greeting method) ${request.name}!`,
+      greeting: `Hello ${request.name}!`,
     });
   }
 }
