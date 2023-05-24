@@ -26,9 +26,9 @@ export function uuidV7FromBuffer(buffer: Buffer): string {
   //   throw new Error('Invalid UUIDv7 buffer length');
   // }
   const bytes = new Uint8Array(buffer);
-  return Array.from(bytes, (byte) =>
-    byte.toString(16).padStart(2, "0")
-  ).join("");
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(
+    ""
+  );
 }
 
 /**

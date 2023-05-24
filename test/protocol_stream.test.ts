@@ -66,7 +66,7 @@ describe("Stream", () => {
           invocationId: Buffer.from("abcd"),
           knownEntries: 1337,
         })
-      )
+      ),
     ]);
 
     http2stream.end();

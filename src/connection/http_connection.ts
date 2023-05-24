@@ -8,7 +8,6 @@ import { on } from "events";
 import { Connection } from "./connection";
 import { Message } from "../types/types";
 import { rlog } from "../utils/logger";
-import {Stream} from "stream";
 
 export class HttpConnection implements Connection {
   private onErrorListeners: (() => void)[] = [];
@@ -40,16 +39,16 @@ export class HttpConnection implements Connection {
   }
 
   buffer(msg: Message): void {
-    this._buffer.push(msg)
+    this._buffer.push(msg);
   }
 
   async flush(): Promise<void> {
     if (this._buffer.length == 0) {
-      return
+      return;
     }
-    const buffer = this._buffer
-    this._buffer = []
-    await this.restate.send(buffer)
+    const buffer = this._buffer;
+    this._buffer = [];
+    await this.restate.send(buffer);
   }
 
   onMessage(handler: (msg: Message) => void) {

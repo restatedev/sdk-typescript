@@ -181,7 +181,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         resolve,
         reject
       );
-    })
+    });
 
     if (this.state !== ExecutionState.REPLAYING) {
       // Not in replay mode: GetState message will be forwarded to the runtime
@@ -191,7 +191,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         msg
       );
       this.buffer(GET_STATE_ENTRY_MESSAGE_TYPE, msg);
-      await this.flush()
+      await this.flush();
     }
 
     const result = await promise;
@@ -299,8 +299,8 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         reject
       );
     }).then<T>((result: Buffer) => {
-       return JSON.parse(result.toString()) as T;
-    })
+      return JSON.parse(result.toString()) as T;
+    });
 
     if (this.state !== ExecutionState.REPLAYING) {
       // Not in replay mode: awakeable message will be forwarded to the runtime
@@ -312,13 +312,13 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       this.buffer(AWAKEABLE_ENTRY_MESSAGE_TYPE, msg);
       return {
         id: JSON.stringify(awakeableIdentifier),
-        promise: this.flush().then(() => awakeablePromise)
+        promise: this.flush().then(() => awakeablePromise),
       };
     }
 
     return {
       id: JSON.stringify(awakeableIdentifier),
-      promise: awakeablePromise
+      promise: awakeablePromise,
     };
   }
 
@@ -454,7 +454,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         resolve,
         reject
       );
-    })
+    });
     if (this.state !== ExecutionState.REPLAYING) {
       // Not in replay mode: invoke will be forwarded to the runtime
       rlog.debugJournalMessage(
@@ -463,10 +463,10 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         msg
       );
       this.buffer(INVOKE_ENTRY_MESSAGE_TYPE, msg);
-      await this.flush()
+      await this.flush();
     }
 
-    return await promise as Uint8Array
+    return (await promise) as Uint8Array;
   }
 
   // When you call inBackground, a flag is set that you want the nested call to be executed in the background.
@@ -588,10 +588,12 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
           // When the runtime has acked the sideEffect with an empty completion,
           // then we resolve the promise with the result of the user-defined function.
-          this.flush().then(() => promiseToResolve).then(
-            () => resolve(value),
-            (failure) => reject(failure)
-          );
+          this.flush()
+            .then(() => promiseToResolve)
+            .then(
+              () => resolve(value),
+              (failure) => reject(failure)
+            );
         })
         .catch((reason) => {
           // Reason is either a failure or an Error
@@ -622,10 +624,12 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
           this.inSideEffectFlag = false;
 
           // When something went wrong, then we resolve the promise with a failure.
-          this.flush().then(() => promiseToResolve).then(
-            () => reject(failure),
-            (failureFromRuntime) => reject(failureFromRuntime)
-          );
+          this.flush()
+            .then(() => promiseToResolve)
+            .then(
+              () => reject(failure),
+              (failureFromRuntime) => reject(failureFromRuntime)
+            );
         });
     });
   }
@@ -692,7 +696,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   }
 
   async flush(): Promise<void> {
-    await this.connection.flush()
+    await this.connection.flush();
   }
 
   scheduleSuspensionTimeout(): void {
@@ -823,7 +827,11 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
   handleInputMessage(m: PollInputStreamEntryMessage) {
     this.invocationIdString = uuidV7FromBuffer(this.invocationId);
-    this.logPrefix = `[${this.method.packge}.${this.method.service}-${this.instanceKey.toString('base64')}-${this.invocationIdString}] [${this.method.method.name}]`;
+    this.logPrefix = `[${this.method.packge}.${
+      this.method.service
+    }-${this.instanceKey.toString("base64")}-${this.invocationIdString}] [${
+      this.method.method.name
+    }]`;
 
     this.method.invoke(this, m.value, this.logPrefix).then(
       (value) => this.onCallSuccess(value),
@@ -1282,7 +1290,9 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         msg
       );
       // We send the message straight over the connection
-      this.connection.buffer(new Message(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, msg));
+      this.connection.buffer(
+        new Message(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, msg)
+      );
     } else {
       rlog.debugJournalMessage(this.logPrefix, "Call suspending. ", result);
       this.connection.buffer(

@@ -42,7 +42,7 @@ export class LambdaConnection implements Connection {
       msg.messageType === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE ||
       msg.messageType === SUSPENSION_MESSAGE_TYPE
     ) {
-      this.suspendedOrCompleted = true
+      this.suspendedOrCompleted = true;
     }
   }
 

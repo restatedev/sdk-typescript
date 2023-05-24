@@ -111,9 +111,9 @@ export class TestDriver<I, O> implements Connection {
 
   async flush(): Promise<void> {
     if (this.result.length == 0) {
-      return
+      return;
     }
-    const tail = this.result[this.result.length - 1]
+    const tail = this.result[this.result.length - 1];
     // For an output message, flush immediately
     if (
       tail.messageType === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE ||

@@ -5,9 +5,9 @@ import { Message } from "../types/types";
 export interface Connection {
   addOnErrorListener(listener: () => void): void;
 
-  buffer(msg: Message): void
+  buffer(msg: Message): void;
 
-  flush(): Promise<void>
+  flush(): Promise<void>;
 
   onMessage(handler: (msg: Message) => void): void;
 

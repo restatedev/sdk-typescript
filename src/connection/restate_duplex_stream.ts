@@ -5,7 +5,7 @@ import { Message } from "../types/types";
 import { streamEncoder } from "../io/encoder";
 import { streamDecoder } from "../io/decoder";
 import { rlog } from "../utils/logger";
-import {promisify} from "util";
+import { promisify } from "util";
 const pipeline = promisify(stream.pipeline);
 
 export class RestateDuplexStream {
@@ -25,11 +25,8 @@ export class RestateDuplexStream {
   ) {}
 
   async send(msgs: Message[]): Promise<void> {
-    const readable = stream.Readable.from(msgs)
-    await pipeline(
-      readable,
-      this.sdkOutput
-    )
+    const readable = stream.Readable.from(msgs);
+    await pipeline(readable, this.sdkOutput);
   }
 
   end() {
