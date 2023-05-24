@@ -293,11 +293,11 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     const msg = AwakeableEntryMessage.create();
 
     const awakeablePromise = this.storePendingMsg<Buffer>(
-        this.currentJournalIndex,
-        AWAKEABLE_ENTRY_MESSAGE_TYPE,
-        msg
-      ).then<T>((result: Buffer) => {
-       return JSON.parse(result.toString()) as T;
+      this.currentJournalIndex,
+      AWAKEABLE_ENTRY_MESSAGE_TYPE,
+      msg
+    ).then<T>((result: Buffer) => {
+      return JSON.parse(result.toString()) as T;
     });
 
     if (this.state !== ExecutionState.REPLAYING) {
@@ -445,10 +445,10 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     });
 
     const promise = this.storePendingMsg(
-        this.currentJournalIndex,
-        INVOKE_ENTRY_MESSAGE_TYPE,
-        msg
-      );
+      this.currentJournalIndex,
+      INVOKE_ENTRY_MESSAGE_TYPE,
+      msg
+    );
     if (this.state !== ExecutionState.REPLAYING) {
       // Not in replay mode: invoke will be forwarded to the runtime
       rlog.debugJournalMessage(
@@ -527,9 +527,9 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       // For journal mismatch checks during replay,
       // we only check the message type to avoid having to re-execute the user code.
       const promiseToResolve = this.storePendingMsg<T | undefined>(
-            this.currentJournalIndex,
-            SIDE_EFFECT_ENTRY_MESSAGE_TYPE
-          );
+        this.currentJournalIndex,
+        SIDE_EFFECT_ENTRY_MESSAGE_TYPE
+      );
 
       if (this.state === ExecutionState.REPLAYING) {
         // In replay mode: side effect will be ignored. Expecting completion.
@@ -575,10 +575,12 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
           // When the runtime has acked the sideEffect with an empty completion,
           // then we resolve the promise with the result of the user-defined function.
-          this.flush().then(() => promiseToResolve).then(
-            () => resolve(value),
-            (failure) => reject(failure)
-          );
+          this.flush()
+            .then(() => promiseToResolve)
+            .then(
+              () => resolve(value),
+              (failure) => reject(failure)
+            );
         })
         .catch((reason) => {
           // Reason is either a failure or an Error
@@ -609,10 +611,12 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
           this.inSideEffectFlag = false;
 
           // When something went wrong, then we resolve the promise with a failure.
-          this.flush().then(() => promiseToResolve).then(
-            () => reject(failure),
-            (failureFromRuntime) => reject(failureFromRuntime)
-          );
+          this.flush()
+            .then(() => promiseToResolve)
+            .then(
+              () => reject(failure),
+              (failureFromRuntime) => reject(failureFromRuntime)
+            );
         });
     });
   }
@@ -626,10 +630,10 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
     const msg = SleepEntryMessage.create({ wakeUpTime: Date.now() + millis });
     const promise = this.storePendingMsg<void>(
-        this.currentJournalIndex,
-        SLEEP_ENTRY_MESSAGE_TYPE,
-        msg
-      );
+      this.currentJournalIndex,
+      SLEEP_ENTRY_MESSAGE_TYPE,
+      msg
+    );
 
     if (this.state !== ExecutionState.REPLAYING) {
       // Not in replay mode: SleepEntryMessage will be forwarded to the runtime
@@ -675,7 +679,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   }
 
   async flush(): Promise<void> {
-    await this.connection.flush()
+    await this.connection.flush();
   }
 
   scheduleSuspensionTimeout(): void {
@@ -806,7 +810,11 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
   handleInputMessage(m: PollInputStreamEntryMessage) {
     this.invocationIdString = uuidV7FromBuffer(this.invocationId);
-    this.logPrefix = `[${this.method.packge}.${this.method.service}-${this.instanceKey.toString('base64')}-${this.invocationIdString}] [${this.method.method.name}]`;
+    this.logPrefix = `[${this.method.packge}.${
+      this.method.service
+    }-${this.instanceKey.toString("base64")}-${this.invocationIdString}] [${
+      this.method.method.name
+    }]`;
 
     this.method.invoke(this, m.value, this.logPrefix).then(
       (value) => this.onCallSuccess(value),
@@ -1008,11 +1016,18 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     const promise = new Promise<T>((resolve, reject) => {
       resolvePendingMsg = resolve;
       rejectPendingMsg = reject;
-    })
+    });
     this.indexToPendingMsgMap.set(
       journalIndex,
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      new PendingMessage(messageType, promise, resolvePendingMsg!, rejectPendingMsg!, message)
+      new PendingMessage(
+        messageType,
+        promise,
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        resolvePendingMsg!,
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        rejectPendingMsg!,
+        message
+      )
     );
 
     if (SUSPENSION_TRIGGERS.includes(messageType)) {
@@ -1267,9 +1282,11 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         msg
       );
 
-      if(this.indexToPendingMsgMap.size !== 0){
+      if (this.indexToPendingMsgMap.size !== 0) {
         // wait till all messages have been resolved
-        await Promise.all([...this.indexToPendingMsgMap.values()].map(el => el.promise))
+        await Promise.all(
+          [...this.indexToPendingMsgMap.values()].map((el) => el.promise)
+        );
       }
 
       // We send the message straight over the connection
