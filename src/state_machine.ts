@@ -40,6 +40,7 @@ import {
   completeAwakeableMsgEquality,
   getStateMsgEquality,
   invokeMsgEquality,
+  outputStreamMsgEquality,
   printMessageAsJson,
   setStateMsgEquality,
   uuidV7FromBuffer,
@@ -276,7 +277,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   awakeable<T>(): { id: string; promise: Promise<T> } {
     if (!this.isValidState("awakeable")) {
       // We need to throw here because we cannot return void or Promise.reject...
-      // This will have the same end result because it gets caught by onCallFailure
+      // This will have the same end result because it gets caught by output()
       throw new Error();
     }
 
@@ -650,7 +651,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   }
 
   // Sends the message and returns the suspensionMillis if set
-  // Note that onCallSuccess and onCallFailure do not use this and send the message straight over the connection.
+  // Note that suspend and output do not use this and send the message straight over the connection.
   buffer(
     messageType: bigint,
     message: ProtocolMessage | Uint8Array,
@@ -712,13 +713,13 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         if (completableIndices.length > 0) {
           // A suspension message is the end of the invocation.
           // Resolve the root call with the suspension message
-          // This will lead to a onCallSuccess call where this msg will be sent.
+          // This will lead to a suspend call where this msg will be sent.
           const msg = SuspensionMessage.create({
             entryIndexes: completableIndices,
           });
           this.method.resolve(msg);
         } else {
-          // leads to onCallFailure call
+          // leads to output() call
           this.method.reject(
             new Error(
               "Illegal state: Not able to send suspension message because no pending promises. " +
@@ -785,8 +786,12 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         this.handleSideEffectMessage(msg.message as Uint8Array);
         break;
       }
+      case OUTPUT_STREAM_ENTRY_MESSAGE_TYPE: {
+        this.handleOutputMessage(msg.message as OutputStreamEntryMessage);
+        break;
+      }
       default: {
-        // leads to onCallFailure call
+        // leads to output() call
         this.method.reject(
           new Error(
             `Received unkown message type from the runtime: { message_type: ${msg.messageType}, message: ${msg.message} }`
@@ -817,8 +822,18 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     }]`;
 
     this.method.invoke(this, m.value, this.logPrefix).then(
-      (value) => this.onCallSuccess(value),
-      (failure) => this.onCallFailure(failure)
+      (value) => {
+        if (value instanceof Uint8Array) {
+          const msg = this.successOutput(value);
+          return this.output(msg)
+        } else {
+          return this.suspend(value)
+        }
+      },
+      (failure) => {
+        const msg = this.failureOutput(failure)
+        return this.output(msg)
+      }
     );
   }
 
@@ -930,6 +945,16 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     }
   }
 
+  handleOutputMessage(m: OutputStreamEntryMessage) {
+    this.checkIfInReplay()
+    this.handlePendingMessage(
+      this.replayIndex,
+      OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
+      m,
+      outputStreamMsgEquality
+    );
+  }
+
   handleAwakeableMessage(m: AwakeableEntryMessage) {
     this.checkIfInReplay();
 
@@ -972,7 +997,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     if (this.replayIndex < this.nbEntriesToReplay) {
       this.replayIndex++;
     } else {
-      // leads to onCallFailure call
+      // leads to output() call
       this.method.reject(
         new Error(
           "Illegal state: We received a replay message from the runtime but we are not in replay mode."
@@ -1122,7 +1147,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         }
         return;
       } else {
-        // leads to onCallFailure call
+        // leads to output() call
         this.method.reject(
           new Error(
             `No pending message found for this journal index: ${journalIndex}`
@@ -1143,17 +1168,29 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         !comparisonFct(resultMessage, pendingMessage.message! as I))
     ) {
-      // leads to onCallFailure call
-      this.method.reject(
-        new Error(`Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!
+      const err = new Error(`Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!
       The journal entry at position ${journalIndex} was:
       - In the user code: type: ${
         pendingMessage.messageType
       }, message:${printMessageAsJson(pendingMessage.message)}
       - In the replayed messages: type: ${resultMessageType}, message: ${printMessageAsJson(
-          resultMessage
-        )}`)
-      );
+        resultMessage
+      )}`)
+
+      if (pendingMessage.messageType == OUTPUT_STREAM_ENTRY_MESSAGE_TYPE) {
+        // the handler has already returned
+        if (resultMessageType === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE) {
+          // we already have an output, its just different. let's not write a new one
+          pendingMessage.resolve(undefined)
+        } else {
+          // genuine non-determinism - we weren't supposed to return here, and we should return an error output
+          // we are already inside output() and we need to surface this error to that function
+          pendingMessage.reject(err)
+        }
+      } else {
+        // leads to output() call
+        this.method.reject(err);
+      }
       return;
     }
 
@@ -1165,7 +1202,8 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       pendingMessage.messageType === SET_STATE_ENTRY_MESSAGE_TYPE ||
       pendingMessage.messageType === CLEAR_STATE_ENTRY_MESSAGE_TYPE ||
       pendingMessage.messageType === COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE ||
-      pendingMessage.messageType === BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE
+      pendingMessage.messageType === BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE ||
+      pendingMessage.messageType === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE
     ) {
       pendingMessage.resolve(undefined);
       this.indexToPendingMsgMap.delete(journalIndex);
@@ -1193,7 +1231,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         this.indexToPendingMsgMap.delete(journalIndex);
         return;
       } else {
-        // leads to onCallFailure call
+        // leads to output() call
         this.method.reject(
           new Error(
             "SDK bug: No resolve method found to resolve the pending message."
@@ -1207,7 +1245,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         this.indexToPendingMsgMap.delete(journalIndex);
         return;
       } else {
-        // leads to onCallFailure call
+        // leads to output() call
         this.method.reject(
           new Error(
             "SDK bug: No resolve method found to resolve the pending message."
@@ -1271,67 +1309,87 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     }
   }
 
-  async onCallSuccess(result: Uint8Array | SuspensionMessage) {
-    if (result instanceof Uint8Array) {
-      const msg = OutputStreamEntryMessage.create({
-        value: Buffer.from(result),
-      });
-      rlog.debugJournalMessage(
-        this.logPrefix,
-        "Call ended successful with output message.",
-        msg
-      );
+  async output(msg: OutputStreamEntryMessage) {
+    this.incrementJournalIndex()
 
-      if (this.indexToPendingMsgMap.size !== 0) {
-        // wait till all messages have been resolved
-        await Promise.all(
-          [...this.indexToPendingMsgMap.values()].map((el) => el.promise)
-        );
-      }
-
-      // We send the message straight over the connection
-      this.connection.buffer(
-        new Message(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, msg)
-      );
-    } else {
-      rlog.debugJournalMessage(this.logPrefix, "Call suspending. ", result);
-      this.connection.buffer(
-        new Message(
-          SUSPENSION_MESSAGE_TYPE,
-          result,
-          undefined,
-          undefined,
-          undefined
-        )
+    // TODO: is it right to do this on failure outputs?
+    if (this.indexToPendingMsgMap.size !== 0) {
+      // wait till all messages have been resolved
+      await Promise.all(
+        [...this.indexToPendingMsgMap.values()].map((el) => el.promise)
       );
     }
+
+    let sendOutput = true
+
+    if (this.state === ExecutionState.REPLAYING) {
+      sendOutput = false
+      try {
+        await this.storePendingMsg(
+          this.currentJournalIndex,
+          OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
+          msg
+        );
+      } catch (e: any) {
+        // non-determinism issue; we weren't supposed to return here, so let's instead output the failure message
+        msg = this.failureOutput(e)
+        sendOutput = true
+      }
+    }
+
+    if (sendOutput) {
+      rlog.debugJournalMessage(
+        this.logPrefix,
+        "Adding message to output buffer: type: OutputStream",
+        msg
+      );
+      this.buffer(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, msg);
+      await this.flush();
+    }
+
+    this.onClose();
+    this.connection.end();
+  }
+
+  async suspend(msg: SuspensionMessage) {
+    rlog.debugJournalMessage(this.logPrefix, "Adding message to output buffer: type: Suspension", msg);
+    this.connection.buffer(
+      new Message(
+        SUSPENSION_MESSAGE_TYPE,
+        msg,
+        undefined,
+        undefined,
+        undefined
+      )
+    );
     await this.connection.flush();
     this.onClose();
     this.connection.end();
   }
 
-  async onCallFailure(e: Error | Failure) {
+  successOutput(result: Uint8Array): OutputStreamEntryMessage {
+    if (result instanceof Uint8Array) {
+      return OutputStreamEntryMessage.create({
+        value: Buffer.from(result),
+      });
+    } else {
+      return result
+    }
+  }
+
+  failureOutput(e: Error | Failure): OutputStreamEntryMessage {
     if (e instanceof Error) {
       rlog.warn(`${this.logPrefix} Call failed: ${e.message} - ${e.stack}`);
     } else {
       rlog.warn(`${this.logPrefix} Call failed: ${printMessageAsJson(e)}`);
     }
 
-    // We send the message straight over the connection
-    this.connection.buffer(
-      new Message(
-        OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
-        OutputStreamEntryMessage.create({
-          failure: Failure.create({
-            code: 13,
-            message: `Uncaught exception for invocation id ${this.invocationIdString}: ${e.message}`,
-          }),
-        })
-      )
-    );
-    await this.connection.flush();
-    this.onClose();
-    this.connection.end();
+    return OutputStreamEntryMessage.create({
+      failure: Failure.create({
+        code: 13,
+        message: `Uncaught exception for invocation id ${this.invocationIdString}: ${e.message}`,
+      }),
+    });
   }
 
   // If the runtime closes the connection then, the state machine continues processing

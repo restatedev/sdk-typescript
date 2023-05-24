@@ -5,7 +5,7 @@ import {
   ClearStateEntryMessage,
   CompleteAwakeableEntryMessage,
   GetStateEntryMessage,
-  InvokeEntryMessage,
+  InvokeEntryMessage, OutputStreamEntryMessage,
   SetStateEntryMessage,
 } from "../generated/proto/protocol";
 
@@ -84,3 +84,14 @@ export const completeAwakeableMsgEquality = (
     msg1.payload.equals(msg2.payload)
   );
 };
+
+export const outputStreamMsgEquality = (
+  msg1: OutputStreamEntryMessage,
+  msg2: OutputStreamEntryMessage
+) => {
+  return (
+    ((msg1.value === undefined && msg2.value === undefined) ||
+    (msg1.value !== undefined && msg2.value !== undefined && msg1.value.equals(msg2.value))) &&
+    ((msg1.failure === undefined && msg2.failure === undefined) || (msg1.failure !== undefined && msg2.failure !== undefined))
+  )
+}
