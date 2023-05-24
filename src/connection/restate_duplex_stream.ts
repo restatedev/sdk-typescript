@@ -1,10 +1,10 @@
 "use strict";
 
 import stream from "stream";
-import { Message } from "../types/types";
-import { streamEncoder } from "../io/encoder";
-import { streamDecoder } from "../io/decoder";
-import { rlog } from "../utils/logger";
+import {Message} from "../types/types";
+import {streamEncoder} from "../io/encoder";
+import {streamDecoder} from "../io/decoder";
+import {rlog} from "../utils/logger";
 import {pipeline} from "stream/promises";
 
 export class RestateDuplexStream {
@@ -21,7 +21,8 @@ export class RestateDuplexStream {
   constructor(
     private readonly sdkInput: stream.Readable,
     private readonly sdkOutput: stream.Writable
-  ) {}
+  ) {
+  }
 
   async send(msgs: Message[]): Promise<void> {
     const max = this.sdkOutput.getMaxListeners()
@@ -31,7 +32,7 @@ export class RestateDuplexStream {
     await pipeline(
       stream.Readable.from(msgs),
       this.sdkOutput,
-    { end: false }
+      {end: false}
     )
     this.sdkOutput.setMaxListeners(max)
   }

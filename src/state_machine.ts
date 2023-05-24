@@ -1321,9 +1321,15 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         )
       );
     }
-    await this.connection.flush();
-    this.onClose();
-    this.connection.end();
+    try {
+      await this.connection.flush();
+    } catch (e: any) {
+      rlog.warn(`${this.logPrefix} Failed to flush output/suspension message to the runtime: ${e.message} - ${e.stack}`);
+    } finally {
+      // even if we failed to flush, we need to close out this state machine
+      this.onClose();
+      this.connection.end();
+    }
   }
 
   async onCallFailure(e: Error | Failure) {
@@ -1345,9 +1351,15 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         })
       )
     );
-    await this.connection.flush();
-    this.onClose();
-    this.connection.end();
+    try {
+      await this.connection.flush();
+    } catch (e: any) {
+      rlog.warn(`${this.logPrefix} Failed to flush failure message to the runtime: ${e.message} - ${e.stack}`);
+    } finally {
+      // even if we failed to flush, we need to close out this state machine
+      this.onClose();
+      this.connection.end();
+    }
   }
 
   // If the runtime closes the connection then, the state machine continues processing
