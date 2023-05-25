@@ -50,6 +50,18 @@ class ReverseAwaitOrder implements TestGreeter {
   }
 }
 
+class UnawaitedRequestResponseCallGreeter implements TestGreeter {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async greet(request: TestRequest): Promise<TestResponse> {
+    const ctx = restate.useContext(this);
+
+    const client = new TestGreeterClientImpl(ctx);
+    client.greet(TestRequest.create({ name: "Francesco" }))
+
+    return TestResponse.create({ greeting: `Hello` });
+  }
+}
+
 class OneWayCallGreeter implements TestGreeter {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
@@ -849,6 +861,28 @@ describe("DelayedAndNormalInOneWayCallGreeter: two async calls. One with delay, 
       )
     );
     expect(result[2]).toStrictEqual(outputMessage(greetResponse("Hello")));
+  });
+});
+
+describe("UnawaitedRequestResponseCallGreeter: if a call is replayed but uncomplete, then don't await the completion. Journal mismatch check has been done already.", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new UnawaitedRequestResponseCallGreeter(),
+      "/test.TestGreeter/Greet",
+      [
+        startMessage(2),
+        inputMessage(greetRequest("Till")),
+        invokeMessage(
+          "test.TestGreeter",
+          "Greet",
+          greetRequest("Francesco")
+        ),
+      ]
+    ).run();
+
+    expect(result).toStrictEqual([outputMessage(greetResponse("Hello"))]);
   });
 });
 

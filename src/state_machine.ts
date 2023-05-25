@@ -80,6 +80,7 @@ export class PendingMessage {
     readonly promise: Promise<unknown>,
     readonly resolve: (value: unknown) => void,
     readonly reject: (reason: Failure | Error) => void,
+    public hasBeenChecked: boolean,
     readonly message?: ProtocolMessage | Uint8Array
   ) {}
 }
@@ -1017,6 +1018,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       resolvePendingMsg = resolve;
       rejectPendingMsg = reject;
     });
+    const hasBeenChecked = (this.state === ExecutionState.REPLAYING) ? false : true;
     this.indexToPendingMsgMap.set(
       journalIndex,
       new PendingMessage(
@@ -1026,6 +1028,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         resolvePendingMsg!,
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         rejectPendingMsg!,
+        hasBeenChecked,
         message
       )
     );
@@ -1186,7 +1189,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
     // If the result is a value, then resolve and remove the pending message from the map
     // If the result is a failure, then reject and remove the pending message from the map
-    // If the result is still missing, do nothing
+    // If the result is still missing, set flag that we did the mismatch check but are still waiting for a completion
     if (value !== undefined) {
       if (pendingMessage.resolve !== undefined) {
         pendingMessage.resolve(value);
@@ -1215,6 +1218,16 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         );
         return;
       }
+    } else {
+      // We got an incomplete replay
+      // We did the journal mismatch with that replayed message, so we can set the hasBeenChecked to true
+      // We update the pending message is in the list
+      // This is necessary for the scenario where we do not await a synchronous action (sleep/invoke/...)
+      // If we then want to send the response, we will get blocked on this forever.
+      // For example you do a sleep but don't await it, it gets replayed but not completed during replay.
+      // You don't want to await on this pending promise. You only want to wait on journal mismatch checks.
+      pendingMessage.hasBeenChecked = true;
+      this.indexToPendingMsgMap.set(journalIndex, pendingMessage);
     }
 
     // Clear the suspension timeout if this completion message leads to zero pending promises
@@ -1272,6 +1285,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   }
 
   async onCallSuccess(result: Uint8Array | SuspensionMessage) {
+
     if (result instanceof Uint8Array) {
       const msg = OutputStreamEntryMessage.create({
         value: Buffer.from(result),
@@ -1282,10 +1296,12 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         msg
       );
 
+      // Wait until replay has finished
       if (this.indexToPendingMsgMap.size !== 0) {
-        // wait till all messages have been resolved
         await Promise.all(
-          [...this.indexToPendingMsgMap.values()].map((el) => el.promise)
+          [...this.indexToPendingMsgMap.entries()]
+            .filter(el => (el[0] < this.nbEntriesToReplay) && (!el[1].hasBeenChecked))
+            .map(el => el[1].promise)
         );
       }
 
