@@ -1272,6 +1272,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   }
 
   async onCallSuccess(result: Uint8Array | SuspensionMessage) {
+
     if (result instanceof Uint8Array) {
       const msg = OutputStreamEntryMessage.create({
         value: Buffer.from(result),
@@ -1282,10 +1283,11 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         msg
       );
 
+      // Wait until replay has finished
       if (this.indexToPendingMsgMap.size !== 0) {
-        // wait till all messages have been resolved
         await Promise.all(
-          [...this.indexToPendingMsgMap.values()].map((el) => el.promise)
+          [...this.indexToPendingMsgMap.entries()].filter(el => el[0] <= this.nbEntriesToReplay)
+            .map(el => el[1].promise)
         );
       }
 
