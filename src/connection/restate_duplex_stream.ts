@@ -26,7 +26,7 @@ export class RestateDuplexStream {
 
   async send(msgs: Message[]): Promise<void> {
     const readable = stream.Readable.from(msgs);
-    await pipeline(readable, this.sdkOutput);
+    await pipeline(readable, this.sdkOutput, { end: false });
   }
 
   end() {
