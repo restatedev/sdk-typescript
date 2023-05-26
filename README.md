@@ -7,7 +7,8 @@ Restate is a system for easily building resilient applications using **distribut
 ❓ Learn more about Restate from the [Restate documentation](https://github.com/restatedev/documentation).
 
 # Prerequisites
-* NodeJS
+- [NodeJS (and npm)](https://nodejs.org) installed.
+- [Docker Engine](https://docs.docker.com/engine/install/) to launch the Restate runtime (not needed for the app implementation itself).
 
 # Building the SDK
 Install the NodeJS dependencies:
@@ -67,21 +68,21 @@ node dist/example.js
 Start the runtime in a Docker container:
 - On Linux:
 ```shell
-docker run -e RUST_LOG=info,restate=debug --network=host ghcr.io/restatedev/restate-dist:latest
+docker run --name restate_dev --rm--network=host ghcr.io/restatedev/restate-dist:0.1.1
 ```
 - On macOS:
 ```shell
-docker run -e RUST_LOG=info,restate=debug ghcr.io/restatedev/restate-dist:latest
+docker run --name restate_dev --rm -p 8081:8081 -p 9091:9091 -p 9090:9090 ghcr.io/restatedev/restate-dist:0.1.1
 ```
 
 Discover the TestGreeter:
 - On Linux:
 ```shell
-curl -X POST http://localhost:8081/services/discover -H 'content-type: application/json' -d '{"uri": "http://localhost:8000"}'
+curl -X POST http://localhost:8081/services/discover -H 'content-type: application/json' -d '{"uri": "http://localhost:8080"}'
 ```
 - On macOS:
 ```shell
-curl -X POST http://localhost:8081/services/discover -H 'content-type: application/json' -d '{"uri": "http://host.docker.internal:8000"}'
+curl -X POST http://localhost:8081/services/discover -H 'content-type: application/json' -d '{"uri": "http://host.docker.internal:8080"}'
 ```
 
 Send a Greet request via curl:
