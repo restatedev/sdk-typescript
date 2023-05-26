@@ -68,7 +68,7 @@ node dist/example.js
 Start the runtime in a Docker container:
 - On Linux:
 ```shell
-docker run --name restate_dev --rm--network=host ghcr.io/restatedev/restate-dist:0.1.1
+docker run --name restate_dev --rm --network=host ghcr.io/restatedev/restate-dist:0.1.1
 ```
 - On macOS:
 ```shell
