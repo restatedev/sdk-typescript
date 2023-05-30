@@ -16,6 +16,7 @@ import { Message } from "../src/types/types";
 import { HostedGrpcServiceMethod, ProtoMetadata } from "../src/types/grpc";
 import { ProtocolMode } from "../src/generated/proto/discovery";
 import { rlog } from "../src/utils/logger";
+import { NewStateMachine } from "../src/new_state_machine";
 
 export class TestDriver<I, O> implements Connection {
   private http2stream = this.mockHttp2DuplexStream();
@@ -27,7 +28,7 @@ export class TestDriver<I, O> implements Connection {
   private method: HostedGrpcServiceMethod<I, O>;
   private entries: Array<Message>;
   private nbCompletions: number;
-  private desm!: DurableExecutionStateMachine<I, O>;
+  private stateMachine!: NewStateMachine<I, O>;
 
   private getResultPromise: Promise<Array<Message>>;
   private resolveOnClose!: (value: Array<Message>) => void;
@@ -72,7 +73,7 @@ export class TestDriver<I, O> implements Connection {
   }
 
   run(): Promise<Array<Message>> {
-    this.desm = new DurableExecutionStateMachine(
+    this.stateMachine = new NewStateMachine(
       this,
       this.method,
       this.protocolMode
@@ -82,15 +83,15 @@ export class TestDriver<I, O> implements Connection {
     this.entries.forEach((el) => {
       // First eagerly send the replay messages, then send the completion messages at the end of the task queue (setTimeout)
       if (el.messageType !== COMPLETION_MESSAGE_TYPE) {
-        this.desm.onIncomingMessage(el);
+        this.stateMachine.applyRuntimeMessage(el);
       } else {
         // we use set timeout here to add the sending of the messages to the end of the task queue
-        setTimeout(() => this.desm.onIncomingMessage(el));
+        setTimeout(() => this.stateMachine.applyRuntimeMessage(el));
       }
     });
     // Set the input channel to closed a bit after sending the messages
     // to make the service finish up the work it can do and suspend or send back a response.
-    setTimeout(() => this.desm.setInputChannelToClosed(), 50);
+    setTimeout(() => this.stateMachine.setInputChannelToClosed(), 50);
 
     return this.getResultPromise;
   }

@@ -52,7 +52,7 @@ import { clearTimeout } from "timers";
 import { Message } from "./types/types";
 import { rlog } from "./utils/logger";
 
-enum ExecutionState {
+export enum ExecutionState {
   WAITING_FOR_START = "WAITING_FOR_START",
   REPLAYING = "REPLAYING",
   PROCESSING = "PROCESSING",
