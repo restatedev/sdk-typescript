@@ -15,9 +15,6 @@ import {
   SuspensionMessage
 } from "./types/protocol";
 import { Failure } from "./generated/proto/protocol";
-import { setContext } from "./restate_context";
-import { awakeableMessage } from "../test/protoutils";
-import { ExecutionState } from "./state_machine";
 
 export class NewStateMachine<I, O>{
   private journal!: Journal<I, O>;

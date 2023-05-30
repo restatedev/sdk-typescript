@@ -377,7 +377,7 @@ export class Journal<I, O> {
     this.userCodeJournalIndex++;
 
     if (
-      this.userCodeJournalIndex === this.nbEntriesToReplay + 1 &&
+      this.userCodeJournalIndex === this.nbEntriesToReplay &&
       this.isUserSideReplaying()
     ) {
       this.transitionState(NewExecutionState.PROCESSING_ON_USER_CODE_SIDE);
@@ -388,7 +388,7 @@ export class Journal<I, O> {
     this.runtimeReplayIndex++;
 
     if (
-      this.runtimeReplayIndex === this.nbEntriesToReplay + 1 &&
+      this.runtimeReplayIndex === this.nbEntriesToReplay &&
       this.isRuntimeSideReplaying()
     ) {
       this.transitionState(NewExecutionState.PROCESSING_ON_RUNTIME_SIDE);
