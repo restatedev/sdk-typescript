@@ -83,10 +83,10 @@ export class TestDriver<I, O> implements Connection {
     this.entries.forEach((el) => {
       // First eagerly send the replay messages, then send the completion messages at the end of the task queue (setTimeout)
       if (el.messageType !== COMPLETION_MESSAGE_TYPE) {
-        this.stateMachine.applyRuntimeMessage(el);
+        this.stateMachine.handleRuntimeMessage(el);
       } else {
         // we use set timeout here to add the sending of the messages to the end of the task queue
-        setTimeout(() => this.stateMachine.applyRuntimeMessage(el));
+        setTimeout(() => this.stateMachine.handleRuntimeMessage(el));
       }
     });
     // Set the input channel to closed a bit after sending the messages

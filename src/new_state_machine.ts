@@ -1,5 +1,5 @@
 import * as p from "./types/protocol";
-import { Journal } from "./journal";
+import { Journal, NewExecutionState } from "./journal";
 import { RestateContextImpl } from "./restate_context_impl";
 import { Connection } from "./connection/connection";
 import { HostedGrpcServiceMethod } from "./types/grpc";
@@ -8,8 +8,16 @@ import { Message } from "./types/types";
 import { printMessageAsJson, uuidV7FromBuffer } from "./utils/utils";
 import { rlog } from "./utils/logger";
 import { clearTimeout } from "timers";
-import { OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, OutputStreamEntryMessage, SUSPENSION_MESSAGE_TYPE } from "./types/protocol";
+import {
+  OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
+  OutputStreamEntryMessage,
+  SUSPENSION_MESSAGE_TYPE,
+  SuspensionMessage
+} from "./types/protocol";
 import { Failure } from "./generated/proto/protocol";
+import { setContext } from "./restate_context";
+import { awakeableMessage } from "../test/protoutils";
+import { ExecutionState } from "./state_machine";
 
 export class NewStateMachine<I, O>{
   private journal!: Journal<I, O>;
@@ -30,14 +38,14 @@ export class NewStateMachine<I, O>{
     private readonly method: HostedGrpcServiceMethod<I, O>,
     private readonly protocolMode: ProtocolMode
   ) {
-    connection.onMessage(this.applyRuntimeMessage.bind(this));
+    connection.onMessage(this.handleRuntimeMessage.bind(this));
     connection.onClose(this.setInputChannelToClosed.bind(this));
     connection.addOnErrorListener(() => {
       this.onError();
     });
   }
 
-  public applyUserCodeMessage<T>(
+  public handleUserCodeMessage<T>(
     messageType: bigint,
     message: p.ProtocolMessage | Uint8Array,
     completedFlag?: boolean,
@@ -73,12 +81,12 @@ export class NewStateMachine<I, O>{
     return promise;
   }
 
-  public applyRuntimeMessage(
+  public handleRuntimeMessage(
     m: Message
   ){
     if(m.messageType === p.START_MESSAGE_TYPE){
       this.handleStartMessage(m.message as p.StartMessage);
-    } if(m.messageType === p.POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE) {
+    } else if(m.messageType === p.POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE) {
       this.handleInputMessage(m.message as p.PollInputStreamEntryMessage)
     } else {
       rlog.debugJournalMessage(this.logPrefix, "Handling message: ", m.message)
@@ -104,12 +112,12 @@ export class NewStateMachine<I, O>{
     this.journal = new Journal(m.knownEntries, this.method);
   }
 
-  async handleInputMessage(m: p.PollInputStreamEntryMessage){
+  handleInputMessage(m: p.PollInputStreamEntryMessage){
     rlog.debugJournalMessage(this.logPrefix, "Handling input message: ", m)
-    const rootPromise = this.method.invoke(this.restateContext, m.value, this.logPrefix)
-    rootPromise
+    this.journal.handleInputMessage(m);
+    this.method.invoke(this.restateContext, m.value, this.logPrefix)
       .then((result) => {
-        if (result instanceof Uint8Array) {
+        if (result instanceof Uint8Array) { // output stream message
           const msg = OutputStreamEntryMessage.create({
             value: Buffer.from(result),
           });
@@ -118,52 +126,41 @@ export class NewStateMachine<I, O>{
             "Call ended successful with output message.",
             msg
           );
-          this.connection.buffer(
-            new Message(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, msg)
-          );
-        } else {
+          this.journal.applyUserSideMessage(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, msg);
+          this.connection.buffer(new Message(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, msg));
+        } else { // suspension message
           rlog.debugJournalMessage(this.logPrefix, "Call suspending. ", result);
-          this.connection.buffer(
-            new Message(
-              SUSPENSION_MESSAGE_TYPE,
-              result,
-              undefined,
-              undefined,
-              undefined
-            )
-          );
+          this.journal.applyUserSideMessage(SUSPENSION_MESSAGE_TYPE, result);
+          this.connection.buffer(new Message(SUSPENSION_MESSAGE_TYPE, result));
         }
       })
-      .catch((e) => {
+      .catch(async (e) => {
         if (e instanceof Error) {
           rlog.warn(`${this.logPrefix} Call failed: ${e.message} - ${e.stack}`);
         } else {
           rlog.warn(`${this.logPrefix} Call failed: ${printMessageAsJson(e)}`);
         }
-
-        // We send the message straight over the connection
-        this.connection.buffer(
-          new Message(
-            OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
-            OutputStreamEntryMessage.create({
-              failure: Failure.create({
-                code: 13,
-                message: `Uncaught exception for invocation id ${this.invocationIdString}: ${e.message}`,
-              }),
-            })
-          )
-        );
+        this.connection.buffer(new Message(
+          OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
+          OutputStreamEntryMessage.create({
+            failure: Failure.create({
+              code: 13,
+              message: `${this.logPrefix} Uncaught exception for invocation id: ${e.message}`,
+            }),
+          })
+        ))
       })
-      .finally( async () => {
+      .finally(async ()=> {
         try {
           await this.connection.flush();
         } catch (e: any) {
           rlog.warn(`${this.logPrefix} Failed to flush output/suspension message to the runtime: ${e.message} - ${e.stack}`);
         } finally {
+          // even if we failed to flush, we need to close out this state machine
           this.connection.end();
         }
-      });
-    this.journal.handleInputMessage(m, rootPromise);
+      })
+
   }
 
   scheduleSuspension(){
@@ -194,6 +191,31 @@ export class NewStateMachine<I, O>{
   }
 
   suspend(){
+    rlog.debug("Suspending")
+
+    const indices = this.journal.getCompletableIndices();
+    // If the state is closed then we either already send a suspension
+    // or something else bad happened...
+    if (!this.journal.isInClosedState()) {
+      // There need to be journal entries to complete, otherwise this timeout should have been removed.
+      if (indices.length > 0) {
+        // A suspension message is the end of the invocation.
+        // Resolve the root call with the suspension message
+        // This will lead to a onCallSuccess call where this msg will be sent.
+        const msg = SuspensionMessage.create({
+          entryIndexes: indices,
+        });
+        this.method.resolve(msg);
+      } else {
+        // leads to onCallFailure call
+        this.method.reject(
+          new Error(
+            "Illegal state: Not able to send suspension message because no pending promises. " +
+            "This timeout should have been removed."
+          )
+        );
+      }
+    }
     return;
   }
 

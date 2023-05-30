@@ -52,7 +52,7 @@ export class RestateContextImpl<I, O> implements RestateContext {
 
     // Create the message and let the state machine process it
     const msg = GetStateEntryMessage.create({ key: Buffer.from(name) });
-    const promise = this.stateMachine.applyUserCodeMessage(GET_STATE_ENTRY_MESSAGE_TYPE, msg);
+    const promise = this.stateMachine.handleUserCodeMessage(GET_STATE_ENTRY_MESSAGE_TYPE, msg);
 
     // Wait for the result, do post-processing and then deliver it back to the user code.
     return promise.then((result) => {
@@ -89,7 +89,7 @@ export class RestateContextImpl<I, O> implements RestateContext {
 
   isValidState(callType: string): boolean {
     if (this.inSideEffectFlag) {
-      this.stateMachine.applyUserCodeMessage(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
+      this.stateMachine.handleUserCodeMessage(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
         OutputStreamEntryMessage.create({failure:
             Failure.create({
               code: 13,
@@ -97,7 +97,7 @@ export class RestateContextImpl<I, O> implements RestateContext {
             })}));
       return false;
     } else if (this.oneWayCallFlag) {
-      this.stateMachine.applyUserCodeMessage(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
+      this.stateMachine.handleUserCodeMessage(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
         OutputStreamEntryMessage.create({failure:
         Failure.create({
           code: 13,

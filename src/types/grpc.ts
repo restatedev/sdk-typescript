@@ -58,6 +58,7 @@ export class HostedGrpcServiceMethod<I, O> {
       this.method
         .localFn(instanceWithContext, input)
         .then((output) => {
+          rlog.debug("Encoding the output message")
           const outBytes = this.method.outputEncoder(output);
           resolve(outBytes);
         })

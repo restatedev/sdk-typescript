@@ -1,17 +1,22 @@
-import {
-  POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
-  PollInputStreamEntryMessage,
-  ProtocolMessage,
-  SuspensionMessage
-} from "./types/protocol";
+import * as p from "./types/protocol";
 import { Failure } from "./generated/proto/protocol";
 import { HostedGrpcServiceMethod } from "./types/grpc";
+import {
+  BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
+  CLEAR_STATE_ENTRY_MESSAGE_TYPE, COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
+  GET_STATE_ENTRY_MESSAGE_TYPE, GetStateEntryMessage,
+  OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
+  OutputStreamEntryMessage, SET_STATE_ENTRY_MESSAGE_TYPE,
+  SUSPENSION_MESSAGE_TYPE,
+  SuspensionMessage
+} from "./types/protocol";
+import { rlog } from "./utils/logger";
 
 export class Journal<I, O> {
   private state = NewExecutionState.WAITING_FOR_START;
 
   // Starts at 1 because the user code doesn't do explicit actions for the input message
-  private userCodeJournalIndex = 1;
+  private userCodeJournalIndex = 0;
 
   // Starts at 0 because we process the input entry message which will increment it to 1
   // Only used as long as the runtime input stream is in replay state
@@ -28,19 +33,35 @@ export class Journal<I, O> {
   ) {
   }
 
-  public handleInputMessage(m: PollInputStreamEntryMessage, rootPromise: Promise<Uint8Array | SuspensionMessage>){
+  handleInputMessage(m: p.PollInputStreamEntryMessage){
+    this.transitionState(NewExecutionState.REPLAYING);
+
+    if(this.nbEntriesToReplay === 1){
+      this.transitionState(NewExecutionState.PROCESSING_ON_RUNTIME_SIDE)
+    }
+
+    let resolve: (value: SuspensionMessage | Uint8Array) => void;
+    let reject: (reason?: any) => void;
+    const promise = new Promise<SuspensionMessage | Uint8Array>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    }).then(
+      (result) => this.method.resolve(result),
+      (failure) => this.method.resolve(failure)
+    );
+
     this.pendingJournalEntries.set(0,
-      new JournalEntry(POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
+      new JournalEntry(p.POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
         m,
         JournalEntryStatus.WAITING_ON_COMPLETION,
-        rootPromise,
-        this.method.resolve,
-        this.method.reject))
+        promise,
+        resolve!,
+        reject!));
   }
 
   public applyUserSideMessage<T>(
     messageType: bigint,
-    message: ProtocolMessage | Uint8Array
+    message: p.ProtocolMessage | Uint8Array
   ): Promise<T> {
     this.incrementUserCodeIndex();
 
@@ -54,7 +75,11 @@ export class Journal<I, O> {
     if(this.isUserSideReplaying()){
       const journalEntry = this.pendingJournalEntries.get(this.userCodeJournalIndex);
       if(journalEntry){
-        this.handleReplay(messageType, message, journalEntry);
+        if(journalEntry.status === JournalEntryStatus.WAITING_ON_USER_CODE){
+          this.handleReplay(this.userCodeJournalIndex, messageType, journalEntry.message, message, journalEntry);
+        } else {
+          //TODO duplicate user side message for journal index
+        }
       } else { // no replayed message yet
         /*
           - Add message to the pendingJournalEntries with JournalEntryStatus = WAITING_ON_REPLAY
@@ -82,12 +107,39 @@ export class Journal<I, O> {
             - If all messages are WAITING_ON_COMPLETION;
                 - send the suspension or output stream message back
             - Set userCodeState to CLOSED
-        - Else if messageType requires completion/ack
+        - Else if messageType does not require completion/ack
+            - Return promise resolved with void;
+        - Else
             - Add message to the pendingJournalEntries with JournalEntryStatus = WAITING_ON_COMPLETION
             - Return the user code promise;
-        - Else
-            - Return promise resolved with void;
        */
+      if(messageType === p.SUSPENSION_MESSAGE_TYPE ||
+        messageType === p.OUTPUT_STREAM_ENTRY_MESSAGE_TYPE){
+        rlog.info("Handling output message")
+        this.handleOutputMessage(messageType, message as SuspensionMessage | OutputStreamEntryMessage);
+        return promise; // TODO??
+      } else if(
+        messageType === SET_STATE_ENTRY_MESSAGE_TYPE ||
+        messageType === CLEAR_STATE_ENTRY_MESSAGE_TYPE ||
+        messageType === COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE ||
+        messageType === BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE
+      ) {
+        // Do not need completion
+
+      } else {
+        // Need completion
+        this.pendingJournalEntries.set(this.userCodeJournalIndex,
+          new JournalEntry(
+            messageType,
+            message,
+            JournalEntryStatus.WAITING_ON_COMPLETION,
+            promise,
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+            resolve!,
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+            reject!));
+        return promise;
+      }
 
     } else if(this.isInClosedState()){
       // We cannot do anything anymore because an output was already sent back
@@ -103,44 +155,9 @@ export class Journal<I, O> {
     return promise;
   }
 
-  private handleReplay(
-    messageType: bigint,
-    message: ProtocolMessage | Uint8Array,
-    replayedMsg: JournalEntry){
-    const match = this.checkJournalMatch(messageType, message, replayedMsg);
-    if(match){
-      /*
-       - If the replayed messageType === suspension or output stream (value/failure)
-          - If there are still messages with JournalEntryStatus = WAITING_ON_USER_CODE/WAITING_ON_REPLAY;
-              - Resolve the root promise with output message with non-determinism failure
-              (This means there were replay messages coming from the runtime that did not have a counterpart in the user code)
-          - If all messages are WAITING_ON_COMPLETION;
-              - Resolve the root promise with output message with suspension or response
-          - Set userCodeState to CLOSED
-      - Else if the replayed message contains a completion
-          - If the completion is a value
-              - Return the resolved user code promise with the value
-          - Else if the completion is a failure
-              - Return the rejected user code promise with the failure as Error
-          - Else if the completion is an Empty message
-              - Return the resolved user code promise with the Empty message
-          - Remove the journal entry
-      - Else the replayed message was uncompleted
-          - Create the user code promise
-          - Add message to the pendingJournalEntries with JournalEntryStatus = WAITING_ON_COMPLETION
-          - Return the user code promise
-       */
-    } else {
-      /*
-       - Resolve the root promise with output message with non-determinism failure
-       - Set userCodeState to CLOSED
-      */
-    }
-  }
-
   public applyRuntimeMessage(
     messageType: bigint,
-    message: ProtocolMessage | Uint8Array
+    message: p.ProtocolMessage | Uint8Array
   ) {
     // can take any type of message
 
@@ -164,71 +181,162 @@ export class Journal<I, O> {
 
   private applyRuntimeCompletionMessage(
     messageType: bigint,
-    message: ProtocolMessage | Uint8Array
+    message: p.ProtocolMessage | Uint8Array
   ){
-    /*
-    Check if the message is a completion message
-    Get message at that index in pendingJournalEntries
-      - If there is a pending user code message:
-         - Resolve the promise with value/failure/Empty
-      - Else if there is no pending user code message:
-         - Resolve the promise with failure
-    */
+    // Check if the message is a completion message
+    if(messageType === p.COMPLETION_MESSAGE_TYPE){
+      const complMsg = message as p.CompletionMessage;
+      // Get message at that entryIndex in pendingJournalEntries
+      const journalEntry = this.pendingJournalEntries.get(complMsg.entryIndex)
+      if(journalEntry){
+        if(complMsg.value !== undefined){
+          journalEntry.resolve(complMsg.value);
+          this.pendingJournalEntries.delete(complMsg.entryIndex);
+        } else if (complMsg.failure !== undefined) {
+          journalEntry.reject(new Error(complMsg.failure.message));
+          this.pendingJournalEntries.delete(complMsg.entryIndex);
+        } else if (complMsg.empty !== undefined) {
+          journalEntry.resolve(complMsg.empty);
+          this.pendingJournalEntries.delete(complMsg.entryIndex);
+        } else {
+          if(journalEntry.messageType === p.SIDE_EFFECT_ENTRY_MESSAGE_TYPE){
+            // Just needs and ack without completion
+            journalEntry.resolve(undefined);
+          } else {
+            //TODO completion message without a value/failure/empty
+          }
+        }
+      } else {
+        //TODO fail
+      }
+    } else {
+      //TODO fail
+    }
   }
 
   private applyRuntimeReplayMessage(
     messageType: bigint,
-    message: ProtocolMessage | Uint8Array
+    message: p.ProtocolMessage | Uint8Array
   ){
-    /*
-    Increment the replay index
-    Get message at runtimeReplayIndex in pendingJournalEntries
-    - If there is a pending user code message:
-        - Do journal mismatch check:
-        - If journal mismatch check pass:
-            - If the replayed messageType === suspension or output stream (value/failure)
-                - If there are still messages with JournalEntryStatus = WAITING_ON_USER_CODE/WAITING_ON_REPLAY;
-                      - Send back output stream message with non-determinism failure
-                      (This means there were replay messages coming from the runtime that did not have a counterpart in the user code)
-                - If all messages are WAITING_ON_COMPLETION;
-                      - send the suspension or output stream message back
-                - Set userCodeState to CLOSED
-            - Else if the replayed message contains a completion -> resolve the promise and remove the journal entry
-            - Else the replayed message was uncompleted -> set state to WAITING_ON_COMPLETION
-        - Else journal mismatch checks fail:
-            - Send back output message with non-determinism failure
-            - Set userCodeState to CLOSED
-    - Else there is no message (= replayed message)
-        - Add message to the pendingJournalEntries with JournalEntryStatus = WAITING_ON_USER_CODE
-    */
-    // Increment the replay index
     this.incrementRuntimeReplayIndex();
 
     const journalEntry = this.pendingJournalEntries.get(this.runtimeReplayIndex);
     if(journalEntry){
-
-    } else { // no journal entry yet
+      if(journalEntry.status === JournalEntryStatus.WAITING_ON_REPLAY){
+        this.handleReplay(this.runtimeReplayIndex, messageType, message, journalEntry.message, journalEntry)
+      } else {
+        // TODO duplicate replay message received from the runtime ...
+      }
+    } else {
+      // No journal entry found.
+      // Add message to the pendingJournalEntries with JournalEntryStatus = WAITING_ON_USER_CODE
+      // Will be completed when the user code reaches this point
+      let resolve: (value: any) => void;
+      let reject: (reason?: any) => void;
+      const promise = new Promise<any>((res, rej) => {
+        resolve = res;
+        reject = rej;
+      });
       this.pendingJournalEntries.set(this.runtimeReplayIndex,
         new JournalEntry(
           messageType,
           message,
-          JournalEntryStatus.WAITING_ON_USER_CODE
+          JournalEntryStatus.WAITING_ON_USER_CODE,
+          promise,
+          resolve!,
+          reject!
         )
       )
     }
   }
 
+  // This method gets called in two cases:
+  // 1. We already had a runtime replay, and now we get the user code message
+  // 2. We already had the user code message, and now we get the runtime replay
+  private handleReplay(
+    journalIndex: number,
+    messageType: bigint,
+    runtimeMsg: p.ProtocolMessage | Uint8Array,
+    userCodeMessage: p.ProtocolMessage | Uint8Array,
+    journalEntry: JournalEntry){
+
+    // Do the journal mismatch check
+    const match = this.checkJournalMatch(messageType, runtimeMsg, userCodeMessage);
+
+    // If journal mismatch check passed
+    if(match){
+      /*
+      - Else if the runtime replay message contains a completion
+          - If the completion is a value
+              - Return the resolved user code promise with the value
+          - Else if the completion is a failure
+              - Return the rejected user code promise with the failure as Error
+          - Else if the completion is an Empty message
+              - Return the resolved user code promise with the Empty message
+          - Remove the journal entry
+      - Else the replayed message was uncompleted
+          - Create the user code promise
+          - Add message to the pendingJournalEntries with JournalEntryStatus = WAITING_ON_COMPLETION
+          - Return the user code promise
+       */
+      if(messageType === SUSPENSION_MESSAGE_TYPE || messageType === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE){
+        this.handleOutputMessage(messageType, userCodeMessage as SuspensionMessage | OutputStreamEntryMessage)
+      } else if (messageType === GET_STATE_ENTRY_MESSAGE_TYPE) {
+        rlog.debug("Handling get state")
+        const getStateMsg = runtimeMsg as GetStateEntryMessage;
+        if (getStateMsg.value || getStateMsg.empty) {
+          journalEntry.resolve(getStateMsg.value || getStateMsg.empty)
+        }
+      } else {
+        /*
+        - Else the replayed message was uncompleted
+          - Create the user code promise
+          - Add message to the pendingJournalEntries with JournalEntryStatus = WAITING_ON_COMPLETION
+          - Return the user code promise
+         */
+        journalEntry.status = JournalEntryStatus.WAITING_ON_COMPLETION;
+        this.pendingJournalEntries.set(journalIndex, journalEntry);
+      }
+    } else { // Journal mismatch check failed
+      /*
+       - Resolve the root promise with output message with non-determinism failure
+       - Set userCodeState to CLOSED
+      */
+    }
+  }
+
+  handleOutputMessage(messageType: bigint, message: OutputStreamEntryMessage | SuspensionMessage){
+    if(this.allMsgsWereReplayed()){
+      // If all messages are WAITING_ON_COMPLETION;
+      // - send the suspension or output stream message back
+      const rootJournalEntry = this.pendingJournalEntries.get(0);
+      if(rootJournalEntry){
+        rootJournalEntry.resolve(message); // TODO fail if there is no rootJournalEntry
+      }
+    } else {
+      // If there are still messages with JournalEntryStatus = WAITING_ON_USER_CODE/WAITING_ON_REPLAY;
+      // - Send back output stream message with non-determinism failure
+      // (This means there were replay messages coming from the runtime that did not have a counterpart in the user code)
+      // TODO fail with non-determinism
+    }
+    this.transitionState(NewExecutionState.CLOSED);
+  }
+
   private checkJournalMatch(
     userCodeMsgType: bigint,
-    userCodeMsg: ProtocolMessage | Uint8Array,
-    runtimeMsg: JournalEntry): boolean {
+    runtimeMsg: p.ProtocolMessage | Uint8Array,
+    userCodeMsg: p.ProtocolMessage | Uint8Array): boolean {
     return true;
   }
 
   // To get the indices that need to be completed with suspension
   public getCompletableIndices(): number[] {
     // return all entries in WAITING_ON_COMPLETION state
-    return [];
+    return [...this.pendingJournalEntries.entries()]
+      .filter(el =>
+        // All entries in state WAITING_ON_COMPLETION, except for the root promise (index 0)
+        (el[0] !== 0) && (el[1].status === JournalEntryStatus.WAITING_ON_COMPLETION))
+      .map(el => el[0]);
   }
 
   private transitionState(newExecState: NewExecutionState){
@@ -243,23 +351,24 @@ export class Journal<I, O> {
     // If the runtime side was already done with the replay,
     // and the new exec stat shows that the user side is also done
     // then set to "processing" because replay has ended on both sides.
-    else if(newExecState === NewExecutionState.PROCESSING_ON_USER_CODE_SIDE){
-      if(this.state === NewExecutionState.PROCESSING_ON_RUNTIME_SIDE){
+    else if(newExecState === NewExecutionState.PROCESSING_ON_USER_CODE_SIDE &&
+      this.state === NewExecutionState.PROCESSING_ON_RUNTIME_SIDE){
+        rlog.debug("Transitioning state to PROCESSING")
         this.state = NewExecutionState.PROCESSING
-      }
     }
 
     // If the user side was already done with the replay,
     // and the new exec stat shows that the runtime side is also done
     // then set to "processing" because replay has ended on both sides.
-    else if(newExecState === NewExecutionState.PROCESSING_ON_RUNTIME_SIDE){
-      if(this.state === NewExecutionState.PROCESSING_ON_USER_CODE_SIDE){
+    else if(newExecState === NewExecutionState.PROCESSING_ON_RUNTIME_SIDE &&
+      this.state === NewExecutionState.PROCESSING_ON_USER_CODE_SIDE){
+        rlog.debug("Transitioning state to PROCESSING")
         this.state = NewExecutionState.PROCESSING
-      }
     }
 
     else {
       this.state = newExecState;
+      rlog.debug("Transitioning state to " + newExecState)
       return;
     }
   }
@@ -309,17 +418,23 @@ export class Journal<I, O> {
     return this.state === NewExecutionState.PROCESSING ||
       this.state === NewExecutionState.PROCESSING_ON_RUNTIME_SIDE;
   }
+
+  private allMsgsWereReplayed(): boolean {
+    const msgsToBeReplayed = [...this.pendingJournalEntries.entries()]
+      .filter(el => (el[1].status !== JournalEntryStatus.WAITING_ON_COMPLETION))
+    return msgsToBeReplayed.length === 0
+  }
 }
 
 
 export class JournalEntry {
   constructor(
     readonly messageType: bigint,
-    readonly message: ProtocolMessage | Uint8Array,
-    status: JournalEntryStatus,
-    readonly promise?: Promise<any>,
-    readonly resolve?: (value: any) => void,
-    readonly reject?: (reason?: any) => void
+    readonly message: p.ProtocolMessage | Uint8Array,
+    public status: JournalEntryStatus,
+    readonly promise: Promise<any>,
+    readonly resolve: (value: any) => void,
+    readonly reject: (reason?: any) => void
   ) {
   }
 
