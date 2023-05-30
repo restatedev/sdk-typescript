@@ -20,7 +20,7 @@ export class HttpConnection implements Connection {
     readonly stream: http2.ServerHttp2Stream,
     readonly restate: RestateDuplexStream
   ) {
-    restate.onError(this.onError.bind(this));
+    restate.onError(this.handleError.bind(this));
   }
 
   respond404() {
@@ -55,14 +55,14 @@ export class HttpConnection implements Connection {
     this.restate.onMessage(handler);
   }
 
-  onError() {
+  handleError() {
     this.end();
     this.emitOnErrorEvent();
   }
 
   // We use an error listener to notify the state machine of errors in the connection layer.
   // When there is a connection error (decoding/encoding/...), the statemachine is closed.
-  public addOnErrorListener(listener: () => void) {
+  public onError(listener: () => void) {
     this.onErrorListeners.push(listener);
   }
 

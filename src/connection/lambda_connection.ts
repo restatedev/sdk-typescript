@@ -61,7 +61,7 @@ export class LambdaConnection implements Connection {
     } catch (e) {
       rlog.error(e);
       rlog.debug("Closing the connection and state machine.");
-      this.onError();
+      this.handleError();
     }
   }
 
@@ -69,14 +69,14 @@ export class LambdaConnection implements Connection {
     return this.completionPromise;
   }
 
-  onError(): void {
+  handleError(): void {
     this.end();
     this.emitOnErrorEvent();
   }
 
   // We use an error listener to notify the state machine of errors in the connection layer.
   // When there is a connection error (decoding/encoding/...), the statemachine is closed.
-  public addOnErrorListener(listener: () => void) {
+  public onError(listener: () => void) {
     this.onErrorListeners.push(listener);
   }
 

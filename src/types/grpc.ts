@@ -2,8 +2,10 @@
 
 import { RestateContext, setContext } from "../restate_context";
 import { FileDescriptorProto } from "ts-proto-descriptors";
-import { SuspensionMessage } from "../generated/proto/protocol";
+import { OutputStreamEntryMessage } from "../generated/proto/protocol";
 import { rlog } from "../utils/logger";
+import { OUTPUT_STREAM_ENTRY_MESSAGE_TYPE } from "./protocol";
+import { Message } from "./types";
 
 export class GrpcServiceMethod<I, O> {
   constructor(
@@ -29,12 +31,7 @@ export class HostedGrpcServiceMethod<I, O> {
   /* eslint-disable @typescript-eslint/no-explicit-any */
   public reject!: (reason: any) => void;
   // used to resolve the invocation on suspensions (so when we have no output response yet)
-  public resolve!: (
-    value:
-      | Uint8Array
-      | SuspensionMessage
-      | PromiseLike<Uint8Array | SuspensionMessage>
-  ) => void;
+  public resolve!: (value: Message | PromiseLike<Message>) => void;
 
   constructor(
     readonly instance: unknown,
@@ -48,8 +45,8 @@ export class HostedGrpcServiceMethod<I, O> {
     context: RestateContext,
     inBytes: Uint8Array,
     logPrefix: string
-  ): Promise<Uint8Array | SuspensionMessage> {
-    return new Promise<Uint8Array | SuspensionMessage>((resolve, reject) => {
+  ): Promise<Message> {
+    return new Promise<Message>((resolve, reject) => {
       this.reject = reject;
       this.resolve = resolve;
       const instanceWithContext = setContext(this.instance, context);
@@ -59,7 +56,10 @@ export class HostedGrpcServiceMethod<I, O> {
         .localFn(instanceWithContext, input)
         .then((output) => {
           const outBytes = this.method.outputEncoder(output);
-          resolve(outBytes);
+          const msg = OutputStreamEntryMessage.create({
+            value: Buffer.from(outBytes),
+          });
+          resolve(new Message(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, msg));
         })
         .catch((error) => {
           reject(error);

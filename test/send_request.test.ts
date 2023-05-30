@@ -472,37 +472,37 @@ This gives the following error:
     at ReverseAwaitOrder.greet (/home/giselle/dev/sdk-typescript/test/send_request.test.ts:41:23)
     at GrpcServiceMethod.localMethod [as localFn] (/home/giselle/dev/sdk-typescript/src/server/base_restate_server.ts:201:16)
  */
-// describe("ReverseAwaitOrder: Failing A1", () => {
-//   it("should call greet", async () => {
-//     const result = await new TestDriver(
-//       protoMetadata,
-//       "TestGreeter",
-//       new ReverseAwaitOrder(),
-//       "/test.TestGreeter/Greet",
-//       [
-//         startMessage(1),
-//         inputMessage(greetRequest("Till")),
-//         completionMessage(
-//           1,
-//           undefined,
-//           undefined,
-//           Failure.create({ code: 13, message: "Error" })
-//         ),
-//         completionMessage(2, greetResponse("TILL")),
-//       ]
-//     ).run();
-//
-//     expect(result.length).toStrictEqual(4);
-//     expect(result[0]).toStrictEqual(
-//       invokeMessage("test.TestGreeter", "Greet", greetRequest("Francesco"))
-//     );
-//     expect(result[1]).toStrictEqual(
-//       invokeMessage("test.TestGreeter", "Greet", greetRequest("Till"))
-//     );
-//     expect(result[2]).toStrictEqual(setStateMessage("A2", "TILL"));
-//     checkError(result[3], "Error"); // Error comes from the failed completion
-//   });
-// });
+describe("ReverseAwaitOrder: Failing A1", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new ReverseAwaitOrder(),
+      "/test.TestGreeter/Greet",
+      [
+        startMessage(1),
+        inputMessage(greetRequest("Till")),
+        completionMessage(
+          1,
+          undefined,
+          undefined,
+          Failure.create({ code: 13, message: "Error" })
+        ),
+        completionMessage(2, greetResponse("TILL")),
+      ]
+    ).run();
+
+    expect(result.length).toStrictEqual(4);
+    expect(result[0]).toStrictEqual(
+      invokeMessage("test.TestGreeter", "Greet", greetRequest("Francesco"))
+    );
+    expect(result[1]).toStrictEqual(
+      invokeMessage("test.TestGreeter", "Greet", greetRequest("Till"))
+    );
+    expect(result[2]).toStrictEqual(setStateMessage("A2", "TILL"));
+    checkError(result[3], "Error"); // Error comes from the failed completion
+  });
+});
 
 describe("FailingForwardGreetingService: call failed - replay", () => {
   it("should call greet", async () => {

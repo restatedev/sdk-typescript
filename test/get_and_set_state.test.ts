@@ -50,6 +50,27 @@ class ClearStateGreeter implements TestGreeter {
   }
 }
 
+enum OrderStatus {
+  ORDERED,
+  DELIVERED,
+}
+
+class GetAndSetEnumGreeter implements TestGreeter {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async greet(request: TestRequest): Promise<TestResponse> {
+    const ctx = restate.useContext(this);
+
+    // state
+    const oldState = await ctx.get<OrderStatus>("STATE");
+
+    ctx.set("STATE", OrderStatus.ORDERED);
+
+    const newState = await ctx.get<OrderStatus>("STATE");
+
+    return TestResponse.create({ greeting: `Hello ${oldState} - ${newState}` });
+  }
+}
+
 describe("GetAndSetGreeter: With GetState and SetState", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
@@ -409,5 +430,47 @@ describe("ClearState: ClearState journal mismatch check on ClearState - completi
       result[0],
       "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
     );
+  });
+});
+
+describe("GetAndSetEnumGreeter: With GetState and SetState and with enum state replayed", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new GetAndSetEnumGreeter(),
+      "/test.TestGreeter/Greet",
+      [
+        startMessage(4),
+        inputMessage(greetRequest("Till")),
+        getStateMessage("STATE", OrderStatus.DELIVERED),
+        setStateMessage("STATE", OrderStatus.ORDERED),
+        getStateMessage("STATE", OrderStatus.ORDERED),
+      ]
+    ).run();
+
+    expect(result).toStrictEqual([outputMessage(greetResponse("Hello 1 - 0"))]);
+  });
+});
+
+describe("GetAndSetEnumGreeter: With GetState and SetState and with empty enum state replayed", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new GetAndSetEnumGreeter(),
+      "/test.TestGreeter/Greet",
+      [
+        startMessage(4),
+        inputMessage(greetRequest("Till")),
+        getStateMessage("STATE", undefined, true),
+        setStateMessage("STATE", OrderStatus.ORDERED),
+        getStateMessage("STATE", OrderStatus.ORDERED),
+      ]
+    ).run();
+
+    expect(result).toStrictEqual([
+      outputMessage(greetResponse("Hello null - 0")),
+    ]);
   });
 });
