@@ -41,6 +41,23 @@ class SideEffectGreeter implements TestGreeter {
   }
 }
 
+class EmptySideEffectGreeter implements TestGreeter {
+  constructor(readonly sideEffectOutput: string) {}
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async greet(request: TestRequest): Promise<TestResponse> {
+    const ctx = restate.useContext(this);
+
+    // state
+    await ctx.sideEffect(async () => {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const something = true;
+    });
+
+    return TestResponse.create({ greeting: `Hello` });
+  }
+}
+
 class NumericSideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: number) {}
 
@@ -331,6 +348,45 @@ describe("SideEffectGreeter: with completion", () => {
     expect(result).toStrictEqual([
       sideEffectMessage("Francesco"),
       outputMessage(greetResponse("Hello Francesco")),
+    ]);
+  });
+});
+
+describe("EmptySideEffectGreeter: with replay", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new EmptySideEffectGreeter("Francesco"),
+      "/test.TestGreeter/Greet",
+      [
+        startMessage(2),
+        inputMessage(greetRequest("Till")),
+        sideEffectMessage({}),
+      ]
+    ).run();
+
+    expect(result).toStrictEqual([outputMessage(greetResponse("Hello"))]);
+  });
+});
+
+describe("EmptySideEffectGreeter: with completion", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new EmptySideEffectGreeter("Francesco"),
+      "/test.TestGreeter/Greet",
+      [
+        startMessage(1),
+        inputMessage(greetRequest("Till")),
+        completionMessage(1),
+      ]
+    ).run();
+
+    expect(result).toStrictEqual([
+      sideEffectMessage({}),
+      outputMessage(greetResponse("Hello")),
     ]);
   });
 });
