@@ -1,13 +1,17 @@
 import { RestateContext } from "./restate_context";
 import { NewStateMachine } from "./new_state_machine";
 import {
+  BackgroundInvokeEntryMessage,
+  ClearStateEntryMessage,
   Failure,
-  GetStateEntryMessage,
+  GetStateEntryMessage, InvokeEntryMessage,
   OutputStreamEntryMessage,
   SetStateEntryMessage
 } from "./generated/proto/protocol";
 import {
-  GET_STATE_ENTRY_MESSAGE_TYPE,
+  BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
+  CLEAR_STATE_ENTRY_MESSAGE_TYPE,
+  GET_STATE_ENTRY_MESSAGE_TYPE, INVOKE_ENTRY_MESSAGE_TYPE,
   OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
   SET_STATE_ENTRY_MESSAGE_TYPE
 } from "./types/protocol";
@@ -40,19 +44,6 @@ export class RestateContextImpl<I, O> implements RestateContext {
     this.serviceName = serviceName
   }
 
-  awakeable<T>(): { id: string; promise: Promise<T> } {
-
-    return { id: "", promise: new Promise<T>(() =>{return;}) };
-  }
-
-  clear(name: string): void {
-    return;
-  }
-
-  completeAwakeable<T>(id: string, payload: T): void {
-    return;
-  }
-
   async get<T>(name: string): Promise<T | null> {
     // Check if this is a valid action
     if (!this.isValidState("get state")) {
@@ -77,13 +68,6 @@ export class RestateContextImpl<I, O> implements RestateContext {
     })
   }
 
-  oneWayCall<T>(call: () => Promise<T>, delayMillis?: number): void {
-  }
-
-  request(service: string, method: string, data: Uint8Array): Promise<Uint8Array> {
-    return Promise.resolve(new Uint8Array());
-  }
-
   set<T>(name: string, value: T): void {
     if (!this.isValidState("set state")) {
       return;
@@ -97,12 +81,89 @@ export class RestateContextImpl<I, O> implements RestateContext {
     this.stateMachine.handleUserCodeMessage(SET_STATE_ENTRY_MESSAGE_TYPE, msg);
   }
 
+  clear(name: string): void {
+    if (!this.isValidState("clear state")) {
+      return;
+    }
+
+    const msg = ClearStateEntryMessage.create({
+      key: Buffer.from(name, "utf8"),
+    });
+    this.stateMachine.handleUserCodeMessage(CLEAR_STATE_ENTRY_MESSAGE_TYPE, msg);
+  }
+
+  request(service: string, method: string, data: Uint8Array): Promise<Uint8Array> {
+    if (this.oneWayCallFlag) {
+      return this.invokeOneWay(service, method, data);
+    } else {
+      return this.invoke(service, method, data);
+    }
+  }
+
+  private async invoke(
+    service: string,
+    method: string,
+    data: Uint8Array
+  ): Promise<Uint8Array> {
+    if (!this.isValidState("invoke")) {
+      return Promise.reject();
+    }
+
+    const msg = InvokeEntryMessage.create({
+      serviceName: service,
+      methodName: method,
+      parameter: Buffer.from(data),
+    });
+    const promise = this.stateMachine.handleUserCodeMessage(INVOKE_ENTRY_MESSAGE_TYPE, msg);
+    return (await promise) as Uint8Array;
+  }
+
+  private async invokeOneWay(
+    service: string,
+    method: string,
+    data: Uint8Array
+  ): Promise<Uint8Array> {
+
+    const invokeTime = (this.oneWayCallDelay > 0) ?  Date.now() + this.oneWayCallDelay : undefined;
+    const msg = BackgroundInvokeEntryMessage.create({
+      serviceName: service,
+      methodName: method,
+      parameter: Buffer.from(data),
+      invokeTime: invokeTime
+    })
+
+    this.stateMachine.handleUserCodeMessage(BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE, msg)
+    return new Uint8Array();
+  }
+
+  async oneWayCall<T>(call: () => Promise<T>, delayMillis?: number): Promise<void> {
+    if (!this.isValidState("oneWayCall")) {
+      return Promise.reject();
+    }
+
+    this.oneWayCallFlag = true;
+    this.oneWayCallDelay = delayMillis || 0;
+    await call().finally(() => {
+      this.oneWayCallDelay = 0;
+      this.oneWayCallFlag = false;
+    });
+  }
+
   sideEffect<T>(fn: () => Promise<T>): Promise<T> {
     return new Promise<T>(() =>{return;});
   }
 
   sleep(millis: number): Promise<void> {
     return Promise.resolve(undefined);
+  }
+
+  awakeable<T>(): { id: string; promise: Promise<T> } {
+
+    return { id: "", promise: new Promise<T>(() =>{return;}) };
+  }
+
+  completeAwakeable<T>(id: string, payload: T): void {
+    return;
   }
 
   isValidState(callType: string): boolean {

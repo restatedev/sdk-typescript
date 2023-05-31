@@ -413,26 +413,20 @@ export class Journal<I, O> {
   private transitionState(newExecState: NewExecutionState) {
 
     // If the state is already closed then you cannot transition anymore
-    if (this.state === NewExecutionState.CLOSED) {
-      if (newExecState !== NewExecutionState.CLOSED) {
-        //TODO
-      }
-    }
-
+    if (this.state === NewExecutionState.CLOSED && newExecState !== NewExecutionState.CLOSED) {
+      //TODO
+    } else if (newExecState === NewExecutionState.PROCESSING_ON_USER_CODE_SIDE &&
+      this.state === NewExecutionState.PROCESSING_ON_RUNTIME_SIDE) {
       // If the runtime side was already done with the replay,
       // and the new exec stat shows that the user side is also done
-    // then set to "processing" because replay has ended on both sides.
-    else if (newExecState === NewExecutionState.PROCESSING_ON_USER_CODE_SIDE &&
-      this.state === NewExecutionState.PROCESSING_ON_RUNTIME_SIDE) {
+      // then set to "processing" because replay has ended on both sides.
       rlog.debug("Transitioning state to PROCESSING");
       this.state = NewExecutionState.PROCESSING;
-    }
-
+    } else if (newExecState === NewExecutionState.PROCESSING_ON_RUNTIME_SIDE &&
+      this.state === NewExecutionState.PROCESSING_ON_USER_CODE_SIDE) {
       // If the user side was already done with the replay,
       // and the new exec stat shows that the runtime side is also done
-    // then set to "processing" because replay has ended on both sides.
-    else if (newExecState === NewExecutionState.PROCESSING_ON_RUNTIME_SIDE &&
-      this.state === NewExecutionState.PROCESSING_ON_USER_CODE_SIDE) {
+      // then set to "processing" because replay has ended on both sides.
       rlog.debug("Transitioning state to PROCESSING");
       this.state = NewExecutionState.PROCESSING;
     } else {
