@@ -5,9 +5,16 @@ import {
   ClearStateEntryMessage,
   CompleteAwakeableEntryMessage,
   GetStateEntryMessage,
-  InvokeEntryMessage,
-  SetStateEntryMessage,
+  InvokeEntryMessage, OutputStreamEntryMessage,
+  SetStateEntryMessage
 } from "../generated/proto/protocol";
+import {
+  AWAKEABLE_ENTRY_MESSAGE_TYPE, BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
+  CLEAR_STATE_ENTRY_MESSAGE_TYPE, COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
+  GET_STATE_ENTRY_MESSAGE_TYPE,
+  INVOKE_ENTRY_MESSAGE_TYPE, OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
+  SET_STATE_ENTRY_MESSAGE_TYPE, SLEEP_ENTRY_MESSAGE_TYPE
+} from "../types/protocol";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export function printMessageAsJson(obj: any): string {
@@ -84,3 +91,27 @@ export const completeAwakeableMsgEquality = (
     msg1.payload.equals(msg2.payload)
   );
 };
+
+const outputMsgEquality = (
+  msg1: OutputStreamEntryMessage,
+  msg2: OutputStreamEntryMessage
+) => {
+  return (
+    msg1.value === msg2.value &&
+    msg1.failure === msg2.failure
+  );
+};
+
+export const equalityCheckers = new Map<bigint, (msg1: any, msg2: any) => boolean>([
+  [GET_STATE_ENTRY_MESSAGE_TYPE, getStateMsgEquality],
+  [SET_STATE_ENTRY_MESSAGE_TYPE, setStateMsgEquality],
+  [CLEAR_STATE_ENTRY_MESSAGE_TYPE, clearStateMsgEquality],
+  [INVOKE_ENTRY_MESSAGE_TYPE, invokeMsgEquality],
+  [BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE, invokeMsgEquality],
+  [COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE, completeAwakeableMsgEquality],
+  [OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, outputMsgEquality],
+  [AWAKEABLE_ENTRY_MESSAGE_TYPE, () => true],
+  [SLEEP_ENTRY_MESSAGE_TYPE, () => true]
+  ]
+)
+

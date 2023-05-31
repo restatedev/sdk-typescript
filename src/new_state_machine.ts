@@ -48,7 +48,7 @@ export class NewStateMachine<I, O>{
     completedFlag?: boolean,
     protocolVersion?: number,
     requiresAckFlag?: boolean
-  ): Promise<T>{
+  ): Promise<T | void>{
     /*
     Can take any type of message as input (also input stream and output stream)
     */
@@ -106,7 +106,7 @@ export class NewStateMachine<I, O>{
       this.method.service,
       this
     );
-    this.journal = new Journal(m.knownEntries, this.method);
+    this.journal = new Journal(this.invocationIdString, m.knownEntries, this.method);
   }
 
   handleInputMessage(m: p.PollInputStreamEntryMessage){
@@ -114,22 +114,13 @@ export class NewStateMachine<I, O>{
     this.journal.handleInputMessage(m);
     this.method.invoke(this.restateContext, m.value, this.logPrefix)
       .then((result) => {
-        if (result instanceof Uint8Array) { // output stream message
-          const msg = OutputStreamEntryMessage.create({
-            value: Buffer.from(result),
-          });
-          rlog.debugJournalMessage(
-            this.logPrefix,
-            "Call ended successful with output message.",
-            msg
-          );
-          this.journal.applyUserSideMessage(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, msg);
-          this.connection.buffer(new Message(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, msg));
-        } else { // suspension message
-          rlog.debugJournalMessage(this.logPrefix, "Call suspending. ", result);
-          this.journal.applyUserSideMessage(SUSPENSION_MESSAGE_TYPE, result);
-          this.connection.buffer(new Message(SUSPENSION_MESSAGE_TYPE, result));
-        }
+        rlog.debugJournalMessage(
+          this.logPrefix,
+          "Call ended successful with message.",
+          result.message
+        );
+        this.journal.applyUserSideMessage(result.messageType, result.message);
+        this.connection.buffer(result)
       })
       .catch(async (e) => {
         if (e instanceof Error) {
@@ -137,6 +128,7 @@ export class NewStateMachine<I, O>{
         } else {
           rlog.warn(`${this.logPrefix} Call failed: ${printMessageAsJson(e)}`);
         }
+        // TODO does this still need to go via the journal? I guess so?...
         this.connection.buffer(new Message(
           OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
           OutputStreamEntryMessage.create({
@@ -202,7 +194,7 @@ export class NewStateMachine<I, O>{
         const msg = SuspensionMessage.create({
           entryIndexes: indices,
         });
-        this.method.resolve(msg);
+        this.method.resolve(new Message(SUSPENSION_MESSAGE_TYPE, msg));
       } else {
         // leads to onCallFailure call
         this.method.reject(

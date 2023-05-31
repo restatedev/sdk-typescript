@@ -2,8 +2,10 @@
 
 import { RestateContext, setContext } from "../restate_context";
 import { FileDescriptorProto } from "ts-proto-descriptors";
-import { SuspensionMessage } from "../generated/proto/protocol";
+import { OutputStreamEntryMessage, SuspensionMessage } from "../generated/proto/protocol";
 import { rlog } from "../utils/logger";
+import { OUTPUT_STREAM_ENTRY_MESSAGE_TYPE } from "./protocol";
+import { Message } from "./types";
 
 export class GrpcServiceMethod<I, O> {
   constructor(
@@ -31,9 +33,8 @@ export class HostedGrpcServiceMethod<I, O> {
   // used to resolve the invocation on suspensions (so when we have no output response yet)
   public resolve!: (
     value:
-      | Uint8Array
-      | SuspensionMessage
-      | PromiseLike<Uint8Array | SuspensionMessage>
+      | Message
+      | PromiseLike<Message>
   ) => void;
 
   constructor(
@@ -48,8 +49,8 @@ export class HostedGrpcServiceMethod<I, O> {
     context: RestateContext,
     inBytes: Uint8Array,
     logPrefix: string
-  ): Promise<Uint8Array | SuspensionMessage> {
-    return new Promise<Uint8Array | SuspensionMessage>((resolve, reject) => {
+  ): Promise<Message> {
+    return new Promise<Message>((resolve, reject) => {
       this.reject = reject;
       this.resolve = resolve;
       const instanceWithContext = setContext(this.instance, context);
@@ -60,7 +61,10 @@ export class HostedGrpcServiceMethod<I, O> {
         .then((output) => {
           rlog.debug("Encoding the output message")
           const outBytes = this.method.outputEncoder(output);
-          resolve(outBytes);
+          const msg = OutputStreamEntryMessage.create({
+            value: Buffer.from(outBytes),
+          });
+          resolve(new Message(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, msg));
         })
         .catch((error) => {
           reject(error);

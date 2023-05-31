@@ -1,7 +1,16 @@
 import { RestateContext } from "./restate_context";
 import { NewStateMachine } from "./new_state_machine";
-import { Failure, GetStateEntryMessage, OutputStreamEntryMessage } from "./generated/proto/protocol";
-import { GET_STATE_ENTRY_MESSAGE_TYPE, OUTPUT_STREAM_ENTRY_MESSAGE_TYPE } from "./types/protocol";
+import {
+  Failure,
+  GetStateEntryMessage,
+  OutputStreamEntryMessage,
+  SetStateEntryMessage
+} from "./generated/proto/protocol";
+import {
+  GET_STATE_ENTRY_MESSAGE_TYPE,
+  OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
+  SET_STATE_ENTRY_MESSAGE_TYPE
+} from "./types/protocol";
 
 export class RestateContextImpl<I, O> implements RestateContext {
   instanceKey: Buffer;
@@ -76,7 +85,16 @@ export class RestateContextImpl<I, O> implements RestateContext {
   }
 
   set<T>(name: string, value: T): void {
-    return;
+    if (!this.isValidState("set state")) {
+      return;
+    }
+
+    const bytes = Buffer.from(JSON.stringify(value));
+    const msg = SetStateEntryMessage.create({
+      key: Buffer.from(name, "utf8"),
+      value: bytes,
+    });
+    this.stateMachine.handleUserCodeMessage(SET_STATE_ENTRY_MESSAGE_TYPE, msg);
   }
 
   sideEffect<T>(fn: () => Promise<T>): Promise<T> {

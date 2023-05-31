@@ -717,7 +717,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
           const msg = SuspensionMessage.create({
             entryIndexes: completableIndices,
           });
-          this.method.resolve(msg);
+          this.method.resolve(new Message(SUSPENSION_MESSAGE_TYPE, msg));
         } else {
           // leads to onCallFailure call
           this.method.reject(
@@ -818,7 +818,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     }]`;
 
     this.method.invoke(this, m.value, this.logPrefix).then(
-      (value) => this.onCallSuccess(value),
+      (value) => {return; },
       (failure) => this.onCallFailure(failure)
     );
   }
