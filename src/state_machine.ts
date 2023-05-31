@@ -554,7 +554,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         .then((value) => {
           const bytes =
             typeof value === "undefined"
-              ? (Empty.encode(Empty.create({})).finish() as Buffer)
+              ? Buffer.from(JSON.stringify({}))
               : Buffer.from(JSON.stringify(value));
           const sideEffectMsg = SideEffectEntryMessage.encode(
             SideEffectEntryMessage.create({ value: bytes })

@@ -1,20 +1,29 @@
 import { RestateContext } from "./restate_context";
 import { NewStateMachine } from "./new_state_machine";
 import {
+  AwakeableEntryMessage,
   BackgroundInvokeEntryMessage,
-  ClearStateEntryMessage,
+  ClearStateEntryMessage, CompleteAwakeableEntryMessage,
   Failure,
-  GetStateEntryMessage, InvokeEntryMessage,
+  GetStateEntryMessage,
+  InvokeEntryMessage,
   OutputStreamEntryMessage,
-  SetStateEntryMessage
+  SetStateEntryMessage,
+  SleepEntryMessage
 } from "./generated/proto/protocol";
 import {
+  AWAKEABLE_ENTRY_MESSAGE_TYPE,
+  AwakeableIdentifier,
   BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
-  CLEAR_STATE_ENTRY_MESSAGE_TYPE,
-  GET_STATE_ENTRY_MESSAGE_TYPE, INVOKE_ENTRY_MESSAGE_TYPE,
+  CLEAR_STATE_ENTRY_MESSAGE_TYPE, COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
+  GET_STATE_ENTRY_MESSAGE_TYPE,
+  INVOKE_ENTRY_MESSAGE_TYPE,
   OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
-  SET_STATE_ENTRY_MESSAGE_TYPE
+  SET_STATE_ENTRY_MESSAGE_TYPE, SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+  SLEEP_ENTRY_MESSAGE_TYPE
 } from "./types/protocol";
+import { Empty } from "./generated/google/protobuf/empty";
+import { SideEffectEntryMessage } from "./generated/proto/javascript";
 
 export class RestateContextImpl<I, O> implements RestateContext {
   instanceKey: Buffer;
@@ -150,20 +159,116 @@ export class RestateContextImpl<I, O> implements RestateContext {
   }
 
   sideEffect<T>(fn: () => Promise<T>): Promise<T> {
+    //
+    // if(this.inSideEffectFlag){
+    //   this.stateMachine.handleUserCodeMessage(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
+    //     OutputStreamEntryMessage.create({failure:
+    //         Failure.create({
+    //           code: 13,
+    //           message: `You cannot do sideEffect calls from within a side effect.`,
+    //         })
+    //     })
+    //   );
+    // } else if (this.oneWayCallFlag){
+    //   this.stateMachine.handleUserCodeMessage(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
+    //     OutputStreamEntryMessage.create({failure:
+    //         Failure.create({
+    //           code: 13,
+    //           message:
+    //             `Cannot do a side effect from within ctx.oneWayCall(...). ` +
+    //             "Context method ctx.oneWayCall() can only be used to invoke other services unidirectionally. " +
+    //             "e.g. ctx.oneWayCall(() => client.greet(my_request))",
+    //         })
+    //     })
+    //   );
+    // }
+    //
+    // this.inSideEffectFlag = true;
+    //
+    // const emptyMsg = SideEffectEntryMessage.create({});
+    // const promise = this.stateMachine.handleUserCodeMessage(SIDE_EFFECT_ENTRY_MESSAGE_TYPE, emptyMsg);
+    //
+    //
+    // fn()
+    //   .then((value) => {
+    //     const bytes =
+    //       typeof value === "undefined"
+    //         ? Buffer.from(JSON.stringify({}))
+    //         : Buffer.from(JSON.stringify(value));
+    //     const sideEffectMsg = SideEffectEntryMessage.encode(
+    //       SideEffectEntryMessage.create({ value: bytes })
+    //     ).finish();
+    //   })
+    //
+
+
     return new Promise<T>(() =>{return;});
   }
 
   sleep(millis: number): Promise<void> {
-    return Promise.resolve(undefined);
+    if (!this.isValidState("sleep")) {
+      return Promise.reject();
+    }
+
+    const msg = SleepEntryMessage.create({ wakeUpTime: Date.now() + millis });
+    return this.stateMachine.handleUserCodeMessage<void>(SLEEP_ENTRY_MESSAGE_TYPE, msg);
   }
 
   awakeable<T>(): { id: string; promise: Promise<T> } {
+    if (!this.isValidState("awakeable")) {
+      // We need to throw here because we cannot return void or Promise.reject...
+      // TODO this will not work the same as in the previous version of the state machine
+      throw new Error();
+    }
 
-    return { id: "", promise: new Promise<T>(() =>{return;}) };
+    const msg = AwakeableEntryMessage.create();
+    const promise = this.stateMachine.handleUserCodeMessage<Buffer>(AWAKEABLE_ENTRY_MESSAGE_TYPE, msg)
+      .then<T>((result: Buffer | void) => {
+        if(result instanceof Buffer){
+          return JSON.parse(result.toString()) as T;
+        } else {
+          //TODO handle this case...
+          throw new Error("");
+        }
+        });
+
+    // This needs to be done after handling the message in the state machine
+    // otherwise the index is not yet incremented.
+    const awakeableIdentifier = new AwakeableIdentifier(
+      this.stateMachine.getFullServiceName(),
+      this.instanceKey,
+      this.invocationId,
+      this.stateMachine.getUserCodeJournalIndex()
+    );
+
+    return {
+      id: JSON.stringify(awakeableIdentifier),
+      promise: promise
+    };
   }
 
   completeAwakeable<T>(id: string, payload: T): void {
-    return;
+    if (!this.isValidState("completeAwakeable")) {
+      return;
+    }
+
+    // Parse the string to an awakeable identifier
+    const awakeableIdentifier = JSON.parse(id, (key, value) => {
+      if (value && value.type === "Buffer") {
+        return Buffer.from(value.data);
+      }
+      return value;
+    }) as AwakeableIdentifier;
+
+    const msg = CompleteAwakeableEntryMessage.create({
+      serviceName: awakeableIdentifier.serviceName,
+      instanceKey: awakeableIdentifier.instanceKey,
+      invocationId: awakeableIdentifier.invocationId,
+      entryIndex: awakeableIdentifier.entryIndex,
+      payload: Buffer.from(JSON.stringify(payload)),
+    });
+
+    this.stateMachine.handleUserCodeMessage(COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE, msg);
   }
 
   isValidState(callType: string): boolean {

@@ -2,9 +2,9 @@
 
 import { ProtocolMode } from "../generated/proto/discovery";
 import { incomingConnectionAtPort } from "../connection/http_connection";
-import { DurableExecutionStateMachine } from "../state_machine";
 import { BaseRestateServer, ServiceOpts } from "./base_restate_server";
 import { rlog } from "../utils/logger";
+import { NewStateMachine } from "../new_state_machine";
 
 /**
  * Creates a Restate entrypoint based on a HTTP2 server. The entrypoint will listen
@@ -117,7 +117,7 @@ export class RestateServer extends BaseRestateServer {
         connection.respond404();
       } else {
         connection.respondOk();
-        new DurableExecutionStateMachine(
+        new NewStateMachine(
           connection,
           method,
           ProtocolMode.BIDI_STREAM

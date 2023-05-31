@@ -208,6 +208,14 @@ export class NewStateMachine<I, O>{
     return;
   }
 
+  public getUserCodeJournalIndex(): number{
+    return this.journal.getUserCodeJournalIndex();
+  }
+
+  public getFullServiceName(): string {
+    return `${this.method.packge}.${this.method.service}`;
+  }
+
   setInputChannelToClosed(){
     if (!this.journal.isInClosedState()) {
       this.inputChannelClosed = true;

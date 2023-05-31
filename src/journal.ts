@@ -478,6 +478,10 @@ export class Journal<I, O> {
       .filter(el => (el[1].status !== JournalEntryStatus.WAITING_ON_COMPLETION));
     return msgsToBeReplayed.length === 0;
   }
+
+  public getUserCodeJournalIndex(): number {
+    return this.userCodeJournalIndex;
+  }
 }
 
 
