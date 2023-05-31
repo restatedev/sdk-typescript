@@ -554,7 +554,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         .then((value) => {
           const bytes =
             typeof value === "undefined"
-              ? (Empty.encode(Empty.create({})).finish() as Buffer)
+              ? Buffer.from(JSON.stringify({}))
               : Buffer.from(JSON.stringify(value));
           const sideEffectMsg = SideEffectEntryMessage.encode(
             SideEffectEntryMessage.create({ value: bytes })
@@ -1018,7 +1018,8 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       resolvePendingMsg = resolve;
       rejectPendingMsg = reject;
     });
-    const hasBeenChecked = (this.state === ExecutionState.REPLAYING) ? false : true;
+    const hasBeenChecked =
+      this.state === ExecutionState.REPLAYING ? false : true;
     this.indexToPendingMsgMap.set(
       journalIndex,
       new PendingMessage(
@@ -1285,7 +1286,6 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   }
 
   async onCallSuccess(result: Uint8Array | SuspensionMessage) {
-
     if (result instanceof Uint8Array) {
       const msg = OutputStreamEntryMessage.create({
         value: Buffer.from(result),
@@ -1300,8 +1300,10 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       if (this.indexToPendingMsgMap.size !== 0) {
         await Promise.all(
           [...this.indexToPendingMsgMap.entries()]
-            .filter(el => (el[0] < this.nbEntriesToReplay) && (!el[1].hasBeenChecked))
-            .map(el => el[1].promise)
+            .filter(
+              (el) => el[0] < this.nbEntriesToReplay && !el[1].hasBeenChecked
+            )
+            .map((el) => el[1].promise)
         );
       }
 
@@ -1324,7 +1326,9 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     try {
       await this.connection.flush();
     } catch (e: any) {
-      rlog.warn(`${this.logPrefix} Failed to flush output/suspension message to the runtime: ${e.message} - ${e.stack}`);
+      rlog.warn(
+        `${this.logPrefix} Failed to flush output/suspension message to the runtime: ${e.message} - ${e.stack}`
+      );
     } finally {
       // even if we failed to flush, we need to close out this state machine
       this.onClose();
@@ -1354,7 +1358,9 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     try {
       await this.connection.flush();
     } catch (e: any) {
-      rlog.warn(`${this.logPrefix} Failed to flush failure message to the runtime: ${e.message} - ${e.stack}`);
+      rlog.warn(
+        `${this.logPrefix} Failed to flush failure message to the runtime: ${e.message} - ${e.stack}`
+      );
     } finally {
       // even if we failed to flush, we need to close out this state machine
       this.onClose();
