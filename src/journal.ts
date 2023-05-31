@@ -66,15 +66,8 @@ export class Journal<I, O> {
   public applyUserSideMessage<T>(
     messageType: bigint,
     message: p.ProtocolMessage | Uint8Array
-  ): Promise<T | void> {
+  ): Promise<T | undefined> {
     this.incrementUserCodeIndex();
-
-    let resolve: (value: any) => void;
-    let reject: (reason?: any) => void;
-    const promise = new Promise<T>((res, rej) => {
-      resolve = res;
-      reject = rej;
-    });
 
     if (this.isUserSideReplaying()) {
       const journalEntry = this.pendingJournalEntries.get(this.userCodeJournalIndex);
@@ -84,24 +77,19 @@ export class Journal<I, O> {
         } else {
           //TODO duplicate user side message for journal index
         }
+        return journalEntry.promise;
       } else { // no replayed message yet
         /*
           - Add message to the pendingJournalEntries with JournalEntryStatus = WAITING_ON_REPLAY
           - Return the user code promise
          */
-        this.pendingJournalEntries.set(this.userCodeJournalIndex,
-          new JournalEntry(
-            messageType,
-            message,
-            JournalEntryStatus.WAITING_ON_REPLAY,
-            promise,
-            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-            resolve!,
-            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-            reject!));
-        return promise;
+        const journalEntry = new JournalEntry(
+          messageType,
+          message,
+          JournalEntryStatus.WAITING_ON_REPLAY);
+        this.pendingJournalEntries.set(this.userCodeJournalIndex, journalEntry);
+        return journalEntry.promise;
       }
-
     } else if (this.isUserSideProcessing()) {
       /*
         - If messageType === suspension or output stream (value/failure)
@@ -121,7 +109,7 @@ export class Journal<I, O> {
         messageType === p.OUTPUT_STREAM_ENTRY_MESSAGE_TYPE) {
         rlog.info("Handling output message");
         this.handleOutputMessage(messageType, message as SuspensionMessage | OutputStreamEntryMessage);
-        return promise; // TODO??
+        return Promise.resolve(undefined);
       } else if (
         messageType === SET_STATE_ENTRY_MESSAGE_TYPE ||
         messageType === CLEAR_STATE_ENTRY_MESSAGE_TYPE ||
@@ -129,34 +117,31 @@ export class Journal<I, O> {
         messageType === BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE
       ) {
         // Do not need completion
-        return Promise.resolve();
+        return Promise.resolve(undefined);
       } else {
         // Need completion
-        this.pendingJournalEntries.set(this.userCodeJournalIndex,
-          new JournalEntry(
-            messageType,
-            message,
-            JournalEntryStatus.WAITING_ON_COMPLETION,
-            promise,
-            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-            resolve!,
-            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-            reject!));
-        return promise;
+        const journalEntry = new JournalEntry(
+          messageType,
+          message,
+          JournalEntryStatus.WAITING_ON_COMPLETION);
+        this.pendingJournalEntries.set(this.userCodeJournalIndex, journalEntry);
+        return journalEntry.promise;
       }
-
     } else if (this.isInClosedState()) {
       // We cannot do anything anymore because an output was already sent back
       // This should actually never happen because the state is only transitioned to closed if the root promise is resolved/rejected
       // So no more user messages can come in...
       // - Print warning log and continue...
+      //TODO
+      return Promise.resolve(undefined);
     } else {
       /*
       Output stream failure -> cannot be in this state
         - Resolve the root promise with output message with illegal state failure
        */
+      //TODO
+      return Promise.resolve(undefined);
     }
-    return promise;
   }
 
   public applyRuntimeMessage(
@@ -350,6 +335,8 @@ export class Journal<I, O> {
         }),
         false
       ))
+      this.pendingJournalEntries.delete(0);
+      this.transitionState(NewExecutionState.CLOSED);
     }
   }
 
@@ -361,6 +348,8 @@ export class Journal<I, O> {
         const rootJournalEntry = this.pendingJournalEntries.get(0);
         if (rootJournalEntry) {
           rootJournalEntry.resolve(new Message(messageType, message));
+          this.pendingJournalEntries.delete(0);
+          this.transitionState(NewExecutionState.CLOSED);
         } else {
           // TODO fail if there is no rootJournalEntry
         }
@@ -375,6 +364,8 @@ export class Journal<I, O> {
       const rootJournalEntry = this.pendingJournalEntries.get(0);
       if (rootJournalEntry) {
         rootJournalEntry.resolve(new Message(messageType, message));
+        this.pendingJournalEntries.delete(0);
+        this.transitionState(NewExecutionState.CLOSED);
       } else {
         // TODO fail if there is no rootJournalEntry
       }
@@ -491,14 +482,29 @@ export class Journal<I, O> {
 
 
 export class JournalEntry {
+  public promise: Promise<any>
+  public resolve!: (value: any) => void
+  public reject!: (reason?: any) => void
+
   constructor(
     readonly messageType: bigint,
     readonly message: p.ProtocolMessage | Uint8Array,
     public status: JournalEntryStatus,
-    readonly promise: Promise<any>,
-    readonly resolve: (value: any) => void,
-    readonly reject: (reason?: any) => void
+    private customPromise?: Promise<any>,
+    private customResolve?: (value: any) => void,
+    private customReject?: (reason?: any) => void
   ) {
+    // Either use the custom promise that is provided or make a new promise
+    if(customPromise && customResolve && customReject) {
+      this.promise = customPromise
+      this.resolve = customResolve;
+      this.reject = customReject;
+    } else {
+      this.promise = new Promise<any>((res, rej) => {
+        this.resolve = res;
+        this.reject = rej;
+      });
+    }
   }
 
 
