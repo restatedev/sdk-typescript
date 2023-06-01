@@ -817,6 +817,8 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       this.method.method.name
     }]`;
 
+    rlog.debugInvokeMessage(this.logPrefix, "Invoking function");
+
     this.method.invoke(this, m.value, this.logPrefix).then(
       (value) => this.onCallSuccess(value),
       (failure) => this.onCallFailure(failure)
@@ -825,9 +827,10 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
 
   handleCompletionMessage(m: CompletionMessage) {
     if (this.state === ExecutionState.CLOSED) {
-      rlog.debug(
-        "State machine is closed. Not processing completion message: " +
-          printMessageAsJson(m)
+      rlog.debugJournalMessage(
+        this.logPrefix,
+        "Received completion message, but state machine is closed. Ignoring message.",
+        m
       );
       return;
     }
@@ -1311,6 +1314,11 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       this.connection.buffer(
         new Message(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, msg)
       );
+
+      rlog.debugInvokeMessage(
+        this.logPrefix,
+        "Function completed successfully"
+      );
     } else {
       rlog.debugJournalMessage(this.logPrefix, "Call suspending. ", result);
       this.connection.buffer(
@@ -1322,6 +1330,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
           undefined
         )
       );
+      rlog.debugInvokeMessage(this.logPrefix, "Function is suspending");
     }
     try {
       await this.connection.flush();
@@ -1337,11 +1346,12 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
   }
 
   async onCallFailure(e: Error | Failure) {
-    if (e instanceof Error) {
-      rlog.warn(`${this.logPrefix} Call failed: ${e.message} - ${e.stack}`);
-    } else {
-      rlog.warn(`${this.logPrefix} Call failed: ${printMessageAsJson(e)}`);
-    }
+    const stringifiedError =
+      e instanceof Error ? `${e.message} - ${e.stack}` : printMessageAsJson(e);
+    rlog.debugInvokeMessage(
+      this.logPrefix,
+      "Function execution failed: " + stringifiedError
+    );
 
     // We send the message straight over the connection
     this.connection.buffer(
