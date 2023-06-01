@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable no-console */
 
+import { PROTOBUF_MESSAGE_NAME_BY_TYPE } from "../types/protocol";
 import { printMessageAsJson } from "./utils";
 
 /**
@@ -11,36 +12,70 @@ import { printMessageAsJson } from "./utils";
  * because constructing that stringified representation is even more expensive.
  */
 export interface RestateConsole extends Console {
+  /**
+   * Called to log per-invocation debug messages.
+   *
+   * Under load, this can generate a large amount of log output. Due to that, this
+   * function by default logs only if the 'NODE_ENV' environment is not set to
+   * 'production', or if explicitly configured via the restate 'RESTATE_DEBUG_LOGGING'
+   * environment variable. See {@link DEBUG_LOG_LEVEL} for details.
+   */
+  debugInvokeMessage(invocationInfo: string, logMessage: string): void;
+
+  /**
+   * Called to log per-jounral action debug messages.
+   *
+   * Under load, this can generate an insane amount of log output. Due to that, this
+   * function doesn't actually output log entries unless configured via the 'RESTATE_DEBUG_LOGGING'
+   * environment variable. See {@link DEBUG_LOG_LEVEL} for details.
+   */
   debugJournalMessage(
     invocationInfo: string,
     logMessage: string,
-    journalMessageObject: any
+    messageType?: bigint,
+    message?: any
   ): void;
 }
 
 /**
  * The environment variable which is read to determine the debug log settings.
  */
-export const DEBUG_ENV = "RESTATE_DEBUG_LOG";
+export const DEBUG_LOGGING_ENV = "RESTATE_DEBUG_LOGGING";
 
 /**
- * The debug log setting for {@link DEBUG_ENV} to print log text.
+ * The values for the {@link DEBUG_LOGGING_ENV} variable.
  */
-export const DEBUG_SETTING_LOG = "LOG";
+export enum DEBUG_LOG_LEVEL {
+  /** No debug logging at all. Good for performance and avoid per-invocation log volume */
+  OFF = "OFF",
 
-/**
- * The debug log setting for {@link DEBUG_ENV} to include the stringified message
- * objects (where applicable) in the log messages.
- */
-export const DEBUG_SETTING_MESSAGES = "MESSAGES";
+  /** Logs debug information for every Restate function invocation. */
+  INVOKE = "INVOKE",
+
+  /** Logs debug information for every Restate effect (=journal event) inside an invocation,
+   *  like RPC, state access, sideEffect, ... */
+  JOURNAL = "JOURNAL",
+
+  /** Logs debug information for every Restate effect (=journal event) inside an invocation,
+   *  like RPC, state access, sideEffect, ... Additionally, this adds a JSON representation
+   *  of the journal message to the log. */
+  JOURNAL_VERBOSE = "JOURNAL_VERBOSE",
+}
+
+const log_setting = process.env[DEBUG_LOGGING_ENV]?.toUpperCase();
+const verbose_journal_event_logging: boolean =
+  log_setting == DEBUG_LOG_LEVEL.JOURNAL_VERBOSE;
+const journal_event_logging: boolean =
+  verbose_journal_event_logging || log_setting == DEBUG_LOG_LEVEL.JOURNAL;
+const invoke_event_logging: boolean =
+  journal_event_logging ||
+  log_setting == DEBUG_LOG_LEVEL.INVOKE ||
+  (log_setting != DEBUG_LOG_LEVEL.OFF &&
+    process.env["NODE_ENV"]?.toLowerCase() !== "production");
 
 // ----------------------------------------------------------------------------
 //  build restate logger
 // ----------------------------------------------------------------------------
-
-const debugMessageObjects = process.env[DEBUG_ENV] === DEBUG_SETTING_MESSAGES;
-const debugLogging: boolean =
-  debugMessageObjects || process.env[DEBUG_ENV] === DEBUG_SETTING_LOG;
 
 // effectively duplicate the console object (new object with same prototype)
 // to override some specific methods
@@ -88,19 +123,37 @@ restate_logger.trace = (message?: any, ...optionalParams: any[]) => {
   );
 };
 
+restate_logger.debugInvokeMessage = function (
+  invocationInfo: string,
+  logMessage: string
+): void {
+  if (!invoke_event_logging) {
+    return;
+  }
+  const msg = `[restate] [${new Date().toISOString()}] DEBUG: ${invocationInfo} : ${logMessage}`;
+  console.debug(msg);
+};
+
 restate_logger.debugJournalMessage = function (
   invocationInfo: string,
   logMessage: string,
-  journalMessageObject: any
+  messageType?: bigint,
+  message?: any
 ): void {
-  if (!debugLogging) {
+  if (!journal_event_logging) {
     return;
   }
-  const journalEvent = debugMessageObjects
-    ? " message: " + printMessageAsJson(journalMessageObject)
-    : "";
+  const type =
+    messageType !== undefined
+      ? " ; " + PROTOBUF_MESSAGE_NAME_BY_TYPE.get(messageType) ||
+        "" + messageType
+      : "";
+  const journalEvent =
+    verbose_journal_event_logging && message !== undefined
+      ? " : " + printMessageAsJson(message)
+      : "";
   console.debug(
-    `[restate] [${new Date().toISOString()}] DEBUG: ${invocationInfo} : ${logMessage}${journalEvent}`
+    `[restate] [${new Date().toISOString()}] DEBUG: ${invocationInfo} : ${logMessage}${type}${journalEvent}`
   );
 };
 
@@ -108,8 +161,9 @@ restate_logger.debugJournalMessage = function (
  * The RestateLogger lets us add some extra information to logging statements:
  * [restate] [timestamp] INFO/WARN/ERROR/DEBUG/TRACE <log-message>.
  *
- * It also adds the method {@link RestateConsole.debugJournalMessage} for optional
- * intensive (per invocation / per journal message) logging.
+ * It also adds the methods {@link RestateConsole.debugInvokeMessage} and *
+ * {@link RestateConsole.debugJournalMessage} for optional intensive (per
+ * invocation / per journal message) logging.
  *
  * We don't override the console here, to make sure that this only applies to Restate
  * log lines, and not to logging from application code.

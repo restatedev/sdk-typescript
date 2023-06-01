@@ -68,6 +68,22 @@ export const KNOWN_MESSAGE_TYPES = new Set([
   COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
 ]);
 
+export const PROTOBUF_MESSAGE_NAME_BY_TYPE = new Map<bigint, string>([
+  [START_MESSAGE_TYPE, "StartMessage"],
+  [COMPLETION_MESSAGE_TYPE, "CompletionMessage"],
+  [SUSPENSION_MESSAGE_TYPE, "SuspensionMessage"],
+  [POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE, "PollInputStreamEntryMessage"],
+  [OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, "OutputStreamEntryMessage"],
+  [GET_STATE_ENTRY_MESSAGE_TYPE, "GetStateEntryMessage"],
+  [SET_STATE_ENTRY_MESSAGE_TYPE, "SetStateEntryMessage"],
+  [CLEAR_STATE_ENTRY_MESSAGE_TYPE, "ClearStateEntryMessage"],
+  [SLEEP_ENTRY_MESSAGE_TYPE, "SleepEntryMessage"],
+  [INVOKE_ENTRY_MESSAGE_TYPE, "InvokeEntryMessage"],
+  [BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE, "BackgroundInvokeEntryMessage"],
+  [AWAKEABLE_ENTRY_MESSAGE_TYPE, "AwakeableEntryMessage"],
+  [COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE, "CompleteAwakeableEntryMessage"],
+]);
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const PROTOBUF_MESSAGES: Array<[bigint, any]> = [
   [START_MESSAGE_TYPE, StartMessage],
