@@ -7,6 +7,66 @@ import { RestateContext } from "../restate_context";
 import { RestateError } from "../types/errors";
 
 /**
+ * Retry policy that decides how to delay between retries.
+ */
+export interface RetryPolicy {
+  computeNextDelay(previousDelayMs: number): number;
+}
+
+/**
+ * A {@link RetryPolicy} that keeps a fixed delay between retries.
+ */
+export const FIXED_DELAY: RetryPolicy = {
+  computeNextDelay(previousDelayMs: number): number {
+    return previousDelayMs;
+  },
+};
+
+/**
+ * A {@link RetryPolicy} that does an exponential backoff delay between retries.
+ * Each delay is double the previous delay.
+ */
+export const EXPONENTIAL_BACKOFF: RetryPolicy = {
+  computeNextDelay(previousDelayMs: number): number {
+    return 2 * previousDelayMs;
+  },
+};
+
+/**
+ * All properties related to retrying, like the policy (exponential, fixed, ...), the
+ * initial delay, the maximum number of retries.
+ */
+export interface RetrySettings {
+  /**
+   * The initial delay between retries. As more retries happen, the delay may chance per the policy.
+   */
+  initialDelayMs: number;
+
+  /**
+   * Optionally, the maximum delay between retries. No matter what the policy says, this is the maximum time
+   * that Restate sleeps between retries.
+   * If not set, there is is effectively no limit (internally the limit is Number.MAX_SAFE_INTEGER).
+   */
+  maxDelayMs?: number;
+
+  /**
+   * Optionally, the maximum number of retries before this function fails with an exception.
+   * If not set, there is is effectively no limit (internally the limit is Number.MAX_SAFE_INTEGER).
+   */
+  maxRetries?: number;
+
+  /**
+   * Optionally, the {@link RetryPolicy} to use. Defaults to {@link EXPONENTIAL_BACKOFF}.
+   */
+  policy?: RetryPolicy;
+
+  /**
+   * Optionally, the name of side effect action that is used in error- and log messages around retries.
+   */
+  name?: string;
+}
+
+/**
  * Calls a side effect function and retries when the result is false, with a timed backoff.
  * The side effect function is retried until it returns true or until it throws an error.
  *
@@ -23,42 +83,47 @@ import { RestateError } from "../types/errors";
  * const ctx = restate.useContext(this);
  * const paymentAction = async () =>
  *   (await paymentClient.call(txId, methodIdentifier, amount)).success;
- * await retrySideEffectWithBackoff(ctx, paymentAction, 1000, 60000, 10);
+ * await retrySideEffect(ctx, paymentAction, {initialDelayMs: 1000, maxRetries: 10});
  *
  * @param ctx              The RestateContext object to call the side effect to sleep on.
- * @param sideEffectAction The side effect action to run.
- * @param initialDelayMs   The initial number of milliseconds to wait before retrying.
- * @param maxDelayMs       The maxim number of milliseconds to wait between retries.
- * @param maxRetries       (Optional) The maximum number of retries before this function fails with an exception.
- * @param name             (Optional) The name of side effect action, to be used in log and error messages.
+ * @param retrySettings    Settings for the retries, like delay, attempts, etc.
+ * @param sideEffect       The side effect action to run.
  *
  * @returns A promises that resolves successfully when the side effect completed successfully,
  *          and rejected if the side effect fails or the maximum retries are exhausted.
  */
-export async function retrySideEffectWithBackoff(
+export async function retrySideEffect(
   ctx: RestateContext,
-  sideEffectAction: () => Promise<boolean>,
-  initialDelayMs: number,
-  maxDelayMs: number,
-  maxRetries: number = 2147483647,
-  name: string = "unnamed-retryable-side-effect"
+  retrySettings: RetrySettings,
+  sideEffect: () => Promise<boolean>
 ): Promise<void> {
-  let delayMs = initialDelayMs;
+  const {
+    initialDelayMs,
+    maxDelayMs = Number.MAX_SAFE_INTEGER,
+    maxRetries = Number.MAX_SAFE_INTEGER,
+    policy = EXPONENTIAL_BACKOFF,
+    name = "retryable-side-effect",
+  } = retrySettings;
+
+  let currentDelayMs = initialDelayMs;
   let retriesLeft = maxRetries;
 
-  while (!(await ctx.sideEffect(sideEffectAction))) {
+  while (!(await ctx.sideEffect(sideEffect))) {
     rlog.debug("Unsuccessful execution of side effect '%s'.", name);
     if (retriesLeft > 0) {
-      rlog.debug("Retrying in %d ms", delayMs);
+      rlog.debug("Retrying in %d ms", currentDelayMs);
     } else {
       rlog.debug("No retries left.");
       throw new RestateError(`Retries exhausted for '${name}'.`);
     }
 
-    await ctx.sleep(delayMs);
+    await ctx.sleep(currentDelayMs);
 
     retriesLeft -= 1;
-    delayMs = Math.min(delayMs * 2, maxDelayMs);
+    currentDelayMs = Math.min(
+      policy.computeNextDelay(currentDelayMs),
+      maxDelayMs
+    );
   }
 }
 
@@ -82,38 +147,40 @@ export async function retrySideEffectWithBackoff(
  *   if (result.error) {
  *     throw result.error;
  *   } else {
- *     return result.isSuccess;
+ *     return result.payment_accepted;
  *   }
  * }
  * const paymentAccepted: boolean =
- *   await retryExceptionalSideEffectWithBackoff(ctx, paymentAction, 1000, 60000, 10);
+ *   await retryExceptionalSideEffectWithBackoff(ctx, paymentAction, {initialDelayMs: 1000, maxRetries: 10});
  *
  * @param ctx              The RestateContext object to call the side effect to sleep on.
- * @param sideEffectAction The side effect action to run.
- * @param initialDelayMs   The initial number of milliseconds to wait before retrying.
- * @param maxDelayMs       The maxim number of milliseconds to wait between retries.
- * @param maxRetries       (Optional) The maximum number of retries before this function fails with an exception.
- * @param name             (Optional) The name of side effect action, to be used in log and error messages.
+ * @param retrySettings    Settings for the retries, like delay, attempts, etc.
+ * @param sideEffect       The side effect action to run.
  *
  * @returns A promises that resolves successfully when the side effect completed,
  *          and rejected if the retries are exhausted.
  */
-export async function retryExceptionalSideEffectWithBackoff<T>(
+export async function retryExceptionalSideEffect<T>(
   ctx: RestateContext,
-  sideEffectAction: () => Promise<T>,
-  initialDelayMs: number,
-  maxDelayMs: number,
-  maxRetries: number = 2147483647,
-  name: string = "unnamed-retryable-side-effect"
+  retrySettings: RetrySettings,
+  sideEffect: () => Promise<T>
 ): Promise<T> {
-  let delayMs = initialDelayMs;
+  const {
+    initialDelayMs,
+    maxDelayMs = Number.MAX_SAFE_INTEGER,
+    maxRetries = Number.MAX_SAFE_INTEGER,
+    policy = EXPONENTIAL_BACKOFF,
+    name = "retryable-side-effect",
+  } = retrySettings;
+
+  let currentDelayMs = initialDelayMs;
   let retriesLeft = maxRetries;
   let lastError: Error | null = null;
 
   // eslint-disable-next-line no-constant-condition
   while (true) {
     try {
-      return await ctx.sideEffect(sideEffectAction);
+      return await ctx.sideEffect(sideEffect);
     } catch (e) {
       let errorName: string;
       let errorMessage: string;
@@ -136,16 +203,75 @@ export async function retryExceptionalSideEffectWithBackoff<T>(
       );
 
       if (retriesLeft > 0) {
-        rlog.debug("Retrying in %d ms", delayMs);
+        rlog.debug("Retrying in %d ms", currentDelayMs);
       } else {
         rlog.debug("No retries left.");
         throw new RestateError(`Retries exhausted for ${name}.`, lastError);
       }
     }
 
-    await ctx.sleep(delayMs);
+    await ctx.sleep(currentDelayMs);
 
     retriesLeft -= 1;
-    delayMs = Math.min(delayMs * 2, maxDelayMs);
+    currentDelayMs = Math.min(
+      policy.computeNextDelay(currentDelayMs),
+      maxDelayMs
+    );
   }
+}
+
+// ----------------------------------------------------------------------------
+//  deprecated versions, for compatibility
+// ----------------------------------------------------------------------------
+
+/**
+ * @deprecated
+ *
+ * Use {@link retrySideEffect} instead.
+ */
+export async function retrySideEffectWithBackoff(
+  ctx: RestateContext,
+  sideEffectAction: () => Promise<boolean>,
+  initialDelayMs: number,
+  maxDelayMs: number,
+  maxRetries: number = 2147483647,
+  name: string = "unnamed-retryable-side-effect"
+): Promise<void> {
+  return retrySideEffect(
+    ctx,
+    {
+      initialDelayMs,
+      maxDelayMs,
+      maxRetries,
+      name,
+      policy: EXPONENTIAL_BACKOFF,
+    },
+    sideEffectAction
+  );
+}
+
+/**
+ * @deprecated
+ *
+ * Use {@link retryExceptionalSideEffect} instead.
+ */
+export async function retryExceptionalSideEffectWithBackoff<T>(
+  ctx: RestateContext,
+  sideEffectAction: () => Promise<T>,
+  initialDelayMs: number,
+  maxDelayMs: number,
+  maxRetries: number = 2147483647,
+  name: string = "unnamed-retryable-side-effect"
+): Promise<T> {
+  return retryExceptionalSideEffect(
+    ctx,
+    {
+      initialDelayMs,
+      maxDelayMs,
+      maxRetries,
+      name,
+      policy: EXPONENTIAL_BACKOFF,
+    },
+    sideEffectAction
+  );
 }
