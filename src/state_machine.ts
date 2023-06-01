@@ -75,14 +75,30 @@ enum ExecutionState {
  * reject: filled in if this message requires a completion
  */
 export class PendingMessage {
+  private waiters: Array<() => void> = [];
   constructor(
     readonly messageType: bigint,
     readonly promise: Promise<unknown>,
     readonly resolve: (value: unknown) => void,
     readonly reject: (reason: Failure | Error) => void,
-    public hasBeenChecked: boolean,
+    private _hasBeenChecked: boolean,
     readonly message?: ProtocolMessage | Uint8Array
   ) {}
+
+  setChecked(): void {
+    this._hasBeenChecked = true
+    this.waiters.forEach((fn) => fn())
+    this.waiters = []
+  }
+
+  waitChecked(): Promise<void> {
+    if (this._hasBeenChecked) {
+      return Promise.resolve();
+    }
+    return new Promise<void>((resolve) => {
+      this.waiters.push(resolve)
+    })
+  }
 }
 
 /**
@@ -1227,7 +1243,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       // If we then want to send the response, we will get blocked on this forever.
       // For example you do a sleep but don't await it, it gets replayed but not completed during replay.
       // You don't want to await on this pending promise. You only want to wait on journal mismatch checks.
-      pendingMessage.hasBeenChecked = true;
+      pendingMessage.setChecked()
       this.indexToPendingMsgMap.set(journalIndex, pendingMessage);
     }
 
@@ -1301,9 +1317,9 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
         await Promise.all(
           [...this.indexToPendingMsgMap.entries()]
             .filter(
-              (el) => el[0] < this.nbEntriesToReplay && !el[1].hasBeenChecked
+              (el) => el[0] < this.nbEntriesToReplay
             )
-            .map((el) => el[1].promise)
+            .map((el) => Promise.race([el[1].promise, el[1].waitChecked()])) // short circuit if we receive an uncompleted replay
         );
       }
 
