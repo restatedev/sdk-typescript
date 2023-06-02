@@ -86,16 +86,16 @@ export interface RetrySettings {
  * await retrySideEffect(ctx, paymentAction, {initialDelayMs: 1000, maxRetries: 10});
  *
  * @param ctx              The RestateContext object to call the side effect to sleep on.
- * @param sideEffectAction The side effect action to run.
  * @param retrySettings    Settings for the retries, like delay, attempts, etc.
+ * @param sideEffect       The side effect action to run.
  *
  * @returns A promises that resolves successfully when the side effect completed successfully,
  *          and rejected if the side effect fails or the maximum retries are exhausted.
  */
 export async function retrySideEffect(
   ctx: RestateContext,
-  sideEffect: () => Promise<boolean>,
-  retrySettings: RetrySettings
+  retrySettings: RetrySettings,
+  sideEffect: () => Promise<boolean>
 ): Promise<void> {
   const {
     initialDelayMs,
@@ -154,16 +154,16 @@ export async function retrySideEffect(
  *   await retryExceptionalSideEffectWithBackoff(ctx, paymentAction, {initialDelayMs: 1000, maxRetries: 10});
  *
  * @param ctx              The RestateContext object to call the side effect to sleep on.
- * @param sideEffectAction The side effect action to run.
  * @param retrySettings    Settings for the retries, like delay, attempts, etc.
+ * @param sideEffect       The side effect action to run.
  *
  * @returns A promises that resolves successfully when the side effect completed,
  *          and rejected if the retries are exhausted.
  */
 export async function retryExceptionalSideEffect<T>(
   ctx: RestateContext,
-  sideEffectAction: () => Promise<T>,
-  retrySettings: RetrySettings
+  retrySettings: RetrySettings,
+  sideEffect: () => Promise<T>
 ): Promise<T> {
   const {
     initialDelayMs,
@@ -180,7 +180,7 @@ export async function retryExceptionalSideEffect<T>(
   // eslint-disable-next-line no-constant-condition
   while (true) {
     try {
-      return await ctx.sideEffect(sideEffectAction);
+      return await ctx.sideEffect(sideEffect);
     } catch (e) {
       let errorName: string;
       let errorMessage: string;
@@ -237,13 +237,17 @@ export async function retrySideEffectWithBackoff(
   maxRetries: number = 2147483647,
   name: string = "unnamed-retryable-side-effect"
 ): Promise<void> {
-  return retrySideEffect(ctx, sideEffectAction, {
-    initialDelayMs,
-    maxDelayMs,
-    maxRetries,
-    name,
-    policy: EXPONENTIAL_BACKOFF,
-  });
+  return retrySideEffect(
+    ctx,
+    {
+      initialDelayMs,
+      maxDelayMs,
+      maxRetries,
+      name,
+      policy: EXPONENTIAL_BACKOFF,
+    },
+    sideEffectAction
+  );
 }
 
 /**
@@ -259,11 +263,15 @@ export async function retryExceptionalSideEffectWithBackoff<T>(
   maxRetries: number = 2147483647,
   name: string = "unnamed-retryable-side-effect"
 ): Promise<T> {
-  return retryExceptionalSideEffect(ctx, sideEffectAction, {
-    initialDelayMs,
-    maxDelayMs,
-    maxRetries,
-    name,
-    policy: EXPONENTIAL_BACKOFF,
-  });
+  return retryExceptionalSideEffect(
+    ctx,
+    {
+      initialDelayMs,
+      maxDelayMs,
+      maxRetries,
+      name,
+      policy: EXPONENTIAL_BACKOFF,
+    },
+    sideEffectAction
+  );
 }
