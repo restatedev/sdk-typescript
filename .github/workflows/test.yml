@@ -23,3 +23,10 @@ jobs:
       - run: npm ci
       - run: npm run proto
       - run: npm run verify
+      - run: mv $(npm pack) restatedev-restate-sdk.tgz
+      - uses: actions/upload-artifact@v3
+        with:
+          name: restatedev-restate-sdk
+          path: restatedev-restate-sdk.tgz
+          retention-days: 1
+          if-no-files-found: error
