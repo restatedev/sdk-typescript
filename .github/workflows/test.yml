@@ -30,3 +30,8 @@ jobs:
           path: restatedev-restate-sdk.tgz
           retention-days: 1
           if-no-files-found: error
+  e2e:
+    needs: build
+    uses: restatedev/e2e/.github/workflows/e2e.yaml@main
+    with:
+      sdkTypescriptCommit: ${{ github.sha }}
