@@ -37,6 +37,7 @@ jobs:
       checks: write
       pull-requests: write
       actions: read
+    secrets: inherit
     needs: build
     uses: restatedev/e2e/.github/workflows/e2e.yaml@main
     with:
