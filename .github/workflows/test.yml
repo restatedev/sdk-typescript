@@ -31,6 +31,12 @@ jobs:
           retention-days: 1
           if-no-files-found: error
   e2e:
+    permissions:
+      contents: read
+      issues: read
+      checks: write
+      pull-requests: write
+      actions: read
     needs: build
     uses: restatedev/e2e/.github/workflows/e2e.yaml@main
     with:
