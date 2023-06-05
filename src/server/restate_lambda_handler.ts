@@ -8,7 +8,7 @@ import {
 } from "../generated/proto/discovery";
 import { BaseRestateServer, ServiceOpts } from "./base_restate_server";
 import { LambdaConnection } from "../connection/lambda_connection";
-import { NewStateMachine } from "../new_state_machine";
+import { StateMachine } from "../state_machine";
 
 /**
  * Creates an Restate entrypoint for services deployed on AWS Lambda and invoked
@@ -179,7 +179,7 @@ export class LambdaRestateServer extends BaseRestateServer {
         return this.toErrorResponse(404, msg);
       }
     } else {
-      new NewStateMachine(
+      new StateMachine(
         connection,
         method,
         ProtocolMode.REQUEST_RESPONSE

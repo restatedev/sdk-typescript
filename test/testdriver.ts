@@ -10,13 +10,12 @@ import { RestateDuplexStream } from "../src/connection/restate_duplex_stream";
 import * as restate from "../src/public_api";
 import { Connection } from "../src/connection/connection";
 import stream from "stream";
-import { DurableExecutionStateMachine } from "../src/state_machine";
 import { printMessageAsJson } from "../src/utils/utils";
 import { Message } from "../src/types/types";
 import { HostedGrpcServiceMethod, ProtoMetadata } from "../src/types/grpc";
 import { ProtocolMode } from "../src/generated/proto/discovery";
 import { rlog } from "../src/utils/logger";
-import { NewStateMachine } from "../src/new_state_machine";
+import { StateMachine } from "../src/state_machine";
 
 export class TestDriver<I, O> implements Connection {
   private http2stream = this.mockHttp2DuplexStream();
@@ -28,7 +27,7 @@ export class TestDriver<I, O> implements Connection {
   private method: HostedGrpcServiceMethod<I, O>;
   private entries: Array<Message>;
   private nbCompletions: number;
-  private stateMachine!: NewStateMachine<I, O>;
+  private stateMachine!: StateMachine<I, O>;
 
   private getResultPromise: Promise<Array<Message>>;
   private resolveOnClose!: (value: Array<Message>) => void;
@@ -73,7 +72,7 @@ export class TestDriver<I, O> implements Connection {
   }
 
   run(): Promise<Array<Message>> {
-    this.stateMachine = new NewStateMachine(
+    this.stateMachine = new StateMachine(
       this,
       this.method,
       this.protocolMode

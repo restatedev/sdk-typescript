@@ -1,5 +1,5 @@
 import { RestateContext } from "./restate_context";
-import { NewStateMachine } from "./new_state_machine";
+import { StateMachine } from "./state_machine";
 import {
   AwakeableEntryMessage,
   BackgroundInvokeEntryMessage,
@@ -22,13 +22,9 @@ import {
   SET_STATE_ENTRY_MESSAGE_TYPE, SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
   SLEEP_ENTRY_MESSAGE_TYPE
 } from "./types/protocol";
-import { Empty } from "./generated/google/protobuf/empty";
 import { SideEffectEntryMessage } from "./generated/proto/javascript";
 
 export class RestateContextImpl<I, O> implements RestateContext {
-  instanceKey: Buffer;
-  invocationId: Buffer;
-  serviceName: string;
 
   // This flag is set to true when we are executing code that is inside a side effect.
   // We use this flag to prevent the user from doing operations on the context from within a side effect.
@@ -43,15 +39,11 @@ export class RestateContextImpl<I, O> implements RestateContext {
   private oneWayCallDelay = 0;
 
   constructor(
-    instanceKey: Buffer,
-    invocationId: Buffer,
-    serviceName: string,
-    private readonly stateMachine: NewStateMachine<I, O>
-  ) {
-    this.instanceKey = instanceKey
-    this.invocationId = invocationId
-    this.serviceName = serviceName
-  }
+    public readonly instanceKey: Buffer,
+    public readonly invocationId: Buffer,
+    public readonly serviceName: string,
+    private readonly stateMachine: StateMachine<I, O>
+  ) {  }
 
   async get<T>(name: string): Promise<T | null> {
     // Check if this is a valid action
@@ -145,7 +137,7 @@ export class RestateContextImpl<I, O> implements RestateContext {
     return new Uint8Array();
   }
 
-  async oneWayCall<T>(call: () => Promise<T>, delayMillis?: number): Promise<void> {
+  async oneWayCall(call: () => Promise<any>, delayMillis?: number): Promise<void> {
     if (!this.isValidState("oneWayCall")) {
       return Promise.reject();
     }

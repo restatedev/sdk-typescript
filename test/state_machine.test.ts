@@ -31,3 +31,22 @@ describe("Greeter", () => {
     ]);
   });
 });
+
+describe("Greeter: replay output message", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new Greeter(),
+      "/test.TestGreeter/Greet",
+      [
+        startMessage(2),
+        inputMessage(greetRequest("Pete")),
+        outputMessage(greetResponse("Hello"))
+      ]
+    ).run();
+
+    expect(result).toStrictEqual([
+    ]);
+  });
+});
