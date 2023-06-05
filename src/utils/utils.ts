@@ -13,7 +13,7 @@ import {
   CLEAR_STATE_ENTRY_MESSAGE_TYPE, COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
   GET_STATE_ENTRY_MESSAGE_TYPE,
   INVOKE_ENTRY_MESSAGE_TYPE, OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
-  SET_STATE_ENTRY_MESSAGE_TYPE, SLEEP_ENTRY_MESSAGE_TYPE
+  SET_STATE_ENTRY_MESSAGE_TYPE, SIDE_EFFECT_ENTRY_MESSAGE_TYPE, SLEEP_ENTRY_MESSAGE_TYPE
 } from "../types/protocol";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -111,6 +111,7 @@ export const equalityCheckers = new Map<bigint, (msg1: any, msg2: any) => boolea
   [COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE, completeAwakeableMsgEquality],
   [OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, outputMsgEquality],
   [AWAKEABLE_ENTRY_MESSAGE_TYPE, () => true],
+  [SIDE_EFFECT_ENTRY_MESSAGE_TYPE, () => true],
   [SLEEP_ENTRY_MESSAGE_TYPE, () => true]
   ]
 )

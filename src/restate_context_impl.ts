@@ -159,50 +159,91 @@ export class RestateContextImpl<I, O> implements RestateContext {
   }
 
   sideEffect<T>(fn: () => Promise<T>): Promise<T> {
-    //
-    // if(this.inSideEffectFlag){
-    //   this.stateMachine.handleUserCodeMessage(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
-    //     OutputStreamEntryMessage.create({failure:
-    //         Failure.create({
-    //           code: 13,
-    //           message: `You cannot do sideEffect calls from within a side effect.`,
-    //         })
-    //     })
-    //   );
-    // } else if (this.oneWayCallFlag){
-    //   this.stateMachine.handleUserCodeMessage(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
-    //     OutputStreamEntryMessage.create({failure:
-    //         Failure.create({
-    //           code: 13,
-    //           message:
-    //             `Cannot do a side effect from within ctx.oneWayCall(...). ` +
-    //             "Context method ctx.oneWayCall() can only be used to invoke other services unidirectionally. " +
-    //             "e.g. ctx.oneWayCall(() => client.greet(my_request))",
-    //         })
-    //     })
-    //   );
-    // }
-    //
-    // this.inSideEffectFlag = true;
-    //
-    // const emptyMsg = SideEffectEntryMessage.create({});
-    // const promise = this.stateMachine.handleUserCodeMessage(SIDE_EFFECT_ENTRY_MESSAGE_TYPE, emptyMsg);
-    //
-    //
-    // fn()
-    //   .then((value) => {
-    //     const bytes =
-    //       typeof value === "undefined"
-    //         ? Buffer.from(JSON.stringify({}))
-    //         : Buffer.from(JSON.stringify(value));
-    //     const sideEffectMsg = SideEffectEntryMessage.encode(
-    //       SideEffectEntryMessage.create({ value: bytes })
-    //     ).finish();
-    //   })
-    //
 
+    if(this.inSideEffectFlag){
+      this.stateMachine.handleUserCodeMessage(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
+        OutputStreamEntryMessage.create({failure:
+            Failure.create({
+              code: 13,
+              message: `You cannot do sideEffect calls from within a side effect.`,
+            })
+        })
+      );
+    } else if (this.oneWayCallFlag){
+      this.stateMachine.handleUserCodeMessage(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
+        OutputStreamEntryMessage.create({failure:
+            Failure.create({
+              code: 13,
+              message:
+                `Cannot do a side effect from within ctx.oneWayCall(...). ` +
+                "Context method ctx.oneWayCall() can only be used to invoke other services unidirectionally. " +
+                "e.g. ctx.oneWayCall(() => client.greet(my_request))",
+            })
+        })
+      );
+    }
 
-    return new Promise<T>(() =>{return;});
+    this.inSideEffectFlag = true;
+
+    return new Promise((resolve, reject) => {
+      if(this.stateMachine.isReplaying()){
+        this.inSideEffectFlag = false;
+        const emptyMsg = SideEffectEntryMessage.create({});
+        const promise = this.stateMachine.handleUserCodeMessage<T>(SIDE_EFFECT_ENTRY_MESSAGE_TYPE, emptyMsg);
+        return promise.then(
+          (value) => {
+            resolve(value as T);
+          },
+          (failure) => {
+            reject(failure);
+          }
+        );
+      } else {
+        fn()
+          .then((value) => {
+            const bytes =
+              typeof value === "undefined"
+                ? Buffer.from(JSON.stringify({}))
+                : Buffer.from(JSON.stringify(value));
+            const sideEffectMsg = SideEffectEntryMessage.encode(
+              SideEffectEntryMessage.create({ value: bytes })
+            ).finish();
+            const promise = this.stateMachine.handleUserCodeMessage<T>(SIDE_EFFECT_ENTRY_MESSAGE_TYPE, sideEffectMsg);
+
+            this.inSideEffectFlag = false;
+            promise
+              .then(
+                () => resolve(value),
+                (failure) => reject(failure)
+              );
+
+          })
+          .catch((reason) => {
+            // Reason is either a failure or an Error
+            const failure: Failure =
+              reason instanceof Error
+                ? Failure.create({
+                  code: 13,
+                  message: reason.message,
+                })
+                : reason;
+
+            const sideEffectMsg = SideEffectEntryMessage.encode(
+              SideEffectEntryMessage.create({ failure: failure })
+            ).finish();
+
+            const promise = this.stateMachine.handleUserCodeMessage<T>(SIDE_EFFECT_ENTRY_MESSAGE_TYPE, sideEffectMsg);
+
+            this.inSideEffectFlag = false;
+            promise
+              .then(
+                () => reject(failure),
+                (failureFromRuntime) => reject(failureFromRuntime)
+              );
+          }
+        );
+      }
+    })
   }
 
   sleep(millis: number): Promise<void> {
