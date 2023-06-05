@@ -208,7 +208,12 @@ export class RestateContextImpl<I, O> implements RestateContext {
             const sideEffectMsg = SideEffectEntryMessage.encode(
               SideEffectEntryMessage.create({ value: bytes })
             ).finish();
-            const promise = this.stateMachine.handleUserCodeMessage<T>(SIDE_EFFECT_ENTRY_MESSAGE_TYPE, sideEffectMsg);
+            const promise = this.stateMachine.handleUserCodeMessage<T>(
+              SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+              sideEffectMsg,
+              false,
+              undefined,
+              true);
 
             this.inSideEffectFlag = false;
             promise
@@ -232,7 +237,12 @@ export class RestateContextImpl<I, O> implements RestateContext {
               SideEffectEntryMessage.create({ failure: failure })
             ).finish();
 
-            const promise = this.stateMachine.handleUserCodeMessage<T>(SIDE_EFFECT_ENTRY_MESSAGE_TYPE, sideEffectMsg);
+            const promise = this.stateMachine.handleUserCodeMessage<T>(
+              SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+              sideEffectMsg,
+              false,
+              undefined,
+              true);
 
             this.inSideEffectFlag = false;
             promise

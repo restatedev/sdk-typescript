@@ -212,8 +212,16 @@ export class NewJournal<I, O> {
         const awakeableMsg = replayMessage.message as AwakeableEntryMessage;
         this.resolveResult(journalIndex, journalEntry, awakeableMsg.value, awakeableMsg.failure);
       } else if (journalEntry.messageType === SIDE_EFFECT_ENTRY_MESSAGE_TYPE) {
-        const sideEffectMsg = replayMessage.message as SideEffectEntryMessage;
-        this.resolveResult(journalIndex, journalEntry, sideEffectMsg.value, sideEffectMsg.failure);
+        rlog.debug(replayMessage.message)
+        const sideEffectMsg = SideEffectEntryMessage.decode(
+          replayMessage.message as Uint8Array
+        );
+        if(sideEffectMsg.value !== undefined){
+          this.resolveResult(journalIndex, journalEntry, JSON.parse(sideEffectMsg.value.toString()));
+        } else {
+          this.resolveResult(journalIndex, journalEntry, undefined, sideEffectMsg.failure);
+        }
+
       } else if (
         journalEntry.messageType === SET_STATE_ENTRY_MESSAGE_TYPE ||
         journalEntry.messageType === CLEAR_STATE_ENTRY_MESSAGE_TYPE ||
