@@ -42,3 +42,4 @@ jobs:
     uses: restatedev/e2e/.github/workflows/e2e.yaml@e2e-workflow-call
     with:
       sdkTypescriptCommit: ${{ github.event.pull_request.head.sha || github.sha }}
+      e2eRef: e2e-workflow-call
