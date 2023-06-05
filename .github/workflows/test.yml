@@ -39,6 +39,6 @@ jobs:
       actions: read
     secrets: inherit
     needs: build
-    uses: restatedev/e2e/.github/workflows/e2e.yaml@main
+    uses: restatedev/e2e/.github/workflows/e2e.yaml@e2e-workflow-call
     with:
       sdkTypescriptCommit: ${{ github.sha }}
