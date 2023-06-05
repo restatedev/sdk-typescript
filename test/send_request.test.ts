@@ -56,7 +56,7 @@ class UnawaitedRequestResponseCallGreeter implements TestGreeter {
     const ctx = restate.useContext(this);
 
     const client = new TestGreeterClientImpl(ctx);
-    client.greet(TestRequest.create({ name: "Francesco" }))
+    client.greet(TestRequest.create({ name: "Francesco" }));
 
     return TestResponse.create({ greeting: `Hello` });
   }
@@ -874,11 +874,7 @@ describe("UnawaitedRequestResponseCallGreeter: if a call is replayed but uncompl
       [
         startMessage(2),
         inputMessage(greetRequest("Till")),
-        invokeMessage(
-          "test.TestGreeter",
-          "Greet",
-          greetRequest("Francesco")
-        ),
+        invokeMessage("test.TestGreeter", "Greet", greetRequest("Francesco")),
       ]
     ).run();
 

@@ -1,8 +1,19 @@
-import { protoMetadata, TestGreeter, TestRequest, TestResponse } from "../src/generated/proto/test";
+import {
+  protoMetadata,
+  TestGreeter,
+  TestRequest,
+  TestResponse,
+} from "../src/generated/proto/test";
 import * as restate from "../src/public_api";
 import { describe, expect } from "@jest/globals";
 import { TestDriver } from "./testdriver";
-import { greetRequest, greetResponse, inputMessage, outputMessage, startMessage } from "./protoutils";
+import {
+  greetRequest,
+  greetResponse,
+  inputMessage,
+  outputMessage,
+  startMessage,
+} from "./protoutils";
 
 class Greeter implements TestGreeter {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -20,15 +31,10 @@ describe("Greeter", () => {
       "TestGreeter",
       new Greeter(),
       "/test.TestGreeter/Greet",
-      [
-        startMessage(1),
-        inputMessage(greetRequest("Pete"))
-      ]
+      [startMessage(1), inputMessage(greetRequest("Pete"))]
     ).run();
 
-    expect(result).toStrictEqual([
-      outputMessage(greetResponse("Hello")),
-    ]);
+    expect(result).toStrictEqual([outputMessage(greetResponse("Hello"))]);
   });
 });
 
@@ -42,11 +48,10 @@ describe("Greeter: replay output message", () => {
       [
         startMessage(2),
         inputMessage(greetRequest("Pete")),
-        outputMessage(greetResponse("Hello"))
+        outputMessage(greetResponse("Hello")),
       ]
     ).run();
 
-    expect(result).toStrictEqual([
-    ]);
+    expect(result).toStrictEqual([]);
   });
 });

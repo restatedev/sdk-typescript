@@ -2,7 +2,10 @@
 
 import { RestateContext, setContext } from "../restate_context";
 import { FileDescriptorProto } from "ts-proto-descriptors";
-import { OutputStreamEntryMessage, SuspensionMessage } from "../generated/proto/protocol";
+import {
+  OutputStreamEntryMessage,
+  SuspensionMessage,
+} from "../generated/proto/protocol";
 import { rlog } from "../utils/logger";
 import { OUTPUT_STREAM_ENTRY_MESSAGE_TYPE } from "./protocol";
 import { Message } from "./types";
@@ -31,11 +34,7 @@ export class HostedGrpcServiceMethod<I, O> {
   /* eslint-disable @typescript-eslint/no-explicit-any */
   public reject!: (reason: any) => void;
   // used to resolve the invocation on suspensions (so when we have no output response yet)
-  public resolve!: (
-    value:
-      | Message
-      | PromiseLike<Message>
-  ) => void;
+  public resolve!: (value: Message | PromiseLike<Message>) => void;
 
   constructor(
     readonly instance: unknown,
@@ -59,7 +58,7 @@ export class HostedGrpcServiceMethod<I, O> {
       this.method
         .localFn(instanceWithContext, input)
         .then((output) => {
-          rlog.debug("Encoding the output message")
+          rlog.debug("Encoding the output message");
           const outBytes = this.method.outputEncoder(output);
           const msg = OutputStreamEntryMessage.create({
             value: Buffer.from(outBytes),

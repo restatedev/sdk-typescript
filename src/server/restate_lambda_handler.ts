@@ -179,11 +179,7 @@ export class LambdaRestateServer extends BaseRestateServer {
         return this.toErrorResponse(404, msg);
       }
     } else {
-      new StateMachine(
-        connection,
-        method,
-        ProtocolMode.REQUEST_RESPONSE
-      );
+      new StateMachine(connection, method, ProtocolMode.REQUEST_RESPONSE);
     }
 
     const result = await connection.getResult();

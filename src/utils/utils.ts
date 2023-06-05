@@ -5,15 +5,21 @@ import {
   ClearStateEntryMessage,
   CompleteAwakeableEntryMessage,
   GetStateEntryMessage,
-  InvokeEntryMessage, OutputStreamEntryMessage,
-  SetStateEntryMessage
+  InvokeEntryMessage,
+  OutputStreamEntryMessage,
+  SetStateEntryMessage,
 } from "../generated/proto/protocol";
 import {
-  AWAKEABLE_ENTRY_MESSAGE_TYPE, BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
-  CLEAR_STATE_ENTRY_MESSAGE_TYPE, COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
+  AWAKEABLE_ENTRY_MESSAGE_TYPE,
+  BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
+  CLEAR_STATE_ENTRY_MESSAGE_TYPE,
+  COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
   GET_STATE_ENTRY_MESSAGE_TYPE,
-  INVOKE_ENTRY_MESSAGE_TYPE, OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
-  SET_STATE_ENTRY_MESSAGE_TYPE, SIDE_EFFECT_ENTRY_MESSAGE_TYPE, SLEEP_ENTRY_MESSAGE_TYPE
+  INVOKE_ENTRY_MESSAGE_TYPE,
+  OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
+  SET_STATE_ENTRY_MESSAGE_TYPE,
+  SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+  SLEEP_ENTRY_MESSAGE_TYPE,
 } from "../types/protocol";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -96,13 +102,13 @@ const outputMsgEquality = (
   msg1: OutputStreamEntryMessage,
   msg2: OutputStreamEntryMessage
 ) => {
-  return (
-    msg1.value === msg2.value &&
-    msg1.failure === msg2.failure
-  );
+  return msg1.value === msg2.value && msg1.failure === msg2.failure;
 };
 
-export const equalityCheckers = new Map<bigint, (msg1: any, msg2: any) => boolean>([
+export const equalityCheckers = new Map<
+  bigint,
+  (msg1: any, msg2: any) => boolean
+>([
   [GET_STATE_ENTRY_MESSAGE_TYPE, getStateMsgEquality],
   [SET_STATE_ENTRY_MESSAGE_TYPE, setStateMsgEquality],
   [CLEAR_STATE_ENTRY_MESSAGE_TYPE, clearStateMsgEquality],
@@ -112,7 +118,5 @@ export const equalityCheckers = new Map<bigint, (msg1: any, msg2: any) => boolea
   [OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, outputMsgEquality],
   [AWAKEABLE_ENTRY_MESSAGE_TYPE, () => true],
   [SIDE_EFFECT_ENTRY_MESSAGE_TYPE, () => true],
-  [SLEEP_ENTRY_MESSAGE_TYPE, () => true]
-  ]
-)
-
+  [SLEEP_ENTRY_MESSAGE_TYPE, () => true],
+]);

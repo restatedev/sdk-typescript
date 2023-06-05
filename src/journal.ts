@@ -19,7 +19,7 @@ import {
   SLEEP_ENTRY_MESSAGE_TYPE,
   SleepEntryMessage,
   SUSPENSION_MESSAGE_TYPE,
-  SuspensionMessage
+  SuspensionMessage,
 } from "./types/protocol";
 import { rlog } from "./utils/logger";
 import { equalityCheckers, printMessageAsJson } from "./utils/utils";
@@ -48,8 +48,7 @@ export class Journal<I, O> {
     readonly invocationIdString: string,
     readonly nbEntriesToReplay: number,
     readonly method: HostedGrpcServiceMethod<I, O>
-  ) {
-  }
+  ) {}
 
   handleInputMessage(m: p.PollInputStreamEntryMessage) {
     this.transitionState(NewExecutionState.REPLAYING);
@@ -68,12 +67,16 @@ export class Journal<I, O> {
       (failure) => this.method.resolve(failure)
     );
 
-    this.pendingJournalEntries.set(0,
-      new JournalEntry(p.POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
+    this.pendingJournalEntries.set(
+      0,
+      new JournalEntry(
+        p.POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
         m,
         promise,
         resolve!,
-        reject!));
+        reject!
+      )
+    );
   }
 
   public applyUserSideMessage<T>(
@@ -93,10 +96,15 @@ export class Journal<I, O> {
         throw new Error();
       }
     } else if (this.isProcessing()) {
-      if (messageType === p.SUSPENSION_MESSAGE_TYPE ||
-        messageType === p.OUTPUT_STREAM_ENTRY_MESSAGE_TYPE) {
+      if (
+        messageType === p.SUSPENSION_MESSAGE_TYPE ||
+        messageType === p.OUTPUT_STREAM_ENTRY_MESSAGE_TYPE
+      ) {
         rlog.info("Handling output message");
-        this.handleOutputMessage(messageType, message as SuspensionMessage | OutputStreamEntryMessage);
+        this.handleOutputMessage(
+          messageType,
+          message as SuspensionMessage | OutputStreamEntryMessage
+        );
         return Promise.resolve(undefined);
       } else if (
         messageType === SET_STATE_ENTRY_MESSAGE_TYPE ||
@@ -108,9 +116,7 @@ export class Journal<I, O> {
         return Promise.resolve(undefined);
       } else {
         // Need completion
-        const journalEntry = new JournalEntry(
-          messageType,
-          message);
+        const journalEntry = new JournalEntry(messageType, message);
         this.pendingJournalEntries.set(this.userCodeJournalIndex, journalEntry);
         return journalEntry.promise;
       }
@@ -130,7 +136,6 @@ export class Journal<I, O> {
       return Promise.resolve(undefined);
     }
   }
-
 
   public applyRuntimeCompletionMessage(m: CompletionMessage) {
     // Get message at that entryIndex in pendingJournalEntries
@@ -158,7 +163,7 @@ export class Journal<I, O> {
     }
   }
 
-  public applyRuntimeReplayMessage( m: Message ) {
+  public applyRuntimeReplayMessage(m: Message) {
     this.incrementRuntimeReplayIndex();
 
     // Add message to the pendingJournalEntries
@@ -172,14 +177,15 @@ export class Journal<I, O> {
   private handleReplay(
     journalIndex: number,
     replayMessage: Message,
-    journalEntry: JournalEntry) {
-
+    journalEntry: JournalEntry
+  ) {
     // Do the journal mismatch check
     const match = this.checkJournalMatch(
       replayMessage.messageType,
       replayMessage.message,
       journalEntry.messageType,
-      journalEntry.message);
+      journalEntry.message
+    );
 
     // If journal mismatch check passed
     if (match) {
@@ -197,31 +203,59 @@ export class Journal<I, O> {
           - Add message to the pendingJournalEntries
           - Return the user code promise
        */
-      if (journalEntry.messageType === SUSPENSION_MESSAGE_TYPE || journalEntry.messageType === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE) {
-        this.handleOutputMessage(journalEntry.messageType, journalEntry.message as SuspensionMessage | OutputStreamEntryMessage);
+      if (
+        journalEntry.messageType === SUSPENSION_MESSAGE_TYPE ||
+        journalEntry.messageType === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE
+      ) {
+        this.handleOutputMessage(
+          journalEntry.messageType,
+          journalEntry.message as SuspensionMessage | OutputStreamEntryMessage
+        );
       } else if (journalEntry.messageType === GET_STATE_ENTRY_MESSAGE_TYPE) {
         const getStateMsg = replayMessage.message as GetStateEntryMessage;
-        this.resolveResult(journalIndex, journalEntry, getStateMsg.value || getStateMsg.empty);
+        this.resolveResult(
+          journalIndex,
+          journalEntry,
+          getStateMsg.value || getStateMsg.empty
+        );
       } else if (journalEntry.messageType === INVOKE_ENTRY_MESSAGE_TYPE) {
         const invokeMsg = replayMessage.message as InvokeEntryMessage;
-        this.resolveResult(journalIndex, journalEntry, invokeMsg.value, invokeMsg.failure);
+        this.resolveResult(
+          journalIndex,
+          journalEntry,
+          invokeMsg.value,
+          invokeMsg.failure
+        );
       } else if (journalEntry.messageType === SLEEP_ENTRY_MESSAGE_TYPE) {
         const sleepMsg = replayMessage.message as SleepEntryMessage;
         this.resolveResult(journalIndex, journalEntry, sleepMsg.result);
       } else if (journalEntry.messageType === AWAKEABLE_ENTRY_MESSAGE_TYPE) {
         const awakeableMsg = replayMessage.message as AwakeableEntryMessage;
-        this.resolveResult(journalIndex, journalEntry, awakeableMsg.value, awakeableMsg.failure);
+        this.resolveResult(
+          journalIndex,
+          journalEntry,
+          awakeableMsg.value,
+          awakeableMsg.failure
+        );
       } else if (journalEntry.messageType === SIDE_EFFECT_ENTRY_MESSAGE_TYPE) {
-        rlog.debug(replayMessage.message)
+        rlog.debug(replayMessage.message);
         const sideEffectMsg = SideEffectEntryMessage.decode(
           replayMessage.message as Uint8Array
         );
-        if(sideEffectMsg.value !== undefined){
-          this.resolveResult(journalIndex, journalEntry, JSON.parse(sideEffectMsg.value.toString()));
+        if (sideEffectMsg.value !== undefined) {
+          this.resolveResult(
+            journalIndex,
+            journalEntry,
+            JSON.parse(sideEffectMsg.value.toString())
+          );
         } else {
-          this.resolveResult(journalIndex, journalEntry, undefined, sideEffectMsg.failure);
+          this.resolveResult(
+            journalIndex,
+            journalEntry,
+            undefined,
+            sideEffectMsg.failure
+          );
         }
-
       } else if (
         journalEntry.messageType === SET_STATE_ENTRY_MESSAGE_TYPE ||
         journalEntry.messageType === CLEAR_STATE_ENTRY_MESSAGE_TYPE ||
@@ -234,7 +268,8 @@ export class Journal<I, O> {
       } else {
         // TODO we shouldn't end up here... we checked all message types
       }
-    } else { // Journal mismatch check failed
+    } else {
+      // Journal mismatch check failed
       /*
        - Resolve the root promise with output message with non-determinism failure
        - Set userCodeState to CLOSED
@@ -242,13 +277,22 @@ export class Journal<I, O> {
       this.resolveWithFailure(
         `Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!
         The journal entry at position ${journalIndex} was:
-        - In the user code: type: ${ journalEntry.messageType }, message:${printMessageAsJson(journalEntry.message)}
-        - In the replayed messages: type: ${replayMessage.messageType}, message: ${printMessageAsJson(replayMessage.message)}`
-      )
+        - In the user code: type: ${
+          journalEntry.messageType
+        }, message:${printMessageAsJson(journalEntry.message)}
+        - In the replayed messages: type: ${
+          replayMessage.messageType
+        }, message: ${printMessageAsJson(replayMessage.message)}`
+      );
     }
   }
 
-  resolveResult<T>(journalIndex: number, journalEntry: JournalEntry, value?: T, failure?: Failure) {
+  resolveResult<T>(
+    journalIndex: number,
+    journalEntry: JournalEntry,
+    value?: T,
+    failure?: Failure
+  ) {
     if (value) {
       journalEntry.resolve(value);
       this.pendingJournalEntries.delete(journalIndex);
@@ -260,25 +304,30 @@ export class Journal<I, O> {
     }
   }
 
-  resolveWithFailure(errorMessage: string){
+  resolveWithFailure(errorMessage: string) {
     const rootEntry = this.pendingJournalEntries.get(0);
-    if(rootEntry){
-      rootEntry.resolve(new Message(
-        OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
-        OutputStreamEntryMessage.create({
-          failure: Failure.create({
-            code: 13,
-            message: `Uncaught exception for invocation id ${this.invocationIdString}: ${errorMessage}`,
+    if (rootEntry) {
+      rootEntry.resolve(
+        new Message(
+          OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
+          OutputStreamEntryMessage.create({
+            failure: Failure.create({
+              code: 13,
+              message: `Uncaught exception for invocation id ${this.invocationIdString}: ${errorMessage}`,
+            }),
           }),
-        }),
-        false
-      ))
+          false
+        )
+      );
       this.pendingJournalEntries.delete(0);
       this.transitionState(NewExecutionState.CLOSED);
     }
   }
 
-  handleOutputMessage(messageType: bigint, message: OutputStreamEntryMessage | SuspensionMessage) {
+  handleOutputMessage(
+    messageType: bigint,
+    message: OutputStreamEntryMessage | SuspensionMessage
+  ) {
     const rootJournalEntry = this.pendingJournalEntries.get(0);
     if (rootJournalEntry) {
       rootJournalEntry.resolve(new Message(messageType, message));
@@ -294,7 +343,8 @@ export class Journal<I, O> {
     runtimeMsgType: bigint,
     runtimeMsg: p.ProtocolMessage | Uint8Array,
     userCodeMsgType: bigint,
-    userCodeMsg: p.ProtocolMessage | Uint8Array): boolean {
+    userCodeMsg: p.ProtocolMessage | Uint8Array
+  ): boolean {
     if (runtimeMsgType === userCodeMsgType) {
       const equalityFct = equalityCheckers.get(runtimeMsgType);
       if (equalityFct) {
@@ -312,14 +362,16 @@ export class Journal<I, O> {
   public getCompletableIndices(): number[] {
     // return all entries except for the root entry
     return [...this.pendingJournalEntries.entries()]
-      .filter(el => (el[0] !== 0))
-      .map(el => el[0]);
+      .filter((el) => el[0] !== 0)
+      .map((el) => el[0]);
   }
 
   private transitionState(newExecState: NewExecutionState) {
-
     // If the state is already closed then you cannot transition anymore
-    if (this.state === NewExecutionState.CLOSED && newExecState !== NewExecutionState.CLOSED) {
+    if (
+      this.state === NewExecutionState.CLOSED &&
+      newExecState !== NewExecutionState.CLOSED
+    ) {
       //TODO
       // Do not transition
       return;
@@ -332,7 +384,9 @@ export class Journal<I, O> {
 
   private incrementUserCodeIndex() {
     this.userCodeJournalIndex++;
-    rlog.debug("User code index incremented. New value: " + this.userCodeJournalIndex);
+    rlog.debug(
+      "User code index incremented. New value: " + this.userCodeJournalIndex
+    );
 
     if (
       this.userCodeJournalIndex === this.nbEntriesToReplay &&
@@ -344,11 +398,16 @@ export class Journal<I, O> {
 
   private incrementRuntimeReplayIndex() {
     this.runtimeReplayIndex++;
-    rlog.debug("Runtime replay index incremented. New value: " + this.runtimeReplayIndex + " while known entries is " + this.nbEntriesToReplay);
+    rlog.debug(
+      "Runtime replay index incremented. New value: " +
+        this.runtimeReplayIndex +
+        " while known entries is " +
+        this.nbEntriesToReplay
+    );
   }
 
   public allReplayMessagesArrived(): boolean {
-    return this.runtimeReplayIndex === this.nbEntriesToReplay - 1
+    return this.runtimeReplayIndex === this.nbEntriesToReplay - 1;
   }
 
   public isClosed(): boolean {
@@ -372,11 +431,10 @@ export class Journal<I, O> {
   }
 }
 
-
 export class JournalEntry {
-  public promise: Promise<any>
-  public resolve!: (value: any) => void
-  public reject!: (reason?: any) => void
+  public promise: Promise<any>;
+  public resolve!: (value: any) => void;
+  public reject!: (reason?: any) => void;
 
   constructor(
     readonly messageType: bigint,
@@ -386,8 +444,8 @@ export class JournalEntry {
     private customReject?: (reason?: any) => void
   ) {
     // Either use the custom promise that is provided or make a new promise
-    if(customPromise && customResolve && customReject) {
-      this.promise = customPromise
+    if (customPromise && customResolve && customReject) {
+      this.promise = customPromise;
       this.resolve = customResolve;
       this.reject = customReject;
     } else {

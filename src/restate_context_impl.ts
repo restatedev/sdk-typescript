@@ -3,29 +3,31 @@ import { StateMachine } from "./state_machine";
 import {
   AwakeableEntryMessage,
   BackgroundInvokeEntryMessage,
-  ClearStateEntryMessage, CompleteAwakeableEntryMessage,
+  ClearStateEntryMessage,
+  CompleteAwakeableEntryMessage,
   Failure,
   GetStateEntryMessage,
   InvokeEntryMessage,
   OutputStreamEntryMessage,
   SetStateEntryMessage,
-  SleepEntryMessage
+  SleepEntryMessage,
 } from "./generated/proto/protocol";
 import {
   AWAKEABLE_ENTRY_MESSAGE_TYPE,
   AwakeableIdentifier,
   BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
-  CLEAR_STATE_ENTRY_MESSAGE_TYPE, COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
+  CLEAR_STATE_ENTRY_MESSAGE_TYPE,
+  COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
   GET_STATE_ENTRY_MESSAGE_TYPE,
   INVOKE_ENTRY_MESSAGE_TYPE,
   OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
-  SET_STATE_ENTRY_MESSAGE_TYPE, SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-  SLEEP_ENTRY_MESSAGE_TYPE
+  SET_STATE_ENTRY_MESSAGE_TYPE,
+  SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+  SLEEP_ENTRY_MESSAGE_TYPE,
 } from "./types/protocol";
 import { SideEffectEntryMessage } from "./generated/proto/javascript";
 
 export class RestateContextImpl<I, O> implements RestateContext {
-
   // This flag is set to true when we are executing code that is inside a side effect.
   // We use this flag to prevent the user from doing operations on the context from within a side effect.
   // e.g. ctx.sideEffect(() => {await ctx.get("my-state")})
@@ -43,7 +45,7 @@ export class RestateContextImpl<I, O> implements RestateContext {
     public readonly invocationId: Buffer,
     public readonly serviceName: string,
     private readonly stateMachine: StateMachine<I, O>
-  ) {  }
+  ) {}
 
   async get<T>(name: string): Promise<T | null> {
     // Check if this is a valid action
@@ -53,7 +55,10 @@ export class RestateContextImpl<I, O> implements RestateContext {
 
     // Create the message and let the state machine process it
     const msg = GetStateEntryMessage.create({ key: Buffer.from(name) });
-    const promise = this.stateMachine.handleUserCodeMessage(GET_STATE_ENTRY_MESSAGE_TYPE, msg);
+    const promise = this.stateMachine.handleUserCodeMessage(
+      GET_STATE_ENTRY_MESSAGE_TYPE,
+      msg
+    );
 
     // Wait for the result, do post-processing and then deliver it back to the user code.
     return promise.then((result) => {
@@ -66,7 +71,7 @@ export class RestateContextImpl<I, O> implements RestateContext {
       } else {
         return null;
       }
-    })
+    });
   }
 
   set<T>(name: string, value: T): void {
@@ -90,10 +95,17 @@ export class RestateContextImpl<I, O> implements RestateContext {
     const msg = ClearStateEntryMessage.create({
       key: Buffer.from(name, "utf8"),
     });
-    this.stateMachine.handleUserCodeMessage(CLEAR_STATE_ENTRY_MESSAGE_TYPE, msg);
+    this.stateMachine.handleUserCodeMessage(
+      CLEAR_STATE_ENTRY_MESSAGE_TYPE,
+      msg
+    );
   }
 
-  request(service: string, method: string, data: Uint8Array): Promise<Uint8Array> {
+  request(
+    service: string,
+    method: string,
+    data: Uint8Array
+  ): Promise<Uint8Array> {
     if (this.oneWayCallFlag) {
       return this.invokeOneWay(service, method, data);
     } else {
@@ -115,7 +127,10 @@ export class RestateContextImpl<I, O> implements RestateContext {
       methodName: method,
       parameter: Buffer.from(data),
     });
-    const promise = this.stateMachine.handleUserCodeMessage(INVOKE_ENTRY_MESSAGE_TYPE, msg);
+    const promise = this.stateMachine.handleUserCodeMessage(
+      INVOKE_ENTRY_MESSAGE_TYPE,
+      msg
+    );
     return (await promise) as Uint8Array;
   }
 
@@ -124,20 +139,26 @@ export class RestateContextImpl<I, O> implements RestateContext {
     method: string,
     data: Uint8Array
   ): Promise<Uint8Array> {
-
-    const invokeTime = (this.oneWayCallDelay > 0) ?  Date.now() + this.oneWayCallDelay : undefined;
+    const invokeTime =
+      this.oneWayCallDelay > 0 ? Date.now() + this.oneWayCallDelay : undefined;
     const msg = BackgroundInvokeEntryMessage.create({
       serviceName: service,
       methodName: method,
       parameter: Buffer.from(data),
-      invokeTime: invokeTime
-    })
+      invokeTime: invokeTime,
+    });
 
-    this.stateMachine.handleUserCodeMessage(BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE, msg)
+    this.stateMachine.handleUserCodeMessage(
+      BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
+      msg
+    );
     return new Uint8Array();
   }
 
-  async oneWayCall(call: () => Promise<any>, delayMillis?: number): Promise<void> {
+  async oneWayCall(
+    call: () => Promise<any>,
+    delayMillis?: number
+  ): Promise<void> {
     if (!this.isValidState("oneWayCall")) {
       return Promise.reject();
     }
@@ -151,26 +172,27 @@ export class RestateContextImpl<I, O> implements RestateContext {
   }
 
   sideEffect<T>(fn: () => Promise<T>): Promise<T> {
-
-    if(this.inSideEffectFlag){
-      this.stateMachine.handleUserCodeMessage(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
-        OutputStreamEntryMessage.create({failure:
-            Failure.create({
-              code: 13,
-              message: `You cannot do sideEffect calls from within a side effect.`,
-            })
+    if (this.inSideEffectFlag) {
+      this.stateMachine.handleUserCodeMessage(
+        OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
+        OutputStreamEntryMessage.create({
+          failure: Failure.create({
+            code: 13,
+            message: `You cannot do sideEffect calls from within a side effect.`,
+          }),
         })
       );
-    } else if (this.oneWayCallFlag){
-      this.stateMachine.handleUserCodeMessage(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
-        OutputStreamEntryMessage.create({failure:
-            Failure.create({
-              code: 13,
-              message:
-                `Cannot do a side effect from within ctx.oneWayCall(...). ` +
-                "Context method ctx.oneWayCall() can only be used to invoke other services unidirectionally. " +
-                "e.g. ctx.oneWayCall(() => client.greet(my_request))",
-            })
+    } else if (this.oneWayCallFlag) {
+      this.stateMachine.handleUserCodeMessage(
+        OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
+        OutputStreamEntryMessage.create({
+          failure: Failure.create({
+            code: 13,
+            message:
+              `Cannot do a side effect from within ctx.oneWayCall(...). ` +
+              "Context method ctx.oneWayCall() can only be used to invoke other services unidirectionally. " +
+              "e.g. ctx.oneWayCall(() => client.greet(my_request))",
+          }),
         })
       );
     }
@@ -178,10 +200,13 @@ export class RestateContextImpl<I, O> implements RestateContext {
     this.inSideEffectFlag = true;
 
     return new Promise((resolve, reject) => {
-      if(this.stateMachine.isReplaying()){
+      if (this.stateMachine.isReplaying()) {
         this.inSideEffectFlag = false;
         const emptyMsg = SideEffectEntryMessage.create({});
-        const promise = this.stateMachine.handleUserCodeMessage<T>(SIDE_EFFECT_ENTRY_MESSAGE_TYPE, emptyMsg);
+        const promise = this.stateMachine.handleUserCodeMessage<T>(
+          SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+          emptyMsg
+        );
         return promise.then(
           (value) => {
             resolve(value as T);
@@ -205,24 +230,23 @@ export class RestateContextImpl<I, O> implements RestateContext {
               sideEffectMsg,
               false,
               undefined,
-              true);
+              true
+            );
 
             this.inSideEffectFlag = false;
-            promise
-              .then(
-                () => resolve(value),
-                (failure) => reject(failure)
-              );
-
+            promise.then(
+              () => resolve(value),
+              (failure) => reject(failure)
+            );
           })
           .catch((reason) => {
             // Reason is either a failure or an Error
             const failure: Failure =
               reason instanceof Error
                 ? Failure.create({
-                  code: 13,
-                  message: reason.message,
-                })
+                    code: 13,
+                    message: reason.message,
+                  })
                 : reason;
 
             const sideEffectMsg = SideEffectEntryMessage.encode(
@@ -234,18 +258,17 @@ export class RestateContextImpl<I, O> implements RestateContext {
               sideEffectMsg,
               false,
               undefined,
-              true);
+              true
+            );
 
             this.inSideEffectFlag = false;
-            promise
-              .then(
-                () => reject(failure),
-                (failureFromRuntime) => reject(failureFromRuntime)
-              );
-          }
-        );
+            promise.then(
+              () => reject(failure),
+              (failureFromRuntime) => reject(failureFromRuntime)
+            );
+          });
       }
-    })
+    });
   }
 
   sleep(millis: number): Promise<void> {
@@ -254,7 +277,10 @@ export class RestateContextImpl<I, O> implements RestateContext {
     }
 
     const msg = SleepEntryMessage.create({ wakeUpTime: Date.now() + millis });
-    return this.stateMachine.handleUserCodeMessage<void>(SLEEP_ENTRY_MESSAGE_TYPE, msg);
+    return this.stateMachine.handleUserCodeMessage<void>(
+      SLEEP_ENTRY_MESSAGE_TYPE,
+      msg
+    );
   }
 
   awakeable<T>(): { id: string; promise: Promise<T> } {
@@ -265,15 +291,16 @@ export class RestateContextImpl<I, O> implements RestateContext {
     }
 
     const msg = AwakeableEntryMessage.create();
-    const promise = this.stateMachine.handleUserCodeMessage<Buffer>(AWAKEABLE_ENTRY_MESSAGE_TYPE, msg)
+    const promise = this.stateMachine
+      .handleUserCodeMessage<Buffer>(AWAKEABLE_ENTRY_MESSAGE_TYPE, msg)
       .then<T>((result: Buffer | void) => {
-        if(result instanceof Buffer){
+        if (result instanceof Buffer) {
           return JSON.parse(result.toString()) as T;
         } else {
           //TODO handle this case...
           throw new Error("");
         }
-        });
+      });
 
     // This needs to be done after handling the message in the state machine
     // otherwise the index is not yet incremented.
@@ -286,7 +313,7 @@ export class RestateContextImpl<I, O> implements RestateContext {
 
     return {
       id: JSON.stringify(awakeableIdentifier),
-      promise: promise
+      promise: promise,
     };
   }
 
@@ -311,27 +338,36 @@ export class RestateContextImpl<I, O> implements RestateContext {
       payload: Buffer.from(JSON.stringify(payload)),
     });
 
-    this.stateMachine.handleUserCodeMessage(COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE, msg);
+    this.stateMachine.handleUserCodeMessage(
+      COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
+      msg
+    );
   }
 
   isValidState(callType: string): boolean {
     if (this.inSideEffectFlag) {
-      this.stateMachine.handleUserCodeMessage(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
-        OutputStreamEntryMessage.create({failure:
-            Failure.create({
-              code: 13,
-              message: `You cannot do ${callType} calls from within a side effect.`,
-            })}));
+      this.stateMachine.handleUserCodeMessage(
+        OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
+        OutputStreamEntryMessage.create({
+          failure: Failure.create({
+            code: 13,
+            message: `You cannot do ${callType} calls from within a side effect.`,
+          }),
+        })
+      );
       return false;
     } else if (this.oneWayCallFlag) {
-      this.stateMachine.handleUserCodeMessage(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
-        OutputStreamEntryMessage.create({failure:
-        Failure.create({
-          code: 13,
-          message: `Cannot do a ${callType} from within ctx.oneWayCall(...).
+      this.stateMachine.handleUserCodeMessage(
+        OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
+        OutputStreamEntryMessage.create({
+          failure: Failure.create({
+            code: 13,
+            message: `Cannot do a ${callType} from within ctx.oneWayCall(...).
           Context method oneWayCall() can only be used to invoke other services in the background.
           e.g. ctx.oneWayCall(() => client.greet(my_request))`,
-        })}));
+          }),
+        })
+      );
       return false;
     } else {
       return true;

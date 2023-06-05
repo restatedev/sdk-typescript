@@ -11,12 +11,12 @@ import {
   OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
   OutputStreamEntryMessage,
   SUSPENSION_MESSAGE_TYPE,
-  SuspensionMessage
+  SuspensionMessage,
 } from "./types/protocol";
 import { Failure } from "./generated/proto/protocol";
 import { Journal } from "./journal";
 
-export class StateMachine<I, O>{
+export class StateMachine<I, O> {
   private journal!: Journal<I, O>;
   private restateContext!: RestateContextImpl<I, O>;
   private logPrefix = "";
@@ -44,35 +44,51 @@ export class StateMachine<I, O>{
     });
   }
 
-  public handleRuntimeMessage(
-    m: Message
-  ){
-    if(m.messageType === p.START_MESSAGE_TYPE){
-      rlog.debugJournalMessage(this.logPrefix, "Handling runtime start message: ", m.message)
+  public handleRuntimeMessage(m: Message) {
+    if (m.messageType === p.START_MESSAGE_TYPE) {
+      rlog.debugJournalMessage(
+        this.logPrefix,
+        "Handling runtime start message: ",
+        m.message
+      );
       this.handleStartMessage(m.message as p.StartMessage);
-    } else if(m.messageType === p.POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE) {
-      rlog.debugJournalMessage(this.logPrefix, "Handling runtime input message: ", m.message)
-      this.handleInputMessage(m.message as p.PollInputStreamEntryMessage)
-    } else if(m.messageType === p.COMPLETION_MESSAGE_TYPE) {
-      rlog.debugJournalMessage(this.logPrefix, "Handling runtime completion message: ", m.message)
-      this.journal.applyRuntimeCompletionMessage(m.message as p.CompletionMessage);
+    } else if (m.messageType === p.POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE) {
+      rlog.debugJournalMessage(
+        this.logPrefix,
+        "Handling runtime input message: ",
+        m.message
+      );
+      this.handleInputMessage(m.message as p.PollInputStreamEntryMessage);
+    } else if (m.messageType === p.COMPLETION_MESSAGE_TYPE) {
+      rlog.debugJournalMessage(
+        this.logPrefix,
+        "Handling runtime completion message: ",
+        m.message
+      );
+      this.journal.applyRuntimeCompletionMessage(
+        m.message as p.CompletionMessage
+      );
     } else {
-      rlog.debugJournalMessage(this.logPrefix, "Handling runtime replay message: ", m.message)
+      rlog.debugJournalMessage(
+        this.logPrefix,
+        "Handling runtime replay message: ",
+        m.message
+      );
       this.journal.applyRuntimeReplayMessage(m);
-      if(this.journal.allReplayMessagesArrived()){
+      if (this.journal.allReplayMessagesArrived()) {
         this.invoke();
       }
     }
   }
 
-  handleStartMessage(m: p.StartMessage){
+  handleStartMessage(m: p.StartMessage) {
     this.invocationIdString = uuidV7FromBuffer(m.invocationId);
     this.logPrefix = `[${this.method.packge}.${
       this.method.service
     }-${m.instanceKey.toString("base64")}-${this.invocationIdString}] [${
       this.method.method.name
     }]`;
-    rlog.debugJournalMessage(this.logPrefix, "Handling start message: ", m)
+    rlog.debugJournalMessage(this.logPrefix, "Handling start message: ", m);
 
     this.restateContext = new RestateContextImpl(
       m.instanceKey,
@@ -80,16 +96,20 @@ export class StateMachine<I, O>{
       this.method.service,
       this
     );
-    this.journal = new Journal(this.invocationIdString, m.knownEntries, this.method);
+    this.journal = new Journal(
+      this.invocationIdString,
+      m.knownEntries,
+      this.method
+    );
   }
 
-  handleInputMessage(m: p.PollInputStreamEntryMessage){
+  handleInputMessage(m: p.PollInputStreamEntryMessage) {
     rlog.debugJournalMessage(this.logPrefix, "Handling input message: ", m);
     this.invocationValue = m.value;
     this.journal.handleInputMessage(m);
 
     // If there are no replay messages then we need to invoke the method
-    if(this.journal.allReplayMessagesArrived()){
+    if (this.journal.allReplayMessagesArrived()) {
       this.invoke();
     }
   }
@@ -100,7 +120,7 @@ export class StateMachine<I, O>{
     completedFlag?: boolean,
     protocolVersion?: number,
     requiresAckFlag?: boolean
-  ): Promise<T | void>{
+  ): Promise<T | void> {
     /*
     Can take any type of message as input (also input stream and output stream)
     */
@@ -113,7 +133,7 @@ export class StateMachine<I, O>{
     const promise = this.journal.applyUserSideMessage<T>(messageType, message);
 
     // Only send if we are in processing mode. Not if we are replaying user code
-    if(this.journal.isProcessing()){
+    if (this.journal.isProcessing()) {
       this.connection.buffer(
         new Message(
           messageType,
@@ -127,17 +147,21 @@ export class StateMachine<I, O>{
 
     if (!this.isReplaying() && p.SUSPENSION_TRIGGERS.includes(messageType)) {
       this.scheduleSuspension();
-    } else if(this.isReplaying() && p.SUSPENSION_TRIGGERS.includes(messageType)){
-      if(this.journal.getCompletableIndices().length > 0){
+    } else if (
+      this.isReplaying() &&
+      p.SUSPENSION_TRIGGERS.includes(messageType)
+    ) {
+      if (this.journal.getCompletableIndices().length > 0) {
         this.scheduleSuspension();
       }
     }
     return promise;
   }
 
-  invoke(){
-    rlog.debug("Invoking")
-    this.method.invoke(this.restateContext, this.invocationValue, this.logPrefix)
+  invoke() {
+    rlog.debug("Invoking");
+    this.method
+      .invoke(this.restateContext, this.invocationValue, this.logPrefix)
       .then((result) => {
         rlog.debugJournalMessage(
           this.logPrefix,
@@ -145,7 +169,7 @@ export class StateMachine<I, O>{
           result.message
         );
         this.journal.applyUserSideMessage(result.messageType, result.message);
-        this.connection.buffer(result)
+        this.connection.buffer(result);
       })
       .catch(async (e) => {
         if (e instanceof Error) {
@@ -154,36 +178,40 @@ export class StateMachine<I, O>{
           rlog.warn(`${this.logPrefix} Call failed: ${printMessageAsJson(e)}`);
         }
         // TODO does this still need to go via the journal? I guess so?...
-        this.connection.buffer(new Message(
-          OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
-          OutputStreamEntryMessage.create({
-            failure: Failure.create({
-              code: 13,
-              message: `${this.logPrefix} Uncaught exception for invocation id: ${e.message}`,
-            }),
-          })
-        ))
+        this.connection.buffer(
+          new Message(
+            OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
+            OutputStreamEntryMessage.create({
+              failure: Failure.create({
+                code: 13,
+                message: `${this.logPrefix} Uncaught exception for invocation id: ${e.message}`,
+              }),
+            })
+          )
+        );
       })
-      .finally(async ()=> {
+      .finally(async () => {
         try {
           await this.connection.flush();
         } catch (e: any) {
-          rlog.warn(`${this.logPrefix} Failed to flush output/suspension message to the runtime: ${e.message} - ${e.stack}`);
+          rlog.warn(
+            `${this.logPrefix} Failed to flush output/suspension message to the runtime: ${e.message} - ${e.stack}`
+          );
         } finally {
           // even if we failed to flush, we need to close out this state machine
           this.connection.end();
         }
-      })
+      });
   }
 
-  scheduleSuspension(){
+  scheduleSuspension() {
     // If there was already a timeout set, we want to reset the time to postpone suspension as long as we make progress.
     // So we first clear the old timeout, and then we set a new one.
     if (this.suspensionTimeout) {
       clearTimeout(this.suspensionTimeout);
     }
 
-    rlog.debug(`Scheduling suspension for ${this.getSuspensionMillis()} ms`)
+    rlog.debug(`Scheduling suspension for ${this.getSuspensionMillis()} ms`);
     // Set a new suspension with a new timeout
     // The suspension will only be sent if the timeout is not canceled due to a completion.
     this.suspensionTimeout = setTimeout(() => {
@@ -200,12 +228,12 @@ export class StateMachine<I, O>{
     return this.protocolMode === ProtocolMode.REQUEST_RESPONSE
       ? 0
       : this.inputChannelClosed
-        ? 0
-        : 1000;
+      ? 0
+      : 1000;
   }
 
-  suspend(){
-    rlog.debug("Suspending")
+  suspend() {
+    rlog.debug("Suspending");
 
     const indices = this.journal.getCompletableIndices();
     // If the state is closed then we either already send a suspension
@@ -225,7 +253,7 @@ export class StateMachine<I, O>{
         this.method.reject(
           new Error(
             "Illegal state: Not able to send suspension message because no pending promises. " +
-            "This timeout should have been removed."
+              "This timeout should have been removed."
           )
         );
       }
@@ -233,7 +261,7 @@ export class StateMachine<I, O>{
     return;
   }
 
-  public getUserCodeJournalIndex(): number{
+  public getUserCodeJournalIndex(): number {
     return this.journal.getUserCodeJournalIndex();
   }
 
@@ -245,8 +273,8 @@ export class StateMachine<I, O>{
     return `${this.method.packge}.${this.method.service}`;
   }
 
-  setInputChannelToClosed(){
-    rlog.debug(`Setting input channel to closed`)
+  setInputChannelToClosed() {
+    rlog.debug(`Setting input channel to closed`);
     if (!this.journal.isClosed()) {
       this.inputChannelClosed = true;
       // If there is a timeout planned, reset the timout to execute immediately when the work is done.
@@ -256,8 +284,7 @@ export class StateMachine<I, O>{
     }
   }
 
-  onError(){
+  onError() {
     return;
   }
 }
-

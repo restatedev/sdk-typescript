@@ -72,11 +72,7 @@ export class TestDriver<I, O> implements Connection {
   }
 
   run(): Promise<Array<Message>> {
-    this.stateMachine = new StateMachine(
-      this,
-      this.method,
-      this.protocolMode
-    );
+    this.stateMachine = new StateMachine(this, this.method, this.protocolMode);
 
     // Pipe messages through the state machine
     this.entries.forEach((el) => {

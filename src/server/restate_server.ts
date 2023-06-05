@@ -117,11 +117,7 @@ export class RestateServer extends BaseRestateServer {
         connection.respond404();
       } else {
         connection.respondOk();
-        new StateMachine(
-          connection,
-          method,
-          ProtocolMode.BIDI_STREAM
-        );
+        new StateMachine(connection, method, ProtocolMode.BIDI_STREAM);
       }
     }
   }
