@@ -1188,7 +1188,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       pendingMessage.messageType === BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE
     ) {
       pendingMessage.resolve(undefined);
-      this.indexToPendingMsgMap.delete(journalIndex);
+      this.cleanUp(journalIndex, pendingMessage.messageType);
       return;
     }
 
@@ -1199,7 +1199,8 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       pendingMessage.messageType === SIDE_EFFECT_ENTRY_MESSAGE_TYPE
     ) {
       pendingMessage.resolve(undefined);
-      this.indexToPendingMsgMap.delete(journalIndex);
+      this.cleanUp(journalIndex, pendingMessage.messageType);
+      return;
     }
 
     // 5. Handle journal entries that require result
@@ -1210,7 +1211,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     if (value !== undefined) {
       if (pendingMessage.resolve !== undefined) {
         pendingMessage.resolve(value);
-        this.indexToPendingMsgMap.delete(journalIndex);
+        this.cleanUp(journalIndex, pendingMessage.messageType);
         return;
       } else {
         // leads to onCallFailure call
@@ -1224,7 +1225,7 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
     } else if (failure !== undefined) {
       if (pendingMessage.reject !== undefined) {
         pendingMessage.reject(new Error(failure.message));
-        this.indexToPendingMsgMap.delete(journalIndex);
+        this.cleanUp(journalIndex, pendingMessage.messageType);
         return;
       } else {
         // leads to onCallFailure call
@@ -1245,12 +1246,17 @@ export class DurableExecutionStateMachine<I, O> implements RestateContext {
       // You don't want to await on this pending promise. You only want to wait on journal mismatch checks.
       pendingMessage.setChecked()
       this.indexToPendingMsgMap.set(journalIndex, pendingMessage);
+      return;
     }
+  }
 
+  cleanUp(journalIndex: number, msgType: bigint){
+    this.indexToPendingMsgMap.delete(journalIndex);
     // Clear the suspension timeout if this completion message leads to zero pending promises
     // In this case, we are not waiting on any completions from the runtime
-    if (this.suspensionTimeout && this.indexToPendingMsgMap.size === 0) {
+    if (this.suspensionTimeout !== undefined && SUSPENSION_TRIGGERS.includes(msgType) && this.indexToPendingMsgMap.size === 0) {
       clearTimeout(this.suspensionTimeout);
+      this.suspensionTimeout = undefined;
     }
   }
 
