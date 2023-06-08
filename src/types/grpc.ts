@@ -4,7 +4,6 @@ import { RestateContext, setContext } from "../restate_context";
 import { FileDescriptorProto } from "ts-proto-descriptors";
 import {
   OutputStreamEntryMessage,
-  SuspensionMessage,
 } from "../generated/proto/protocol";
 import { rlog } from "../utils/logger";
 import { OUTPUT_STREAM_ENTRY_MESSAGE_TYPE } from "./protocol";
@@ -58,7 +57,6 @@ export class HostedGrpcServiceMethod<I, O> {
       this.method
         .localFn(instanceWithContext, input)
         .then((output) => {
-          rlog.debug("Encoding the output message");
           const outBytes = this.method.outputEncoder(output);
           const msg = OutputStreamEntryMessage.create({
             value: Buffer.from(outBytes),

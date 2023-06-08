@@ -102,7 +102,14 @@ const outputMsgEquality = (
   msg1: OutputStreamEntryMessage,
   msg2: OutputStreamEntryMessage
 ) => {
-  return msg1.value === msg2.value && msg1.failure === msg2.failure;
+  if(msg1.value && msg2.value){
+    return msg1.value.equals(msg2.value)
+  } else if (msg1.failure && msg2.failure){
+    return (msg1.failure?.code === msg2.failure?.code) &&
+      (msg1.failure?.message === msg2.failure?.message)
+  } else {
+    return false
+  }
 };
 
 export const equalityCheckers = new Map<

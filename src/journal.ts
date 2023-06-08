@@ -29,7 +29,6 @@ import { SideEffectEntryMessage } from "./generated/proto/javascript";
 export class Journal<I, O> {
   private state = NewExecutionState.WAITING_FOR_START;
 
-  // Starts at 1 because the user code doesn't do explicit actions for the input message
   private userCodeJournalIndex = 0;
 
   // Starts at 0 because we process the input entry message which will increment it to 1
@@ -171,9 +170,6 @@ export class Journal<I, O> {
     this.replayEntries.set(this.runtimeReplayIndex, m);
   }
 
-  // This method gets called in two cases:
-  // 1. We already had a runtime replay, and now we get the user code message
-  // 2. We already had the user code message, and now we get the runtime replay
   private handleReplay(
     journalIndex: number,
     replayMessage: Message,
@@ -272,9 +268,8 @@ export class Journal<I, O> {
       // Journal mismatch check failed
       /*
        - Resolve the root promise with output message with non-determinism failure
-       - Set userCodeState to CLOSED
       */
-      this.resolveWithFailure(
+      throw new Error(
         `Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!
         The journal entry at position ${journalIndex} was:
         - In the user code: type: ${
@@ -319,8 +314,6 @@ export class Journal<I, O> {
           false
         )
       );
-      this.pendingJournalEntries.delete(0);
-      this.transitionState(NewExecutionState.CLOSED);
     }
   }
 
@@ -328,15 +321,14 @@ export class Journal<I, O> {
     messageType: bigint,
     message: OutputStreamEntryMessage | SuspensionMessage
   ) {
+    this.transitionState(NewExecutionState.CLOSED);
     const rootJournalEntry = this.pendingJournalEntries.get(0);
     if (rootJournalEntry) {
-      rootJournalEntry.resolve(new Message(messageType, message));
       this.pendingJournalEntries.delete(0);
-      this.transitionState(NewExecutionState.CLOSED);
+      rootJournalEntry.resolve(new Message(messageType, message));
     } else {
       // TODO fail if there is no rootJournalEntry
     }
-    this.transitionState(NewExecutionState.CLOSED);
   }
 
   private checkJournalMatch(
@@ -414,10 +406,6 @@ export class Journal<I, O> {
     return this.state === NewExecutionState.CLOSED;
   }
 
-  public isWaitingForStart(): boolean {
-    return this.state === NewExecutionState.WAITING_FOR_START;
-  }
-
   public isReplaying(): boolean {
     return this.state === NewExecutionState.REPLAYING;
   }
@@ -428,6 +416,14 @@ export class Journal<I, O> {
 
   public getUserCodeJournalIndex(): number {
     return this.userCodeJournalIndex;
+  }
+
+  public outputMsgWasReplayed(){
+    // Check if the last message of the replay entries is an output message
+    const lastEntry = this.replayEntries.get(this.nbEntriesToReplay - 1);
+    if(lastEntry) {
+      return lastEntry.messageType === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE;
+    }
   }
 }
 

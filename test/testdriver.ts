@@ -21,9 +21,9 @@ export class TestDriver<I, O> implements Connection {
   private http2stream = this.mockHttp2DuplexStream();
   private restate = RestateDuplexStream.from(this.http2stream);
   private result: Array<Message> = [];
+  private protocolMode = ProtocolMode.BIDI_STREAM;
 
   private restateServer: TestRestateServer;
-  private protocolMode = ProtocolMode.BIDI_STREAM;
   private method: HostedGrpcServiceMethod<I, O>;
   private entries: Array<Message>;
   private nbCompletions: number;
@@ -106,18 +106,7 @@ export class TestDriver<I, O> implements Connection {
   }
 
   async flush(): Promise<void> {
-    if (this.result.length == 0) {
-      return;
-    }
-    const tail = this.result[this.result.length - 1];
-    // For an output message, flush immediately
-    if (
-      tail.messageType === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE ||
-      tail.messageType === SUSPENSION_MESSAGE_TYPE
-    ) {
-      rlog.debug("End of test: Flushing test results");
-      this.resolveOnClose(this.result);
-    }
+    return;
   }
 
   onMessage(handler: (msg: Message) => void) {
@@ -130,6 +119,7 @@ export class TestDriver<I, O> implements Connection {
 
   end() {
     this.http2stream.end();
+    this.resolveOnClose(this.result);
   }
 
   mockHttp2DuplexStream() {

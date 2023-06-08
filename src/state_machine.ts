@@ -159,7 +159,6 @@ export class StateMachine<I, O> {
   }
 
   invoke() {
-    rlog.debug("Invoking");
     this.method
       .invoke(this.restateContext, this.invocationValue, this.logPrefix)
       .then((result) => {
@@ -169,7 +168,10 @@ export class StateMachine<I, O> {
           result.message
         );
         this.journal.applyUserSideMessage(result.messageType, result.message);
-        this.connection.buffer(result);
+
+        if(!this.journal.outputMsgWasReplayed()) {
+          this.connection.buffer(result);
+        }
       })
       .catch(async (e) => {
         if (e instanceof Error) {
@@ -178,17 +180,17 @@ export class StateMachine<I, O> {
           rlog.warn(`${this.logPrefix} Call failed: ${printMessageAsJson(e)}`);
         }
         // TODO does this still need to go via the journal? I guess so?...
-        this.connection.buffer(
-          new Message(
-            OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
-            OutputStreamEntryMessage.create({
-              failure: Failure.create({
-                code: 13,
-                message: `${this.logPrefix} Uncaught exception for invocation id: ${e.message}`,
-              }),
-            })
-          )
-        );
+        const message = new Message(
+          OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
+          OutputStreamEntryMessage.create({
+            failure: Failure.create({
+              code: 13,
+              message: `${this.logPrefix} Uncaught exception for invocation id: ${e.message}`,
+            }),
+          }))
+        if(!this.journal.outputMsgWasReplayed()) {
+          this.connection.buffer(message);
+        }
       })
       .finally(async () => {
         try {
@@ -285,6 +287,7 @@ export class StateMachine<I, O> {
   }
 
   onError() {
+    //TODO
     return;
   }
 }
