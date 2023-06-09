@@ -2,9 +2,7 @@
 
 import {
   COMPLETION_MESSAGE_TYPE,
-  OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
   StartMessage,
-  SUSPENSION_MESSAGE_TYPE,
 } from "../src/types/protocol";
 import { RestateDuplexStream } from "../src/connection/restate_duplex_stream";
 import * as restate from "../src/public_api";
@@ -136,7 +134,7 @@ export class TestDriver<I, O> implements Connection {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  addOnErrorListener(listener: () => void): void {
+  onError(listener: () => void): void {
     return;
   }
 }

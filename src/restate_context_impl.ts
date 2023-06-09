@@ -156,6 +156,7 @@ export class RestateContextImpl<I, O> implements RestateContext {
   }
 
   async oneWayCall(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     call: () => Promise<any>,
     delayMillis?: number
   ): Promise<void> {

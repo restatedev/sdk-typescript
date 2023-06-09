@@ -44,7 +44,6 @@ export class Journal<I, O> {
   private replayEntries = new Map<number, Message>();
 
   constructor(
-    readonly invocationIdString: string,
     readonly nbEntriesToReplay: number,
     readonly method: HostedGrpcServiceMethod<I, O>
   ) {}
@@ -57,6 +56,7 @@ export class Journal<I, O> {
     }
 
     let resolve: (value: Message) => void;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let reject: (reason?: any) => void;
     const promise = new Promise<Message>((res, rej) => {
       resolve = res;
@@ -72,13 +72,15 @@ export class Journal<I, O> {
         p.POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
         m,
         promise,
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         resolve!,
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         reject!
       )
     );
   }
 
-  public applyUserSideMessage<T>(
+  public handleUserSideMessage<T>(
     messageType: bigint,
     message: p.ProtocolMessage | Uint8Array
   ): Promise<T | undefined> {
@@ -99,7 +101,6 @@ export class Journal<I, O> {
         messageType === p.SUSPENSION_MESSAGE_TYPE ||
         messageType === p.OUTPUT_STREAM_ENTRY_MESSAGE_TYPE
       ) {
-        rlog.info("Handling output message");
         this.handleOutputMessage(
           messageType,
           message as SuspensionMessage | OutputStreamEntryMessage
@@ -128,15 +129,14 @@ export class Journal<I, O> {
       return Promise.resolve(undefined);
     } else {
       /*
-      Output stream failure -> cannot be in this state
-        - Resolve the root promise with output message with illegal state failure
+      state = waiting for start
+      we cannot be in this state
        */
-      //TODO
-      return Promise.resolve(undefined);
+      throw new Error("Did not receive input message before other messages.");
     }
   }
 
-  public applyRuntimeCompletionMessage(m: CompletionMessage) {
+  public handleRuntimeCompletionMessage(m: CompletionMessage) {
     // Get message at that entryIndex in pendingJournalEntries
     const journalEntry = this.pendingJournalEntries.get(m.entryIndex);
     if (journalEntry) {
@@ -153,6 +153,7 @@ export class Journal<I, O> {
         if (journalEntry.messageType === p.SIDE_EFFECT_ENTRY_MESSAGE_TYPE) {
           // Just needs and ack without completion
           journalEntry.resolve(undefined);
+          this.pendingJournalEntries.delete(m.entryIndex);
         } else {
           //TODO completion message without a value/failure/empty
         }
@@ -162,7 +163,7 @@ export class Journal<I, O> {
     }
   }
 
-  public applyRuntimeReplayMessage(m: Message) {
+  public handleRuntimeReplayMessage(m: Message) {
     this.incrementRuntimeReplayIndex();
 
     // Add message to the pendingJournalEntries
@@ -266,9 +267,6 @@ export class Journal<I, O> {
       }
     } else {
       // Journal mismatch check failed
-      /*
-       - Resolve the root promise with output message with non-determinism failure
-      */
       throw new Error(
         `Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!
         The journal entry at position ${journalIndex} was:
@@ -296,24 +294,6 @@ export class Journal<I, O> {
       this.pendingJournalEntries.delete(journalIndex);
     } else {
       this.pendingJournalEntries.set(journalIndex, journalEntry);
-    }
-  }
-
-  resolveWithFailure(errorMessage: string) {
-    const rootEntry = this.pendingJournalEntries.get(0);
-    if (rootEntry) {
-      rootEntry.resolve(
-        new Message(
-          OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
-          OutputStreamEntryMessage.create({
-            failure: Failure.create({
-              code: 13,
-              message: `Uncaught exception for invocation id ${this.invocationIdString}: ${errorMessage}`,
-            }),
-          }),
-          false
-        )
-      );
     }
   }
 
@@ -418,25 +398,31 @@ export class Journal<I, O> {
     return this.userCodeJournalIndex;
   }
 
-  public outputMsgWasReplayed(){
+  public outputMsgWasReplayed() {
     // Check if the last message of the replay entries is an output message
     const lastEntry = this.replayEntries.get(this.nbEntriesToReplay - 1);
-    if(lastEntry) {
+    if (lastEntry) {
       return lastEntry.messageType === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE;
     }
   }
 }
 
 export class JournalEntry {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public promise: Promise<any>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public resolve!: (value: any) => void;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public reject!: (reason?: any) => void;
 
   constructor(
     readonly messageType: bigint,
     readonly message: p.ProtocolMessage | Uint8Array,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private customPromise?: Promise<any>,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private customResolve?: (value: any) => void,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private customReject?: (reason?: any) => void
   ) {
     // Either use the custom promise that is provided or make a new promise
@@ -445,6 +431,7 @@ export class JournalEntry {
       this.resolve = customResolve;
       this.reject = customReject;
     } else {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       this.promise = new Promise<any>((res, rej) => {
         this.resolve = res;
         this.reject = rej;

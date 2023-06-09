@@ -39,8 +39,8 @@ export class StateMachine<I, O> {
   ) {
     connection.onMessage(this.handleRuntimeMessage.bind(this));
     connection.onClose(this.setInputChannelToClosed.bind(this));
-    connection.addOnErrorListener(() => {
-      this.onError();
+    connection.onError(() => {
+      this.handleError();
     });
   }
 
@@ -65,16 +65,24 @@ export class StateMachine<I, O> {
         "Handling runtime completion message: ",
         m.message
       );
-      this.journal.applyRuntimeCompletionMessage(
+      this.journal.handleRuntimeCompletionMessage(
         m.message as p.CompletionMessage
       );
+      // Remove lingering suspension timeouts, if we are not waiting for completions anymore
+      if (
+        this.suspensionTimeout !== undefined &&
+        this.journal.getCompletableIndices().length === 0
+      ) {
+        clearTimeout(this.suspensionTimeout);
+        this.suspensionTimeout = undefined;
+      }
     } else {
       rlog.debugJournalMessage(
         this.logPrefix,
         "Handling runtime replay message: ",
         m.message
       );
-      this.journal.applyRuntimeReplayMessage(m);
+      this.journal.handleRuntimeReplayMessage(m);
       if (this.journal.allReplayMessagesArrived()) {
         this.invoke();
       }
@@ -96,11 +104,7 @@ export class StateMachine<I, O> {
       this.method.service,
       this
     );
-    this.journal = new Journal(
-      this.invocationIdString,
-      m.knownEntries,
-      this.method
-    );
+    this.journal = new Journal(m.knownEntries, this.method);
   }
 
   handleInputMessage(m: p.PollInputStreamEntryMessage) {
@@ -130,7 +134,7 @@ export class StateMachine<I, O> {
       message
     );
 
-    const promise = this.journal.applyUserSideMessage<T>(messageType, message);
+    const promise = this.journal.handleUserSideMessage<T>(messageType, message);
 
     // Only send if we are in processing mode. Not if we are replaying user code
     if (this.journal.isProcessing()) {
@@ -149,7 +153,8 @@ export class StateMachine<I, O> {
       this.scheduleSuspension();
     } else if (
       this.isReplaying() &&
-      p.SUSPENSION_TRIGGERS.includes(messageType)
+      p.SUSPENSION_TRIGGERS.includes(messageType) &&
+      this.journal.getCompletableIndices().length > 0
     ) {
       if (this.journal.getCompletableIndices().length > 0) {
         this.scheduleSuspension();
@@ -167,9 +172,9 @@ export class StateMachine<I, O> {
           "Call ended successful with message.",
           result.message
         );
-        this.journal.applyUserSideMessage(result.messageType, result.message);
+        this.journal.handleUserSideMessage(result.messageType, result.message);
 
-        if(!this.journal.outputMsgWasReplayed()) {
+        if (!this.journal.outputMsgWasReplayed()) {
           this.connection.buffer(result);
         }
       })
@@ -179,7 +184,6 @@ export class StateMachine<I, O> {
         } else {
           rlog.warn(`${this.logPrefix} Call failed: ${printMessageAsJson(e)}`);
         }
-        // TODO does this still need to go via the journal? I guess so?...
         const message = new Message(
           OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
           OutputStreamEntryMessage.create({
@@ -187,14 +191,16 @@ export class StateMachine<I, O> {
               code: 13,
               message: `${this.logPrefix} Uncaught exception for invocation id: ${e.message}`,
             }),
-          }))
-        if(!this.journal.outputMsgWasReplayed()) {
+          })
+        );
+        if (!this.journal.outputMsgWasReplayed()) {
           this.connection.buffer(message);
         }
       })
       .finally(async () => {
         try {
           await this.connection.flush();
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } catch (e: any) {
           rlog.warn(
             `${this.logPrefix} Failed to flush output/suspension message to the runtime: ${e.message} - ${e.stack}`
@@ -286,7 +292,7 @@ export class StateMachine<I, O> {
     }
   }
 
-  onError() {
+  handleError() {
     //TODO
     return;
   }
