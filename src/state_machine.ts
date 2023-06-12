@@ -8,10 +8,11 @@ import { printMessageAsJson, uuidV7FromBuffer } from "./utils/utils";
 import { rlog } from "./utils/logger";
 import { clearTimeout } from "timers";
 import {
+  COMPLETION_MESSAGE_TYPE,
   OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
-  OutputStreamEntryMessage,
+  OutputStreamEntryMessage, POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE, START_MESSAGE_TYPE,
   SUSPENSION_MESSAGE_TYPE,
-  SuspensionMessage,
+  SuspensionMessage
 } from "./types/protocol";
 import { Failure } from "./generated/proto/protocol";
 import { Journal } from "./journal";
@@ -45,46 +46,55 @@ export class StateMachine<I, O> {
   }
 
   public handleRuntimeMessage(m: Message) {
-    if (m.messageType === p.START_MESSAGE_TYPE) {
-      rlog.debugJournalMessage(
-        this.logPrefix,
-        "Handling runtime start message: ",
-        m.message
-      );
-      this.handleStartMessage(m.message as p.StartMessage);
-    } else if (m.messageType === p.POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE) {
-      rlog.debugJournalMessage(
-        this.logPrefix,
-        "Handling runtime input message: ",
-        m.message
-      );
-      this.handleInputMessage(m.message as p.PollInputStreamEntryMessage);
-    } else if (m.messageType === p.COMPLETION_MESSAGE_TYPE) {
-      rlog.debugJournalMessage(
-        this.logPrefix,
-        "Handling runtime completion message: ",
-        m.message
-      );
-      this.journal.handleRuntimeCompletionMessage(
-        m.message as p.CompletionMessage
-      );
-      // Remove lingering suspension timeouts, if we are not waiting for completions anymore
-      if (
-        this.suspensionTimeout !== undefined &&
-        this.journal.getCompletableIndices().length === 0
-      ) {
-        clearTimeout(this.suspensionTimeout);
-        this.suspensionTimeout = undefined;
+    switch (m.messageType) {
+      case START_MESSAGE_TYPE: {
+        rlog.debugJournalMessage(
+          this.logPrefix,
+          "Handling runtime start message: ",
+          m.message
+        );
+        this.handleStartMessage(m.message as p.StartMessage);
+        break;
       }
-    } else {
-      rlog.debugJournalMessage(
-        this.logPrefix,
-        "Handling runtime replay message: ",
-        m.message
-      );
-      this.journal.handleRuntimeReplayMessage(m);
-      if (this.journal.allReplayMessagesArrived()) {
-        this.invoke();
+      case POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE: {
+        rlog.debugJournalMessage(
+          this.logPrefix,
+          "Handling runtime input message: ",
+          m.message
+        );
+        this.handleInputMessage(m.message as p.PollInputStreamEntryMessage);
+        break;
+      }
+      case COMPLETION_MESSAGE_TYPE: {
+        rlog.debugJournalMessage(
+          this.logPrefix,
+          "Handling runtime completion message: ",
+          m.message
+        );
+        this.journal.handleRuntimeCompletionMessage(
+          m.message as p.CompletionMessage
+        );
+        // Remove lingering suspension timeouts, if we are not waiting for completions anymore
+        if (
+          this.suspensionTimeout !== undefined &&
+          this.journal.getCompletableIndices().length === 0
+        ) {
+          clearTimeout(this.suspensionTimeout);
+          this.suspensionTimeout = undefined;
+        }
+        break;
+      }
+      default: {
+        rlog.debugJournalMessage(
+          this.logPrefix,
+          "Handling runtime replay message: ",
+          m.message
+        );
+        this.journal.handleRuntimeReplayMessage(m);
+        if (this.journal.allReplayMessagesArrived()) {
+          this.invoke();
+        }
+        break;
       }
     }
   }
@@ -271,13 +281,14 @@ export class StateMachine<I, O> {
   }
 
   setInputChannelToClosed() {
-    rlog.debug(`Setting input channel to closed`);
-    if (!this.journal.isClosed()) {
-      this.inputChannelClosed = true;
-      // If there is a timeout planned, reset the timout to execute immediately when the work is done.
-      if (this.suspensionTimeout) {
-        this.scheduleSuspension();
-      }
+    if(this.journal.isClosed()){
+      return;
+    }
+
+    this.inputChannelClosed = true;
+    // If there is a timeout planned, reset the timout to execute immediately when the work is done.
+    if (this.suspensionTimeout) {
+      this.scheduleSuspension();
     }
   }
 

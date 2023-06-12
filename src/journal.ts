@@ -80,13 +80,13 @@ export class Journal<I, O> {
     switch (this.state) {
       case NewExecutionState.REPLAYING: {
         const replayEntry = this.replayEntries.get(this.userCodeJournalIndex);
-        if (replayEntry) {
-          const journalEntry = new JournalEntry(messageType, message);
-          this.handleReplay(this.userCodeJournalIndex, replayEntry, journalEntry);
-          return journalEntry.promise;
-        } else {
+        if(!replayEntry){
           throw new Error(`Illegal state: no replay message was received for the entry at journal index ${this.userCodeJournalIndex}`);
         }
+
+        const journalEntry = new JournalEntry(messageType, message);
+        this.handleReplay(this.userCodeJournalIndex, replayEntry, journalEntry);
+        return journalEntry.promise;
       }
       case NewExecutionState.PROCESSING: {
         switch (messageType) {
