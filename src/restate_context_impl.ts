@@ -7,9 +7,10 @@ import {
   CompleteAwakeableEntryMessage,
   Failure,
   GetStateEntryMessage,
-  InvokeEntryMessage, OutputStreamEntryMessage,
+  InvokeEntryMessage,
+  OutputStreamEntryMessage,
   SetStateEntryMessage,
-  SleepEntryMessage
+  SleepEntryMessage,
 } from "./generated/proto/protocol";
 import {
   AWAKEABLE_ENTRY_MESSAGE_TYPE,
@@ -18,10 +19,11 @@ import {
   CLEAR_STATE_ENTRY_MESSAGE_TYPE,
   COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
   GET_STATE_ENTRY_MESSAGE_TYPE,
-  INVOKE_ENTRY_MESSAGE_TYPE, OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
+  INVOKE_ENTRY_MESSAGE_TYPE,
+  OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
   SET_STATE_ENTRY_MESSAGE_TYPE,
   SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-  SLEEP_ENTRY_MESSAGE_TYPE
+  SLEEP_ENTRY_MESSAGE_TYPE,
 } from "./types/protocol";
 import { SideEffectEntryMessage } from "./generated/proto/javascript";
 
@@ -61,7 +63,7 @@ export class RestateContextImpl<I, O> implements RestateContext {
     // Wait for the result, do post-processing and then deliver it back to the user code.
     return promise.then((result) => {
       if (!(result instanceof Buffer)) {
-        return null
+        return null;
       }
       return JSON.parse(result.toString()) as T;
     });
@@ -82,7 +84,7 @@ export class RestateContextImpl<I, O> implements RestateContext {
 
   clear(name: string): void {
     if (!this.isValidState("clear state")) {
-      throw new Error()
+      throw new Error();
     }
 
     const msg = ClearStateEntryMessage.create({
@@ -213,7 +215,8 @@ export class RestateContextImpl<I, O> implements RestateContext {
         fn()
           .then((value) => {
             const bytes =
-              value !== undefined ? Buffer.from(JSON.stringify(value))
+              value !== undefined
+                ? Buffer.from(JSON.stringify(value))
                 : Buffer.from(JSON.stringify({}));
             const sideEffectMsg = SideEffectEntryMessage.encode(
               SideEffectEntryMessage.create({ value: bytes })
@@ -237,9 +240,9 @@ export class RestateContextImpl<I, O> implements RestateContext {
             const failure: Failure =
               reason instanceof Error
                 ? Failure.create({
-                  code: 13,
-                  message: reason.message,
-                })
+                    code: 13,
+                    message: reason.message,
+                  })
                 : reason;
 
             const sideEffectMsg = SideEffectEntryMessage.encode(

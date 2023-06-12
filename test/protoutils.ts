@@ -83,14 +83,18 @@ export function outputMessage(value?: Uint8Array): Message {
   }
 }
 
-export function getStateMessage<T>(key: string, value?: T, empty?: boolean): Message {
+export function getStateMessage<T>(
+  key: string,
+  value?: T,
+  empty?: boolean
+): Message {
   if (empty === true) {
-    rlog.log("Returning get state with empty")
+    rlog.log("Returning get state with empty");
     return new Message(
       GET_STATE_ENTRY_MESSAGE_TYPE,
       GetStateEntryMessage.create({
         key: Buffer.from(key),
-        empty: Empty.create({})
+        empty: Empty.create({}),
       })
     );
   } else if (value !== undefined) {

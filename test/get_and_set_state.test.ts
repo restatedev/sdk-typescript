@@ -12,7 +12,7 @@ import {
   outputMessage,
   setStateMessage,
   startMessage,
-  suspensionMessage
+  suspensionMessage,
 } from "./protoutils";
 import {
   protoMetadata,
@@ -56,11 +56,12 @@ enum OrderStatus {
 }
 
 class GetAndSetEnumGreeter implements TestGreeter {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     // state
-    const oldState = (await ctx.get<OrderStatus>("STATE")) || OrderStatus.DELIVERED;
+    const oldState = await ctx.get<OrderStatus>("STATE");
 
     ctx.set("STATE", OrderStatus.ORDERED);
 
@@ -444,13 +445,11 @@ describe("GetAndSetEnumGreeter: With GetState and SetState and with enum state r
         inputMessage(greetRequest("Till")),
         getStateMessage("STATE", OrderStatus.DELIVERED),
         setStateMessage("STATE", OrderStatus.ORDERED),
-        getStateMessage("STATE", OrderStatus.ORDERED)
+        getStateMessage("STATE", OrderStatus.ORDERED),
       ]
     ).run();
 
-    expect(result).toStrictEqual([
-      outputMessage(greetResponse("Hello 1 - 0")),
-    ]);
+    expect(result).toStrictEqual([outputMessage(greetResponse("Hello 1 - 0"))]);
   });
 });
 
@@ -466,12 +465,12 @@ describe("GetAndSetEnumGreeter: With GetState and SetState and with empty enum s
         inputMessage(greetRequest("Till")),
         getStateMessage("STATE", undefined, true),
         setStateMessage("STATE", OrderStatus.ORDERED),
-        getStateMessage("STATE", OrderStatus.ORDERED)
+        getStateMessage("STATE", OrderStatus.ORDERED),
       ]
     ).run();
 
     expect(result).toStrictEqual([
-      outputMessage(greetResponse("Hello 1 - 0")),
+      outputMessage(greetResponse("Hello null - 0")),
     ]);
   });
 });

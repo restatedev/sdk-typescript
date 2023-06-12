@@ -12,9 +12,11 @@ import { clearTimeout } from "timers";
 import {
   COMPLETION_MESSAGE_TYPE,
   OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
-  OutputStreamEntryMessage, POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE, START_MESSAGE_TYPE,
+  OutputStreamEntryMessage,
+  POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
+  START_MESSAGE_TYPE,
   SUSPENSION_MESSAGE_TYPE,
-  SuspensionMessage
+  SuspensionMessage,
 } from "./types/protocol";
 import { Failure } from "./generated/proto/protocol";
 import { Journal } from "./journal";
@@ -161,12 +163,10 @@ export class StateMachine<I, O> {
       );
     }
 
-    if(p.SUSPENSION_TRIGGERS.includes(messageType) && (
-      !this.isReplaying() || (
-        this.isReplaying() &&
-        this.journal.getCompletableIndices().length > 0
-      )
-      )
+    if (
+      p.SUSPENSION_TRIGGERS.includes(messageType) &&
+      (!this.isReplaying() ||
+        (this.isReplaying() && this.journal.getCompletableIndices().length > 0))
     ) {
       this.scheduleSuspension();
     }
@@ -257,7 +257,7 @@ export class StateMachine<I, O> {
     const indices = this.journal.getCompletableIndices();
     // If the state is closed then we either already send a suspension
     // or something else bad happened...
-    if(this.journal.isClosed() || indices.length === 0){
+    if (this.journal.isClosed() || indices.length === 0) {
       return;
     }
 
@@ -284,7 +284,7 @@ export class StateMachine<I, O> {
   }
 
   setInputChannelToClosed() {
-    if(this.journal.isClosed()){
+    if (this.journal.isClosed()) {
       return;
     }
 

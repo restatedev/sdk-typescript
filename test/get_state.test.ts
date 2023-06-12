@@ -172,7 +172,7 @@ describe("GetStateGreeter: Without GetStateEntry and completed with later Comple
       [
         startMessage(2),
         inputMessage(greetRequest("Till")),
-        getStateMessage( "STATE", undefined, true),
+        getStateMessage("STATE", undefined, true),
       ]
     ).run();
 

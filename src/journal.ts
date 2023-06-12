@@ -60,17 +60,14 @@ export class Journal<I, O> {
     const rootEntry = new JournalEntry(
       p.POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
       m
-    )
+    );
 
     rootEntry.promise = rootEntry.promise.then(
       (result) => this.method.resolve(result),
       (failure) => this.method.resolve(failure)
     );
 
-    this.pendingJournalEntries.set(
-      0,
-      rootEntry
-    );
+    this.pendingJournalEntries.set(0, rootEntry);
   }
 
   public handleUserSideMessage<T>(
@@ -82,8 +79,10 @@ export class Journal<I, O> {
     switch (this.state) {
       case NewExecutionState.REPLAYING: {
         const replayEntry = this.replayEntries.get(this.userCodeJournalIndex);
-        if(replayEntry === undefined){
-          throw new Error(`Illegal state: no replay message was received for the entry at journal index ${this.userCodeJournalIndex}`);
+        if (replayEntry === undefined) {
+          throw new Error(
+            `Illegal state: no replay message was received for the entry at journal index ${this.userCodeJournalIndex}`
+          );
         }
 
         const journalEntry = new JournalEntry(messageType, message);
@@ -110,7 +109,10 @@ export class Journal<I, O> {
           default: {
             // Need completion
             const journalEntry = new JournalEntry(messageType, message);
-            this.pendingJournalEntries.set(this.userCodeJournalIndex, journalEntry);
+            this.pendingJournalEntries.set(
+              this.userCodeJournalIndex,
+              journalEntry
+            );
             return journalEntry.promise;
           }
         }
@@ -133,7 +135,7 @@ export class Journal<I, O> {
     // Get message at that entryIndex in pendingJournalEntries
     const journalEntry = this.pendingJournalEntries.get(m.entryIndex);
 
-    if(journalEntry === undefined){
+    if (journalEntry === undefined) {
       //TODO fail
       // throw new Error("Illegal state: received a completion message but ")
       return;
@@ -221,7 +223,7 @@ export class Journal<I, O> {
       }
       case GET_STATE_ENTRY_MESSAGE_TYPE: {
         const getStateMsg = replayMessage.message as GetStateEntryMessage;
-        rlog.debug(printMessageAsJson(getStateMsg))
+        rlog.debug(printMessageAsJson(getStateMsg));
         this.resolveResult(
           journalIndex,
           journalEntry,
@@ -229,7 +231,7 @@ export class Journal<I, O> {
         );
         break;
       }
-      case  INVOKE_ENTRY_MESSAGE_TYPE: {
+      case INVOKE_ENTRY_MESSAGE_TYPE: {
         const invokeMsg = replayMessage.message as InvokeEntryMessage;
         this.resolveResult(
           journalIndex,
@@ -314,10 +316,12 @@ export class Journal<I, O> {
     this.transitionState(NewExecutionState.CLOSED);
     const rootJournalEntry = this.pendingJournalEntries.get(0);
 
-    if(rootJournalEntry === undefined){
+    if (rootJournalEntry === undefined) {
       // We have no other option than to throw an error here
       // Because without the root promise we cannot resolve the method or continue
-      throw new Error("No root journal entry found to resolve with output stream message")
+      throw new Error(
+        "No root journal entry found to resolve with output stream message"
+      );
     }
 
     this.pendingJournalEntries.delete(0);
@@ -334,7 +338,7 @@ export class Journal<I, O> {
       const equalityFct = equalityCheckers.get(runtimeMsgType);
       if (equalityFct === undefined) {
         // TODO there always has to be an equality fct defined...
-        throw new Error("No equality function defined")
+        throw new Error("No equality function defined");
       }
       return equalityFct(runtimeMsg, userCodeMsg);
     } else {
@@ -413,7 +417,9 @@ export class Journal<I, O> {
   public outputMsgWasReplayed() {
     // Check if the last message of the replay entries is an output message
     const lastEntry = this.replayEntries.get(this.nbEntriesToReplay - 1);
-    return lastEntry && lastEntry.messageType === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE;
+    return (
+      lastEntry && lastEntry.messageType === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE
+    );
   }
 }
 
@@ -427,7 +433,7 @@ export class JournalEntry {
 
   constructor(
     readonly messageType: bigint,
-    readonly message: p.ProtocolMessage | Uint8Array,
+    readonly message: p.ProtocolMessage | Uint8Array
   ) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.promise = new Promise<any>((res, rej) => {

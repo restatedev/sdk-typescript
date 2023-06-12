@@ -1,7 +1,6 @@
 import {
   protoMetadata,
   TestGreeter,
-  TestGreeterClientImpl,
   TestRequest,
   TestResponse,
 } from "../src/generated/proto/test";
@@ -9,19 +8,16 @@ import * as restate from "../src/public_api";
 import { describe, expect } from "@jest/globals";
 import { TestDriver } from "./testdriver";
 import {
-  completionMessage,
   greetRequest,
   greetResponse,
   inputMessage,
   outputMessage,
   startMessage,
 } from "./protoutils";
-import { Empty } from "../src/generated/google/protobuf/empty";
 
 class Greeter implements TestGreeter {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
-
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const ctx = restate.useContext(this);
 

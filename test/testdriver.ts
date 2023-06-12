@@ -1,9 +1,6 @@
 "use strict";
 
-import {
-  COMPLETION_MESSAGE_TYPE,
-  StartMessage,
-} from "../src/types/protocol";
+import { COMPLETION_MESSAGE_TYPE, StartMessage } from "../src/types/protocol";
 import { RestateDuplexStream } from "../src/connection/restate_duplex_stream";
 import * as restate from "../src/public_api";
 import { Connection } from "../src/connection/connection";
