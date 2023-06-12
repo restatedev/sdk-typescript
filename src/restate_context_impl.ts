@@ -7,10 +7,9 @@ import {
   CompleteAwakeableEntryMessage,
   Failure,
   GetStateEntryMessage,
-  InvokeEntryMessage,
-  OutputStreamEntryMessage,
+  InvokeEntryMessage, OutputStreamEntryMessage,
   SetStateEntryMessage,
-  SleepEntryMessage,
+  SleepEntryMessage
 } from "./generated/proto/protocol";
 import {
   AWAKEABLE_ENTRY_MESSAGE_TYPE,
@@ -19,11 +18,10 @@ import {
   CLEAR_STATE_ENTRY_MESSAGE_TYPE,
   COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
   GET_STATE_ENTRY_MESSAGE_TYPE,
-  INVOKE_ENTRY_MESSAGE_TYPE,
-  OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
+  INVOKE_ENTRY_MESSAGE_TYPE, OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
   SET_STATE_ENTRY_MESSAGE_TYPE,
   SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-  SLEEP_ENTRY_MESSAGE_TYPE,
+  SLEEP_ENTRY_MESSAGE_TYPE
 } from "./types/protocol";
 import { SideEffectEntryMessage } from "./generated/proto/javascript";
 
@@ -62,15 +60,14 @@ export class RestateContextImpl<I, O> implements RestateContext {
 
     // Wait for the result, do post-processing and then deliver it back to the user code.
     return promise.then((result) => {
-      if (result instanceof Buffer) {
-        const resultString = result.toString();
-        if (resultString === "0") {
-          return resultString as T;
-        }
-        return JSON.parse(resultString) as T;
-      } else {
-        return null;
+      if (!(result instanceof Buffer)) {
+        return null
       }
+      const resultString = result.toString();
+      if (resultString === "0") {
+        return resultString as T;
+      }
+      return JSON.parse(resultString) as T;
     });
   }
 
@@ -89,7 +86,7 @@ export class RestateContextImpl<I, O> implements RestateContext {
 
   clear(name: string): void {
     if (!this.isValidState("clear state")) {
-      return;
+      throw new Error()
     }
 
     const msg = ClearStateEntryMessage.create({

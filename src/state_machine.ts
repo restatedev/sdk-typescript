@@ -149,16 +149,14 @@ export class StateMachine<I, O> {
       );
     }
 
-    if (!this.isReplaying() && p.SUSPENSION_TRIGGERS.includes(messageType)) {
-      this.scheduleSuspension();
-    } else if (
-      this.isReplaying() &&
-      p.SUSPENSION_TRIGGERS.includes(messageType) &&
-      this.journal.getCompletableIndices().length > 0
+    if(p.SUSPENSION_TRIGGERS.includes(messageType) && (
+      !this.isReplaying() || (
+        this.isReplaying() &&
+        this.journal.getCompletableIndices().length > 0
+      )
+      )
     ) {
-      if (this.journal.getCompletableIndices().length > 0) {
-        this.scheduleSuspension();
-      }
+      this.scheduleSuspension();
     }
     return promise;
   }
@@ -246,27 +244,18 @@ export class StateMachine<I, O> {
     const indices = this.journal.getCompletableIndices();
     // If the state is closed then we either already send a suspension
     // or something else bad happened...
-    if (!this.journal.isClosed()) {
-      // There need to be journal entries to complete, otherwise this timeout should have been removed.
-      if (indices.length > 0) {
-        // A suspension message is the end of the invocation.
-        // Resolve the root call with the suspension message
-        // This will lead to a onCallSuccess call where this msg will be sent.
-        const msg = SuspensionMessage.create({
-          entryIndexes: indices,
-        });
-        this.method.resolve(new Message(SUSPENSION_MESSAGE_TYPE, msg));
-      } else {
-        // leads to onCallFailure call
-        this.method.reject(
-          new Error(
-            "Illegal state: Not able to send suspension message because no pending promises. " +
-              "This timeout should have been removed."
-          )
-        );
-      }
+    if(this.journal.isClosed() || indices.length === 0){
+      return;
     }
-    return;
+
+    // There need to be journal entries to complete, otherwise this timeout should have been removed.
+    // A suspension message is the end of the invocation.
+    // Resolve the root call with the suspension message
+    // This will lead to a onCallSuccess call where this msg will be sent.
+    const msg = SuspensionMessage.create({
+      entryIndexes: indices,
+    });
+    this.method.resolve(new Message(SUSPENSION_MESSAGE_TYPE, msg));
   }
 
   public getUserCodeJournalIndex(): number {

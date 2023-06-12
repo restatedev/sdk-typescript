@@ -55,28 +55,19 @@ export class Journal<I, O> {
       this.transitionState(NewExecutionState.PROCESSING);
     }
 
-    let resolve: (value: Message) => void;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let reject: (reason?: any) => void;
-    const promise = new Promise<Message>((res, rej) => {
-      resolve = res;
-      reject = rej;
-    }).then(
+    const rootEntry = new JournalEntry(
+      p.POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
+      m
+    )
+
+    rootEntry.promise = rootEntry.promise.then(
       (result) => this.method.resolve(result),
       (failure) => this.method.resolve(failure)
     );
 
     this.pendingJournalEntries.set(
       0,
-      new JournalEntry(
-        p.POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
-        m,
-        promise,
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        resolve!,
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        reject!
-      )
+      rootEntry
     );
   }
 
@@ -86,80 +77,83 @@ export class Journal<I, O> {
   ): Promise<T | undefined> {
     this.incrementUserCodeIndex();
 
-    if (this.isReplaying()) {
-      const replayEntry = this.replayEntries.get(this.userCodeJournalIndex);
-      if (replayEntry) {
-        const journalEntry = new JournalEntry(messageType, message);
-        this.handleReplay(this.userCodeJournalIndex, replayEntry, journalEntry);
-        return journalEntry.promise;
-      } else {
-        //TODO fail no replay message...
-        throw new Error();
+    switch (this.state) {
+      case NewExecutionState.REPLAYING: {
+        const replayEntry = this.replayEntries.get(this.userCodeJournalIndex);
+        if (replayEntry) {
+          const journalEntry = new JournalEntry(messageType, message);
+          this.handleReplay(this.userCodeJournalIndex, replayEntry, journalEntry);
+          return journalEntry.promise;
+        } else {
+          throw new Error(`Illegal state: no replay message was received for the entry at journal index ${this.userCodeJournalIndex}`);
+        }
       }
-    } else if (this.isProcessing()) {
-      if (
-        messageType === p.SUSPENSION_MESSAGE_TYPE ||
-        messageType === p.OUTPUT_STREAM_ENTRY_MESSAGE_TYPE
-      ) {
-        this.handleOutputMessage(
-          messageType,
-          message as SuspensionMessage | OutputStreamEntryMessage
-        );
-        return Promise.resolve(undefined);
-      } else if (
-        messageType === SET_STATE_ENTRY_MESSAGE_TYPE ||
-        messageType === CLEAR_STATE_ENTRY_MESSAGE_TYPE ||
-        messageType === COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE ||
-        messageType === BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE
-      ) {
-        // Do not need completion
-        return Promise.resolve(undefined);
-      } else {
-        // Need completion
-        const journalEntry = new JournalEntry(messageType, message);
-        this.pendingJournalEntries.set(this.userCodeJournalIndex, journalEntry);
-        return journalEntry.promise;
+      case NewExecutionState.PROCESSING: {
+        switch (messageType) {
+          case p.SUSPENSION_MESSAGE_TYPE:
+          case p.OUTPUT_STREAM_ENTRY_MESSAGE_TYPE: {
+            this.handleClosingMessage(
+              messageType,
+              message as p.SuspensionMessage | p.OutputStreamEntryMessage
+            );
+            return Promise.resolve(undefined);
+          }
+          case p.SET_STATE_ENTRY_MESSAGE_TYPE:
+          case p.CLEAR_STATE_ENTRY_MESSAGE_TYPE:
+          case p.COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE:
+          case p.BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE: {
+            // Do not need completion
+            return Promise.resolve(undefined);
+          }
+          default: {
+            // Need completion
+            const journalEntry = new JournalEntry(messageType, message);
+            this.pendingJournalEntries.set(this.userCodeJournalIndex, journalEntry);
+            return journalEntry.promise;
+          }
+        }
       }
-    } else if (this.isClosed()) {
-      // We cannot do anything anymore because an output was already sent back
-      // This should actually never happen because the state is only transitioned to closed if the root promise is resolved/rejected
-      // So no more user messages can come in...
-      // - Print warning log and continue...
-      //TODO
-      return Promise.resolve(undefined);
-    } else {
-      /*
-      state = waiting for start
-      we cannot be in this state
-       */
-      throw new Error("Did not receive input message before other messages.");
+      case NewExecutionState.CLOSED: {
+        // We cannot do anything anymore because an output was already sent back
+        // This should actually never happen because the state is only transitioned to closed if the root promise is resolved/rejected
+        // So no more user messages can come in...
+        // - Print warning log and continue...
+        //TODO
+        return Promise.resolve(undefined);
+      }
+      default: {
+        throw new Error("Did not receive input message before other messages.");
+      }
     }
   }
 
   public handleRuntimeCompletionMessage(m: CompletionMessage) {
     // Get message at that entryIndex in pendingJournalEntries
     const journalEntry = this.pendingJournalEntries.get(m.entryIndex);
-    if (journalEntry) {
-      if (m.value !== undefined) {
-        journalEntry.resolve(m.value);
-        this.pendingJournalEntries.delete(m.entryIndex);
-      } else if (m.failure !== undefined) {
-        journalEntry.reject(new Error(m.failure.message));
-        this.pendingJournalEntries.delete(m.entryIndex);
-      } else if (m.empty !== undefined) {
-        journalEntry.resolve(m.empty);
+
+    if(!journalEntry){
+      //TODO fail
+      // throw new Error("Illegal state: received a completion message but ")
+      return;
+    }
+
+    if (m.value !== undefined) {
+      journalEntry.resolve(m.value);
+      this.pendingJournalEntries.delete(m.entryIndex);
+    } else if (m.failure !== undefined) {
+      journalEntry.reject(new Error(m.failure.message));
+      this.pendingJournalEntries.delete(m.entryIndex);
+    } else if (m.empty !== undefined) {
+      journalEntry.resolve(m.empty);
+      this.pendingJournalEntries.delete(m.entryIndex);
+    } else {
+      if (journalEntry.messageType === p.SIDE_EFFECT_ENTRY_MESSAGE_TYPE) {
+        // Just needs and ack without completion
+        journalEntry.resolve(undefined);
         this.pendingJournalEntries.delete(m.entryIndex);
       } else {
-        if (journalEntry.messageType === p.SIDE_EFFECT_ENTRY_MESSAGE_TYPE) {
-          // Just needs and ack without completion
-          journalEntry.resolve(undefined);
-          this.pendingJournalEntries.delete(m.entryIndex);
-        } else {
-          //TODO completion message without a value/failure/empty
-        }
+        //TODO completion message without a value/failure/empty
       }
-    } else {
-      //TODO fail
     }
   }
 
@@ -184,38 +178,55 @@ export class Journal<I, O> {
       journalEntry.message
     );
 
+    // Journal mismatch check failedf
+    if (!match) {
+      throw new Error(
+        `Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!
+        The journal entry at position ${journalIndex} was:
+        - In the user code: type: ${
+          journalEntry.messageType
+        }, message:${printMessageAsJson(journalEntry.message)}
+        - In the replayed messages: type: ${
+          replayMessage.messageType
+        }, message: ${printMessageAsJson(replayMessage.message)}`
+      );
+      return;
+    }
+
     // If journal mismatch check passed
-    if (match) {
-      /*
-      - Else if the runtime replay message contains a completion
-          - If the completion is a value
-              - Return the resolved user code promise with the value
-          - Else if the completion is a failure
-              - Return the rejected user code promise with the failure as Error
-          - Else if the completion is an Empty message
-              - Return the resolved user code promise with the Empty message
-          - Remove the journal entry
-      - Else the replayed message was uncompleted
-          - Create the user code promise
-          - Add message to the pendingJournalEntries
-          - Return the user code promise
-       */
-      if (
-        journalEntry.messageType === SUSPENSION_MESSAGE_TYPE ||
-        journalEntry.messageType === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE
-      ) {
-        this.handleOutputMessage(
+    /*
+    - Else if the runtime replay message contains a completion
+        - If the completion is a value
+            - Return the resolved user code promise with the value
+        - Else if the completion is a failure
+            - Return the rejected user code promise with the failure as Error
+        - Else if the completion is an Empty message
+            - Return the resolved user code promise with the Empty message
+        - Remove the journal entry
+    - Else the replayed message was uncompleted
+        - Create the user code promise
+        - Add message to the pendingJournalEntries
+        - Return the user code promise
+     */
+    switch (journalEntry.messageType) {
+      case SUSPENSION_MESSAGE_TYPE:
+      case OUTPUT_STREAM_ENTRY_MESSAGE_TYPE: {
+        this.handleClosingMessage(
           journalEntry.messageType,
           journalEntry.message as SuspensionMessage | OutputStreamEntryMessage
         );
-      } else if (journalEntry.messageType === GET_STATE_ENTRY_MESSAGE_TYPE) {
+        break;
+      }
+      case GET_STATE_ENTRY_MESSAGE_TYPE: {
         const getStateMsg = replayMessage.message as GetStateEntryMessage;
         this.resolveResult(
           journalIndex,
           journalEntry,
           getStateMsg.value || getStateMsg.empty
         );
-      } else if (journalEntry.messageType === INVOKE_ENTRY_MESSAGE_TYPE) {
+        break;
+      }
+      case  INVOKE_ENTRY_MESSAGE_TYPE: {
         const invokeMsg = replayMessage.message as InvokeEntryMessage;
         this.resolveResult(
           journalIndex,
@@ -223,10 +234,14 @@ export class Journal<I, O> {
           invokeMsg.value,
           invokeMsg.failure
         );
-      } else if (journalEntry.messageType === SLEEP_ENTRY_MESSAGE_TYPE) {
+        break;
+      }
+      case SLEEP_ENTRY_MESSAGE_TYPE: {
         const sleepMsg = replayMessage.message as SleepEntryMessage;
         this.resolveResult(journalIndex, journalEntry, sleepMsg.result);
-      } else if (journalEntry.messageType === AWAKEABLE_ENTRY_MESSAGE_TYPE) {
+        break;
+      }
+      case AWAKEABLE_ENTRY_MESSAGE_TYPE: {
         const awakeableMsg = replayMessage.message as AwakeableEntryMessage;
         this.resolveResult(
           journalIndex,
@@ -234,7 +249,9 @@ export class Journal<I, O> {
           awakeableMsg.value,
           awakeableMsg.failure
         );
-      } else if (journalEntry.messageType === SIDE_EFFECT_ENTRY_MESSAGE_TYPE) {
+        break;
+      }
+      case SIDE_EFFECT_ENTRY_MESSAGE_TYPE: {
         rlog.debug(replayMessage.message);
         const sideEffectMsg = SideEffectEntryMessage.decode(
           replayMessage.message as Uint8Array
@@ -253,30 +270,20 @@ export class Journal<I, O> {
             sideEffectMsg.failure
           );
         }
-      } else if (
-        journalEntry.messageType === SET_STATE_ENTRY_MESSAGE_TYPE ||
-        journalEntry.messageType === CLEAR_STATE_ENTRY_MESSAGE_TYPE ||
-        journalEntry.messageType === COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE ||
-        journalEntry.messageType === BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE
-      ) {
+        break;
+      }
+      case SET_STATE_ENTRY_MESSAGE_TYPE:
+      case CLEAR_STATE_ENTRY_MESSAGE_TYPE:
+      case COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE:
+      case BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE: {
         // Do not need a completion. So if the match has passed then the entry can be deleted.
         journalEntry.resolve(undefined);
         this.pendingJournalEntries.delete(journalIndex);
-      } else {
+        break;
+      }
+      default: {
         // TODO we shouldn't end up here... we checked all message types
       }
-    } else {
-      // Journal mismatch check failed
-      throw new Error(
-        `Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!
-        The journal entry at position ${journalIndex} was:
-        - In the user code: type: ${
-          journalEntry.messageType
-        }, message:${printMessageAsJson(journalEntry.message)}
-        - In the replayed messages: type: ${
-          replayMessage.messageType
-        }, message: ${printMessageAsJson(replayMessage.message)}`
-      );
     }
   }
 
@@ -297,18 +304,21 @@ export class Journal<I, O> {
     }
   }
 
-  handleOutputMessage(
+  handleClosingMessage(
     messageType: bigint,
     message: OutputStreamEntryMessage | SuspensionMessage
   ) {
     this.transitionState(NewExecutionState.CLOSED);
     const rootJournalEntry = this.pendingJournalEntries.get(0);
-    if (rootJournalEntry) {
-      this.pendingJournalEntries.delete(0);
-      rootJournalEntry.resolve(new Message(messageType, message));
-    } else {
-      // TODO fail if there is no rootJournalEntry
+
+    if(!rootJournalEntry){
+      // We have no other option than to throw an error here
+      // Because without the root promise we cannot resolve the method or continue
+      throw new Error("No root journal entry found to resolve with output stream message")
     }
+
+    this.pendingJournalEntries.delete(0);
+    rootJournalEntry.resolve(new Message(messageType, message));
   }
 
   private checkJournalMatch(
@@ -401,9 +411,7 @@ export class Journal<I, O> {
   public outputMsgWasReplayed() {
     // Check if the last message of the replay entries is an output message
     const lastEntry = this.replayEntries.get(this.nbEntriesToReplay - 1);
-    if (lastEntry) {
-      return lastEntry.messageType === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE;
-    }
+    return lastEntry && lastEntry.messageType === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE;
   }
 }
 
@@ -418,25 +426,12 @@ export class JournalEntry {
   constructor(
     readonly messageType: bigint,
     readonly message: p.ProtocolMessage | Uint8Array,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    private customPromise?: Promise<any>,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    private customResolve?: (value: any) => void,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    private customReject?: (reason?: any) => void
   ) {
-    // Either use the custom promise that is provided or make a new promise
-    if (customPromise && customResolve && customReject) {
-      this.promise = customPromise;
-      this.resolve = customResolve;
-      this.reject = customReject;
-    } else {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      this.promise = new Promise<any>((res, rej) => {
-        this.resolve = res;
-        this.reject = rej;
-      });
-    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    this.promise = new Promise<any>((res, rej) => {
+      this.resolve = res;
+      this.reject = rej;
+    });
   }
 }
 
