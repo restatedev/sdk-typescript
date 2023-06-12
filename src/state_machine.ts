@@ -1,3 +1,5 @@
+"use strict";
+
 import * as p from "./types/protocol";
 import { RestateContextImpl } from "./restate_context_impl";
 import { Connection } from "./connection/connection";
@@ -223,8 +225,9 @@ export class StateMachine<I, O> {
   scheduleSuspension() {
     // If there was already a timeout set, we want to reset the time to postpone suspension as long as we make progress.
     // So we first clear the old timeout, and then we set a new one.
-    if (this.suspensionTimeout) {
+    if (this.suspensionTimeout !== undefined) {
       clearTimeout(this.suspensionTimeout);
+      this.suspensionTimeout = undefined;
     }
 
     rlog.debug(`Scheduling suspension for ${this.getSuspensionMillis()} ms`);
@@ -287,7 +290,7 @@ export class StateMachine<I, O> {
 
     this.inputChannelClosed = true;
     // If there is a timeout planned, reset the timout to execute immediately when the work is done.
-    if (this.suspensionTimeout) {
+    if (this.suspensionTimeout !== undefined) {
       this.scheduleSuspension();
     }
   }

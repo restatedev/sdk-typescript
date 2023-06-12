@@ -63,11 +63,7 @@ export class RestateContextImpl<I, O> implements RestateContext {
       if (!(result instanceof Buffer)) {
         return null
       }
-      const resultString = result.toString();
-      if (resultString === "0") {
-        return resultString as T;
-      }
-      return JSON.parse(resultString) as T;
+      return JSON.parse(result.toString()) as T;
     });
   }
 
@@ -145,7 +141,7 @@ export class RestateContextImpl<I, O> implements RestateContext {
       invokeTime: invokeTime,
     });
 
-    this.stateMachine.handleUserCodeMessage(
+    await this.stateMachine.handleUserCodeMessage(
       BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
       msg
     );
@@ -169,9 +165,9 @@ export class RestateContextImpl<I, O> implements RestateContext {
     });
   }
 
-  sideEffect<T>(fn: () => Promise<T>): Promise<T> {
+  async sideEffect<T>(fn: () => Promise<T>): Promise<T> {
     if (this.inSideEffectFlag) {
-      this.stateMachine.handleUserCodeMessage(
+      await this.stateMachine.handleUserCodeMessage(
         OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
         OutputStreamEntryMessage.create({
           failure: Failure.create({
@@ -181,7 +177,7 @@ export class RestateContextImpl<I, O> implements RestateContext {
         })
       );
     } else if (this.oneWayCallFlag) {
-      this.stateMachine.handleUserCodeMessage(
+      await this.stateMachine.handleUserCodeMessage(
         OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
         OutputStreamEntryMessage.create({
           failure: Failure.create({
@@ -217,9 +213,8 @@ export class RestateContextImpl<I, O> implements RestateContext {
         fn()
           .then((value) => {
             const bytes =
-              typeof value === "undefined"
-                ? Buffer.from(JSON.stringify({}))
-                : Buffer.from(JSON.stringify(value));
+              value !== undefined ? Buffer.from(JSON.stringify(value))
+                : Buffer.from(JSON.stringify({}));
             const sideEffectMsg = SideEffectEntryMessage.encode(
               SideEffectEntryMessage.create({ value: bytes })
             ).finish();
@@ -242,9 +237,9 @@ export class RestateContextImpl<I, O> implements RestateContext {
             const failure: Failure =
               reason instanceof Error
                 ? Failure.create({
-                    code: 13,
-                    message: reason.message,
-                  })
+                  code: 13,
+                  message: reason.message,
+                })
                 : reason;
 
             const sideEffectMsg = SideEffectEntryMessage.encode(
@@ -292,12 +287,12 @@ export class RestateContextImpl<I, O> implements RestateContext {
     const promise = this.stateMachine
       .handleUserCodeMessage<Buffer>(AWAKEABLE_ENTRY_MESSAGE_TYPE, msg)
       .then<T>((result: Buffer | void) => {
-        if (result instanceof Buffer) {
-          return JSON.parse(result.toString()) as T;
-        } else {
+        if (!(result instanceof Buffer)) {
           //TODO handle this case...
           throw new Error("");
         }
+
+        return JSON.parse(result.toString()) as T;
       });
 
     // This needs to be done after handling the message in the state machine
@@ -322,7 +317,7 @@ export class RestateContextImpl<I, O> implements RestateContext {
 
     // Parse the string to an awakeable identifier
     const awakeableIdentifier = JSON.parse(id, (key, value) => {
-      if (value && value.type === "Buffer") {
+      if (value !== undefined && value.type === "Buffer") {
         return Buffer.from(value.data);
       }
       return value;

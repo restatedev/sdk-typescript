@@ -162,6 +162,26 @@ describe("GetStateGreeter: Without GetStateEntry and completed with later Comple
   });
 });
 
+describe("GetStateGreeter: Without GetStateEntry and completed with later CompletionFrame with Empty state replayed", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new GetStateGreeter(),
+      "/test.TestGreeter/Greet",
+      [
+        startMessage(2),
+        inputMessage(greetRequest("Till")),
+        getStateMessage( "STATE", undefined, true),
+      ]
+    ).run();
+
+    expect(result).toStrictEqual([
+      outputMessage(greetResponse("Hello nobody")),
+    ]);
+  });
+});
+
 describe("GetStateGreeter: Without GetStateEntry and completed with later CompletionFrame with empty string", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(

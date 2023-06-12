@@ -1,3 +1,5 @@
+"use strict";
+
 import * as p from "./types/protocol";
 import { Failure } from "./generated/proto/protocol";
 import { HostedGrpcServiceMethod } from "./types/grpc";
@@ -80,7 +82,7 @@ export class Journal<I, O> {
     switch (this.state) {
       case NewExecutionState.REPLAYING: {
         const replayEntry = this.replayEntries.get(this.userCodeJournalIndex);
-        if(!replayEntry){
+        if(replayEntry === undefined){
           throw new Error(`Illegal state: no replay message was received for the entry at journal index ${this.userCodeJournalIndex}`);
         }
 
@@ -131,7 +133,7 @@ export class Journal<I, O> {
     // Get message at that entryIndex in pendingJournalEntries
     const journalEntry = this.pendingJournalEntries.get(m.entryIndex);
 
-    if(!journalEntry){
+    if(journalEntry === undefined){
       //TODO fail
       // throw new Error("Illegal state: received a completion message but ")
       return;
@@ -219,6 +221,7 @@ export class Journal<I, O> {
       }
       case GET_STATE_ENTRY_MESSAGE_TYPE: {
         const getStateMsg = replayMessage.message as GetStateEntryMessage;
+        rlog.debug(printMessageAsJson(getStateMsg))
         this.resolveResult(
           journalIndex,
           journalEntry,
@@ -293,10 +296,10 @@ export class Journal<I, O> {
     value?: T,
     failure?: Failure
   ) {
-    if (value) {
+    if (value !== undefined) {
       journalEntry.resolve(value);
       this.pendingJournalEntries.delete(journalIndex);
-    } else if (failure) {
+    } else if (failure !== undefined) {
       journalEntry.reject(new Error(failure.message));
       this.pendingJournalEntries.delete(journalIndex);
     } else {
@@ -311,7 +314,7 @@ export class Journal<I, O> {
     this.transitionState(NewExecutionState.CLOSED);
     const rootJournalEntry = this.pendingJournalEntries.get(0);
 
-    if(!rootJournalEntry){
+    if(rootJournalEntry === undefined){
       // We have no other option than to throw an error here
       // Because without the root promise we cannot resolve the method or continue
       throw new Error("No root journal entry found to resolve with output stream message")
@@ -329,12 +332,11 @@ export class Journal<I, O> {
   ): boolean {
     if (runtimeMsgType === userCodeMsgType) {
       const equalityFct = equalityCheckers.get(runtimeMsgType);
-      if (equalityFct) {
-        return equalityFct(runtimeMsg, userCodeMsg);
-      } else {
+      if (equalityFct === undefined) {
         // TODO there always has to be an equality fct defined...
-        return false;
+        throw new Error("No equality function defined")
       }
+      return equalityFct(runtimeMsg, userCodeMsg);
     } else {
       return false;
     }

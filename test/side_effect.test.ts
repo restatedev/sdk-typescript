@@ -267,6 +267,26 @@ class FailingAwakeableSideEffectGreeter implements TestGreeter {
   }
 }
 
+enum OrderStatus {
+  ORDERED,
+  DELIVERED,
+}
+
+class EnumSideEffectGreeter implements TestGreeter {
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async greet(request: TestRequest): Promise<TestResponse> {
+    const ctx = restate.useContext(this);
+
+    // state
+    const response = await ctx.sideEffect(async () => {
+      return OrderStatus.ORDERED;
+    });
+
+    return TestResponse.create({ greeting: `Hello ${response}` });
+  }
+}
+
 describe("SideEffectGreeter: with ack", () => {
   it("should call greet", async () => {
     const result = await new TestDriver(
@@ -427,6 +447,27 @@ describe("SideEffectGreeter: without ack - numeric output", () => {
     expect(result).toStrictEqual([
       sideEffectMessage(123),
       outputMessage(greetResponse("Hello 123")),
+    ]);
+  });
+});
+
+describe("EnumSideEffectGreeter: without ack - enum output", () => {
+  it("should call greet", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new EnumSideEffectGreeter(),
+      "/test.TestGreeter/Greet",
+      [
+        startMessage(1),
+        inputMessage(greetRequest("Till")),
+        completionMessage(1),
+      ]
+    ).run();
+
+    expect(result).toStrictEqual([
+      sideEffectMessage(OrderStatus.ORDERED),
+      outputMessage(greetResponse("Hello 0")),
     ]);
   });
 });
