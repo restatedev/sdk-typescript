@@ -132,7 +132,7 @@ export class StateMachine<I, O> {
     }
   }
 
-  public handleUserCodeMessage<T>(
+  public async handleUserCodeMessage<T>(
     messageType: bigint,
     message: p.ProtocolMessage | Uint8Array,
     completedFlag?: boolean,
@@ -168,6 +168,7 @@ export class StateMachine<I, O> {
       (!this.isReplaying() ||
         (this.isReplaying() && this.journal.getCompletableIndices().length > 0))
     ) {
+      await this.connection.flush();
       this.scheduleSuspension();
     }
     return promise;
@@ -296,7 +297,7 @@ export class StateMachine<I, O> {
   }
 
   handleError() {
-    //TODO
+    this.journal.close();
     return;
   }
 }

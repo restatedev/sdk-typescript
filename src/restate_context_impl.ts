@@ -281,17 +281,15 @@ export class RestateContextImpl<I, O> implements RestateContext {
 
   awakeable<T>(): { id: string; promise: Promise<T> } {
     if (!this.isValidState("awakeable")) {
-      // We need to throw here because we cannot return void or Promise.reject...
-      // TODO this will not work the same as in the previous version of the state machine
       throw new Error();
     }
 
     const msg = AwakeableEntryMessage.create();
     const promise = this.stateMachine
       .handleUserCodeMessage<Buffer>(AWAKEABLE_ENTRY_MESSAGE_TYPE, msg)
-      .then<T>((result: Buffer | void) => {
+      .then((result: Buffer | void) => {
         if (!(result instanceof Buffer)) {
-          //TODO handle this case...
+          //TODO What to do if this is not a buffer?
           throw new Error("");
         }
 

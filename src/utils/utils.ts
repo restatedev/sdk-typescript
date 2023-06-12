@@ -53,14 +53,14 @@ export function uuidV7FromBuffer(buffer: Buffer): string {
 // We check the fields which we can check
 // (the fields which do not contain results, because these might be filled in the result)
 
-export const getStateMsgEquality = (
+const getStateMsgEquality = (
   msg1: GetStateEntryMessage,
   msg2: GetStateEntryMessage
 ) => {
   return msg1.key.equals(msg2.key);
 };
 
-export const invokeMsgEquality = (
+const invokeMsgEquality = (
   msg1: InvokeEntryMessage | BackgroundInvokeEntryMessage,
   msg2: InvokeEntryMessage | BackgroundInvokeEntryMessage
 ) => {
@@ -71,21 +71,21 @@ export const invokeMsgEquality = (
   );
 };
 
-export const setStateMsgEquality = (
+const setStateMsgEquality = (
   msg1: SetStateEntryMessage,
   msg2: SetStateEntryMessage
 ) => {
   return msg1.key.equals(msg2.key) && msg1.value.equals(msg2.value);
 };
 
-export const clearStateMsgEquality = (
+const clearStateMsgEquality = (
   msg1: ClearStateEntryMessage,
   msg2: ClearStateEntryMessage
 ) => {
   return msg1.key.equals(msg2.key);
 };
 
-export const completeAwakeableMsgEquality = (
+const completeAwakeableMsgEquality = (
   msg1: CompleteAwakeableEntryMessage,
   msg2: CompleteAwakeableEntryMessage
 ) => {

@@ -122,7 +122,7 @@ export class Journal<I, O> {
         // This should actually never happen because the state is only transitioned to closed if the root promise is resolved/rejected
         // So no more user messages can come in...
         // - Print warning log and continue...
-        //TODO
+        //TODO received user-side message but state machine is closed
         return Promise.resolve(undefined);
       }
       default: {
@@ -136,8 +136,7 @@ export class Journal<I, O> {
     const journalEntry = this.pendingJournalEntries.get(m.entryIndex);
 
     if (journalEntry === undefined) {
-      //TODO fail
-      // throw new Error("Illegal state: received a completion message but ")
+      //TODO received completion message but there is no pending promise for that index
       return;
     }
 
@@ -156,7 +155,7 @@ export class Journal<I, O> {
         journalEntry.resolve(undefined);
         this.pendingJournalEntries.delete(m.entryIndex);
       } else {
-        //TODO completion message without a value/failure/empty
+        //TODO completion message without a value/failure/empty and message is not a side effect
       }
     }
   }
@@ -287,7 +286,7 @@ export class Journal<I, O> {
         break;
       }
       default: {
-        // TODO we shouldn't end up here... we checked all message types
+        // TODO received replay message of unknown type
       }
     }
   }
@@ -337,8 +336,8 @@ export class Journal<I, O> {
     if (runtimeMsgType === userCodeMsgType) {
       const equalityFct = equalityCheckers.get(runtimeMsgType);
       if (equalityFct === undefined) {
-        // TODO there always has to be an equality fct defined...
-        throw new Error("No equality function defined");
+        // TODO no equality function was defined for the message type
+        return true;
       }
       return equalityFct(runtimeMsg, userCodeMsg);
     } else {
@@ -360,8 +359,7 @@ export class Journal<I, O> {
       this.state === NewExecutionState.CLOSED &&
       newExecState !== NewExecutionState.CLOSED
     ) {
-      //TODO
-      // Do not transition
+      // do nothing
       return;
     } else {
       this.state = newExecState;
@@ -412,6 +410,10 @@ export class Journal<I, O> {
 
   public getUserCodeJournalIndex(): number {
     return this.userCodeJournalIndex;
+  }
+
+  public close(){
+    this.transitionState(NewExecutionState.CLOSED)
   }
 
   public outputMsgWasReplayed() {
