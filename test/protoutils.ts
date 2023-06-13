@@ -282,12 +282,20 @@ export function sideEffectMessage<T>(value?: T, failure?: Failure): Message {
       undefined,
       true
     );
-  } else {
+  } else if (failure !== undefined) {
     return new Message(
       SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
       SideEffectEntryMessage.encode(
         SideEffectEntryMessage.create({ failure: failure })
       ).finish(),
+      false,
+      undefined,
+      true
+    );
+  } else {
+    return new Message(
+      SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+      SideEffectEntryMessage.encode(SideEffectEntryMessage.create({})).finish(),
       false,
       undefined,
       true

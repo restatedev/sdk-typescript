@@ -24,7 +24,9 @@ export function encodeMessage(msg: Message): Uint8Array {
   if (pbType === undefined) {
     // this is a custom message.
     // in this case we expect it to be already encoded.
-    bodyBuf = msg.message as Uint8Array;
+    // It can also be undefined (void side effect), then allocate an empty buffer
+    bodyBuf =
+      msg.message !== undefined ? (msg.message as Uint8Array) : Buffer.alloc(0);
   } else {
     bodyBuf = pbType.encode(msg.message).finish();
   }

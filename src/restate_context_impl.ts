@@ -174,22 +174,32 @@ export class RestateContextImpl<I, O> implements RestateContext {
   }
 
   async sideEffect<T>(fn: () => Promise<T>): Promise<T> {
-    if (this.sideEffectFlagStore.getStore()) {
-      this.stateMachine.notifyApiViolation(
+    if (this.getSideEffectFlag()) {
+      await this.stateMachine.notifyApiViolation(
         13,
         `You cannot do sideEffect calls from within a side effect.`
       );
+      return Promise.reject(
+        new Error(`You cannot do sideEffect calls from within a side effect.`)
+      );
     } else if (this.getOneWayCallFlag()) {
-      this.stateMachine.notifyApiViolation(
+      await this.stateMachine.notifyApiViolation(
         13,
         `Cannot do a side effect from within ctx.oneWayCall(...). ` +
           "Context method ctx.oneWayCall() can only be used to invoke other services unidirectionally. " +
           "e.g. ctx.oneWayCall(() => client.greet(my_request))"
       );
+      return Promise.reject(
+        new Error(
+          `Cannot do a side effect from within ctx.oneWayCall(...). ` +
+            "Context method ctx.oneWayCall() can only be used to invoke other services unidirectionally. " +
+            "e.g. ctx.oneWayCall(() => client.greet(my_request))"
+        )
+      );
     }
 
     return new Promise((resolve, reject) => {
-      if (this.stateMachine.isReplaying()) {
+      if (this.stateMachine.nextEntryWillBeReplayed()) {
         const emptyMsg = SideEffectEntryMessage.create({});
         const promise = this.stateMachine.handleUserCodeMessage<T>(
           SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
@@ -207,13 +217,16 @@ export class RestateContextImpl<I, O> implements RestateContext {
         this.sideEffectFlagStore.run(true, () => {
           fn()
             .then((value) => {
-              const bytes =
+              const sideEffectMsg =
                 value !== undefined
-                  ? Buffer.from(JSON.stringify(value))
-                  : Buffer.from(JSON.stringify({}));
-              const sideEffectMsg = SideEffectEntryMessage.encode(
-                SideEffectEntryMessage.create({ value: bytes })
-              ).finish();
+                  ? SideEffectEntryMessage.encode(
+                    SideEffectEntryMessage.create({
+                      value: Buffer.from(JSON.stringify(value)),
+                    })
+                  ).finish()
+                  : SideEffectEntryMessage.encode(
+                    SideEffectEntryMessage.create()
+                  ).finish();
               const promise = this.stateMachine.handleUserCodeMessage<T>(
                 SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
                 sideEffectMsg,
@@ -330,6 +343,16 @@ export class RestateContextImpl<I, O> implements RestateContext {
     );
   }
 
+  getSideEffectFlag(): boolean {
+    const sideEffectFlag = this.sideEffectFlagStore.getStore();
+    if (sideEffectFlag !== undefined) {
+      return sideEffectFlag as boolean;
+    } else {
+      return false;
+
+    }
+  }
+
   getOneWayCallFlag(): boolean {
     const oneWayCallParams = this.oneWayCallParamsStore.getStore();
     if (oneWayCallParams !== undefined) {
@@ -349,7 +372,7 @@ export class RestateContextImpl<I, O> implements RestateContext {
   }
 
   isValidState(callType: string): boolean {
-    if (this.sideEffectFlagStore.getStore()) {
+    if (this.getSideEffectFlag()) {
       this.stateMachine.notifyApiViolation(
         13,
         `You cannot do ${callType} calls from within a side effect.`
