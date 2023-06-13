@@ -71,7 +71,7 @@ export interface RestateContext {
    *   client.greet(Request.create({ name: "Peter" }))
    * )
    */
-  oneWayCall<T>(call: () => Promise<T>, delayMillis?: number): void;
+  oneWayCall(call: () => Promise<any>, delayMillis?: number): void;
 
   /**
    * Execute a side effect and store the result in the Restate runtime.

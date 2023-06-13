@@ -61,7 +61,7 @@ export class LambdaConnection implements Connection {
     } catch (e) {
       rlog.error(e);
       rlog.debug("Closing the connection and state machine.");
-      this.handleError();
+      this.handleConnectionError();
     }
   }
 
@@ -69,7 +69,7 @@ export class LambdaConnection implements Connection {
     return this.completionPromise;
   }
 
-  handleError(): void {
+  handleConnectionError(): void {
     this.end();
     this.emitOnErrorEvent();
   }
