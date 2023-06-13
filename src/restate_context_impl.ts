@@ -60,18 +60,16 @@ export class RestateContextImpl<I, O> implements RestateContext {
 
     // Create the message and let the state machine process it
     const msg = GetStateEntryMessage.create({ key: Buffer.from(name) });
-    const promise = this.stateMachine.handleUserCodeMessage(
+    const result = await this.stateMachine.handleUserCodeMessage(
       GET_STATE_ENTRY_MESSAGE_TYPE,
       msg
     );
 
-    // Wait for the result, do post-processing and then deliver it back to the user code.
-    return promise.then((result) => {
-      if (!(result instanceof Buffer)) {
-        return null;
-      }
-      return JSON.parse(result.toString()) as T;
-    });
+    if (!(result instanceof Buffer)) {
+      return null;
+    }
+
+    return JSON.parse(result.toString()) as T;
   }
 
   public set<T>(name: string, value: T): void {
@@ -133,10 +131,8 @@ export class RestateContextImpl<I, O> implements RestateContext {
     method: string,
     data: Uint8Array
   ): Promise<Uint8Array> {
-    const invokeTime =
-      this.getOneWayCallDelay() > 0
-        ? Date.now() + this.getOneWayCallDelay()
-        : undefined;
+    const delay = this.getOneWayCallDelay();
+    const invokeTime = delay > 0 ? Date.now() + delay : undefined;
     const msg = BackgroundInvokeEntryMessage.create({
       serviceName: service,
       methodName: method,
@@ -160,9 +156,7 @@ export class RestateContextImpl<I, O> implements RestateContext {
 
     await this.callContext.run(
       { type: CallContexType.OneWayCall, delay: delayMillis },
-      async () => {
-        await call();
-      }
+      call
     );
   }
 
@@ -170,9 +164,7 @@ export class RestateContextImpl<I, O> implements RestateContext {
     if (this.isInSideEffect()) {
       const msg = "You cannot do sideEffect calls from within a side effect.";
       await this.stateMachine.notifyApiViolation(13, msg);
-      throw new Error(
-        `You cannot do sideEffect calls from within a side effect.`
-      );
+      throw new Error(msg);
     } else if (this.isInOneWayCall()) {
       const msg =
         "Cannot do a side effect from within ctx.oneWayCall(...). " +
