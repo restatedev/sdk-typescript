@@ -71,6 +71,7 @@ export interface RestateContext {
    *   client.greet(Request.create({ name: "Peter" }))
    * )
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   oneWayCall(call: () => Promise<any>, delayMillis?: number): void;
 
   /**

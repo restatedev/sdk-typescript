@@ -412,8 +412,8 @@ export class Journal<I, O> {
     return this.userCodeJournalIndex;
   }
 
-  public close(){
-    this.transitionState(NewExecutionState.CLOSED)
+  public close() {
+    this.transitionState(NewExecutionState.CLOSED);
   }
 
   public outputMsgWasReplayed() {

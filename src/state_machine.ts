@@ -272,7 +272,7 @@ export class StateMachine<I, O> {
     this.method.resolve(new Message(SUSPENSION_MESSAGE_TYPE, msg));
   }
 
-  public notifyApiViolation(code: number, msg: string){
+  public notifyApiViolation(code: number, msg: string) {
     this.handleUserCodeMessage(
       OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
       OutputStreamEntryMessage.create({
