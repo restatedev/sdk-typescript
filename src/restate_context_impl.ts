@@ -52,7 +52,7 @@ export class RestateContextImpl<I, O> implements RestateContext {
     private readonly stateMachine: StateMachine<I, O>
   ) {}
 
-  async get<T>(name: string): Promise<T | null> {
+  public async get<T>(name: string): Promise<T | null> {
     // Check if this is a valid action
     this.checkState("get state");
 
@@ -72,7 +72,7 @@ export class RestateContextImpl<I, O> implements RestateContext {
     });
   }
 
-  set<T>(name: string, value: T): void {
+  public set<T>(name: string, value: T): void {
     this.checkState("set state");
 
     const bytes = Buffer.from(JSON.stringify(value));
@@ -83,7 +83,7 @@ export class RestateContextImpl<I, O> implements RestateContext {
     this.stateMachine.handleUserCodeMessage(SET_STATE_ENTRY_MESSAGE_TYPE, msg);
   }
 
-  clear(name: string): void {
+  public clear(name: string): void {
     this.checkState("clear state");
 
     const msg = ClearStateEntryMessage.create({
@@ -95,7 +95,7 @@ export class RestateContextImpl<I, O> implements RestateContext {
     );
   }
 
-  request(
+  public request(
     service: string,
     method: string,
     data: Uint8Array
@@ -149,7 +149,7 @@ export class RestateContextImpl<I, O> implements RestateContext {
     return new Uint8Array();
   }
 
-  async oneWayCall(
+  public async oneWayCall(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     call: () => Promise<any>,
     delayMillis?: number
@@ -164,7 +164,7 @@ export class RestateContextImpl<I, O> implements RestateContext {
     );
   }
 
-  async sideEffect<T>(fn: () => Promise<T>): Promise<T> {
+  public async sideEffect<T>(fn: () => Promise<T>): Promise<T> {
     if (this.getSideEffectFlag()) {
       await this.stateMachine.notifyApiViolation(
         13,
@@ -263,7 +263,7 @@ export class RestateContextImpl<I, O> implements RestateContext {
     });
   }
 
-  sleep(millis: number): Promise<void> {
+  public sleep(millis: number): Promise<void> {
     this.checkState("sleep");
 
     const msg = SleepEntryMessage.create({ wakeUpTime: Date.now() + millis });
@@ -273,7 +273,7 @@ export class RestateContextImpl<I, O> implements RestateContext {
     );
   }
 
-  awakeable<T>(): { id: string; promise: Promise<T> } {
+  public awakeable<T>(): { id: string; promise: Promise<T> } {
     this.checkState("awakeable");
 
     const msg = AwakeableEntryMessage.create();
@@ -303,7 +303,7 @@ export class RestateContextImpl<I, O> implements RestateContext {
     };
   }
 
-  completeAwakeable<T>(id: string, payload: T): void {
+  public completeAwakeable<T>(id: string, payload: T): void {
     this.checkState("completeAwakeable");
 
     // Parse the string to an awakeable identifier
@@ -328,7 +328,7 @@ export class RestateContextImpl<I, O> implements RestateContext {
     );
   }
 
-  getSideEffectFlag(): boolean {
+  private getSideEffectFlag(): boolean {
     const sideEffectFlag = this.sideEffectFlagStore.getStore();
     if (sideEffectFlag !== undefined) {
       return sideEffectFlag as boolean;
@@ -337,7 +337,7 @@ export class RestateContextImpl<I, O> implements RestateContext {
     }
   }
 
-  getOneWayCallFlag(): boolean {
+  private getOneWayCallFlag(): boolean {
     const oneWayCallParams = this.oneWayCallParamsStore.getStore();
     if (oneWayCallParams !== undefined) {
       return (oneWayCallParams as OneWayCallParams).oneWayFlag;
@@ -346,7 +346,7 @@ export class RestateContextImpl<I, O> implements RestateContext {
     }
   }
 
-  getOneWayCallDelay(): number {
+  private getOneWayCallDelay(): number {
     const oneWayCallParams = this.oneWayCallParamsStore.getStore();
     if (oneWayCallParams !== undefined) {
       return (oneWayCallParams as OneWayCallParams).delay;
