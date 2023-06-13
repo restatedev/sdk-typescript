@@ -25,6 +25,7 @@ import {
 } from "./types/protocol";
 import { SideEffectEntryMessage } from "./generated/proto/javascript";
 import { AsyncLocalStorage } from "async_hooks";
+import { RestateError } from "./types/errors";
 
 interface OneWayCallParams {
   oneWayFlag: boolean;
@@ -53,9 +54,7 @@ export class RestateContextImpl<I, O> implements RestateContext {
 
   async get<T>(name: string): Promise<T | null> {
     // Check if this is a valid action
-    if (!this.isValidState("get state")) {
-      return Promise.reject();
-    }
+    this.checkState("get state");
 
     // Create the message and let the state machine process it
     const msg = GetStateEntryMessage.create({ key: Buffer.from(name) });
@@ -74,9 +73,7 @@ export class RestateContextImpl<I, O> implements RestateContext {
   }
 
   set<T>(name: string, value: T): void {
-    if (!this.isValidState("set state")) {
-      return;
-    }
+    this.checkState("set state");
 
     const bytes = Buffer.from(JSON.stringify(value));
     const msg = SetStateEntryMessage.create({
@@ -87,9 +84,7 @@ export class RestateContextImpl<I, O> implements RestateContext {
   }
 
   clear(name: string): void {
-    if (!this.isValidState("clear state")) {
-      throw new Error();
-    }
+    this.checkState("clear state");
 
     const msg = ClearStateEntryMessage.create({
       key: Buffer.from(name, "utf8"),
@@ -117,9 +112,7 @@ export class RestateContextImpl<I, O> implements RestateContext {
     method: string,
     data: Uint8Array
   ): Promise<Uint8Array> {
-    if (!this.isValidState("invoke")) {
-      return Promise.reject();
-    }
+    this.checkState("invoke");
 
     const msg = InvokeEntryMessage.create({
       serviceName: service,
@@ -161,9 +154,7 @@ export class RestateContextImpl<I, O> implements RestateContext {
     call: () => Promise<any>,
     delayMillis?: number
   ): Promise<void> {
-    if (!this.isValidState("oneWayCall")) {
-      return Promise.reject();
-    }
+    this.checkState("oneWayCall");
 
     await this.oneWayCallParamsStore.run(
       { oneWayFlag: true, delay: delayMillis || 0 } as OneWayCallParams,
@@ -273,9 +264,7 @@ export class RestateContextImpl<I, O> implements RestateContext {
   }
 
   sleep(millis: number): Promise<void> {
-    if (!this.isValidState("sleep")) {
-      return Promise.reject();
-    }
+    this.checkState("sleep");
 
     const msg = SleepEntryMessage.create({ wakeUpTime: Date.now() + millis });
     return this.stateMachine.handleUserCodeMessage<void>(
@@ -285,9 +274,7 @@ export class RestateContextImpl<I, O> implements RestateContext {
   }
 
   awakeable<T>(): { id: string; promise: Promise<T> } {
-    if (!this.isValidState("awakeable")) {
-      throw new Error();
-    }
+    this.checkState("awakeable");
 
     const msg = AwakeableEntryMessage.create();
     const promise = this.stateMachine
@@ -317,9 +304,7 @@ export class RestateContextImpl<I, O> implements RestateContext {
   }
 
   completeAwakeable<T>(id: string, payload: T): void {
-    if (!this.isValidState("completeAwakeable")) {
-      return;
-    }
+    this.checkState("completeAwakeable");
 
     // Parse the string to an awakeable identifier
     const awakeableIdentifier = JSON.parse(id, (key, value) => {
@@ -370,23 +355,19 @@ export class RestateContextImpl<I, O> implements RestateContext {
     }
   }
 
-  isValidState(callType: string): boolean {
+  private checkState(callType: string): void {
     if (this.getSideEffectFlag()) {
-      this.stateMachine.notifyApiViolation(
-        13,
-        `You cannot do ${callType} calls from within a side effect.`
-      );
-      return false;
-    } else if (this.getOneWayCallFlag()) {
-      this.stateMachine.notifyApiViolation(
-        13,
-        `Cannot do a ${callType} from within ctx.oneWayCall(...).
+      const msg = `You cannot do ${callType} calls from within a side effect.`;
+      this.stateMachine.notifyApiViolation(13, msg);
+      throw new RestateError(msg);
+    }
+
+    if (this.getOneWayCallFlag()) {
+      const msg = `Cannot do a ${callType} from within ctx.oneWayCall(...).
           Context method oneWayCall() can only be used to invoke other services in the background.
-          e.g. ctx.oneWayCall(() => client.greet(my_request))`
-      );
-      return false;
-    } else {
-      return true;
+          e.g. ctx.oneWayCall(() => client.greet(my_request))`;
+      this.stateMachine.notifyApiViolation(13, msg);
+      throw new RestateError(msg);
     }
   }
 }
