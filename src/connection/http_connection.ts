@@ -20,7 +20,7 @@ export class HttpConnection implements Connection {
     readonly stream: http2.ServerHttp2Stream,
     readonly restate: RestateDuplexStream
   ) {
-    restate.onError(this.handleError.bind(this));
+    restate.onError(this.handleConnectionError.bind(this));
   }
 
   respond404() {
@@ -55,7 +55,7 @@ export class HttpConnection implements Connection {
     this.restate.onMessage(handler);
   }
 
-  handleError() {
+  handleConnectionError() {
     this.end();
     this.emitOnErrorEvent();
   }

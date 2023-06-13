@@ -132,7 +132,7 @@ export class StateMachine<I, O> {
     }
   }
 
-  public async handleUserCodeMessage<T>(
+  public handleUserCodeMessage<T>(
     messageType: bigint,
     message: p.ProtocolMessage | Uint8Array,
     completedFlag?: boolean,
@@ -168,7 +168,7 @@ export class StateMachine<I, O> {
       (!this.isReplaying() ||
         (this.isReplaying() && this.journal.getCompletableIndices().length > 0))
     ) {
-      await this.connection.flush();
+      this.connection.flush();
       this.scheduleSuspension();
     }
     return promise;
@@ -270,6 +270,18 @@ export class StateMachine<I, O> {
       entryIndexes: indices,
     });
     this.method.resolve(new Message(SUSPENSION_MESSAGE_TYPE, msg));
+  }
+
+  public notifyApiViolation(code: number, msg: string) {
+    this.handleUserCodeMessage(
+      OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
+      OutputStreamEntryMessage.create({
+        failure: Failure.create({
+          code: 13,
+          message: msg,
+        }),
+      })
+    );
   }
 
   public getUserCodeJournalIndex(): number {
