@@ -27,23 +27,25 @@ import { SideEffectEntryMessage } from "./generated/proto/javascript";
 import { AsyncLocalStorage } from "async_hooks";
 import { RestateError } from "./types/errors";
 
-interface OneWayCallParams {
-  oneWayFlag: boolean;
-  delay: number;
+enum CallContexType {
+  None,
+  SideEffect,
+  OneWayCall,
+}
+
+interface CallContext {
+  type: CallContexType;
+  delay?: number;
 }
 
 export class RestateContextImpl<I, O> implements RestateContext {
-  // This flag is set to true when we are executing code that is inside a side effect.
-  // We use this flag to prevent the user from doing operations on the context from within a side effect.
-  // e.g. ctx.sideEffect(() => {await ctx.get("my-state")})
-  private sideEffectFlagStore = new AsyncLocalStorage();
-
-  // This is a container for the one way call parameters: a flag and the delay parameter.
-  // The flag is set to true when a unidirectional call follows.
-  // Both types of requests (unidirectional or request-response) call the same request() method.
-  // So to be able to know if a request is a unidirectional request or not, the user first sets this flag:
-  // e.g.: ctx.oneWayCall(() => client.greet(request))
-  private oneWayCallParamsStore = new AsyncLocalStorage();
+  // here, we capture the context information for actions on the Restate context that
+  // are executed within other actions, such as
+  // ctx.oneWayCall( () => client.foo(bar) );
+  // we also use this information to ensure we check that only allowed operations are
+  // used. Within side-effects, no operations are allowed on the RestateContext.
+  // For example, this is illegal: 'ctx.sideEffect(() => {await ctx.get("my-state")})'
+  private callContext = new AsyncLocalStorage<CallContext>();
 
   constructor(
     public readonly instanceKey: Buffer,
@@ -100,7 +102,7 @@ export class RestateContextImpl<I, O> implements RestateContext {
     method: string,
     data: Uint8Array
   ): Promise<Uint8Array> {
-    if (this.getOneWayCallFlag()) {
+    if (this.isInOneWayCall()) {
       return this.invokeOneWay(service, method, data);
     } else {
       return this.invoke(service, method, data);
@@ -156,8 +158,8 @@ export class RestateContextImpl<I, O> implements RestateContext {
   ): Promise<void> {
     this.checkState("oneWayCall");
 
-    await this.oneWayCallParamsStore.run(
-      { oneWayFlag: true, delay: delayMillis || 0 } as OneWayCallParams,
+    await this.callContext.run(
+      { type: CallContexType.OneWayCall, delay: delayMillis },
       async () => {
         await call();
       }
@@ -165,28 +167,19 @@ export class RestateContextImpl<I, O> implements RestateContext {
   }
 
   public async sideEffect<T>(fn: () => Promise<T>): Promise<T> {
-    if (this.getSideEffectFlag()) {
-      await this.stateMachine.notifyApiViolation(
-        13,
+    if (this.isInSideEffect()) {
+      const msg = "You cannot do sideEffect calls from within a side effect.";
+      await this.stateMachine.notifyApiViolation(13, msg);
+      throw new Error(
         `You cannot do sideEffect calls from within a side effect.`
       );
-      return Promise.reject(
-        new Error(`You cannot do sideEffect calls from within a side effect.`)
-      );
-    } else if (this.getOneWayCallFlag()) {
-      await this.stateMachine.notifyApiViolation(
-        13,
-        `Cannot do a side effect from within ctx.oneWayCall(...). ` +
-          "Context method ctx.oneWayCall() can only be used to invoke other services unidirectionally. " +
-          "e.g. ctx.oneWayCall(() => client.greet(my_request))"
-      );
-      return Promise.reject(
-        new Error(
-          `Cannot do a side effect from within ctx.oneWayCall(...). ` +
-            "Context method ctx.oneWayCall() can only be used to invoke other services unidirectionally. " +
-            "e.g. ctx.oneWayCall(() => client.greet(my_request))"
-        )
-      );
+    } else if (this.isInOneWayCall()) {
+      const msg =
+        "Cannot do a side effect from within ctx.oneWayCall(...). " +
+        "Context method ctx.oneWayCall() can only be used to invoke other services unidirectionally. " +
+        "e.g. ctx.oneWayCall(() => client.greet(my_request))";
+      await this.stateMachine.notifyApiViolation(13, msg);
+      throw new Error(msg);
     }
 
     return new Promise((resolve, reject) => {
@@ -205,7 +198,7 @@ export class RestateContextImpl<I, O> implements RestateContext {
           }
         );
       } else {
-        this.sideEffectFlagStore.run(true, () => {
+        this.callContext.run({ type: CallContexType.SideEffect }, () => {
           fn()
             .then((value) => {
               const sideEffectMsg =
@@ -328,41 +321,34 @@ export class RestateContextImpl<I, O> implements RestateContext {
     );
   }
 
-  private getSideEffectFlag(): boolean {
-    const sideEffectFlag = this.sideEffectFlagStore.getStore();
-    if (sideEffectFlag !== undefined) {
-      return sideEffectFlag as boolean;
-    } else {
-      return false;
-    }
+  private isInSideEffect(): boolean {
+    const context = this.callContext.getStore();
+    return context?.type === CallContexType.SideEffect;
   }
 
-  private getOneWayCallFlag(): boolean {
-    const oneWayCallParams = this.oneWayCallParamsStore.getStore();
-    if (oneWayCallParams !== undefined) {
-      return (oneWayCallParams as OneWayCallParams).oneWayFlag;
-    } else {
-      return false;
-    }
+  private isInOneWayCall(): boolean {
+    const context = this.callContext.getStore();
+    return context?.type === CallContexType.OneWayCall;
   }
 
   private getOneWayCallDelay(): number {
-    const oneWayCallParams = this.oneWayCallParamsStore.getStore();
-    if (oneWayCallParams !== undefined) {
-      return (oneWayCallParams as OneWayCallParams).delay;
-    } else {
-      return 0;
-    }
+    const context = this.callContext.getStore();
+    return context?.delay || 0;
   }
 
   private checkState(callType: string): void {
-    if (this.getSideEffectFlag()) {
+    const context = this.callContext.getStore();
+    if (!context) {
+      return;
+    }
+
+    if (context.type === CallContexType.SideEffect) {
       const msg = `You cannot do ${callType} calls from within a side effect.`;
       this.stateMachine.notifyApiViolation(13, msg);
       throw new RestateError(msg);
     }
 
-    if (this.getOneWayCallFlag()) {
+    if (context.type === CallContexType.OneWayCall) {
       const msg = `Cannot do a ${callType} from within ctx.oneWayCall(...).
           Context method oneWayCall() can only be used to invoke other services in the background.
           e.g. ctx.oneWayCall(() => client.greet(my_request))`;
