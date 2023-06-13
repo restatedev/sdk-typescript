@@ -165,8 +165,9 @@ export class StateMachine<I, O> {
 
     if (
       p.SUSPENSION_TRIGGERS.includes(messageType) &&
-      (!this.isReplaying() ||
-        (this.isReplaying() && this.journal.getCompletableIndices().length > 0))
+      (!this.journal.isReplaying() ||
+        (this.journal.isReplaying() &&
+          this.journal.getCompletableIndices().length > 0))
     ) {
       this.connection.flush();
       this.scheduleSuspension();
@@ -272,8 +273,8 @@ export class StateMachine<I, O> {
     this.method.resolve(new Message(SUSPENSION_MESSAGE_TYPE, msg));
   }
 
-  public notifyApiViolation(code: number, msg: string) {
-    this.handleUserCodeMessage(
+  public async notifyApiViolation(code: number, msg: string) {
+    await this.handleUserCodeMessage(
       OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
       OutputStreamEntryMessage.create({
         failure: Failure.create({
@@ -284,12 +285,13 @@ export class StateMachine<I, O> {
     );
   }
 
+  /**
+   * WARNING: make sure you use this at the right point in the code
+   * After the index has been incremented...
+   * This is error-prone... Would be good to have a better solution for this.
+   */
   public getUserCodeJournalIndex(): number {
     return this.journal.getUserCodeJournalIndex();
-  }
-
-  public isReplaying() {
-    return this.journal.isReplaying();
   }
 
   public getFullServiceName(): string {
@@ -311,5 +313,9 @@ export class StateMachine<I, O> {
   handleError() {
     this.journal.close();
     return;
+  }
+
+  nextEntryWillBeReplayed() {
+    return this.journal.nextEntryWillBeReplayed();
   }
 }

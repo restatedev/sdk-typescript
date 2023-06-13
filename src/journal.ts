@@ -266,13 +266,18 @@ export class Journal<I, O> {
             journalEntry,
             JSON.parse(sideEffectMsg.value.toString())
           );
-        } else {
+        } else if (sideEffectMsg.failure !== undefined) {
           this.resolveResult(
             journalIndex,
             journalEntry,
             undefined,
             sideEffectMsg.failure
           );
+        } else {
+          // A side effect can have a void return type
+          // If it was replayed, then it is acked, so we should resolve it.
+          journalEntry.resolve(undefined);
+          this.pendingJournalEntries.delete(journalIndex);
         }
         break;
       }
@@ -376,7 +381,7 @@ export class Journal<I, O> {
 
     if (
       this.userCodeJournalIndex === this.nbEntriesToReplay &&
-      this.isReplaying()
+      this.state === NewExecutionState.REPLAYING
     ) {
       this.transitionState(NewExecutionState.PROCESSING);
     }
@@ -422,6 +427,16 @@ export class Journal<I, O> {
     return (
       lastEntry && lastEntry.messageType === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE
     );
+  }
+
+  // We use this for side effects.
+  // The restate context needs to know if the user-defined fct needs to be executed or not.
+  // It needs to know this before it can craft the message and call this.stateMachine.handleUserSideMessage(...)
+  // so before the index got incremented and the state got transitioned.
+  // So we cannot use isReplaying().
+  // So we need to check in the journal if the next entry (= our side effect) will be replayed or not.
+  nextEntryWillBeReplayed() {
+    return this.userCodeJournalIndex + 1 < this.nbEntriesToReplay;
   }
 }
 
