@@ -5,15 +5,24 @@ import "./utils/logger";
 
 export interface RestateContext {
   /**
-   * Id of the service instance.
+   * The key associated with the current function invocation.
+   *
+   * For keyed services, this is the key extracted from the input argument, as annotated in the
+   * protobuf service definition.
+   *
+   * For unkeyed services, this is the internal key under which restate stores the journal and
+   * transient state of the function execution.
    */
   instanceKey: Buffer;
+
   /**
    * Name of the service.
    */
   serviceName: string;
+
   /**
-   * Id of the ongoing invocation.
+   * The unique id that identifies the current function invocation. This id is guaranteed to be
+   * unique across invocations, but constant across reties and suspensions.
    */
   invocationId: Buffer;
 
@@ -134,22 +143,22 @@ export interface RestateContext {
   sleep(millis: number): Promise<void>;
 
   /**
-   * Synchronously call other Restate services ( = wait on response).
-   * It is not recommended to use this.
-   * It is recommended
-   * to do the request via the proto-ts client that was generated based on the Protobuf service definitions,
-   * as shown in the example.
-   * These clients use this request method under-the-hood.
+   * Call another Restate service and await the response.
+   *
+   * This function is not recommended to be called directly. Instead, use the generated gRPC client
+   * that was generated based on the Protobuf service definitions (which internally use this method):
+   *
+   * @example
+   * ```
+   * const ctx = restate.useContext(this);
+   * const client = new GreeterClientImpl(ctx);
+   * client.greet(Request.create({ name: "Peter" }))
+   * ```
+   *
    * @param service name of the service to call
    * @param method name of the method to call
    * @param data payload as Uint8Array
    * @returns a Promise that is resolved with the response of the called service
-   *
-
-   * @example
-   * const ctx = restate.useContext(this);
-   * const client = new GreeterClientImpl(ctx);
-   * client.greet(Request.create({ name: "Peter" }))
    */
   request(
     service: string,
