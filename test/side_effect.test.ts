@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { describe, expect } from "@jest/globals";
 import * as restate from "../src/public_api";
 import { TestDriver } from "./testdriver";
@@ -29,7 +30,6 @@ import { rlog } from "../src/utils/logger";
 class SideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: string) {}
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
@@ -62,7 +62,6 @@ class EmptySideEffectGreeter implements TestGreeter {
 class NumericSideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: number) {}
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
@@ -76,7 +75,6 @@ class NumericSideEffectGreeter implements TestGreeter {
 }
 
 class SideEffectAndInvokeGreeter implements TestGreeter {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
@@ -96,7 +94,6 @@ class SideEffectAndInvokeGreeter implements TestGreeter {
 }
 
 class SideEffectAndOneWayCallGreeter implements TestGreeter {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
@@ -117,7 +114,6 @@ class SideEffectAndOneWayCallGreeter implements TestGreeter {
 class FailingSideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: number) {}
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
@@ -133,14 +129,12 @@ class FailingSideEffectGreeter implements TestGreeter {
 class FailingGetSideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: number) {}
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     // state
     const response = await ctx.sideEffect(async () => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const state = await ctx.get("state");
+      await ctx.get("state");
       return this.sideEffectOutput;
     });
 
@@ -151,7 +145,6 @@ class FailingGetSideEffectGreeter implements TestGreeter {
 class FailingSetSideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: number) {}
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
@@ -168,7 +161,6 @@ class FailingSetSideEffectGreeter implements TestGreeter {
 class FailingClearSideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: number) {}
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
@@ -185,7 +177,6 @@ class FailingClearSideEffectGreeter implements TestGreeter {
 class FailingNestedSideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: number) {}
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
@@ -202,7 +193,6 @@ class FailingNestedSideEffectGreeter implements TestGreeter {
 class FailingNestedWithoutAwaitSideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: number) {}
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
@@ -221,7 +211,6 @@ class FailingNestedWithoutAwaitSideEffectGreeter implements TestGreeter {
 class FailingOneWayCallInSideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: number) {}
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
@@ -239,7 +228,6 @@ class FailingOneWayCallInSideEffectGreeter implements TestGreeter {
 class FailingSleepSideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: number) {}
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
@@ -255,7 +243,6 @@ class FailingSleepSideEffectGreeter implements TestGreeter {
 class FailingCompleteAwakeableSideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: number) {}
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
@@ -272,7 +259,6 @@ class FailingCompleteAwakeableSideEffectGreeter implements TestGreeter {
 class FailingAwakeableSideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: number) {}
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
@@ -314,7 +300,6 @@ enum OrderStatus {
 }
 
 class EnumSideEffectGreeter implements TestGreeter {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
