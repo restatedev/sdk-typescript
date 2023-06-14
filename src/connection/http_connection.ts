@@ -14,6 +14,7 @@ import { rlog } from "../utils/logger";
 import { InvocationBuilder } from "../invocation";
 import { START_MESSAGE_TYPE, StartMessage } from "../types/protocol";
 import { StateMachine } from "../state_machine";
+import { HostedGrpcServiceMethod } from "../types/grpc";
 
 export class HttpConnection<I, O> implements Connection {
   private onErrorListeners: (() => void)[] = [];
@@ -85,6 +86,10 @@ export class HttpConnection<I, O> implements Connection {
 
     this.stateMachine.handleRuntimeMessage(m);
     return;
+  }
+
+  setGrpcMethod(method: HostedGrpcServiceMethod<I, O>) {
+    this.invocationBuilder.setGrpcMethod(method)
   }
 
   handleConnectionError() {

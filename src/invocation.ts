@@ -93,8 +93,8 @@ export class InvocationBuilder<I, O> {
 }
 
 export class Invocation<I, O> {
-  public invocationIdString;
-  public logPrefix;
+  public readonly invocationIdString;
+  public readonly logPrefix;
   constructor(
     public readonly method: HostedGrpcServiceMethod<I, O>,
     public readonly protocolMode: ProtocolMode,

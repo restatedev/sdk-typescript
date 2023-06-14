@@ -116,7 +116,7 @@ export class RestateServer extends BaseRestateServer {
         connection.respond404();
       } else {
         connection.respondOk();
-        connection.invocationBuilder.setGrpcMethod(method);
+        connection.setGrpcMethod(method);
       }
     }
   }
