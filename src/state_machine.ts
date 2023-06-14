@@ -2,7 +2,7 @@
 
 import * as p from "./types/protocol";
 import { RestateContextImpl } from "./restate_context_impl";
-import { Connection } from "./connection/connection";
+import { Connection, RestateStreamConsumer } from "./connection/connection";
 import { ProtocolMode } from "./generated/proto/discovery";
 import { Message } from "./types/types";
 import { printMessageAsJson } from "./utils/utils";
@@ -19,7 +19,7 @@ import { Failure } from "./generated/proto/protocol";
 import { Journal } from "./journal";
 import { Invocation } from "./invocation";
 
-export class StateMachine<I, O> {
+export class StateMachine<I, O> implements RestateStreamConsumer {
   private journal: Journal<I, O>;
   private restateContext: RestateContextImpl<I, O>;
 
@@ -33,7 +33,8 @@ export class StateMachine<I, O> {
 
   constructor(
     private readonly connection: Connection,
-    private readonly invocation: Invocation<I, O>
+    private readonly invocation: Invocation<I, O>,
+    private readonly protocolMode: ProtocolMode
   ) {
     this.restateContext = new RestateContextImpl(
       this.invocation.instanceKey,
@@ -42,14 +43,9 @@ export class StateMachine<I, O> {
       this
     );
     this.journal = new Journal(this.invocation);
-
-    connection.onClose(this.setInputChannelToClosed.bind(this));
-    connection.onError(() => {
-      this.handleError();
-    });
   }
 
-  public handleRuntimeMessage(m: Message) {
+  public handleMessage(m: Message): boolean {
     if (m.messageType !== COMPLETION_MESSAGE_TYPE) {
       throw new Error(
         `Received message of type ${m.messageType}. Can only accept completion messages after replay has finished.`
@@ -72,6 +68,8 @@ export class StateMachine<I, O> {
       clearTimeout(this.suspensionTimeout);
       this.suspensionTimeout = undefined;
     }
+
+    return false; // we are never complete
   }
 
   public handleUserCodeMessage<T>(
@@ -117,7 +115,7 @@ export class StateMachine<I, O> {
     return promise;
   }
 
-  invoke() {
+  public invoke() {
     this.invocation.method
       .invoke(
         this.restateContext,
@@ -196,7 +194,7 @@ export class StateMachine<I, O> {
   // - suspend after 1 seconds if input channel is still open (can still get completions)
   // - suspend immediately if input channel is closed (cannot get completions)
   getSuspensionMillis(): number {
-    return this.invocation.protocolMode === ProtocolMode.REQUEST_RESPONSE
+    return this.protocolMode === ProtocolMode.REQUEST_RESPONSE
       ? 0
       : this.inputChannelClosed
       ? 0
@@ -248,7 +246,7 @@ export class StateMachine<I, O> {
     return `${this.invocation.method.packge}.${this.invocation.method.service}`;
   }
 
-  setInputChannelToClosed() {
+  public handleInputClosed(): void {
     if (this.journal.isClosed()) {
       return;
     }
@@ -260,7 +258,7 @@ export class StateMachine<I, O> {
     }
   }
 
-  handleError() {
+  public handleStreamError(): void {
     this.journal.close();
     return;
   }

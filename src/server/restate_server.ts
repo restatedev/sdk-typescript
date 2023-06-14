@@ -1,9 +1,21 @@
 "use strict";
 
-import { ProtocolMode } from "../generated/proto/discovery";
-import { incomingConnectionAtPort } from "../connection/http_connection";
+import { on } from "events";
+import stream from "stream";
+import { pipeline, finished } from "stream/promises";
+import http2 from "http2";
+import { parse as urlparse, Url } from "url";
+import {
+  ProtocolMode,
+  ServiceDiscoveryResponse,
+} from "../generated/proto/discovery";
 import { BaseRestateServer, ServiceOpts } from "./base_restate_server";
 import { rlog } from "../utils/logger";
+import { RestateHttp2Connection } from "../connection/http_connection";
+import { HostedGrpcServiceMethod } from "../types/grpc";
+import { ensureError } from "../types/errors";
+import { InvocationBuilder } from "../invocation";
+import { StateMachine } from "../state_machine";
 
 /**
  * Creates a Restate entrypoint based on a HTTP2 server. The entrypoint will listen
@@ -104,20 +116,125 @@ export class RestateServer extends BaseRestateServer {
     const actualPort = port ?? parseInt(process.env.PORT ?? "8080");
     rlog.info(`Listening on ${actualPort}...`);
 
-    for await (const connection of incomingConnectionAtPort(
-      actualPort,
-      this.discovery
-    )) {
-      const method = this.methodByUrl(connection.url.path);
-      if (method === undefined) {
-        rlog.error(`No service found for URL ${connection.url.path}`);
-        rlog.trace();
-        // Respons 404 and end the stream.
-        connection.respond404();
-      } else {
-        connection.respondOk();
-        connection.setGrpcMethod(method);
+    for await (const connection of incomingConnectionAtPort(actualPort)) {
+      try {
+        const method = this.methodByUrl(connection.url.path);
+
+        if (method !== undefined) {
+          // valid connection, let's dispatch the invocation
+          connection.stream.respond({
+            "content-type": "application/restate",
+            ":status": 200,
+          });
+
+          const restateStream = RestateHttp2Connection.from(connection.stream);
+          await handleInvocation(method, restateStream);
+          continue;
+        }
+
+        // no method under that name. might be a discovery request
+        if (connection.url.path == "/discover") {
+          rlog.info(
+            "Answering discovery request. Registering these services: " +
+              JSON.stringify(this.discovery.services)
+          );
+          await respondDiscovery(this.discovery, connection.stream);
+          continue;
+        }
+
+        // no discovery, so unknown method: 404
+        rlog.error(
+          `No service and function found for URL ${connection.url.path}`
+        );
+        await respondNotFound(connection.stream);
+      } catch (e) {
+        const error = ensureError(e);
+        rlog.error("Error while handling connection: " + error.message);
+        rlog.error(error.stack);
+        connection.stream.end();
+        connection.stream.destroy();
       }
     }
+  }
+}
+
+async function* incomingConnectionAtPort(port: number) {
+  const server = http2.createServer();
+
+  server.on("error", (err) =>
+    rlog.error("Error in Restate service endpoint http2 server: " + err)
+  );
+  server.listen(port);
+
+  let connectionId = 1n;
+
+  for await (const [s, h] of on(server, "stream")) {
+    const stream = s as http2.ServerHttp2Stream;
+    const headers = h as http2.IncomingHttpHeaders;
+    const url: Url = urlparse(headers[":path"] ?? "/");
+    connectionId++;
+    yield { connectionId, url, headers, stream };
+  }
+}
+
+async function respondDiscovery(
+  response: ServiceDiscoveryResponse,
+  http2Stream: http2.ServerHttp2Stream
+) {
+  const responseData = ServiceDiscoveryResponse.encode(response).finish();
+
+  http2Stream.respond({
+    ":status": 200,
+    "content-type": "application/proto",
+  });
+
+  await pipeline(stream.Readable.from(responseData), http2Stream, {
+    end: true,
+  });
+}
+
+async function respondNotFound(stream: http2.ServerHttp2Stream) {
+  stream.respond({
+    "content-type": "application/restate",
+    ":status": 404,
+  });
+  stream.end();
+  await finished(stream);
+}
+
+async function handleInvocation<I, O>(
+  func: HostedGrpcServiceMethod<I, O>,
+  connection: RestateHttp2Connection
+) {
+  // step 1: collect all journal events
+  const journalBuilder = new InvocationBuilder<I, O>(func);
+  connection.pipeToConsumer(journalBuilder);
+  try {
+    await journalBuilder.completion();
+  } finally {
+    // some GC friendliness
+    connection.removeCurrentConsumer();
+  }
+
+  // step 2: create the state machine
+  const stateMachine = new StateMachine<I, O>(
+    connection,
+    journalBuilder.build(),
+    ProtocolMode.BIDI_STREAM
+  );
+  connection.pipeToConsumer(stateMachine);
+
+  // step 3: invoke the function
+
+  // This call would propagate errors in the state machine logic, but not errors
+  // in the application function code. Ending a function with an error as well
+  // as failign an invocation and being retried are perfectly valid actions from the
+  // SDK's perspective.
+  try {
+    await stateMachine.invoke();
+  } finally {
+    // some GC friendliness
+    // we want this here, but can only do this once we can actually await the 'stateMachine.invoke()' function
+    // connection.removeCurrentConsumer();
   }
 }

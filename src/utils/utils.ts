@@ -23,6 +23,29 @@ import {
 } from "../types/protocol";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
+export class CompletablePromise<T> {
+  private success!: (value: T | PromiseLike<T>) => void;
+  private failure!: (reason?: any) => void;
+
+  public readonly promise: Promise<T>;
+
+  constructor() {
+    this.promise = new Promise((resolve, reject) => {
+      this.success = resolve;
+      this.failure = reject;
+    });
+  }
+
+  public resolve(value: T) {
+    this.success(value);
+  }
+
+  public reject(reason?: any) {
+    this.failure(reason);
+  }
+}
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
 export function printMessageAsJson(obj: any): string {
   const newObj = { ...(obj as Record<string, unknown>) };
   for (const [key, value] of Object.entries(newObj)) {

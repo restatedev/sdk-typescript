@@ -8,40 +8,58 @@ import {
   PollInputStreamEntryMessage,
   StartMessage,
 } from "./generated/proto/protocol";
-import { uuidV7FromBuffer } from "./utils/utils";
-import { POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE } from "./types/protocol";
-import { ProtocolMode } from "./generated/proto/discovery";
+import { CompletablePromise, uuidV7FromBuffer } from "./utils/utils";
+import {
+  POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
+  START_MESSAGE_TYPE,
+} from "./types/protocol";
+import { RestateStreamConsumer } from "./connection/connection";
 
-export class InvocationBuilder<I, O> {
+export class InvocationBuilder<I, O> implements RestateStreamConsumer {
+  private readonly complete = new CompletablePromise<void>();
+
   private runtimeReplayIndex = 0;
   private replayEntries = new Map<number, Message>();
   private instanceKey?: Buffer = undefined;
   private invocationId?: Buffer = undefined;
   private invocationValue?: Buffer = undefined;
-  private protocolMode?: ProtocolMode = undefined;
   private nbEntriesToReplay?: number = undefined;
-  private method?: HostedGrpcServiceMethod<I, O> = undefined;
 
-  public handleStartMessage(m: StartMessage): InvocationBuilder<I, O> {
+  constructor(private readonly method: HostedGrpcServiceMethod<I, O>) {}
+
+  public handleMessage(m: Message): boolean {
+    if (m.messageType === START_MESSAGE_TYPE) {
+      this.handleStartMessage(m.message as StartMessage);
+      return false;
+    } else {
+      this.addReplayEntry(m);
+      const isComplete = this.isComplete();
+      if (isComplete) {
+        this.complete.resolve();
+      }
+      return isComplete;
+    }
+  }
+
+  public handleStreamError(e: Error): void {
+    this.complete.reject(e);
+  }
+  public handleInputClosed(): void {
+    this.complete.reject(new Error("Input closed before journal is complete"));
+  }
+
+  public completion(): Promise<void> {
+    return this.complete.promise;
+  }
+
+  private handleStartMessage(m: StartMessage): InvocationBuilder<I, O> {
     this.nbEntriesToReplay = m.knownEntries;
     this.instanceKey = m.instanceKey;
     this.invocationId = m.invocationId;
     return this;
   }
 
-  public setProtocolMode(protocolMode: ProtocolMode): InvocationBuilder<I, O> {
-    this.protocolMode = protocolMode;
-    return this;
-  }
-
-  public setGrpcMethod(
-    method: HostedGrpcServiceMethod<I, O>
-  ): InvocationBuilder<I, O> {
-    this.method = method;
-    return this;
-  }
-
-  public addReplayEntry(m: Message): InvocationBuilder<I, O> {
+  private addReplayEntry(m: Message): InvocationBuilder<I, O> {
     if (m.messageType === POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE) {
       this.invocationValue = (m.message as PollInputStreamEntryMessage).value;
     }
@@ -64,8 +82,6 @@ export class InvocationBuilder<I, O> {
 
   public isComplete(): boolean {
     return (
-      this.method !== undefined &&
-      this.protocolMode !== undefined &&
       this.instanceKey !== undefined &&
       this.invocationId !== undefined &&
       this.nbEntriesToReplay !== undefined &&
@@ -82,7 +98,6 @@ export class InvocationBuilder<I, O> {
     }
     return new Invocation(
       this.method!,
-      this.protocolMode!,
       this.instanceKey!,
       this.invocationId!,
       this.nbEntriesToReplay!,
@@ -97,7 +112,6 @@ export class Invocation<I, O> {
   public readonly logPrefix;
   constructor(
     public readonly method: HostedGrpcServiceMethod<I, O>,
-    public readonly protocolMode: ProtocolMode,
     public readonly instanceKey: Buffer,
     public readonly invocationId: Buffer,
     public readonly nbEntriesToReplay: number,

@@ -6,7 +6,7 @@ import {
   START_MESSAGE_TYPE,
   StartMessage,
 } from "../src/types/protocol";
-import { RestateDuplexStream } from "../src/connection/restate_duplex_stream";
+import { RestateHttp2Connection } from "../src/connection/http_connection";
 import * as restate from "../src/public_api";
 import { Connection } from "../src/connection/connection";
 import stream from "stream";
@@ -20,7 +20,7 @@ import { Invocation } from "../src/invocation";
 
 export class TestDriver<I, O> implements Connection {
   private http2stream = this.mockHttp2DuplexStream();
-  private restate = RestateDuplexStream.from(this.http2stream);
+  private restate = RestateHttp2Connection.from(this.http2stream);
   private result: Array<Message> = [];
   private protocolMode = ProtocolMode.BIDI_STREAM;
 
@@ -114,7 +114,6 @@ export class TestDriver<I, O> implements Connection {
 
     const invocation = new Invocation(
       this.method,
-      this.protocolMode,
       startMsg.instanceKey,
       startMsg.invocationId,
       knownEntries,
@@ -124,18 +123,18 @@ export class TestDriver<I, O> implements Connection {
       (replayMessages[0].message as PollInputStreamEntryMessage).value
     );
 
-    this.stateMachine = new StateMachine(this, invocation);
+    this.stateMachine = new StateMachine(this, invocation, this.protocolMode);
     this.stateMachine.invoke();
   }
 
   run(): Promise<Array<Message>> {
     // Pipe messages through the state machine
     this.completionMessages.forEach((el) => {
-      setTimeout(() => this.stateMachine.handleRuntimeMessage(el));
+      setTimeout(() => this.stateMachine.handleMessage(el));
     });
     // Set the input channel to closed a bit after sending the messages
     // to make the service finish up the work it can do and suspend or send back a response.
-    setTimeout(() => this.stateMachine.setInputChannelToClosed(), 50);
+    setTimeout(() => this.stateMachine.handleInputClosed());
 
     return this.getResultPromise;
   }
@@ -156,10 +155,6 @@ export class TestDriver<I, O> implements Connection {
 
   async flush(): Promise<void> {
     return;
-  }
-
-  onMessage(handler: (msg: Message) => void) {
-    this.restate.onMessage(handler);
   }
 
   onClose(handler: () => void) {
@@ -185,7 +180,7 @@ export class TestDriver<I, O> implements Connection {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  onError(listener: () => void): void {
+  onError(listener: (e: Error) => void): void {
     return;
   }
 }

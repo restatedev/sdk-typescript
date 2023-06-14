@@ -1,162 +1,122 @@
 "use strict";
 
-import http2 from "http2";
-import { parse as urlparse, Url } from "url";
-import { RestateDuplexStream } from "./restate_duplex_stream";
-import {
-  ProtocolMode,
-  ServiceDiscoveryResponse,
-} from "../generated/proto/discovery";
-import { on } from "events";
-import { Connection } from "./connection";
+import stream from "stream";
+import { pipeline } from "stream/promises";
+import { streamEncoder } from "../io/encoder";
+import { streamDecoder } from "../io/decoder";
+import { Connection, RestateStreamConsumer } from "./connection";
 import { Message } from "../types/types";
 import { rlog } from "../utils/logger";
-import { InvocationBuilder } from "../invocation";
-import { START_MESSAGE_TYPE, StartMessage } from "../types/protocol";
-import { StateMachine } from "../state_machine";
-import { HostedGrpcServiceMethod } from "../types/grpc";
 
-export class HttpConnection<I, O> implements Connection {
-  private onErrorListeners: (() => void)[] = [];
+export class RestateHttp2Connection implements Connection {
+  /**
+   * create a RestateDuplex stream from an http2 (duplex) stream.
+   */
+  public static from(http2stream: stream.Duplex): RestateHttp2Connection {
+    const sdkInput = http2stream.pipe(streamDecoder());
+
+    const sdkOutput = streamEncoder();
+    sdkOutput.pipe(http2stream);
+
+    return new RestateHttp2Connection(sdkInput, sdkOutput);
+  }
+
+  // --------------------------------------------------------------------------
+
   private _buffer: Message[] = [];
-  private invocationBuilder = new InvocationBuilder<I, O>();
-  private stateMachine?: StateMachine<I, O>;
+  private currentConsumer: RestateStreamConsumer | null = null;
 
   constructor(
-    readonly connectionId: bigint,
-    readonly headers: http2.IncomingHttpHeaders,
-    readonly url: Url,
-    readonly stream: http2.ServerHttp2Stream,
-    readonly restate: RestateDuplexStream
+    private readonly sdkInput: stream.Readable,
+    private readonly sdkOutput: stream.Writable
   ) {
-    restate.onError(this.handleConnectionError.bind(this));
-    this.restate.onMessage(this.handleMessage.bind(this));
-  }
-
-  respond404() {
-    this.stream.respond({
-      "content-type": "application/restate",
-      ":status": 404,
+    // install default logging for errors
+    this.sdkInput.on("error", (e: Error) => {
+      rlog.error(
+        "Error in input stream (from Restate to SDK/Service): " + e.message
+      );
+      rlog.error(e.stack);
     });
-    this.stream.end();
-  }
-
-  respondOk() {
-    this.stream.respond({
-      "content-type": "application/restate",
-      ":status": 200,
+    this.sdkOutput.on("error", (e: Error) => {
+      rlog.error(
+        "Error in output stream (from SDK/Service to  Restate): " + e.message
+      );
+      rlog.error(e.stack);
     });
   }
 
-  buffer(msg: Message): void {
+  /**
+   * Pipes the messages from this connection to the given consumer. The consumer
+   * will also receive error and stream closing notifications.
+   *
+   * Once the 'handleMessage()' method returns 'true', the consumer is immediately removed.
+   * That way, consumers can consume a bounded amount of messages (like just the initial journal).
+   *
+   * There can only be one consumer at a time.
+   */
+  public pipeToConsumer(consumer: RestateStreamConsumer): void {
+    if (this.currentConsumer !== null) {
+      throw new Error("Already piping to a consumer");
+    }
+
+    const handleMessage = (m: Message) => {
+      const done = consumer.handleMessage(m);
+      if (done) {
+        this.removeCurrentConsumer();
+      }
+      return done;
+    };
+    const handleInputClosed = consumer.handleInputClosed.bind(consumer);
+    const handleStreamError = consumer.handleStreamError.bind(consumer);
+    this.currentConsumer = {
+      handleMessage,
+      handleInputClosed,
+      handleStreamError,
+    };
+
+    this.sdkInput.on("data", handleMessage);
+    this.sdkInput.on("close", handleInputClosed);
+    this.sdkInput.on("error", handleStreamError);
+    this.sdkOutput.on("error", handleStreamError);
+  }
+
+  /**
+   * Removes the current consumer, if there is one. Otherwise does nothing.
+   */
+  public removeCurrentConsumer(): void {
+    if (this.currentConsumer === null) {
+      return;
+    }
+    const c = this.currentConsumer;
+    this.currentConsumer = null;
+    this.sdkInput.removeListener("data", c.handleMessage);
+    this.sdkInput.removeListener("close", c.handleInputClosed);
+    this.sdkInput.removeListener("error", c.handleStreamError);
+    this.sdkOutput.removeListener("error", c.handleStreamError);
+  }
+
+  public buffer(msg: Message): void {
     this._buffer.push(msg);
   }
 
-  async flush(): Promise<void> {
+  public async flush(): Promise<void> {
     if (this._buffer.length == 0) {
       return;
     }
     const buffer = this._buffer;
     this._buffer = [];
-    await this.restate.send(buffer);
+
+    const max = this.sdkOutput.getMaxListeners();
+    // pipeline creates a huge number of listeners, but it is not a leak; they are cleaned up by the time we complete
+    // set to unlimited briefly
+    this.sdkOutput.setMaxListeners(0);
+    await pipeline(stream.Readable.from(buffer), this.sdkOutput, {
+      end: false,
+    });
+    this.sdkOutput.setMaxListeners(max);
   }
 
-  handleMessage(m: Message) {
-    if (!this.stateMachine) {
-      if (m.messageType === START_MESSAGE_TYPE) {
-        rlog.debug("Initializing: handling start message.");
-        this.invocationBuilder
-          .handleStartMessage(m.message as StartMessage)
-          .setProtocolMode(ProtocolMode.BIDI_STREAM);
-        return;
-      } else {
-        rlog.debug("Initializing: adding replay message.");
-        this.invocationBuilder.addReplayEntry(m);
-        if (this.invocationBuilder.isComplete()) {
-          rlog.debug("Initialization complete. Creating state machine.");
-          this.stateMachine = new StateMachine<I, O>(
-            this,
-            this.invocationBuilder.build()
-          );
-          this.stateMachine.invoke();
-        }
-        return;
-      }
-    }
-
-    this.stateMachine.handleRuntimeMessage(m);
-    return;
-  }
-
-  setGrpcMethod(method: HostedGrpcServiceMethod<I, O>) {
-    this.invocationBuilder.setGrpcMethod(method)
-  }
-
-  handleConnectionError() {
-    this.end();
-    this.emitOnErrorEvent();
-  }
-
-  // We use an error listener to notify the state machine of errors in the connection layer.
-  // When there is a connection error (decoding/encoding/...), the statemachine is closed.
-  public onError(listener: () => void) {
-    this.onErrorListeners.push(listener);
-  }
-
-  private emitOnErrorEvent() {
-    for (const listener of this.onErrorListeners) {
-      listener();
-    }
-  }
-
-  onClose(handler: () => void) {
-    this.stream.on("close", handler);
-  }
-
-  end() {
-    this.restate.end();
-  }
-}
-
-export async function* incomingConnectionAtPort(
-  port: number,
-  discovery: ServiceDiscoveryResponse
-) {
-  const server = http2.createServer();
-
-  server.on("error", (err) => rlog.error(err));
-  server.listen(port);
-
-  let connectionId = BigInt(1);
-
-  for await (const [stream, headers] of on(server, "stream")) {
-    const s = stream as http2.ServerHttp2Stream;
-    const h = headers as http2.IncomingHttpHeaders;
-    const u: Url = urlparse(h[":path"] ?? "/");
-
-    if (u.path == "/discover") {
-      rlog.info(
-        "Answering discovery request. Registering these services: " +
-          JSON.stringify(discovery.services)
-      );
-      s.respond({
-        ":status": 200,
-        "content-type": "application/proto",
-      });
-      s.write(ServiceDiscoveryResponse.encode(discovery).finish());
-      s.end();
-      continue;
-    }
-
-    connectionId += 1n;
-    const connection = new HttpConnection(
-      connectionId,
-      h,
-      u,
-      s,
-      RestateDuplexStream.from(s)
-    );
-
-    yield connection;
+  public end() {
+    this.sdkOutput.end();
   }
 }

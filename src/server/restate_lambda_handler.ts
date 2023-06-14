@@ -8,6 +8,11 @@ import {
 } from "../generated/proto/discovery";
 import { BaseRestateServer, ServiceOpts } from "./base_restate_server";
 import { LambdaConnection } from "../connection/lambda_connection";
+import { InvocationBuilder } from "../invocation";
+import { decodeLambdaBody } from "../io/decoder";
+import { Message } from "../types/types";
+import { StateMachine } from "../state_machine";
+import { ensureError } from "../types/errors";
 
 /**
  * Creates an Restate entrypoint for services deployed on AWS Lambda and invoked
@@ -157,39 +162,54 @@ export class LambdaRestateServer extends BaseRestateServer {
     url: string,
     event: APIGatewayProxyEvent
   ): Promise<APIGatewayProxyResult> {
-    const method = this.methodByUrl(url);
-    if (event.body == null) {
-      const msg = "The incoming message body was null";
-      rlog.error(msg);
-      rlog.trace();
-      return this.toErrorResponse(500, msg);
-    }
-
-    if (method === undefined) {
-      if (url.includes("?")) {
-        const msg = `Invalid path: path URL seems to include query parameters: ${url}`;
-        rlog.error(msg);
-        rlog.trace();
-        return this.toErrorResponse(500, msg);
-      } else {
-        const msg = `No service found for URL: ${url}`;
-        rlog.error(msg);
-        rlog.trace();
-        return this.toErrorResponse(404, msg);
+    try {
+      const method = this.methodByUrl(url);
+      if (event.body == null) {
+        throw new Error("The incoming message body was null");
       }
+
+      if (method === undefined) {
+        if (url.includes("?")) {
+          throw new Error(
+            `Invalid path: path URL seems to include query parameters: ${url}`
+          );
+        } else {
+          const msg = `No service found for URL: ${url}`;
+          rlog.error(msg);
+          return this.toErrorResponse(404, msg);
+        }
+      }
+
+      // build the previous journal from the events
+      let decodedEntries: Message[] | null = decodeLambdaBody(event.body);
+      const journalBuilder = new InvocationBuilder(method);
+      decodedEntries.forEach((e: Message) => journalBuilder.handleMessage(e));
+      decodedEntries = null;
+
+      // set up and invoke the state machine
+      const connection = new LambdaConnection();
+      const stateMachine = new StateMachine(
+        connection,
+        journalBuilder.build(),
+        ProtocolMode.REQUEST_RESPONSE
+      );
+      await stateMachine.invoke();
+      const result = await connection.getResult();
+
+      return {
+        headers: {
+          "content-type": "application/restate",
+        },
+        statusCode: 200,
+        isBase64Encoded: true,
+        body: result.toString("base64"),
+      };
+    } catch (e) {
+      const error = ensureError(e);
+      rlog.error(error.message);
+      rlog.error(error.stack);
+      return this.toErrorResponse(500, error.message);
     }
-
-    const connection = new LambdaConnection(event.body, method);
-    const result = await connection.getResult();
-
-    return {
-      headers: {
-        "content-type": "application/restate",
-      },
-      statusCode: 200,
-      isBase64Encoded: true,
-      body: result.toString("base64"),
-    };
   }
 
   private handleDiscovery(): APIGatewayProxyResult {

@@ -5,9 +5,10 @@ import {
   COMPLETION_MESSAGE_TYPE,
   GET_STATE_ENTRY_MESSAGE_TYPE,
 } from "../src/types/protocol";
-import { RestateDuplexStream } from "../src/connection/restate_duplex_stream";
+import { RestateHttp2Connection } from "../src/connection/http_connection";
 import { Header, Message } from "../src/types/types";
 import stream from "stream";
+import { CompletablePromise } from "../src/utils/utils";
 
 // The following test suite is taken from headers.rs
 describe("Header", () => {
@@ -48,31 +49,39 @@ describe("Stream", () => {
 
     // the following demonstrates how to use a stream_encoder/decoder to convert
     // a raw duplex stream to a high-level stream of Restate's protocol messages and headers.
-    const restateStream = RestateDuplexStream.from(http2stream);
+    const restateStream = RestateHttp2Connection.from(http2stream);
 
     // here we need to create a promise for the sake of this test.
     // this future will be resolved once something is emitted on the stream.
-    const result = new Promise<Message>((resolve) => {
-      restateStream.onMessage((msg: Message) => {
-        resolve(msg);
-      });
+    const result = new CompletablePromise<Message>();
+
+    restateStream.pipeToConsumer({
+      handleMessage: (m) => {
+        result.resolve(m);
+        return false;
+      },
+
+      // eslint-disable-next-line @typescript-eslint/no-empty-function
+      handleInputClosed: () => {},
+
+      handleStreamError: result.reject,
     });
 
     // now, let's simulate sending a message
-    await restateStream.send([
+    restateStream.buffer(
       new Message(
         START_MESSAGE_TYPE,
         StartMessage.create({
           invocationId: Buffer.from("abcd"),
           knownEntries: 1337,
         })
-      ),
-    ]);
-
-    http2stream.end();
+      )
+    );
+    await restateStream.flush();
+    restateStream.end();
 
     // and collect what was written
-    const msg = await result;
+    const msg = await result.promise;
 
     expect(msg.messageType).toStrictEqual(START_MESSAGE_TYPE);
     expect((msg.message as StartMessage).knownEntries).toStrictEqual(1337);
