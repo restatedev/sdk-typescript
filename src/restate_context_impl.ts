@@ -174,78 +174,74 @@ export class RestateContextImpl<I, O> implements RestateContext {
       throw new Error(msg);
     }
 
-    return new Promise((resolve, reject) => {
-      if (this.stateMachine.nextEntryWillBeReplayed()) {
-        const emptyMsg = SideEffectEntryMessage.create({});
-        const promise = this.stateMachine.handleUserCodeMessage<T>(
-          SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-          emptyMsg
-        );
-        return promise.then(
-          (value) => {
-            resolve(value as T);
-          },
-          (failure) => {
-            reject(failure);
-          }
-        );
-      } else {
-        this.callContext.run({ type: CallContexType.SideEffect }, () => {
-          fn()
-            .then((value) => {
-              const sideEffectMsg =
-                value !== undefined
-                  ? SideEffectEntryMessage.encode(
-                      SideEffectEntryMessage.create({
-                        value: Buffer.from(JSON.stringify(value)),
-                      })
-                    ).finish()
-                  : SideEffectEntryMessage.encode(
-                      SideEffectEntryMessage.create()
-                    ).finish();
-              const promise = this.stateMachine.handleUserCodeMessage<T>(
-                SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-                sideEffectMsg,
-                false,
-                undefined,
-                true
-              );
+    // in replay mode, we directly return the value from the log
+    if (this.stateMachine.nextEntryWillBeReplayed()) {
+      const emptyMsg = SideEffectEntryMessage.create({});
+      return this.stateMachine.handleUserCodeMessage<T>(
+        SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+        emptyMsg
+      ) as Promise<T>;
+    }
 
-              promise.then(
-                () => resolve(value),
-                (failure) => reject(failure)
-              );
+    let sideEffectResult: T;
+    try {
+      sideEffectResult = await this.callContext.run(
+        { type: CallContexType.SideEffect },
+        fn
+      );
+    } catch (e) {
+      // error that came out of the side-effect execution
+      // we send back a completion with a failure
+      const errorMessage: string =
+        e instanceof Error ? e.message : JSON.stringify(e);
+      const failure: Failure = Failure.create({
+        code: 13,
+        message: errorMessage,
+      });
+
+      const sideEffectMsg = SideEffectEntryMessage.encode(
+        SideEffectEntryMessage.create({ failure: failure })
+      ).finish();
+
+      // this may throw an error from the SDK/runtime/connection side, in case the
+      // failure message cannot be committed to the journal. That error would then
+      // be returned from this function (replace the original error)
+      await this.stateMachine.handleUserCodeMessage<T>(
+        SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+        sideEffectMsg,
+        false,
+        undefined,
+        true
+      );
+
+      throw new RestateError("sideEffect execution failed: " + errorMessage, e);
+    }
+
+    // we have this code outside the above try/catch block, to ensure that any error arising
+    // from here is not incorrectly attributed to the side-effect
+    const sideEffectMsg =
+      sideEffectResult !== undefined
+        ? SideEffectEntryMessage.encode(
+            SideEffectEntryMessage.create({
+              value: Buffer.from(JSON.stringify(sideEffectResult)),
             })
-            .catch((reason) => {
-              // Reason is either a failure or an Error
-              const failure: Failure =
-                reason instanceof Error
-                  ? Failure.create({
-                      code: 13,
-                      message: reason.message,
-                    })
-                  : reason;
+          ).finish()
+        : SideEffectEntryMessage.encode(
+            SideEffectEntryMessage.create()
+          ).finish();
 
-              const sideEffectMsg = SideEffectEntryMessage.encode(
-                SideEffectEntryMessage.create({ failure: failure })
-              ).finish();
+    // if an error arises from committing the side effect result, then this error will
+    // be thrown here (reject the returned promise) and the function will see that error,
+    // even if the side-effect function completed correctly
+    await this.stateMachine.handleUserCodeMessage<T>(
+      SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+      sideEffectMsg,
+      false,
+      undefined,
+      true
+    );
 
-              const promise = this.stateMachine.handleUserCodeMessage<T>(
-                SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-                sideEffectMsg,
-                false,
-                undefined,
-                true
-              );
-
-              promise.then(
-                () => reject(failure),
-                (failureFromRuntime) => reject(failureFromRuntime)
-              );
-            });
-        });
-      }
-    });
+    return sideEffectResult;
   }
 
   public sleep(millis: number): Promise<void> {
