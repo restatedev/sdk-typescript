@@ -17,7 +17,7 @@ import { StateMachine } from "../state_machine";
 import { HostedGrpcServiceMethod } from "../types/grpc";
 
 export class HttpConnection<I, O> implements Connection {
-  private onErrorListeners: (() => void)[] = [];
+  private onErrorListeners: ((e: Error) => void)[] = [];
   private _buffer: Message[] = [];
   private invocationBuilder = new InvocationBuilder<I, O>();
   private stateMachine?: StateMachine<I, O>;
@@ -89,23 +89,23 @@ export class HttpConnection<I, O> implements Connection {
   }
 
   setGrpcMethod(method: HostedGrpcServiceMethod<I, O>) {
-    this.invocationBuilder.setGrpcMethod(method)
+    this.invocationBuilder.setGrpcMethod(method);
   }
 
-  handleConnectionError() {
+  handleConnectionError(e: Error) {
     this.end();
-    this.emitOnErrorEvent();
+    this.emitOnErrorEvent(e);
   }
 
   // We use an error listener to notify the state machine of errors in the connection layer.
   // When there is a connection error (decoding/encoding/...), the statemachine is closed.
-  public onError(listener: () => void) {
+  public onError(listener: (e: Error) => void) {
     this.onErrorListeners.push(listener);
   }
 
-  private emitOnErrorEvent() {
+  private emitOnErrorEvent(e: Error) {
     for (const listener of this.onErrorListeners) {
-      listener();
+      listener(e);
     }
   }
 

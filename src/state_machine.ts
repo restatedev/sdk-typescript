@@ -44,9 +44,7 @@ export class StateMachine<I, O> {
     this.journal = new Journal(this.invocation);
 
     connection.onClose(this.setInputChannelToClosed.bind(this));
-    connection.onError(() => {
-      this.handleError();
-    });
+    connection.onError(this.handleError.bind(this));
   }
 
   public handleRuntimeMessage(m: Message) {
@@ -260,7 +258,7 @@ export class StateMachine<I, O> {
     }
   }
 
-  handleError() {
+  handleError(e: Error) {
     this.journal.close();
     return;
   }

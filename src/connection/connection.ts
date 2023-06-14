@@ -9,7 +9,7 @@ export interface Connection {
 
   onClose(handler: () => void): void;
 
-  onError(listener: () => void): void;
+  onError(listener: (e: Error) => void): void;
 
   end(): void;
 }

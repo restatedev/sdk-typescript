@@ -185,7 +185,7 @@ export class TestDriver<I, O> implements Connection {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  onError(listener: () => void): void {
+  onError(listener: (e: Error) => void): void {
     return;
   }
 }
