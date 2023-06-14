@@ -2,7 +2,6 @@
 
 import * as p from "./types/protocol";
 import { Failure } from "./generated/proto/protocol";
-import { HostedGrpcServiceMethod } from "./types/grpc";
 import {
   AWAKEABLE_ENTRY_MESSAGE_TYPE,
   AwakeableEntryMessage,
@@ -15,45 +14,43 @@ import {
   INVOKE_ENTRY_MESSAGE_TYPE,
   InvokeEntryMessage,
   OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
-  OutputStreamEntryMessage,
+  OutputStreamEntryMessage, POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE, PollInputStreamEntryMessage,
   SET_STATE_ENTRY_MESSAGE_TYPE,
   SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
   SLEEP_ENTRY_MESSAGE_TYPE,
   SleepEntryMessage,
   SUSPENSION_MESSAGE_TYPE,
-  SuspensionMessage,
+  SuspensionMessage
 } from "./types/protocol";
 import { rlog } from "./utils/logger";
 import { equalityCheckers, printMessageAsJson } from "./utils/utils";
 import { Message } from "./types/types";
 import { SideEffectEntryMessage } from "./generated/proto/javascript";
+import { Invocation } from "./invocation";
 
 export class Journal<I, O> {
-  private state = NewExecutionState.WAITING_FOR_START;
+  private state = NewExecutionState.REPLAYING;
 
   private userCodeJournalIndex = 0;
-
-  // Starts at 0 because we process the input entry message which will increment it to 1
-  // Only used as long as the runtime input stream is in replay state
-  // After that, completions can arrive in random order and contain the journal index, so necessary to keep the runtime index.
-  private runtimeReplayIndex = 0;
 
   // Journal entries waiting for arrival of runtime completion
   // 0 = root promise of the method invocation
   private pendingJournalEntries = new Map<number, JournalEntry>();
 
-  // Entries that were replayed by the runtime
-  private replayEntries = new Map<number, Message>();
-
   constructor(
-    readonly nbEntriesToReplay: number,
-    readonly method: HostedGrpcServiceMethod<I, O>
-  ) {}
+    readonly invocation: Invocation<I, O>
+  ) {
+    const inputMessage = invocation.replayEntries.get(0)
+    if(!inputMessage || inputMessage.messageType !== POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE){
+      throw new Error("First message of replay entries needs to be PollInputStreamMessage")
+    }
+    this.handleInputMessage(inputMessage.message as PollInputStreamEntryMessage)
+  }
 
   handleInputMessage(m: p.PollInputStreamEntryMessage) {
     this.transitionState(NewExecutionState.REPLAYING);
 
-    if (this.nbEntriesToReplay === 1) {
+    if (this.invocation.nbEntriesToReplay === 1) {
       this.transitionState(NewExecutionState.PROCESSING);
     }
 
@@ -63,8 +60,8 @@ export class Journal<I, O> {
     );
 
     rootEntry.promise = rootEntry.promise.then(
-      (result) => this.method.resolve(result),
-      (failure) => this.method.resolve(failure)
+      (result) => this.invocation.method.resolve(result),
+      (failure) => this.invocation.method.resolve(failure)
     );
 
     this.pendingJournalEntries.set(0, rootEntry);
@@ -78,7 +75,7 @@ export class Journal<I, O> {
 
     switch (this.state) {
       case NewExecutionState.REPLAYING: {
-        const replayEntry = this.replayEntries.get(this.userCodeJournalIndex);
+        const replayEntry = this.invocation.replayEntries.get(this.userCodeJournalIndex);
         if (replayEntry === undefined) {
           throw new Error(
             `Illegal state: no replay message was received for the entry at journal index ${this.userCodeJournalIndex}`
@@ -160,14 +157,6 @@ export class Journal<I, O> {
     }
   }
 
-  public handleRuntimeReplayMessage(m: Message) {
-    this.incrementRuntimeReplayIndex();
-
-    // Add message to the pendingJournalEntries
-    // Will be retrieved when the user code reaches this point
-    this.replayEntries.set(this.runtimeReplayIndex, m);
-  }
-
   private handleReplay(
     journalIndex: number,
     replayMessage: Message,
@@ -193,7 +182,6 @@ export class Journal<I, O> {
           replayMessage.messageType
         }, message: ${printMessageAsJson(replayMessage.message)}`
       );
-      return;
     }
 
     // If journal mismatch check passed
@@ -380,25 +368,11 @@ export class Journal<I, O> {
     );
 
     if (
-      this.userCodeJournalIndex === this.nbEntriesToReplay &&
+      this.userCodeJournalIndex === this.invocation.nbEntriesToReplay &&
       this.state === NewExecutionState.REPLAYING
     ) {
       this.transitionState(NewExecutionState.PROCESSING);
     }
-  }
-
-  private incrementRuntimeReplayIndex() {
-    this.runtimeReplayIndex++;
-    rlog.debug(
-      "Runtime replay index incremented. New value: " +
-        this.runtimeReplayIndex +
-        " while known entries is " +
-        this.nbEntriesToReplay
-    );
-  }
-
-  public allReplayMessagesArrived(): boolean {
-    return this.runtimeReplayIndex === this.nbEntriesToReplay - 1;
   }
 
   public isClosed(): boolean {
@@ -423,7 +397,7 @@ export class Journal<I, O> {
 
   public outputMsgWasReplayed() {
     // Check if the last message of the replay entries is an output message
-    const lastEntry = this.replayEntries.get(this.nbEntriesToReplay - 1);
+    const lastEntry = this.invocation.replayEntries.get(this.invocation.nbEntriesToReplay - 1);
     return (
       lastEntry && lastEntry.messageType === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE
     );
@@ -436,7 +410,7 @@ export class Journal<I, O> {
   // So we cannot use isReplaying().
   // So we need to check in the journal if the next entry (= our side effect) will be replayed or not.
   nextEntryWillBeReplayed() {
-    return this.userCodeJournalIndex + 1 < this.nbEntriesToReplay;
+    return this.userCodeJournalIndex + 1 < this.invocation.nbEntriesToReplay;
   }
 }
 
@@ -466,7 +440,6 @@ export class JournalEntry {
 // "PROCESSING" when both sides have finished replaying
 // "CLOSED" when input stream connection channel gets closed
 export enum NewExecutionState {
-  WAITING_FOR_START = "WAITING_FOR_START",
   REPLAYING = "REPLAYING",
   PROCESSING = "PROCESSING",
   CLOSED = "CLOSED",

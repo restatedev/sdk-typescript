@@ -7,8 +7,6 @@ export interface Connection {
 
   flush(): Promise<void>;
 
-  onMessage(handler: (msg: Message) => void): void;
-
   onClose(handler: () => void): void;
 
   onError(listener: () => void): void;

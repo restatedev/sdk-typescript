@@ -4,31 +4,57 @@ import { Connection } from "./connection";
 import { encodeMessage } from "../io/encoder";
 import {
   OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
-  SUSPENSION_MESSAGE_TYPE,
+  START_MESSAGE_TYPE,
+  StartMessage,
+  SUSPENSION_MESSAGE_TYPE
 } from "../types/protocol";
 import { decodeLambdaBody } from "../io/decoder";
 import { Message } from "../types/types";
 import { rlog } from "../utils/logger";
+import { InvocationBuilder } from "../invocation";
+import { HostedGrpcServiceMethod } from "../types/grpc";
+import { ProtocolMode } from "../generated/proto/discovery";
+import { StateMachine } from "../state_machine";
 
-export class LambdaConnection implements Connection {
+export class LambdaConnection<I,O> implements Connection {
   // Buffer with input messages
   private inputBase64: string;
   // Empty buffer to store journal output messages
   private outputBuffer: Buffer = Buffer.alloc(0);
+  invocationBuilder = new InvocationBuilder<I, O>();
   private suspendedOrCompleted = false;
   // Callback to resolve the invocation promise of the Lambda handler when the response is ready
   private completionPromise: Promise<Buffer>;
   private resolveOnCompleted!: (value: Buffer | PromiseLike<Buffer>) => void;
   private onErrorListeners: (() => void)[] = [];
 
-  constructor(body: string) {
+  constructor(body: string, method: HostedGrpcServiceMethod<I, O>) {
     // Decode the body coming from API Gateway (base64 encoded).
     this.inputBase64 = body;
+
+    const decodedEntries = decodeLambdaBody(this.inputBase64);
+
+    // First message should be the start message
+    const firstMsg = decodedEntries.shift();
+    if(!firstMsg || firstMsg.messageType !== START_MESSAGE_TYPE) {
+      throw new Error("First message needs to be start message")
+    }
+
+    this.invocationBuilder
+      .setGrpcMethod(method)
+      .setProtocolMode(ProtocolMode.REQUEST_RESPONSE)
+      .handleStartMessage(firstMsg.message as StartMessage);
 
     // Promise that signals when the invocation is over, to then flush the messages
     this.completionPromise = new Promise<Buffer>((resolve) => {
       this.resolveOnCompleted = resolve;
     });
+
+    decodedEntries.forEach(el => this.invocationBuilder.addReplayEntry(el));
+
+    const invocation = this.invocationBuilder.build();
+    const stateMachine = new StateMachine(this, invocation);
+    stateMachine.invoke();
   }
 
   // Send a message back to the runtime
@@ -50,18 +76,6 @@ export class LambdaConnection implements Connection {
     if (this.suspendedOrCompleted) {
       rlog.debug("Flushing output buffer...");
       this.resolveOnCompleted(this.outputBuffer);
-    }
-  }
-
-  // Process the incoming invocation message from the runtime
-  onMessage(handler: (msg: Message) => void): void {
-    try {
-      const decodedEntries = decodeLambdaBody(this.inputBase64);
-      decodedEntries.forEach((msg) => handler(msg));
-    } catch (e) {
-      rlog.error(e);
-      rlog.debug("Closing the connection and state machine.");
-      this.handleConnectionError();
     }
   }
 

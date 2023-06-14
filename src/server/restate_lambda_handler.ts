@@ -165,7 +165,7 @@ export class LambdaRestateServer extends BaseRestateServer {
       rlog.trace();
       return this.toErrorResponse(500, msg);
     }
-    const connection = new LambdaConnection(event.body);
+
     if (method === undefined) {
       if (url.includes("?")) {
         const msg = `Invalid path: path URL seems to include query parameters: ${url}`;
@@ -178,10 +178,9 @@ export class LambdaRestateServer extends BaseRestateServer {
         rlog.trace();
         return this.toErrorResponse(404, msg);
       }
-    } else {
-      new StateMachine(connection, method, ProtocolMode.REQUEST_RESPONSE);
     }
 
+    const connection = new LambdaConnection(event.body, method);
     const result = await connection.getResult();
 
     return {
