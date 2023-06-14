@@ -8,7 +8,6 @@ import {
 } from "../generated/proto/discovery";
 import { BaseRestateServer, ServiceOpts } from "./base_restate_server";
 import { LambdaConnection } from "../connection/lambda_connection";
-import { StateMachine } from "../state_machine";
 
 /**
  * Creates an Restate entrypoint for services deployed on AWS Lambda and invoked
@@ -165,7 +164,7 @@ export class LambdaRestateServer extends BaseRestateServer {
       rlog.trace();
       return this.toErrorResponse(500, msg);
     }
-    const connection = new LambdaConnection(event.body);
+
     if (method === undefined) {
       if (url.includes("?")) {
         const msg = `Invalid path: path URL seems to include query parameters: ${url}`;
@@ -178,10 +177,9 @@ export class LambdaRestateServer extends BaseRestateServer {
         rlog.trace();
         return this.toErrorResponse(404, msg);
       }
-    } else {
-      new StateMachine(connection, method, ProtocolMode.REQUEST_RESPONSE);
     }
 
+    const connection = new LambdaConnection(event.body, method);
     const result = await connection.getResult();
 
     return {

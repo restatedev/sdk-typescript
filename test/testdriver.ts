@@ -1,6 +1,11 @@
 "use strict";
 
-import { COMPLETION_MESSAGE_TYPE, StartMessage } from "../src/types/protocol";
+import {
+  COMPLETION_MESSAGE_TYPE,
+  PollInputStreamEntryMessage,
+  START_MESSAGE_TYPE,
+  StartMessage,
+} from "../src/types/protocol";
 import { RestateDuplexStream } from "../src/connection/restate_duplex_stream";
 import * as restate from "../src/public_api";
 import { Connection } from "../src/connection/connection";
@@ -11,6 +16,7 @@ import { HostedGrpcServiceMethod, ProtoMetadata } from "../src/types/grpc";
 import { ProtocolMode } from "../src/generated/proto/discovery";
 import { rlog } from "../src/utils/logger";
 import { StateMachine } from "../src/state_machine";
+import { Invocation } from "../src/invocation";
 
 export class TestDriver<I, O> implements Connection {
   private http2stream = this.mockHttp2DuplexStream();
@@ -20,9 +26,8 @@ export class TestDriver<I, O> implements Connection {
 
   private restateServer: TestRestateServer;
   private method: HostedGrpcServiceMethod<I, O>;
-  private entries: Array<Message>;
-  private nbCompletions: number;
-  private stateMachine!: StateMachine<I, O>;
+  private stateMachine: StateMachine<I, O>;
+  private completionMessages: Array<Message>;
 
   private getResultPromise: Promise<Array<Message>>;
   private resolveOnClose!: (value: Array<Message>) => void;
@@ -59,25 +64,74 @@ export class TestDriver<I, O> implements Connection {
       this.resolveOnClose = resolve;
     });
 
-    this.entries = entries;
-    const nbReplayMessages = (this.entries[0].message as StartMessage)
-      .knownEntries;
-    // number of completions in the entries = length of entries array - one start message - number of replay messages
-    this.nbCompletions = this.entries.length - 1 - nbReplayMessages;
+    if (entries.length < 2) {
+      throw new Error(
+        "Less than two runtime messages supplied for test. Need to have at least start message and input message."
+      );
+    }
+
+    rlog.debug(JSON.stringify(entries.map((el) => el.message)));
+
+    // Remove the start message from the entries and store it
+    const firstMsg = entries.shift();
+    if (!firstMsg || firstMsg.messageType !== START_MESSAGE_TYPE) {
+      throw new Error("First message needs to be start message");
+    }
+    const startMsg = firstMsg.message as StartMessage;
+
+    // Get the index of where the completion messages start in the entries list
+    const firstCompletionIndex = entries.findIndex(
+      (value) => value.messageType === COMPLETION_MESSAGE_TYPE
+    );
+    rlog.debug(firstCompletionIndex);
+
+    // The last message of the replay is the one right before the first completion
+    const knownEntries =
+      firstCompletionIndex !== -1 ? firstCompletionIndex : entries.length;
+
+    const replayMessages = entries.slice(0, knownEntries);
+    this.completionMessages = entries.slice(knownEntries);
+
+    if (
+      replayMessages.filter(
+        (value) => value.messageType === COMPLETION_MESSAGE_TYPE
+      ).length > 0
+    ) {
+      throw new Error(
+        "You cannot interleave replay messages with completion messages. First define the replay messages, then the completion messages."
+      );
+    }
+
+    if (
+      this.completionMessages.filter(
+        (value) => value.messageType !== COMPLETION_MESSAGE_TYPE
+      ).length > 0
+    ) {
+      throw new Error(
+        "You cannot interleave replay messages with completion messages. First define the replay messages, then the completion messages."
+      );
+    }
+
+    const invocation = new Invocation(
+      this.method,
+      this.protocolMode,
+      startMsg.instanceKey,
+      startMsg.invocationId,
+      knownEntries,
+      new Map<number, Message>(
+        replayMessages.map((value, index) => [index, value])
+      ),
+      (replayMessages[0].message as PollInputStreamEntryMessage).value
+    );
+
+    this.stateMachine = new StateMachine(this, invocation);
+    this.stateMachine.invoke();
   }
 
   run(): Promise<Array<Message>> {
-    this.stateMachine = new StateMachine(this, this.method, this.protocolMode);
-
     // Pipe messages through the state machine
-    this.entries.forEach((el) => {
-      // First eagerly send the replay messages, then send the completion messages at the end of the task queue (setTimeout)
-      if (el.messageType !== COMPLETION_MESSAGE_TYPE) {
-        this.stateMachine.handleRuntimeMessage(el);
-      } else {
-        // we use set timeout here to add the sending of the messages to the end of the task queue
-        setTimeout(() => this.stateMachine.handleRuntimeMessage(el));
-      }
+    this.completionMessages.forEach((el) => {
+      setTimeout(() => this.stateMachine.handleRuntimeMessage(el));
     });
     // Set the input channel to closed a bit after sending the messages
     // to make the service finish up the work it can do and suspend or send back a response.

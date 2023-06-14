@@ -220,13 +220,13 @@ export class RestateContextImpl<I, O> implements RestateContext {
               const sideEffectMsg =
                 value !== undefined
                   ? SideEffectEntryMessage.encode(
-                    SideEffectEntryMessage.create({
-                      value: Buffer.from(JSON.stringify(value)),
-                    })
-                  ).finish()
+                      SideEffectEntryMessage.create({
+                        value: Buffer.from(JSON.stringify(value)),
+                      })
+                    ).finish()
                   : SideEffectEntryMessage.encode(
-                    SideEffectEntryMessage.create()
-                  ).finish();
+                      SideEffectEntryMessage.create()
+                    ).finish();
               const promise = this.stateMachine.handleUserCodeMessage<T>(
                 SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
                 sideEffectMsg,
@@ -349,7 +349,6 @@ export class RestateContextImpl<I, O> implements RestateContext {
       return sideEffectFlag as boolean;
     } else {
       return false;
-
     }
   }
 

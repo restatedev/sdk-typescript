@@ -3,15 +3,24 @@
 import http2 from "http2";
 import { parse as urlparse, Url } from "url";
 import { RestateDuplexStream } from "./restate_duplex_stream";
-import { ServiceDiscoveryResponse } from "../generated/proto/discovery";
+import {
+  ProtocolMode,
+  ServiceDiscoveryResponse,
+} from "../generated/proto/discovery";
 import { on } from "events";
 import { Connection } from "./connection";
 import { Message } from "../types/types";
 import { rlog } from "../utils/logger";
+import { InvocationBuilder } from "../invocation";
+import { START_MESSAGE_TYPE, StartMessage } from "../types/protocol";
+import { StateMachine } from "../state_machine";
+import { HostedGrpcServiceMethod } from "../types/grpc";
 
-export class HttpConnection implements Connection {
+export class HttpConnection<I, O> implements Connection {
   private onErrorListeners: (() => void)[] = [];
   private _buffer: Message[] = [];
+  private invocationBuilder = new InvocationBuilder<I, O>();
+  private stateMachine?: StateMachine<I, O>;
 
   constructor(
     readonly connectionId: bigint,
@@ -21,6 +30,7 @@ export class HttpConnection implements Connection {
     readonly restate: RestateDuplexStream
   ) {
     restate.onError(this.handleConnectionError.bind(this));
+    this.restate.onMessage(this.handleMessage.bind(this));
   }
 
   respond404() {
@@ -51,8 +61,35 @@ export class HttpConnection implements Connection {
     await this.restate.send(buffer);
   }
 
-  onMessage(handler: (msg: Message) => void) {
-    this.restate.onMessage(handler);
+  handleMessage(m: Message) {
+    if (!this.stateMachine) {
+      if (m.messageType === START_MESSAGE_TYPE) {
+        rlog.debug("Initializing: handling start message.");
+        this.invocationBuilder
+          .handleStartMessage(m.message as StartMessage)
+          .setProtocolMode(ProtocolMode.BIDI_STREAM);
+        return;
+      } else {
+        rlog.debug("Initializing: adding replay message.");
+        this.invocationBuilder.addReplayEntry(m);
+        if (this.invocationBuilder.isComplete()) {
+          rlog.debug("Initialization complete. Creating state machine.");
+          this.stateMachine = new StateMachine<I, O>(
+            this,
+            this.invocationBuilder.build()
+          );
+          this.stateMachine.invoke();
+        }
+        return;
+      }
+    }
+
+    this.stateMachine.handleRuntimeMessage(m);
+    return;
+  }
+
+  setGrpcMethod(method: HostedGrpcServiceMethod<I, O>) {
+    this.invocationBuilder.setGrpcMethod(method)
   }
 
   handleConnectionError() {

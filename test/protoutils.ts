@@ -39,13 +39,13 @@ import { expect } from "@jest/globals";
 import { rlog } from "../src/utils/logger";
 import { printMessageAsJson } from "../src/utils/utils";
 
-export function startMessage(knownEntries: number): Message {
+export function startMessage(knownEntries?: number): Message {
   return new Message(
     START_MESSAGE_TYPE,
     StartMessage.create({
       instanceKey: Buffer.from("123"),
       invocationId: Buffer.from("abcd"),
-      knownEntries: knownEntries,
+      knownEntries: knownEntries, // only used for the Lambda case. For bidi streaming, this will be imputed by the testdriver
     }),
     undefined,
     0,
