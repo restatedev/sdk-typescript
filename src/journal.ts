@@ -14,13 +14,15 @@ import {
   INVOKE_ENTRY_MESSAGE_TYPE,
   InvokeEntryMessage,
   OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
-  OutputStreamEntryMessage, POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE, PollInputStreamEntryMessage,
+  OutputStreamEntryMessage,
+  POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
+  PollInputStreamEntryMessage,
   SET_STATE_ENTRY_MESSAGE_TYPE,
   SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
   SLEEP_ENTRY_MESSAGE_TYPE,
   SleepEntryMessage,
   SUSPENSION_MESSAGE_TYPE,
-  SuspensionMessage
+  SuspensionMessage,
 } from "./types/protocol";
 import { rlog } from "./utils/logger";
 import { equalityCheckers, printMessageAsJson } from "./utils/utils";
@@ -37,14 +39,19 @@ export class Journal<I, O> {
   // 0 = root promise of the method invocation
   private pendingJournalEntries = new Map<number, JournalEntry>();
 
-  constructor(
-    readonly invocation: Invocation<I, O>
-  ) {
-    const inputMessage = invocation.replayEntries.get(0)
-    if(!inputMessage || inputMessage.messageType !== POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE){
-      throw new Error("First message of replay entries needs to be PollInputStreamMessage")
+  constructor(readonly invocation: Invocation<I, O>) {
+    const inputMessage = invocation.replayEntries.get(0);
+    if (
+      !inputMessage ||
+      inputMessage.messageType !== POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE
+    ) {
+      throw new Error(
+        "First message of replay entries needs to be PollInputStreamMessage"
+      );
     }
-    this.handleInputMessage(inputMessage.message as PollInputStreamEntryMessage)
+    this.handleInputMessage(
+      inputMessage.message as PollInputStreamEntryMessage
+    );
   }
 
   handleInputMessage(m: p.PollInputStreamEntryMessage) {
@@ -75,7 +82,9 @@ export class Journal<I, O> {
 
     switch (this.state) {
       case NewExecutionState.REPLAYING: {
-        const replayEntry = this.invocation.replayEntries.get(this.userCodeJournalIndex);
+        const replayEntry = this.invocation.replayEntries.get(
+          this.userCodeJournalIndex
+        );
         if (replayEntry === undefined) {
           throw new Error(
             `Illegal state: no replay message was received for the entry at journal index ${this.userCodeJournalIndex}`
@@ -397,7 +406,9 @@ export class Journal<I, O> {
 
   public outputMsgWasReplayed() {
     // Check if the last message of the replay entries is an output message
-    const lastEntry = this.invocation.replayEntries.get(this.invocation.nbEntriesToReplay - 1);
+    const lastEntry = this.invocation.replayEntries.get(
+      this.invocation.nbEntriesToReplay - 1
+    );
     return (
       lastEntry && lastEntry.messageType === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE
     );

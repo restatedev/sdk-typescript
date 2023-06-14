@@ -8,7 +8,6 @@ import {
 } from "../generated/proto/discovery";
 import { BaseRestateServer, ServiceOpts } from "./base_restate_server";
 import { LambdaConnection } from "../connection/lambda_connection";
-import { StateMachine } from "../state_machine";
 
 /**
  * Creates an Restate entrypoint for services deployed on AWS Lambda and invoked

@@ -6,7 +6,7 @@ import {
   OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
   START_MESSAGE_TYPE,
   StartMessage,
-  SUSPENSION_MESSAGE_TYPE
+  SUSPENSION_MESSAGE_TYPE,
 } from "../types/protocol";
 import { decodeLambdaBody } from "../io/decoder";
 import { Message } from "../types/types";
@@ -16,7 +16,7 @@ import { HostedGrpcServiceMethod } from "../types/grpc";
 import { ProtocolMode } from "../generated/proto/discovery";
 import { StateMachine } from "../state_machine";
 
-export class LambdaConnection<I,O> implements Connection {
+export class LambdaConnection<I, O> implements Connection {
   // Buffer with input messages
   private inputBase64: string;
   // Empty buffer to store journal output messages
@@ -36,8 +36,8 @@ export class LambdaConnection<I,O> implements Connection {
 
     // First message should be the start message
     const firstMsg = decodedEntries.shift();
-    if(!firstMsg || firstMsg.messageType !== START_MESSAGE_TYPE) {
-      throw new Error("First message needs to be start message")
+    if (!firstMsg || firstMsg.messageType !== START_MESSAGE_TYPE) {
+      throw new Error("First message needs to be start message");
     }
 
     this.invocationBuilder
@@ -50,7 +50,7 @@ export class LambdaConnection<I,O> implements Connection {
       this.resolveOnCompleted = resolve;
     });
 
-    decodedEntries.forEach(el => this.invocationBuilder.addReplayEntry(el));
+    decodedEntries.forEach((el) => this.invocationBuilder.addReplayEntry(el));
 
     const invocation = this.invocationBuilder.build();
     const stateMachine = new StateMachine(this, invocation);

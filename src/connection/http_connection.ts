@@ -3,7 +3,10 @@
 import http2 from "http2";
 import { parse as urlparse, Url } from "url";
 import { RestateDuplexStream } from "./restate_duplex_stream";
-import { ProtocolMode, ServiceDiscoveryResponse } from "../generated/proto/discovery";
+import {
+  ProtocolMode,
+  ServiceDiscoveryResponse,
+} from "../generated/proto/discovery";
 import { on } from "events";
 import { Connection } from "./connection";
 import { Message } from "../types/types";
@@ -15,8 +18,8 @@ import { StateMachine } from "../state_machine";
 export class HttpConnection<I, O> implements Connection {
   private onErrorListeners: (() => void)[] = [];
   private _buffer: Message[] = [];
-  invocationBuilder = new InvocationBuilder<I, O>();
-  stateMachine?: StateMachine<I, O>;
+  private invocationBuilder = new InvocationBuilder<I, O>();
+  private stateMachine?: StateMachine<I, O>;
 
   constructor(
     readonly connectionId: bigint,
@@ -58,20 +61,22 @@ export class HttpConnection<I, O> implements Connection {
   }
 
   handleMessage(m: Message) {
-    if(!this.stateMachine){
-      if(m.messageType === START_MESSAGE_TYPE){
-        rlog.debug("Initializing: handling start message.")
+    if (!this.stateMachine) {
+      if (m.messageType === START_MESSAGE_TYPE) {
+        rlog.debug("Initializing: handling start message.");
         this.invocationBuilder
           .handleStartMessage(m.message as StartMessage)
           .setProtocolMode(ProtocolMode.BIDI_STREAM);
         return;
       } else {
-        rlog.debug("Initializing: adding replay message.")
+        rlog.debug("Initializing: adding replay message.");
         this.invocationBuilder.addReplayEntry(m);
-        if(this.invocationBuilder.isComplete()){
-          rlog.debug("Initialization complete. Creating state machine.")
-          this.stateMachine =
-            new StateMachine<I, O>(this, this.invocationBuilder.build());
+        if (this.invocationBuilder.isComplete()) {
+          rlog.debug("Initialization complete. Creating state machine.");
+          this.stateMachine = new StateMachine<I, O>(
+            this,
+            this.invocationBuilder.build()
+          );
           this.stateMachine.invoke();
         }
         return;

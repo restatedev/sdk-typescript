@@ -50,8 +50,10 @@ export class StateMachine<I, O> {
   }
 
   public handleRuntimeMessage(m: Message) {
-    if(m.messageType !== COMPLETION_MESSAGE_TYPE){
-      throw new Error(`Received message of type ${m.messageType}. Can only accept completion messages after replay has finished.`)
+    if (m.messageType !== COMPLETION_MESSAGE_TYPE) {
+      throw new Error(
+        `Received message of type ${m.messageType}. Can only accept completion messages after replay has finished.`
+      );
     }
 
     rlog.debugJournalMessage(
@@ -71,7 +73,6 @@ export class StateMachine<I, O> {
       this.suspensionTimeout = undefined;
     }
   }
-
 
   public handleUserCodeMessage<T>(
     messageType: bigint,
@@ -118,7 +119,11 @@ export class StateMachine<I, O> {
 
   invoke() {
     this.invocation.method
-      .invoke(this.restateContext, this.invocation.invocationValue, this.invocation.logPrefix)
+      .invoke(
+        this.restateContext,
+        this.invocation.invocationValue,
+        this.invocation.logPrefix
+      )
       .then((result) => {
         rlog.debugJournalMessage(
           this.invocation.logPrefix,
@@ -133,9 +138,13 @@ export class StateMachine<I, O> {
       })
       .catch(async (e) => {
         if (e instanceof Error) {
-          rlog.warn(`${this.invocation.logPrefix} Call failed: ${e.message} - ${e.stack}`);
+          rlog.warn(
+            `${this.invocation.logPrefix} Call failed: ${e.message} - ${e.stack}`
+          );
         } else {
-          rlog.warn(`${this.invocation.logPrefix} Call failed: ${printMessageAsJson(e)}`);
+          rlog.warn(
+            `${this.invocation.logPrefix} Call failed: ${printMessageAsJson(e)}`
+          );
         }
         const message = new Message(
           OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,

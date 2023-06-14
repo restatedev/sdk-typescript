@@ -4,7 +4,7 @@ import {
   COMPLETION_MESSAGE_TYPE,
   PollInputStreamEntryMessage,
   START_MESSAGE_TYPE,
-  StartMessage
+  StartMessage,
 } from "../src/types/protocol";
 import { RestateDuplexStream } from "../src/connection/restate_duplex_stream";
 import * as restate from "../src/public_api";
@@ -64,35 +64,52 @@ export class TestDriver<I, O> implements Connection {
       this.resolveOnClose = resolve;
     });
 
-    if(entries.length < 2){
-      throw new Error("Less than two runtime messages supplied for test. Need to have at least start message and input message.")
+    if (entries.length < 2) {
+      throw new Error(
+        "Less than two runtime messages supplied for test. Need to have at least start message and input message."
+      );
     }
 
-    rlog.debug(JSON.stringify(entries.map(el => el.message)))
+    rlog.debug(JSON.stringify(entries.map((el) => el.message)));
 
     // Remove the start message from the entries and store it
     const firstMsg = entries.shift();
-    if(!firstMsg || firstMsg.messageType !== START_MESSAGE_TYPE) {
-      throw new Error("First message needs to be start message")
+    if (!firstMsg || firstMsg.messageType !== START_MESSAGE_TYPE) {
+      throw new Error("First message needs to be start message");
     }
     const startMsg = firstMsg.message as StartMessage;
 
     // Get the index of where the completion messages start in the entries list
-    const firstCompletionIndex = entries.findIndex((value) => value.messageType === COMPLETION_MESSAGE_TYPE);
-    rlog.debug(firstCompletionIndex)
+    const firstCompletionIndex = entries.findIndex(
+      (value) => value.messageType === COMPLETION_MESSAGE_TYPE
+    );
+    rlog.debug(firstCompletionIndex);
 
     // The last message of the replay is the one right before the first completion
-    const knownEntries = (firstCompletionIndex !== -1) ? firstCompletionIndex: entries.length;
+    const knownEntries =
+      firstCompletionIndex !== -1 ? firstCompletionIndex : entries.length;
 
     const replayMessages = entries.slice(0, knownEntries);
     this.completionMessages = entries.slice(knownEntries);
 
-    if(replayMessages.filter((value) => value.messageType === COMPLETION_MESSAGE_TYPE).length > 0) {
-      throw new Error("You cannot interleave replay messages with completion messages. First define the replay messages, then the completion messages.")
+    if (
+      replayMessages.filter(
+        (value) => value.messageType === COMPLETION_MESSAGE_TYPE
+      ).length > 0
+    ) {
+      throw new Error(
+        "You cannot interleave replay messages with completion messages. First define the replay messages, then the completion messages."
+      );
     }
 
-    if(this.completionMessages.filter((value) => value.messageType !== COMPLETION_MESSAGE_TYPE).length > 0) {
-      throw new Error("You cannot interleave replay messages with completion messages. First define the replay messages, then the completion messages.")
+    if (
+      this.completionMessages.filter(
+        (value) => value.messageType !== COMPLETION_MESSAGE_TYPE
+      ).length > 0
+    ) {
+      throw new Error(
+        "You cannot interleave replay messages with completion messages. First define the replay messages, then the completion messages."
+      );
     }
 
     const invocation = new Invocation(
@@ -101,9 +118,11 @@ export class TestDriver<I, O> implements Connection {
       startMsg.instanceKey,
       startMsg.invocationId,
       knownEntries,
-      new Map<number, Message>(replayMessages.map((value, index) =>  [index, value])),
+      new Map<number, Message>(
+        replayMessages.map((value, index) => [index, value])
+      ),
       (replayMessages[0].message as PollInputStreamEntryMessage).value
-    )
+    );
 
     this.stateMachine = new StateMachine(this, invocation);
     this.stateMachine.invoke();
