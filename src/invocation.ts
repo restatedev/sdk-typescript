@@ -118,7 +118,15 @@ export class InvocationBuilder<I, O> implements RestateStreamConsumer {
   }
 
   public build(): Invocation<I, O> {
-    if (!this.isComplete()) {
+    if (
+      !this.isComplete() ||
+      this.method === undefined ||
+      this.protocolMode === undefined ||
+      this.instanceKey === undefined ||
+      this.invocationId === undefined ||
+      this.nbEntriesToReplay === undefined ||
+      this.invocationValue === undefined
+    ) {
       throw new Error(
         `Cannot build invocation. Not all data present: ${JSON.stringify(this)}`
       );
