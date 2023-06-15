@@ -62,12 +62,19 @@ export function inputMessage(value: Uint8Array): Message {
   );
 }
 
-export function outputMessage(value?: Uint8Array): Message {
+export function outputMessage(value?: Uint8Array, failure?: Failure): Message {
   if (value !== undefined) {
     return new Message(
       OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
       OutputStreamEntryMessage.create({
         value: Buffer.from(value),
+      })
+    );
+  } else if (failure !== undefined) {
+    return new Message(
+      OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
+      OutputStreamEntryMessage.create({
+        failure: failure,
       })
     );
   } else {
@@ -303,18 +310,25 @@ export function sideEffectMessage<T>(value?: T, failure?: Failure): Message {
   }
 }
 
-export function awakeableMessage<T>(payload?: T): Message {
-  if (!payload) {
-    return new Message(
-      AWAKEABLE_ENTRY_MESSAGE_TYPE,
-      AwakeableEntryMessage.create()
-    );
-  } else {
+export function awakeableMessage<T>(payload?: T, failure?: Failure): Message {
+  if (payload) {
     return new Message(
       AWAKEABLE_ENTRY_MESSAGE_TYPE,
       AwakeableEntryMessage.create({
         value: Buffer.from(JSON.stringify(payload)),
       })
+    );
+  } else if (failure) {
+    return new Message(
+      AWAKEABLE_ENTRY_MESSAGE_TYPE,
+      AwakeableEntryMessage.create({
+        failure: failure,
+      })
+    );
+  } else {
+    return new Message(
+      AWAKEABLE_ENTRY_MESSAGE_TYPE,
+      AwakeableEntryMessage.create()
     );
   }
 }
@@ -345,6 +359,10 @@ export function suspensionMessage(entryIndices: number[]): Message {
       entryIndexes: entryIndices,
     })
   );
+}
+
+export function failure(code: number, msg: string): Failure {
+  return Failure.create({ code: code, message: msg });
 }
 
 export function greetRequest(myName: string): Uint8Array {

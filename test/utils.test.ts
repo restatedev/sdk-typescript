@@ -7,7 +7,6 @@ import * as RestateUtils from "../src/utils/public_utils";
 import { RestateError } from "../src/types/errors";
 import { RestateContext } from "../src/restate_context";
 import {
-  protoMetadata,
   TestGreeter,
   TestRequest,
   TestResponse,
@@ -330,10 +329,7 @@ describe("FailingSideEffectGreeter: finally succeeds", () => {
   it("retries two times and then succeeds", async () => {
     i = 0;
     const result = await new TestDriver(
-      protoMetadata,
-      "TestGreeter",
       new FailingExceptionalSideEffectGreeter(2),
-      "/test.TestGreeter/Greet",
       [
         startMessage(1),
         inputMessage(greetRequest("Till")),
@@ -362,10 +358,7 @@ describe("FailingSideEffectGreeter: never succeeds", () => {
   it("retries three times and then fails", async () => {
     i = 0;
     const result = await new TestDriver(
-      protoMetadata,
-      "TestGreeter",
       new FailingExceptionalSideEffectGreeter(4),
-      "/test.TestGreeter/Greet",
       [
         startMessage(1),
         inputMessage(greetRequest("Till")),
@@ -394,21 +387,15 @@ describe("FailingSideEffectGreeter: never succeeds", () => {
 describe("FailingRetrySideEffectGreeter: finally succeeds", () => {
   it("retries two times and then succeeds", async () => {
     i = 0;
-    const result = await new TestDriver(
-      protoMetadata,
-      "TestGreeter",
-      new FailingRetrySideEffectGreeter(2),
-      "/test.TestGreeter/Greet",
-      [
-        startMessage(1),
-        inputMessage(greetRequest("Till")),
-        completionMessage(1), // fail
-        completionMessage(2, undefined, true), // sleep
-        completionMessage(3), // fail
-        completionMessage(4, undefined, true), // sleep
-        completionMessage(5), // success
-      ]
-    ).run();
+    const result = await new TestDriver(new FailingRetrySideEffectGreeter(2), [
+      startMessage(1),
+      inputMessage(greetRequest("Till")),
+      completionMessage(1), // fail
+      completionMessage(2, undefined, true), // sleep
+      completionMessage(3), // fail
+      completionMessage(4, undefined, true), // sleep
+      completionMessage(5), // success
+    ]).run();
 
     expect(result.length).toStrictEqual(6);
     checkIfSideEffectReturnsFalse(result[0]);
@@ -426,23 +413,17 @@ describe("FailingRetrySideEffectGreeter: finally succeeds", () => {
 describe("FailingRetrySideEffectGreeter: never succeeds", () => {
   it("retries three times and then fails", async () => {
     i = 0;
-    const result = await new TestDriver(
-      protoMetadata,
-      "TestGreeter",
-      new FailingRetrySideEffectGreeter(4),
-      "/test.TestGreeter/Greet",
-      [
-        startMessage(1),
-        inputMessage(greetRequest("Till")),
-        completionMessage(1), // fail
-        completionMessage(2, undefined, true), // sleep
-        completionMessage(3), // fail
-        completionMessage(4, undefined, true), // sleep
-        completionMessage(5), // fail
-        completionMessage(6, undefined, true), // sleep
-        completionMessage(7), // fail
-      ]
-    ).run();
+    const result = await new TestDriver(new FailingRetrySideEffectGreeter(4), [
+      startMessage(1),
+      inputMessage(greetRequest("Till")),
+      completionMessage(1), // fail
+      completionMessage(2, undefined, true), // sleep
+      completionMessage(3), // fail
+      completionMessage(4, undefined, true), // sleep
+      completionMessage(5), // fail
+      completionMessage(6, undefined, true), // sleep
+      completionMessage(7), // fail
+    ]).run();
 
     printResults(result);
 

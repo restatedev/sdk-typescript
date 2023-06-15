@@ -12,11 +12,12 @@ import { Connection } from "../src/connection/connection";
 import stream from "stream";
 import { printMessageAsJson } from "../src/utils/utils";
 import { Message } from "../src/types/types";
-import { HostedGrpcServiceMethod, ProtoMetadata } from "../src/types/grpc";
+import { HostedGrpcServiceMethod } from "../src/types/grpc";
 import { ProtocolMode } from "../src/generated/proto/discovery";
 import { rlog } from "../src/utils/logger";
 import { StateMachine } from "../src/state_machine";
 import { Invocation } from "../src/invocation";
+import { protoMetadata } from "../src/generated/proto/test";
 
 export class TestDriver<I, O> implements Connection {
   private http2stream = this.mockHttp2DuplexStream();
@@ -33,23 +34,22 @@ export class TestDriver<I, O> implements Connection {
   private resolveOnClose!: (value: Array<Message>) => void;
 
   constructor(
-    descriptor: ProtoMetadata,
-    service: string,
     instance: object,
-    methodName: string,
     entries: Array<Message>,
     protocolMode?: ProtocolMode
   ) {
     this.restateServer = new TestRestateServer();
     this.restateServer.bindService({
-      descriptor: descriptor,
-      service: service,
+      descriptor: protoMetadata,
+      service: "TestGreeter",
       instance: instance,
     });
 
     if (protocolMode) {
       this.protocolMode = protocolMode;
     }
+
+    const methodName = "/test.TestGreeter/Greet";
 
     const hostedGrpcServiceMethod: HostedGrpcServiceMethod<I, O> | undefined =
       this.restateServer.methodByUrl("/invoke" + methodName);

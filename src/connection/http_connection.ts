@@ -89,7 +89,7 @@ export class HttpConnection<I, O> implements Connection {
   }
 
   setGrpcMethod(method: HostedGrpcServiceMethod<I, O>) {
-    this.invocationBuilder.setGrpcMethod(method)
+    this.invocationBuilder.setGrpcMethod(method);
   }
 
   handleConnectionError() {

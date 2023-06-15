@@ -1,5 +1,4 @@
 import {
-  protoMetadata,
   TestGreeter,
   TestRequest,
   TestResponse,
@@ -26,32 +25,21 @@ class Greeter implements TestGreeter {
 }
 
 describe("Greeter", () => {
-  it("should call greet", async () => {
-    const result = await new TestDriver(
-      protoMetadata,
-      "TestGreeter",
-      new Greeter(),
-      "/test.TestGreeter/Greet",
-      [startMessage(1), inputMessage(greetRequest("Pete"))]
-    ).run();
+  it("sends message to runtime", async () => {
+    const result = await new TestDriver(new Greeter(), [
+      startMessage(1),
+      inputMessage(greetRequest("Pete")),
+    ]).run();
 
     expect(result).toStrictEqual([outputMessage(greetResponse("Hello"))]);
   });
-});
 
-describe("Greeter: replay output message", () => {
-  it("should call greet", async () => {
-    const result = await new TestDriver(
-      protoMetadata,
-      "TestGreeter",
-      new Greeter(),
-      "/test.TestGreeter/Greet",
-      [
-        startMessage(2),
-        inputMessage(greetRequest("Pete")),
-        outputMessage(greetResponse("Hello")),
-      ]
-    ).run();
+  it("handles replay of output message", async () => {
+    const result = await new TestDriver(new Greeter(), [
+      startMessage(2),
+      inputMessage(greetRequest("Pete")),
+      outputMessage(greetResponse("Hello")),
+    ]).run();
 
     expect(result).toStrictEqual([]);
   });

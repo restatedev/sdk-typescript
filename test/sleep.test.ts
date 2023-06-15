@@ -9,7 +9,6 @@ import {
   greetResponse,
   inputMessage,
   outputMessage,
-  printResults,
   setStateMessage,
   sleepMessage,
   startMessage,
@@ -18,7 +17,6 @@ import {
 import { SLEEP_ENTRY_MESSAGE_TYPE } from "../src/types/protocol";
 import { Empty } from "../src/generated/google/protobuf/empty";
 import {
-  protoMetadata,
   TestGreeter,
   TestRequest,
   TestResponse,
@@ -38,6 +36,90 @@ class SleepGreeter implements TestGreeter {
   }
 }
 
+describe("SleepGreeter", () => {
+  it("sends message to runtime", async () => {
+    const result = await new TestDriver(new SleepGreeter(), [
+      startMessage(),
+      inputMessage(greetRequest("Till")),
+    ]).run();
+
+    expect(result.length).toStrictEqual(2);
+    expect(result[0].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
+    expect(result[1]).toStrictEqual(suspensionMessage([1]));
+  });
+
+  it("sends message to runtime for request-response mode", async () => {
+    const result = await new TestDriver(
+      new SleepGreeter(),
+      [startMessage(1), inputMessage(greetRequest("Till"))],
+      ProtocolMode.REQUEST_RESPONSE
+    ).run();
+
+    expect(result[0].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
+    expect(result[1]).toStrictEqual(suspensionMessage([1]));
+  });
+
+  it("handles completion with no empty", async () => {
+    const result = await new TestDriver(new SleepGreeter(), [
+      startMessage(),
+      inputMessage(greetRequest("Till")),
+      completionMessage(1),
+    ]).run();
+
+    expect(result.length).toStrictEqual(2);
+    expect(result[0].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
+    expect(result[1]).toStrictEqual(suspensionMessage([1]));
+  });
+
+  it("handles completion with empty", async () => {
+    const result = await new TestDriver(new SleepGreeter(), [
+      startMessage(),
+      inputMessage(greetRequest("Till")),
+      completionMessage(1, Empty.encode(Empty.create({})).finish()),
+    ]).run();
+
+    expect(result.length).toStrictEqual(2);
+    expect(result[0].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
+    expect(result[1]).toStrictEqual(outputMessage(greetResponse("Hello")));
+  });
+
+  it("handles replay with no empty", async () => {
+    const result = await new TestDriver(new SleepGreeter(), [
+      startMessage(),
+      inputMessage(greetRequest("Till")),
+      sleepMessage(1000),
+    ]).run();
+
+    expect(result.length).toStrictEqual(1);
+    expect(result[0]).toStrictEqual(suspensionMessage([1]));
+  });
+
+  it("handles replay with empty", async () => {
+    const result = await new TestDriver(new SleepGreeter(), [
+      startMessage(),
+      inputMessage(greetRequest("Till")),
+      sleepMessage(wakeupTime, Empty.create({})),
+    ]).run();
+
+    expect(result.length).toStrictEqual(1);
+    expect(result[0]).toStrictEqual(outputMessage(greetResponse("Hello")));
+  });
+
+  it("fails on journal mismatch. Completed with Awakeable.", async () => {
+    const result = await new TestDriver(new SleepGreeter(), [
+      startMessage(),
+      inputMessage(greetRequest("Till")),
+      awakeableMessage(""), // should have been a sleep message
+    ]).run();
+
+    expect(result.length).toStrictEqual(1);
+    checkError(
+      result[0],
+      "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    );
+  });
+});
+
 class ManySleepsGreeter implements TestGreeter {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
@@ -50,6 +132,96 @@ class ManySleepsGreeter implements TestGreeter {
     return TestResponse.create({ greeting: `Hello` });
   }
 }
+
+describe("ManySleepsGreeter: With sleep not complete", () => {
+  it("sends message to the runtime for all sleeps", async () => {
+    const result = await new TestDriver(new ManySleepsGreeter(), [
+      startMessage(),
+      inputMessage(greetRequest("Till")),
+    ]).run();
+
+    expect(result[0].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
+    expect(result[1].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
+    expect(result[2].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
+    expect(result[3].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
+    expect(result[4].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
+    expect(result[5]).toStrictEqual(suspensionMessage([1, 2, 3, 4, 5]));
+  });
+
+  it("handles completions without empty for some of the sleeps", async () => {
+    const result = await new TestDriver(new ManySleepsGreeter(), [
+      startMessage(),
+      inputMessage(greetRequest("Till")),
+      completionMessage(4),
+      completionMessage(2),
+    ]).run();
+
+    expect(result[0].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
+    expect(result[1].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
+    expect(result[2].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
+    expect(result[3].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
+    expect(result[4].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
+    expect(result[5]).toStrictEqual(suspensionMessage([1, 2, 3, 4, 5]));
+  });
+
+  it("handles completions with empty for some of the sleeps", async () => {
+    const result = await new TestDriver(new ManySleepsGreeter(), [
+      startMessage(),
+      inputMessage(greetRequest("Till")),
+      completionMessage(4, undefined, true),
+      completionMessage(2, undefined, true),
+    ]).run();
+
+    expect(result[0].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
+    expect(result[1].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
+    expect(result[2].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
+    expect(result[3].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
+    expect(result[4].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
+    expect(result[5]).toStrictEqual(suspensionMessage([1, 3, 5]));
+  });
+
+  it("handles replay of all sleeps without empty", async () => {
+    const result = await new TestDriver(new ManySleepsGreeter(), [
+      startMessage(),
+      inputMessage(greetRequest("Till")),
+      sleepMessage(100),
+      sleepMessage(100),
+      sleepMessage(100),
+      sleepMessage(100),
+      sleepMessage(100),
+    ]).run();
+
+    expect(result[0]).toStrictEqual(suspensionMessage([1, 2, 3, 4, 5]));
+  });
+
+  it("handles replay of all sleeps some without empty and some with empty", async () => {
+    const result = await new TestDriver(new ManySleepsGreeter(), [
+      startMessage(),
+      inputMessage(greetRequest("Till")),
+      sleepMessage(100),
+      sleepMessage(100, Empty.create({})),
+      sleepMessage(100),
+      sleepMessage(100, Empty.create({})),
+      sleepMessage(100),
+    ]).run();
+
+    expect(result[0]).toStrictEqual(suspensionMessage([1, 3, 5]));
+  });
+
+  it("handles replay of all sleeps with empty", async () => {
+    const result = await new TestDriver(new ManySleepsGreeter(), [
+      startMessage(),
+      inputMessage(greetRequest("Till")),
+      sleepMessage(100, Empty.create({})),
+      sleepMessage(100, Empty.create({})),
+      sleepMessage(100, Empty.create({})),
+      sleepMessage(100, Empty.create({})),
+      sleepMessage(100, Empty.create({})),
+    ]).run();
+
+    expect(result[0]).toStrictEqual(outputMessage(greetResponse("Hello")));
+  });
+});
 
 class ManySleepsAndSetGreeter implements TestGreeter {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -66,262 +238,18 @@ class ManySleepsAndSetGreeter implements TestGreeter {
   }
 }
 
-describe("SleepGreeter: With sleep not complete", () => {
-  it("should call greet", async () => {
-    const result = await new TestDriver(
-      protoMetadata,
-      "TestGreeter",
-      new SleepGreeter(),
-      "/test.TestGreeter/Greet",
-      [startMessage(1), inputMessage(greetRequest("Till"))]
-    ).run();
+describe("ManySleepsAndSetGreeter", () => {
+  it("handles replays of all sleeps without empty", async () => {
+    const result = await new TestDriver(new ManySleepsAndSetGreeter(), [
+      startMessage(),
+      inputMessage(greetRequest("Till")),
+      sleepMessage(100),
+      sleepMessage(100),
+      sleepMessage(100),
+      sleepMessage(100),
+      sleepMessage(100),
+    ]).run();
 
-    expect(result[0].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
-    expect(result[1]).toStrictEqual(suspensionMessage([1]));
-  });
-});
-
-describe("SleepGreeter: With replayed incomplete sleep", () => {
-  it("should call greet", async () => {
-    const result = await new TestDriver(
-      protoMetadata,
-      "TestGreeter",
-      new SleepGreeter(),
-      "/test.TestGreeter/Greet",
-      [startMessage(2), inputMessage(greetRequest("Till")), sleepMessage(1000)]
-    ).run();
-
-    expect(result[0]).toStrictEqual(suspensionMessage([1]));
-  });
-});
-
-describe("SleepGreeter: Request-response with sleep not complete", () => {
-  it("should call greet", async () => {
-    const result = await new TestDriver(
-      protoMetadata,
-      "TestGreeter",
-      new SleepGreeter(),
-      "/test.TestGreeter/Greet",
-      [startMessage(1), inputMessage(greetRequest("Till"))],
-      ProtocolMode.REQUEST_RESPONSE
-    ).run();
-
-    expect(result[0].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
-    expect(result[1]).toStrictEqual(suspensionMessage([1]));
-  });
-});
-
-describe("SleepGreeter: With sleep already complete", () => {
-  it("should call greet", async () => {
-    const result = await new TestDriver(
-      protoMetadata,
-      "TestGreeter",
-      new SleepGreeter(),
-      "/test.TestGreeter/Greet",
-      [
-        startMessage(1),
-        inputMessage(greetRequest("Till")),
-        completionMessage(1, Empty.encode(Empty.create({})).finish()),
-      ]
-    ).run();
-
-    expect(result[0].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
-    expect(result[1]).toStrictEqual(outputMessage(greetResponse("Hello")));
-  });
-});
-
-describe("SleepGreeter: With sleep replayed", () => {
-  it("should call greet", async () => {
-    const result = await new TestDriver(
-      protoMetadata,
-      "TestGreeter",
-      new SleepGreeter(),
-      "/test.TestGreeter/Greet",
-      [
-        startMessage(2),
-        inputMessage(greetRequest("Till")),
-        sleepMessage(wakeupTime, Empty.create({})),
-      ]
-    ).run();
-
-    expect(result[0]).toStrictEqual(outputMessage(greetResponse("Hello")));
-  });
-});
-
-describe("SleepGreeter: journal mismatch checks on sleep: Completed with awakeable on replay.", () => {
-  it("should call greet", async () => {
-    const result = await new TestDriver(
-      protoMetadata,
-      "TestGreeter",
-      new SleepGreeter(),
-      "/test.TestGreeter/Greet",
-      [
-        startMessage(2),
-        inputMessage(greetRequest("Till")),
-        awakeableMessage(""), // should have been a sleep message
-      ]
-    ).run();
-
-    expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
-    );
-  });
-});
-
-describe("ManySleepsGreeter: With sleep not complete", () => {
-  it("should call greet", async () => {
-    const result = await new TestDriver(
-      protoMetadata,
-      "TestGreeter",
-      new ManySleepsGreeter(),
-      "/test.TestGreeter/Greet",
-      [startMessage(1), inputMessage(greetRequest("Till"))]
-    ).run();
-
-    expect(result[0].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
-    expect(result[1].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
-    expect(result[2].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
-    expect(result[3].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
-    expect(result[4].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
-    expect(result[5]).toStrictEqual(suspensionMessage([1, 2, 3, 4, 5]));
-  });
-});
-
-describe("ManySleepsGreeter: With some sleeps completed without result", () => {
-  it("should call greet", async () => {
-    const result = await new TestDriver(
-      protoMetadata,
-      "TestGreeter",
-      new ManySleepsGreeter(),
-      "/test.TestGreeter/Greet",
-      [
-        startMessage(1),
-        inputMessage(greetRequest("Till")),
-        completionMessage(4),
-        completionMessage(2),
-      ]
-    ).run();
-
-    expect(result[0].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
-    expect(result[1].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
-    expect(result[2].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
-    expect(result[3].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
-    expect(result[4].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
-    expect(result[5]).toStrictEqual(suspensionMessage([1, 2, 3, 4, 5]));
-  });
-});
-
-describe("ManySleepsGreeter: With some sleeps completed with result", () => {
-  it("should call greet", async () => {
-    const result = await new TestDriver(
-      protoMetadata,
-      "TestGreeter",
-      new ManySleepsGreeter(),
-      "/test.TestGreeter/Greet",
-      [
-        startMessage(1),
-        inputMessage(greetRequest("Till")),
-        completionMessage(4, undefined, true),
-        completionMessage(2, undefined, true),
-      ]
-    ).run();
-
-    expect(result[0].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
-    expect(result[1].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
-    expect(result[2].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
-    expect(result[3].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
-    expect(result[4].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
-    expect(result[5]).toStrictEqual(suspensionMessage([1, 3, 5]));
-  });
-});
-
-describe("ManySleepsGreeter: With all sleeps replayed incomplete", () => {
-  it("should send back suspension message", async () => {
-    const result = await new TestDriver(
-      protoMetadata,
-      "TestGreeter",
-      new ManySleepsGreeter(),
-      "/test.TestGreeter/Greet",
-      [
-        startMessage(6),
-        inputMessage(greetRequest("Till")),
-        sleepMessage(100),
-        sleepMessage(100),
-        sleepMessage(100),
-        sleepMessage(100),
-        sleepMessage(100),
-      ]
-    ).run();
-
-    expect(result[0]).toStrictEqual(suspensionMessage([1, 2, 3, 4, 5]));
-  });
-});
-
-describe("ManySleepsGreeter: With all sleeps replayed incomplete+complete", () => {
-  it("should send back suspension message", async () => {
-    const result = await new TestDriver(
-      protoMetadata,
-      "TestGreeter",
-      new ManySleepsGreeter(),
-      "/test.TestGreeter/Greet",
-      [
-        startMessage(6),
-        inputMessage(greetRequest("Till")),
-        sleepMessage(100),
-        sleepMessage(100, Empty.create({})),
-        sleepMessage(100),
-        sleepMessage(100, Empty.create({})),
-        sleepMessage(100),
-      ]
-    ).run();
-
-    expect(result[0]).toStrictEqual(suspensionMessage([1, 3, 5]));
-  });
-});
-
-describe("ManySleepsGreeter: With all sleeps replayed complete", () => {
-  it("should send back suspension message", async () => {
-    const result = await new TestDriver(
-      protoMetadata,
-      "TestGreeter",
-      new ManySleepsGreeter(),
-      "/test.TestGreeter/Greet",
-      [
-        startMessage(6),
-        inputMessage(greetRequest("Till")),
-        sleepMessage(100, Empty.create({})),
-        sleepMessage(100, Empty.create({})),
-        sleepMessage(100, Empty.create({})),
-        sleepMessage(100, Empty.create({})),
-        sleepMessage(100, Empty.create({})),
-      ]
-    ).run();
-
-    expect(result[0]).toStrictEqual(outputMessage(greetResponse("Hello")));
-  });
-});
-
-describe("ManySleepsAndSetGreeter: With all sleeps replayed complete", () => {
-  it("should send back suspension message", async () => {
-    const result = await new TestDriver(
-      protoMetadata,
-      "TestGreeter",
-      new ManySleepsAndSetGreeter(),
-      "/test.TestGreeter/Greet",
-      [
-        startMessage(6),
-        inputMessage(greetRequest("Till")),
-        sleepMessage(100),
-        sleepMessage(100),
-        sleepMessage(100),
-        sleepMessage(100),
-        sleepMessage(100),
-      ]
-    ).run();
-
-    printResults(result);
     expect(result[0]).toStrictEqual(setStateMessage("state", "Hello"));
     expect(result[1]).toStrictEqual(suspensionMessage([1, 2, 3, 4, 5]));
   });

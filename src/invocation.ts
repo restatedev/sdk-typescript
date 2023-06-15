@@ -63,19 +63,19 @@ export class InvocationBuilder<I, O> {
   }
 
   public isComplete(): boolean {
-    return (
-      this.method !== undefined &&
-      this.protocolMode !== undefined &&
-      this.instanceKey !== undefined &&
-      this.invocationId !== undefined &&
-      this.nbEntriesToReplay !== undefined &&
-      this.invocationValue !== undefined &&
-      this.replayEntries.size === this.nbEntriesToReplay
-    );
+    return this.replayEntries.size === this.nbEntriesToReplay;
   }
 
   public build(): Invocation<I, O> {
-    if (!this.isComplete()) {
+    if (
+      !this.isComplete() ||
+      this.method === undefined ||
+      this.protocolMode === undefined ||
+      this.instanceKey === undefined ||
+      this.invocationId === undefined ||
+      this.nbEntriesToReplay === undefined ||
+      this.invocationValue === undefined
+    ) {
       throw new Error(
         `Cannot build invocation. Not all data present: ${JSON.stringify(this)}`
       );
