@@ -3,12 +3,9 @@ import { StateMachine } from "./state_machine";
 import {
   AwakeableEntryMessage,
   BackgroundInvokeEntryMessage,
-  ClearStateEntryMessage,
   CompleteAwakeableEntryMessage,
   Failure,
-  GetStateEntryMessage,
   InvokeEntryMessage,
-  SetStateEntryMessage,
   SleepEntryMessage,
 } from "./generated/proto/protocol";
 import {
@@ -61,7 +58,7 @@ export class RestateContextImpl implements RestateContext {
     this.checkState("get state");
 
     // Create the message and let the state machine process it
-    const msg = GetStateEntryMessage.create({ key: Buffer.from(name) });
+    const msg = this.stateMachine.localStateStore.get(name);
     const result = await this.stateMachine.handleUserCodeMessage(
       GET_STATE_ENTRY_MESSAGE_TYPE,
       msg
@@ -76,21 +73,14 @@ export class RestateContextImpl implements RestateContext {
 
   public set<T>(name: string, value: T): void {
     this.checkState("set state");
-
-    const bytes = Buffer.from(jsonSerialize(value));
-    const msg = SetStateEntryMessage.create({
-      key: Buffer.from(name, "utf8"),
-      value: bytes,
-    });
+    const msg = this.stateMachine.localStateStore.set(name, value);
     this.stateMachine.handleUserCodeMessage(SET_STATE_ENTRY_MESSAGE_TYPE, msg);
   }
 
   public clear(name: string): void {
     this.checkState("clear state");
 
-    const msg = ClearStateEntryMessage.create({
-      key: Buffer.from(name, "utf8"),
-    });
+    const msg = this.stateMachine.localStateStore.clear(name);
     this.stateMachine.handleUserCodeMessage(
       CLEAR_STATE_ENTRY_MESSAGE_TYPE,
       msg

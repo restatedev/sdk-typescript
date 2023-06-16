@@ -22,7 +22,7 @@ export class GreeterService implements TestGreeter {
 
     // return the final response
     return TestResponse.create({
-      greeting: `Hello ${request.name}!`,
+      greeting: `Hello ${request.name} no.${seen}!`,
     });
   }
 }
