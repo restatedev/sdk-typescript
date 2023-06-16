@@ -55,8 +55,6 @@ export class Journal<I, O> {
   }
 
   handleInputMessage(m: p.PollInputStreamEntryMessage) {
-    this.transitionState(NewExecutionState.REPLAYING);
-
     if (this.invocation.nbEntriesToReplay === 1) {
       this.transitionState(NewExecutionState.PROCESSING);
     }
@@ -74,10 +72,10 @@ export class Journal<I, O> {
     this.pendingJournalEntries.set(0, rootEntry);
   }
 
-  public handleUserSideMessage<T>(
+  public handleUserSideMessage(
     messageType: bigint,
     message: p.ProtocolMessage | Uint8Array
-  ): Promise<T | undefined> {
+  ): Promise<any | undefined> {
     this.incrementUserCodeIndex();
 
     switch (this.state) {
@@ -111,6 +109,21 @@ export class Journal<I, O> {
           case p.BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE: {
             // Do not need completion
             return Promise.resolve(undefined);
+          }
+          case p.GET_STATE_ENTRY_MESSAGE_TYPE: {
+            const getStateMsg = message as GetStateEntryMessage;
+            if(getStateMsg.value !== undefined || getStateMsg.empty !== undefined){
+              // State was eagerly filled by the local state store
+              return Promise.resolve(getStateMsg.value || getStateMsg.empty);
+            } else {
+              // Need to retrieve state by going to the runtime.
+              const journalEntry = new JournalEntry(messageType, message);
+              this.pendingJournalEntries.set(
+                  this.userCodeJournalIndex,
+                  journalEntry
+              );
+              return journalEntry.promise;
+            }
           }
           default: {
             // Need completion

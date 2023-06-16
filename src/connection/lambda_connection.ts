@@ -26,7 +26,7 @@ export class LambdaConnection<I, O> implements Connection {
   // Callback to resolve the invocation promise of the Lambda handler when the response is ready
   private completionPromise: Promise<Buffer>;
   private resolveOnCompleted!: (value: Buffer | PromiseLike<Buffer>) => void;
-  private onErrorListeners: (() => void)[] = [];
+  private onErrorListeners: ((e: Error) => void)[] = [];
 
   constructor(body: string, method: HostedGrpcServiceMethod<I, O>) {
     // Decode the body coming from API Gateway (base64 encoded).
@@ -43,7 +43,7 @@ export class LambdaConnection<I, O> implements Connection {
     this.invocationBuilder
       .setGrpcMethod(method)
       .setProtocolMode(ProtocolMode.REQUEST_RESPONSE)
-      .handleStartMessage(firstMsg.message as StartMessage);
+      .handleStartMessage(firstMsg.message as StartMessage, firstMsg.partialStateFlag || false);
 
     // Promise that signals when the invocation is over, to then flush the messages
     this.completionPromise = new Promise<Buffer>((resolve) => {
@@ -53,7 +53,7 @@ export class LambdaConnection<I, O> implements Connection {
     decodedEntries.forEach((el) => this.invocationBuilder.addReplayEntry(el));
 
     const invocation = this.invocationBuilder.build();
-    const stateMachine = new StateMachine(this, invocation);
+    const stateMachine = new StateMachine<I,O>(this, invocation);
     stateMachine.invoke();
   }
 
@@ -83,20 +83,21 @@ export class LambdaConnection<I, O> implements Connection {
     return this.completionPromise;
   }
 
-  handleConnectionError(): void {
+  // TODO Do proper failure handling for Lambda. This is not used anywhere.
+  handleConnectionError(e: Error): void {
     this.end();
-    this.emitOnErrorEvent();
+    this.emitOnErrorEvent(e);
   }
 
   // We use an error listener to notify the state machine of errors in the connection layer.
   // When there is a connection error (decoding/encoding/...), the statemachine is closed.
-  public onError(listener: () => void) {
+  public onError(listener: (e: Error) => void) {
     this.onErrorListeners.push(listener);
   }
 
-  private emitOnErrorEvent() {
+  private emitOnErrorEvent(e: Error) {
     for (const listener of this.onErrorListeners) {
-      listener();
+      listener(e);
     }
   }
 

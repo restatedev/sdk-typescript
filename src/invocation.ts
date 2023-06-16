@@ -11,6 +11,7 @@ import {
 import { uuidV7FromBuffer } from "./utils/utils";
 import { POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE } from "./types/protocol";
 import { ProtocolMode } from "./generated/proto/discovery";
+import {LocalStateStore} from "./local_state_store";
 
 export class InvocationBuilder<I, O> {
   private runtimeReplayIndex = 0;
@@ -21,11 +22,13 @@ export class InvocationBuilder<I, O> {
   private protocolMode?: ProtocolMode = undefined;
   private nbEntriesToReplay?: number = undefined;
   private method?: HostedGrpcServiceMethod<I, O> = undefined;
+  private localStateStore?: LocalStateStore;
 
-  public handleStartMessage(m: StartMessage): InvocationBuilder<I, O> {
+  public handleStartMessage(m: StartMessage, partialState: boolean): InvocationBuilder<I, O> {
     this.nbEntriesToReplay = m.knownEntries;
     this.instanceKey = m.instanceKey;
     this.invocationId = m.invocationId;
+    this.localStateStore = new LocalStateStore(partialState, m.stateMap);
     return this;
   }
 
@@ -70,6 +73,7 @@ export class InvocationBuilder<I, O> {
       this.invocationId !== undefined &&
       this.nbEntriesToReplay !== undefined &&
       this.invocationValue !== undefined &&
+      this.localStateStore !==undefined &&
       this.replayEntries.size === this.nbEntriesToReplay
     );
   }
@@ -87,7 +91,8 @@ export class InvocationBuilder<I, O> {
       this.invocationId!,
       this.nbEntriesToReplay!,
       this.replayEntries!,
-      this.invocationValue!
+      this.invocationValue!,
+      this.localStateStore!
     );
   }
 }
@@ -102,7 +107,8 @@ export class Invocation<I, O> {
     public readonly invocationId: Buffer,
     public readonly nbEntriesToReplay: number,
     public readonly replayEntries: Map<number, Message>,
-    public readonly invocationValue: Buffer
+    public readonly invocationValue: Buffer,
+    public readonly localStateStore: LocalStateStore
   ) {
     this.invocationIdString = uuidV7FromBuffer(this.invocationId);
     this.logPrefix = `[${this.method.packge}.${

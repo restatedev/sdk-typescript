@@ -17,6 +17,8 @@ import { ProtocolMode } from "../src/generated/proto/discovery";
 import { rlog } from "../src/utils/logger";
 import { StateMachine } from "../src/state_machine";
 import { Invocation } from "../src/invocation";
+import {LocalStateStore} from "../src/local_state_store";
+import {StartMessage_StateEntry} from "../src/generated/proto/protocol";
 
 export class TestDriver<I, O> implements Connection {
   private http2stream = this.mockHttp2DuplexStream();
@@ -38,7 +40,9 @@ export class TestDriver<I, O> implements Connection {
     instance: object,
     methodName: string,
     entries: Array<Message>,
-    protocolMode?: ProtocolMode
+    protocolMode?: ProtocolMode,
+    partialStateFlag?: boolean,
+    stateEntries?: Buffer[][]
   ) {
     this.restateServer = new TestRestateServer();
     this.restateServer.bindService({
@@ -112,6 +116,13 @@ export class TestDriver<I, O> implements Connection {
       );
     }
 
+    const localStateStore = (stateEntries !== undefined && partialStateFlag !== undefined) ?
+        // If we want to supply the state eagerly
+        new LocalStateStore(partialStateFlag,
+            stateEntries.map(el => StartMessage_StateEntry.create({key: el[0], value: el[1]}))) :
+        // If we don't want to supply the state eagerly
+        new LocalStateStore(true, [])
+
     const invocation = new Invocation(
       this.method,
       this.protocolMode,
@@ -121,7 +132,8 @@ export class TestDriver<I, O> implements Connection {
       new Map<number, Message>(
         replayMessages.map((value, index) => [index, value])
       ),
-      (replayMessages[0].message as PollInputStreamEntryMessage).value
+      (replayMessages[0].message as PollInputStreamEntryMessage).value,
+      localStateStore
     );
 
     this.stateMachine = new StateMachine(this, invocation);

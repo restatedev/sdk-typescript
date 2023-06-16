@@ -375,6 +375,10 @@ export function getAwakeableId(entryIndex: number): string {
   );
 }
 
+export function keyVal(key: string, value: any): Buffer[]{
+    return [Buffer.from(key), Buffer.from(JSON.stringify(value))]
+}
+
 // a utility function to print the results of a test
 export function printResults(results: Message[]) {
   rlog.info(

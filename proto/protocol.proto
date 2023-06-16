@@ -8,14 +8,24 @@ import "google/protobuf/empty.proto";
 
 // Type: 0x0000 + 0
 message StartMessage {
+  message StateEntry {
+    bytes key = 1;
+    // If value is an empty byte array,
+    // then it means the value is empty and not "missing" (e.g. empty string).
+    bytes value = 2;
+  }
+
   bytes invocation_id = 1;
   bytes instance_key = 2;
 
   uint32 known_entries = 3;
+
+  // protolint:disable:next REPEATED_FIELD_NAMES_PLURALIZED
+  repeated StateEntry state_map = 4;
 }
 
 // Type: 0x0000 + 1
-// Note: Completions that are simply acks will use this frame without sending back any result
+// Note: Acks to custom messages will have the `empty` field filled.
 message CompletionMessage {
   uint32 entry_index = 1;
 
@@ -37,6 +47,11 @@ message SuspensionMessage {
   repeated uint32 entry_indexes = 1;  // protolint:disable:this REPEATED_FIELD_NAMES_PLURALIZED
 }
 
+// Type: 0x0000 + 3
+message ErrorMessage {
+  Failure failure = 15;
+}
+
 // --- Journal Entries ---
 
 // Every Completable JournalEntry has a result field, filled only and only if the entry is in DONE state.
@@ -56,7 +71,7 @@ message PollInputStreamEntryMessage {
   bytes value = 14;
 }
 
-// Kind: Ack-able JournalEntry
+// Kind: Non-Completable JournalEntry
 // Type: 0x0400 + 1
 message OutputStreamEntryMessage {
   oneof result {
@@ -78,14 +93,14 @@ message GetStateEntryMessage {
   };
 }
 
-// Kind: Ack-able JournalEntry
+// Kind: Non-Completable JournalEntry
 // Type: 0x0800 + 1
 message SetStateEntryMessage {
   bytes key = 1;
   bytes value = 3;
 }
 
-// Kind: Ack-able JournalEntry
+// Kind: Non-Completable JournalEntry
 // Type: 0x0800 + 2
 message ClearStateEntryMessage {
   bytes key = 1;
@@ -116,7 +131,7 @@ message InvokeEntryMessage {
   };
 }
 
-// Kind: Ack-able JournalEntry
+// Kind: Non-Completable JournalEntry
 // Type: 0x0C00 + 2
 message BackgroundInvokeEntryMessage {
   string service_name = 1;
@@ -140,7 +155,7 @@ message AwakeableEntryMessage {
   };
 }
 
-// Kind: Ack-able JournalEntry
+// Kind: Non-Completable JournalEntry
 // Type: 0x0C00 + 4
 message CompleteAwakeableEntryMessage {
   string service_name = 1;
@@ -154,6 +169,7 @@ message CompleteAwakeableEntryMessage {
 // --- Nested messages
 
 message Failure {
+  // Same error space of gRPC, as defined here: https://github.com/grpc/grpc/blob/master/doc/statuscodes.md#status-codes-and-their-use-in-grpc
   int32 code = 1;
   string message = 2;
 }

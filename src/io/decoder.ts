@@ -65,7 +65,8 @@ export function streamDecoder(): stream.Transform {
                     frame,
                     header.completedFlag,
                     header.protocolVersion,
-                    header.requiresAckFlag
+                    header.requiresAckFlag,
+                    header.partialStateFlag
                   )
                 );
               } else {
@@ -76,7 +77,8 @@ export function streamDecoder(): stream.Transform {
                     message,
                     header.completedFlag,
                     header.protocolVersion,
-                    header.requiresAckFlag
+                    header.requiresAckFlag,
+                    header.partialStateFlag
                   )
                 );
               }
@@ -148,7 +150,8 @@ export function decodeLambdaBody(msgBase64: string): Message[] {
               frame,
               header.completedFlag,
               header.protocolVersion,
-              header.requiresAckFlag
+              header.requiresAckFlag,
+              header.partialStateFlag
             )
           );
         } else {
@@ -159,7 +162,8 @@ export function decodeLambdaBody(msgBase64: string): Message[] {
               message,
               header.completedFlag,
               header.protocolVersion,
-              header.requiresAckFlag
+              header.requiresAckFlag,
+              header.partialStateFlag
             )
           );
         }

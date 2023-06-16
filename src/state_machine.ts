@@ -18,10 +18,13 @@ import {
 import { Failure } from "./generated/proto/protocol";
 import { Journal } from "./journal";
 import { Invocation } from "./invocation";
+import {LocalStateStore} from "./local_state_store";
 
 export class StateMachine<I, O> {
   private journal: Journal<I, O>;
   private restateContext: RestateContextImpl<I, O>;
+
+  public readonly localStateStore: LocalStateStore
 
   // Whether the input channel (runtime -> service) is closed
   // If it is closed, then we suspend immediately upon the next suspension point
@@ -33,8 +36,10 @@ export class StateMachine<I, O> {
 
   constructor(
     private readonly connection: Connection,
-    private readonly invocation: Invocation<I, O>
+    private readonly invocation: Invocation<I, O>,
   ) {
+    this.localStateStore = invocation.localStateStore;
+
     this.restateContext = new RestateContextImpl(
       this.invocation.instanceKey,
       this.invocation.invocationId,
@@ -88,7 +93,7 @@ export class StateMachine<I, O> {
       message
     );
 
-    const promise = this.journal.handleUserSideMessage<T>(messageType, message);
+    const promise = this.journal.handleUserSideMessage(messageType, message);
 
     // Only send if we are in processing mode. Not if we are replaying user code
     if (this.journal.isProcessing()) {
@@ -105,9 +110,7 @@ export class StateMachine<I, O> {
 
     if (
       p.SUSPENSION_TRIGGERS.includes(messageType) &&
-      (!this.journal.isReplaying() ||
-        (this.journal.isReplaying() &&
-          this.journal.getCompletableIndices().length > 0))
+      this.journal.getCompletableIndices().length > 0
     ) {
       this.connection.flush();
       this.scheduleSuspension();

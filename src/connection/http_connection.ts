@@ -66,7 +66,7 @@ export class HttpConnection<I, O> implements Connection {
       if (m.messageType === START_MESSAGE_TYPE) {
         rlog.debug("Initializing: handling start message.");
         this.invocationBuilder
-          .handleStartMessage(m.message as StartMessage)
+          .handleStartMessage(m.message as StartMessage, m.partialStateFlag || false)
           .setProtocolMode(ProtocolMode.BIDI_STREAM);
         return;
       } else {
