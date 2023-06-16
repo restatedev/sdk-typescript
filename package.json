@@ -2,6 +2,9 @@
   "name": "@restatedev/restate-sdk",
   "version": "1.0.29",
   "description": "Typescript SDK for Restate",
+  "engines": {
+    "node": ">= 10"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/restatedev/sdk-typescript.git"
