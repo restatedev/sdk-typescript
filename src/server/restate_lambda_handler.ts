@@ -202,7 +202,7 @@ export class LambdaRestateServer extends BaseRestateServer {
         },
         statusCode: 200,
         isBase64Encoded: true,
-        body: result.toString("base64"),
+        body: encodeResponse(result),
       };
     } catch (e) {
       const error = ensureError(e);
@@ -224,9 +224,9 @@ export class LambdaRestateServer extends BaseRestateServer {
       },
       statusCode: 200,
       isBase64Encoded: true,
-      body: Buffer.from(
+      body: encodeResponse(
         ServiceDiscoveryResponse.encode(this.discovery).finish()
-      ).toString("base64"),
+      ),
     };
   }
 
@@ -237,9 +237,12 @@ export class LambdaRestateServer extends BaseRestateServer {
       },
       statusCode: code,
       isBase64Encoded: true,
-      body: Buffer.from(JSON.stringify({ message: message })).toString(
-        "base64"
-      ),
+      body: encodeResponse(Buffer.from(JSON.stringify({ message }))),
     };
   }
+}
+
+function encodeResponse(data: Uint8Array): string {
+  const buffer = data instanceof Buffer ? data : Buffer.from(data);
+  return buffer.toString("base64");
 }
