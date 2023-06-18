@@ -38,7 +38,7 @@ interface CallContext {
   delay?: number;
 }
 
-export class RestateContextImpl<I, O> implements RestateContext {
+export class RestateContextImpl implements RestateContext {
   // here, we capture the context information for actions on the Restate context that
   // are executed within other actions, such as
   // ctx.oneWayCall( () => client.foo(bar) );
@@ -51,7 +51,8 @@ export class RestateContextImpl<I, O> implements RestateContext {
     public readonly instanceKey: Buffer,
     public readonly invocationId: Buffer,
     public readonly serviceName: string,
-    private readonly stateMachine: StateMachine<I, O>
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    private readonly stateMachine: StateMachine<any, any>
   ) {}
 
   public async get<T>(name: string): Promise<T | null> {

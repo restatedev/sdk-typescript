@@ -22,7 +22,7 @@ import { ensureError } from "./types/errors";
 
 export class StateMachine<I, O> implements RestateStreamConsumer {
   private journal: Journal<I, O>;
-  private restateContext: RestateContextImpl<I, O>;
+  private restateContext: RestateContextImpl;
 
   private readonly invocationComplete = new CompletablePromise<void>();
 
