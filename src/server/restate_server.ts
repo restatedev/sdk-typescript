@@ -234,7 +234,6 @@ async function handleInvocation<I, O>(
     await stateMachine.invoke();
   } finally {
     // some GC friendliness
-    // we want this here, but can only do this once we can actually await the 'stateMachine.invoke()' function
-    // connection.removeCurrentConsumer();
+    connection.removeCurrentConsumer();
   }
 }

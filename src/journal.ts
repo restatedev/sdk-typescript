@@ -66,11 +66,6 @@ export class Journal<I, O> {
       m
     );
 
-    rootEntry.promise = rootEntry.promise.then(
-      (result) => this.invocation.method.resolve(result),
-      (failure) => this.invocation.method.resolve(failure)
-    );
-
     this.pendingJournalEntries.set(0, rootEntry);
   }
 

@@ -2,10 +2,7 @@
 
 import { RestateContext, setContext } from "../restate_context";
 import { FileDescriptorProto } from "ts-proto-descriptors";
-import { OutputStreamEntryMessage } from "../generated/proto/protocol";
 import { rlog } from "../utils/logger";
-import { OUTPUT_STREAM_ENTRY_MESSAGE_TYPE } from "./protocol";
-import { Message } from "./types";
 
 export class GrpcServiceMethod<I, O> {
   constructor(
@@ -27,12 +24,6 @@ export class GrpcService {
 }
 
 export class HostedGrpcServiceMethod<I, O> {
-  // used to fail the invocation on an error
-  /* eslint-disable @typescript-eslint/no-explicit-any */
-  public reject!: (reason: any) => void;
-  // used to resolve the invocation on suspensions (so when we have no output response yet)
-  public resolve!: (value: Message | PromiseLike<Message>) => void;
-
   constructor(
     readonly instance: unknown,
     readonly packge: string,
@@ -45,26 +36,18 @@ export class HostedGrpcServiceMethod<I, O> {
     context: RestateContext,
     inBytes: Uint8Array,
     logPrefix: string
-  ): Promise<Message> {
-    return new Promise<Message>((resolve, reject) => {
-      this.reject = reject;
-      this.resolve = resolve;
-      const instanceWithContext = setContext(this.instance, context);
-      const input = this.method.inputDecoder(inBytes);
-      rlog.debugJournalMessage(logPrefix, "Received input message.", input);
-      this.method
-        .localFn(instanceWithContext, input)
-        .then((output) => {
-          const outBytes = this.method.outputEncoder(output);
-          const msg = OutputStreamEntryMessage.create({
-            value: Buffer.from(outBytes),
-          });
-          resolve(new Message(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, msg));
-        })
-        .catch((error) => {
-          reject(error);
-        });
-    });
+  ): Promise<Uint8Array> {
+    const instanceWithContext = setContext(this.instance, context);
+
+    const input = this.method.inputDecoder(inBytes);
+    rlog.debugJournalMessage(
+      logPrefix,
+      "Invoking function with input message:",
+      input
+    );
+
+    const result: O = await this.method.localFn(instanceWithContext, input);
+    return this.method.outputEncoder(result);
   }
 }
 
