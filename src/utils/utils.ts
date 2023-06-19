@@ -53,7 +53,8 @@ export function printMessageAsJson(obj: any): string {
       newObj[key] = value.toString().trim();
     }
   }
-  return JSON.stringify(newObj);
+  // Stringify object. Replace bigintToString serializer to prevent "BigInt not serializable" errors
+  return JSON.stringify(obj, (_, v) => typeof v === 'bigint' ? v.toString() : v);
 }
 
 // Only used for logging the invocation ID in debug logging mode

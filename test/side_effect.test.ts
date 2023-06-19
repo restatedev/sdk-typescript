@@ -413,7 +413,7 @@ describe("EmptySideEffectGreeter: with completion", () => {
     ).run();
 
     expect(result).toStrictEqual([
-      sideEffectMessage({}),
+      sideEffectMessage(),
       outputMessage(greetResponse("Hello")),
     ]);
   });
