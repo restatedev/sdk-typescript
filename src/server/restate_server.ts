@@ -117,44 +117,47 @@ export class RestateServer extends BaseRestateServer {
     rlog.info(`Listening on ${actualPort}...`);
 
     for await (const connection of incomingConnectionAtPort(actualPort)) {
-      try {
-        const method = this.methodByUrl(connection.url.path);
-
-        if (method !== undefined) {
-          // valid connection, let's dispatch the invocation
-          connection.stream.respond({
-            "content-type": "application/restate",
-            ":status": 200,
-          });
-
-          const restateStream = RestateHttp2Connection.from(connection.stream);
-          await handleInvocation(method, restateStream);
-          continue;
-        }
-
-        // no method under that name. might be a discovery request
-        if (connection.url.path == "/discover") {
-          rlog.info(
-            "Answering discovery request. Registering these services: " +
-              JSON.stringify(this.discovery.services)
-          );
-          await respondDiscovery(this.discovery, connection.stream);
-          continue;
-        }
-
-        // no discovery, so unknown method: 404
-        rlog.error(
-          `No service and function found for URL ${connection.url.path}`
-        );
-        await respondNotFound(connection.stream);
-      } catch (e) {
+      this.handleConnection(connection.url, connection.stream).catch((e) => {
         const error = ensureError(e);
         rlog.error("Error while handling connection: " + error.message);
         rlog.error(error.stack);
         connection.stream.end();
         connection.stream.destroy();
-      }
+      });
     }
+  }
+
+  private async handleConnection(
+    url: Url,
+    stream: http2.ServerHttp2Stream
+  ): Promise<void> {
+    const method = this.methodByUrl(url.path);
+
+    if (method !== undefined) {
+      // valid connection, let's dispatch the invocation
+      stream.respond({
+        "content-type": "application/restate",
+        ":status": 200,
+      });
+
+      const restateStream = RestateHttp2Connection.from(stream);
+      await handleInvocation(method, restateStream);
+      return;
+    }
+
+    // no method under that name. might be a discovery request
+    if (url.path == "/discover") {
+      rlog.info(
+        "Answering discovery request. Registering these services: " +
+          JSON.stringify(this.discovery.services)
+      );
+      await respondDiscovery(this.discovery, stream);
+      return;
+    }
+
+    // no discovery, so unknown method: 404
+    rlog.error(`No service and function found for URL ${url.path}`);
+    await respondNotFound(stream);
   }
 }
 
