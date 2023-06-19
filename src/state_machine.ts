@@ -247,7 +247,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
       OutputStreamEntryMessage.create({
         failure: Failure.create({
           code: 13,
-          message: `${this.invocation.logPrefix}  for invocation id: ${e.message}`,
+          message: `${this.invocation.logPrefix}  Uncaught exception for invocation id: ${e.message}`,
         }),
       })
     );
