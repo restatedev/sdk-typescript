@@ -1,6 +1,6 @@
 "use strict";
 
-import stream from "stream";
+import stream, { EventEmitter } from "stream";
 import { pipeline } from "stream/promises";
 import { streamEncoder } from "../io/encoder";
 import { streamDecoder } from "../io/decoder";
@@ -18,7 +18,7 @@ export class RestateHttp2Connection implements Connection {
     const sdkOutput = streamEncoder();
     sdkOutput.pipe(http2stream);
 
-    return new RestateHttp2Connection(sdkInput, sdkOutput);
+    return new RestateHttp2Connection(sdkInput, sdkOutput, http2stream);
   }
 
   // --------------------------------------------------------------------------
@@ -33,15 +33,50 @@ export class RestateHttp2Connection implements Connection {
 
   constructor(
     private readonly sdkInput: stream.Readable,
-    private readonly sdkOutput: stream.Writable
+    private readonly sdkOutput: stream.Writable,
+    errorEvents: EventEmitter
   ) {
-    // install error listeners on the stream
+    // remember and forward messages
+    this.sdkInput.on("data", (m: Message) => {
+      // deliver message, if we have a consumer. otherwise buffer the message.
+      if (this.currentConsumer) {
+        if (this.currentConsumer.handleMessage(m)) {
+          this.removeCurrentConsumer();
+        }
+      } else {
+        this.inputBuffer.push(m);
+      }
+    });
+
+    // remember and forward close events
+    this.sdkInput.on("end", () => {
+      this.consumerInputClosed = true;
+      if (this.currentConsumer) {
+        this.currentConsumer.handleInputClosed();
+      }
+    });
+
+    // --------- error handling --------
+    // - a.k.a. node event wrangling...
+
+    // the error handler for all sorts of errors coming from streams
     const errorHandler = (e: Error) => {
+      // make sure we don't overwrite the initial error
+      if (this.consumerError !== undefined) {
+        return;
+      }
       this.consumerError = e;
       if (this.currentConsumer) {
         this.currentConsumer.handleStreamError(e);
       }
     };
+
+    // this event handles all types of connection loss
+    errorEvents.on("aborted", () => {
+      errorHandler(new Error("Connection to Restate was lost"));
+    });
+
+    // these events notify of errors in the pipeline, like encoding/decoding
     this.sdkInput.on("error", (e: Error) => {
       rlog.error("Error in input stream (Restate to Service): " + e.message);
       rlog.error(e.stack);
@@ -53,23 +88,10 @@ export class RestateHttp2Connection implements Connection {
       errorHandler(e);
     });
 
-    // remember and forward close events
+    // see if streams get torn down before they end cleanly
     this.sdkInput.on("close", () => {
-      this.consumerInputClosed = true;
-      if (this.currentConsumer) {
-        this.currentConsumer.handleInputClosed();
-      }
-    });
-
-    // remember and forward messages
-    this.sdkInput.on("data", (m: Message) => {
-      // deliver message, if we have a consumer. otherwise buffer the message.
-      if (this.currentConsumer) {
-        if (this.currentConsumer.handleMessage(m)) {
-          this.removeCurrentConsumer();
-        }
-      } else {
-        this.inputBuffer.push(m);
+      if (!this.consumerInputClosed) {
+        errorHandler(new Error("stream was destroyed before end"));
       }
     });
   }

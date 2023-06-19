@@ -412,7 +412,11 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
   }
 
   public handleInputClosed(): void {
-    if (this.journal.isClosed()) {
+    if (
+      this.journal.isClosed() ||
+      this.stateMachineClosed ||
+      this.inputChannelClosed
+    ) {
       return;
     }
 
