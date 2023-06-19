@@ -24,7 +24,6 @@ import {
   SUSPENSION_MESSAGE_TYPE,
   SuspensionMessage,
 } from "./types/protocol";
-import { rlog } from "./utils/logger";
 import {
   equalityCheckers,
   jsonDeserialize,
@@ -218,7 +217,6 @@ export class Journal<I, O> {
       }
       case GET_STATE_ENTRY_MESSAGE_TYPE: {
         const getStateMsg = replayMessage.message as GetStateEntryMessage;
-        rlog.debug(printMessageAsJson(getStateMsg));
         this.resolveResult(
           journalIndex,
           journalEntry,
@@ -252,7 +250,6 @@ export class Journal<I, O> {
         break;
       }
       case SIDE_EFFECT_ENTRY_MESSAGE_TYPE: {
-        rlog.debug(replayMessage.message);
         const sideEffectMsg = SideEffectEntryMessage.decode(
           replayMessage.message as Uint8Array
         );
@@ -364,17 +361,12 @@ export class Journal<I, O> {
       return;
     } else {
       this.state = newExecState;
-      rlog.debug("Transitioning state to " + newExecState);
       return;
     }
   }
 
   private incrementUserCodeIndex() {
     this.userCodeJournalIndex++;
-    rlog.debug(
-      "User code index incremented. New value: " + this.userCodeJournalIndex
-    );
-
     if (
       this.userCodeJournalIndex === this.invocation.nbEntriesToReplay &&
       this.state === NewExecutionState.REPLAYING

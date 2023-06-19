@@ -69,7 +69,8 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
 
     rlog.debugJournalMessage(
       this.invocation.logPrefix,
-      "Handling runtime completion message: ",
+      "Received completion message from Restate, adding to journal.",
+      m.messageType,
       m.message
     );
     this.journal.handleRuntimeCompletionMessage(
@@ -103,16 +104,17 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
     /*
     Can take any type of message as input (also input stream and output stream)
     */
-    rlog.debugJournalMessage(
-      this.invocation.logPrefix,
-      "Adding message to output buffer: type: ",
-      message
-    );
-
     const promise = this.journal.handleUserSideMessage<T>(messageType, message);
 
     // Only send if we are in processing mode. Not if we are replaying user code
     if (this.journal.isProcessing()) {
+      rlog.debugJournalMessage(
+        this.invocation.logPrefix,
+        "Adding message to journal and sending to Restate",
+        messageType,
+        message
+      );
+
       this.connection.buffer(
         new Message(
           messageType,
@@ -121,6 +123,13 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
           protocolVersion,
           requiresAckFlag
         )
+      );
+    } else {
+      rlog.debugJournalMessage(
+        this.invocation.logPrefix,
+        "Matched and replayed message from journal",
+        messageType,
+        message
       );
     }
 
@@ -168,10 +177,18 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
       return Promise.reject(new Error("state machine is already closed"));
     }
 
+    if (this.journal.nextEntryWillBeReplayed()) {
+      rlog.debugInvokeMessage(
+        this.invocation.logPrefix,
+        "Resuming (replaying) function."
+      );
+    } else {
+      rlog.debugInvokeMessage(this.invocation.logPrefix, "Invoking function.");
+    }
+
     const resultBytes: Promise<Uint8Array> = this.invocation.method.invoke(
       this.restateContext,
-      this.invocation.invocationValue,
-      this.invocation.logPrefix
+      this.invocation.invocationValue
     );
 
     resultBytes
@@ -201,7 +218,25 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
           this.journal.handleUserSideMessage(msg.messageType, msg.message);
           if (!this.journal.outputMsgWasReplayed()) {
             this.connection.buffer(msg);
+            rlog.debugJournalMessage(
+              this.invocation.logPrefix,
+              "Journaled and sent output message",
+              msg.messageType,
+              msg.message
+            );
+          } else {
+            rlog.debugJournalMessage(
+              this.invocation.logPrefix,
+              "Replayed and matched output message from journal",
+              msg.messageType,
+              msg.message
+            );
           }
+
+          rlog.debugInvokeMessage(
+            this.invocation.logPrefix,
+            "Function completed successfully."
+          );
 
           this.finish();
         } catch (e) {
@@ -219,11 +254,12 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
           }
 
           const error = ensureError(e);
-          rlog.info(
-            `${this.invocation.logPrefix} Call failed: ${error.message}`
+          rlog.debugInvokeMessage(
+            this.invocation.logPrefix,
+            "Function completed with an error: " + error.message
           );
 
-          this.finishWithError(e);
+          this.finishWithError(error);
         } catch (ee) {
           this.unhandledError(ensureError(ee));
         }
@@ -254,7 +290,8 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
     rlog.debugJournalMessage(
       this.invocation.logPrefix,
       "Invocation ended with failure message.",
-      msg
+      msg.messageType,
+      msg.message
     );
     if (!this.journal.outputMsgWasReplayed()) {
       this.connection.buffer(msg);
@@ -291,12 +328,17 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
       this.suspensionTimeout = undefined;
     }
 
-    rlog.debug(`Scheduling suspension for ${this.getSuspensionMillis()} ms`);
+    const delay = this.getSuspensionMillis();
+    rlog.debugJournalMessage(
+      this.invocation.logPrefix,
+      "Scheduling suspension in " + delay + " ms"
+    );
+
     // Set a new suspension with a new timeout
     // The suspension will only be sent if the timeout is not canceled due to a completion.
     this.suspensionTimeout = setTimeout(() => {
       this.suspend();
-    }, this.getSuspensionMillis());
+    }, delay);
   }
 
   // Suspension timeouts:
@@ -320,8 +362,6 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
       return;
     }
 
-    rlog.debug("Suspending");
-
     // There need to be journal entries to complete, otherwise this timeout should have been removed.
     // A suspension message is the end of the invocation.
     // Resolve the root call with the suspension message
@@ -332,21 +372,26 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
         entryIndexes: indices,
       })
     );
+
     rlog.debugJournalMessage(
       this.invocation.logPrefix,
-      "Call ended successful with message.",
-      msg
+      "Writing suspension message to journal.",
+      msg.messageType,
+      msg.message
     );
 
     this.journal.handleUserSideMessage(msg.messageType, msg.message);
     if (!this.journal.outputMsgWasReplayed()) {
       this.connection.buffer(msg);
     }
+
+    rlog.debugInvokeMessage(this.invocation.logPrefix, "Suspending function.");
+
     await this.finish();
   }
 
   public async notifyApiViolation(code: number, msg: string) {
-    await this.finishWithError(new Error("API violation: " + msg));
+    await this.finishWithError(new Error(`API violation (${code}): ${msg}`));
   }
 
   /**
@@ -368,6 +413,12 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
     }
 
     this.inputChannelClosed = true;
+
+    rlog.debug(
+      this.invocation.logPrefix +
+        " : Restate closed connection to trigger suspension."
+    );
+
     // If there is a timeout planned, reset the timout to execute immediately when the work is done.
     if (this.suspensionTimeout !== undefined) {
       this.scheduleSuspension();

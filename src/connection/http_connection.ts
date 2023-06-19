@@ -55,7 +55,6 @@ export class RestateHttp2Connection implements Connection {
 
     // remember and forward close events
     this.sdkInput.on("close", () => {
-      rlog.debug("Stream: Input closed");
       this.consumerInputClosed = true;
       if (this.currentConsumer) {
         this.currentConsumer.handleInputClosed();
