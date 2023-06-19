@@ -307,8 +307,11 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
   private async finish() {
     this.stateMachineClosed = true;
     this.journal.close();
+    this.clearSuspensionTimeout();
+
     await this.connection.flush();
     this.connection.end();
+
     this.invocationComplete.resolve();
   }
 
@@ -318,8 +321,9 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
    */
   private unhandledError(e: Error) {
     const error = ensureError(e);
-    this.journal.close();
     this.invocationComplete.reject(error);
+    this.journal.close();
+    this.clearSuspensionTimeout();
   }
 
   scheduleSuspension() {
@@ -438,5 +442,12 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
 
   public nextEntryWillBeReplayed() {
     return this.journal.nextEntryWillBeReplayed();
+  }
+
+  private clearSuspensionTimeout() {
+    if (this.suspensionTimeout !== undefined) {
+      clearTimeout(this.suspensionTimeout);
+      this.suspensionTimeout = undefined;
+    }
   }
 }
