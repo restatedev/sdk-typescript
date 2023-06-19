@@ -41,6 +41,8 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
   // Suspension timeout that gets set and cleared based on completion messages;
   private suspensionTimeout?: NodeJS.Timeout;
 
+  private readonly suspensionMillis = 30_000;
+
   constructor(
     private readonly connection: Connection,
     private readonly invocation: Invocation<I, O>,
@@ -347,11 +349,10 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
   // - suspend after 1 seconds if input channel is still open (can still get completions)
   // - suspend immediately if input channel is closed (cannot get completions)
   private getSuspensionMillis(): number {
-    return this.protocolMode === ProtocolMode.REQUEST_RESPONSE
+    return this.protocolMode === ProtocolMode.REQUEST_RESPONSE ||
+      this.inputChannelClosed
       ? 0
-      : this.inputChannelClosed
-      ? 0
-      : 1000;
+      : this.suspensionMillis;
   }
 
   private async suspend() {
