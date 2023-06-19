@@ -103,12 +103,9 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
       return new CompletablePromise<T>().promise;
     }
 
-    /*
-    Can take any type of message as input (also input stream and output stream)
-    */
     const promise = this.journal.handleUserSideMessage<T>(messageType, message);
 
-    // Only send if we are in processing mode. Not if we are replaying user code
+    // Only send the message to restate if we are not in replaying mode
     if (this.journal.isProcessing()) {
       rlog.debugJournalMessage(
         this.invocation.logPrefix,
@@ -218,8 +215,10 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
           );
 
           this.journal.handleUserSideMessage(msg.messageType, msg.message);
+
           if (!this.journal.outputMsgWasReplayed()) {
             this.connection.buffer(msg);
+
             rlog.debugJournalMessage(
               this.invocation.logPrefix,
               "Journaled and sent output message",
@@ -326,7 +325,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
     this.clearSuspensionTimeout();
   }
 
-  scheduleSuspension() {
+  private scheduleSuspension() {
     // If there was already a timeout set, we want to reset the time to postpone suspension as long as we make progress.
     // So we first clear the old timeout, and then we set a new one.
     if (this.suspensionTimeout !== undefined) {

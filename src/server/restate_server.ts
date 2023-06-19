@@ -215,7 +215,7 @@ async function handleInvocation<I, O>(
   try {
     await journalBuilder.completion();
   } finally {
-    // some GC friendliness
+    // ensure GC friendliness, also in case of errors
     connection.removeCurrentConsumer();
   }
 
@@ -236,7 +236,7 @@ async function handleInvocation<I, O>(
   try {
     await stateMachine.invoke();
   } finally {
-    // some GC friendliness
+    // ensure GC friendliness, also in case of errors
     connection.removeCurrentConsumer();
   }
 }
