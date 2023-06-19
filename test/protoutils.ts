@@ -37,7 +37,7 @@ import { SideEffectEntryMessage } from "../src/generated/proto/javascript";
 import { Failure } from "../src/generated/proto/protocol";
 import { expect } from "@jest/globals";
 import { rlog } from "../src/utils/logger";
-import { printMessageAsJson } from "../src/utils/utils";
+import { jsonSerialize, printMessageAsJson } from "../src/utils/utils";
 
 export function startMessage(knownEntries?: number): Message {
   return new Message(
@@ -102,7 +102,7 @@ export function getStateMessage<T>(
       GET_STATE_ENTRY_MESSAGE_TYPE,
       GetStateEntryMessage.create({
         key: Buffer.from(key),
-        value: Buffer.from(JSON.stringify(value)),
+        value: Buffer.from(jsonSerialize(value)),
       })
     );
   } else {
@@ -120,7 +120,7 @@ export function setStateMessage<T>(key: string, value: T): Message {
     SET_STATE_ENTRY_MESSAGE_TYPE,
     SetStateEntryMessage.create({
       key: Buffer.from(key),
-      value: Buffer.from(JSON.stringify(value)),
+      value: Buffer.from(jsonSerialize(value)),
     })
   );
 }

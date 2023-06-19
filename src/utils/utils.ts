@@ -1,5 +1,7 @@
 "use strict";
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import {
   BackgroundInvokeEntryMessage,
   ClearStateEntryMessage,
@@ -22,7 +24,6 @@ import {
   SLEEP_ENTRY_MESSAGE_TYPE,
 } from "../types/protocol";
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 export class CompletablePromise<T> {
   private success!: (value: T | PromiseLike<T>) => void;
   private failure!: (reason?: any) => void;
@@ -45,7 +46,20 @@ export class CompletablePromise<T> {
   }
 }
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
+export function jsonSerialize(obj: any): string {
+  return JSON.stringify(obj, (_, v) =>
+    typeof v === "bigint" ? "BIGINT::" + v.toString() : v
+  );
+}
+
+export function jsonDeserialize<T>(json: string): T {
+  return JSON.parse(json, (_, v) =>
+    typeof v === "string" && v.startsWith("BIGINT::")
+      ? BigInt(v.substring(8))
+      : v
+  ) as T;
+}
+
 export function printMessageAsJson(obj: any): string {
   const newObj = { ...(obj as Record<string, unknown>) };
   for (const [key, value] of Object.entries(newObj)) {
@@ -54,7 +68,9 @@ export function printMessageAsJson(obj: any): string {
     }
   }
   // Stringify object. Replace bigintToString serializer to prevent "BigInt not serializable" errors
-  return JSON.stringify(obj, (_, v) => typeof v === 'bigint' ? v.toString() : v);
+  return JSON.stringify(obj, (_, v) =>
+    typeof v === "bigint" ? v.toString() + "n" : v
+  );
 }
 
 // Only used for logging the invocation ID in debug logging mode

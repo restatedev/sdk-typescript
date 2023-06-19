@@ -25,7 +25,11 @@ import {
   SuspensionMessage,
 } from "./types/protocol";
 import { rlog } from "./utils/logger";
-import { equalityCheckers, printMessageAsJson } from "./utils/utils";
+import {
+  equalityCheckers,
+  jsonDeserialize,
+  printMessageAsJson,
+} from "./utils/utils";
 import { Message } from "./types/types";
 import { SideEffectEntryMessage } from "./generated/proto/javascript";
 import { Invocation } from "./invocation";
@@ -256,7 +260,7 @@ export class Journal<I, O> {
           this.resolveResult(
             journalIndex,
             journalEntry,
-            JSON.parse(sideEffectMsg.value.toString())
+            jsonDeserialize(sideEffectMsg.value.toString())
           );
         } else if (sideEffectMsg.failure !== undefined) {
           this.resolveResult(

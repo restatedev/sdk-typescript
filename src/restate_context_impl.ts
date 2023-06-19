@@ -26,6 +26,7 @@ import {
 import { SideEffectEntryMessage } from "./generated/proto/javascript";
 import { AsyncLocalStorage } from "async_hooks";
 import { RestateError } from "./types/errors";
+import { jsonSerialize, jsonDeserialize } from "./utils/utils";
 
 enum CallContexType {
   None,
@@ -70,13 +71,13 @@ export class RestateContextImpl implements RestateContext {
       return null;
     }
 
-    return JSON.parse(result.toString()) as T;
+    return jsonDeserialize(result.toString());
   }
 
   public set<T>(name: string, value: T): void {
     this.checkState("set state");
 
-    const bytes = Buffer.from(JSON.stringify(value));
+    const bytes = Buffer.from(jsonSerialize(value));
     const msg = SetStateEntryMessage.create({
       key: Buffer.from(name, "utf8"),
       value: bytes,
@@ -224,7 +225,7 @@ export class RestateContextImpl implements RestateContext {
       sideEffectResult !== undefined
         ? SideEffectEntryMessage.encode(
             SideEffectEntryMessage.create({
-              value: Buffer.from(JSON.stringify(sideEffectResult)),
+              value: Buffer.from(jsonSerialize(sideEffectResult)),
             })
           ).finish()
         : SideEffectEntryMessage.encode(

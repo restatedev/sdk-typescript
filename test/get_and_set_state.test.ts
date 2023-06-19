@@ -50,6 +50,18 @@ class ClearStateGreeter implements TestGreeter {
   }
 }
 
+class BigIntGreeter implements TestGreeter {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async greet(request: TestRequest): Promise<TestResponse> {
+    const ctx = restate.useContext(this);
+
+    const state = (await ctx.get<bigint>("STATE")) || 0n;
+    ctx.set("STATE", state + 1n);
+
+    return TestResponse.create({ greeting: `Hello ${state}` });
+  }
+}
+
 enum OrderStatus {
   ORDERED,
   DELIVERED,
@@ -89,6 +101,25 @@ describe("GetAndSetGreeter: With GetState and SetState", () => {
     expect(result).toStrictEqual([
       outputMessage(greetResponse("Hello Francesco")),
     ]);
+  });
+});
+
+describe("get() and set() state", () => {
+  it("should handle bigint", async () => {
+    const result = await new TestDriver(
+      protoMetadata,
+      "TestGreeter",
+      new BigIntGreeter(),
+      "/test.TestGreeter/Greet",
+      [
+        startMessage(3),
+        inputMessage(greetRequest("<ignored>")),
+        getStateMessage("STATE", 42n),
+        setStateMessage("STATE", 43n),
+      ]
+    ).run();
+
+    expect(result).toStrictEqual([outputMessage(greetResponse("Hello 42"))]);
   });
 });
 
