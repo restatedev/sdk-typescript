@@ -3,20 +3,32 @@
 
 import { Message } from "./types/types";
 import { HostedGrpcServiceMethod } from "./types/grpc";
-import { rlog } from "./utils/logger";
 import {
   PollInputStreamEntryMessage,
   StartMessage,
 } from "./generated/proto/protocol";
-import { CompletablePromise, uuidV7FromBuffer } from "./utils/utils";
+import {
+  CompletablePromise,
+  printMessageAsJson,
+  uuidV7FromBuffer,
+} from "./utils/utils";
 import {
   POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
   START_MESSAGE_TYPE,
 } from "./types/protocol";
 import { RestateStreamConsumer } from "./connection/connection";
 
+enum State {
+  ExpectingStart = 0,
+  ExpectingInput = 1,
+  ExpectingFurtherReplay = 2,
+  Complete = 3,
+}
+
 export class InvocationBuilder<I, O> implements RestateStreamConsumer {
   private readonly complete = new CompletablePromise<void>();
+
+  private state: State = State.ExpectingStart;
 
   private runtimeReplayIndex = 0;
   private replayEntries = new Map<number, Message>();
@@ -28,17 +40,44 @@ export class InvocationBuilder<I, O> implements RestateStreamConsumer {
   constructor(private readonly method: HostedGrpcServiceMethod<I, O>) {}
 
   public handleMessage(m: Message): boolean {
-    if (m.messageType === START_MESSAGE_TYPE) {
-      this.handleStartMessage(m.message as StartMessage);
-      return false;
-    } else {
-      this.addReplayEntry(m);
-      const isComplete = this.isComplete();
-      if (isComplete) {
-        this.complete.resolve();
-      }
-      return isComplete;
+    switch (this.state) {
+      case State.ExpectingStart:
+        checkState(State.ExpectingStart, START_MESSAGE_TYPE, m);
+        this.handleStartMessage(m.message as StartMessage);
+        this.state = State.ExpectingInput;
+        return false;
+
+      case State.ExpectingInput:
+        checkState(
+          State.ExpectingInput,
+          POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
+          m
+        );
+        this.addReplayEntry(m);
+        break;
+
+      case State.ExpectingFurtherReplay:
+        this.addReplayEntry(m);
+        break;
+
+      case State.Complete:
+        throw new Error(
+          `Journal builder is getting a message after the journal was complete. entries-to-replay: ${
+            this.nbEntriesToReplay
+          }, message: ${printMessageAsJson(m)}`
+        );
     }
+
+    this.state =
+      this.replayEntries.size === this.nbEntriesToReplay
+        ? State.Complete
+        : State.ExpectingFurtherReplay;
+
+    if (this.state === State.Complete) {
+      this.complete.resolve();
+      return true;
+    }
+    return false;
   }
 
   public handleStreamError(e: Error): void {
@@ -72,22 +111,10 @@ export class InvocationBuilder<I, O> implements RestateStreamConsumer {
 
   private incrementRuntimeReplayIndex() {
     this.runtimeReplayIndex++;
-    rlog.debug(
-      "Runtime replay index incremented. New value: " +
-        this.runtimeReplayIndex +
-        " while known entries is " +
-        this.nbEntriesToReplay
-    );
   }
 
   public isComplete(): boolean {
-    return (
-      this.instanceKey !== undefined &&
-      this.invocationId !== undefined &&
-      this.nbEntriesToReplay !== undefined &&
-      this.invocationValue !== undefined &&
-      this.replayEntries.size === this.nbEntriesToReplay
-    );
+    return this.state === State.Complete;
   }
 
   public build(): Invocation<I, O> {
@@ -124,5 +151,13 @@ export class Invocation<I, O> {
     }-${this.instanceKey.toString("base64")}-${this.invocationIdString}] [${
       this.method.method.name
     }]`;
+  }
+}
+
+function checkState(state: State, expected: bigint, m: Message) {
+  if (m.messageType !== expected) {
+    throw new Error(
+      `Unexpected message in state ${state}: ${printMessageAsJson(m)}`
+    );
   }
 }
