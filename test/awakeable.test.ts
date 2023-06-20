@@ -12,7 +12,6 @@ import {
   greetResponse,
   inputMessage,
   outputMessage,
-  printResults,
   startMessage,
   suspensionMessage,
 } from "./protoutils";
@@ -67,7 +66,6 @@ describe("AwakeableGreeter", () => {
       completionMessage(1, JSON.stringify("Francesco")),
     ]).run();
 
-    printResults(result);
     expect(result).toStrictEqual([
       awakeableMessage(),
       outputMessage(greetResponse(`Hello Francesco for ${getAwakeableId(1)}`)),

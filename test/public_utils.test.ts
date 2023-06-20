@@ -22,7 +22,6 @@ import {
   greetResponse,
   inputMessage,
   outputMessage,
-  printResults,
   startMessage,
 } from "./protoutils";
 import { rlog } from "../src/utils/logger";
@@ -431,7 +430,6 @@ describe("FailingRetrySideEffectGreeter", () => {
       completionMessage(5), // success
     ]).run();
 
-    printResults(result);
     expect(result.length).toStrictEqual(6);
     checkIfSideEffectReturnsFalse(result[0]);
     expect(result[1].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
@@ -457,8 +455,6 @@ describe("FailingRetrySideEffectGreeter", () => {
       completionMessage(6, undefined, true), // sleep
       completionMessage(7), // fail
     ]).run();
-
-    printResults(result);
 
     expect(result.length).toStrictEqual(8);
     checkIfSideEffectReturnsFalse(result[0]);

@@ -10,7 +10,6 @@ import {
   greetResponse,
   inputMessage,
   outputMessage,
-  printResults,
   setStateMessage,
   startMessage,
   suspensionMessage,
@@ -42,8 +41,6 @@ describe("GetAndSetGreeter", () => {
       inputMessage(greetRequest("Till")),
       completionMessage(1, JSON.stringify("Pete")),
     ]).run();
-
-    printResults(result);
 
     expect(result).toStrictEqual([
       getStateMessage("STATE"),
