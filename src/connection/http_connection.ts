@@ -172,7 +172,6 @@ export class RestateHttp2Connection implements Connection {
     this.sdkOutput.setMaxListeners(max);
   }
 
-
   public end() {
     this.sdkOutput.end();
   }
