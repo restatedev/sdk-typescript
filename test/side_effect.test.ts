@@ -736,7 +736,6 @@ describe("FailingAwakeableSideEffectGreeter", () => {
 });
 
 export class AwaitSideEffectService implements TestGreeter {
-
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);

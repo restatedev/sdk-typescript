@@ -42,17 +42,11 @@ async function exceptionOnFalse(x: Promise<boolean>): Promise<boolean> {
  */
 describe("retrySideEffectWithBackoff()", () => {
   it("should return immediately upon success", async () => {
-    await testReturnImmediatelyUponSuccess(
-      RestateUtils.retrySideEffect,
-      true
-    );
+    await testReturnImmediatelyUponSuccess(RestateUtils.retrySideEffect, true);
   });
 
   it("should retry until success", async () => {
-    await testRetryUntilSuccess(
-      RestateUtils.retrySideEffect,
-      async (x) => x
-    );
+    await testRetryUntilSuccess(RestateUtils.retrySideEffect, async (x) => x);
   });
 
   it("should retry until the maximum attemps", async () => {
@@ -147,9 +141,10 @@ async function testReturnImmediatelyUponSuccess<E, R>(
       initialDelayMs: 10,
       maxDelayMs: 100,
       maxRetries: 1000000,
-      name: "test action"
+      name: "test action",
     } as RetrySettings,
-    action);
+    action
+  );
 
   expect(invocations).toStrictEqual(1);
   expect(timesSleepCalled).toStrictEqual(0);
@@ -177,9 +172,10 @@ async function testRetryUntilSuccess<E, R>(
       initialDelayMs: 10,
       maxDelayMs: 100,
       maxRetries: 1000000,
-      name: "test action"
+      name: "test action",
     } as RetrySettings,
-    action);
+    action
+  );
 
   expect(remainingFailures).toStrictEqual(0);
 
@@ -211,9 +207,10 @@ async function testRetryMaxAttempts<R>(
         initialDelayMs: 10,
         maxDelayMs: 100,
         maxRetries: numRetries,
-        name: "test action"
+        name: "test action",
       } as RetrySettings,
-      wrappedAction);
+      wrappedAction
+    );
 
     fail("expected an exception to be thrown");
   } catch (e) {
@@ -250,9 +247,10 @@ async function testInitialSleepTime<R>(
       initialDelayMs: 10,
       maxDelayMs: 100,
       maxRetries: 100000,
-      name: "test action"
+      name: "test action",
     } as RetrySettings,
-    wrappedAction);
+    wrappedAction
+  );
 
   expect(initSleep).toStrictEqual(10);
 }
@@ -284,9 +282,10 @@ async function testUltimateSleepTime<R>(
       initialDelayMs: 10,
       maxDelayMs: 100,
       maxRetries: 100000,
-      name: "test action"
+      name: "test action",
     } as RetrySettings,
-    wrappedAction);
+    wrappedAction
+  );
 
   expect(lastSleepTime).toStrictEqual(100);
 }
@@ -305,7 +304,7 @@ class FailingExceptionalSideEffectGreeter implements TestGreeter {
       {
         initialDelayMs: 100,
         maxDelayMs: 500,
-        maxRetries: 3
+        maxRetries: 3,
       } as RetrySettings,
       doCall
     );
@@ -328,7 +327,7 @@ class FailingRetrySideEffectGreeter implements TestGreeter {
       {
         initialDelayMs: 100,
         maxDelayMs: 500,
-        maxRetries: 3
+        maxRetries: 3,
       },
       doCall
     );
@@ -422,20 +421,17 @@ describe("FailingSideEffectGreeter", () => {
 describe("FailingRetrySideEffectGreeter", () => {
   it("retries two times and then succeeds", async () => {
     i = 0;
-    const result = await new TestDriver(
-      new FailingRetrySideEffectGreeter(2),
-      [
-        startMessage(1),
-        inputMessage(greetRequest("Till")),
-        completionMessage(1), // fail
-        completionMessage(2, undefined, true), // sleep
-        completionMessage(3), // fail
-        completionMessage(4, undefined, true), // sleep
-        completionMessage(5), // success
-      ]
-    ).run();
+    const result = await new TestDriver(new FailingRetrySideEffectGreeter(2), [
+      startMessage(1),
+      inputMessage(greetRequest("Till")),
+      completionMessage(1), // fail
+      completionMessage(2, undefined, true), // sleep
+      completionMessage(3), // fail
+      completionMessage(4, undefined, true), // sleep
+      completionMessage(5), // success
+    ]).run();
 
-    printResults(result)
+    printResults(result);
     expect(result.length).toStrictEqual(6);
     checkIfSideEffectReturnsFalse(result[0]);
     expect(result[1].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
@@ -450,20 +446,17 @@ describe("FailingRetrySideEffectGreeter", () => {
 
   it("retries three times and then fails", async () => {
     i = 0;
-    const result = await new TestDriver(
-      new FailingRetrySideEffectGreeter(4),
-      [
-        startMessage(1),
-        inputMessage(greetRequest("Till")),
-        completionMessage(1), // fail
-        completionMessage(2, undefined, true), // sleep
-        completionMessage(3), // fail
-        completionMessage(4, undefined, true), // sleep
-        completionMessage(5), // fail
-        completionMessage(6, undefined, true), // sleep
-        completionMessage(7), // fail
-      ]
-    ).run();
+    const result = await new TestDriver(new FailingRetrySideEffectGreeter(4), [
+      startMessage(1),
+      inputMessage(greetRequest("Till")),
+      completionMessage(1), // fail
+      completionMessage(2, undefined, true), // sleep
+      completionMessage(3), // fail
+      completionMessage(4, undefined, true), // sleep
+      completionMessage(5), // fail
+      completionMessage(6, undefined, true), // sleep
+      completionMessage(7), // fail
+    ]).run();
 
     printResults(result);
 
