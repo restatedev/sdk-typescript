@@ -35,7 +35,8 @@ export function encodeMessage(msg: Message): Uint8Array {
     bodyBuf.length,
     msg.completed,
     msg.protocolVersion, // only set for incoming start message
-    msg.requiresAck
+    msg.requiresAck,
+    msg.partialStateFlag
   );
   const headerBuf = Buffer.alloc(8);
   const encoded = header.toU64be();

@@ -27,7 +27,6 @@ class GetEmpty implements TestGreeter {
 }
 
 const input = inputMessage(greetRequest("Two"));
-const PARTIAL_STATE = true;
 const COMPLETE_STATE = false;
 
 describe("GetEmpty", () => {
@@ -38,11 +37,9 @@ describe("GetEmpty", () => {
             new GetEmpty(),
             "/test.TestGreeter/Greet",
             [
-                startMessage(1), input
+                startMessage(1, COMPLETE_STATE), input
             ],
-            ProtocolMode.BIDI_STREAM,
-            COMPLETE_STATE,
-            []
+            ProtocolMode.BIDI_STREAM
         ).run()
 
         expect(result).toStrictEqual([
@@ -60,9 +57,7 @@ describe("GetEmpty", () => {
             [
                 startMessage(1), input
             ],
-            ProtocolMode.BIDI_STREAM,
-            PARTIAL_STATE,
-            []
+            ProtocolMode.BIDI_STREAM
         ).run()
 
         expect(result).toStrictEqual([
@@ -82,8 +77,6 @@ describe("GetEmpty", () => {
                 getStateMessage("STATE", undefined, true)
             ],
             ProtocolMode.BIDI_STREAM,
-            PARTIAL_STATE,
-            []
         ).run()
 
         expect(result).toStrictEqual([
@@ -110,11 +103,11 @@ describe("Get", () => {
             new Get(),
             "/test.TestGreeter/Greet",
             [
-                startMessage(1), input
+                startMessage(1, COMPLETE_STATE, [keyVal("STATE", "One")]),
+                input
             ],
             ProtocolMode.BIDI_STREAM,
-            COMPLETE_STATE,
-            [keyVal("STATE", "One")]
+
         ).run()
 
         expect(result).toStrictEqual([
@@ -130,11 +123,10 @@ describe("Get", () => {
             new Get(),
             "/test.TestGreeter/Greet",
             [
-                startMessage(1), input
+                startMessage(1, undefined, [keyVal("STATE", "One")]), input
             ],
             ProtocolMode.BIDI_STREAM,
-            PARTIAL_STATE,
-            [keyVal("STATE", "One")]
+
         ).run()
 
         expect(result).toStrictEqual([
@@ -152,9 +144,7 @@ describe("Get", () => {
             [
                 startMessage(2), input
             ],
-            ProtocolMode.BIDI_STREAM,
-            PARTIAL_STATE,
-            []
+            ProtocolMode.BIDI_STREAM
         ).run()
 
         expect(result).toStrictEqual([
@@ -184,11 +174,12 @@ describe("GetAppendAndGet", () => {
             new GetAppendAndGet(),
             "/test.TestGreeter/Greet",
             [
-                startMessage(1), input
+                startMessage(1,
+                  COMPLETE_STATE,
+                  [keyVal("STATE", "One")]), input
             ],
             ProtocolMode.BIDI_STREAM,
-            COMPLETE_STATE,
-            [keyVal("STATE", "One")]
+
         ).run()
 
         expect(result).toStrictEqual([
@@ -209,9 +200,7 @@ describe("GetAppendAndGet", () => {
                 startMessage(1), input,
                 completionMessage(1, JSON.stringify("One"))
             ],
-            ProtocolMode.BIDI_STREAM,
-            PARTIAL_STATE,
-            []
+            ProtocolMode.BIDI_STREAM
         ).run()
 
         expect(result).toStrictEqual([
@@ -243,11 +232,10 @@ describe("GetClearAndGet", () => {
             new GetClearAndGet(),
             "/test.TestGreeter/Greet",
             [
-                startMessage(1), input
+                startMessage(1, COMPLETE_STATE, [keyVal("STATE", "One")]),
+                input
             ],
-            ProtocolMode.BIDI_STREAM,
-            COMPLETE_STATE,
-            [keyVal("STATE", "One")]
+            ProtocolMode.BIDI_STREAM
         ).run()
 
         expect(result).toStrictEqual([
@@ -269,8 +257,6 @@ describe("GetClearAndGet", () => {
                 completionMessage(1, JSON.stringify("One"))
             ],
             ProtocolMode.BIDI_STREAM,
-            PARTIAL_STATE,
-            []
         ).run()
 
         expect(result).toStrictEqual([
