@@ -362,7 +362,7 @@ async function failingCall(attempts: number): Promise<boolean> {
   }
 }
 
-describe("FailingSideEffectGreeter: finally succeeds", () => {
+describe("FailingSideEffectGreeter", () => {
   it("retries two times and then succeeds", async () => {
     i = 0;
     const result = await new TestDriver(
@@ -389,9 +389,7 @@ describe("FailingSideEffectGreeter: finally succeeds", () => {
     );
     expect(result[5]).toStrictEqual(outputMessage(greetResponse("true")));
   });
-});
 
-describe("FailingSideEffectGreeter: never succeeds", () => {
   it("retries three times and then fails", async () => {
     i = 0;
     const result = await new TestDriver(
@@ -421,7 +419,7 @@ describe("FailingSideEffectGreeter: never succeeds", () => {
   });
 });
 
-describe("FailingRetrySideEffectGreeter: finally succeeds", () => {
+describe("FailingRetrySideEffectGreeter", () => {
   it("retries two times and then succeeds", async () => {
     i = 0;
     const result = await new TestDriver(
@@ -449,9 +447,7 @@ describe("FailingRetrySideEffectGreeter: finally succeeds", () => {
     ).toStrictEqual("true");
     expect(result[5]).toStrictEqual(outputMessage(greetResponse("Passed")));
   });
-});
 
-describe("FailingRetrySideEffectGreeter: never succeeds", () => {
   it("retries three times and then fails", async () => {
     i = 0;
     const result = await new TestDriver(
