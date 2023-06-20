@@ -21,7 +21,6 @@ import {
   TestResponse,
 } from "../src/generated/proto/test";
 import { ProtocolMode } from "../src/generated/proto/discovery";
-import { rlog } from "../src/utils/logger";
 
 class AwakeableGreeter implements TestGreeter {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -32,7 +31,6 @@ class AwakeableGreeter implements TestGreeter {
 
     const result = await awakeable.promise;
 
-    rlog.debug(result);
     return TestResponse.create({
       greeting: `Hello ${result} for ${awakeable.id}`,
     });

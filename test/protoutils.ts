@@ -36,8 +36,8 @@ import { TestRequest, TestResponse } from "../src/generated/proto/test";
 import { SideEffectEntryMessage } from "../src/generated/proto/javascript";
 import { Failure } from "../src/generated/proto/protocol";
 import { expect } from "@jest/globals";
-import { rlog } from "../src/utils/logger";
 import { jsonSerialize, printMessageAsJson } from "../src/utils/utils";
+import { rlog } from "../src/utils/logger";
 
 export function startMessage(knownEntries?: number): Message {
   return new Message(
@@ -96,7 +96,6 @@ export function getStateMessage<T>(
   empty?: boolean
 ): Message {
   if (empty === true) {
-    rlog.log("Returning get state with empty");
     return new Message(
       GET_STATE_ENTRY_MESSAGE_TYPE,
       GetStateEntryMessage.create({

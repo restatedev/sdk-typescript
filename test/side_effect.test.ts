@@ -26,7 +26,6 @@ import {
 } from "../src/generated/proto/test";
 import { Failure } from "../src/generated/proto/protocol";
 import { SIDE_EFFECT_ENTRY_MESSAGE_TYPE } from "../src/types/protocol";
-import { rlog } from "../src/utils/logger";
 
 class SideEffectGreeter implements TestGreeter {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -744,15 +743,12 @@ export class AwaitSideEffectService implements TestGreeter {
 
     await ctx.sideEffect<void>(async () => {
       invocationCount++;
-      rlog.debug(invocationCount);
     });
     await ctx.sideEffect<void>(async () => {
       invocationCount++;
-      rlog.debug(invocationCount);
     });
     await ctx.sideEffect<void>(async () => {
       invocationCount++;
-      rlog.debug(invocationCount);
     });
 
     return { greeting: invocationCount.toString() };
