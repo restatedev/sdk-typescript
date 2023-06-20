@@ -121,7 +121,6 @@ export class InvocationBuilder<I, O> implements RestateStreamConsumer {
     if (
       !this.isComplete() ||
       this.method === undefined ||
-      this.protocolMode === undefined ||
       this.instanceKey === undefined ||
       this.invocationId === undefined ||
       this.nbEntriesToReplay === undefined ||
