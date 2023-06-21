@@ -32,10 +32,7 @@ class GetEmpty implements TestGreeter {
 describe("GetEmpty", () => {
     it('handles complete state without key present', async () => {
         const result = await new TestDriver(
-            protoMetadata,
-            "TestGreeter",
             new GetEmpty(),
-            "/test.TestGreeter/Greet",
             [
                 startMessage(1, COMPLETE_STATE), input
             ],
@@ -50,10 +47,7 @@ describe("GetEmpty", () => {
 
     it('handles partial state without key present ', async () => {
         const result = await new TestDriver(
-            protoMetadata,
-            "TestGreeter",
             new GetEmpty(),
-            "/test.TestGreeter/Greet",
             [
                 startMessage(1), input
             ],
@@ -68,10 +62,7 @@ describe("GetEmpty", () => {
 
     it('handles replay of partial state', async () => {
         const result = await new TestDriver(
-            protoMetadata,
-            "TestGreeter",
             new GetEmpty(),
-            "/test.TestGreeter/Greet",
             [
                 startMessage(2), input,
                 getStateMessage("STATE", undefined, true)
@@ -98,10 +89,7 @@ class Get implements TestGreeter {
 describe("Get", () => {
     it('handles complete state with key present', async () => {
         const result = await new TestDriver(
-            protoMetadata,
-            "TestGreeter",
             new Get(),
-            "/test.TestGreeter/Greet",
             [
                 startMessage(1, COMPLETE_STATE, [keyVal("STATE", "One")]),
                 input
@@ -118,10 +106,7 @@ describe("Get", () => {
 
     it('handles partial state with key present ', async () => {
         const result = await new TestDriver(
-            protoMetadata,
-            "TestGreeter",
             new Get(),
-            "/test.TestGreeter/Greet",
             [
                 startMessage(1, undefined, [keyVal("STATE", "One")]), input
             ],
@@ -137,10 +122,7 @@ describe("Get", () => {
 
     it('handles partial state without key present', async () => {
         const result = await new TestDriver(
-            protoMetadata,
-            "TestGreeter",
             new Get(),
-            "/test.TestGreeter/Greet",
             [
                 startMessage(2), input
             ],
@@ -169,10 +151,7 @@ class GetAppendAndGet implements TestGreeter {
 describe("GetAppendAndGet", () => {
     it('handles complete state with key present', async () => {
         const result = await new TestDriver(
-            protoMetadata,
-            "TestGreeter",
             new GetAppendAndGet(),
-            "/test.TestGreeter/Greet",
             [
                 startMessage(1,
                   COMPLETE_STATE,
@@ -192,10 +171,7 @@ describe("GetAppendAndGet", () => {
 
     it('handles partial state with key not present ', async () => {
         const result = await new TestDriver(
-            protoMetadata,
-            "TestGreeter",
             new GetAppendAndGet(),
-            "/test.TestGreeter/Greet",
             [
                 startMessage(1), input,
                 completionMessage(1, JSON.stringify("One"))
@@ -227,10 +203,7 @@ class GetClearAndGet implements TestGreeter {
 describe("GetClearAndGet", () => {
     it('handles complete state with key present', async () => {
         const result = await new TestDriver(
-            protoMetadata,
-            "TestGreeter",
             new GetClearAndGet(),
-            "/test.TestGreeter/Greet",
             [
                 startMessage(1, COMPLETE_STATE, [keyVal("STATE", "One")]),
                 input
@@ -248,10 +221,7 @@ describe("GetClearAndGet", () => {
 
     it('handles partial state with key not present ', async () => {
         const result = await new TestDriver(
-            protoMetadata,
-            "TestGreeter",
             new GetClearAndGet(),
-            "/test.TestGreeter/Greet",
             [
                 startMessage(1), input,
                 completionMessage(1, JSON.stringify("One"))
@@ -268,8 +238,6 @@ describe("GetClearAndGet", () => {
     });
 })
 
-
-
 class MultipleGet implements TestGreeter {
     async greet(request: TestRequest): Promise<TestResponse> {
         const ctx = restate.useContext(this);
@@ -285,10 +253,7 @@ class MultipleGet implements TestGreeter {
 describe("MultipleGet", () => {
     it('handles multiple gets with partial state not present with completion', async () => {
         const result = await new TestDriver(
-          protoMetadata,
-          "TestGreeter",
           new MultipleGet(),
-          "/test.TestGreeter/Greet",
           [
               startMessage(),
               input,
@@ -308,10 +273,7 @@ describe("MultipleGet", () => {
 
     it('handles multiple gets with partial state not present with replay', async () => {
         const result = await new TestDriver(
-          protoMetadata,
-          "TestGreeter",
           new MultipleGet(),
-          "/test.TestGreeter/Greet",
           [
               startMessage(),
               input,
