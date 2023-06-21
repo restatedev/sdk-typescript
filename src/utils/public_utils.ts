@@ -24,7 +24,7 @@ export const FIXED_DELAY: RetryPolicy = {
 
 /**
  * A {@link RetryPolicy} that does an exponential backoff delay between retries.
- * Each delay is double the previous delay.
+ * Each delay is twice as long as the previous delay.
  */
 export const EXPONENTIAL_BACKOFF: RetryPolicy = {
   computeNextDelay(previousDelayMs: number): number {
@@ -38,20 +38,20 @@ export const EXPONENTIAL_BACKOFF: RetryPolicy = {
  */
 export interface RetrySettings {
   /**
-   * The initial delay between retries. As more retries happen, the delay may chance per the policy.
+   * The initial delay between retries. As more retries happen, the delay may change per the policy.
    */
   initialDelayMs: number;
 
   /**
    * Optionally, the maximum delay between retries. No matter what the policy says, this is the maximum time
    * that Restate sleeps between retries.
-   * If not set, there is is effectively no limit (internally the limit is Number.MAX_SAFE_INTEGER).
+   * If not set, there is effectively no limit (internally the limit is Number.MAX_SAFE_INTEGER).
    */
   maxDelayMs?: number;
 
   /**
    * Optionally, the maximum number of retries before this function fails with an exception.
-   * If not set, there is is effectively no limit (internally the limit is Number.MAX_SAFE_INTEGER).
+   * If not set, there is effectively no limit (internally the limit is Number.MAX_SAFE_INTEGER).
    */
   maxRetries?: number;
 
@@ -83,7 +83,7 @@ export interface RetrySettings {
  * const ctx = restate.useContext(this);
  * const paymentAction = async () =>
  *   (await paymentClient.call(txId, methodIdentifier, amount)).success;
- * await retrySideEffect(ctx, paymentAction, {initialDelayMs: 1000, maxRetries: 10});
+ * await retrySideEffect(ctx, {initialDelayMs: 1000, maxRetries: 10}, paymentAction);
  *
  * @param ctx              The RestateContext object to call the side effect to sleep on.
  * @param retrySettings    Settings for the retries, like delay, attempts, etc.
@@ -151,7 +151,7 @@ export async function retrySideEffect(
  *   }
  * }
  * const paymentAccepted: boolean =
- *   await retryExceptionalSideEffectWithBackoff(ctx, paymentAction, {initialDelayMs: 1000, maxRetries: 10});
+ *   await retryExceptionalSideEffect(ctx, {initialDelayMs: 1000, maxRetries: 10}, paymentAction);
  *
  * @param ctx              The RestateContext object to call the side effect to sleep on.
  * @param retrySettings    Settings for the retries, like delay, attempts, etc.
