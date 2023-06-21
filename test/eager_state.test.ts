@@ -16,6 +16,9 @@ import {
 } from "./protoutils";
 import {ProtocolMode} from "../src/generated/proto/discovery";
 
+const input = inputMessage(greetRequest("Two"));
+const COMPLETE_STATE = false;
+
 class GetEmpty implements TestGreeter {
     async greet(request: TestRequest): Promise<TestResponse> {
         const ctx = restate.useContext(this);
@@ -25,9 +28,6 @@ class GetEmpty implements TestGreeter {
         return TestResponse.create({greeting: `${stateIsEmpty}`})
     }
 }
-
-const input = inputMessage(greetRequest("Two"));
-const COMPLETE_STATE = false;
 
 describe("GetEmpty", () => {
     it('handles complete state without key present', async () => {
@@ -264,6 +264,67 @@ describe("GetClearAndGet", () => {
             clearStateMessage("STATE"),
             getStateMessage("STATE", undefined, true),
             outputMessage(greetResponse("One-nothing"))
+        ])
+    });
+})
+
+
+
+class MultipleGet implements TestGreeter {
+    async greet(request: TestRequest): Promise<TestResponse> {
+        const ctx = restate.useContext(this);
+
+        const state = (await ctx.get<string>("STATE")) || "nothing";
+        const state1 = (await ctx.get<string>("STATE")) || "nothing";
+        const state2 = (await ctx.get<string>("STATE")) || "nothing";
+
+        return TestResponse.create({greeting: `${state} - ${state1} - ${state2}`});
+    }
+}
+
+describe("MultipleGet", () => {
+    it('handles multiple gets with partial state not present with completion', async () => {
+        const result = await new TestDriver(
+          protoMetadata,
+          "TestGreeter",
+          new MultipleGet(),
+          "/test.TestGreeter/Greet",
+          [
+              startMessage(),
+              input,
+              completionMessage(1, JSON.stringify("One"))
+          ],
+          ProtocolMode.BIDI_STREAM
+        ).run()
+
+        // First get goes to the runtime, the others get completed with local state
+        expect(result).toStrictEqual([
+            getStateMessage("STATE"),
+            getStateMessage("STATE", "One"),
+            getStateMessage("STATE", "One"),
+            outputMessage(greetResponse("One - One - One"))
+        ])
+    });
+
+    it('handles multiple gets with partial state not present with replay', async () => {
+        const result = await new TestDriver(
+          protoMetadata,
+          "TestGreeter",
+          new MultipleGet(),
+          "/test.TestGreeter/Greet",
+          [
+              startMessage(),
+              input,
+              getStateMessage("STATE", "One")
+          ],
+          ProtocolMode.BIDI_STREAM
+        ).run()
+
+        // First get goes to the runtime, the others get completed with local state
+        expect(result).toStrictEqual([
+            getStateMessage("STATE", "One"),
+            getStateMessage("STATE", "One"),
+            outputMessage(greetResponse("One - One - One"))
         ])
     });
 })

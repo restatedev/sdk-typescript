@@ -49,4 +49,11 @@ export class LocalStateStore {
         this.state.set(key, Empty.create({}))
         return ClearStateEntryMessage.create({key: Buffer.from(key)})
     }
+
+    // When a GetState request does not have a local entry and we have partial state,
+    // then the request goes to the runtime.
+    // When we get the response of the runtime, we add the state to the localStateStore.
+    public add(key: string, result: Buffer | Empty): void {
+        this.state.set(key, result);
+    }
 }

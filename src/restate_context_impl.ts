@@ -24,6 +24,7 @@ import { SideEffectEntryMessage } from "./generated/proto/javascript";
 import { AsyncLocalStorage } from "async_hooks";
 import { RestateError } from "./types/errors";
 import { jsonSerialize, jsonDeserialize } from "./utils/utils";
+import { Empty } from "./generated/google/protobuf/empty";
 
 enum CallContexType {
   None,
@@ -63,6 +64,14 @@ export class RestateContextImpl implements RestateContext {
       GET_STATE_ENTRY_MESSAGE_TYPE,
       msg
     );
+
+    // If the GetState message did not have a value or empty,
+    // then we went to the runtime to get the value.
+    // When we get the response, we set it in the localStateStore,
+    // to answer subsequent requests
+    if(msg.value === undefined && msg.empty === undefined){
+      this.stateMachine.localStateStore.add(name, result as Buffer | Empty);
+    }
 
     if (!(result instanceof Buffer)) {
       return null;
