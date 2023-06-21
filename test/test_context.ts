@@ -45,7 +45,12 @@ export class TestingContext implements RestateContext {
   }
 
   //eslint-disable-next-line @typescript-eslint/no-explicit-any
-  oneWayCall(call: () => Promise<any>, delayMillis?: number): Promise<void> {
+  oneWayCall(call: () => Promise<any>): Promise<void> {
+    throw new Error("Method not implemented.");
+  }
+
+  //eslint-disable-next-line @typescript-eslint/no-explicit-any
+  delayedCall(call: () => Promise<any>, delayMillis?: number): Promise<void> {
     throw new Error("Method not implemented.");
   }
   sideEffect<T>(fn: () => Promise<T>): Promise<T> {

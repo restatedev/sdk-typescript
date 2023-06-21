@@ -72,7 +72,6 @@ export interface RestateContext {
    * So we are required to return a Promise.
    *
    * @param call Invoke another service by using the generated proto-ts client.
-   * @param delayMillis millisecond delay duration to delay the execution of the call
    * @example
    * const ctx = restate.useContext(this);
    * const client = new GreeterClientImpl(ctx);
@@ -81,7 +80,28 @@ export interface RestateContext {
    * )
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  oneWayCall(call: () => Promise<any>, delayMillis?: number): void;
+  oneWayCall(call: () => Promise<any>): void;
+
+  /**
+   * Delayed unidirectional call to other Restate services ( = in background / async / not waiting on response).
+   * To do this, wrap the call via the proto-ts client with delayedCall, as shown in the example.
+   * Add the delay in millis as the second parameter.
+   *
+   * NOTE: this returns a Promise because we override the gRPC clients provided by proto-ts.
+   * So we are required to return a Promise.
+   *
+   * @param call Invoke another service by using the generated proto-ts client.
+   * @param delayMillis millisecond delay duration to delay the execution of the call
+   * @example
+   * const ctx = restate.useContext(this);
+   * const client = new GreeterClientImpl(ctx);
+   * await ctx.delayedCall(() =>
+   *   client.greet(Request.create({ name: "Peter" })),
+   *   5000
+   * )
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  delayedCall(call: () => Promise<any>, delayMillis?: number): void;
 
   /**
    * Execute a side effect and store the result in the Restate runtime.
