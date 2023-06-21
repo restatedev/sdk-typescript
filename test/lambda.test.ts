@@ -36,7 +36,7 @@ class LambdaGreeter implements TestGreeter {
 }
 
 describe("Lambda: decodeMessage", () => {
-  it("should return a list of decoded messages", async () => {
+  it("returns a list of decoded messages", async () => {
     const messages: Message[] = [
       startMessage(2),
       inputMessage(greetRequest("Pete")),
@@ -48,10 +48,8 @@ describe("Lambda: decodeMessage", () => {
 
     expect(decodedMessages).toStrictEqual(messages);
   });
-});
 
-describe("Lambda: decodeMessage", () => {
-  it("should fail on an invalid input message with random signs at end of message", async () => {
+  it("fails on an invalid input message with random signs at end of message", async () => {
     const messages: Message[] = [
       startMessage(2),
       inputMessage(greetRequest("Pete")),
@@ -67,10 +65,8 @@ describe("Lambda: decodeMessage", () => {
       "Parsing error: SDK cannot parse the message. Message was not valid base64 encoded."
     );
   });
-});
 
-describe("Lambda: decodeMessage", () => {
-  it("should fail on an invalid input message with random signs in front of message", async () => {
+  it("fails on an invalid input message with random signs in front of message", async () => {
     const messages: Message[] = [
       startMessage(2),
       inputMessage(greetRequest("Pete")),
@@ -88,8 +84,8 @@ describe("Lambda: decodeMessage", () => {
   });
 });
 
-describe("LambdaGreeter: Invoke Lambda function - output message response", () => {
-  it("should call greet", async () => {
+describe("LambdaGreeter", () => {
+  it("sends output response", async () => {
     const handler = getTestHandler();
 
     const request = apiProxyGatewayEvent(
@@ -112,10 +108,8 @@ describe("LambdaGreeter: Invoke Lambda function - output message response", () =
       outputMessage(greetResponse("Hello Foo")),
     ]);
   });
-});
 
-describe("LambdaGreeter: Invoke Lambda function - fail on query parameters in path", () => {
-  it("should call greet", async () => {
+  it("fails on query parameters in path", async () => {
     const handler = getTestHandler();
 
     const request = apiProxyGatewayEvent(
@@ -135,10 +129,8 @@ describe("LambdaGreeter: Invoke Lambda function - fail on query parameters in pa
         "Invalid path: path URL seems to include query parameters: /invoke/test.TestGreeter/Greet?count=5"
     );
   });
-});
 
-describe("LambdaGreeter: Invoke Lambda function - invalid path", () => {
-  it("should call greet", async () => {
+  it("fails on invalid path", async () => {
     const handler = getTestHandler();
 
     const request = apiProxyGatewayEvent(
@@ -157,10 +149,8 @@ describe("LambdaGreeter: Invoke Lambda function - invalid path", () => {
       "Invalid path: path doesn't end in /invoke/SvcName/MethodName and also not in /discover: /invoke/test.TestGreeter"
     );
   });
-});
 
-describe("LambdaGreeter: Invoke Lambda function - invalid path no 'invoke' or 'discover'", () => {
-  it("should call greet", async () => {
+  it("fails on invalid path no 'invoke' or 'discover'", async () => {
     const handler = getTestHandler();
 
     const request = apiProxyGatewayEvent(
@@ -179,10 +169,8 @@ describe("LambdaGreeter: Invoke Lambda function - invalid path no 'invoke' or 'd
       "Invalid path: path doesn't end in /invoke/SvcName/MethodName and also not in /discover: /something/test.TestGreeter/Greet"
     );
   });
-});
 
-describe("LambdaGreeter: Invoke Lambda function - invalid path non-existing URL", () => {
-  it("should call greet", async () => {
+  it("fails on invalid path non-existing URL", async () => {
     const handler = getTestHandler();
 
     const request = apiProxyGatewayEvent(
@@ -201,10 +189,8 @@ describe("LambdaGreeter: Invoke Lambda function - invalid path non-existing URL"
       "No service found for URL: /invoke/test.TestGreeter/Greets"
     );
   });
-});
 
-describe("LambdaGreeter: discovery of Lambda function", () => {
-  it("should call greet", async () => {
+  it("handles discovery", async () => {
     const handler = getTestHandler();
 
     const discoverRequest = Buffer.from(
