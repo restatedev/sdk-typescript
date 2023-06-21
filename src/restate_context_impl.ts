@@ -32,6 +32,7 @@ enum CallContexType {
   None,
   SideEffect,
   OneWayCall,
+  DelayedCall,
 }
 
 interface CallContext {
@@ -104,6 +105,8 @@ export class RestateContextImpl implements RestateContext {
   ): Promise<Uint8Array> {
     if (this.isInOneWayCall()) {
       return this.invokeOneWay(service, method, data);
+    } if (this.isInDelayedCall()) {
+      return this.invokeDelayedOneWay(service, method, data);
     } else {
       return this.invoke(service, method, data);
     }
@@ -133,13 +136,10 @@ export class RestateContextImpl implements RestateContext {
     method: string,
     data: Uint8Array
   ): Promise<Uint8Array> {
-    const delay = this.getOneWayCallDelay();
-    const invokeTime = delay > 0 ? Date.now() + delay : undefined;
     const msg = BackgroundInvokeEntryMessage.create({
       serviceName: service,
       methodName: method,
       parameter: Buffer.from(data),
-      invokeTime: invokeTime,
     });
 
     await this.stateMachine.handleUserCodeMessage(
@@ -161,6 +161,27 @@ export class RestateContextImpl implements RestateContext {
     );
   }
 
+  private async invokeDelayedOneWay(
+    service: string,
+    method: string,
+    data: Uint8Array
+  ): Promise<Uint8Array> {
+    const delay = this.getDelayedCallDelay();
+    const invokeTime = delay > 0 ? Date.now() + delay : undefined;
+    const msg = BackgroundInvokeEntryMessage.create({
+      serviceName: service,
+      methodName: method,
+      parameter: Buffer.from(data),
+      invokeTime: invokeTime,
+    });
+
+    await this.stateMachine.handleUserCodeMessage(
+      BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
+      msg
+    );
+    return new Uint8Array();
+  }
+
   public async delayedCall(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     call: () => Promise<any>,
@@ -170,7 +191,7 @@ export class RestateContextImpl implements RestateContext {
 
     // Delayed call is a one way call with a delay
     await this.callContext.run(
-      { type: CallContexType.OneWayCall, delay: delayMillis },
+      { type: CallContexType.DelayedCall, delay: delayMillis },
       call
     );
   }
@@ -185,6 +206,12 @@ export class RestateContextImpl implements RestateContext {
         "Cannot do a side effect from within ctx.oneWayCall(...). " +
         "Context method ctx.oneWayCall() can only be used to invoke other services unidirectionally. " +
         "e.g. ctx.oneWayCall(() => client.greet(my_request))";
+      await this.stateMachine.notifyApiViolation(13, msg);
+      throw new Error(msg);
+    } else if (this.isInDelayedCall()) {
+      const msg =
+        "Cannot do a side effect from within ctx.delayedCall(...). " +
+        "Context method ctx.delayedCall() can only be used to invoke other services unidirectionally. "
       await this.stateMachine.notifyApiViolation(13, msg);
       throw new Error(msg);
     }
@@ -334,7 +361,12 @@ export class RestateContextImpl implements RestateContext {
     return context?.type === CallContexType.OneWayCall;
   }
 
-  private getOneWayCallDelay(): number {
+  private isInDelayedCall(): boolean {
+    const context = this.callContext.getStore();
+    return context?.type === CallContexType.DelayedCall;
+  }
+
+  private getDelayedCallDelay(): number {
     const context = this.callContext.getStore();
     return context?.delay || 0;
   }
@@ -355,6 +387,13 @@ export class RestateContextImpl implements RestateContext {
       const msg = `Cannot do a ${callType} from within ctx.oneWayCall(...).
           Context method oneWayCall() can only be used to invoke other services in the background.
           e.g. ctx.oneWayCall(() => client.greet(my_request))`;
+      this.stateMachine.notifyApiViolation(13, msg);
+      throw new RestateError(msg);
+    }
+
+    if (context.type === CallContexType.DelayedCall) {
+      const msg = `Cannot do a ${callType} from within ctx.delayedCall(...).
+          Context method delayedCall() can only be used to do a one-way call to other services with a delay.`;
       this.stateMachine.notifyApiViolation(13, msg);
       throw new RestateError(msg);
     }

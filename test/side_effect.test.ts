@@ -237,7 +237,6 @@ class SideEffectAndOneWayCallGreeter implements TestGreeter {
   }
 }
 
-// Checks if the side effect flag is put back to false when we are in replay and do not execute the side effect
 describe("SideEffectAndOneWayCallGreeter", () => {
   it("handles completion and then invoke", async () => {
     const result = await new TestDriver(new SideEffectAndOneWayCallGreeter(), [
@@ -638,6 +637,38 @@ describe("FailingOneWayCallInSideEffectGreeter", () => {
     checkError(
       result[0],
       "You cannot do oneWayCall calls from within a side effect"
+    );
+  });
+});
+
+class FailingDelayedCallInSideEffectGreeter implements TestGreeter {
+  constructor(readonly sideEffectOutput: number) {}
+
+  async greet(request: TestRequest): Promise<TestResponse> {
+    const ctx = restate.useContext(this);
+
+    // state
+    const response = await ctx.sideEffect(async () => {
+      await ctx.delayedCall(async () => {
+        return;
+      });
+    });
+
+    return TestResponse.create({ greeting: `Hello ${response}` });
+  }
+}
+
+describe("FailingDelayedCallInSideEffectGreeter", () => {
+  it("fails on invalid operation delayedCall in sideEffect", async () => {
+    const result = await new TestDriver(
+      new FailingDelayedCallInSideEffectGreeter(123),
+      [startMessage(), inputMessage(greetRequest("Till")), completionMessage(1)]
+    ).run();
+
+    expect(result.length).toStrictEqual(1);
+    checkError(
+      result[0],
+      "You cannot do delayedCall calls from within a side effect"
     );
   });
 });

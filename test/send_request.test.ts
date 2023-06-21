@@ -829,3 +829,61 @@ describe("UnawaitedRequestResponseCallGreeter", () => {
     expect(result).toStrictEqual([outputMessage(greetResponse("Hello"))]);
   });
 });
+
+
+class DelayedCallInOneWayCall implements TestGreeter {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async greet(request: TestRequest): Promise<TestResponse> {
+    const ctx = restate.useContext(this);
+
+    const client = new TestGreeterClientImpl(ctx);
+    await ctx.oneWayCall(async () => {
+      return await ctx.delayedCall(() => client.greet(TestRequest.create({ name: "Francesco" })), 5000);
+    })
+
+    return TestResponse.create({ greeting: `Hello` });
+  }
+}
+
+describe("DelayedCallInOneWayCall", () => {
+  it("fails on invalid operation delayedCall within oneWayCall", async () => {
+    const result = await new TestDriver(
+      new DelayedCallInOneWayCall(),
+      [
+        startMessage(2),
+        inputMessage(greetRequest("Till")),
+      ]
+    ).run();
+
+    checkError(result[0], "Cannot do a delayedCall from within ctx.oneWayCall");
+  });
+});
+
+class OneWayCallInDelayedCall implements TestGreeter {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async greet(request: TestRequest): Promise<TestResponse> {
+    const ctx = restate.useContext(this);
+
+    const client = new TestGreeterClientImpl(ctx);
+    await ctx.delayedCall(async () => {
+      return await ctx.oneWayCall(() => client.greet(TestRequest.create({ name: "Francesco" })))
+      },
+      5000)
+
+    return TestResponse.create({ greeting: `Hello` });
+  }
+}
+
+describe("OneWayCallInDelayedCall", () => {
+  it("fails on invalid operation oneWayCall within delayedCall", async () => {
+    const result = await new TestDriver(
+      new OneWayCallInDelayedCall(),
+      [
+        startMessage(2),
+        inputMessage(greetRequest("Till")),
+      ]
+    ).run();
+
+    checkError(result[0], "Cannot do a oneWayCall from within ctx.delayedCall");
+  });
+});
