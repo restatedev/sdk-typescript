@@ -151,11 +151,24 @@ export class RestateContextImpl implements RestateContext {
 
   public async oneWayCall(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    call: () => Promise<any>,
-    delayMillis?: number
+    call: () => Promise<any>
   ): Promise<void> {
     this.checkState("oneWayCall");
 
+    await this.callContext.run(
+      { type: CallContexType.OneWayCall },
+      call
+    );
+  }
+
+  public async delayedCall(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    call: () => Promise<any>,
+    delayMillis?: number
+  ): Promise<void> {
+    this.checkState("delayedCall");
+
+    // Delayed call is a one way call with a delay
     await this.callContext.run(
       { type: CallContexType.OneWayCall, delay: delayMillis },
       call

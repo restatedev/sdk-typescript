@@ -699,7 +699,7 @@ class DelayedOneWayCallGreeter implements TestGreeter {
     const ctx = restate.useContext(this);
 
     const client = new TestGreeterClientImpl(ctx);
-    await ctx.oneWayCall(
+    await ctx.delayedCall(
       () => client.greet(TestRequest.create({ name: "Francesco" })),
       delayedCallTime - Date.now()
     );
@@ -764,7 +764,7 @@ class DelayedAndNormalInOneWayCallGreeter implements TestGreeter {
     const ctx = restate.useContext(this);
 
     const client = new TestGreeterClientImpl(ctx);
-    await ctx.oneWayCall(
+    await ctx.delayedCall(
       () => client.greet(TestRequest.create({ name: "Francesco" })),
       delayedCallTime - Date.now()
     );
