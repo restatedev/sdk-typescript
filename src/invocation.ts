@@ -17,7 +17,7 @@ import {
   START_MESSAGE_TYPE,
 } from "./types/protocol";
 import { RestateStreamConsumer } from "./connection/connection";
-import {LocalStateStore} from "./local_state_store";
+import { Empty } from "./generated/google/protobuf/empty";
 
 enum State {
   ExpectingStart = 0,
@@ -29,7 +29,7 @@ enum State {
 export class InvocationBuilder<I, O> implements RestateStreamConsumer {
   private readonly complete = new CompletablePromise<void>();
 
-  private state: State = State.ExpectingStart;
+  private executionState: State = State.ExpectingStart;
 
   private runtimeReplayIndex = 0;
   private replayEntries = new Map<number, Message>();
@@ -37,16 +37,17 @@ export class InvocationBuilder<I, O> implements RestateStreamConsumer {
   private invocationId?: Buffer = undefined;
   private invocationValue?: Buffer = undefined;
   private nbEntriesToReplay?: number = undefined;
-  private localStateStore?: LocalStateStore;
+  private partialState?: boolean = undefined;
+  private localStateStore?: Map<string, Buffer | Empty>;
 
   constructor(private readonly method: HostedGrpcServiceMethod<I, O>) {}
 
   public handleMessage(m: Message): boolean {
-    switch (this.state) {
+    switch (this.executionState) {
       case State.ExpectingStart:
         checkState(State.ExpectingStart, START_MESSAGE_TYPE, m);
         this.handleStartMessage(m.message as StartMessage, m.partialStateFlag || false);
-        this.state = State.ExpectingInput;
+        this.executionState = State.ExpectingInput;
         return false;
 
       case State.ExpectingInput:
@@ -70,12 +71,12 @@ export class InvocationBuilder<I, O> implements RestateStreamConsumer {
         );
     }
 
-    this.state =
+    this.executionState =
       this.replayEntries.size === this.nbEntriesToReplay
         ? State.Complete
         : State.ExpectingFurtherReplay;
 
-    if (this.state === State.Complete) {
+    if (this.executionState === State.Complete) {
       this.complete.resolve();
       return true;
     }
@@ -97,7 +98,8 @@ export class InvocationBuilder<I, O> implements RestateStreamConsumer {
     this.nbEntriesToReplay = m.knownEntries;
     this.instanceKey = m.instanceKey;
     this.invocationId = m.invocationId;
-    this.localStateStore = new LocalStateStore(partialState, m.stateMap);
+    this.localStateStore = new Map<string, Buffer | Empty>(m.stateMap.map(({key, value}) => [key.toString(), value]))
+    this.partialState = partialState;
     return this;
   }
 
@@ -117,7 +119,7 @@ export class InvocationBuilder<I, O> implements RestateStreamConsumer {
   }
 
   public isComplete(): boolean {
-    return this.state === State.Complete;
+    return this.executionState === State.Complete;
   }
 
   public build(): Invocation<I, O> {
@@ -133,6 +135,7 @@ export class InvocationBuilder<I, O> implements RestateStreamConsumer {
       this.nbEntriesToReplay!,
       this.replayEntries!,
       this.invocationValue!,
+      this.partialState!,
       this.localStateStore!
     );
   }
@@ -148,7 +151,8 @@ export class Invocation<I, O> {
     public readonly nbEntriesToReplay: number,
     public readonly replayEntries: Map<number, Message>,
     public readonly invocationValue: Buffer,
-    public readonly localStateStore: LocalStateStore
+    public readonly partialState: boolean,
+    public readonly localStateStore: Map<string, Buffer | Empty>
   ) {
     this.invocationIdString = uuidV7FromBuffer(this.invocationId);
     this.logPrefix = `[${this.method.packge}.${

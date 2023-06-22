@@ -3,9 +3,12 @@ import { StateMachine } from "./state_machine";
 import {
   AwakeableEntryMessage,
   BackgroundInvokeEntryMessage,
+  ClearStateEntryMessage,
   CompleteAwakeableEntryMessage,
   Failure,
+  GetStateEntryMessage,
   InvokeEntryMessage,
+  SetStateEntryMessage,
   SleepEntryMessage,
 } from "./generated/proto/protocol";
 import {
@@ -24,7 +27,6 @@ import { SideEffectEntryMessage } from "./generated/proto/javascript";
 import { AsyncLocalStorage } from "async_hooks";
 import { RestateError } from "./types/errors";
 import { jsonSerialize, jsonDeserialize } from "./utils/utils";
-import { Empty } from "./generated/google/protobuf/empty";
 
 enum CallContexType {
   None,
@@ -58,20 +60,11 @@ export class RestateContextImpl implements RestateContext {
     // Check if this is a valid action
     this.checkState("get state");
 
-    // Create the message and let the state machine process it
-    const msg = this.stateMachine.localStateStore.get(name);
+    const msg = GetStateEntryMessage.create({ key: Buffer.from(name) });
     const result = await this.stateMachine.handleUserCodeMessage(
       GET_STATE_ENTRY_MESSAGE_TYPE,
       msg
     );
-
-    // If the GetState message did not have a value or empty,
-    // then we went to the runtime to get the value.
-    // When we get the response, we set it in the localStateStore,
-    // to answer subsequent requests
-    if(msg.value === undefined && msg.empty === undefined){
-      this.stateMachine.localStateStore.add(name, result as Buffer | Empty);
-    }
 
     if (!(result instanceof Buffer)) {
       return null;
@@ -82,14 +75,21 @@ export class RestateContextImpl implements RestateContext {
 
   public set<T>(name: string, value: T): void {
     this.checkState("set state");
-    const msg = this.stateMachine.localStateStore.set(name, value);
+
+    const bytes = Buffer.from(jsonSerialize(value));
+    const msg = SetStateEntryMessage.create({
+      key: Buffer.from(name, "utf8"),
+      value: bytes,
+    });
     this.stateMachine.handleUserCodeMessage(SET_STATE_ENTRY_MESSAGE_TYPE, msg);
   }
 
   public clear(name: string): void {
     this.checkState("clear state");
 
-    const msg = this.stateMachine.localStateStore.clear(name);
+    const msg = ClearStateEntryMessage.create({
+      key: Buffer.from(name, "utf8"),
+    });
     this.stateMachine.handleUserCodeMessage(
       CLEAR_STATE_ENTRY_MESSAGE_TYPE,
       msg

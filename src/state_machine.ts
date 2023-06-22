@@ -19,7 +19,6 @@ import { Failure } from "./generated/proto/protocol";
 import { Journal } from "./journal";
 import { Invocation } from "./invocation";
 import { ensureError } from "./types/errors";
-import {LocalStateStore} from "./local_state_store";
 
 export class StateMachine<I, O> implements RestateStreamConsumer {
   private journal: Journal<I, O>;
@@ -33,8 +32,6 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
   //  - a suspension
   //  - an error in the state machine
   private stateMachineClosed = false;
-
-  public readonly localStateStore: LocalStateStore
 
   // Whether the input channel (runtime -> service) is closed
   // If it is closed, then we suspend immediately upon the next suspension point
@@ -52,8 +49,6 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
     private readonly protocolMode: ProtocolMode
 
   ) {
-    this.localStateStore = invocation.localStateStore;
-
     this.restateContext = new RestateContextImpl(
       this.invocation.instanceKey,
       this.invocation.invocationId,
@@ -109,7 +104,14 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
       return new CompletablePromise<T>().promise;
     }
 
-    const promise = this.journal.handleUserSideMessage(messageType, message);
+    const journalResponse = this.journal.handleUserSideMessage(
+      messageType,
+      message
+    );
+
+    // For get state messages, the journal can have completed it with eager state
+    // If so, use the pre-filled message to send to the runtime
+    const msg = journalResponse.preFilledMsg || message;
 
     // Only send the message to restate if we are not in replaying mode
     if (this.journal.isProcessing()) {
@@ -117,13 +119,13 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
         this.invocation.logPrefix,
         "Adding message to journal and sending to Restate",
         messageType,
-        message
+        msg
       );
 
       this.connection.buffer(
         new Message(
           messageType,
-          message,
+          msg,
           completedFlag,
           protocolVersion,
           requiresAckFlag
@@ -134,7 +136,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
         this.invocation.logPrefix,
         "Matched and replayed message from journal",
         messageType,
-        message
+        msg
       );
     }
 
@@ -145,7 +147,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
       this.connection.flush();
       this.scheduleSuspension();
     }
-    return promise;
+    return journalResponse.promise;
   }
 
   /**

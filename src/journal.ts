@@ -7,6 +7,7 @@ import {
   AwakeableEntryMessage,
   BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
   CLEAR_STATE_ENTRY_MESSAGE_TYPE,
+  ClearStateEntryMessage,
   COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
   CompletionMessage,
   GET_STATE_ENTRY_MESSAGE_TYPE,
@@ -17,7 +18,9 @@ import {
   OutputStreamEntryMessage,
   POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
   PollInputStreamEntryMessage,
+  ProtocolMessage,
   SET_STATE_ENTRY_MESSAGE_TYPE,
+  SetStateEntryMessage,
   SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
   SLEEP_ENTRY_MESSAGE_TYPE,
   SleepEntryMessage,
@@ -32,9 +35,10 @@ import {
 import { Message } from "./types/types";
 import { SideEffectEntryMessage } from "./generated/proto/javascript";
 import { Invocation } from "./invocation";
+import { Empty } from "./generated/google/protobuf/empty";
 
 export class Journal<I, O> {
-  private state = NewExecutionState.REPLAYING;
+  private executionState = NewExecutionState.REPLAYING;
 
   private userCodeJournalIndex = 0;
 
@@ -73,10 +77,10 @@ export class Journal<I, O> {
   public handleUserSideMessage(
     messageType: bigint,
     message: p.ProtocolMessage | Uint8Array
-  ): Promise<any | undefined> {
+  ): { promise: Promise<any | undefined>; preFilledMsg?: ProtocolMessage } {
     this.incrementUserCodeIndex();
 
-    switch (this.state) {
+    switch (this.executionState) {
       case NewExecutionState.REPLAYING: {
         const replayEntry = this.invocation.replayEntries.get(
           this.userCodeJournalIndex
@@ -89,7 +93,7 @@ export class Journal<I, O> {
 
         const journalEntry = new JournalEntry(messageType, message);
         this.handleReplay(this.userCodeJournalIndex, replayEntry, journalEntry);
-        return journalEntry.promise;
+        return { promise: journalEntry.promise };
       }
       case NewExecutionState.PROCESSING: {
         switch (messageType) {
@@ -99,29 +103,30 @@ export class Journal<I, O> {
               messageType,
               message as p.SuspensionMessage | p.OutputStreamEntryMessage
             );
-            return Promise.resolve(undefined);
+            return { promise: Promise.resolve(undefined) };
           }
-          case p.SET_STATE_ENTRY_MESSAGE_TYPE:
-          case p.CLEAR_STATE_ENTRY_MESSAGE_TYPE:
+          case p.SET_STATE_ENTRY_MESSAGE_TYPE: {
+            const setStateMsg = message as SetStateEntryMessage;
+            this.invocation.localStateStore.set(
+              setStateMsg.key.toString(),
+              setStateMsg.value
+            );
+            return { promise: Promise.resolve(undefined) };
+          }
+          case p.CLEAR_STATE_ENTRY_MESSAGE_TYPE: {
+            this.invocation.localStateStore.set(
+              (message as ClearStateEntryMessage).key.toString(),
+              Empty.create({})
+            );
+            return { promise: Promise.resolve(undefined) };
+          }
           case p.COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE:
           case p.BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE: {
             // Do not need completion
-            return Promise.resolve(undefined);
+            return { promise: Promise.resolve(undefined) };
           }
           case p.GET_STATE_ENTRY_MESSAGE_TYPE: {
-            const getStateMsg = message as GetStateEntryMessage;
-            if(getStateMsg.value !== undefined || getStateMsg.empty !== undefined){
-              // State was eagerly filled by the local state store
-              return Promise.resolve(getStateMsg.value || getStateMsg.empty);
-            } else {
-              // Need to retrieve state by going to the runtime.
-              const journalEntry = new JournalEntry(messageType, message);
-              this.pendingJournalEntries.set(
-                  this.userCodeJournalIndex,
-                  journalEntry
-              );
-              return journalEntry.promise;
-            }
+            return this.handleGetState(message as GetStateEntryMessage);
           }
           default: {
             // Need completion
@@ -130,7 +135,7 @@ export class Journal<I, O> {
               this.userCodeJournalIndex,
               journalEntry
             );
-            return journalEntry.promise;
+            return { promise: journalEntry.promise };
           }
         }
       }
@@ -140,13 +145,48 @@ export class Journal<I, O> {
         // So no more user messages can come in...
         // - Print warning log and continue...
         //TODO received user-side message but state machine is closed
-        return Promise.resolve(undefined);
+        return { promise: Promise.resolve(undefined) };
       }
       default: {
         throw new Error("Did not receive input message before other messages.");
       }
     }
   }
+
+  handleGetState(m: GetStateEntryMessage): { promise: Promise<any | undefined>; preFilledMsg?: ProtocolMessage } {
+      const stateKey = m.key.toString()
+      const value = this.invocation.localStateStore.get(stateKey);
+
+      if (value === undefined && this.invocation.partialState) {
+        // Need to retrieve state by going to the runtime.
+        const journalEntry = new JournalEntry(GET_STATE_ENTRY_MESSAGE_TYPE, m);
+        this.pendingJournalEntries.set(
+          this.userCodeJournalIndex,
+          journalEntry
+        );
+        return {
+          promise: journalEntry.promise.then((value) => {
+            this.invocation.localStateStore.set(
+              stateKey,
+              value
+            );
+            return value;
+          }),
+        };
+      } else if(value instanceof Buffer) {
+        m.value = value;
+        return {
+          promise: Promise.resolve(m.value),
+          preFilledMsg: m,
+        };
+      } else {
+        m.empty = Empty.create({});
+        return {
+          promise: Promise.resolve(m.empty),
+          preFilledMsg: m,
+        };
+      }
+    }
 
   public handleRuntimeCompletionMessage(m: CompletionMessage) {
     // Get message at that entryIndex in pendingJournalEntries
@@ -367,13 +407,13 @@ export class Journal<I, O> {
   private transitionState(newExecState: NewExecutionState) {
     // If the state is already closed then you cannot transition anymore
     if (
-      this.state === NewExecutionState.CLOSED &&
+      this.executionState === NewExecutionState.CLOSED &&
       newExecState !== NewExecutionState.CLOSED
     ) {
       // do nothing
       return;
     } else {
-      this.state = newExecState;
+      this.executionState = newExecState;
       return;
     }
   }
@@ -382,22 +422,18 @@ export class Journal<I, O> {
     this.userCodeJournalIndex++;
     if (
       this.userCodeJournalIndex === this.invocation.nbEntriesToReplay &&
-      this.state === NewExecutionState.REPLAYING
+      this.executionState === NewExecutionState.REPLAYING
     ) {
       this.transitionState(NewExecutionState.PROCESSING);
     }
   }
 
   public isClosed(): boolean {
-    return this.state === NewExecutionState.CLOSED;
-  }
-
-  public isReplaying(): boolean {
-    return this.state === NewExecutionState.REPLAYING;
+    return this.executionState === NewExecutionState.CLOSED;
   }
 
   public isProcessing(): boolean {
-    return this.state === NewExecutionState.PROCESSING;
+    return this.executionState === NewExecutionState.PROCESSING;
   }
 
   public getUserCodeJournalIndex(): number {

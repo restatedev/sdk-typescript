@@ -12,8 +12,6 @@ import { ProtocolMode } from "../src/generated/proto/discovery";
 import { rlog } from "../src/utils/logger";
 import { StateMachine } from "../src/state_machine";
 import { InvocationBuilder } from "../src/invocation";
-import {LocalStateStore} from "../src/local_state_store";
-import {StartMessage_StateEntry} from "../src/generated/proto/protocol";
 import { protoMetadata } from "../src/generated/proto/test";
 
 export class TestDriver<I, O> implements Connection {

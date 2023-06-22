@@ -271,22 +271,181 @@ describe("MultipleGet", () => {
         ])
     });
 
-    it('handles multiple gets with partial state not present with replay', async () => {
-        const result = await new TestDriver(
-          new MultipleGet(),
-          [
-              startMessage(),
-              input,
-              getStateMessage("STATE", "One")
-          ],
-          ProtocolMode.BIDI_STREAM
-        ).run()
+  it("handles multiple gets with partial state not present with replay", async () => {
+    const result = await new TestDriver(
+      new MultipleGet(),
+      [startMessage(), input, getStateMessage("STATE", "One")],
+      ProtocolMode.BIDI_STREAM
+    ).run();
 
-        // First get goes to the runtime, the others get completed with local state
-        expect(result).toStrictEqual([
-            getStateMessage("STATE", "One"),
-            getStateMessage("STATE", "One"),
-            outputMessage(greetResponse("One - One - One"))
-        ])
+    // First get goes to the runtime, the others get completed with local state
+    expect(result).toStrictEqual([
+      getStateMessage("STATE"),
+      suspensionMessage([2]),
+    ]);
+  });
+
+  it("handles multiple gets with complete state", async () => {
+    const result = await new TestDriver(
+      new MultipleGet(),
+      [startMessage(undefined, false, [keyVal("STATE", "One")]), input],
+      ProtocolMode.BIDI_STREAM
+    ).run();
+
+    // First get goes to the runtime, the others get completed with local state
+    expect(result).toStrictEqual([
+      getStateMessage("STATE", "One"),
+      getStateMessage("STATE", "One"),
+      getStateMessage("STATE", "One"),
+      outputMessage(greetResponse("One - One - One")),
+    ]);
+  });
+
+  it("handles multiple gets with complete state with replay", async () => {
+    const result = await new TestDriver(
+      new MultipleGet(),
+      [
+        startMessage(undefined, false, [keyVal("STATE", "One")]),
+        input,
+        getStateMessage("STATE", "One"),
+      ],
+      ProtocolMode.BIDI_STREAM
+    ).run();
+
+    // First get goes to the runtime, the others get completed with local state
+    expect(result).toStrictEqual([
+      getStateMessage("STATE", "One"),
+      getStateMessage("STATE", "One"),
+      outputMessage(greetResponse("One - One - One")),
+    ]);
+  });
+});
+
+class IncrementingGreeter implements TestGreeter {
+  async greet(request: TestRequest): Promise<TestResponse> {
+    const ctx = restate.useContext(this);
+
+    const state = (await ctx.get<number>("STATE")) || 0;
+    ctx.set("STATE", state + 1);
+    const state1 = (await ctx.get<number>("STATE")) || 0;
+    ctx.set("STATE", state1 + 1);
+    const state2 = (await ctx.get<number>("STATE")) || 0;
+    ctx.clear("STATE");
+    const state3 = (await ctx.get<number>("STATE")) || 0;
+
+    return TestResponse.create({
+      greeting: `${state} - ${state1} - ${state2} - ${state3}`,
     });
-})
+  }
+}
+
+describe("IncrementingGreeter", () => {
+  it("handles partial state not present with completion", async () => {
+    const result = await new TestDriver(
+      new IncrementingGreeter(),
+      [startMessage(), input, completionMessage(1, undefined, true)],
+      ProtocolMode.BIDI_STREAM
+    ).run();
+
+    // First get goes to the runtime, the others get completed with local state
+    expect(result).toStrictEqual([
+      getStateMessage("STATE"),
+      setStateMessage("STATE", 1),
+      getStateMessage("STATE", 1),
+      setStateMessage("STATE", 2),
+      getStateMessage("STATE", 2),
+      clearStateMessage("STATE"),
+      getStateMessage("STATE", undefined, true),
+      outputMessage(greetResponse("0 - 1 - 2 - 0")),
+    ]);
+  });
+
+  it("handles partial state not present with replay", async () => {
+    const result = await new TestDriver(
+      new IncrementingGreeter(),
+      [
+        startMessage(),
+        input,
+        getStateMessage("STATE", undefined, true),
+        completionMessage(1, JSON.stringify(1)),
+      ],
+      ProtocolMode.BIDI_STREAM
+    ).run();
+
+    // First get goes to the runtime, the others get completed with local state
+    expect(result).toStrictEqual([
+      setStateMessage("STATE", 1),
+      getStateMessage("STATE", 1),
+      setStateMessage("STATE", 2),
+      getStateMessage("STATE", 2),
+      clearStateMessage("STATE"),
+      getStateMessage("STATE", undefined, true),
+      outputMessage(greetResponse("0 - 1 - 2 - 0")),
+    ]);
+  });
+
+  it("handles complete state", async () => {
+    const result = await new TestDriver(
+      new IncrementingGreeter(),
+      [startMessage(undefined, false, []), input],
+      ProtocolMode.BIDI_STREAM
+    ).run();
+
+    expect(result).toStrictEqual([
+      getStateMessage("STATE", undefined, true),
+      setStateMessage("STATE", 1),
+      getStateMessage("STATE", 1),
+      setStateMessage("STATE", 2),
+      getStateMessage("STATE", 2),
+      clearStateMessage("STATE"),
+      getStateMessage("STATE", undefined, true),
+      outputMessage(greetResponse("0 - 1 - 2 - 0")),
+    ]);
+  });
+
+  it("handles complete state with replay up to increment no. 1", async () => {
+    const result = await new TestDriver(
+      new IncrementingGreeter(),
+      [
+        startMessage(undefined, false, [keyVal("STATE", 1)]),
+        input,
+        getStateMessage("STATE", undefined, true),
+        setStateMessage("STATE", 1),
+        getStateMessage("STATE", 1),
+      ],
+      ProtocolMode.BIDI_STREAM
+    ).run();
+
+    // First get goes to the runtime, the others get completed with local state
+    expect(result).toStrictEqual([
+      setStateMessage("STATE", 2),
+      getStateMessage("STATE", 2),
+      clearStateMessage("STATE"),
+      getStateMessage("STATE", undefined, true),
+      outputMessage(greetResponse("0 - 1 - 2 - 0")),
+    ]);
+  });
+
+  it("handles complete state with replay up to increment no. 2", async () => {
+    const result = await new TestDriver(
+      new IncrementingGreeter(),
+      [
+        startMessage(undefined, false, [keyVal("STATE", 2)]),
+        input,
+        getStateMessage("STATE", undefined, true),
+        setStateMessage("STATE", 1),
+        getStateMessage("STATE", 1),
+        setStateMessage("STATE", 2),
+      ],
+      ProtocolMode.BIDI_STREAM
+    ).run();
+
+    // First get goes to the runtime, the others get completed with local state
+    expect(result).toStrictEqual([
+      getStateMessage("STATE", 2),
+      clearStateMessage("STATE"),
+      getStateMessage("STATE", undefined, true),
+      outputMessage(greetResponse("0 - 1 - 2 - 0")),
+    ]);
+  });
+});
