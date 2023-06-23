@@ -19,7 +19,7 @@ import { Failure } from "./generated/proto/protocol";
 import { Journal } from "./journal";
 import { Invocation } from "./invocation";
 import { ensureError } from "./types/errors";
-import {LocalStateStore} from "./local_state_store";
+import { LocalStateStore } from "./local_state_store";
 
 export class StateMachine<I, O> implements RestateStreamConsumer {
   private journal: Journal<I, O>;
@@ -34,7 +34,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
   //  - an error in the state machine
   private stateMachineClosed = false;
 
-  public readonly localStateStore: LocalStateStore
+  public readonly localStateStore: LocalStateStore;
 
   // Whether the input channel (runtime -> service) is closed
   // If it is closed, then we suspend immediately upon the next suspension point
@@ -50,7 +50,6 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
     private readonly connection: Connection,
     private readonly invocation: Invocation<I, O>,
     private readonly protocolMode: ProtocolMode
-
   ) {
     this.localStateStore = invocation.localStateStore;
 

@@ -34,30 +34,40 @@ import {
 import { Message } from "../src/types/types";
 import { TestRequest, TestResponse } from "../src/generated/proto/test";
 import { SideEffectEntryMessage } from "../src/generated/proto/javascript";
-import { Failure, StartMessage_StateEntry } from "../src/generated/proto/protocol";
+import {
+  Failure,
+  StartMessage_StateEntry,
+} from "../src/generated/proto/protocol";
 import { expect } from "@jest/globals";
 import { jsonSerialize, printMessageAsJson } from "../src/utils/utils";
 import { rlog } from "../src/utils/logger";
 
-export function startMessage(knownEntries?: number, partialState?: boolean, state?: Buffer[][]): Message {
-
+export function startMessage(
+  knownEntries?: number,
+  partialState?: boolean,
+  state?: Buffer[][]
+): Message {
   return new Message(
     START_MESSAGE_TYPE,
     StartMessage.create({
       instanceKey: Buffer.from("123"),
       invocationId: Buffer.from("abcd"),
       knownEntries: knownEntries, // only used for the Lambda case. For bidi streaming, this will be imputed by the testdriver
-      stateMap: toStateEntries(state || [])
+      stateMap: toStateEntries(state || []),
     }),
     undefined,
     0,
     undefined,
-    (partialState === false) ? undefined : true
+    partialState === false ? undefined : true
   );
 }
 
-export function toStateEntries(entries: Buffer[][]){
-  return entries.map(el => StartMessage_StateEntry.create({key: el[0], value: el[1]})) || []
+export function toStateEntries(entries: Buffer[][]) {
+  return (
+    entries.map((el) =>
+      StartMessage_StateEntry.create({ key: el[0], value: el[1] })
+    ) || []
+  );
 }
 
 export function inputMessage(value: Uint8Array): Message {
@@ -399,8 +409,8 @@ export function getAwakeableId(entryIndex: number): string {
   );
 }
 
-export function keyVal(key: string, value: any): Buffer[]{
-    return [Buffer.from(key), Buffer.from(JSON.stringify(value))]
+export function keyVal(key: string, value: any): Buffer[] {
+  return [Buffer.from(key), Buffer.from(JSON.stringify(value))];
 }
 
 // a utility function to print the results of a test

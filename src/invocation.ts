@@ -17,7 +17,7 @@ import {
   START_MESSAGE_TYPE,
 } from "./types/protocol";
 import { RestateStreamConsumer } from "./connection/connection";
-import {LocalStateStore} from "./local_state_store";
+import { LocalStateStore } from "./local_state_store";
 
 enum State {
   ExpectingStart = 0,
@@ -45,7 +45,10 @@ export class InvocationBuilder<I, O> implements RestateStreamConsumer {
     switch (this.state) {
       case State.ExpectingStart:
         checkState(State.ExpectingStart, START_MESSAGE_TYPE, m);
-        this.handleStartMessage(m.message as StartMessage, m.partialStateFlag || false);
+        this.handleStartMessage(
+          m.message as StartMessage,
+          m.partialStateFlag || false
+        );
         this.state = State.ExpectingInput;
         return false;
 
@@ -93,7 +96,10 @@ export class InvocationBuilder<I, O> implements RestateStreamConsumer {
     return this.complete.promise;
   }
 
-  private handleStartMessage(m: StartMessage, partialState: boolean): InvocationBuilder<I, O> {
+  private handleStartMessage(
+    m: StartMessage,
+    partialState: boolean
+  ): InvocationBuilder<I, O> {
     this.nbEntriesToReplay = m.knownEntries;
     this.instanceKey = m.instanceKey;
     this.invocationId = m.invocationId;

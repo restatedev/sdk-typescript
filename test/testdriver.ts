@@ -1,6 +1,10 @@
 "use strict";
 
-import { COMPLETION_MESSAGE_TYPE, START_MESSAGE_TYPE, StartMessage } from "../src/types/protocol";
+import {
+  COMPLETION_MESSAGE_TYPE,
+  START_MESSAGE_TYPE,
+  StartMessage,
+} from "../src/types/protocol";
 import { RestateHttp2Connection } from "../src/connection/http_connection";
 import * as restate from "../src/public_api";
 import { Connection } from "../src/connection/connection";
@@ -12,8 +16,6 @@ import { ProtocolMode } from "../src/generated/proto/discovery";
 import { rlog } from "../src/utils/logger";
 import { StateMachine } from "../src/state_machine";
 import { InvocationBuilder } from "../src/invocation";
-import {LocalStateStore} from "../src/local_state_store";
-import {StartMessage_StateEntry} from "../src/generated/proto/protocol";
 import { protoMetadata } from "../src/generated/proto/test";
 
 export class TestDriver<I, O> implements Connection {
@@ -33,7 +35,7 @@ export class TestDriver<I, O> implements Connection {
   constructor(
     instance: object,
     entries: Array<Message>,
-    protocolMode?: ProtocolMode,
+    protocolMode?: ProtocolMode
   ) {
     this.restateServer = new TestRestateServer();
     this.restateServer.bindService({
@@ -67,10 +69,8 @@ export class TestDriver<I, O> implements Connection {
       );
     }
 
-    if(entries[0].messageType !== START_MESSAGE_TYPE){
-      throw new Error(
-        "First message has to be start message."
-      );
+    if (entries[0].messageType !== START_MESSAGE_TYPE) {
+      throw new Error("First message has to be start message.");
     }
 
     // Get the index of where the completion messages start in the entries list
@@ -91,13 +91,13 @@ export class TestDriver<I, O> implements Connection {
         instanceKey: startEntry.instanceKey,
         invocationId: startEntry.invocationId,
         knownEntries: endOfReplay - 1,
-        stateMap: startEntry.stateMap
+        stateMap: startEntry.stateMap,
       }),
       msg.completed,
       msg.protocolVersion,
       msg.requiresAck,
       msg.partialStateFlag
-    )
+    );
 
     const replayMessages = entries.slice(0, endOfReplay);
     this.completionMessages = entries.slice(endOfReplay);
@@ -123,8 +123,8 @@ export class TestDriver<I, O> implements Connection {
     }
 
     const invocationBuilder = new InvocationBuilder(this.method);
-    replayMessages.forEach(el => invocationBuilder.handleMessage(el))
-    const invocation = invocationBuilder.build()
+    replayMessages.forEach((el) => invocationBuilder.handleMessage(el));
+    const invocation = invocationBuilder.build();
 
     this.stateMachine = new StateMachine(this, invocation, this.protocolMode);
     this.stateMachine.invoke();

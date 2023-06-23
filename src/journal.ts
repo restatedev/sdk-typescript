@@ -73,6 +73,7 @@ export class Journal<I, O> {
   public handleUserSideMessage(
     messageType: bigint,
     message: p.ProtocolMessage | Uint8Array
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ): Promise<any | undefined> {
     this.incrementUserCodeIndex();
 
@@ -110,15 +111,18 @@ export class Journal<I, O> {
           }
           case p.GET_STATE_ENTRY_MESSAGE_TYPE: {
             const getStateMsg = message as GetStateEntryMessage;
-            if(getStateMsg.value !== undefined || getStateMsg.empty !== undefined){
+            if (
+              getStateMsg.value !== undefined ||
+              getStateMsg.empty !== undefined
+            ) {
               // State was eagerly filled by the local state store
               return Promise.resolve(getStateMsg.value || getStateMsg.empty);
             } else {
               // Need to retrieve state by going to the runtime.
               const journalEntry = new JournalEntry(messageType, message);
               this.pendingJournalEntries.set(
-                  this.userCodeJournalIndex,
-                  journalEntry
+                this.userCodeJournalIndex,
+                journalEntry
               );
               return journalEntry.promise;
             }
@@ -390,10 +394,6 @@ export class Journal<I, O> {
 
   public isClosed(): boolean {
     return this.state === NewExecutionState.CLOSED;
-  }
-
-  public isReplaying(): boolean {
-    return this.state === NewExecutionState.REPLAYING;
   }
 
   public isProcessing(): boolean {

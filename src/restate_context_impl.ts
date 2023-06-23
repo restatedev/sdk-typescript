@@ -69,7 +69,7 @@ export class RestateContextImpl implements RestateContext {
     // then we went to the runtime to get the value.
     // When we get the response, we set it in the localStateStore,
     // to answer subsequent requests
-    if(msg.value === undefined && msg.empty === undefined){
+    if (msg.value === undefined && msg.empty === undefined) {
       this.stateMachine.localStateStore.add(name, result as Buffer | Empty);
     }
 
@@ -154,10 +154,7 @@ export class RestateContextImpl implements RestateContext {
   ): Promise<void> {
     this.checkState("oneWayCall");
 
-    await this.callContext.run(
-      { type: CallContexType.OneWayCall },
-      call
-    );
+    await this.callContext.run({ type: CallContexType.OneWayCall }, call);
   }
 
   public async delayedCall(
