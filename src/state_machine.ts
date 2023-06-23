@@ -19,6 +19,7 @@ import { Failure } from "./generated/proto/protocol";
 import { Journal } from "./journal";
 import { Invocation } from "./invocation";
 import { ensureError } from "./types/errors";
+import {LocalStateStore} from "./local_state_store";
 
 export class StateMachine<I, O> implements RestateStreamConsumer {
   private journal: Journal<I, O>;
@@ -32,6 +33,8 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
   //  - a suspension
   //  - an error in the state machine
   private stateMachineClosed = false;
+
+  public readonly localStateStore: LocalStateStore
 
   // Whether the input channel (runtime -> service) is closed
   // If it is closed, then we suspend immediately upon the next suspension point
@@ -47,7 +50,10 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
     private readonly connection: Connection,
     private readonly invocation: Invocation<I, O>,
     private readonly protocolMode: ProtocolMode
+
   ) {
+    this.localStateStore = invocation.localStateStore;
+
     this.restateContext = new RestateContextImpl(
       this.invocation.instanceKey,
       this.invocation.invocationId,
@@ -103,7 +109,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
       return new CompletablePromise<T>().promise;
     }
 
-    const promise = this.journal.handleUserSideMessage<T>(messageType, message);
+    const promise = this.journal.handleUserSideMessage(messageType, message);
 
     // Only send the message to restate if we are not in replaying mode
     if (this.journal.isProcessing()) {
@@ -134,9 +140,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
 
     if (
       p.SUSPENSION_TRIGGERS.includes(messageType) &&
-      (!this.journal.isReplaying() ||
-        (this.journal.isReplaying() &&
-          this.journal.getCompletableIndices().length > 0))
+      this.journal.getCompletableIndices().length > 0
     ) {
       this.connection.flush();
       this.scheduleSuspension();

@@ -1,11 +1,6 @@
 "use strict";
 
-import {
-  COMPLETION_MESSAGE_TYPE,
-  PollInputStreamEntryMessage,
-  START_MESSAGE_TYPE,
-  StartMessage,
-} from "../src/types/protocol";
+import { COMPLETION_MESSAGE_TYPE, START_MESSAGE_TYPE, StartMessage } from "../src/types/protocol";
 import { RestateHttp2Connection } from "../src/connection/http_connection";
 import * as restate from "../src/public_api";
 import { Connection } from "../src/connection/connection";
@@ -16,7 +11,9 @@ import { HostedGrpcServiceMethod } from "../src/types/grpc";
 import { ProtocolMode } from "../src/generated/proto/discovery";
 import { rlog } from "../src/utils/logger";
 import { StateMachine } from "../src/state_machine";
-import { Invocation } from "../src/invocation";
+import { InvocationBuilder } from "../src/invocation";
+import {LocalStateStore} from "../src/local_state_store";
+import {StartMessage_StateEntry} from "../src/generated/proto/protocol";
 import { protoMetadata } from "../src/generated/proto/test";
 
 export class TestDriver<I, O> implements Connection {
@@ -36,7 +33,7 @@ export class TestDriver<I, O> implements Connection {
   constructor(
     instance: object,
     entries: Array<Message>,
-    protocolMode?: ProtocolMode
+    protocolMode?: ProtocolMode,
   ) {
     this.restateServer = new TestRestateServer();
     this.restateServer.bindService({
@@ -70,27 +67,40 @@ export class TestDriver<I, O> implements Connection {
       );
     }
 
-    rlog.debug(JSON.stringify(entries.map((el) => el.message)));
-
-    // Remove the start message from the entries and store it
-    const firstMsg = entries.shift();
-    if (!firstMsg || firstMsg.messageType !== START_MESSAGE_TYPE) {
-      throw new Error("First message needs to be start message");
+    if(entries[0].messageType !== START_MESSAGE_TYPE){
+      throw new Error(
+        "First message has to be start message."
+      );
     }
-    const startMsg = firstMsg.message as StartMessage;
 
     // Get the index of where the completion messages start in the entries list
     const firstCompletionIndex = entries.findIndex(
       (value) => value.messageType === COMPLETION_MESSAGE_TYPE
     );
-    rlog.debug(firstCompletionIndex);
 
     // The last message of the replay is the one right before the first completion
-    const knownEntries =
+    const endOfReplay =
       firstCompletionIndex !== -1 ? firstCompletionIndex : entries.length;
 
-    const replayMessages = entries.slice(0, knownEntries);
-    this.completionMessages = entries.slice(knownEntries);
+    const msg = entries[0];
+    // We need to set the right number for known entries. Copy the rest
+    const startEntry = msg.message as StartMessage;
+    entries[0] = new Message(
+      msg.messageType,
+      StartMessage.create({
+        instanceKey: startEntry.instanceKey,
+        invocationId: startEntry.invocationId,
+        knownEntries: endOfReplay - 1,
+        stateMap: startEntry.stateMap
+      }),
+      msg.completed,
+      msg.protocolVersion,
+      msg.requiresAck,
+      msg.partialStateFlag
+    )
+
+    const replayMessages = entries.slice(0, endOfReplay);
+    this.completionMessages = entries.slice(endOfReplay);
 
     if (
       replayMessages.filter(
@@ -112,16 +122,9 @@ export class TestDriver<I, O> implements Connection {
       );
     }
 
-    const invocation = new Invocation(
-      this.method,
-      startMsg.instanceKey,
-      startMsg.invocationId,
-      knownEntries,
-      new Map<number, Message>(
-        replayMessages.map((value, index) => [index, value])
-      ),
-      (replayMessages[0].message as PollInputStreamEntryMessage).value
-    );
+    const invocationBuilder = new InvocationBuilder(this.method);
+    replayMessages.forEach(el => invocationBuilder.handleMessage(el))
+    const invocation = invocationBuilder.build()
 
     this.stateMachine = new StateMachine(this, invocation, this.protocolMode);
     this.stateMachine.invoke();

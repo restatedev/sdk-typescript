@@ -17,6 +17,7 @@ import {
   START_MESSAGE_TYPE,
 } from "./types/protocol";
 import { RestateStreamConsumer } from "./connection/connection";
+import {LocalStateStore} from "./local_state_store";
 
 enum State {
   ExpectingStart = 0,
@@ -36,6 +37,7 @@ export class InvocationBuilder<I, O> implements RestateStreamConsumer {
   private invocationId?: Buffer = undefined;
   private invocationValue?: Buffer = undefined;
   private nbEntriesToReplay?: number = undefined;
+  private localStateStore?: LocalStateStore;
 
   constructor(private readonly method: HostedGrpcServiceMethod<I, O>) {}
 
@@ -43,7 +45,7 @@ export class InvocationBuilder<I, O> implements RestateStreamConsumer {
     switch (this.state) {
       case State.ExpectingStart:
         checkState(State.ExpectingStart, START_MESSAGE_TYPE, m);
-        this.handleStartMessage(m.message as StartMessage);
+        this.handleStartMessage(m.message as StartMessage, m.partialStateFlag || false);
         this.state = State.ExpectingInput;
         return false;
 
@@ -91,10 +93,11 @@ export class InvocationBuilder<I, O> implements RestateStreamConsumer {
     return this.complete.promise;
   }
 
-  private handleStartMessage(m: StartMessage): InvocationBuilder<I, O> {
+  private handleStartMessage(m: StartMessage, partialState: boolean): InvocationBuilder<I, O> {
     this.nbEntriesToReplay = m.knownEntries;
     this.instanceKey = m.instanceKey;
     this.invocationId = m.invocationId;
+    this.localStateStore = new LocalStateStore(partialState, m.stateMap);
     return this;
   }
 
@@ -129,7 +132,8 @@ export class InvocationBuilder<I, O> implements RestateStreamConsumer {
       this.invocationId!,
       this.nbEntriesToReplay!,
       this.replayEntries!,
-      this.invocationValue!
+      this.invocationValue!,
+      this.localStateStore!
     );
   }
 }
@@ -143,7 +147,8 @@ export class Invocation<I, O> {
     public readonly invocationId: Buffer,
     public readonly nbEntriesToReplay: number,
     public readonly replayEntries: Map<number, Message>,
-    public readonly invocationValue: Buffer
+    public readonly invocationValue: Buffer,
+    public readonly localStateStore: LocalStateStore
   ) {
     this.invocationIdString = uuidV7FromBuffer(this.invocationId);
     this.logPrefix = `[${this.method.packge}.${
