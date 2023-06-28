@@ -44,7 +44,7 @@ export class RestateContextImpl implements RestateContext {
   // we also use this information to ensure we check that only allowed operations are
   // used. Within side-effects, no operations are allowed on the RestateContext.
   // For example, this is illegal: 'ctx.sideEffect(() => {await ctx.get("my-state")})'
-  private callContext = new AsyncLocalStorage<CallContext>();
+  private static callContext = new AsyncLocalStorage<CallContext>();
 
   constructor(
     public readonly instanceKey: Buffer,
@@ -154,7 +154,7 @@ export class RestateContextImpl implements RestateContext {
   ): Promise<void> {
     this.checkState("oneWayCall");
 
-    await this.callContext.run({ type: CallContexType.OneWayCall }, call);
+    await RestateContextImpl.callContext.run({ type: CallContexType.OneWayCall }, call);
   }
 
   public async delayedCall(
@@ -165,7 +165,7 @@ export class RestateContextImpl implements RestateContext {
     this.checkState("delayedCall");
 
     // Delayed call is a one way call with a delay
-    await this.callContext.run(
+    await RestateContextImpl.callContext.run(
       { type: CallContexType.OneWayCall, delay: delayMillis },
       call
     );
@@ -196,7 +196,7 @@ export class RestateContextImpl implements RestateContext {
 
     let sideEffectResult: T;
     try {
-      sideEffectResult = await this.callContext.run(
+      sideEffectResult = await RestateContextImpl.callContext.run(
         { type: CallContexType.SideEffect },
         fn
       );
@@ -321,22 +321,22 @@ export class RestateContextImpl implements RestateContext {
   }
 
   private isInSideEffect(): boolean {
-    const context = this.callContext.getStore();
+    const context = RestateContextImpl.callContext.getStore();
     return context?.type === CallContexType.SideEffect;
   }
 
   private isInOneWayCall(): boolean {
-    const context = this.callContext.getStore();
+    const context = RestateContextImpl.callContext.getStore();
     return context?.type === CallContexType.OneWayCall;
   }
 
   private getOneWayCallDelay(): number {
-    const context = this.callContext.getStore();
+    const context = RestateContextImpl.callContext.getStore();
     return context?.delay || 0;
   }
 
   private checkState(callType: string): void {
-    const context = this.callContext.getStore();
+    const context = RestateContextImpl.callContext.getStore();
     if (!context) {
       return;
     }
