@@ -8,6 +8,8 @@ on:
 
 jobs:
   build:
+    # prevent from running on forks
+    if: github.repository_owner == 'restatedev'
     runs-on: ubuntu-latest
     strategy:
       matrix:
