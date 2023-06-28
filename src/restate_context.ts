@@ -80,7 +80,7 @@ export interface RestateContext {
    * )
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  oneWayCall(call: () => Promise<any>): void;
+  oneWayCall(call: () => Promise<any>): Promise<void>;
 
   /**
    * Delayed unidirectional call to other Restate services ( = in background / async / not waiting on response).
@@ -101,7 +101,7 @@ export interface RestateContext {
    * )
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  delayedCall(call: () => Promise<any>, delayMillis?: number): void;
+  delayedCall(call: () => Promise<any>, delayMillis?: number): Promise<void>;
 
   /**
    * Execute a side effect and store the result in the Restate runtime.
