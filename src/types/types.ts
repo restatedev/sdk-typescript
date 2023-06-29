@@ -94,7 +94,7 @@ export class Header {
         : undefined;
     const partialStateFlag =
       MessageType.hasPartialStateFlag(messageType) &&
-      (value && PARTIAL_STATE_MASK) !== 0n
+      (value & PARTIAL_STATE_MASK) !== 0n
         ? true
         : undefined;
     const frameLength = Number(value & 0xffffffffn);
