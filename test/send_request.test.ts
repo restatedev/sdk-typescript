@@ -340,7 +340,7 @@ gets completed in this order: (test: https://github.com/restatedev/sdk-typescrip
           1,
           undefined,
           undefined,
-          Failure.create({ code: 13, message: "Error" })
+          failure("Error")
         ),
         completionMessage(2, greetResponse("TILL")),
 The current behaviour is that the first completion (error) throws a user-code error that isn't catched. So the entire call fails and sends back an output entry stream message.
@@ -362,7 +362,7 @@ This gives the following error:
   //           1,
   //           undefined,
   //           undefined,
-  //           Failure.create({ code: 13, message: "Error" })
+  //           failure("Error")
   //         ),
   //         completionMessage(2, greetResponse("TILL")),
   //       ]
@@ -420,10 +420,7 @@ describe("FailingForwardGreetingService", () => {
         1,
         undefined,
         undefined,
-        Failure.create({
-          code: 13,
-          message: "Sorry, something went terribly wrong...",
-        })
+        failure("Sorry, something went terribly wrong...")
       ),
     ]).run();
 
@@ -444,10 +441,7 @@ describe("FailingForwardGreetingService", () => {
         "Greet",
         greetRequest("Francesco"),
         undefined,
-        Failure.create({
-          code: 13,
-          message: "Sorry, something went terribly wrong...",
-        })
+        failure("Sorry, something went terribly wrong...")
       ),
     ]).run();
 
