@@ -5,9 +5,6 @@ import {
   TestGreeter,
   protoMetadata,
 } from "../src/generated/proto/test";
-import { randomInt } from "crypto";
-import { TerminalError } from "../src/types/errors";
-import { rlog } from "../src/utils/logger";
 
 /**
  * Example of a service implemented with the Restate Typescript SDK
@@ -20,34 +17,8 @@ export class GreeterService implements TestGreeter {
     // state
     let seen = (await ctx.get<number>("seen")) || 0;
     seen += 1;
+
     await ctx.set("seen", seen);
-
-    // try {
-    const result = await ctx.sideEffect(async () => {
-      /*      const nb = randomInt(5);
-              rlog.log(nb);
-              if(nb < 2) {*/
-      // throw new TerminalError("Execution failed");
-      //  } else {
-      throw new TerminalError("Execution failed");
-      // }
-    });
-    rlog.info("Result 1: " + result);
-    // } catch (e) {
-    //   rlog.info("I can catch this");
-    // }
-
-    const result2 = await ctx.sideEffect(async () => {
-      rlog.info("I am here");
-      return 5;
-      /*      const nb = randomInt(5);
-            rlog.log(nb);
-            if(nb < 2) {*/
-      // throw new TerminalError("Execution failed");
-      //  } else {
-      // }
-    });
-    rlog.info("Result 2: " + result2);
 
     // return the final response
     return TestResponse.create({
