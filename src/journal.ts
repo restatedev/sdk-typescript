@@ -32,6 +32,11 @@ import {
 import { Message } from "./types/types";
 import { SideEffectEntryMessage } from "./generated/proto/javascript";
 import { Invocation } from "./invocation";
+import {
+  JournalMismatchError,
+  ProtocolViolationError,
+  RetryableError,
+} from "./types/errors";
 
 export class Journal<I, O> {
   private state = NewExecutionState.REPLAYING;
@@ -48,7 +53,7 @@ export class Journal<I, O> {
       !inputMessage ||
       inputMessage.messageType !== POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE
     ) {
-      throw new Error(
+      throw new ProtocolViolationError(
         "First message of replay entries needs to be PollInputStreamMessage"
       );
     }
@@ -83,7 +88,7 @@ export class Journal<I, O> {
           this.userCodeJournalIndex
         );
         if (replayEntry === undefined) {
-          throw new Error(
+          throw new RetryableError(
             `Illegal state: no replay message was received for the entry at journal index ${this.userCodeJournalIndex}`
           );
         }
@@ -147,7 +152,9 @@ export class Journal<I, O> {
         return Promise.resolve(undefined);
       }
       default: {
-        throw new Error("Did not receive input message before other messages.");
+        throw new ProtocolViolationError(
+          "Did not receive input message before other messages."
+        );
       }
     }
   }
@@ -196,7 +203,7 @@ export class Journal<I, O> {
 
     // Journal mismatch check failedf
     if (!match) {
-      throw new Error(
+      throw new JournalMismatchError(
         `Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!
         The journal entry at position ${journalIndex} was:
         - In the user code: type: ${
@@ -333,8 +340,8 @@ export class Journal<I, O> {
     if (rootJournalEntry === undefined) {
       // We have no other option than to throw an error here
       // Because without the root promise we cannot resolve the method or continue
-      throw new Error(
-        "No root journal entry found to resolve with output stream message"
+      throw new RetryableError(
+        "Illegal state: No root journal entry found to resolve with output stream message"
       );
     }
 

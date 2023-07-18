@@ -30,6 +30,8 @@ import {
   SuspensionMessage,
   ProtocolMessage,
   AwakeableIdentifier,
+  ERROR_MESSAGE_TYPE,
+  ErrorMessage,
 } from "../src/types/protocol";
 import { Message } from "../src/types/types";
 import { TestRequest, TestResponse } from "../src/generated/proto/test";
@@ -392,6 +394,13 @@ export function greetResponse(myGreeting: string): Uint8Array {
 }
 
 export function checkError(outputMsg: Message, errorMessage: string) {
+  expect(outputMsg.messageType).toEqual(ERROR_MESSAGE_TYPE);
+  expect((outputMsg.message as ErrorMessage).failure?.message).toContain(
+    errorMessage
+  );
+}
+
+export function checkTerminalError(outputMsg: Message, errorMessage: string) {
   expect(outputMsg.messageType).toEqual(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE);
   expect(
     (outputMsg.message as OutputStreamEntryMessage).failure?.message

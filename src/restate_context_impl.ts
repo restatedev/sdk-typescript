@@ -4,7 +4,6 @@ import {
   AwakeableEntryMessage,
   BackgroundInvokeEntryMessage,
   CompleteAwakeableEntryMessage,
-  Failure,
   InvokeEntryMessage,
   SleepEntryMessage,
 } from "./generated/proto/protocol";
@@ -22,7 +21,11 @@ import {
 } from "./types/protocol";
 import { SideEffectEntryMessage } from "./generated/proto/javascript";
 import { AsyncLocalStorage } from "async_hooks";
-import { RestateError } from "./types/errors";
+import {
+  ApiViolationError,
+  TerminalError,
+  RetryableError,
+} from "./types/errors";
 import { jsonSerialize, jsonDeserialize } from "./utils/utils";
 import { Empty } from "./generated/google/protobuf/empty";
 
@@ -173,16 +176,19 @@ export class RestateContextImpl implements RestateContext {
 
   public async sideEffect<T>(fn: () => Promise<T>): Promise<T> {
     if (this.isInSideEffect()) {
-      const msg = "You cannot do sideEffect calls from within a side effect.";
-      await this.stateMachine.notifyApiViolation(13, msg);
-      throw new Error(msg);
+      const e = new ApiViolationError(
+        "You cannot do sideEffect calls from within a side effect."
+      );
+      await this.stateMachine.notifyHandlerExecutionError(e);
+      throw e;
     } else if (this.isInOneWayCall()) {
-      const msg =
+      const e = new ApiViolationError(
         "Cannot do a side effect from within ctx.oneWayCall(...). " +
-        "Context method ctx.oneWayCall() can only be used to invoke other services unidirectionally. " +
-        "e.g. ctx.oneWayCall(() => client.greet(my_request))";
-      await this.stateMachine.notifyApiViolation(13, msg);
-      throw new Error(msg);
+          "Context method ctx.oneWayCall() can only be used to invoke other services unidirectionally. " +
+          "e.g. ctx.oneWayCall(() => client.greet(my_request))"
+      );
+      await this.stateMachine.notifyHandlerExecutionError(e);
+      throw e;
     }
 
     // in replay mode, we directly return the value from the log
@@ -201,31 +207,37 @@ export class RestateContextImpl implements RestateContext {
         fn
       );
     } catch (e) {
-      // error that came out of the side-effect execution
-      // we send back a completion with a failure
-      const errorMessage: string =
-        e instanceof Error ? e.message : JSON.stringify(e);
-      const failure: Failure = Failure.create({
-        code: 13,
-        message: errorMessage,
-      });
+      if (e instanceof TerminalError) {
+        // terminal error that came out of the side effect execution
+        // we send back a completion with a failure
+        const sideEffectMsg = SideEffectEntryMessage.encode(
+          SideEffectEntryMessage.create({ failure: e.toFailure() })
+        ).finish();
 
-      const sideEffectMsg = SideEffectEntryMessage.encode(
-        SideEffectEntryMessage.create({ failure: failure })
-      ).finish();
+        // this may throw an error from the SDK/runtime/connection side, in case the
+        // failure message cannot be committed to the journal. That error would then
+        // be returned from this function (replace the original error)
+        await this.stateMachine.handleUserCodeMessage<T>(
+          SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+          sideEffectMsg,
+          false,
+          undefined,
+          true
+        );
 
-      // this may throw an error from the SDK/runtime/connection side, in case the
-      // failure message cannot be committed to the journal. That error would then
-      // be returned from this function (replace the original error)
-      await this.stateMachine.handleUserCodeMessage<T>(
-        SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-        sideEffectMsg,
-        false,
-        undefined,
-        true
-      );
+        throw e;
+      } else if (e instanceof ApiViolationError) {
+        // has already been reported so just throw
+        throw e;
+      } else {
+        const msg = e instanceof Error ? e.message : JSON.stringify(e);
+        const userCodeError = new RetryableError(
+          "sideEffect execution failed: " + msg
+        );
+        await this.stateMachine.notifyHandlerExecutionError(userCodeError);
 
-      throw new RestateError("sideEffect execution failed: " + errorMessage, e);
+        throw e;
+      }
     }
 
     // we have this code outside the above try/catch block, to ensure that any error arising
@@ -273,8 +285,10 @@ export class RestateContextImpl implements RestateContext {
       .handleUserCodeMessage<Buffer>(AWAKEABLE_ENTRY_MESSAGE_TYPE, msg)
       .then((result: Buffer | void) => {
         if (!(result instanceof Buffer)) {
-          //TODO What to do if this is not a buffer?
-          throw new Error("");
+          // This should either be a filled buffer or an empty buffer but never anything else.
+          throw new RetryableError(
+            "Awakeable was not resolved with a buffer payload"
+          );
         }
 
         return JSON.parse(result.toString()) as T;
@@ -342,17 +356,20 @@ export class RestateContextImpl implements RestateContext {
     }
 
     if (context.type === CallContexType.SideEffect) {
-      const msg = `You cannot do ${callType} calls from within a side effect.`;
-      this.stateMachine.notifyApiViolation(13, msg);
-      throw new RestateError(msg);
+      const e = new ApiViolationError(
+        `You cannot do ${callType} calls from within a side effect.`
+      );
+      this.stateMachine.notifyHandlerExecutionError(e);
+      throw e;
     }
 
     if (context.type === CallContexType.OneWayCall) {
-      const msg = `Cannot do a ${callType} from within ctx.oneWayCall(...).
+      const e =
+        new ApiViolationError(`Cannot do a ${callType} from within ctx.oneWayCall(...).
           Context method oneWayCall() can only be used to invoke other services in the background.
-          e.g. ctx.oneWayCall(() => client.greet(my_request))`;
-      this.stateMachine.notifyApiViolation(13, msg);
-      throw new RestateError(msg);
+          e.g. ctx.oneWayCall(() => client.greet(my_request))`);
+      this.stateMachine.notifyHandlerExecutionError(e);
+      throw e;
     }
   }
 }

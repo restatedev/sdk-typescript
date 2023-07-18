@@ -190,7 +190,7 @@ export async function retryExceptionalSideEffect<T>(
         errorName = e.name;
         errorMessage = e.message;
       } else {
-        lastError = new RestateError("Uncategorized error", e);
+        lastError = new RestateError("Uncategorized error", 13, e);
         errorName = "Error";
         errorMessage = JSON.stringify(e);
       }
@@ -206,7 +206,7 @@ export async function retryExceptionalSideEffect<T>(
         rlog.debug("Retrying in %d ms", currentDelayMs);
       } else {
         rlog.debug("No retries left.");
-        throw new RestateError(`Retries exhausted for ${name}.`, lastError);
+        throw new RestateError(`Retries exhausted for ${name}.`, 13, lastError);
       }
     }
 
