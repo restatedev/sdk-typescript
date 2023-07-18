@@ -4,7 +4,7 @@
 import { describe, expect } from "@jest/globals";
 import { TestingContext } from "./test_context";
 import * as RestateUtils from "../src/utils/public_utils";
-import { RestateError } from "../src/types/errors";
+import { RestateError, TerminalError } from "../src/types/errors";
 import { RestateContext } from "../src/restate_context";
 import {
   TestGreeter,
@@ -15,12 +15,14 @@ import * as restate from "../src/public_api";
 import { TestDriver } from "./testdriver";
 import {
   checkError,
+  checkTerminalError,
   completionMessage,
   decodeSideEffectFromResult,
   greetRequest,
   greetResponse,
   inputMessage,
   outputMessage,
+  printResults,
   startMessage,
 } from "./protoutils";
 import { rlog } from "../src/utils/logger";
@@ -31,14 +33,10 @@ import {
 import { Message } from "../src/types/types";
 import { RetrySettings } from "../src/utils/public_utils";
 
-async function exceptionOnFalse(x: Promise<boolean>): Promise<boolean> {
-  return (await x) ? x : Promise.reject(new Error("test error"));
-}
-
 /**
  * Tests for the method {@linkcode restate_utils.retrySideEffectWithBackoff}.
  */
-describe("retrySideEffectWithBackoff()", () => {
+describe("retrySideEffect()", () => {
   it("should return immediately upon success", async () => {
     await testReturnImmediatelyUponSuccess(RestateUtils.retrySideEffect, true);
   });
@@ -57,54 +55,6 @@ describe("retrySideEffectWithBackoff()", () => {
 
   it("should ultimately sleep the maximum time", async () => {
     await testUltimateSleepTime(RestateUtils.retrySideEffect);
-  });
-});
-
-/**
- * Tests for the method {@linkcode restate_utils.retryExceptionalSideEffectWithBackoff}.
- */
-describe("retryExceptionalSideEffectWithBackoff()", () => {
-  it("should return immediately upon success", async () => {
-    const result = await testReturnImmediatelyUponSuccess(
-      RestateUtils.retryExceptionalSideEffect,
-      "great!"
-    );
-
-    expect(result).toStrictEqual("great!");
-  });
-
-  it("should retry until success", async () => {
-    const finalValue = "success!!!";
-    const resultProducer = async (val: boolean) =>
-      val ? finalValue : Promise.reject(new Error("..."));
-
-    const result = await testRetryUntilSuccess(
-      RestateUtils.retryExceptionalSideEffect,
-      resultProducer
-    );
-
-    expect(result).toStrictEqual(finalValue);
-  });
-
-  it("should retry until the maximum attempts", async () => {
-    await testRetryMaxAttempts(
-      RestateUtils.retryExceptionalSideEffect,
-      exceptionOnFalse
-    );
-  });
-
-  it("should initially sleep the minimum time", async () => {
-    await testInitialSleepTime(
-      RestateUtils.retryExceptionalSideEffect,
-      exceptionOnFalse
-    );
-  });
-
-  it("should ultimately sleep the maximum time", async () => {
-    await testUltimateSleepTime(
-      RestateUtils.retryExceptionalSideEffect,
-      exceptionOnFalse
-    );
   });
 });
 
@@ -289,22 +239,22 @@ async function testUltimateSleepTime<R>(
 }
 
 class FailingExceptionalSideEffectGreeter implements TestGreeter {
-  constructor(readonly attempts: number) {}
+  constructor(
+    readonly fn: () => Promise<boolean>
+  ) {}
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     // state
-    const doCall = async () => failingCall(this.attempts);
-    const success = await RestateUtils.retryExceptionalSideEffect(
-      ctx,
+    const success = await ctx.sideEffect(
+      this.fn,
       {
         initialDelayMs: 100,
         maxDelayMs: 500,
         maxRetries: 3,
-      } as RetrySettings,
-      doCall
+      } as RetrySettings
     );
 
     return TestResponse.create({ greeting: `${success}` });
@@ -359,11 +309,40 @@ async function failingCall(attempts: number): Promise<boolean> {
   }
 }
 
-describe("FailingSideEffectGreeter", () => {
-  it("retries two times and then succeeds", async () => {
+async function terminalFailingCall(attempts: number): Promise<boolean> {
+  if (i >= attempts) {
+    rlog.debug("Call succeeded");
+    i = 0;
+    return true;
+  } else {
+    rlog.debug("Call failed");
+    i = i + 1;
+    throw new TerminalError("Call failed");
+  }
+}
+
+describe("FailingExceptionalSideEffectGreeter", () => {
+  it("fails immediately with terminal error", async () => {
     i = 0;
     const result = await new TestDriver(
-      new FailingExceptionalSideEffectGreeter(2),
+      new FailingExceptionalSideEffectGreeter(async () => terminalFailingCall(2)),
+      [
+        startMessage(1),
+        inputMessage(greetRequest("Till")),
+        completionMessage(1), // fail
+      ]
+    ).run();
+
+    printResults(result)
+    expect(result.length).toStrictEqual(2);
+    checkIfSideEffectReturnsCallFailed(result[0]);
+    checkTerminalError(result[1], "Uncaught exception for invocation id: Call failed")
+  });
+
+  it("retries two times and then succeeds for retryable errors", async () => {
+    i = 0;
+    const result = await new TestDriver(
+      new FailingExceptionalSideEffectGreeter(async () => failingCall(2)),
       [
         startMessage(1),
         inputMessage(greetRequest("Till")),
@@ -387,10 +366,10 @@ describe("FailingSideEffectGreeter", () => {
     expect(result[5]).toStrictEqual(outputMessage(greetResponse("true")));
   });
 
-  it("retries three times and then fails", async () => {
+  it("retries three times and then fails for retryable errors", async () => {
     i = 0;
     const result = await new TestDriver(
-      new FailingExceptionalSideEffectGreeter(4),
+      new FailingExceptionalSideEffectGreeter(async () => failingCall(4)),
       [
         startMessage(1),
         inputMessage(greetRequest("Till")),
@@ -478,5 +457,5 @@ function checkIfSideEffectReturnsCallFailed(msg: Message) {
   expect(msg.messageType).toStrictEqual(SIDE_EFFECT_ENTRY_MESSAGE_TYPE);
   expect(
     decodeSideEffectFromResult(msg.message).failure?.message
-  ).toStrictEqual("Call failed");
+  ).toContain("Call failed");
 }

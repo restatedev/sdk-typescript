@@ -21,9 +21,11 @@ import {
 } from "./types/protocol";
 import { SideEffectEntryMessage } from "./generated/proto/javascript";
 import { AsyncLocalStorage } from "async_hooks";
-import { TerminalError, RetryableError } from "./types/errors";
+import { TerminalError, RetryableError, RestateError, ensureError } from "./types/errors";
 import { jsonSerialize, jsonDeserialize } from "./utils/utils";
 import { Empty } from "./generated/google/protobuf/empty";
+import { EXPONENTIAL_BACKOFF, RetrySettings } from "./utils/public_utils";
+import { rlog } from "./utils/logger";
 
 enum CallContexType {
   None,
@@ -173,7 +175,15 @@ export class RestateContextImpl implements RestateContext {
     );
   }
 
-  public async sideEffect<T>(fn: () => Promise<T>): Promise<T> {
+  public async sideEffect<T>(fn: () => Promise<T>, retrySettings?: RetrySettings): Promise<T> {
+    if(retrySettings){
+      return this.retryExceptionalSideEffect(fn, retrySettings);
+    } else {
+      return this.execSideEffect(fn);
+    }
+  }
+
+  private async execSideEffect<T>(fn: () => Promise<T>, logRetryableError = false): Promise<T> {
     if (this.isInSideEffect()) {
       const e = RetryableError.apiViolation(
         "You cannot do sideEffect calls from within a side effect."
@@ -206,38 +216,20 @@ export class RestateContextImpl implements RestateContext {
         fn
       );
     } catch (e) {
-      if (e instanceof TerminalError) {
-        // terminal error that came out of the side effect execution
-        // we send back a completion with a failure
-        const sideEffectMsg = SideEffectEntryMessage.encode(
-          SideEffectEntryMessage.create({ failure: e.toFailure() })
-        ).finish();
-
-        // this may throw an error from the SDK/runtime/connection side, in case the
-        // failure message cannot be committed to the journal. That error would then
-        // be returned from this function (replace the original error)
-        await this.stateMachine.handleUserCodeMessage<T>(
-          SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-          sideEffectMsg,
-          false,
-          undefined,
-          true
-        );
-
-        throw e;
-      } else if (e instanceof RetryableError) {
-        // has already been reported so just throw
-        await this.stateMachine.notifyHandlerExecutionError(e);
-        throw e;
+      if ( e instanceof TerminalError ) {
+        await this.logFailedSideEffect(e);
       } else {
-        const msg = e instanceof Error ? e.message : JSON.stringify(e);
-        const userCodeError = RetryableError.internal(
-          "sideEffect execution failed: " + msg
-        );
-        await this.stateMachine.notifyHandlerExecutionError(userCodeError);
-
-        throw e;
+        const retryableError = (e instanceof RetryableError) ? e :
+          RetryableError.fromError(ensureError(e));
+        // For side effects with a retry strategy, we log the failed side effect
+        // For side effects that will be retried by the runtime, we send an error message
+        if(logRetryableError) {
+          await this.logFailedSideEffect(retryableError);
+        } else {
+          await this.stateMachine.notifyHandlerExecutionError(retryableError);
+        }
       }
+      throw e;
     }
 
     // we have this code outside the above try/catch block, to ensure that any error arising
@@ -265,6 +257,89 @@ export class RestateContextImpl implements RestateContext {
     );
 
     return sideEffectResult;
+  }
+
+  private async logFailedSideEffect<T>(e: TerminalError | RetryableError){
+    // error that came out of the side effect execution
+    // we send back a completion with a failure
+    const sideEffectMsg = SideEffectEntryMessage.encode(
+      SideEffectEntryMessage.create({ failure: e.toFailure() })
+    ).finish();
+
+    // this may throw an error from the SDK/runtime/connection side, in case the
+    // failure message cannot be committed to the journal. That error would then
+    // be returned from this function (replace the original error)
+    await this.stateMachine.handleUserCodeMessage<T>(
+      SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+      sideEffectMsg,
+      false,
+      undefined,
+      true
+    );
+  }
+
+  private async retryExceptionalSideEffect<T>(
+    sideEffect: () => Promise<T>,
+    retrySettings: RetrySettings
+  ): Promise<T> {
+    const {
+      initialDelayMs,
+      maxDelayMs = Number.MAX_SAFE_INTEGER,
+      maxRetries = Number.MAX_SAFE_INTEGER,
+      policy = EXPONENTIAL_BACKOFF,
+      name = "retryable-side-effect",
+    } = retrySettings;
+
+    let currentDelayMs = initialDelayMs;
+    let retriesLeft = maxRetries;
+    let lastError: Error | null = null;
+
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+      try {
+        return await this.execSideEffect(sideEffect, true);
+      } catch (e) {
+        if(e instanceof TerminalError){
+          // no retries for terminal errors
+          throw e;
+        }
+
+        let errorName: string;
+        let errorMessage: string;
+
+        if (e instanceof Error) {
+          lastError = e;
+          errorName = e.name;
+          errorMessage = e.message;
+        } else {
+          lastError = new RestateError("Uncategorized error", 13, e);
+          errorName = "Error";
+          errorMessage = JSON.stringify(e);
+        }
+
+        rlog.debug(
+          "Error while executing side effect '%s': %s - %s",
+          name,
+          errorName,
+          errorMessage
+        );
+
+        if (retriesLeft > 0) {
+          rlog.debug("Retrying in %d ms", currentDelayMs);
+        } else {
+          rlog.debug("No retries left.");
+          throw new RestateError(`Retries exhausted for ${name}.`, 13, lastError);
+        }
+      }
+
+      await this.sleep(currentDelayMs);
+
+      retriesLeft -= 1;
+      currentDelayMs = Math.min(
+        policy.computeNextDelay(currentDelayMs),
+        maxDelayMs
+      );
+    }
   }
 
   public sleep(millis: number): Promise<void> {

@@ -2,6 +2,7 @@
 
 // Use our prefixed logger instead of default console logging
 import "./utils/logger";
+import { RetrySettings } from "./utils/public_utils";
 
 export interface RestateContext {
   /**
@@ -104,17 +105,31 @@ export interface RestateContext {
   delayedCall(call: () => Promise<any>, delayMillis?: number): Promise<void>;
 
   /**
-   * Execute a side effect and store the result in the Restate runtime.
-   * @param fn user-defined function to execute.
+   * Executes a side effect and stores the result in the Restate runtime.
+   *
+   * If retry settings are supplied, the call is retried on failure with a timed backoff.
+   * The side effect function is retried when it throws an Error, until returns a successfully
+   * resolved Promise. Between retries, this function will do a suspendable Restate sleep.
+   * The sleep time starts with the 'initialDelayMs' value and doubles on each retry, up to
+   * a maximum of maxDelayMs.
+   *
+   * The returned Promise will be resolved successfully once the side effect action completes
+   * successfully and will be rejected with an error if the maximum number of retries
+   * (as specified by 'maxRetries') is exhausted.
+   * @param fn The side effect action to run.
    * The result is saved in the Restate runtime and reused on replays.
+   * @param retrySettings Settings for the retries, like delay, attempts, etc.
    * @returns a Promise that gets resolved with the result of the user-defined function,
-   * once it has been saved in the Restate runtime.
+   * once it has been saved in the Restate runtime. If retry settings have been supplied,
+   * the promise is resolved successfully when the side effect has completed,
+   * and rejected if the retries are exhausted.
    *
    * @example
    * const ctx = restate.useContext(this);
    * const result = await ctx.sideEffect<string>(async () => { return doSomething(); })
+   * const result = await ctx.sideEffect<string>(async () => { return doSomething(); }, {initialDelayMs: 1000, maxRetries: 10})
    */
-  sideEffect<T>(fn: () => Promise<T>): Promise<T>;
+  sideEffect<T>(fn: () => Promise<T>, retrySettings?: RetrySettings): Promise<T>;
 
   /**
    * Register an awakeable and pause the processing until the awakeable ID has been returned to the service
