@@ -6,9 +6,7 @@ import {
   protoMetadata,
 } from "../src/generated/proto/test";
 import { randomInt } from "crypto";
-import {
-  TerminalError,
-} from "../src/types/errors";
+import { TerminalError } from "../src/types/errors";
 import { rlog } from "../src/utils/logger";
 
 /**
@@ -25,16 +23,16 @@ export class GreeterService implements TestGreeter {
     await ctx.set("seen", seen);
 
     // try {
-      const result = await ctx.sideEffect(async () => {
-        /*      const nb = randomInt(5);
+    const result = await ctx.sideEffect(async () => {
+      /*      const nb = randomInt(5);
               rlog.log(nb);
               if(nb < 2) {*/
-        // throw new TerminalError("Execution failed");
-        //  } else {
-        throw new TerminalError("Execution failed");
-        // }
-      });
-      rlog.info("Result 1: " + result);
+      // throw new TerminalError("Execution failed");
+      //  } else {
+      throw new TerminalError("Execution failed");
+      // }
+    });
+    rlog.info("Result 1: " + result);
     // } catch (e) {
     //   rlog.info("I can catch this");
     // }

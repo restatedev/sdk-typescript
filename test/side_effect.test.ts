@@ -17,7 +17,7 @@ import {
   suspensionMessage,
   failure,
   checkTerminalError,
-  checkJournalMismatchError
+  checkJournalMismatchError,
 } from "./protoutils";
 import {
   TestGreeter,
@@ -143,7 +143,7 @@ describe("SideEffectGreeter", () => {
     const result = await new TestDriver(new SideEffectGreeter("Francesco"), [
       startMessage(),
       inputMessage(greetRequest("Till")),
-      sideEffectMessage(undefined, failure( "Something went wrong.")),
+      sideEffectMessage(undefined, failure("Something went wrong.")),
     ]).run();
 
     checkError(result[0], "Something went wrong.");
@@ -162,9 +162,7 @@ describe("SideEffectGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkJournalMismatchError(
-      result[0]
-    );
+    checkJournalMismatchError(result[0]);
   });
 });
 
@@ -819,7 +817,7 @@ export class TerminalErrorSideEffectService implements TestGreeter {
     const ctx = restate.useContext(this);
 
     await ctx.sideEffect<void>(async () => {
-      throw new TerminalError( "Something bad happened.");
+      throw new TerminalError("Something bad happened.");
     });
 
     return { greeting: `Hello ${request.name}` };

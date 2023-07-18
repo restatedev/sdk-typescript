@@ -84,9 +84,7 @@ describe("GetAndSetGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkJournalMismatchError(
-      result[0]
-    );
+    checkJournalMismatchError(result[0]);
   });
 
   it("fails on journal mismatch. SetState completed with getState.", async () => {
@@ -98,9 +96,7 @@ describe("GetAndSetGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkJournalMismatchError(
-      result[0]
-    );
+    checkJournalMismatchError(result[0]);
   });
 
   it("fails on journal mismatch. SetState completed with clearState.", async () => {
@@ -112,9 +108,7 @@ describe("GetAndSetGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkJournalMismatchError(
-      result[0]
-    );
+    checkJournalMismatchError(result[0]);
   });
 
   it("fails on journal mismatch. SetState completed with different key.", async () => {
@@ -126,9 +120,7 @@ describe("GetAndSetGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkJournalMismatchError(
-      result[0]
-    );
+    checkJournalMismatchError(result[0]);
   });
 
   it("fails on journal mismatch. SetState completed with different value.", async () => {
@@ -140,9 +132,7 @@ describe("GetAndSetGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkJournalMismatchError(
-      result[0]
-    );
+    checkJournalMismatchError(result[0]);
   });
 
   it("fails on journal mismatch. GetState completed with different key.", async () => {
@@ -153,9 +143,7 @@ describe("GetAndSetGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkJournalMismatchError(
-      result[0]
-    );
+    checkJournalMismatchError(result[0]);
   });
 });
 
@@ -213,9 +201,7 @@ describe("ClearState", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkJournalMismatchError(
-      result[0]
-    );
+    checkJournalMismatchError(result[0]);
   });
 
   it("fails on journal mismatch. ClearState completed with setState.", async () => {
@@ -228,9 +214,7 @@ describe("ClearState", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkJournalMismatchError(
-      result[0]
-    );
+    checkJournalMismatchError(result[0]);
   });
 
   it("fails on journal mismatch. ClearState completed with different key.", async () => {
@@ -243,9 +227,7 @@ describe("ClearState", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkJournalMismatchError(
-      result[0]
-    );
+    checkJournalMismatchError(result[0]);
   });
 });
 

@@ -380,7 +380,10 @@ export function suspensionMessage(entryIndices: number[]): Message {
   );
 }
 
-export function failure(msg: string, code: number = ErrorCodes.INTERNAL): Failure {
+export function failure(
+  msg: string,
+  code: number = ErrorCodes.INTERNAL
+): Failure {
   return Failure.create({ code: code, message: msg });
 }
 
@@ -394,17 +397,19 @@ export function greetResponse(myGreeting: string): Uint8Array {
   ).finish();
 }
 
-export function checkError(outputMsg: Message, errorMessage: string, code: number = ErrorCodes.INTERNAL ) {
+export function checkError(
+  outputMsg: Message,
+  errorMessage: string,
+  code: number = ErrorCodes.INTERNAL
+) {
   expect(outputMsg.messageType).toEqual(ERROR_MESSAGE_TYPE);
-  expect((outputMsg.message as ErrorMessage).failure?.code).toStrictEqual(
-    code
-  );
+  expect((outputMsg.message as ErrorMessage).failure?.code).toStrictEqual(code);
   expect((outputMsg.message as ErrorMessage).failure?.message).toContain(
     errorMessage
   );
 }
 
-export function checkJournalMismatchError(outputMsg: Message){
+export function checkJournalMismatchError(outputMsg: Message) {
   expect(outputMsg.messageType).toEqual(ERROR_MESSAGE_TYPE);
   expect((outputMsg.message as ErrorMessage).failure?.code).toStrictEqual(
     ErrorCodes.JOURNAL_MISMATCH
@@ -412,7 +417,6 @@ export function checkJournalMismatchError(outputMsg: Message){
   expect((outputMsg.message as ErrorMessage).failure?.message).toContain(
     "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
   );
-
 }
 
 export function checkTerminalError(outputMsg: Message, errorMessage: string) {

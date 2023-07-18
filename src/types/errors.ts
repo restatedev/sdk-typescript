@@ -10,9 +10,8 @@ import { JournalEntry } from "../journal";
 export enum ErrorCodes {
   INTERNAL = 13,
   JOURNAL_MISMATCH = 32,
-  PROTOCOL_VIOLATION = 33
+  PROTOCOL_VIOLATION = 33,
 }
-
 
 export function ensureError(e: unknown): Error {
   if (e instanceof Error) {
@@ -52,9 +51,9 @@ export class RestateError extends Error {
   }
 
   public toFailure(logPrefix?: string): Failure {
-    const msg = logPrefix ?
-      `${logPrefix}  Uncaught exception for invocation id: ${this.message}` :
-      this.message
+    const msg = logPrefix
+      ? `${logPrefix}  Uncaught exception for invocation id: ${this.message}`
+      : this.message;
     return Failure.create({
       code: this.code,
       message: msg,
@@ -84,29 +83,33 @@ export class RetryableError extends RestateError {
     super(message);
   }
 
-  public static journalMismatch(journalIndex: number,
-                         replayMessage: Message,
-                         journalEntry: JournalEntry) {
+  public static journalMismatch(
+    journalIndex: number,
+    replayMessage: Message,
+    journalEntry: JournalEntry
+  ) {
     const msg = `Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!
         The journal entry at position ${journalIndex} was:
         - In the user code: type: ${
-      journalEntry.messageType
-    }, message:${printMessageAsJson(journalEntry.message)}
+          journalEntry.messageType
+        }, message:${printMessageAsJson(journalEntry.message)}
         - In the replayed messages: type: ${
-      replayMessage.messageType
-    }, message: ${printMessageAsJson(replayMessage.message)}`
-    return new RetryableError(msg, ErrorCodes.JOURNAL_MISMATCH)
+          replayMessage.messageType
+        }, message: ${printMessageAsJson(replayMessage.message)}`;
+    return new RetryableError(msg, ErrorCodes.JOURNAL_MISMATCH);
   }
 
-  public static protocolViolation(message: string){
+  public static protocolViolation(message: string) {
     return new RetryableError(message, ErrorCodes.PROTOCOL_VIOLATION);
   }
 
   public static apiViolation(message: string) {
-    return new RetryableError(`API violation (${ErrorCodes.INTERNAL}): ${message}`)
+    return new RetryableError(
+      `API violation (${ErrorCodes.INTERNAL}): ${message}`
+    );
   }
 
-  public static fromError(e: Error){
+  public static fromError(e: Error) {
     return new RetryableError(e.message);
   }
 }

@@ -21,10 +21,7 @@ import {
 } from "./types/protocol";
 import { SideEffectEntryMessage } from "./generated/proto/javascript";
 import { AsyncLocalStorage } from "async_hooks";
-import {
-  TerminalError,
-  RetryableError,
-} from "./types/errors";
+import { TerminalError, RetryableError } from "./types/errors";
 import { jsonSerialize, jsonDeserialize } from "./utils/utils";
 import { Empty } from "./generated/google/protobuf/empty";
 
@@ -156,7 +153,10 @@ export class RestateContextImpl implements RestateContext {
   ): Promise<void> {
     this.checkState("oneWayCall");
 
-    await RestateContextImpl.callContext.run({ type: CallContexType.OneWayCall }, call);
+    await RestateContextImpl.callContext.run(
+      { type: CallContexType.OneWayCall },
+      call
+    );
   }
 
   public async delayedCall(

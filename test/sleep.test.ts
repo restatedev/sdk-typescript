@@ -113,9 +113,7 @@ describe("SleepGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkJournalMismatchError(
-      result[0]
-    );
+    checkJournalMismatchError(result[0]);
   });
 });
 

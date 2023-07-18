@@ -229,9 +229,7 @@ describe("GetNumberStateGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkJournalMismatchError(
-      result[0]
-    );
+    checkJournalMismatchError(result[0]);
   });
 });
 
@@ -354,8 +352,6 @@ describe("GetNumberListStateGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkJournalMismatchError(
-      result[0]
-    );
+    checkJournalMismatchError(result[0]);
   });
 });

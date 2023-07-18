@@ -114,9 +114,7 @@ describe("CompleteAwakeableGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkJournalMismatchError(
-      result[0]
-    );
+    checkJournalMismatchError(result[0]);
   });
 
   it("fails on journal mismatch. Completed with wrong service name", async () => {
@@ -133,9 +131,7 @@ describe("CompleteAwakeableGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkJournalMismatchError(
-      result[0]
-    );
+    checkJournalMismatchError(result[0]);
   });
 
   it("fails on journal mismatch. Completed with wrong instance key.", async () => {
@@ -152,9 +148,7 @@ describe("CompleteAwakeableGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkJournalMismatchError(
-      result[0]
-    );
+    checkJournalMismatchError(result[0]);
   });
 
   it("fails on journal mismatch. Completed with wrong invocation id.", async () => {
@@ -171,9 +165,7 @@ describe("CompleteAwakeableGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkJournalMismatchError(
-      result[0]
-    );
+    checkJournalMismatchError(result[0]);
   });
 
   it("fails on journal mismatch. Completed with wrong entry index.", async () => {

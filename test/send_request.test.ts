@@ -14,7 +14,7 @@ import {
   outputMessage,
   setStateMessage,
   startMessage,
-  suspensionMessage
+  suspensionMessage,
 } from "./protoutils";
 import {
   TestGreeter,
@@ -84,7 +84,7 @@ describe("SyncCallGreeter", () => {
     expect(result[0]).toStrictEqual(
       invokeMessage("test.TestGreeter", "Greet", greetRequest("Francesco"))
     );
-    checkError(result[1],"Something went wrong");
+    checkError(result[1], "Something went wrong");
   });
 
   it("handles replay with value", async () => {
@@ -120,14 +120,14 @@ describe("SyncCallGreeter", () => {
         1,
         undefined,
         undefined,
-        failure( "Something went wrong")
+        failure("Something went wrong")
       ),
     ]).run();
 
     expect(result[0]).toStrictEqual(
       invokeMessage("test.TestGreeter", "Greet", greetRequest("Francesco"))
     );
-    checkError(result[1],"Something went wrong");
+    checkError(result[1], "Something went wrong");
   });
 });
 
@@ -257,9 +257,7 @@ describe("ReverseAwaitOrder", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkJournalMismatchError(
-      result[0]
-    );
+    checkJournalMismatchError(result[0]);
   });
 
   it("fails on journal mismatch. A1 completed with wrong method name.", async () => {
@@ -282,9 +280,7 @@ describe("ReverseAwaitOrder", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkJournalMismatchError(
-      result[0]
-    );
+    checkJournalMismatchError(result[0]);
   });
 
   it("fails on journal mismatch. A1 completed with wrong request", async () => {
@@ -307,9 +303,7 @@ describe("ReverseAwaitOrder", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkJournalMismatchError(
-      result[0]
-    );
+    checkJournalMismatchError(result[0]);
   });
 
   it("fails on journal mismatch. A2 completed with backgroundInvoke", async () => {
@@ -331,9 +325,7 @@ describe("ReverseAwaitOrder", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkJournalMismatchError(
-      result[0]
-    );
+    checkJournalMismatchError(result[0]);
   });
 
   //TODO
@@ -506,9 +498,7 @@ describe("OneWayCallGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkJournalMismatchError(
-      result[0]
-    );
+    checkJournalMismatchError(result[0]);
   });
 
   it("fails on journal mismatch. Completed with different service name.", async () => {
@@ -523,9 +513,7 @@ describe("OneWayCallGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkJournalMismatchError(
-      result[0]
-    );
+    checkJournalMismatchError(result[0]);
   });
 
   it("fails on journal mismatch. Completed with different method", async () => {
@@ -540,9 +528,7 @@ describe("OneWayCallGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkJournalMismatchError(
-      result[0]
-    );
+    checkJournalMismatchError(result[0]);
   });
 
   it("fails on journal mismatch. Completed with different request.", async () => {
@@ -557,9 +543,7 @@ describe("OneWayCallGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkJournalMismatchError(
-      result[0]
-    )
+    checkJournalMismatchError(result[0]);
   });
 });
 
@@ -744,9 +728,7 @@ describe("DelayedOneWayCallGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkJournalMismatchError(
-      result[0]
-    );
+    checkJournalMismatchError(result[0]);
   });
 });
 

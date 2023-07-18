@@ -24,16 +24,11 @@ import {
   SUSPENSION_MESSAGE_TYPE,
   SuspensionMessage,
 } from "./types/protocol";
-import {
-  equalityCheckers,
-  jsonDeserialize,
-} from "./utils/utils";
+import { equalityCheckers, jsonDeserialize } from "./utils/utils";
 import { Message } from "./types/types";
 import { SideEffectEntryMessage } from "./generated/proto/javascript";
 import { Invocation } from "./invocation";
-import {
-  RetryableError,
-} from "./types/errors";
+import { RetryableError } from "./types/errors";
 
 export class Journal<I, O> {
   private state = NewExecutionState.REPLAYING;
