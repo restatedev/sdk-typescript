@@ -4,7 +4,7 @@ import { describe, expect } from "@jest/globals";
 import * as restate from "../src/public_api";
 import { TestDriver } from "./testdriver";
 import {
-  checkError,
+  checkJournalMismatchError,
   completionMessage,
   getStateMessage,
   greetRequest,
@@ -229,10 +229,7 @@ describe("GetNumberStateGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Uncaught exception for invocation id: Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
-    );
+    checkJournalMismatchError(result[0]);
   });
 });
 
@@ -355,9 +352,6 @@ describe("GetNumberListStateGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Uncaught exception for invocation id: Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
-    );
+    checkJournalMismatchError(result[0]);
   });
 });

@@ -4,6 +4,7 @@ import { TestDriver } from "./testdriver";
 import {
   backgroundInvokeMessage,
   checkError,
+  checkJournalMismatchError,
   completionMessage,
   failure,
   greetRequest,
@@ -22,10 +23,7 @@ import {
   TestResponse,
 } from "../src/generated/proto/test";
 import { ProtocolMode } from "../src/generated/proto/discovery";
-import {
-  BackgroundInvokeEntryMessage,
-  Failure,
-} from "../src/generated/proto/protocol";
+import { BackgroundInvokeEntryMessage } from "../src/generated/proto/protocol";
 import { BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE } from "../src/types/protocol";
 
 class SyncCallGreeter implements TestGreeter {
@@ -76,7 +74,7 @@ describe("SyncCallGreeter", () => {
         1,
         undefined,
         undefined,
-        failure(13, "Something went wrong")
+        failure("Something went wrong")
       ),
     ]).run();
 
@@ -119,7 +117,7 @@ describe("SyncCallGreeter", () => {
         1,
         undefined,
         undefined,
-        failure(13, "Something went wrong")
+        failure("Something went wrong")
       ),
     ]).run();
 
@@ -256,10 +254,7 @@ describe("ReverseAwaitOrder", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
-    );
+    checkJournalMismatchError(result[0]);
   });
 
   it("fails on journal mismatch. A1 completed with wrong method name.", async () => {
@@ -282,10 +277,7 @@ describe("ReverseAwaitOrder", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
-    );
+    checkJournalMismatchError(result[0]);
   });
 
   it("fails on journal mismatch. A1 completed with wrong request", async () => {
@@ -308,10 +300,7 @@ describe("ReverseAwaitOrder", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
-    );
+    checkJournalMismatchError(result[0]);
   });
 
   it("fails on journal mismatch. A2 completed with backgroundInvoke", async () => {
@@ -333,10 +322,7 @@ describe("ReverseAwaitOrder", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
-    );
+    checkJournalMismatchError(result[0]);
   });
 
   //TODO
@@ -351,7 +337,7 @@ gets completed in this order: (test: https://github.com/restatedev/sdk-typescrip
           1,
           undefined,
           undefined,
-          Failure.create({ code: 13, message: "Error" })
+          failure("Error")
         ),
         completionMessage(2, greetResponse("TILL")),
 The current behaviour is that the first completion (error) throws a user-code error that isn't catched. So the entire call fails and sends back an output entry stream message.
@@ -373,7 +359,7 @@ This gives the following error:
   //           1,
   //           undefined,
   //           undefined,
-  //           Failure.create({ code: 13, message: "Error" })
+  //           failure("Error")
   //         ),
   //         completionMessage(2, greetResponse("TILL")),
   //       ]
@@ -431,10 +417,7 @@ describe("FailingForwardGreetingService", () => {
         1,
         undefined,
         undefined,
-        Failure.create({
-          code: 13,
-          message: "Sorry, something went terribly wrong...",
-        })
+        failure("Sorry, something went terribly wrong...")
       ),
     ]).run();
 
@@ -455,10 +438,7 @@ describe("FailingForwardGreetingService", () => {
         "Greet",
         greetRequest("Francesco"),
         undefined,
-        Failure.create({
-          code: 13,
-          message: "Sorry, something went terribly wrong...",
-        })
+        failure("Sorry, something went terribly wrong...")
       ),
     ]).run();
 
@@ -509,10 +489,7 @@ describe("OneWayCallGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
-    );
+    checkJournalMismatchError(result[0]);
   });
 
   it("fails on journal mismatch. Completed with different service name.", async () => {
@@ -527,10 +504,7 @@ describe("OneWayCallGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
-    );
+    checkJournalMismatchError(result[0]);
   });
 
   it("fails on journal mismatch. Completed with different method", async () => {
@@ -545,10 +519,7 @@ describe("OneWayCallGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
-    );
+    checkJournalMismatchError(result[0]);
   });
 
   it("fails on journal mismatch. Completed with different request.", async () => {
@@ -563,10 +534,7 @@ describe("OneWayCallGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
-    );
+    checkJournalMismatchError(result[0]);
   });
 });
 
@@ -751,10 +719,7 @@ describe("DelayedOneWayCallGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
-    );
+    checkJournalMismatchError(result[0]);
   });
 });
 

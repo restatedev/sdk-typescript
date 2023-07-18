@@ -7,7 +7,6 @@ import * as RestateUtils from "../src/utils/public_utils";
 import { RestateError } from "../src/types/errors";
 import { RestateContext } from "../src/restate_context";
 import {
-  protoMetadata,
   TestGreeter,
   TestRequest,
   TestResponse,
