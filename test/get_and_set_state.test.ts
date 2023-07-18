@@ -2,7 +2,7 @@ import { describe, expect } from "@jest/globals";
 import * as restate from "../src/public_api";
 import { TestDriver } from "./testdriver";
 import {
-  checkError,
+  checkJournalMismatchError,
   clearStateMessage,
   completionMessage,
   getStateMessage,
@@ -84,9 +84,8 @@ describe("GetAndSetGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    checkJournalMismatchError(
+      result[0]
     );
   });
 
@@ -99,9 +98,8 @@ describe("GetAndSetGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    checkJournalMismatchError(
+      result[0]
     );
   });
 
@@ -114,9 +112,8 @@ describe("GetAndSetGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    checkJournalMismatchError(
+      result[0]
     );
   });
 
@@ -129,9 +126,8 @@ describe("GetAndSetGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    checkJournalMismatchError(
+      result[0]
     );
   });
 
@@ -144,9 +140,8 @@ describe("GetAndSetGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    checkJournalMismatchError(
+      result[0]
     );
   });
 
@@ -158,9 +153,8 @@ describe("GetAndSetGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    checkJournalMismatchError(
+      result[0]
     );
   });
 });
@@ -219,9 +213,8 @@ describe("ClearState", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    checkJournalMismatchError(
+      result[0]
     );
   });
 
@@ -235,9 +228,8 @@ describe("ClearState", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    checkJournalMismatchError(
+      result[0]
     );
   });
 
@@ -251,9 +243,8 @@ describe("ClearState", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    checkJournalMismatchError(
+      result[0]
     );
   });
 });

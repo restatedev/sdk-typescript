@@ -4,6 +4,7 @@ import { TestDriver } from "./testdriver";
 import {
   awakeableMessage,
   checkError,
+  checkJournalMismatchError,
   completeAwakeableMessage,
   completionMessage,
   failure,
@@ -106,7 +107,7 @@ describe("AwakeableGreeter", () => {
         1,
         undefined,
         undefined,
-        failure(13, "Something went wrong")
+        failure("Something went wrong")
       ),
     ]).run();
 
@@ -131,7 +132,7 @@ describe("AwakeableGreeter", () => {
     const result = await new TestDriver(new AwakeableGreeter(), [
       startMessage(),
       inputMessage(greetRequest("Till")),
-      awakeableMessage(undefined, failure(13, "Something went wrong")),
+      awakeableMessage(undefined, failure("Something went wrong")),
     ]).run();
 
     expect(result.length).toStrictEqual(1);
@@ -152,9 +153,8 @@ describe("AwakeableGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    checkJournalMismatchError(
+      result[0]
     );
   });
 });

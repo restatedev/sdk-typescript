@@ -16,15 +16,13 @@ import {
   SUSPENSION_MESSAGE_TYPE,
   SuspensionMessage,
 } from "./types/protocol";
-import { ErrorMessage, Failure } from "./generated/proto/protocol";
+import { ErrorMessage } from "./generated/proto/protocol";
 import { Journal } from "./journal";
 import { Invocation } from "./invocation";
 import {
   ensureError,
-  ApiViolationError,
-  ProtocolViolationError,
   TerminalError,
-  RetryableError, toRetryableError
+  RetryableError
 } from "./types/errors";
 import { LocalStateStore } from "./local_state_store";
 
@@ -76,7 +74,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
     }
 
     if (m.messageType !== COMPLETION_MESSAGE_TYPE) {
-      throw new ProtocolViolationError(
+      throw RetryableError.protocolViolation(
         `Received message of type ${m.messageType}. Can only accept completion messages after replay has finished.`
       );
     }
@@ -293,7 +291,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
   }
 
   private async finishWithRetryableError(e: Error) {
-    const retryableError = e instanceof RetryableError ? e : toRetryableError(e);
+    const retryableError = e instanceof RetryableError ? e : RetryableError.fromError(e);
     const msg = new Message(
       ERROR_MESSAGE_TYPE,
       ErrorMessage.create({
@@ -426,7 +424,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
   }
 
   public async notifyHandlerExecutionError(
-    e: ApiViolationError | RetryableError | TerminalError
+    e: RetryableError | TerminalError
   ) {
     await this.finishWithError(e);
   }

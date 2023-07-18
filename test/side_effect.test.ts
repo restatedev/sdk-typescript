@@ -17,6 +17,7 @@ import {
   suspensionMessage,
   failure,
   checkTerminalError,
+  checkJournalMismatchError
 } from "./protoutils";
 import {
   TestGreeter,
@@ -142,7 +143,7 @@ describe("SideEffectGreeter", () => {
     const result = await new TestDriver(new SideEffectGreeter("Francesco"), [
       startMessage(),
       inputMessage(greetRequest("Till")),
-      sideEffectMessage(undefined, failure(13, "Something went wrong.")),
+      sideEffectMessage(undefined, failure( "Something went wrong.")),
     ]).run();
 
     checkError(result[0], "Something went wrong.");
@@ -161,9 +162,8 @@ describe("SideEffectGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    checkJournalMismatchError(
+      result[0]
     );
   });
 });

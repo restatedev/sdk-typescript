@@ -27,14 +27,11 @@ import {
 import {
   equalityCheckers,
   jsonDeserialize,
-  printMessageAsJson,
 } from "./utils/utils";
 import { Message } from "./types/types";
 import { SideEffectEntryMessage } from "./generated/proto/javascript";
 import { Invocation } from "./invocation";
 import {
-  JournalMismatchError,
-  ProtocolViolationError,
   RetryableError,
 } from "./types/errors";
 
@@ -53,7 +50,7 @@ export class Journal<I, O> {
       !inputMessage ||
       inputMessage.messageType !== POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE
     ) {
-      throw new ProtocolViolationError(
+      throw RetryableError.protocolViolation(
         "First message of replay entries needs to be PollInputStreamMessage"
       );
     }
@@ -152,7 +149,7 @@ export class Journal<I, O> {
         return Promise.resolve(undefined);
       }
       default: {
-        throw new ProtocolViolationError(
+        throw RetryableError.protocolViolation(
           "Did not receive input message before other messages."
         );
       }
@@ -203,15 +200,10 @@ export class Journal<I, O> {
 
     // Journal mismatch check failedf
     if (!match) {
-      throw new JournalMismatchError(
-        `Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!
-        The journal entry at position ${journalIndex} was:
-        - In the user code: type: ${
-          journalEntry.messageType
-        }, message:${printMessageAsJson(journalEntry.message)}
-        - In the replayed messages: type: ${
-          replayMessage.messageType
-        }, message: ${printMessageAsJson(replayMessage.message)}`
+      throw RetryableError.journalMismatch(
+        journalIndex,
+        replayMessage,
+        journalEntry
       );
     }
 

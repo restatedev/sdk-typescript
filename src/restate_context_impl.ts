@@ -22,7 +22,6 @@ import {
 import { SideEffectEntryMessage } from "./generated/proto/javascript";
 import { AsyncLocalStorage } from "async_hooks";
 import {
-  ApiViolationError,
   TerminalError,
   RetryableError,
 } from "./types/errors";
@@ -176,13 +175,13 @@ export class RestateContextImpl implements RestateContext {
 
   public async sideEffect<T>(fn: () => Promise<T>): Promise<T> {
     if (this.isInSideEffect()) {
-      const e = new ApiViolationError(
+      const e = RetryableError.apiViolation(
         "You cannot do sideEffect calls from within a side effect."
       );
       await this.stateMachine.notifyHandlerExecutionError(e);
       throw e;
     } else if (this.isInOneWayCall()) {
-      const e = new ApiViolationError(
+      const e = RetryableError.apiViolation(
         "Cannot do a side effect from within ctx.oneWayCall(...). " +
           "Context method ctx.oneWayCall() can only be used to invoke other services unidirectionally. " +
           "e.g. ctx.oneWayCall(() => client.greet(my_request))"
@@ -226,8 +225,9 @@ export class RestateContextImpl implements RestateContext {
         );
 
         throw e;
-      } else if (e instanceof ApiViolationError) {
+      } else if (e instanceof RetryableError) {
         // has already been reported so just throw
+        await this.stateMachine.notifyHandlerExecutionError(e);
         throw e;
       } else {
         const msg = e instanceof Error ? e.message : JSON.stringify(e);
@@ -356,19 +356,17 @@ export class RestateContextImpl implements RestateContext {
     }
 
     if (context.type === CallContexType.SideEffect) {
-      const e = new ApiViolationError(
+      const e = RetryableError.apiViolation(
         `You cannot do ${callType} calls from within a side effect.`
       );
-      this.stateMachine.notifyHandlerExecutionError(e);
       throw e;
     }
 
     if (context.type === CallContexType.OneWayCall) {
       const e =
-        new ApiViolationError(`Cannot do a ${callType} from within ctx.oneWayCall(...).
+        RetryableError.apiViolation(`Cannot do a ${callType} from within ctx.oneWayCall(...).
           Context method oneWayCall() can only be used to invoke other services in the background.
           e.g. ctx.oneWayCall(() => client.greet(my_request))`);
-      this.stateMachine.notifyHandlerExecutionError(e);
       throw e;
     }
   }

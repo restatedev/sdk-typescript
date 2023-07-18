@@ -5,7 +5,7 @@ import {
 } from "../src/generated/proto/test";
 import * as restate from "../src/public_api";
 import {
-  checkError,
+  checkJournalMismatchError,
   completeAwakeableMessage,
   getAwakeableId,
   greetRequest,
@@ -114,9 +114,8 @@ describe("CompleteAwakeableGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    checkJournalMismatchError(
+      result[0]
     );
   });
 
@@ -134,9 +133,8 @@ describe("CompleteAwakeableGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    checkJournalMismatchError(
+      result[0]
     );
   });
 
@@ -154,9 +152,8 @@ describe("CompleteAwakeableGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    checkJournalMismatchError(
+      result[0]
     );
   });
 
@@ -174,9 +171,8 @@ describe("CompleteAwakeableGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    checkJournalMismatchError(
+      result[0]
     );
   });
 
@@ -194,9 +190,6 @@ describe("CompleteAwakeableGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
-    );
+    checkJournalMismatchError(result[0]);
   });
 });

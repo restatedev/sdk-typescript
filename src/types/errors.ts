@@ -3,6 +3,16 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { Failure } from "../generated/proto/protocol";
+import { printMessageAsJson } from "../utils/utils";
+import { Message } from "./types";
+import { JournalEntry } from "../journal";
+
+export enum ErrorCodes {
+  INTERNAL = 13,
+  JOURNAL_MISMATCH = 32,
+  PROTOCOL_VIOLATION = 33
+}
+
 
 export function ensureError(e: unknown): Error {
   if (e instanceof Error) {
@@ -73,28 +83,30 @@ export class RetryableError extends RestateError {
   ) {
     super(message);
   }
-}
 
-export class JournalMismatchError extends RetryableError {
-  constructor(public readonly message: string, public readonly cause?: any) {
-    super(message, 32, cause);
+  public static journalMismatch(journalIndex: number,
+                         replayMessage: Message,
+                         journalEntry: JournalEntry) {
+    const msg = `Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!
+        The journal entry at position ${journalIndex} was:
+        - In the user code: type: ${
+      journalEntry.messageType
+    }, message:${printMessageAsJson(journalEntry.message)}
+        - In the replayed messages: type: ${
+      replayMessage.messageType
+    }, message: ${printMessageAsJson(replayMessage.message)}`
+    return new RetryableError(msg, ErrorCodes.JOURNAL_MISMATCH)
   }
-}
 
-export class ProtocolViolationError extends RetryableError {
-  constructor(public readonly message: string, public readonly cause?: any) {
-    super(message, 33, cause);
+  public static protocolViolation(message: string){
+    return new RetryableError(message, ErrorCodes.PROTOCOL_VIOLATION);
   }
-}
 
-// We need this as a separate class for type matching for side effects
-export class ApiViolationError extends RetryableError {
-  constructor(public readonly message: string, public readonly cause?: any) {
-    const code = 13;
-    super(`API violation (${code}): ${message}`, code, cause);
+  public static apiViolation(message: string) {
+    return new RetryableError(`API violation (${ErrorCodes.INTERNAL}): ${message}`)
   }
-}
 
-export function toRetryableError(e: Error){
-  return new RetryableError(e.message);
+  public static fromError(e: Error){
+    return new RetryableError(e.message);
+  }
 }

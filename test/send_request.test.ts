@@ -4,6 +4,7 @@ import { TestDriver } from "./testdriver";
 import {
   backgroundInvokeMessage,
   checkError,
+  checkJournalMismatchError,
   completionMessage,
   failure,
   greetRequest,
@@ -13,7 +14,7 @@ import {
   outputMessage,
   setStateMessage,
   startMessage,
-  suspensionMessage,
+  suspensionMessage
 } from "./protoutils";
 import {
   TestGreeter,
@@ -76,14 +77,14 @@ describe("SyncCallGreeter", () => {
         1,
         undefined,
         undefined,
-        failure(13, "Something went wrong")
+        failure("Something went wrong")
       ),
     ]).run();
 
     expect(result[0]).toStrictEqual(
       invokeMessage("test.TestGreeter", "Greet", greetRequest("Francesco"))
     );
-    checkError(result[1], "Something went wrong");
+    checkError(result[1],"Something went wrong");
   });
 
   it("handles replay with value", async () => {
@@ -119,14 +120,14 @@ describe("SyncCallGreeter", () => {
         1,
         undefined,
         undefined,
-        failure(13, "Something went wrong")
+        failure( "Something went wrong")
       ),
     ]).run();
 
     expect(result[0]).toStrictEqual(
       invokeMessage("test.TestGreeter", "Greet", greetRequest("Francesco"))
     );
-    checkError(result[1], "Something went wrong");
+    checkError(result[1],"Something went wrong");
   });
 });
 
@@ -256,9 +257,8 @@ describe("ReverseAwaitOrder", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    checkJournalMismatchError(
+      result[0]
     );
   });
 
@@ -282,9 +282,8 @@ describe("ReverseAwaitOrder", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    checkJournalMismatchError(
+      result[0]
     );
   });
 
@@ -308,9 +307,8 @@ describe("ReverseAwaitOrder", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    checkJournalMismatchError(
+      result[0]
     );
   });
 
@@ -333,9 +331,8 @@ describe("ReverseAwaitOrder", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    checkJournalMismatchError(
+      result[0]
     );
   });
 
@@ -509,9 +506,8 @@ describe("OneWayCallGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    checkJournalMismatchError(
+      result[0]
     );
   });
 
@@ -527,9 +523,8 @@ describe("OneWayCallGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    checkJournalMismatchError(
+      result[0]
     );
   });
 
@@ -545,9 +540,8 @@ describe("OneWayCallGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    checkJournalMismatchError(
+      result[0]
     );
   });
 
@@ -563,10 +557,9 @@ describe("OneWayCallGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
-    );
+    checkJournalMismatchError(
+      result[0]
+    )
   });
 });
 
@@ -751,9 +744,8 @@ describe("DelayedOneWayCallGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
+    checkJournalMismatchError(
+      result[0]
     );
   });
 });
