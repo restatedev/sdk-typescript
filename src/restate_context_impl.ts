@@ -231,7 +231,7 @@ export class RestateContextImpl implements RestateContext {
         throw e;
       } else {
         const msg = e instanceof Error ? e.message : JSON.stringify(e);
-        const userCodeError = new RetryableError(
+        const userCodeError = RetryableError.internal(
           "sideEffect execution failed: " + msg
         );
         await this.stateMachine.notifyHandlerExecutionError(userCodeError);
@@ -286,7 +286,7 @@ export class RestateContextImpl implements RestateContext {
       .then((result: Buffer | void) => {
         if (!(result instanceof Buffer)) {
           // This should either be a filled buffer or an empty buffer but never anything else.
-          throw new RetryableError(
+          throw RetryableError.internal(
             "Awakeable was not resolved with a buffer payload"
           );
         }

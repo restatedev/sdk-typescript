@@ -80,7 +80,7 @@ export class Journal<I, O> {
           this.userCodeJournalIndex
         );
         if (replayEntry === undefined) {
-          throw new RetryableError(
+          throw RetryableError.internal(
             `Illegal state: no replay message was received for the entry at journal index ${this.userCodeJournalIndex}`
           );
         }
@@ -327,7 +327,7 @@ export class Journal<I, O> {
     if (rootJournalEntry === undefined) {
       // We have no other option than to throw an error here
       // Because without the root promise we cannot resolve the method or continue
-      throw new RetryableError(
+      throw RetryableError.internal(
         "Illegal state: No root journal entry found to resolve with output stream message"
       );
     }

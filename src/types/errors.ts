@@ -75,12 +75,16 @@ export class TerminalError extends RestateError {
 
 // Leads to Restate retries
 export class RetryableError extends RestateError {
-  constructor(
+  private constructor(
     public readonly message: string,
     public readonly code: number = 13,
     public readonly cause?: any
   ) {
     super(message);
+  }
+
+  public static internal(message: string){
+    return new RetryableError(message);
   }
 
   public static journalMismatch(
