@@ -3,7 +3,7 @@ import * as restate from "../src/public_api";
 import { TestDriver } from "./testdriver";
 import {
   awakeableMessage,
-  checkError,
+  checkJournalMismatchError,
   completionMessage,
   greetRequest,
   greetResponse,
@@ -113,10 +113,7 @@ describe("SleepGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
-    );
+    checkJournalMismatchError(result[0]);
   });
 });
 

@@ -10,13 +10,14 @@ import {
   startMessage,
   greetRequest,
   greetResponse,
-  decodeSideEffectFromResult,
   checkError,
   invokeMessage,
   getAwakeableId,
   backgroundInvokeMessage,
   suspensionMessage,
   failure,
+  checkTerminalError,
+  checkJournalMismatchError,
 } from "./protoutils";
 import {
   TestGreeter,
@@ -25,7 +26,7 @@ import {
   TestResponse,
 } from "../src/generated/proto/test";
 import { Failure } from "../src/generated/proto/protocol";
-import { SIDE_EFFECT_ENTRY_MESSAGE_TYPE } from "../src/types/protocol";
+import { TerminalError } from "../src/types/errors";
 
 class SideEffectGreeter implements TestGreeter {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -142,7 +143,7 @@ describe("SideEffectGreeter", () => {
     const result = await new TestDriver(new SideEffectGreeter("Francesco"), [
       startMessage(),
       inputMessage(greetRequest("Till")),
-      sideEffectMessage(undefined, failure(13, "Something went wrong.")),
+      sideEffectMessage(undefined, failure("Something went wrong.")),
     ]).run();
 
     checkError(result[0], "Something went wrong.");
@@ -161,10 +162,7 @@ describe("SideEffectGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
-    );
+    checkJournalMismatchError(result[0]);
   });
 });
 
@@ -389,12 +387,8 @@ describe("FailingSideEffectGreeter", () => {
 
     // When the user code fails we do want to see a side effect message with a failure
     // For invalid user code, we do not want to see this.
-    expect(result.length).toStrictEqual(2);
-    expect(result[0].messageType).toStrictEqual(SIDE_EFFECT_ENTRY_MESSAGE_TYPE);
-    expect(
-      decodeSideEffectFromResult(result[0].message).failure?.code
-    ).toStrictEqual(13);
-    checkError(result[1], "Failing user code");
+    expect(result.length).toStrictEqual(1);
+    checkError(result[0], "Failing user code");
   });
 });
 
@@ -814,5 +808,39 @@ describe("AwaitSideEffectService", () => {
     ]).run();
 
     expect(result).toStrictEqual([outputMessage(greetResponse("0"))]);
+  });
+});
+
+export class TerminalErrorSideEffectService implements TestGreeter {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async greet(request: TestRequest): Promise<TestResponse> {
+    const ctx = restate.useContext(this);
+
+    await ctx.sideEffect<void>(async () => {
+      throw new TerminalError("Something bad happened.");
+    });
+
+    return { greeting: `Hello ${request.name}` };
+  }
+}
+
+describe("TerminalErrorSideEffectService", () => {
+  it("handles terminal error", async () => {
+    const result = await new TestDriver(new TerminalErrorSideEffectService(), [
+      startMessage(),
+      inputMessage(greetRequest("Till")),
+      completionMessage(1),
+    ]).run();
+
+    expect(result[0]).toStrictEqual(
+      sideEffectMessage(
+        undefined,
+        Failure.create({
+          code: 13,
+          message: "Something bad happened.",
+        })
+      )
+    );
+    checkTerminalError(result[1], "Something bad happened.");
   });
 });

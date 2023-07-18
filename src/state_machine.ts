@@ -10,15 +10,16 @@ import { rlog } from "./utils/logger";
 import { clearTimeout } from "timers";
 import {
   COMPLETION_MESSAGE_TYPE,
+  ERROR_MESSAGE_TYPE,
   OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
   OutputStreamEntryMessage,
   SUSPENSION_MESSAGE_TYPE,
   SuspensionMessage,
 } from "./types/protocol";
-import { Failure } from "./generated/proto/protocol";
+import { ErrorMessage } from "./generated/proto/protocol";
 import { Journal } from "./journal";
 import { Invocation } from "./invocation";
-import { ensureError } from "./types/errors";
+import { ensureError, TerminalError, RetryableError } from "./types/errors";
 import { LocalStateStore } from "./local_state_store";
 
 export class StateMachine<I, O> implements RestateStreamConsumer {
@@ -69,7 +70,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
     }
 
     if (m.messageType !== COMPLETION_MESSAGE_TYPE) {
-      throw new Error(
+      throw RetryableError.protocolViolation(
         `Received message of type ${m.messageType}. Can only accept completion messages after replay has finished.`
       );
     }
@@ -201,9 +202,12 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
           if (this.stateMachineClosed) {
             rlog.warn(
               "Unexpected successful completion of the function after the state machine closed. " +
-                "This may indicate that the function code does not properly await some Restate calls " +
-                "and did not notice an error, or that the function code was delayed for longer than " +
-                "the suspension timeout."
+                "This may indicate that: \n" +
+                "- the function code does not properly await some Restate calls " +
+                "and did not notice an error \n" +
+                "- the function code was delayed for longer than the suspension timeout \n" +
+                "- the function code contained a try-catch block around a side effect which throws retryable errors. " +
+                "This try-catch block should be placed inside the side effect."
             );
             return;
           }
@@ -274,20 +278,38 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
   }
 
   private async finishWithError(e: Error) {
-    // this isn't implemented, yet
-    // here would go the logic to decide whether the Error is retryable or not
-    // for now, we use the previous semantics: nothing is retryable
-    await this.finishWithTerminalError(e);
+    if (e instanceof TerminalError) {
+      await this.finishWithTerminalError(e);
+    } else {
+      await this.finishWithRetryableError(e);
+    }
   }
 
-  private async finishWithTerminalError(e: Error) {
+  private async finishWithRetryableError(e: Error) {
+    const retryableError =
+      e instanceof RetryableError ? e : RetryableError.fromError(e);
+    const msg = new Message(
+      ERROR_MESSAGE_TYPE,
+      ErrorMessage.create({
+        failure: retryableError.toFailure(this.invocation.logPrefix),
+      })
+    );
+    rlog.debugJournalMessage(
+      this.invocation.logPrefix,
+      "Invocation ended with retryable error.",
+      msg.messageType,
+      msg.message
+    );
+
+    this.connection.send(msg);
+    await this.finish();
+  }
+
+  private async finishWithTerminalError(e: TerminalError) {
     const msg = new Message(
       OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
       OutputStreamEntryMessage.create({
-        failure: Failure.create({
-          code: 13,
-          message: `${this.invocation.logPrefix}  Uncaught exception for invocation id: ${e.message}`,
-        }),
+        failure: e.toFailure(this.invocation.logPrefix),
       })
     );
     rlog.debugJournalMessage(
@@ -296,6 +318,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
       msg.messageType,
       msg.message
     );
+    // await this.journal.handleUserSideMessage(msg.messageType, msg.message);
     if (!this.journal.outputMsgWasReplayed()) {
       this.connection.send(msg);
     }
@@ -324,8 +347,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
    * on the connection layer.
    */
   private unhandledError(e: Error) {
-    const error = ensureError(e);
-    this.invocationComplete.reject(error);
+    this.invocationComplete.reject(e);
     this.journal.close();
     this.clearSuspensionTimeout();
   }
@@ -399,8 +421,8 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
     await this.finish();
   }
 
-  public async notifyApiViolation(code: number, msg: string) {
-    await this.finishWithError(new Error(`API violation (${code}): ${msg}`));
+  public async notifyHandlerExecutionError(e: RetryableError | TerminalError) {
+    await this.finishWithError(e);
   }
 
   /**

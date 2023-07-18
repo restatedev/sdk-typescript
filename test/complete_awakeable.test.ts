@@ -5,7 +5,7 @@ import {
 } from "../src/generated/proto/test";
 import * as restate from "../src/public_api";
 import {
-  checkError,
+  checkJournalMismatchError,
   completeAwakeableMessage,
   getAwakeableId,
   greetRequest,
@@ -114,10 +114,7 @@ describe("CompleteAwakeableGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
-    );
+    checkJournalMismatchError(result[0]);
   });
 
   it("fails on journal mismatch. Completed with wrong service name", async () => {
@@ -134,10 +131,7 @@ describe("CompleteAwakeableGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
-    );
+    checkJournalMismatchError(result[0]);
   });
 
   it("fails on journal mismatch. Completed with wrong instance key.", async () => {
@@ -154,10 +148,7 @@ describe("CompleteAwakeableGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
-    );
+    checkJournalMismatchError(result[0]);
   });
 
   it("fails on journal mismatch. Completed with wrong invocation id.", async () => {
@@ -174,10 +165,7 @@ describe("CompleteAwakeableGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
-    );
+    checkJournalMismatchError(result[0]);
   });
 
   it("fails on journal mismatch. Completed with wrong entry index.", async () => {
@@ -194,9 +182,6 @@ describe("CompleteAwakeableGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
-      "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
-    );
+    checkJournalMismatchError(result[0]);
   });
 });
