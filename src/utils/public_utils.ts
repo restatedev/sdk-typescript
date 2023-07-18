@@ -4,7 +4,7 @@
 /* eslint-disable @typescript-eslint/no-inferrable-types */
 import { rlog } from "../utils/logger";
 import { RestateContext } from "../restate_context";
-import { RestateError } from "../types/errors";
+import { TerminalError } from "../types/errors";
 
 /**
  * Retry policy that decides how to delay between retries.
@@ -114,7 +114,7 @@ export async function retrySideEffect(
       rlog.debug("Retrying in %d ms", currentDelayMs);
     } else {
       rlog.debug("No retries left.");
-      throw new RestateError(`Retries exhausted for '${name}'.`);
+      throw new TerminalError(`Retries exhausted for '${name}'.`);
     }
 
     await ctx.sleep(currentDelayMs);

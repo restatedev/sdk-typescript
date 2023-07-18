@@ -328,7 +328,7 @@ export class RestateContextImpl implements RestateContext {
           rlog.debug("Retrying in %d ms", currentDelayMs);
         } else {
           rlog.debug("No retries left.");
-          throw new RestateError(`Retries exhausted for ${name}.`, 13, lastError);
+          throw new TerminalError(`Retries exhausted for ${name}.`, 13, lastError);
         }
       }
 

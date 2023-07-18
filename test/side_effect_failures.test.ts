@@ -14,7 +14,6 @@ import {
 import * as restate from "../src/public_api";
 import { TestDriver } from "./testdriver";
 import {
-  checkError,
   checkTerminalError,
   completionMessage,
   decodeSideEffectFromResult,
@@ -391,7 +390,7 @@ describe("FailingExceptionalSideEffectGreeter", () => {
     checkIfSideEffectReturnsCallFailed(result[4]);
     expect(result[5].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
     checkIfSideEffectReturnsCallFailed(result[6]);
-    checkError(result[7], "Retries exhausted for ");
+    checkTerminalError(result[7], "Retries exhausted for ");
   });
 });
 
@@ -442,7 +441,7 @@ describe("FailingRetrySideEffectGreeter", () => {
     checkIfSideEffectReturnsFalse(result[4]);
     expect(result[5].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
     checkIfSideEffectReturnsFalse(result[6]);
-    checkError(result[7], "Retries exhausted for ");
+    checkTerminalError(result[7], "Retries exhausted for ");
   });
 });
 

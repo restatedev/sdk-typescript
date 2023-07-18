@@ -72,6 +72,11 @@ export const KNOWN_MESSAGE_TYPES = new Set([
   COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
 ]);
 
+// Export the custom message types
+// Side effects are custom messages because the runtime does not need to inspect them
+export const SIDE_EFFECT_ENTRY_MESSAGE_TYPE = 0xfc01n;
+
+// Used by the logger so also side effect is in here.
 export const PROTOBUF_MESSAGE_NAME_BY_TYPE = new Map<bigint, string>([
   [START_MESSAGE_TYPE, "StartMessage"],
   [COMPLETION_MESSAGE_TYPE, "CompletionMessage"],
@@ -87,6 +92,7 @@ export const PROTOBUF_MESSAGE_NAME_BY_TYPE = new Map<bigint, string>([
   [BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE, "BackgroundInvokeEntryMessage"],
   [AWAKEABLE_ENTRY_MESSAGE_TYPE, "AwakeableEntryMessage"],
   [COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE, "CompleteAwakeableEntryMessage"],
+  [SIDE_EFFECT_ENTRY_MESSAGE_TYPE, "SideEffectEntryMessage"]
 ]);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -124,10 +130,6 @@ export type ProtocolMessage =
   | BackgroundInvokeEntryMessage
   | AwakeableEntryMessage
   | CompleteAwakeableEntryMessage;
-
-// Export the custom message types
-// Side effects are custom messages because the runtime does not need to inspect them
-export const SIDE_EFFECT_ENTRY_MESSAGE_TYPE = 0xfc01n;
 
 export class AwakeableIdentifier {
   constructor(
