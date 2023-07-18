@@ -107,6 +107,13 @@ export interface RestateContext {
   /**
    * Executes a side effect and stores the result in the Restate runtime.
    *
+   * Failing side effects are retried as follows:
+   * - When a TerminalError is thrown: no retries (not by runtime and also not when supplying retrySettings)
+   * - For all other error types:
+   *      - By default, the runtime will do infinite invocation retries
+   *      - When you supply retrySettings: the side effect will be retried within the process according to the supplied retry settings.
+   *      So you don't go through an entire invocation retry, but the retry is immediately triggered by the SDK.
+   *
    * If retry settings are supplied, the call is retried on failure with a timed backoff.
    * The side effect function is retried when it throws an Error, until returns a successfully
    * resolved Promise. Between retries, this function will do a suspendable Restate sleep.
