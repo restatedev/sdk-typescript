@@ -68,7 +68,7 @@ describe("Stream", () => {
       // eslint-disable-next-line @typescript-eslint/no-empty-function
       handleInputClosed: () => {},
 
-      handleStreamError: result.reject,
+      handleStreamError: (error) => result.reject(error),
     });
 
     // now, let's simulate sending a message
@@ -82,7 +82,7 @@ describe("Stream", () => {
       )
     );
     await restateStream.flush();
-    restateStream.end();
+    await restateStream.end();
 
     // and collect what was written
     const msg = await result.promise;
@@ -139,7 +139,7 @@ function roundtripTest(a: Header) {
 }
 
 function mockHttp2DuplexStream() {
-  return new stream.Duplex({
+  const duplex = new stream.Duplex({
     write(chunk, _encoding, next) {
       this.push(chunk);
       next();
@@ -149,4 +149,12 @@ function mockHttp2DuplexStream() {
       // don't care.
     },
   });
+
+  // make sure we circuit back the closing of the write side to the read side
+  duplex.on("finish", () => {
+    duplex.emit("end");
+    duplex.emit("close");
+  });
+
+  return duplex;
 }
