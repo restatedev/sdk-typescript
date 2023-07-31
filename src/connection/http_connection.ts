@@ -95,9 +95,15 @@ export class RestateHttp2Connection implements Connection {
       }
     };
 
-    // this event handles all types of connection loss
+    // those two event types should cover all types of connection losses
     errorEvents.on("aborted", () => {
+      rlog.error("Connection to Restate was lost");
       errorHandler(new Error("Connection to Restate was lost"));
+    });
+    errorEvents.on("error", (e: Error) => {
+      rlog.error("Error in http2 stream to Restate: " + e.message);
+      rlog.error(e.stack);
+      errorHandler(e);
     });
 
     // these events notify of errors in the pipeline, like encoding/decoding
