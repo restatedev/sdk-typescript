@@ -142,7 +142,7 @@ export class TestDriver<I, O> implements Connection {
     return this.getResultPromise;
   }
 
-  buffer(msg: Message): void {
+  send(msg: Message): Promise<void> {
     this.result.push(msg);
     rlog.debug(
       `Adding result to the result array. Message type: ${
@@ -154,18 +154,17 @@ export class TestDriver<I, O> implements Connection {
             : printMessageAsJson(msg.message)
         }`
     );
-  }
-
-  async flush(): Promise<void> {
-    return;
+    return Promise.resolve();
   }
 
   onClose(handler: () => void) {
     this.http2stream.on("close", handler);
   }
 
-  end() {
-    this.http2stream.end();
+  async end(): Promise<void> {
+    await new Promise((resolve) => {
+      this.http2stream.end(resolve);
+    });
     this.resolveOnClose(this.result);
   }
 

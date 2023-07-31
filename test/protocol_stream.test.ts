@@ -72,7 +72,7 @@ describe("Stream", () => {
     });
 
     // now, let's simulate sending a message
-    restateStream.buffer(
+    restateStream.send(
       new Message(
         START_MESSAGE_TYPE,
         StartMessage.create({
@@ -81,10 +81,9 @@ describe("Stream", () => {
         })
       )
     );
-    await restateStream.flush();
-    await restateStream.end();
 
     // and collect what was written
+    await restateStream.end();
     const msg = await result.promise;
 
     expect(msg.messageType).toStrictEqual(START_MESSAGE_TYPE);

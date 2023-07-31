@@ -119,7 +119,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
         message
       );
 
-      this.connection.buffer(
+      this.connection.send(
         new Message(
           messageType,
           message,
@@ -141,7 +141,6 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
       p.SUSPENSION_TRIGGERS.includes(messageType) &&
       this.journal.getCompletableIndices().length > 0
     ) {
-      this.connection.flush();
       this.scheduleSuspension();
     }
     return promise;
@@ -220,7 +219,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
           this.journal.handleUserSideMessage(msg.messageType, msg.message);
 
           if (!this.journal.outputMsgWasReplayed()) {
-            this.connection.buffer(msg);
+            this.connection.send(msg);
 
             rlog.debugJournalMessage(
               this.invocation.logPrefix,
@@ -298,7 +297,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
       msg.message
     );
     if (!this.journal.outputMsgWasReplayed()) {
-      this.connection.buffer(msg);
+      this.connection.send(msg);
     }
     await this.finish();
   }
@@ -311,8 +310,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
     this.journal.close();
     this.clearSuspensionTimeout();
 
-    await this.connection.flush();
-    this.connection.end();
+    await this.connection.end();
 
     this.invocationComplete.resolve();
   }
@@ -389,7 +387,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
 
     this.journal.handleUserSideMessage(msg.messageType, msg.message);
     if (!this.journal.outputMsgWasReplayed()) {
-      this.connection.buffer(msg);
+      this.connection.send(msg);
     }
 
     rlog.debugInvokeMessage(this.invocation.logPrefix, "Suspending function.");
