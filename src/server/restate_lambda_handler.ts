@@ -1,7 +1,12 @@
 "use strict";
 
 import { rlog } from "../utils/logger";
-import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
+import {
+  APIGatewayProxyEvent,
+  APIGatewayProxyEventV2,
+  APIGatewayProxyResult,
+  APIGatewayProxyResultV2,
+} from "aws-lambda";
 import {
   ProtocolMode,
   ServiceDiscoveryResponse,
@@ -96,7 +101,7 @@ export class LambdaRestateServer extends BaseRestateServer {
   /**
    * Creates the invocation handler function to be called by AWS Lambda.
    *
-   * The returned type of this function is `(event: APIGatewayProxyEvent) => Promise<APIGatewayProxyResult>`.
+   * The returned type of this function is `(event: APIGatewayProxyEvent | APIGatewayProxyEventV2) => Promise<APIGatewayProxyResult | APIGatewayProxyResultV2>`.
    * We use `any` types here to avoid a dependency on the `@types/aws-lambda` dependency for consumers of this API.
    *
    * @example
@@ -128,9 +133,17 @@ export class LambdaRestateServer extends BaseRestateServer {
    * This is the main request handling method, effectively a typed variant of `create()`.
    */
   private async handleRequest(
-    event: APIGatewayProxyEvent
-  ): Promise<APIGatewayProxyResult> {
-    const pathSegments = event.path.split("/");
+    event: APIGatewayProxyEvent | APIGatewayProxyEventV2
+  ): Promise<APIGatewayProxyResult | APIGatewayProxyResultV2> {
+    let path;
+    if ("path" in event) {
+      // V1
+      path = event.path;
+    } else {
+      // V2
+      path = event.rawPath;
+    }
+    const pathSegments = path.split("/");
 
     // API Gateway can add a prefix to the path based on the name of the Lambda function and deployment stage
     // (e.g. /default)
@@ -151,7 +164,7 @@ export class LambdaRestateServer extends BaseRestateServer {
     } else {
       const msg =
         "Invalid path: path doesn't end in /invoke/SvcName/MethodName and also not in /discover: " +
-        event.path;
+        path;
       rlog.error(msg);
       rlog.trace();
       return this.toErrorResponse(500, msg);
@@ -160,8 +173,8 @@ export class LambdaRestateServer extends BaseRestateServer {
 
   private async handleInvoke(
     url: string,
-    event: APIGatewayProxyEvent
-  ): Promise<APIGatewayProxyResult> {
+    event: APIGatewayProxyEvent | APIGatewayProxyEventV2
+  ): Promise<APIGatewayProxyResult | APIGatewayProxyResultV2> {
     try {
       const method = this.methodByUrl(url);
       if (event.body == null) {
@@ -212,7 +225,7 @@ export class LambdaRestateServer extends BaseRestateServer {
     }
   }
 
-  private handleDiscovery(): APIGatewayProxyResult {
+  private handleDiscovery(): APIGatewayProxyResult | APIGatewayProxyResultV2 {
     // return discovery information
     rlog.info(
       "Answering discovery request. Registering these services: " +
