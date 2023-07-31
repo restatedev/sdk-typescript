@@ -1,7 +1,7 @@
 "use strict";
 
-import stream, { EventEmitter, FinishedOptions } from "stream";
-import { streamEncoder } from "../io/encoder";
+import stream from "stream";
+import { encodeMessage } from "../io/encoder";
 import { streamDecoder } from "../io/decoder";
 import { Connection, RestateStreamConsumer } from "./connection";
 import { Message } from "../types/types";
@@ -38,15 +38,17 @@ export class RestateHttp2Connection implements Connection {
    * create a RestateDuplex stream from an http2 (duplex) stream.
    */
   public static from(http2stream: stream.Duplex): RestateHttp2Connection {
-    const sdkInput = http2stream.pipe(streamDecoder());
-
-    const sdkOutput = streamEncoder();
-    sdkOutput.pipe(http2stream);
-
-    return new RestateHttp2Connection(sdkInput, sdkOutput, http2stream);
+    return new RestateHttp2Connection(http2stream);
   }
 
   // --------------------------------------------------------------------------
+
+  // input as decoded messages
+  private readonly sdkInput: stream.Readable;
+
+  // output as encoded bytes. we convert manually, not as transforms,
+  // to skip a layer of stream indirection
+  private readonly sdkOutput: stream.Writable;
 
   // consumer handling
   private currentConsumer: RestateStreamConsumer | null = null;
@@ -54,11 +56,10 @@ export class RestateHttp2Connection implements Connection {
   private consumerError?: Error;
   private consumerInputClosed = false;
 
-  constructor(
-    private readonly sdkInput: stream.Readable,
-    private readonly sdkOutput: stream.Writable,
-    errorEvents: EventEmitter
-  ) {
+  constructor(private readonly rawStream: stream.Duplex) {
+    this.sdkInput = rawStream.pipe(streamDecoder());
+    this.sdkOutput = rawStream;
+
     // remember and forward messages
     this.sdkInput.on("data", (m: Message) => {
       // deliver message, if we have a consumer. otherwise buffer the message.
@@ -95,11 +96,11 @@ export class RestateHttp2Connection implements Connection {
     };
 
     // those two event types should cover all types of connection losses
-    errorEvents.on("aborted", () => {
+    rawStream.on("aborted", () => {
       rlog.error("Connection to Restate was lost");
       errorHandler(new Error("Connection to Restate was lost"));
     });
-    errorEvents.on("error", (e: Error) => {
+    rawStream.on("error", (e: Error) => {
       rlog.error("Error in http2 stream to Restate: " + e.message);
       rlog.error(e.stack);
       errorHandler(e);
@@ -194,7 +195,9 @@ export class RestateHttp2Connection implements Connection {
    * capacity again, so that at least the operations that await results will respect backpressure.
    */
   public send(msg: Message): Promise<void> {
-    const hasMoreCapacity = this.sdkOutput.write(msg);
+    const encodedMessage: Uint8Array = encodeMessage(msg);
+
+    const hasMoreCapacity = this.sdkOutput.write(encodedMessage);
     if (hasMoreCapacity) {
       return RESOLVED;
     }
@@ -215,7 +218,6 @@ export class RestateHttp2Connection implements Connection {
       cleanup: true,
     };
 
-    await finished(this.sdkOutput, options);
-    await finished(this.sdkInput, options);
+    await finished(this.rawStream, options);
   }
 }
