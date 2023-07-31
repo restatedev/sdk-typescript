@@ -306,13 +306,17 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
    * Closes the state machine, flushes all output, and resolves the invocation promise.
    */
   private async finish() {
-    this.stateMachineClosed = true;
-    this.journal.close();
-    this.clearSuspensionTimeout();
+    try {
+      this.stateMachineClosed = true;
+      this.journal.close();
+      this.clearSuspensionTimeout();
 
-    await this.connection.end();
+      await this.connection.end();
 
-    this.invocationComplete.resolve();
+      this.invocationComplete.resolve();
+    } catch (e) {
+      this.invocationComplete.reject(ensureError(e));
+    }
   }
 
   /**
