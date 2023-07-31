@@ -4,11 +4,14 @@ import {
   StartMessage,
   COMPLETION_MESSAGE_TYPE,
   GET_STATE_ENTRY_MESSAGE_TYPE,
+  SetStateEntryMessage,
+  SET_STATE_ENTRY_MESSAGE_TYPE,
 } from "../src/types/protocol";
 import { RestateHttp2Connection } from "../src/connection/http_connection";
 import { Header, Message } from "../src/types/types";
 import stream from "stream";
 import { CompletablePromise } from "../src/utils/utils";
+import { setTimeout } from "timers/promises";
 
 // The following test suite is taken from headers.rs
 describe("Header", () => {
@@ -45,8 +48,8 @@ describe("Header", () => {
     roundtripTest(new Header(0xfc00n, 10341, undefined, undefined, true)));
 });
 
-describe("Stream", () => {
-  it("should demonstrate how an SDK can use encoder/decoder.", async () => {
+describe("Restate Streaming Connection", () => {
+  it("should demonstrate how to write messages and read messages.", async () => {
     // imagine that the HTTP2 request handler hands to you a bidirectional (duplex in node's lingo)
     // binary stream, that you can read from and write to.
     const http2stream = mockHttp2DuplexStream();
@@ -89,6 +92,82 @@ describe("Stream", () => {
     expect(msg.messageType).toStrictEqual(START_MESSAGE_TYPE);
     expect((msg.message as StartMessage).knownEntries).toStrictEqual(1337);
   });
+
+  it("should await sending of small data when closing", async () => {
+    const { duplex, processBytes } = mockBackpressuredDuplex(8192);
+    const connection = RestateHttp2Connection.from(duplex);
+
+    // enqueue small data, below watermark, so that 'end' can immediately be written
+    connection.send(newMessage(10));
+    const done = connection.end();
+
+    await verifyPromisePending(done);
+
+    // now let the stream flow
+    processBytes(10 * 1024);
+
+    // we should be able to finish cleanly
+    await done;
+  });
+
+  it("should await sending of larger data when closing", async () => {
+    const { duplex, processBytes } = mockBackpressuredDuplex(128);
+    const connection = RestateHttp2Connection.from(duplex);
+
+    // enqueue quite some data, before allowing any bytes to flow any
+    connection.send(newMessage(1024));
+    connection.send(newMessage(1024));
+    connection.send(newMessage(1024));
+    const done = connection.end();
+
+    await verifyPromisePending(done);
+
+    // now let the stream flow
+    processBytes(10 * 1024);
+
+    // we should be able to finish cleanly
+    await done;
+  });
+
+  it("should not trigger backpressure for small messages", async () => {
+    const { duplex } = mockBackpressuredDuplex(1024);
+    const connection = RestateHttp2Connection.from(duplex);
+
+    // enqueue a message that is too large
+    const promise1 = connection.send(newMessage(80));
+    const promise2 = connection.send(newMessage(80));
+
+    await verifyPromiseResolved(promise1);
+    await verifyPromiseResolved(promise2);
+  });
+
+  it("should trigger backpressure for large messages", async () => {
+    const { duplex } = mockBackpressuredDuplex(1024);
+    const connection = RestateHttp2Connection.from(duplex);
+
+    // enqueue a message that is too large
+    connection.send(newMessage(800));
+    const promise2 = connection.send(newMessage(800));
+
+    await verifyPromisePending(promise2);
+  });
+
+  it("should resolve backpressure promises when the stream flows", async () => {
+    const { duplex, processBytes } = mockBackpressuredDuplex(1024);
+    const connection = RestateHttp2Connection.from(duplex);
+
+    // enqueue a message that is too large
+    connection.send(newMessage(800));
+    const promise2 = connection.send(newMessage(800));
+
+    await verifyPromisePending(promise2);
+
+    // now let the stream flow
+    processBytes(10 * 1024);
+
+    // this should now complete
+    await promise2;
+  });
 });
 
 // The following is taken from headers.rs tests
@@ -119,12 +198,44 @@ function newCompletableEntry(
   return new Header(ty, length, completed);
 }
 
+function newMessage(size: number) {
+  return new Message(
+    SET_STATE_ENTRY_MESSAGE_TYPE,
+    SetStateEntryMessage.create({
+      key: Buffer.from("abcd"),
+      value: Buffer.alloc(size),
+    })
+  );
+}
+
 function sameTruthness<A, B>(a: A, b: B) {
   if (a) {
     expect(b).toBeTruthy();
   } else {
     expect(b).toBeFalsy();
   }
+}
+
+async function verifyPromisePending(promise: Promise<unknown>) {
+  let complete = false;
+  promise.finally(() => {
+    complete = true;
+  });
+
+  await setTimeout(0); // let the callbacks and tasks proceed first
+
+  expect(complete).toBeFalsy();
+}
+
+async function verifyPromiseResolved(promise: Promise<unknown>) {
+  let complete = false;
+  promise.finally(() => {
+    complete = true;
+  });
+
+  await setTimeout(0); // let the callbacks and tasks proceed first
+
+  expect(complete).toBeTruthy();
 }
 
 function roundtripTest(a: Header) {
@@ -156,4 +267,50 @@ function mockHttp2DuplexStream() {
   });
 
   return duplex;
+}
+
+function mockBackpressuredDuplex(highWaterMark = 128) {
+  let permittedBytes = 0;
+  const queue: { bytes: number; cb: () => void }[] = [];
+
+  const duplex = new stream.Duplex({
+    highWaterMark,
+    write(chunk, _encoding, callback) {
+      if (permittedBytes >= chunk.length) {
+        permittedBytes -= chunk.length;
+        process.nextTick(callback);
+      } else {
+        queue.push({ bytes: chunk.length - permittedBytes, cb: callback });
+        permittedBytes = 0;
+      }
+    },
+
+    read() {
+      // don't care.
+    },
+  });
+
+  // make sure we circuit back the closing of the write side to the read side
+  duplex.on("finish", () => {
+    duplex.emit("end");
+    duplex.emit("close");
+  });
+
+  function processBytes(numBytes: number) {
+    while (queue.length > 0 && numBytes > 0) {
+      const next = queue[0];
+
+      if (next.bytes > numBytes) {
+        next.bytes -= numBytes;
+        numBytes = 0;
+      } else {
+        numBytes -= next.bytes;
+        queue.pop();
+        process.nextTick(next.cb);
+      }
+    }
+    permittedBytes += numBytes;
+  }
+
+  return { duplex, processBytes };
 }
