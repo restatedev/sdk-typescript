@@ -9,6 +9,8 @@ import {
 import { Message } from "../types/types";
 import { rlog } from "../utils/logger";
 
+const RESOLVED: Promise<void> = Promise.resolve();
+
 export class LambdaConnection implements Connection {
   // Empty buffer to store journal output messages
   private outputBuffer: Buffer = Buffer.alloc(0);
@@ -26,7 +28,7 @@ export class LambdaConnection implements Connection {
   }
 
   // Send a message back to the runtime
-  buffer(msg: Message): void {
+  send(msg: Message): Promise<void> {
     // Add the header and the body to buffer and add to the output buffer
     const msgBuffer = encodeMessage(msg);
     this.outputBuffer = Buffer.concat([this.outputBuffer, msgBuffer]);
@@ -38,20 +40,20 @@ export class LambdaConnection implements Connection {
     ) {
       this.suspendedOrCompleted = true;
     }
-  }
 
-  async flush(): Promise<void> {
-    if (this.suspendedOrCompleted) {
-      rlog.debug("Flushing output buffer...");
-      this.resolveOnCompleted(this.outputBuffer);
-    }
+    return RESOLVED;
   }
 
   getResult(): Promise<Buffer> {
     return this.completionPromise;
   }
 
-  end(): void {
+  end(): Promise<void> {
+    if (this.suspendedOrCompleted) {
+      rlog.debug("Flushing output buffer...");
+      this.resolveOnCompleted(this.outputBuffer);
+    }
     this.outputBuffer = Buffer.alloc(0);
+    return RESOLVED;
   }
 }

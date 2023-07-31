@@ -7,11 +7,9 @@ import { Message } from "../types/types";
  * Accepts messages to be sent and committed to the journal.
  */
 export interface Connection {
-  buffer(msg: Message): void;
+  send(msg: Message): Promise<void>;
 
-  flush(): Promise<void>;
-
-  end(): void;
+  end(): Promise<void>;
 }
 
 /**

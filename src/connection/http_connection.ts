@@ -1,12 +1,15 @@
 "use strict";
 
-import stream, { EventEmitter } from "stream";
-import { pipeline, finished } from "stream/promises";
+import stream, { EventEmitter, FinishedOptions } from "stream";
 import { streamEncoder } from "../io/encoder";
 import { streamDecoder } from "../io/decoder";
 import { Connection, RestateStreamConsumer } from "./connection";
 import { Message } from "../types/types";
 import { rlog } from "../utils/logger";
+import { finished } from "stream/promises";
+
+// utility promise, for cases where we want to save allocation of an extra promise
+const RESOLVED: Promise<void> = Promise.resolve();
 
 /**
  * A duplex stream with Restate Messages over HTTP2.
@@ -44,10 +47,6 @@ export class RestateHttp2Connection implements Connection {
   }
 
   // --------------------------------------------------------------------------
-
-  // output stream handling
-  private outputBuffer: Message[] = [];
-  private flushQueueTail: Promise<void> = Promise.resolve();
 
   // consumer handling
   private currentConsumer: RestateStreamConsumer | null = null;
@@ -182,63 +181,41 @@ export class RestateHttp2Connection implements Connection {
   // --------------------------------------------------------------------------
 
   /**
-   * Adds a message to the output buffer, but does not yet attempt to send it.
-   * Messages are only actually sent when {@link flush} is called.
-   */
-  public buffer(msg: Message): void {
-    this.outputBuffer.push(msg);
-  }
-
-  /**
-   * Flushes all currently buffered messages to the output stream.
-   * The returned promise resolves when the data has been fully flushed.
+   * Adds a message to the output stream.
    *
-   * If another flush operation is still ongoing (for example due to stream backpressure), then
-   * this flush will start executing once the pending request(s) finished.
+   * This always puts the message into the node stream, but will return a promise that is resolved once
+   * further messages can be written.
+   *
+   * The reasoning is that some, but not all Restate operations return promises and are typically
+   * awaited. For example, rpc, sleep, side-effect have promises and are awaited, while one-way-sends and
+   * state updates don't return promises.
+   *
+   * As a pragmatic solution, we always accept messages, but return a promise for when the output has
+   * capacity again, so that at least the operations that await results will respect backpressure.
    */
-  public async flush(): Promise<void> {
-    if (this.outputBuffer.length == 0) {
-      return;
+  public send(msg: Message): Promise<void> {
+    const hasMoreCapacity = this.sdkOutput.write(msg);
+    if (hasMoreCapacity) {
+      return RESOLVED;
     }
 
-    const data = this.outputBuffer;
-    this.outputBuffer = [];
-
-    // this adds a new flush to the tail of the queue. If no flush is currently happening
-    // (which is mostly the case) then the promise is already resolved and this flush starts
-    // immediately.
-    // NOTE: We do not add a '.catch()' because we want that, after one failure, all further flushes
-    //       are skipped and promises rejected
-    this.flushQueueTail = this.flushQueueTail.then(() => this.doFlush(data));
-    return this.flushQueueTail;
-  }
-
-  private async doFlush(data: Message[]): Promise<void> {
-    // pipeline creates a huge number of listeners, but it is not a leak; they are cleaned up by the time we complete
-    // set to unlimited briefly
-    const max = this.sdkOutput.getMaxListeners();
-    try {
-      this.sdkOutput.setMaxListeners(0);
-      await pipeline(stream.Readable.from(data), this.sdkOutput, {
-        end: false,
-      });
-    } finally {
-      this.sdkOutput.setMaxListeners(max);
-    }
+    return new Promise((resolve) => {
+      this.sdkOutput.once("drain", resolve);
+    });
   }
 
   /**
-   * Ends the stream, awaiting pending flushes.
+   * Ends the stream, awaiting pending writes.
    */
   public async end(): Promise<void> {
-    // ensure everything is written before we close the stream
-    await this.flush();
     this.sdkOutput.end();
 
-    // this here *would* be nice to surface errors (if the stream is broken), and
-    // it normally should (like on file streams), but it seems that the way the node http2
-    // stream is implemented, it never reports errors here
-    await finished(this.sdkOutput);
-    await finished(this.sdkInput);
+    const options = {
+      error: true,
+      cleanup: true,
+    };
+
+    await finished(this.sdkOutput, options);
+    await finished(this.sdkInput, options);
   }
 }
