@@ -148,8 +148,8 @@ export interface RestateContext {
   sideEffect<T>(fn: () => Promise<T>, retryPolicy?: RetrySettings): Promise<T>;
 
   /**
-   * Register an awakeable and pause the processing until the awakeable ID has been returned to the service
-   * (via ctx.completeAwakeable(...)).
+   * Register an awakeable and pause the processing until the awakeable ID (and optional payload) have been returned to the service
+   * (via ctx.completeAwakeable(...)). The SDK deserializes the payload with `JSON.parse(result.toString()) as T`.
    * @returns
    * - id: the string ID that has to be used to complete the awakaeble by some external service
    * - promise: the Promise that needs to be awaited and that is resolved with the payload that was supplied by the service which completed the awakeable
@@ -173,7 +173,9 @@ export interface RestateContext {
    * Complete an awakeable of another service.
    * @param id the string ID of the awakeable.
    * This is supplied by the service that needs to be woken up.
-   * @param payload the payload to pass to the service that is woken up
+   * @param payload the payload to pass to the service that is woken up.
+   * The SDK serializes the payload with `Buffer.from(JSON.stringify(payload))`
+   * and deserializes it in the receiving service with `JSON.parse(result.toString()) as T`.
    *
    * @example
    * const ctx = restate.useContext(this);
