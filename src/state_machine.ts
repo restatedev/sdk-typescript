@@ -284,13 +284,15 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
 
   private async finishWithError(e: Error) {
     if (e instanceof TerminalError) {
-      await this.finishWithTerminalError(e);
+      this.sendTerminalError(e);
     } else {
-      await this.finishWithRetryableError(e);
+      this.sendRetryableError(e);
     }
+
+    await this.finish();
   }
 
-  private async finishWithRetryableError(e: Error) {
+  private sendRetryableError(e: Error) {
     const msg = new Message(
       ERROR_MESSAGE_TYPE,
       ErrorMessage.create({
@@ -305,10 +307,9 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
     );
 
     this.connection.send(msg);
-    await this.finish();
   }
 
-  private async finishWithTerminalError(e: TerminalError) {
+  private sendTerminalError(e: TerminalError) {
     const msg = new Message(
       OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
       OutputStreamEntryMessage.create({
@@ -321,11 +322,11 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
       msg.messageType,
       msg.message
     );
-    // await this.journal.handleUserSideMessage(msg.messageType, msg.message);
+
+    this.journal.handleUserSideMessage(msg.messageType, msg.message);
     if (!this.journal.outputMsgWasReplayed()) {
       this.connection.send(msg);
     }
-    await this.finish();
   }
 
   /**
@@ -351,6 +352,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
    */
   private unhandledError(e: Error) {
     this.invocationComplete.reject(e);
+    this.stateMachineClosed = true;
     this.journal.close();
     this.clearSuspensionTimeout();
   }
@@ -468,9 +470,8 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
       "Aborting function execution and closing state machine due to connection error: " +
         e.message
     );
-    this.stateMachineClosed = true;
-    this.journal.close();
-    return;
+
+    this.unhandledError(e);
   }
 
   public nextEntryWillBeReplayed() {
