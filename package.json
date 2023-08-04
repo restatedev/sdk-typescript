@@ -28,7 +28,7 @@
   "email": "code@restate.dev",
   "scripts": {
     "proto": "npx buf mod update && npx buf generate",
-    "build": "tsc --noEmitOnError && tsc --p ./examples/ --noEmit",
+    "build": "tsc --noEmitOnError",
     "test": "jest --silent --maxWorkers=1",
     "lint": "eslint --ignore-path .eslintignore --ext .ts .",
     "format": "prettier --ignore-path .eslintignore --write \"**/*.+(js|ts|json)\"",
