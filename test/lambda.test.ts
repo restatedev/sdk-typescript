@@ -1,10 +1,10 @@
 import { describe, expect } from "@jest/globals";
 import * as restate from "../src/public_api";
 import {
-  protoMetadata,
+  protoMetadata, TestEmpty,
   TestGreeter,
   TestRequest,
-  TestResponse,
+  TestResponse
 } from "../src/generated/proto/test";
 import { APIGatewayProxyEvent } from "aws-lambda";
 import {
@@ -14,14 +14,16 @@ import {
 import { encodeMessage } from "../src/io/encoder";
 import { Message } from "../src/types/types";
 import {
+  awakeableMessage,
   getStateMessage,
   greetRequest,
   greetResponse,
   inputMessage,
   outputMessage,
-  startMessage,
+  startMessage
 } from "./protoutils";
 import { decodeLambdaBody } from "../src/io/decoder";
+import { Empty } from "../src/generated/google/protobuf/empty";
 
 class LambdaGreeter implements TestGreeter {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -41,6 +43,31 @@ describe("Lambda: decodeMessage", () => {
       startMessage(2),
       inputMessage(greetRequest("Pete")),
       getStateMessage("STATE", "Foo"),
+    ];
+    const serializedMsgs = serializeMessages(messages);
+
+    const decodedMessages = decodeLambdaBody(serializedMsgs);
+
+    expect(decodedMessages).toStrictEqual(messages);
+  });
+
+  it("returns a list of decoded messages when last message body is empty", async () => {
+    const messages: Message[] = [
+      startMessage(2),
+      inputMessage(TestEmpty.encode(TestEmpty.create({greeting: Empty.create({})})).finish()),
+    ];
+    const serializedMsgs = serializeMessages(messages);
+
+    const decodedMessages = decodeLambdaBody(serializedMsgs);
+
+    expect(decodedMessages).toStrictEqual(messages);
+  });
+
+  it("returns a list of decoded messages when last message body is empty", async () => {
+    const messages: Message[] = [
+      startMessage(2),
+      inputMessage(greetRequest("Pete")),
+      awakeableMessage(),
     ];
     const serializedMsgs = serializeMessages(messages);
 

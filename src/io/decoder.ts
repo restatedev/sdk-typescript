@@ -110,7 +110,7 @@ export function decodeLambdaBody(msgBase64: string): Message[] {
 
   // Will be set to true after parsing the last body.
   // eslint-disable-next-line no-constant-condition
-  while (true) {
+  parsingLoop: while (true) {
     switch (state) {
       case WAITING_FOR_HEADER: {
         if (buf.length < 8) {
@@ -180,7 +180,7 @@ export function decodeLambdaBody(msgBase64: string): Message[] {
         // This would have the effect that this loop is stopped after parsing the header that belongs to the empty body.
         // And last message with the empty body will never be added to the decodedEntries.
         if(buf.length === 0){
-          break;
+          break parsingLoop;
         }
       }
     }
