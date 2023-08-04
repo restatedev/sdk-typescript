@@ -2,6 +2,7 @@ import { describe, expect } from "@jest/globals";
 import * as restate from "../src/public_api";
 import {
   protoMetadata,
+  TestEmpty,
   TestGreeter,
   TestResponse,
 } from "../src/generated/proto/test";
@@ -13,6 +14,7 @@ import {
 import { encodeMessage } from "../src/io/encoder";
 import { Message } from "../src/types/types";
 import {
+  awakeableMessage,
   getStateMessage,
   greetRequest,
   greetResponse,
@@ -21,6 +23,7 @@ import {
   startMessage,
 } from "./protoutils";
 import { decodeLambdaBody } from "../src/io/decoder";
+import { Empty } from "../src/generated/google/protobuf/empty";
 
 class LambdaGreeter implements TestGreeter {
   async greet(): Promise<TestResponse> {
@@ -39,6 +42,35 @@ describe("Lambda: decodeMessage", () => {
       startMessage(2),
       inputMessage(greetRequest("Pete")),
       getStateMessage("STATE", "Foo"),
+    ];
+    const serializedMsgs = serializeMessages(messages);
+
+    const decodedMessages = decodeLambdaBody(serializedMsgs);
+
+    expect(decodedMessages).toStrictEqual(messages);
+  });
+
+  it("returns a list of decoded messages when last message body is empty", async () => {
+    const messages: Message[] = [
+      startMessage(2),
+      inputMessage(
+        TestEmpty.encode(
+          TestEmpty.create({ greeting: Empty.create({}) })
+        ).finish()
+      ),
+    ];
+    const serializedMsgs = serializeMessages(messages);
+
+    const decodedMessages = decodeLambdaBody(serializedMsgs);
+
+    expect(decodedMessages).toStrictEqual(messages);
+  });
+
+  it("returns a list of decoded messages when last message body is empty", async () => {
+    const messages: Message[] = [
+      startMessage(2),
+      inputMessage(greetRequest("Pete")),
+      awakeableMessage(),
     ];
     const serializedMsgs = serializeMessages(messages);
 
