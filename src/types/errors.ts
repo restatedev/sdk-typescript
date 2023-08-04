@@ -29,34 +29,17 @@ export function ensureError(e: unknown): Error {
 }
 
 export class RestateError extends Error {
-  constructor(
-    public readonly message: string,
-    public readonly code: number = 13,
-    public readonly cause?: any
-  ) {
-    super(message);
+  public readonly code: number;
+
+  constructor(message: string, options?: { errorCode?: number; cause?: any }) {
+    super(message, { cause: options?.cause });
+    this.code = options?.errorCode ?? ErrorCodes.INTERNAL;
   }
 
-  public hasCause(): boolean {
-    return this.cause;
-  }
-
-  public getRestateRootCause(): any {
-    // eslint-disable-next-line @typescript-eslint/no-this-alias
-    let curr = this;
-    while (curr instanceof RestateError && (curr as RestateError).cause) {
-      curr = (curr as RestateError).cause;
-    }
-    return curr;
-  }
-
-  public toFailure(logPrefix?: string): Failure {
-    const msg = logPrefix
-      ? `${logPrefix}  Uncaught exception for invocation id: ${this.message}`
-      : this.message;
+  public toFailure(): Failure {
     return Failure.create({
       code: this.code,
-      message: msg,
+      message: this.message,
     });
   }
 }
@@ -64,26 +47,18 @@ export class RestateError extends Error {
 // Does not lead to Restate retries
 // Leads to an output message with a failure defined
 export class TerminalError extends RestateError {
-  constructor(
-    public readonly message: string,
-    public readonly code: number = 13,
-    public readonly cause?: any
-  ) {
-    super(message);
+  constructor(message: string, options?: { errorCode?: number; cause?: any }) {
+    super(message, options);
   }
 }
 
 // Leads to Restate retries
 export class RetryableError extends RestateError {
-  private constructor(
-    public readonly message: string,
-    public readonly code: number = 13,
-    public readonly cause?: any
-  ) {
-    super(message);
+  constructor(message: string, options?: { errorCode?: number; cause?: any }) {
+    super(message, options);
   }
 
-  public static internal(message: string){
+  public static internal(message: string) {
     return new RetryableError(message);
   }
 
@@ -100,21 +75,19 @@ export class RetryableError extends RestateError {
         - In the replayed messages: type: ${
           replayMessage.messageType
         }, message: ${printMessageAsJson(replayMessage.message)}`;
-    return new RetryableError(msg, ErrorCodes.JOURNAL_MISMATCH);
+    return new RetryableError(msg, { errorCode: ErrorCodes.JOURNAL_MISMATCH });
   }
 
   public static protocolViolation(message: string) {
-    return new RetryableError(message, ErrorCodes.PROTOCOL_VIOLATION);
+    return new RetryableError(message, {
+      errorCode: ErrorCodes.PROTOCOL_VIOLATION,
+    });
   }
 
   public static apiViolation(message: string) {
-    return new RetryableError(
-      `API violation (${ErrorCodes.INTERNAL}): ${message}`
-    );
-  }
-
-  public static fromError(e: Error) {
-    return new RetryableError(e.message);
+    return new RetryableError(`API violation: ${message}`, {
+      errorCode: ErrorCodes.INTERNAL,
+    });
   }
 }
 

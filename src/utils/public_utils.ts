@@ -4,7 +4,7 @@
 /* eslint-disable @typescript-eslint/no-inferrable-types */
 import { rlog } from "../utils/logger";
 import { RestateContext } from "../restate_context";
-import { RestateError } from "../types/errors";
+import { ErrorCodes, RestateError, ensureError } from "../types/errors";
 
 /**
  * Retry policy that decides how to delay between retries.
@@ -190,9 +190,13 @@ export async function retryExceptionalSideEffect<T>(
         errorName = e.name;
         errorMessage = e.message;
       } else {
-        lastError = new RestateError("Uncategorized error", 13, e);
+        const asError = ensureError(e);
+        lastError = new RestateError("Uncategorized error", {
+          errorCode: ErrorCodes.INTERNAL,
+          cause: asError,
+        });
         errorName = "Error";
-        errorMessage = JSON.stringify(e);
+        errorMessage = asError.message;
       }
 
       rlog.debug(
@@ -206,7 +210,10 @@ export async function retryExceptionalSideEffect<T>(
         rlog.debug("Retrying in %d ms", currentDelayMs);
       } else {
         rlog.debug("No retries left.");
-        throw new RestateError(`Retries exhausted for ${name}.`, 13, lastError);
+        throw new RestateError(`Retries exhausted for ${name}.`, {
+          errorCode: ErrorCodes.INTERNAL,
+          cause: lastError,
+        });
       }
     }
 
