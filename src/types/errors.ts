@@ -117,3 +117,12 @@ export class RetryableError extends RestateError {
     return new RetryableError(e.message);
   }
 }
+
+export function errorToFailure(err: Error): Failure {
+  return err instanceof RestateError
+    ? err.toFailure()
+    : Failure.create({
+        code: ErrorCodes.INTERNAL,
+        message: err.message,
+      });
+}
