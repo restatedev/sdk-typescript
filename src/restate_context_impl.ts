@@ -21,7 +21,7 @@ import {
 } from "./types/protocol";
 import { SideEffectEntryMessage } from "./generated/proto/javascript";
 import { AsyncLocalStorage } from "async_hooks";
-import { TerminalError, RetryableError } from "./types/errors";
+import { RetryableError, ensureError, errorToFailure } from "./types/errors";
 import { jsonSerialize, jsonDeserialize } from "./utils/utils";
 import { Empty } from "./generated/google/protobuf/empty";
 
@@ -206,38 +206,30 @@ export class RestateContextImpl implements RestateContext {
         fn
       );
     } catch (e) {
-      if (e instanceof TerminalError) {
-        // terminal error that came out of the side effect execution
-        // we send back a completion with a failure
-        const sideEffectMsg = SideEffectEntryMessage.encode(
-          SideEffectEntryMessage.create({ failure: e.toFailure() })
-        ).finish();
+      // we commit any error from the side effet to thr journal, and re-throw it into
+      // the function. that way, any catching by the user and reacting to it will be
+      // deterministic on replay
+      const error = ensureError(e);
+      const failure = errorToFailure(error);
+      const sideEffectMsg = SideEffectEntryMessage.encode(
+        SideEffectEntryMessage.create({ failure })
+      ).finish();
 
-        // this may throw an error from the SDK/runtime/connection side, in case the
-        // failure message cannot be committed to the journal. That error would then
-        // be returned from this function (replace the original error)
-        await this.stateMachine.handleUserCodeMessage<T>(
-          SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-          sideEffectMsg,
-          false,
-          undefined,
-          true
-        );
+      // this may throw an error from the SDK/runtime/connection side, in case the
+      // failure message cannot be committed to the journal. That error would then
+      // be returned from this function (replace the original error)
+      // that is acceptable, because in such a situation (failure to append to journal),
+      // the state machine closes anyways and no further operations will succeed and the
+      // the execution aborts
+      await this.stateMachine.handleUserCodeMessage<T>(
+        SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+        sideEffectMsg,
+        false,
+        undefined,
+        true
+      );
 
-        throw e;
-      } else if (e instanceof RetryableError) {
-        // has already been reported so just throw
-        await this.stateMachine.notifyHandlerExecutionError(e);
-        throw e;
-      } else {
-        const msg = e instanceof Error ? e.message : JSON.stringify(e);
-        const userCodeError = RetryableError.internal(
-          "sideEffect execution failed: " + msg
-        );
-        await this.stateMachine.notifyHandlerExecutionError(userCodeError);
-
-        throw e;
-      }
+      throw e;
     }
 
     // we have this code outside the above try/catch block, to ensure that any error arising
@@ -256,6 +248,13 @@ export class RestateContextImpl implements RestateContext {
     // if an error arises from committing the side effect result, then this error will
     // be thrown here (reject the returned promise) and the function will see that error,
     // even if the side-effect function completed correctly
+    // that is acceptable, because in such a situation (failure to append to journal),
+    // the state machine closes anyways and reports an execution failure, meaning no further
+    // operations will succeed and the the execution will be retried.
+    // If the side-effect result did in fact not make it to the journal, then the side-effect
+    // re-executes, and if it made it to the journal after all (error happend inly during
+    // ack-back), then retries will use the journaled result.
+    // So all good in any case, due to the beauty of "the runtime log is the ground thruth" approach.
     await this.stateMachine.handleUserCodeMessage<T>(
       SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
       sideEffectMsg,
