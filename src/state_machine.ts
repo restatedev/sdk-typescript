@@ -19,7 +19,12 @@ import {
 import { ErrorMessage } from "./generated/proto/protocol";
 import { Journal } from "./journal";
 import { Invocation } from "./invocation";
-import { ensureError, TerminalError, RetryableError } from "./types/errors";
+import {
+  ensureError,
+  TerminalError,
+  RetryableError,
+  errorToFailure,
+} from "./types/errors";
 import { LocalStateStore } from "./local_state_store";
 
 export class StateMachine<I, O> implements RestateStreamConsumer {
@@ -286,12 +291,10 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
   }
 
   private async finishWithRetryableError(e: Error) {
-    const retryableError =
-      e instanceof RetryableError ? e : RetryableError.fromError(e);
     const msg = new Message(
       ERROR_MESSAGE_TYPE,
       ErrorMessage.create({
-        failure: retryableError.toFailure(this.invocation.logPrefix),
+        failure: errorToFailure(e),
       })
     );
     rlog.debugJournalMessage(
