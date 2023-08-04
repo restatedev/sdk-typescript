@@ -3,6 +3,7 @@ syntax = "proto3";
 package test;
 
 import "dev/restate/ext.proto";
+import "google/protobuf/empty.proto";
 
 service TestGreeter {
 	option (dev.restate.ext.service_type) = KEYED;
@@ -16,5 +17,9 @@ message TestRequest {
 
 message TestResponse {
 	string greeting = 1;
+}
+
+message TestEmpty {
+	google.protobuf.Empty  greeting = 1;
 }
 
