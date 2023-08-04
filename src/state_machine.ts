@@ -309,7 +309,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
     const msg = new Message(
       OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
       OutputStreamEntryMessage.create({
-        failure: e.toFailure(this.invocation.logPrefix),
+        failure: e.toFailure(),
       })
     );
     rlog.debugJournalMessage(
