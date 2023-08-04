@@ -192,19 +192,17 @@ export class RestateContextImpl implements RestateContext {
     retryPolicy: RetrySettings = DEFAULT_INFINITE_EXPONENTIAL_BACKOFF
   ): Promise<T> {
     if (this.isInSideEffect()) {
-      const e = RetryableError.apiViolation(
-        "You cannot do sideEffect calls from within a side effect."
+      throw new TerminalError(
+        "You cannot do sideEffect calls from within a side effect.",
+        { errorCode: ErrorCodes.INTERNAL }
       );
-      await this.stateMachine.notifyHandlerExecutionError(e);
-      throw e;
     } else if (this.isInOneWayCall()) {
-      const e = RetryableError.apiViolation(
+      throw new TerminalError(
         "Cannot do a side effect from within ctx.oneWayCall(...). " +
           "Context method ctx.oneWayCall() can only be used to invoke other services unidirectionally. " +
-          "e.g. ctx.oneWayCall(() => client.greet(my_request))"
+          "e.g. ctx.oneWayCall(() => client.greet(my_request))",
+        { errorCode: ErrorCodes.INTERNAL }
       );
-      await this.stateMachine.notifyHandlerExecutionError(e);
-      throw e;
     }
 
     const executeAndLogSideEffect = async () => {
