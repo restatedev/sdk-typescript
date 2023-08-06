@@ -26,9 +26,12 @@ import {
 } from "./types/protocol";
 import { equalityCheckers, jsonDeserialize } from "./utils/utils";
 import { Message } from "./types/types";
-import { SideEffectEntryMessage } from "./generated/proto/javascript";
+import {
+  FailureWithTerminal,
+  SideEffectEntryMessage,
+} from "./generated/proto/javascript";
 import { Invocation } from "./invocation";
-import { RetryableError } from "./types/errors";
+import { failureToError, RetryableError } from "./types/errors";
 
 export class Journal<I, O> {
   private state = NewExecutionState.REPLAYING;
@@ -304,13 +307,14 @@ export class Journal<I, O> {
     journalIndex: number,
     journalEntry: JournalEntry,
     value?: T,
-    failure?: Failure
+    failure?: Failure | FailureWithTerminal
   ) {
     if (value !== undefined) {
       journalEntry.resolve(value);
       this.pendingJournalEntries.delete(journalIndex);
     } else if (failure !== undefined) {
-      journalEntry.reject(new Error(failure.message));
+      const error = failureToError(failure);
+      journalEntry.reject(error);
       this.pendingJournalEntries.delete(journalIndex);
     } else {
       this.pendingJournalEntries.set(journalIndex, journalEntry);
