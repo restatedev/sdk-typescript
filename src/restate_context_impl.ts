@@ -21,9 +21,23 @@ import {
 } from "./types/protocol";
 import { SideEffectEntryMessage } from "./generated/proto/javascript";
 import { AsyncLocalStorage } from "async_hooks";
-import { RetryableError, ensureError, errorToFailure } from "./types/errors";
+import {
+  ErrorCodes,
+  RestateError,
+  RetryableError,
+  TerminalError,
+  ensureError,
+  errorToFailure,
+} from "./types/errors";
 import { jsonSerialize, jsonDeserialize } from "./utils/utils";
 import { Empty } from "./generated/google/protobuf/empty";
+import {
+  DEFAULT_INFINITE_EXPONENTIAL_BACKOFF,
+  DEFAULT_INITIAL_DELAY_MS,
+  EXPONENTIAL_BACKOFF,
+  RetrySettings,
+} from "./utils/public_utils";
+import { rlog } from "./utils/logger";
 
 enum CallContexType {
   None,
@@ -173,7 +187,10 @@ export class RestateContextImpl implements RestateContext {
     );
   }
 
-  public async sideEffect<T>(fn: () => Promise<T>): Promise<T> {
+  public async sideEffect<T>(
+    fn: () => Promise<T>,
+    retryPolicy: RetrySettings = DEFAULT_INFINITE_EXPONENTIAL_BACKOFF
+  ): Promise<T> {
     if (this.isInSideEffect()) {
       const e = RetryableError.apiViolation(
         "You cannot do sideEffect calls from within a side effect."
@@ -190,37 +207,72 @@ export class RestateContextImpl implements RestateContext {
       throw e;
     }
 
-    // in replay mode, we directly return the value from the log
-    if (this.stateMachine.nextEntryWillBeReplayed()) {
-      const emptyMsg = SideEffectEntryMessage.create({});
-      return this.stateMachine.handleUserCodeMessage<T>(
-        SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-        emptyMsg
-      ) as Promise<T>;
-    }
+    const executeAndLogSideEffect = async () => {
+      // in replay mode, we directly return the value from the log
+      if (this.stateMachine.nextEntryWillBeReplayed()) {
+        const emptyMsg = SideEffectEntryMessage.create({});
+        return this.stateMachine.handleUserCodeMessage<T>(
+          SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+          emptyMsg
+        ) as Promise<T>;
+      }
 
-    let sideEffectResult: T;
-    try {
-      sideEffectResult = await RestateContextImpl.callContext.run(
-        { type: CallContexType.SideEffect },
-        fn
-      );
-    } catch (e) {
-      // we commit any error from the side effet to thr journal, and re-throw it into
-      // the function. that way, any catching by the user and reacting to it will be
-      // deterministic on replay
-      const error = ensureError(e);
-      const failure = errorToFailure(error);
-      const sideEffectMsg = SideEffectEntryMessage.encode(
-        SideEffectEntryMessage.create({ failure })
-      ).finish();
+      let sideEffectResult: T;
+      try {
+        sideEffectResult = await RestateContextImpl.callContext.run(
+          { type: CallContexType.SideEffect },
+          fn
+        );
+      } catch (e) {
+        // we commit any error from the side effet to thr journal, and re-throw it into
+        // the function. that way, any catching by the user and reacting to it will be
+        // deterministic on replay
+        const error = ensureError(e);
+        const failure = errorToFailure(error);
+        const sideEffectMsg = SideEffectEntryMessage.encode(
+          SideEffectEntryMessage.create({ failure })
+        ).finish();
 
-      // this may throw an error from the SDK/runtime/connection side, in case the
-      // failure message cannot be committed to the journal. That error would then
-      // be returned from this function (replace the original error)
+        // this may throw an error from the SDK/runtime/connection side, in case the
+        // failure message cannot be committed to the journal. That error would then
+        // be returned from this function (replace the original error)
+        // that is acceptable, because in such a situation (failure to append to journal),
+        // the state machine closes anyways and no further operations will succeed and the
+        // the execution aborts
+        await this.stateMachine.handleUserCodeMessage<T>(
+          SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+          sideEffectMsg,
+          false,
+          undefined,
+          true
+        );
+
+        throw e;
+      }
+
+      // we have this code outside the above try/catch block, to ensure that any error arising
+      // from here is not incorrectly attributed to the side-effect
+      const sideEffectMsg =
+        sideEffectResult !== undefined
+          ? SideEffectEntryMessage.encode(
+              SideEffectEntryMessage.create({
+                value: Buffer.from(jsonSerialize(sideEffectResult)),
+              })
+            ).finish()
+          : SideEffectEntryMessage.encode(
+              SideEffectEntryMessage.create()
+            ).finish();
+
+      // if an error arises from committing the side effect result, then this error will
+      // be thrown here (reject the returned promise) and the function will see that error,
+      // even if the side-effect function completed correctly
       // that is acceptable, because in such a situation (failure to append to journal),
-      // the state machine closes anyways and no further operations will succeed and the
-      // the execution aborts
+      // the state machine closes anyways and reports an execution failure, meaning no further
+      // operations will succeed and the the execution will be retried.
+      // If the side-effect result did in fact not make it to the journal, then the side-effect
+      // re-executes, and if it made it to the journal after all (error happend inly during
+      // ack-back), then retries will use the journaled result.
+      // So all good in any case, due to the beauty of "the runtime log is the ground thruth" approach.
       await this.stateMachine.handleUserCodeMessage<T>(
         SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
         sideEffectMsg,
@@ -229,41 +281,11 @@ export class RestateContextImpl implements RestateContext {
         true
       );
 
-      throw e;
-    }
+      return sideEffectResult;
+    };
 
-    // we have this code outside the above try/catch block, to ensure that any error arising
-    // from here is not incorrectly attributed to the side-effect
-    const sideEffectMsg =
-      sideEffectResult !== undefined
-        ? SideEffectEntryMessage.encode(
-            SideEffectEntryMessage.create({
-              value: Buffer.from(jsonSerialize(sideEffectResult)),
-            })
-          ).finish()
-        : SideEffectEntryMessage.encode(
-            SideEffectEntryMessage.create()
-          ).finish();
-
-    // if an error arises from committing the side effect result, then this error will
-    // be thrown here (reject the returned promise) and the function will see that error,
-    // even if the side-effect function completed correctly
-    // that is acceptable, because in such a situation (failure to append to journal),
-    // the state machine closes anyways and reports an execution failure, meaning no further
-    // operations will succeed and the the execution will be retried.
-    // If the side-effect result did in fact not make it to the journal, then the side-effect
-    // re-executes, and if it made it to the journal after all (error happend inly during
-    // ack-back), then retries will use the journaled result.
-    // So all good in any case, due to the beauty of "the runtime log is the ground thruth" approach.
-    await this.stateMachine.handleUserCodeMessage<T>(
-      SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-      sideEffectMsg,
-      false,
-      undefined,
-      true
-    );
-
-    return sideEffectResult;
+    const sleep = (millis: number) => this.sleep(millis);
+    return executeWithRetries(retryPolicy, executeAndLogSideEffect, sleep);
   }
 
   public sleep(millis: number): Promise<void> {
@@ -368,5 +390,76 @@ export class RestateContextImpl implements RestateContext {
           e.g. ctx.oneWayCall(() => client.greet(my_request))`);
       throw e;
     }
+  }
+}
+
+async function executeWithRetries<T>(
+  retrySettings: RetrySettings,
+  executeAndLogSideEffect: () => Promise<T>,
+  sleep: (millis: number) => Promise<void>
+): Promise<T> {
+  const {
+    initialDelayMs = DEFAULT_INITIAL_DELAY_MS,
+    maxDelayMs = Number.MAX_SAFE_INTEGER,
+    maxRetries = Number.MAX_SAFE_INTEGER,
+    policy = EXPONENTIAL_BACKOFF,
+    name = "side-effect",
+  } = retrySettings;
+
+  let currentDelayMs = initialDelayMs;
+  let retriesLeft = maxRetries;
+
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    try {
+      return await executeAndLogSideEffect();
+    } catch (e) {
+      if (e instanceof TerminalError) {
+        throw e;
+      }
+
+      // journal mismatch errors are special:
+      //  - they are not terminal errors, because we want to allow pushing new code so
+      //    that retries succeed later
+      //  - they are not retried within the service, because they will never succeed within this service,
+      //    but can only succeed within a new invocation going to service with fixed code
+      //  we hence break the retries here similar to terminal errors
+      if (e instanceof RestateError && e.code == ErrorCodes.JOURNAL_MISMATCH) {
+        throw e;
+      }
+
+      const error = ensureError(e);
+
+      rlog.debug(
+        "Error while executing side effect '%s': %s - %s",
+        name,
+        error.name,
+        error.message
+      );
+      if (error.stack) {
+        rlog.debug(error.stack);
+      }
+
+      if (retriesLeft > 0) {
+        rlog.debug("Retrying in %d ms", currentDelayMs);
+      } else {
+        rlog.debug("No retries left.");
+        throw new TerminalError(
+          `Retries exhausted for ${name}. Last error: ${error.name}: ${error.message}`,
+          {
+            errorCode: ErrorCodes.INTERNAL,
+            cause: error,
+          }
+        );
+      }
+    }
+
+    await sleep(currentDelayMs);
+
+    retriesLeft -= 1;
+    currentDelayMs = Math.min(
+      policy.computeNextDelay(currentDelayMs),
+      maxDelayMs
+    );
   }
 }
