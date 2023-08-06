@@ -1,6 +1,7 @@
 "use strict";
 
 import { RestateContext } from "../src/restate_context";
+import { RetrySettings } from "../src/utils/public_utils";
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
@@ -53,7 +54,7 @@ export class TestingContext implements RestateContext {
   delayedCall(call: () => Promise<any>, delayMillis?: number): Promise<void> {
     throw new Error("Method not implemented.");
   }
-  sideEffect<T>(fn: () => Promise<T>): Promise<T> {
+  sideEffect<T>(fn: () => Promise<T>, retryPolicy: RetrySettings): Promise<T> {
     // we simply call the side effect here
     return fn();
   }

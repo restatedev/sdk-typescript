@@ -2,6 +2,7 @@
 
 // Use our prefixed logger instead of default console logging
 import "./utils/logger";
+import { RetrySettings } from "./utils/public_utils";
 
 export interface RestateContext {
   /**
@@ -104,17 +105,47 @@ export interface RestateContext {
   delayedCall(call: () => Promise<any>, delayMillis?: number): Promise<void>;
 
   /**
-   * Execute a side effect and store the result in the Restate runtime.
-   * @param fn user-defined function to execute.
-   * The result is saved in the Restate runtime and reused on replays.
-   * @returns a Promise that gets resolved with the result of the user-defined function,
-   * once it has been saved in the Restate runtime.
+   * Execute a side effect and store the result in Restate. The side effect will thus not
+   * be re-executed during a later replay, but take the durable result from Restate.
+   *
+   * Side effects let you capture potentially non-deterministic computation and interaction
+   * with external systems in a safe way.
+   *
+   * Failure semantics of side effects are:
+   *   - If a side effect executed and persisted before, the result (value or Error) will be
+   *     taken from the Restate journal.
+   *   - There is a small window where a side effect may be re-executed twice, if a failure
+   *     occured between execution and persisting the result.
+   *   - No second side-effect will be executed while a previous side-effect's result is not
+   *     yet durable. That way, side effects that build on top of each other can assume
+   *     deterministic results from previous effects, and at most one side-effect will be
+   *     re-executed on replay (the latest, if the failure happened in the small windows
+   *     described above).
+   *
+   * This function takes an optional retry policy, that determines what happens if the
+   * side-effect throws an error. The default retry policy retries infinitely, with exponential
+   * backoff and uses suspending sleep for the wait times between retries.
    *
    * @example
    * const ctx = restate.useContext(this);
-   * const result = await ctx.sideEffect<string>(async () => { return doSomething(); })
+   * const result = await ctx.sideEffect(async () => someExternalAction() )
+   *
+   * @example
+   * const paymentAction = async () => {
+   *   const result = await paymentClient.call(txId, methodIdentifier, amount);
+   *   if (result.error) {
+   *     throw result.error;
+   *   } else {
+   *     return result.payment_accepted;
+   *   }
+   * }
+   * const paymentAccepted: boolean =
+   *   await ctx.sideEffect(paymentAction, { maxRetries: 10});
+   *
+   * @param fn The funcion to run as a side-effect.
+   * @param retryPolicy The optional policy describing how retries happen.
    */
-  sideEffect<T>(fn: () => Promise<T>): Promise<T>;
+  sideEffect<T>(fn: () => Promise<T>, retryPolicy?: RetrySettings): Promise<T>;
 
   /**
    * Register an awakeable and pause the processing until the awakeable ID has been returned to the service
