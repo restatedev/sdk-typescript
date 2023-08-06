@@ -6,6 +6,7 @@ import { Failure } from "../generated/proto/protocol";
 import { printMessageAsJson } from "../utils/utils";
 import { Message } from "./types";
 import { JournalEntry } from "../journal";
+import { FailureWithTerminal } from "../generated/proto/javascript";
 
 export enum ErrorCodes {
   INTERNAL = 13,
@@ -91,6 +92,12 @@ export class RetryableError extends RestateError {
   }
 }
 
+function isFailureWithTerminal(
+  msg: Failure | FailureWithTerminal
+): msg is FailureWithTerminal {
+  return "failure" in msg;
+}
+
 export function errorToFailure(err: Error): Failure {
   return err instanceof RestateError
     ? err.toFailure()
@@ -98,4 +105,32 @@ export function errorToFailure(err: Error): Failure {
         code: ErrorCodes.INTERNAL,
         message: err.message,
       });
+}
+
+export function errorToFailureWithTerminal(err: Error): FailureWithTerminal {
+  const failure = errorToFailure(err);
+  return FailureWithTerminal.create({
+    failure,
+    terminal: err instanceof TerminalError,
+  });
+}
+
+export function failureToError(msg: Failure | FailureWithTerminal): Error {
+  let failure: Failure | undefined;
+  let terminal: boolean;
+
+  if (isFailureWithTerminal(msg)) {
+    terminal = msg.terminal ?? false;
+    failure = msg.failure;
+  } else {
+    terminal = false;
+    failure = msg;
+  }
+
+  const errorMessage = failure?.message ?? "(missing error message)";
+  const errorCode = failure?.code ?? ErrorCodes.INTERNAL;
+
+  return terminal
+    ? new TerminalError(errorMessage, { errorCode })
+    : new RestateError(errorMessage, { errorCode });
 }

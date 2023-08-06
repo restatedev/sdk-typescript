@@ -27,7 +27,7 @@ import {
   RetryableError,
   TerminalError,
   ensureError,
-  errorToFailure,
+  errorToFailureWithTerminal,
 } from "./types/errors";
 import { jsonSerialize, jsonDeserialize } from "./utils/utils";
 import { Empty } from "./generated/google/protobuf/empty";
@@ -226,7 +226,7 @@ export class RestateContextImpl implements RestateContext {
         // the function. that way, any catching by the user and reacting to it will be
         // deterministic on replay
         const error = ensureError(e);
-        const failure = errorToFailure(error);
+        const failure = errorToFailureWithTerminal(error);
         const sideEffectMsg = SideEffectEntryMessage.encode(
           SideEffectEntryMessage.create({ failure })
         ).finish();
@@ -375,18 +375,19 @@ export class RestateContextImpl implements RestateContext {
     }
 
     if (context.type === CallContexType.SideEffect) {
-      const e = RetryableError.apiViolation(
-        `You cannot do ${callType} calls from within a side effect.`
+      throw new TerminalError(
+        `You cannot do ${callType} calls from within a side effect.`,
+        { errorCode: ErrorCodes.INTERNAL }
       );
-      throw e;
     }
 
     if (context.type === CallContexType.OneWayCall) {
-      const e =
-        RetryableError.apiViolation(`Cannot do a ${callType} from within ctx.oneWayCall(...).
+      throw new TerminalError(
+        `Cannot do a ${callType} from within ctx.oneWayCall(...).
           Context method oneWayCall() can only be used to invoke other services in the background.
-          e.g. ctx.oneWayCall(() => client.greet(my_request))`);
-      throw e;
+          e.g. ctx.oneWayCall(() => client.greet(my_request))`,
+        { errorCode: ErrorCodes.INTERNAL }
+      );
     }
   }
 }

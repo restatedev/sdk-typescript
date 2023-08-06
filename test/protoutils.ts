@@ -35,7 +35,10 @@ import {
 } from "../src/types/protocol";
 import { Message } from "../src/types/types";
 import { TestRequest, TestResponse } from "../src/generated/proto/test";
-import { SideEffectEntryMessage } from "../src/generated/proto/javascript";
+import {
+  FailureWithTerminal,
+  SideEffectEntryMessage,
+} from "../src/generated/proto/javascript";
 import {
   Failure,
   StartMessage_StateEntry,
@@ -295,7 +298,10 @@ export function decodeSideEffectFromResult(msg: Uint8Array | ProtocolMessage) {
   }
 }
 
-export function sideEffectMessage<T>(value?: T, failure?: Failure): Message {
+export function sideEffectMessage<T>(
+  value?: T,
+  failure?: FailureWithTerminal
+): Message {
   if (value !== undefined) {
     return new Message(
       SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
@@ -385,6 +391,17 @@ export function failure(
   code: number = ErrorCodes.INTERNAL
 ): Failure {
   return Failure.create({ code: code, message: msg });
+}
+
+export function failureWithTerminal(
+  terminal: boolean,
+  msg: string,
+  code: number = ErrorCodes.INTERNAL
+): FailureWithTerminal {
+  return FailureWithTerminal.create({
+    terminal,
+    failure: Failure.create({ code: code, message: msg }),
+  });
 }
 
 export function greetRequest(myName: string): Uint8Array {

@@ -1,5 +1,6 @@
 "use strict";
 
+import { SideEffectEntryMessage } from "../generated/proto/javascript";
 import {
   AwakeableEntryMessage,
   BackgroundInvokeEntryMessage,
@@ -123,7 +124,8 @@ export type ProtocolMessage =
   | InvokeEntryMessage
   | BackgroundInvokeEntryMessage
   | AwakeableEntryMessage
-  | CompleteAwakeableEntryMessage;
+  | CompleteAwakeableEntryMessage
+  | SideEffectEntryMessage;
 
 // Export the custom message types
 // Side effects are custom messages because the runtime does not need to inspect them
