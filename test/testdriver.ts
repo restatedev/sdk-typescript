@@ -1,14 +1,10 @@
-"use strict";
-
 import {
   COMPLETION_MESSAGE_TYPE,
   START_MESSAGE_TYPE,
   StartMessage,
 } from "../src/types/protocol";
-import { RestateHttp2Connection } from "../src/connection/http_connection";
 import * as restate from "../src/public_api";
 import { Connection } from "../src/connection/connection";
-import stream from "stream";
 import { printMessageAsJson } from "../src/utils/utils";
 import { Message } from "../src/types/types";
 import { HostedGrpcServiceMethod } from "../src/types/grpc";
@@ -19,23 +15,17 @@ import { InvocationBuilder } from "../src/invocation";
 import { protoMetadata } from "../src/generated/proto/test";
 
 export class TestDriver<I, O> implements Connection {
-  private http2stream = this.mockHttp2DuplexStream();
-  private restate = RestateHttp2Connection.from(this.http2stream);
-  private result: Array<Message> = [];
-  private protocolMode = ProtocolMode.BIDI_STREAM;
+  private readonly result: Message[] = [];
 
   private restateServer: TestRestateServer;
   private method: HostedGrpcServiceMethod<I, O>;
   private stateMachine: StateMachine<I, O>;
-  private completionMessages: Array<Message>;
-
-  private getResultPromise: Promise<Array<Message>>;
-  private resolveOnClose!: (value: Array<Message>) => void;
+  private completionMessages: Message[];
 
   constructor(
     instance: object,
-    entries: Array<Message>,
-    protocolMode?: ProtocolMode
+    entries: Message[],
+    private readonly protocolMode: ProtocolMode = ProtocolMode.BIDI_STREAM
   ) {
     this.restateServer = new TestRestateServer();
     this.restateServer.bindService({
@@ -43,10 +33,6 @@ export class TestDriver<I, O> implements Connection {
       service: "TestGreeter",
       instance: instance,
     });
-
-    if (protocolMode) {
-      this.protocolMode = protocolMode;
-    }
 
     const methodName = "/test.TestGreeter/Greet";
 
@@ -58,10 +44,6 @@ export class TestDriver<I, O> implements Connection {
     } else {
       throw new Error("Method not found: " + methodName);
     }
-
-    this.getResultPromise = new Promise<Array<Message>>((resolve) => {
-      this.resolveOnClose = resolve;
-    });
 
     if (entries.length < 2) {
       throw new Error(
@@ -127,11 +109,14 @@ export class TestDriver<I, O> implements Connection {
     const invocation = invocationBuilder.build();
 
     this.stateMachine = new StateMachine(this, invocation, this.protocolMode);
-    this.stateMachine.invoke();
   }
 
-  run(): Promise<Array<Message>> {
-    // Pipe messages through the state machine
+  async run(): Promise<Message[]> {
+    const completed = this.stateMachine.invoke();
+
+    // we send the completions here. Because we don't await the messages that we send the completions for,
+    // we enqueue those completions in the event loop, so they get processed when everything else is done.
+    // This is highly fragile!!!
     this.completionMessages.forEach((el) => {
       setTimeout(() => this.stateMachine.handleMessage(el));
     });
@@ -139,7 +124,9 @@ export class TestDriver<I, O> implements Connection {
     // to make the service finish up the work it can do and suspend or send back a response.
     setTimeout(() => this.stateMachine.handleInputClosed());
 
-    return this.getResultPromise;
+    await completed;
+
+    return Promise.resolve(this.result);
   }
 
   send(msg: Message): Promise<void> {
@@ -157,33 +144,17 @@ export class TestDriver<I, O> implements Connection {
     return Promise.resolve();
   }
 
-  onClose(handler: () => void) {
-    this.http2stream.on("close", handler);
+  onClose() {
+    // nothing to do
   }
 
   async end(): Promise<void> {
-    await new Promise((resolve) => {
-      this.http2stream.end(resolve);
-    });
-    this.resolveOnClose(this.result);
+    // nothing to do
+    return Promise.resolve();
   }
 
-  mockHttp2DuplexStream() {
-    return new stream.Duplex({
-      write(chunk, _encoding, next) {
-        this.push(chunk);
-        next();
-      },
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      read(_encoding) {
-        // don't care.
-      },
-    });
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  onError(listener: (e: Error) => void): void {
-    return;
+  onError() {
+    // nothing to do
   }
 }
 
