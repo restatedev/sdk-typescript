@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import { describe, expect } from "@jest/globals";
 import * as restate from "../src/public_api";
 import { TestDriver } from "./testdriver";
@@ -10,16 +9,13 @@ import {
   startMessage,
   greetRequest,
   greetResponse,
-  checkError,
   invokeMessage,
   getAwakeableId,
   backgroundInvokeMessage,
   suspensionMessage,
-  failure,
   checkTerminalError,
   checkJournalMismatchError,
   failureWithTerminal,
-  sleepMessage,
 } from "./protoutils";
 import {
   TestGreeter,
@@ -27,14 +23,12 @@ import {
   TestRequest,
   TestResponse,
 } from "../src/generated/proto/test";
-import { Failure } from "../src/generated/proto/protocol";
 import { ErrorCodes, TerminalError } from "../src/types/errors";
 
 class SideEffectGreeter implements TestGreeter {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  constructor(readonly sideEffectOutput: any) {}
+  constructor(readonly sideEffectOutput: unknown) {}
 
-  async greet(request: TestRequest): Promise<TestResponse> {
+  async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     // state
@@ -172,7 +166,7 @@ describe("SideEffectGreeter", () => {
 });
 
 class SideEffectAndInvokeGreeter implements TestGreeter {
-  async greet(request: TestRequest): Promise<TestResponse> {
+  async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     const client = new TestGreeterClientImpl(ctx);
@@ -223,7 +217,7 @@ describe("SideEffectAndInvokeGreeter", () => {
 });
 
 class SideEffectAndOneWayCallGreeter implements TestGreeter {
-  async greet(request: TestRequest): Promise<TestResponse> {
+  async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     const client = new TestGreeterClientImpl(ctx);
@@ -370,7 +364,7 @@ describe("EnumSideEffectGreeter", () => {
 class FailingSideEffectGreeter implements TestGreeter {
   constructor(private readonly terminalError: boolean) {}
 
-  async greet(request: TestRequest): Promise<TestResponse> {
+  async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     // state
@@ -420,7 +414,7 @@ describe("Side effects error-handling", () => {
 class FailingGetSideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: number) {}
 
-  async greet(request: TestRequest): Promise<TestResponse> {
+  async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     // state
@@ -452,7 +446,7 @@ describe("FailingGetSideEffectGreeter", () => {
 class FailingSetSideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: number) {}
 
-  async greet(request: TestRequest): Promise<TestResponse> {
+  async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     // state
@@ -484,7 +478,7 @@ describe("FailingSetSideEffectGreeter", () => {
 class FailingClearSideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: number) {}
 
-  async greet(request: TestRequest): Promise<TestResponse> {
+  async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     // state
@@ -515,7 +509,7 @@ describe("FailingClearSideEffectGreeter", () => {
 class FailingNestedSideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: number) {}
 
-  async greet(request: TestRequest): Promise<TestResponse> {
+  async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     // state
@@ -571,7 +565,7 @@ describe("FailingNestedSideEffectGreeter", () => {
 class FailingNestedWithoutAwaitSideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: number) {}
 
-  async greet(request: TestRequest): Promise<TestResponse> {
+  async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     // state
@@ -632,7 +626,7 @@ describe("FailingNestedWithoutAwaitSideEffectGreeter", () => {
 class FailingOneWayCallInSideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: number) {}
 
-  async greet(request: TestRequest): Promise<TestResponse> {
+  async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     // state
@@ -664,7 +658,7 @@ describe("FailingOneWayCallInSideEffectGreeter", () => {
 class FailingCompleteAwakeableSideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: number) {}
 
-  async greet(request: TestRequest): Promise<TestResponse> {
+  async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     // state
@@ -726,7 +720,7 @@ describe("FailingSleepSideEffectGreeter", () => {
 class FailingAwakeableSideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: number) {}
 
-  async greet(request: TestRequest): Promise<TestResponse> {
+  async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     // state

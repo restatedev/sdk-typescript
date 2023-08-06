@@ -1,8 +1,4 @@
-import {
-  TestGreeter,
-  TestRequest,
-  TestResponse,
-} from "../src/generated/proto/test";
+import { TestGreeter, TestResponse } from "../src/generated/proto/test";
 import * as restate from "../src/public_api";
 import { describe, expect } from "@jest/globals";
 import { TestDriver } from "./testdriver";
@@ -15,10 +11,8 @@ import {
 } from "./protoutils";
 
 class Greeter implements TestGreeter {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async greet(request: TestRequest): Promise<TestResponse> {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const ctx = restate.useContext(this);
+  async greet(): Promise<TestResponse> {
+    restate.useContext(this);
 
     return TestResponse.create({ greeting: `Hello` });
   }

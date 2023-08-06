@@ -16,16 +16,11 @@ import {
   startMessage,
   suspensionMessage,
 } from "./protoutils";
-import {
-  TestGreeter,
-  TestRequest,
-  TestResponse,
-} from "../src/generated/proto/test";
+import { TestGreeter, TestResponse } from "../src/generated/proto/test";
 import { ProtocolMode } from "../src/generated/proto/discovery";
 
 class AwakeableGreeter implements TestGreeter {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async greet(request: TestRequest): Promise<TestResponse> {
+  async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     const awakeable = ctx.awakeable<string>();

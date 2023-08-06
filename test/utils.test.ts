@@ -1,6 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
-"use strict";
-
 import { describe, expect } from "@jest/globals";
 import {
   jsonDeserialize,

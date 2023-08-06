@@ -24,8 +24,7 @@ const input = inputMessage(greetRequest("Two"));
 const COMPLETE_STATE = false;
 
 class GetEmpty implements TestGreeter {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async greet(request: TestRequest): Promise<TestResponse> {
+  async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     const stateIsEmpty = (await ctx.get<string>("STATE")) === null;
@@ -73,8 +72,7 @@ describe("GetEmpty", () => {
 });
 
 class Get implements TestGreeter {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async greet(request: TestRequest): Promise<TestResponse> {
+  async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     const state = (await ctx.get<string>("STATE")) || "nothing";
@@ -169,8 +167,7 @@ describe("GetAppendAndGet", () => {
 });
 
 class GetClearAndGet implements TestGreeter {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async greet(request: TestRequest): Promise<TestResponse> {
+  async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     const oldState = (await ctx.get<string>("STATE")) || "not-nothing";
@@ -214,8 +211,7 @@ describe("GetClearAndGet", () => {
 });
 
 class MultipleGet implements TestGreeter {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async greet(request: TestRequest): Promise<TestResponse> {
+  async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     const state = (await ctx.get<string>("STATE")) || "nothing";
