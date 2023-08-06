@@ -18,6 +18,8 @@ import {
   failure,
   checkTerminalError,
   checkJournalMismatchError,
+  failureWithTerminal,
+  sleepMessage,
 } from "./protoutils";
 import {
   TestGreeter,
@@ -26,7 +28,7 @@ import {
   TestResponse,
 } from "../src/generated/proto/test";
 import { Failure } from "../src/generated/proto/protocol";
-import { TerminalError } from "../src/types/errors";
+import { ErrorCodes, TerminalError } from "../src/types/errors";
 
 class SideEffectGreeter implements TestGreeter {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -43,6 +45,7 @@ class SideEffectGreeter implements TestGreeter {
     return TestResponse.create({ greeting: `Hello ${response}` });
   }
 }
+
 describe("SideEffectGreeter", () => {
   it("sends message to runtime", async () => {
     const result = await new TestDriver(new SideEffectGreeter("Francesco"), [
@@ -143,10 +146,13 @@ describe("SideEffectGreeter", () => {
     const result = await new TestDriver(new SideEffectGreeter("Francesco"), [
       startMessage(),
       inputMessage(greetRequest("Till")),
-      sideEffectMessage(undefined, failure("Something went wrong.")),
+      sideEffectMessage(
+        undefined,
+        failureWithTerminal(true, "Something went wrong.")
+      ),
     ]).run();
 
-    checkError(result[0], "Something went wrong.");
+    checkTerminalError(result[0], "Something went wrong.");
   });
 
   it("fails on journal mismatch. Completed with invoke.", async () => {
@@ -161,7 +167,6 @@ describe("SideEffectGreeter", () => {
       ), // should have been side effect
     ]).run();
 
-    expect(result.length).toStrictEqual(1);
     checkJournalMismatchError(result[0]);
   });
 });
@@ -363,23 +368,25 @@ describe("EnumSideEffectGreeter", () => {
 });
 
 class FailingSideEffectGreeter implements TestGreeter {
-  constructor(readonly sideEffectOutput: number) {}
+  constructor(private readonly terminalError: boolean) {}
 
   async greet(request: TestRequest): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     // state
     const response = await ctx.sideEffect(async () => {
-      throw new Error("Failing user code");
+      throw this.terminalError
+        ? new TerminalError("Failing user code")
+        : new Error("Failing user code");
     });
 
     return TestResponse.create({ greeting: `Hello ${response}` });
   }
 }
 
-describe("FailingSideEffectGreeter", () => {
-  it("fails on user-code error", async () => {
-    const result = await new TestDriver(new FailingSideEffectGreeter(123), [
+describe("Side effects error-handling", () => {
+  it("handles terminal errors by producing error output", async () => {
+    const result = await new TestDriver(new FailingSideEffectGreeter(true), [
       startMessage(),
       inputMessage(greetRequest("Till")),
       completionMessage(1),
@@ -387,8 +394,26 @@ describe("FailingSideEffectGreeter", () => {
 
     // When the user code fails we do want to see a side effect message with a failure
     // For invalid user code, we do not want to see this.
-    expect(result.length).toStrictEqual(1);
-    checkError(result[0], "Failing user code");
+    expect(result.length).toStrictEqual(2);
+    checkTerminalError(result[1], "Failing user code");
+  });
+
+  it("handles non-terminal errors by retrying (with sleep and suspension)", async () => {
+    const result = await new TestDriver(new FailingSideEffectGreeter(false), [
+      startMessage(),
+      inputMessage(greetRequest("Till")),
+      completionMessage(1),
+    ]).run();
+
+    // When the user code fails we do want to see a side effect message with a failure
+    // For invalid user code, we do not want to see this.
+    expect(result.length).toBeGreaterThanOrEqual(1);
+    expect(result[0]).toStrictEqual(
+      sideEffectMessage(
+        undefined,
+        failureWithTerminal(false, "Failing user code")
+      )
+    );
   });
 });
 
@@ -416,9 +441,9 @@ describe("FailingGetSideEffectGreeter", () => {
       completionMessage(1),
     ]).run();
 
-    expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
+    expect(result.length).toStrictEqual(2);
+    checkTerminalError(
+      result[1],
       "You cannot do get state calls from within a side effect."
     );
   });
@@ -448,9 +473,9 @@ describe("FailingSetSideEffectGreeter", () => {
       completionMessage(1),
     ]).run();
 
-    expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
+    expect(result.length).toStrictEqual(2);
+    checkTerminalError(
+      result[1],
       "You cannot do set state calls from within a side effect."
     );
   });
@@ -479,9 +504,9 @@ describe("FailingClearSideEffectGreeter", () => {
       [startMessage(), inputMessage(greetRequest("Till")), completionMessage(1)]
     ).run();
 
-    expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
+    expect(result.length).toStrictEqual(2);
+    checkTerminalError(
+      result[1],
       "You cannot do clear state calls from within a side effect"
     );
   });
@@ -508,12 +533,12 @@ describe("FailingNestedSideEffectGreeter", () => {
   it("fails on invalid operation sideEffect in sideEffect", async () => {
     const result = await new TestDriver(
       new FailingNestedSideEffectGreeter(123),
-      [startMessage(), inputMessage(greetRequest("Till"))]
+      [startMessage(), inputMessage(greetRequest("Till")), completionMessage(1)]
     ).run();
 
-    expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
+    expect(result.length).toStrictEqual(2);
+    checkTerminalError(
+      result[1],
       "You cannot do sideEffect calls from within a side effect."
     );
   });
@@ -526,17 +551,17 @@ describe("FailingNestedSideEffectGreeter", () => {
         inputMessage(greetRequest("Till")),
         sideEffectMessage(
           undefined,
-          Failure.create({
-            code: 13,
-            message:
-              "Error: You cannot do sideEffect state calls from within a side effect.",
-          })
+          failureWithTerminal(
+            true,
+            "Error: You cannot do sideEffect state calls from within a side effect.",
+            ErrorCodes.INTERNAL
+          )
         ),
       ]
     ).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
+    checkTerminalError(
       result[0],
       "You cannot do sideEffect state calls from within a side effect"
     );
@@ -561,22 +586,22 @@ class FailingNestedWithoutAwaitSideEffectGreeter implements TestGreeter {
   }
 }
 
-//TODO This test causes one of the later tests to fail
-// it seems there is something not cleaned up correctly...
-// describe("FailingNestedWithoutAwaitSideEffectGreeter: invalid nested side effect in side effect with ack", () => {
-//   it("should call greet", async () => {
-//     const result = await new TestDriver(
-//       new FailingNestedWithoutAwaitSideEffectGreeter(123),
-//       [startMessage(), inputMessage(greetRequest("Till"))]
-//     ).run();
-//
-//     expect(result.length).toStrictEqual(1);
-//     checkError(
-//       result[0],
-//       "You cannot do sideEffect calls from within a side effect."
-//     );
-//   });
-// });
+// //TODO This test causes one of the later tests to fail
+// // it seems there is something not cleaned up correctly...
+// // describe("FailingNestedWithoutAwaitSideEffectGreeter: invalid nested side effect in side effect with ack", () => {
+// //   it("should call greet", async () => {
+// //     const result = await new TestDriver(
+// //       new FailingNestedWithoutAwaitSideEffectGreeter(123),
+// //       [startMessage(), inputMessage(greetRequest("Till"))]
+// //     ).run();
+// //
+// //     expect(result.length).toStrictEqual(1);
+// //     checkError(
+// //       result[0],
+// //       "You cannot do sideEffect calls from within a side effect."
+// //     );
+// //   });
+// // });
 
 describe("FailingNestedWithoutAwaitSideEffectGreeter", () => {
   it("fails on invalid operation unawaited side effect in sideEffect", async () => {
@@ -587,17 +612,17 @@ describe("FailingNestedWithoutAwaitSideEffectGreeter", () => {
         inputMessage(greetRequest("Till")),
         sideEffectMessage(
           undefined,
-          Failure.create({
-            code: 13,
-            message:
-              "Error: You cannot do sideEffect state calls from within a side effect.",
-          })
+          failureWithTerminal(
+            true,
+            "Error: You cannot do sideEffect state calls from within a side effect.",
+            ErrorCodes.INTERNAL
+          )
         ),
       ]
     ).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
+    checkTerminalError(
       result[0],
       "You cannot do sideEffect state calls from within a side effect"
     );
@@ -628,9 +653,9 @@ describe("FailingOneWayCallInSideEffectGreeter", () => {
       [startMessage(), inputMessage(greetRequest("Till")), completionMessage(1)]
     ).run();
 
-    expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
+    expect(result.length).toStrictEqual(2);
+    checkTerminalError(
+      result[1],
       "You cannot do oneWayCall calls from within a side effect"
     );
   });
@@ -659,9 +684,9 @@ describe("FailingCompleteAwakeableSideEffectGreeter", () => {
       [startMessage(), inputMessage(greetRequest("Till")), completionMessage(1)]
     ).run();
 
-    expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
+    expect(result.length).toStrictEqual(2);
+    checkTerminalError(
+      result[1],
       "You cannot do completeAwakeable calls from within a side effect."
     );
   });
@@ -690,9 +715,9 @@ describe("FailingSleepSideEffectGreeter", () => {
       [startMessage(), inputMessage(greetRequest("Till")), completionMessage(1)]
     ).run();
 
-    expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
+    expect(result.length).toStrictEqual(2);
+    checkTerminalError(
+      result[1],
       "You cannot do sleep calls from within a side effect."
     );
   });
@@ -720,9 +745,9 @@ describe("FailingAwakeableSideEffectGreeter", () => {
       [startMessage(), inputMessage(greetRequest("Till")), completionMessage(1)]
     ).run();
 
-    expect(result.length).toStrictEqual(1);
-    checkError(
-      result[0],
+    expect(result.length).toStrictEqual(2);
+    checkTerminalError(
+      result[1],
       "You cannot do awakeable calls from within a side effect."
     );
   });
@@ -835,10 +860,11 @@ describe("TerminalErrorSideEffectService", () => {
     expect(result[0]).toStrictEqual(
       sideEffectMessage(
         undefined,
-        Failure.create({
-          code: 13,
-          message: "Something bad happened.",
-        })
+        failureWithTerminal(
+          true,
+          "Something bad happened.",
+          ErrorCodes.INTERNAL
+        )
       )
     );
     checkTerminalError(result[1], "Something bad happened.");

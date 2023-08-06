@@ -5,6 +5,7 @@ import {
   backgroundInvokeMessage,
   checkError,
   checkJournalMismatchError,
+  checkTerminalError,
   completionMessage,
   failure,
   greetRequest,
@@ -557,7 +558,7 @@ describe("FailingOneWayCallGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
+    checkTerminalError(
       result[0],
       "Cannot do a set state from within ctx.oneWayCall(...)."
     );
@@ -583,7 +584,7 @@ describe("FailingAwakeableOneWayCallGreeter", () => {
     ).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
+    checkTerminalError(
       result[0],
       "Cannot do a awakeable from within ctx.oneWayCall(...)."
     );
@@ -609,7 +610,7 @@ describe("FailingSideEffectInOneWayCallGreeter", () => {
     ).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(
+    checkTerminalError(
       result[0],
       "Cannot do a side effect from within ctx.oneWayCall(...). Context method ctx.oneWayCall() can only be used to invoke other services unidirectionally. e.g. ctx.oneWayCall(() => client.greet(my_request))"
     );
