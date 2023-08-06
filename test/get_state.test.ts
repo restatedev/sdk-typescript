@@ -1,5 +1,3 @@
-"use strict";
-
 import { describe, expect } from "@jest/globals";
 import * as restate from "../src/public_api";
 import { TestDriver } from "./testdriver";
@@ -15,16 +13,11 @@ import {
   startMessage,
   suspensionMessage,
 } from "./protoutils";
-import {
-  TestGreeter,
-  TestRequest,
-  TestResponse,
-} from "../src/generated/proto/test";
+import { TestGreeter, TestResponse } from "../src/generated/proto/test";
 import { ProtocolMode } from "../src/generated/proto/discovery";
 
 class GetStringStateGreeter implements TestGreeter {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async greet(request: TestRequest): Promise<TestResponse> {
+  async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     // state
@@ -128,8 +121,7 @@ describe("GetStringStateGreeter", () => {
 });
 
 class GetNumberStateGreeter implements TestGreeter {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async greet(request: TestRequest): Promise<TestResponse> {
+  async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     // state
@@ -234,8 +226,7 @@ describe("GetNumberStateGreeter", () => {
 });
 
 class GetNumberListStateGreeter implements TestGreeter {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async greet(request: TestRequest): Promise<TestResponse> {
+  async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     // state

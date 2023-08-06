@@ -237,8 +237,7 @@ enum OrderStatus {
 }
 
 class GetAndSetEnumGreeter implements TestGreeter {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async greet(request: TestRequest): Promise<TestResponse> {
+  async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     // state

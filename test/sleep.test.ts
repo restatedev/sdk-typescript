@@ -118,8 +118,7 @@ describe("SleepGreeter", () => {
 });
 
 class ManySleepsGreeter implements TestGreeter {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async greet(request: TestRequest): Promise<TestResponse> {
+  async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     await Promise.all(
@@ -221,8 +220,7 @@ describe("ManySleepsGreeter: With sleep not complete", () => {
 });
 
 class ManySleepsAndSetGreeter implements TestGreeter {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async greet(request: TestRequest): Promise<TestResponse> {
+  async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     const mySleeps = Promise.all(

@@ -3,7 +3,6 @@ import * as restate from "../src/public_api";
 import {
   protoMetadata,
   TestGreeter,
-  TestRequest,
   TestResponse,
 } from "../src/generated/proto/test";
 import { APIGatewayProxyEvent } from "aws-lambda";
@@ -24,8 +23,7 @@ import {
 import { decodeLambdaBody } from "../src/io/decoder";
 
 class LambdaGreeter implements TestGreeter {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async greet(request: TestRequest): Promise<TestResponse> {
+  async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     // state

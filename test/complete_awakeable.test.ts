@@ -1,8 +1,4 @@
-import {
-  TestGreeter,
-  TestRequest,
-  TestResponse,
-} from "../src/generated/proto/test";
+import { TestGreeter, TestResponse } from "../src/generated/proto/test";
 import * as restate from "../src/public_api";
 import {
   checkJournalMismatchError,
@@ -21,8 +17,7 @@ import { TestDriver } from "./testdriver";
 class CompleteAwakeableGreeter implements TestGreeter {
   constructor(readonly payload: string) {}
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async greet(request: TestRequest): Promise<TestResponse> {
+  async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     const awakeableIdentifier = getAwakeableId(1);

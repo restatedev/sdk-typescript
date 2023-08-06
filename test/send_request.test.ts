@@ -28,8 +28,7 @@ import { BackgroundInvokeEntryMessage } from "../src/generated/proto/protocol";
 import { BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE } from "../src/types/protocol";
 
 class SyncCallGreeter implements TestGreeter {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async greet(request: TestRequest): Promise<TestResponse> {
+  async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     const client = new TestGreeterClientImpl(ctx);
@@ -130,8 +129,7 @@ describe("SyncCallGreeter", () => {
 });
 
 class ReverseAwaitOrder implements TestGreeter {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async greet(request: TestRequest): Promise<TestResponse> {
+  async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     const client = new TestGreeterClientImpl(ctx);
@@ -380,8 +378,7 @@ This gives the following error:
 });
 
 class FailingForwardGreetingService implements TestGreeter {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async greet(request: TestRequest): Promise<TestResponse> {
+  async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     const client = new TestGreeterClientImpl(ctx);
@@ -452,8 +449,7 @@ describe("FailingForwardGreetingService", () => {
 });
 
 class OneWayCallGreeter implements TestGreeter {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async greet(request: TestRequest): Promise<TestResponse> {
+  async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     const client = new TestGreeterClientImpl(ctx);
@@ -540,8 +536,7 @@ describe("OneWayCallGreeter", () => {
 });
 
 class FailingOneWayCallGreeter implements TestGreeter {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async greet(request: TestRequest): Promise<TestResponse> {
+  async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     await ctx.oneWayCall(async () => ctx.set("state", 13));
@@ -566,8 +561,7 @@ describe("FailingOneWayCallGreeter", () => {
 });
 
 class FailingAwakeableOneWayCallGreeter implements TestGreeter {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async greet(request: TestRequest): Promise<TestResponse> {
+  async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     await ctx.oneWayCall(async () => ctx.awakeable<string>());
@@ -592,8 +586,7 @@ describe("FailingAwakeableOneWayCallGreeter", () => {
 });
 
 class FailingSideEffectInOneWayCallGreeter implements TestGreeter {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async greet(request: TestRequest): Promise<TestResponse> {
+  async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     await ctx.oneWayCall(async () => ctx.sideEffect(async () => 13));
@@ -618,8 +611,7 @@ describe("FailingSideEffectInOneWayCallGreeter", () => {
 });
 
 class CatchTwoFailingInvokeGreeter implements TestGreeter {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async greet(request: TestRequest): Promise<TestResponse> {
+  async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     // Do a failing async call
@@ -661,16 +653,16 @@ describe("CatchTwoFailingInvokeGreeter", () => {
   });
 });
 
-const delayedCallTime = 1835661783000;
 class DelayedOneWayCallGreeter implements TestGreeter {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async greet(request: TestRequest): Promise<TestResponse> {
+  constructor(private readonly delayedCallTime: number) {}
+
+  async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     const client = new TestGreeterClientImpl(ctx);
     await ctx.delayedCall(
       () => client.greet(TestRequest.create({ name: "Francesco" })),
-      delayedCallTime - Date.now()
+      this.delayedCallTime - Date.now()
     );
 
     return TestResponse.create({ greeting: `Hello` });
@@ -679,10 +671,12 @@ class DelayedOneWayCallGreeter implements TestGreeter {
 
 describe("DelayedOneWayCallGreeter", () => {
   it("sends message to runtime", async () => {
-    const result = await new TestDriver(new DelayedOneWayCallGreeter(), [
-      startMessage(1),
-      inputMessage(greetRequest("Till")),
-    ]).run();
+    const delayedCallTime = 1835661783000;
+
+    const result = await new TestDriver(
+      new DelayedOneWayCallGreeter(delayedCallTime),
+      [startMessage(1), inputMessage(greetRequest("Till"))]
+    ).run();
 
     // Delayed call time is slightly larger or smaller based on test execution speed... So test the range
     expect(result[0].messageType).toStrictEqual(
@@ -698,26 +692,36 @@ describe("DelayedOneWayCallGreeter", () => {
   });
 
   it("handles replay", async () => {
-    const result = await new TestDriver(new DelayedOneWayCallGreeter(), [
-      startMessage(2),
-      inputMessage(greetRequest("Till")),
-      backgroundInvokeMessage(
-        "test.TestGreeter",
-        "Greet",
-        greetRequest("Francesco"),
-        delayedCallTime
-      ),
-    ]).run();
+    const delayedCallTime = 1835661783000;
+
+    const result = await new TestDriver(
+      new DelayedOneWayCallGreeter(delayedCallTime),
+      [
+        startMessage(2),
+        inputMessage(greetRequest("Till")),
+        backgroundInvokeMessage(
+          "test.TestGreeter",
+          "Greet",
+          greetRequest("Francesco"),
+          delayedCallTime
+        ),
+      ]
+    ).run();
 
     expect(result).toStrictEqual([outputMessage(greetResponse("Hello"))]);
   });
 
   it("fails on journal mismatch. Completed with InvokeMessage.", async () => {
-    const result = await new TestDriver(new DelayedOneWayCallGreeter(), [
-      startMessage(2),
-      inputMessage(greetRequest("Till")),
-      invokeMessage("test.TestGreeter", "Greet", greetRequest("Francesco")),
-    ]).run();
+    const delayedCallTime = 1835661783000;
+
+    const result = await new TestDriver(
+      new DelayedOneWayCallGreeter(delayedCallTime),
+      [
+        startMessage(2),
+        inputMessage(greetRequest("Till")),
+        invokeMessage("test.TestGreeter", "Greet", greetRequest("Francesco")),
+      ]
+    ).run();
 
     expect(result.length).toStrictEqual(1);
     checkJournalMismatchError(result[0]);
@@ -725,14 +729,15 @@ describe("DelayedOneWayCallGreeter", () => {
 });
 
 class DelayedAndNormalInOneWayCallGreeter implements TestGreeter {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async greet(request: TestRequest): Promise<TestResponse> {
+  constructor(private readonly delayedCallTime: number) {}
+
+  async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     const client = new TestGreeterClientImpl(ctx);
     await ctx.delayedCall(
       () => client.greet(TestRequest.create({ name: "Francesco" })),
-      delayedCallTime - Date.now()
+      this.delayedCallTime - Date.now()
     );
     await ctx.oneWayCall(() =>
       client.greet(TestRequest.create({ name: "Francesco" }))
@@ -744,8 +749,10 @@ class DelayedAndNormalInOneWayCallGreeter implements TestGreeter {
 
 describe("DelayedAndNormalInOneWayCallGreeter", () => {
   it("sends delayed and normal oneWayCall to runtime", async () => {
+    const delayedCallTime = 1835661783000;
+
     const result = await new TestDriver(
-      new DelayedAndNormalInOneWayCallGreeter(),
+      new DelayedAndNormalInOneWayCallGreeter(delayedCallTime),
       [startMessage(1), inputMessage(greetRequest("Till"))]
     ).run();
 
@@ -770,8 +777,7 @@ describe("DelayedAndNormalInOneWayCallGreeter", () => {
 });
 
 class UnawaitedRequestResponseCallGreeter implements TestGreeter {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async greet(request: TestRequest): Promise<TestResponse> {
+  async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     const client = new TestGreeterClientImpl(ctx);
