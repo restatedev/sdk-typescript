@@ -119,8 +119,9 @@ export class RestateServer extends BaseRestateServer {
     for await (const connection of incomingConnectionAtPort(actualPort)) {
       this.handleConnection(connection.url, connection.stream).catch((e) => {
         const error = ensureError(e);
-        rlog.error("Error while handling connection: " + error.message);
-        rlog.error(error.stack);
+        rlog.error(
+          "Error while handling connection: " + (error.stack ?? error.message)
+        );
         connection.stream.end();
         connection.stream.destroy();
       });

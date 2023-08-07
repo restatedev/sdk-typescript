@@ -100,21 +100,18 @@ export class RestateHttp2Connection implements Connection {
       rlog.error("Connection to Restate was lost");
       errorHandler(new Error("Connection to Restate was lost"));
     });
+
+    // this is both the raw http2 stream and the output SDK->Restate
     rawStream.on("error", (e: Error) => {
-      rlog.error("Error in http2 stream to Restate: " + e.message);
-      rlog.error(e.stack);
+      rlog.error("Error in http2 stream to Restate: " + (e.stack ?? e.message));
       errorHandler(e);
     });
 
-    // these events notify of errors in the pipeline, like encoding/decoding
+    // these events notify of errors in the decoding pipeline
     this.sdkInput.on("error", (e: Error) => {
-      rlog.error("Error in input stream (Restate to Service): " + e.message);
-      rlog.error(e.stack);
-      errorHandler(e);
-    });
-    this.sdkOutput.on("error", (e: Error) => {
-      rlog.error("Error in output stream (Service to  Restate): " + e.message);
-      rlog.error(e.stack);
+      rlog.error(
+        "Error in input stream (Restate to Service): " + (e.stack ?? e.message)
+      );
       errorHandler(e);
     });
 
