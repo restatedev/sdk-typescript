@@ -6,3 +6,4 @@ export {
   createLambdaApiGatewayHandler,
 } from "./server/restate_lambda_handler";
 export * as RestateUtils from "./utils/public_utils";
+export { ErrorCodes, RestateError, TerminalError } from "./types/errors";
