@@ -18,6 +18,7 @@ import {
 } from "./types/protocol";
 import { RestateStreamConsumer } from "./connection/connection";
 import { LocalStateStore } from "./local_state_store";
+import { ensureError } from "./types/errors";
 
 enum State {
   ExpectingStart = 0,
@@ -42,47 +43,54 @@ export class InvocationBuilder<I, O> implements RestateStreamConsumer {
   constructor(private readonly method: HostedGrpcServiceMethod<I, O>) {}
 
   public handleMessage(m: Message): boolean {
-    switch (this.state) {
-      case State.ExpectingStart:
-        checkState(State.ExpectingStart, START_MESSAGE_TYPE, m);
-        this.handleStartMessage(
-          m.message as StartMessage,
-          m.partialStateFlag || false
-        );
-        this.state = State.ExpectingInput;
-        return false;
+    try {
+      switch (this.state) {
+        case State.ExpectingStart:
+          checkState(State.ExpectingStart, START_MESSAGE_TYPE, m);
+          this.handleStartMessage(
+            m.message as StartMessage,
+            m.partialStateFlag || false
+          );
+          this.state = State.ExpectingInput;
+          return false;
 
-      case State.ExpectingInput:
-        checkState(
-          State.ExpectingInput,
-          POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
-          m
-        );
-        this.addReplayEntry(m);
-        break;
+        case State.ExpectingInput:
+          checkState(
+            State.ExpectingInput,
+            POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
+            m
+          );
+          this.addReplayEntry(m);
+          break;
 
-      case State.ExpectingFurtherReplay:
-        this.addReplayEntry(m);
-        break;
+        case State.ExpectingFurtherReplay:
+          this.addReplayEntry(m);
+          break;
 
-      case State.Complete:
-        throw new Error(
-          `Journal builder is getting a message after the journal was complete. entries-to-replay: ${
-            this.nbEntriesToReplay
-          }, message: ${printMessageAsJson(m)}`
-        );
+        case State.Complete:
+          throw new Error(
+            `Journal builder is getting a message after the journal was complete. entries-to-replay: ${
+              this.nbEntriesToReplay
+            }, message: ${printMessageAsJson(m)}`
+          );
+      }
+
+      this.state =
+        this.replayEntries.size === this.nbEntriesToReplay
+          ? State.Complete
+          : State.ExpectingFurtherReplay;
+
+      if (this.state === State.Complete) {
+        this.complete.resolve();
+        return true;
+      }
+
+      return false;
+    } catch (e) {
+      const error = ensureError(e);
+      this.complete.reject(error);
+      return true; // we want no further messages
     }
-
-    this.state =
-      this.replayEntries.size === this.nbEntriesToReplay
-        ? State.Complete
-        : State.ExpectingFurtherReplay;
-
-    if (this.state === State.Complete) {
-      this.complete.resolve();
-      return true;
-    }
-    return false;
   }
 
   public handleStreamError(e: Error): void {
