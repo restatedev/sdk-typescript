@@ -118,11 +118,11 @@ Creating the GitHub release will trigger `npm publish` via GitHub actions.
 After having created a new SDK release, you need to:
 
 1. [Update and release the tour of Restate](https://github.com/restatedev/tour-of-restate-typescript#upgrading-typescript-sdk)
-2. [Update the Typescript SDK and Tour version and release the documentation](https://github.com/restatedev/documentation#upgrading-typescript-sdk-version)
-3. [Update and release the Node template generator](https://github.com/restatedev/node-template-generator#upgrading-typescript-sdk)
-4. Update the examples:
+2. [Update and release Lambda greeter example](https://github.com/restatedev/example-lambda-ts-greeter#upgrading-the-sdk)
+3. [Update the Typescript SDK, Tour and Lambda greeter version in the documentation and release it](https://github.com/restatedev/documentation#upgrading-typescript-sdk-version)
+4. [Update and release the Node template generator](https://github.com/restatedev/node-template-generator#upgrading-typescript-sdk)
+5. Update the other examples:
    * [Ticket reservation example](https://github.com/restatedev/example-ticket-reservation-system#upgrading-typescript-sdk)
    * [Food ordering example](https://github.com/restatedev/example-food-ordering#upgrading-typescript-sdk)
    * [Shopping cart example](https://github.com/restatedev/example-shopping-cart-typescript#upgrading-typescript-sdk)
-   * [Lambda greeter example](https://github.com/restatedev/example-lambda-ts-greeter#upgrading-the-sdk)
-5. Update the e2e tests to point to the new SDK version.
+6. Update the e2e tests to point to the new SDK version.
