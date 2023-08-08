@@ -125,4 +125,4 @@ After having created a new SDK release, you need to:
    * [Ticket reservation example](https://github.com/restatedev/example-ticket-reservation-system#upgrading-typescript-sdk)
    * [Food ordering example](https://github.com/restatedev/example-food-ordering#upgrading-typescript-sdk)
    * [Shopping cart example](https://github.com/restatedev/example-shopping-cart-typescript#upgrading-typescript-sdk)
-6. Update the e2e tests to point to the new SDK version.
+6. [Update the e2e tests to point to the new SDK version](https://github.com/restatedev/e2e/blob/main/services/node-services/package.json).
