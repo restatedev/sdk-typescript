@@ -17,34 +17,52 @@ import assert from "assert";
 import { ensureError } from "../types/errors";
 
 type Output = { push(msg: Message): void };
+type DecoderState = { state: number; header: Header | undefined; buf: Buffer };
 
 const WAITING_FOR_HEADER = 0;
 const WAITING_FOR_BODY = 1;
 
-function decodeMessages(buf: Buffer, out: Output): Buffer {
-  let state = WAITING_FOR_HEADER;
-  let header: Header | undefined;
+function initalDecoderState(buf: Buffer): DecoderState {
+  return {
+    state: WAITING_FOR_HEADER,
+    header: undefined,
+    buf,
+  };
+}
 
-  while (buf.length > 0 || state === WAITING_FOR_BODY) {
-    switch (state) {
+function appendBufferToDecoder(state: DecoderState, chunk: Buffer) {
+  state.buf = Buffer.concat([state.buf, chunk]);
+}
+
+function decodeMessages(decoderState: DecoderState, out: Output): DecoderState {
+  let buf = decoderState.buf;
+
+  while (buf.length > 0 || decoderState.state === WAITING_FOR_BODY) {
+    switch (decoderState.state) {
       case WAITING_FOR_HEADER: {
+        assert(decoderState.header === undefined);
         if (buf.length < 8) {
-          return buf;
+          decoderState.buf = buf;
+          return decoderState;
         }
         const h = buf.readBigUInt64BE();
         buf = buf.subarray(8);
-        header = Header.fromU64be(h);
-        state = WAITING_FOR_BODY;
+        decoderState.header = Header.fromU64be(h);
+        decoderState.state = WAITING_FOR_BODY;
         break;
       }
       case WAITING_FOR_BODY: {
+        const header = decoderState.header;
         assert(header !== undefined);
+
         if (buf.length < header.frameLength) {
-          return buf;
+          decoderState.buf = buf;
+          return decoderState;
         }
         const frame = buf.subarray(0, header.frameLength);
         buf = buf.subarray(header.frameLength);
-        state = WAITING_FOR_HEADER;
+        decoderState.state = WAITING_FOR_HEADER;
+        decoderState.header = undefined;
 
         const pbType = PROTOBUF_MESSAGE_BY_TYPE.get(header.messageType);
         if (pbType === undefined) {
@@ -81,11 +99,12 @@ function decodeMessages(buf: Buffer, out: Output): Buffer {
     }
   }
 
-  return buf;
+  decoderState.buf = buf;
+  return decoderState;
 }
 
 export function streamDecoder(): stream.Transform {
-  let buf = Buffer.alloc(0);
+  let decoderState = initalDecoderState(Buffer.alloc(0));
 
   return new stream.Transform({
     writableObjectMode: true,
@@ -93,8 +112,8 @@ export function streamDecoder(): stream.Transform {
 
     transform(chunk, _encoding, cb) {
       try {
-        buf = Buffer.concat([buf, chunk]);
-        buf = decodeMessages(buf, this);
+        appendBufferToDecoder(decoderState, chunk);
+        decoderState = decodeMessages(decoderState, this);
         cb();
       } catch (e) {
         cb(ensureError(e), null);
@@ -115,12 +134,13 @@ export function decodeLambdaBody(msgBase64: string): Message[] {
     );
   }
 
-  const buf = Buffer.from(msgBase64, "base64");
   const decodedEntries: Message[] = [];
-
-  let trailingData: Buffer;
+  let finalState;
   try {
-    trailingData = decodeMessages(buf, decodedEntries);
+    finalState = decodeMessages(
+      initalDecoderState(Buffer.from(msgBase64, "base64")),
+      decodedEntries
+    );
   } catch (e) {
     const err = ensureError(e);
     throw new Error(
@@ -130,10 +150,10 @@ export function decodeLambdaBody(msgBase64: string): Message[] {
     );
   }
 
-  if (trailingData.length > 0) {
+  if (finalState.buf.length > 0) {
     throw new Error(
       "Cannot parse the lambda request body: Trailing data (incomplete message) in request body: " +
-        trailingData.toString("hex")
+        finalState.buf.toString("hex")
     );
   }
 
