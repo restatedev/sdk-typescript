@@ -1,37 +1,56 @@
-import * as restate from "../src/public_api";
-import {
-  TestRequest,
-  TestResponse,
-  TestGreeter,
-  protoMetadata,
-} from "../src/generated/proto/test";
+/* eslint-disable no-console */
 
-/**
- * Example of a service implemented with the Restate Typescript SDK
- * This is a long-running service with two gRPC methods: Greet and MultiWord
+/*
+ * A simple example program using the Restate dynamic RPC-based API.
+ *
+ * This example primarily exists to make it simple to test the code against
+ * a running Restate instance.
  */
-export class GreeterService implements TestGreeter {
-  async greet(request: TestRequest): Promise<TestResponse> {
-    const ctx = restate.useContext(this);
 
-    // state
-    let seen = (await ctx.get<number>("seen")) || 0;
-    seen += 1;
+import * as restate from "../src/public_api";
 
-    await ctx.set("seen", seen);
+// handler implementations
 
-    // return the final response
-    return TestResponse.create({
-      greeting: `Hello ${request.name} no.${seen}!`,
-    });
-  }
-}
+const doGreet = async (
+  ctx: restate.RpcContext,
+  name: string
+): Promise<string> => {
+  const countSoFar = await ctx.rpc<apiType>({ path: "counter" }).count(name);
+
+  const message = `Hello ${name}! at the ${countSoFar + 1}th time`;
+
+  ctx.send(greeterApi).logger(message);
+  ctx.sendDelayed(greeterApi, 100).logger("delayed " + message);
+
+  return message;
+};
+
+const countKeeper = async (ctx: restate.RpcContext): Promise<number> => {
+  const seen = (await ctx.get<number>("seen")) || 0;
+  ctx.set("seen", seen + 1);
+  return seen;
+};
+
+// routers (with some in-line handlers)
+
+const greeter = restate.router({
+  greet: doGreet,
+  logger: async (_ctx: restate.RpcContext, msg: string) => {
+    console.log(" HEEEELLLLOOOOO! " + msg);
+  },
+});
+
+const counter = restate.keyedRouter({
+  count: countKeeper,
+});
+
+type apiType = typeof counter;
+const greeterApi: restate.ServiceApi<typeof greeter> = { path: "greeter" };
+
+// restate server
 
 restate
   .createServer()
-  .bindService({
-    descriptor: protoMetadata,
-    service: "TestGreeter",
-    instance: new GreeterService(),
-  })
+  .bindRouter("greeter", greeter)
+  .bindKeyedRouter("counter", counter)
   .listen(8080);

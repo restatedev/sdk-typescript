@@ -1,4 +1,4 @@
-import { RestateContext } from "./restate_context";
+import { RestateGrpcContext, RpcContext, ServiceApi } from "./restate_context";
 import { StateMachine } from "./state_machine";
 import {
   AwakeableEntryMessage,
@@ -38,6 +38,9 @@ import {
   RetrySettings,
 } from "./utils/public_utils";
 import { rlog } from "./utils/logger";
+import { Client, SendClient } from "./types/router";
+import { RpcRequest, RpcResponse } from "./generated/proto/dynrpc";
+import { requestFromArgs } from "./utils/assumpsions";
 
 enum CallContexType {
   None,
@@ -50,7 +53,7 @@ interface CallContext {
   delay?: number;
 }
 
-export class RestateContextImpl implements RestateContext {
+export class RestateGrpcContextImpl implements RestateGrpcContext {
   // here, we capture the context information for actions on the Restate context that
   // are executed within other actions, such as
   // ctx.oneWayCall( () => client.foo(bar) );
@@ -167,7 +170,7 @@ export class RestateContextImpl implements RestateContext {
   ): Promise<void> {
     this.checkState("oneWayCall");
 
-    await RestateContextImpl.callContext.run(
+    await RestateGrpcContextImpl.callContext.run(
       { type: CallContexType.OneWayCall },
       call
     );
@@ -181,7 +184,7 @@ export class RestateContextImpl implements RestateContext {
     this.checkState("delayedCall");
 
     // Delayed call is a one way call with a delay
-    await RestateContextImpl.callContext.run(
+    await RestateGrpcContextImpl.callContext.run(
       { type: CallContexType.OneWayCall, delay: delayMillis },
       call
     );
@@ -217,7 +220,7 @@ export class RestateContextImpl implements RestateContext {
 
       let sideEffectResult: T;
       try {
-        sideEffectResult = await RestateContextImpl.callContext.run(
+        sideEffectResult = await RestateGrpcContextImpl.callContext.run(
           { type: CallContexType.SideEffect },
           fn
         );
@@ -354,22 +357,22 @@ export class RestateContextImpl implements RestateContext {
   }
 
   private isInSideEffect(): boolean {
-    const context = RestateContextImpl.callContext.getStore();
+    const context = RestateGrpcContextImpl.callContext.getStore();
     return context?.type === CallContexType.SideEffect;
   }
 
   private isInOneWayCall(): boolean {
-    const context = RestateContextImpl.callContext.getStore();
+    const context = RestateGrpcContextImpl.callContext.getStore();
     return context?.type === CallContexType.OneWayCall;
   }
 
   private getOneWayCallDelay(): number {
-    const context = RestateContextImpl.callContext.getStore();
+    const context = RestateGrpcContextImpl.callContext.getStore();
     return context?.delay || 0;
   }
 
   private checkState(callType: string): void {
-    const context = RestateContextImpl.callContext.getStore();
+    const context = RestateGrpcContextImpl.callContext.getStore();
     if (!context) {
       return;
     }
@@ -460,5 +463,90 @@ async function executeWithRetries<T>(
       policy.computeNextDelay(currentDelayMs),
       maxDelayMs
     );
+  }
+}
+
+export class RpcContextImpl implements RpcContext {
+  constructor(
+    private readonly ctx: RestateGrpcContext,
+    public readonly instanceKey: Buffer = ctx.instanceKey,
+    public readonly serviceName: string = ctx.serviceName,
+    public readonly invocationId: Buffer = ctx.invocationId
+  ) {}
+
+  public rpc<M>({ path }: ServiceApi): Client<M> {
+    const clientProxy = new Proxy(
+      {},
+      {
+        get: (_target, prop) => {
+          const route = prop as string;
+          return async (...args: unknown[]) => {
+            const request = requestFromArgs(args);
+            const requestBytes = RpcRequest.encode(request).finish();
+            const responseBytes = await this.ctx.request(
+              path,
+              route,
+              requestBytes
+            );
+            const response = RpcResponse.decode(responseBytes);
+            return response.response;
+          };
+        },
+      }
+    );
+
+    return clientProxy as Client<M>;
+  }
+
+  public send<M>(options: ServiceApi): SendClient<M> {
+    return this.sendDelayed(options, 0);
+  }
+
+  public sendDelayed<M>(
+    { path }: ServiceApi,
+    delayMillis: number
+  ): SendClient<M> {
+    const clientProxy = new Proxy(
+      {},
+      {
+        get: (_target, prop) => {
+          const route = prop as string;
+          return (...args: unknown[]) => {
+            const request = requestFromArgs(args);
+            const requestBytes = RpcRequest.encode(request).finish();
+            const sender = () => this.ctx.request(path, route, requestBytes);
+            if (delayMillis === undefined || delayMillis === 0) {
+              this.ctx.oneWayCall(sender);
+            } else {
+              this.ctx.delayedCall(sender, delayMillis);
+            }
+          };
+        },
+      }
+    );
+
+    return clientProxy as SendClient<M>;
+  }
+
+  public get<T>(name: string): Promise<T | null> {
+    return this.ctx.get(name);
+  }
+  public set<T>(name: string, value: T): void {
+    this.ctx.set(name, value);
+  }
+  public clear(name: string): void {
+    this.ctx.clear(name);
+  }
+  public sideEffect<T>(fn: () => Promise<T>): Promise<T> {
+    return this.ctx.sideEffect(fn);
+  }
+  public awakeable<T>(): { id: string; promise: Promise<T> } {
+    return this.ctx.awakeable();
+  }
+  public completeAwakeable<T>(id: string, payload: T): void {
+    this.ctx.completeAwakeable(id, payload);
+  }
+  public sleep(millis: number): Promise<void> {
+    return this.ctx.sleep(millis);
   }
 }

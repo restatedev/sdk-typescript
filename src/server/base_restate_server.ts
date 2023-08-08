@@ -1,5 +1,7 @@
 "use strict";
 
+/* eslint-disable @typescript-eslint/ban-types */
+
 import { rlog } from "../utils/logger";
 import {
   GrpcService,
@@ -16,9 +18,24 @@ import {
   UninterpretedOption,
 } from "../generated/google/protobuf/descriptor";
 import {
+  FileDescriptorProto as FileDescriptorProto1,
+  ServiceDescriptorProto as ServiceDescriptorProto1,
+  MethodDescriptorProto as MethodDescriptorProto1,
+} from "ts-proto-descriptors";
+import {
   fieldTypeToJSON,
   serviceTypeToJSON,
 } from "../generated/dev/restate/ext";
+import {
+  RpcRequest,
+  RpcResponse,
+  ProtoMetadata as RpcServiceProtoMetadata,
+  protoMetadata as rpcServiceProtoMetadata,
+} from "../generated/proto/dynrpc";
+import { RestateContext, useContext } from "../restate_context";
+import { RpcContextImpl } from "../restate_context_impl";
+import { verifyAssumptions } from "../utils/assumpsions";
+import { TerminalError } from "../public_api";
 
 export interface ServiceOpts {
   descriptor: ProtoMetadata;
@@ -102,9 +119,13 @@ export abstract class BaseRestateServer {
   protected bindService({ descriptor, service, instance }: ServiceOpts) {
     const spec = parseService(descriptor, service, instance);
     this.addDescriptor(descriptor);
-    this.discovery.services.push(`${spec.packge}.${spec.name}`);
+
+    const qname =
+      spec.packge === "" ? spec.name : `${spec.packge}.${spec.name}`;
+
+    this.discovery.services.push(qname);
     for (const method of spec.methods) {
-      const url = `/invoke/${spec.packge}.${spec.name}/${method.name}`;
+      const url = `/invoke/${qname}/${method.name}`;
       this.methods[url] = new HostedGrpcServiceMethod(
         instance,
         spec.packge,
@@ -118,23 +139,76 @@ export abstract class BaseRestateServer {
     }
   }
 
+  protected bindRpcService(name: string, router: RpcRouter, keyed: boolean) {
+    const lastDot = name.indexOf(".");
+    const serviceName = lastDot === -1 ? name : name.substring(lastDot + 1);
+    const servicePackage = name.substring(
+      0,
+      name.length - serviceName.length - 1
+    );
+
+    const desc = dynrpcDescriptor;
+    const serviceGrpcSpec = keyed
+      ? pushKeyedService(desc, name)
+      : pushUnKeyedService(desc, name);
+
+    const decoder = RpcRequest.decode;
+    const encoder = (message: RpcResponse) =>
+      RpcResponse.encode(message).finish();
+
+    for (const [route, handler] of Object.entries(router)) {
+      serviceGrpcSpec.method.push(createRpcMethodDescriptor(route));
+
+      const localFn = (instance: unknown, input: RpcRequest) => {
+        const ctx = useContext(instance);
+        if (keyed) {
+          return dispatchKeyedRpcHandler(ctx, input, handler);
+        } else {
+          return dispatchUnkeyedRpcHandler(ctx, input, handler);
+        }
+      };
+
+      const method = new GrpcServiceMethod<RpcRequest, RpcResponse>(
+        route,
+        route,
+        localFn,
+        decoder,
+        encoder
+      );
+
+      const url = `/invoke/${name}/${route}`;
+      this.methods[url] = new HostedGrpcServiceMethod(
+        {}, // we don't actually execute on any class instance
+        servicePackage,
+        serviceName,
+        method
+      ) as HostedGrpcServiceMethod<unknown, unknown>;
+
+      rlog.info(
+        `Registering: ${url}  -> ${JSON.stringify(method, null, "\t")}`
+      );
+    }
+
+    // since we modified this descriptor, we need to remove it in case it was added before,
+    // so that the modified version is processed and added again
+    const filteredFiles = this.discovery.files?.file.filter(
+      (haveDesc) => desc.fileDescriptor.name !== haveDesc.name
+    );
+    if (this.discovery.files !== undefined && filteredFiles !== undefined) {
+      this.discovery.files.file = filteredFiles;
+    }
+
+    this.addDescriptor(desc);
+    this.discovery.services.push(name);
+  }
+
   protected methodByUrl<I, O>(
     url: string | undefined | null
   ): HostedGrpcServiceMethod<I, O> | undefined {
     if (url == undefined || url === null) {
       return undefined;
     }
-    const method = this.methods[url];
-    if (method === null || method === undefined) {
-      return undefined;
-    }
-    // create new instance each time as reject and resolve must not be shared across invocations
-    return new HostedGrpcServiceMethod<I, O>(
-      method.instance,
-      method.packge,
-      method.service,
-      method.method as GrpcServiceMethod<I, O>
-    );
+    return this.methods[url] as HostedGrpcServiceMethod<I, O>;
   }
 }
 
@@ -250,3 +324,120 @@ export function parseService(
   }
   throw new Error(`Unable to find a service ${serviceName}.`);
 }
+
+export type RpcRouter = {
+  [key: string]: Function;
+};
+
+async function dispatchKeyedRpcHandler(
+  origCtx: RestateContext,
+  req: RpcRequest,
+  handler: Function
+): Promise<RpcResponse> {
+  const { key, request } = verifyAssumptions(true, req);
+  const ctx = new RpcContextImpl(origCtx);
+  if (typeof key !== "string" || key.length === 0) {
+    // we throw a terminal error here, because this cannot be patched by updating code:
+    // if the request is wrong (missing a key), the request can never make it
+    throw new TerminalError(
+      "Keyed handlers must recieve a non null or empty string key"
+    );
+  }
+  const jsResult = (await handler(ctx, key, request)) as any;
+  return RpcResponse.create({ response: jsResult });
+}
+
+async function dispatchUnkeyedRpcHandler(
+  origCtx: RestateContext,
+  req: RpcRequest,
+  handler: Function
+): Promise<RpcResponse> {
+  const { request } = verifyAssumptions(false, req);
+  const ctx = new RpcContextImpl(origCtx);
+  const result = await handler(ctx, request);
+  return RpcResponse.create({ response: result });
+}
+
+function copyProtoMetadata(
+  original: RpcServiceProtoMetadata
+): RpcServiceProtoMetadata {
+  // duplicate the file descriptor. shallow, because we only need to
+  // change one top-level field: service[]
+  const fileDescriptorCopy = {
+    ...original.fileDescriptor,
+  } as FileDescriptorProto1;
+  fileDescriptorCopy.service = [];
+
+  let options = original.options;
+  if (options !== undefined) {
+    options = {
+      ...original.options,
+    };
+    options.services = {};
+  }
+
+  return {
+    fileDescriptor: fileDescriptorCopy,
+    references: original.references,
+    dependencies: original.dependencies,
+    options: options,
+  };
+}
+
+function pushKeyedService(
+  desc: RpcServiceProtoMetadata,
+  newName: string
+): ServiceDescriptorProto1 {
+  const service = {
+    ...rpcServiceProtoMetadata.fileDescriptor.service[0],
+  } as ServiceDescriptorProto1;
+  service.name = newName;
+  service.method = [];
+  desc.fileDescriptor.service.push(service);
+
+  const serviceOptions =
+    rpcServiceProtoMetadata.options?.services?.["RpcEndpoint"];
+  if (serviceOptions === undefined) {
+    throw new Error(
+      "Missing service options in original RpcEndpoint proto descriptor"
+    );
+  }
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  desc.options!.services![newName] = serviceOptions;
+
+  return service;
+}
+
+function pushUnKeyedService(
+  desc: RpcServiceProtoMetadata,
+  newName: string
+): ServiceDescriptorProto1 {
+  const service = {
+    ...rpcServiceProtoMetadata.fileDescriptor.service[1],
+  } as ServiceDescriptorProto1;
+  service.name = newName;
+  service.method = [];
+  desc.fileDescriptor.service.push(service);
+
+  const serviceOptions =
+    rpcServiceProtoMetadata.options?.services?.["UnkeyedRpcEndpoint"];
+  if (serviceOptions === undefined) {
+    throw new Error(
+      "Missing service options in original UnkeyedRpcEndpoint proto descriptor"
+    );
+  }
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  desc.options!.services![newName] = serviceOptions;
+
+  return service;
+}
+
+function createRpcMethodDescriptor(methodName: string): MethodDescriptorProto1 {
+  const desc = {
+    ...rpcServiceProtoMetadata.fileDescriptor.service[0].method[0],
+  } as MethodDescriptorProto1;
+  desc.name = methodName;
+  return desc;
+}
+
+const dynrpcDescriptor = copyProtoMetadata(rpcServiceProtoMetadata);

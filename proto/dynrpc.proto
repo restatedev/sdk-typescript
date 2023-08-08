@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+import "dev/restate/ext.proto";
+import "google/protobuf/struct.proto";
+
+service RpcEndpoint {
+	option (dev.restate.ext.service_type) = KEYED;
+
+	rpc call(RpcRequest) returns (RpcResponse) {};
+
+}
+
+service UnkeyedRpcEndpoint {
+	option (dev.restate.ext.service_type) = UNKEYED;
+
+	rpc call(RpcRequest) returns (RpcResponse) {};
+}
+
+message RpcRequest {
+  string key = 1 [(dev.restate.ext.field) = KEY];
+  google.protobuf.Value request = 2;
+
+  // internal: see src/utils/assumptions.ts
+  int32 sender_assumes = 101;
+}
+
+message RpcResponse {
+  	google.protobuf.Value response = 1;
+}

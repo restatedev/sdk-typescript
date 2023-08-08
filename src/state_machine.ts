@@ -1,7 +1,7 @@
 "use strict";
 
 import * as p from "./types/protocol";
-import { RestateContextImpl } from "./restate_context_impl";
+import { RestateGrpcContextImpl } from "./restate_context_impl";
 import { Connection, RestateStreamConsumer } from "./connection/connection";
 import { ProtocolMode } from "./generated/proto/discovery";
 import { Message } from "./types/types";
@@ -29,7 +29,7 @@ import { LocalStateStore } from "./local_state_store";
 
 export class StateMachine<I, O> implements RestateStreamConsumer {
   private journal: Journal<I, O>;
-  private restateContext: RestateContextImpl;
+  private restateContext: RestateGrpcContextImpl;
 
   private readonly invocationComplete = new CompletablePromise<void>();
 
@@ -59,7 +59,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
   ) {
     this.localStateStore = invocation.localStateStore;
 
-    this.restateContext = new RestateContextImpl(
+    this.restateContext = new RestateGrpcContextImpl(
       this.invocation.instanceKey,
       this.invocation.invocationId,
       this.invocation.method.service,

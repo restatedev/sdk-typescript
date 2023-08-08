@@ -35,9 +35,10 @@
     "test": "jest --silent --maxWorkers=1",
     "lint": "eslint --ignore-path .eslintignore --ext .ts .",
     "format": "prettier --ignore-path .eslintignore --write \"**/*.+(js|ts|json)\"",
-    "example": "RESTATE_DEBUG_LOGGING=JOURNAL ts-node-dev --respawn --transpile-only ./examples/example.ts",
     "verify": "npm run test && npm run lint && npm run build",
-    "release": "release-it"
+    "release": "release-it",
+    "example": "RESTATE_DEBUG_LOGGING=JOURNAL ts-node-dev --respawn --transpile-only ./examples/example.ts",
+    "grpcexample": "RESTATE_DEBUG_LOGGING=JOURNAL ts-node-dev --respawn --transpile-only ./examples/grpc_example.ts"
   },
   "files": [
     "dist",

@@ -16,6 +16,7 @@ import { HostedGrpcServiceMethod } from "../types/grpc";
 import { ensureError } from "../types/errors";
 import { InvocationBuilder } from "../invocation";
 import { StateMachine } from "../state_machine";
+import { KeyedRouter, UnKeyedRouter } from "../types/router";
 
 /**
  * Creates a Restate entrypoint based on a HTTP2 server. The entrypoint will listen
@@ -57,6 +58,24 @@ export class RestateServer extends BaseRestateServer {
   constructor() {
     super(ProtocolMode.BIDI_STREAM);
   }
+
+  public bindKeyedRouter<M>(
+    path: string,
+    router: KeyedRouter<M>
+  ): RestateServer {
+    // Implementation note: This override if here mainly to change the return type to the more
+    // concrete type RestateServer (from BaseRestateServer).
+    super.bindRpcService(path, router, true);
+    return this;
+  }
+
+  public bindRouter<M>(path: string, router: UnKeyedRouter<M>): RestateServer {
+    // Implementation note: This override if here mainly to change the return type to the more
+    // concrete type RestateServer (from BaseRestateServer).
+    super.bindRpcService(path, router, false);
+    return this;
+  }
+
   /**
    * Adds a gRPC service to be served from this endpoint.
    *

@@ -3,8 +3,15 @@
 // Use our prefixed logger instead of default console logging
 import "./utils/logger";
 import { RetrySettings } from "./utils/public_utils";
+import { Client, SendClient } from "./types/router";
 
-export interface RestateContext {
+/**
+ * Base Restate context, which contains all operations that are the same in the gRPC-based API
+ * as in the dynamic rpc-handler-based API.
+ *
+ * Those operations include state access/updates, side-effects, awakeables, or sleeps.
+ */
+export interface RestateBaseContext {
   /**
    * The key associated with the current function invocation.
    *
@@ -64,45 +71,6 @@ export interface RestateContext {
    * const state = ctx.clear("STATE");
    */
   clear(name: string): void;
-
-  /**
-   * Unidirectional call to other Restate services ( = in background / async / not waiting on response).
-   * To do this, wrap the call via the proto-ts client with oneWayCall, as shown in the example.
-   *
-   * NOTE: this returns a Promise because we override the gRPC clients provided by proto-ts.
-   * So we are required to return a Promise.
-   *
-   * @param call Invoke another service by using the generated proto-ts client.
-   * @example
-   * const ctx = restate.useContext(this);
-   * const client = new GreeterClientImpl(ctx);
-   * await ctx.oneWayCall(() =>
-   *   client.greet(Request.create({ name: "Peter" }))
-   * )
-   */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  oneWayCall(call: () => Promise<any>): Promise<void>;
-
-  /**
-   * Delayed unidirectional call to other Restate services ( = in background / async / not waiting on response).
-   * To do this, wrap the call via the proto-ts client with delayedCall, as shown in the example.
-   * Add the delay in millis as the second parameter.
-   *
-   * NOTE: this returns a Promise because we override the gRPC clients provided by proto-ts.
-   * So we are required to return a Promise.
-   *
-   * @param call Invoke another service by using the generated proto-ts client.
-   * @param delayMillis millisecond delay duration to delay the execution of the call
-   * @example
-   * const ctx = restate.useContext(this);
-   * const client = new GreeterClientImpl(ctx);
-   * await ctx.delayedCall(() =>
-   *   client.greet(Request.create({ name: "Peter" })),
-   *   5000
-   * )
-   */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  delayedCall(call: () => Promise<any>, delayMillis?: number): Promise<void>;
 
   /**
    * Execute a side effect and store the result in Restate. The side effect will thus not
@@ -194,6 +162,63 @@ export interface RestateContext {
    * await ctx.sleep(1000);
    */
   sleep(millis: number): Promise<void>;
+}
+
+// ----------------------------------------------------------------------------
+//  types and functions for the gRPC-based API
+// ----------------------------------------------------------------------------
+
+/**
+ * The context that gives access to all Restate-backed operstions, for example
+ *   - sending reliable messages / rpc through Restate
+ *   - access/update state (for keyed services)
+ *   - side-effects
+ *   - sleeps and delayed calls
+ *   - awakeables
+ *   - ...
+ *
+ * This context is for use in **gRPC service** implementations.
+ * For the rpc-handler API, use the {@link RpcContext} instead.
+ */
+export interface RestateGrpcContext extends RestateBaseContext {
+  /**
+   * Unidirectional call to other Restate services ( = in background / async / not waiting on response).
+   * To do this, wrap the call via the proto-ts client with oneWayCall, as shown in the example.
+   *
+   * NOTE: this returns a Promise because we override the gRPC clients provided by proto-ts.
+   * So we are required to return a Promise.
+   *
+   * @param call Invoke another service by using the generated proto-ts client.
+   * @example
+   * const ctx = restate.useContext(this);
+   * const client = new GreeterClientImpl(ctx);
+   * await ctx.oneWayCall(() =>
+   *   client.greet(Request.create({ name: "Peter" }))
+   * )
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  oneWayCall(call: () => Promise<any>): Promise<void>;
+
+  /**
+   * Delayed unidirectional call to other Restate services ( = in background / async / not waiting on response).
+   * To do this, wrap the call via the proto-ts client with delayedCall, as shown in the example.
+   * Add the delay in millis as the second parameter.
+   *
+   * NOTE: this returns a Promise because we override the gRPC clients provided by proto-ts.
+   * So we are required to return a Promise.
+   *
+   * @param call Invoke another service by using the generated proto-ts client.
+   * @param delayMillis millisecond delay duration to delay the execution of the call
+   * @example
+   * const ctx = restate.useContext(this);
+   * const client = new GreeterClientImpl(ctx);
+   * await ctx.delayedCall(() =>
+   *   client.greet(Request.create({ name: "Peter" })),
+   *   5000
+   * )
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  delayedCall(call: () => Promise<any>, delayMillis?: number): Promise<void>;
 
   /**
    * Call another Restate service and await the response.
@@ -221,6 +246,11 @@ export interface RestateContext {
 }
 
 /**
+ * For compatibility, we make the support 'RestateContext' as the type for the Grpc-based API context.
+ */
+export type RestateContext = RestateGrpcContext;
+
+/**
  * Returns the RestateContext which is the entrypoint for all interaction with Restate.
  * Use this from within a method to retrieve the RestateContext.
  * The context is bounded to a single invocation.
@@ -229,7 +259,7 @@ export interface RestateContext {
  * const ctx = restate.useContext(this);
  *
  */
-export function useContext<T>(instance: T): RestateContext {
+export function useContext<T>(instance: T): RestateGrpcContext {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const wrapper = instance as any;
   if (wrapper.$$restate === undefined || wrapper.$$restate === null) {
@@ -238,7 +268,7 @@ export function useContext<T>(instance: T): RestateContext {
   return wrapper.$$restate;
 }
 
-export function setContext<T>(instance: T, context: RestateContext): T {
+export function setContext<T>(instance: T, context: RestateGrpcContext): T {
   // creates a *new*, per call object that shares all the properties that @instance has
   // except '$$restate' which is a unique, per call pointer to a restate context.
   //
@@ -248,4 +278,177 @@ export function setContext<T>(instance: T, context: RestateContext): T {
     $$restate: { value: context },
   });
   return wrapper as T;
+}
+
+// ----------------------------------------------------------------------------
+//  types for the rpc-handler-based API
+// ----------------------------------------------------------------------------
+
+/* eslint-disable @typescript-eslint/no-unused-vars */
+
+/**
+ * ServiceApi captures the type and parameters to make RPC calls and send messages to
+ * a set of RPC handlers in a router.
+ *
+ * @example
+ * **Service Side:**
+ * ```ts
+ * const router = restate.router({
+ *   someAction:    async(ctx: RpcContext, req: string) => { ... },
+ *   anotherAction: async(ctx: RpcContext, count: number) => { ... }
+ * });
+ *
+ * export const myApi: ServiceApi<typeof router> = { path : "myservice" };
+ *
+ * restate.createServer().bindRouter("myservice", router).listen(8080);
+ * ```
+ * **Client side:**
+ * ```ts
+ * ctx.rpc(myApi).someAction("hello!");
+ * ```
+ */
+export type ServiceApi<_M = unknown> = {
+  path: string;
+};
+
+/**
+ * The context that gives access to all Restate-backed operstions, for example
+ *   - sending reliable messages / rpc through Restate
+ *   - access/update state (for keyed services)
+ *   - side-effects
+ *   - sleeps and delayed calls
+ *   - awakeables
+ *   - ...
+ *
+ * This context is for use with the **rpc-handler API**.
+ * For gRPC-based API, use the {@link RestateContext} instead.
+ */
+export interface RpcContext extends RestateBaseContext {
+  /**
+   * Makes a type-safe request/reponse RPC to the specified target service.
+   *
+   * The RPC goes through Restate and is guaranteed to be reliably delivered. The RPC is also
+   * journaled for durable execution and will thus not be duplicated when the handler is re-invoked
+   * for retries or after suspending.
+   *
+   * This call will return the result produced by the target handler, or the Error, if the target
+   * handler finishes with a Terminal Error.
+   *
+   * This call is a suspension point: The hander might suspend while awaiting the response and
+   * resume once the response is available.
+   *
+   * @example
+   * *Service Side:*
+   * ```ts
+   * const router = restate.router({
+   *   someAction:    async(ctx: RpcContext, req: string) => { ... },
+   *   anotherAction: async(ctx: RpcContext, count: number) => { ... }
+   * });
+   *
+   * // option 1: export only the type signature of the router
+   * export type myApiType = typeof router;
+   *
+   * // option 2: export the API definition with type and name (path)
+   * export const myApi: ServiceApi<typeof router> = { path : "myservice" };
+   *
+   * restate.createServer().bindRouter("myservice", router).listen(8080);
+   * ```
+   * **Client side:**
+   * ```ts
+   * // option 1: use only types and supply service name separately
+   * const result1 = await ctx.rpc<myApiType>({path: "myservice"}).someAction("hello!");
+   *
+   * // option 2: use full API spec
+   * const result2 = await ctx.rpc(myApi).anotherAction(1337);
+   * ```
+   */
+  rpc<M>(opts: ServiceApi<M>): Client<M>;
+
+  /**
+   * Makes a type-safe one-way RPC to the specified target service. This method effectively behaves
+   * like enqueuing the message in a message queue.
+   *
+   * The message goes through Restate and is guaranteed to be reliably delivered. The RPC is also
+   * journaled for durable execution and will thus not be duplicated when the handler is re-invoked
+   * for retries or after suspending.
+   *
+   * This call will return immediately; the message sending happens asynchronously in the background.
+   * Despite that, the message is guaranteed to be sent, because the completion of the invocation that
+   * triggers the send (calls this function) happens logically after the sending. That means that any
+   * failure where the message does not reach Restate also cannot complete this invocation, and will
+   * hence recover this handler and (through the durable execution) recover the message to be sent.
+   *
+   * @example
+   * *Service Side:*
+   * ```ts
+   * const router = restate.router({
+   *   someAction:    async(ctx: RpcContext, req: string) => { ... },
+   *   anotherAction: async(ctx: RpcContext, count: number) => { ... }
+   * });
+   *
+   * // option 1: export only the type signature of the router
+   * export type myApiType = typeof router;
+   *
+   * // option 2: export the API definition with type and name (path)
+   * export const myApi: ServiceApi<typeof router> = { path : "myservice" };
+   *
+   * restate.createServer().bindRouter("myservice", router).listen(8080);
+   * ```
+   * **Client side:**
+   * ```ts
+   * // option 1: use only types and supply service name separately
+   * ctx.send<myApiType>({path: "myservice"}).someAction("hello!");
+   *
+   * // option 2: use full API spec
+   * ctx.send(myApi).anotherAction(1337);
+   * ```
+   */
+  send<M>(opts: ServiceApi<M>): SendClient<M>;
+
+  /**
+   * Makes a type-safe one-way RPC to the specified target service, after a delay specified by the
+   * milliseconds argument.
+   * This method is like stetting up a fault-tolerant cron job that enqueues the message in a
+   * message queue.
+   * The handler calling this function does not have to stay active for the delay time.
+   *
+   * Both the delay timer and the message are durably stored in Restate and guaranteed to be reliably
+   * delivered. The delivery happens no earlier than specified through the delay, but may happen
+   * later, if the target service is down, or backpressuring the system.
+   *
+   * The delay message is journaled for durable execution and will thus not be duplicated when the
+   * handler is re-invoked for retries or after suspending.
+   *
+   * This call will return immediately; the message sending happens asynchronously in the background.
+   * Despite that, the message is guaranteed to be sent, because the completion of the invocation that
+   * triggers the send (calls this function) happens logically after the sending. That means that any
+   * failure where the message does not reach Restate also cannot complete this invocation, and will
+   * hence recover this handler and (through the durable execution) recover the message to be sent.
+   *
+   * @example
+   * *Service Side:*
+   * ```ts
+   * const router = restate.router({
+   *   someAction:    async(ctx: RpcContext, req: string) => { ... },
+   *   anotherAction: async(ctx: RpcContext, count: number) => { ... }
+   * });
+   *
+   * // option 1: export only the type signature of the router
+   * export type myApiType = typeof router;
+   *
+   * // option 2: export the API definition with type and name (path)
+   * export const myApi: ServiceApi<typeof router> = { path : "myservice" };
+   *
+   * restate.createServer().bindRouter("myservice", router).listen(8080);
+   * ```
+   * **Client side:**
+   * ```ts
+   * // option 1: use only types and supply service name separately
+   * ctx.send<myApiType>({path: "myservice"}, 60_000).someAction("hello!");
+   *
+   * // option 2: use full API spec
+   * ctx.send(myApi, 60_000).anotherAction(1337);
+   * ```
+   */
+  sendDelayed<M>(opts: ServiceApi<M>, delay: number): SendClient<M>;
 }
