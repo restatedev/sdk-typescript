@@ -10,6 +10,9 @@
     "url": "git+https://github.com/restatedev/sdk-typescript.git"
   },
   "release-it": {
+    "git": {
+      "pushRepo": "https://github.com/restatedev/sdk-typescript.git"
+    },
     "github": {
       "release": true
     },
