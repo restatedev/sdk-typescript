@@ -14,7 +14,6 @@ import * as restate from "../src/public_api";
 import { TestDriver } from "./testdriver";
 import {
   backgroundInvokeMessage,
-  checkError,
   checkJournalMismatchError,
   checkTerminalError,
   completionMessage,
@@ -92,7 +91,7 @@ describe("SyncCallGreeter", () => {
     expect(result[0]).toStrictEqual(
       invokeMessage("test.TestGreeter", "Greet", greetRequest("Francesco"))
     );
-    checkError(result[1], "Something went wrong");
+    checkTerminalError(result[1], "Something went wrong");
   });
 
   it("handles replay with value", async () => {
@@ -133,7 +132,7 @@ describe("SyncCallGreeter", () => {
       ),
     ]).run();
 
-    checkError(result[0], "Something went wrong");
+    checkTerminalError(result[0], "Something went wrong");
   });
 });
 
