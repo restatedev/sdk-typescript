@@ -10,6 +10,7 @@
  */
 
 import { RpcRequest } from "../generated/proto/dynrpc";
+import { TerminalError } from "../types/errors";
 
 const ASSUME_UNKEYED_SINCE_FIRST_PARAM_NOT_STRING = 1;
 const ASSUME_UNKEYED_SINCE_ZERO_ARGS = 2;
@@ -38,7 +39,7 @@ export const requestFromArgs = (args: unknown[]): RpcRequest => {
     }
     case 2: {
       if (typeof args[0] !== "string") {
-        throw new Error(
+        throw new TerminalError(
           `Two argument handlers are only possible for keyed handlers. Where the first argument must be of type 'string'.`
         );
       }
@@ -49,7 +50,7 @@ export const requestFromArgs = (args: unknown[]): RpcRequest => {
       });
     }
     default: {
-      throw new Error("wrong number of arguments " + args.length);
+      throw new TerminalError("wrong number of arguments " + args.length);
     }
   }
 };
@@ -64,34 +65,54 @@ export type JsType =
   | Array<any>
   | undefined;
 
+const requireThat = (condition: boolean, errorMessage: string) => {
+  if (!condition) {
+    throw new TerminalError(errorMessage);
+  }
+};
+
 export const verifyAssumptions = (
   isKeyed: boolean,
   request: RpcRequest
 ): { key?: string; request?: JsType } => {
   const assumpsion = request.senderAssumes ?? 0;
   switch (assumpsion) {
-    case ASSUME_UNKEYED_SINCE_FIRST_PARAM_NOT_STRING: {
+    case 0: {
+      // no assumption: this comes from an ingress.
+      const hasKeyProperty =
+        typeof request.key === "string" && request.key.length > 0;
       if (isKeyed) {
-        throw new Error(
-          `Trying to call a keyed handler with a missing key. This could happen if the first argument passed is not a 'string'.`
+        requireThat(
+          hasKeyProperty,
+          `Trying to call a keyed handler with a missing or empty 'key' property.`
+        );
+      } else {
+        requireThat(
+          !hasKeyProperty,
+          `Trying to call a an unkeyed handler with a 'key' property. Did you mean using the 'request' property instead?`
         );
       }
+      return { key: request.key, request: request.request };
+    }
+    case ASSUME_UNKEYED_SINCE_FIRST_PARAM_NOT_STRING: {
+      requireThat(
+        !isKeyed,
+        `Trying to call a keyed handler with a missing key. This could happen if the first argument passed is not a 'string'.`
+      );
       return { request: request.request };
     }
     case ASSUME_UNKEYED_SINCE_ZERO_ARGS: {
-      if (isKeyed) {
-        throw new Error(
-          `A keyed handler must at least be invoked with a single non empty string argument, that represents the key. 0 arguments given.`
-        );
-      }
+      requireThat(
+        !isKeyed,
+        `A keyed handler must at least be invoked with a single non empty string argument, that represents the key. 0 arguments given.`
+      );
       return { request: request.request };
     }
     case ASSUME_KEYED_SINCE_TWO_ARGS_STR_AND_ANY: {
-      if (!isKeyed) {
-        throw new Error(
-          `An unkeyed handler must have at most 1 argument. two given.`
-        );
-      }
+      requireThat(
+        isKeyed,
+        `An unkeyed handler must have at most 1 argument. two given.`
+      );
       return { key: request.key, request: request.request };
     }
     case ASSUME_EITHER_KEYED_OR_UNKEYED_ONE_STR_ARG: {
@@ -101,8 +122,9 @@ export const verifyAssumptions = (
       return { request: request.key };
     }
     default: {
-      // no assumptions.
-      return { key: request.key, request: request.request };
+      throw new TerminalError(
+        `internal SDK error: unknown assumption id ${assumpsion}`
+      );
     }
   }
 };
