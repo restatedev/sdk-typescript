@@ -431,18 +431,18 @@ export function checkError(
   code: number = ErrorCodes.INTERNAL
 ) {
   expect(outputMsg.messageType).toEqual(ERROR_MESSAGE_TYPE);
-  expect((outputMsg.message as ErrorMessage).failure?.code).toStrictEqual(code);
-  expect((outputMsg.message as ErrorMessage).failure?.message).toContain(
+  expect((outputMsg.message as ErrorMessage).code).toStrictEqual(code);
+  expect((outputMsg.message as ErrorMessage).message).toContain(
     errorMessage
   );
 }
 
 export function checkJournalMismatchError(outputMsg: Message) {
   expect(outputMsg.messageType).toEqual(ERROR_MESSAGE_TYPE);
-  expect((outputMsg.message as ErrorMessage).failure?.code).toStrictEqual(
+  expect((outputMsg.message as ErrorMessage).code).toStrictEqual(
     ErrorCodes.JOURNAL_MISMATCH
   );
-  expect((outputMsg.message as ErrorMessage).failure?.message).toContain(
+  expect((outputMsg.message as ErrorMessage).message).toContain(
     "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
   );
 }

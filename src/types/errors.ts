@@ -11,7 +11,7 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { Failure } from "../generated/proto/protocol";
+import { ErrorMessage, Failure } from "../generated/proto/protocol";
 import { printMessageAsJson } from "../utils/utils";
 import { Message } from "./types";
 import { JournalEntry } from "../journal";
@@ -128,4 +128,15 @@ export function failureToError(
   return terminalError
     ? new TerminalError(errorMessage, { errorCode })
     : new RestateError(errorMessage, { errorCode });
+}
+
+export function errorToErrorMessage(err: Error): ErrorMessage {
+  const code = err instanceof RestateError
+    ? err.code
+    : ErrorCodes.INTERNAL;
+
+  return ErrorMessage.create({
+    code: code,
+    message: err.message
+  });
 }

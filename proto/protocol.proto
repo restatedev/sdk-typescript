@@ -60,7 +60,17 @@ message SuspensionMessage {
 
 // Type: 0x0000 + 3
 message ErrorMessage {
-  Failure failure = 15;
+  // The code can be:
+  // * Any of the error codes defined by OutputStreamEntry.failure (see Failure message)
+  // * JOURNAL_MISMATCH = 32, that is when the SDK cannot replay a journal due to the mismatch between the journal and the actual code.
+  // * PROTOCOL_VIOLATION = 33, that is when the SDK receives an unexpected message or an expected message variant, given its state.
+  //
+  // If 16 < code < 32, or code > 33, the runtime will interpret it as code 2 (UNKNOWN).
+  uint32 code = 1;
+  // Contains a concise error message, e.g. Throwable#getMessage() in Java.
+  string message = 2;
+  // Contains a verbose error description, e.g. the exception stacktrace.
+  string description = 3;
 }
 
 // --- Journal Entries ---
@@ -122,8 +132,9 @@ message ClearStateEntryMessage {
 // Kind: Completable JournalEntry
 // Type: 0x0C00 + 0
 message SleepEntryMessage {
-  // Duration since UNIX Epoch
-  int64 wake_up_time = 1;
+  // Wake up time.
+  // The time is set as duration since UNIX Epoch.
+  uint64 wake_up_time = 1;
 
   google.protobuf.Empty result = 13;
 }
@@ -154,7 +165,7 @@ message BackgroundInvokeEntryMessage {
   // The time is set as duration since UNIX Epoch.
   // If this value is not set, equal to 0, or past in time,
   // the runtime will execute this BackgroundInvoke as soon as possible.
-  int64 invoke_time = 4;
+  uint64 invoke_time = 4;
 }
 
 // Kind: Completable JournalEntry
@@ -179,8 +190,14 @@ message CompleteAwakeableEntryMessage {
 
 // --- Nested messages
 
+// This failure object carries user visible errors,
+// e.g. invocation failure return value or failure result of an InvokeEntryMessage.
 message Failure {
-  // Same error space of gRPC, as defined here: https://github.com/grpc/grpc/blob/master/doc/statuscodes.md#status-codes-and-their-use-in-grpc
-  int32 code = 1;
+  // The code should be any of the gRPC error codes,
+  // as defined here: https://github.com/grpc/grpc/blob/master/doc/statuscodes.md#status-codes-and-their-use-in-grpc
+  //
+  // If code > 16, the runtime will interpret it as code 2 (UNKNOWN).
+  uint32 code = 1;
+  // Contains a concise error message, e.g. Throwable#getMessage() in Java.
   string message = 2;
 }

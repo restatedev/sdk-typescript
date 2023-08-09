@@ -25,14 +25,13 @@ import {
   SUSPENSION_MESSAGE_TYPE,
   SuspensionMessage,
 } from "./types/protocol";
-import { ErrorMessage } from "./generated/proto/protocol";
 import { Journal } from "./journal";
 import { Invocation } from "./invocation";
 import {
   ensureError,
   TerminalError,
   RetryableError,
-  errorToFailure,
+  errorToErrorMessage,
 } from "./types/errors";
 import { LocalStateStore } from "./local_state_store";
 
@@ -304,9 +303,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
   private sendRetryableError(e: Error) {
     const msg = new Message(
       ERROR_MESSAGE_TYPE,
-      ErrorMessage.create({
-        failure: errorToFailure(e),
-      })
+      errorToErrorMessage(e)
     );
     rlog.debugJournalMessage(
       this.invocation.logPrefix,
