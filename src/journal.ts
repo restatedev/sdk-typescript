@@ -173,7 +173,12 @@ export class Journal<I, O> {
       journalEntry.resolve(m.value);
       this.pendingJournalEntries.delete(m.entryIndex);
     } else if (m.failure !== undefined) {
-      journalEntry.reject(new Error(m.failure.message));
+      // we do all completions with Terminal Errors, because failures triggered by those exceptions
+      // when the bubble up would otherwise lead to re-tries, deterministic replay, re-throwing, and
+      // thus an infinite loop that keeps replay-ing but never makes progress
+      // these failures here consequently need to cause terminal failures, unless caught and handled
+      // by the handler code
+      journalEntry.reject(failureToError(m.failure, true));
       this.pendingJournalEntries.delete(m.entryIndex);
     } else if (m.empty !== undefined) {
       journalEntry.resolve(m.empty);
@@ -321,7 +326,7 @@ export class Journal<I, O> {
       journalEntry.resolve(value);
       this.pendingJournalEntries.delete(journalIndex);
     } else if (failure !== undefined) {
-      const error = failureToError(failure, failureWouldBeTerminal ?? false);
+      const error = failureToError(failure, failureWouldBeTerminal ?? true);
       journalEntry.reject(error);
       this.pendingJournalEntries.delete(journalIndex);
     } else {

@@ -16,6 +16,7 @@ import {
   awakeableMessage,
   checkError,
   checkJournalMismatchError,
+  checkTerminalError,
   completeAwakeableMessage,
   completionMessage,
   failure,
@@ -119,7 +120,7 @@ describe("AwakeableGreeter", () => {
 
     expect(result.length).toStrictEqual(2);
     expect(result[0]).toStrictEqual(awakeableMessage());
-    checkError(result[1], "Something went wrong");
+    checkTerminalError(result[1], "Something went wrong");
   });
 
   it("handles replay with value", async () => {
@@ -142,7 +143,7 @@ describe("AwakeableGreeter", () => {
     ]).run();
 
     expect(result.length).toStrictEqual(1);
-    checkError(result[0], "Something went wrong");
+    checkTerminalError(result[0], "Something went wrong");
   });
 
   it("fails on journal mismatch. Completed with CompleteAwakeable during replay.", async () => {
