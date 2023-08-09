@@ -35,10 +35,7 @@ import {
 } from "./types/protocol";
 import { equalityCheckers, jsonDeserialize } from "./utils/utils";
 import { Message } from "./types/types";
-import {
-  FailureWithTerminal,
-  SideEffectEntryMessage,
-} from "./generated/proto/javascript";
+import { SideEffectEntryMessage } from "./generated/proto/javascript";
 import { Invocation } from "./invocation";
 import { failureToError, RetryableError } from "./types/errors";
 
@@ -287,7 +284,8 @@ export class Journal<I, O> {
             journalIndex,
             journalEntry,
             undefined,
-            sideEffectMsg.failure
+            sideEffectMsg.failure.failure,
+            sideEffectMsg.failure.terminal
           );
         } else {
           // A side effect can have a void return type
@@ -315,14 +313,15 @@ export class Journal<I, O> {
   resolveResult<T>(
     journalIndex: number,
     journalEntry: JournalEntry,
-    value?: T,
-    failure?: Failure | FailureWithTerminal
+    value: T | undefined,
+    failure?: Failure | undefined,
+    failureWouldBeTerminal?: boolean
   ) {
     if (value !== undefined) {
       journalEntry.resolve(value);
       this.pendingJournalEntries.delete(journalIndex);
     } else if (failure !== undefined) {
-      const error = failureToError(failure);
+      const error = failureToError(failure, failureWouldBeTerminal ?? false);
       journalEntry.reject(error);
       this.pendingJournalEntries.delete(journalIndex);
     } else {

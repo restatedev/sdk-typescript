@@ -101,12 +101,6 @@ export class RetryableError extends RestateError {
   }
 }
 
-function isFailureWithTerminal(
-  msg: Failure | FailureWithTerminal
-): msg is FailureWithTerminal {
-  return "failure" in msg;
-}
-
 export function errorToFailure(err: Error): Failure {
   return err instanceof RestateError
     ? err.toFailure()
@@ -124,22 +118,14 @@ export function errorToFailureWithTerminal(err: Error): FailureWithTerminal {
   });
 }
 
-export function failureToError(msg: Failure | FailureWithTerminal): Error {
-  let failure: Failure | undefined;
-  let terminal: boolean;
+export function failureToError(
+  failure: Failure,
+  terminalError: boolean
+): Error {
+  const errorMessage = failure.message ?? "(missing error message)";
+  const errorCode = failure.code ?? ErrorCodes.INTERNAL;
 
-  if (isFailureWithTerminal(msg)) {
-    terminal = msg.terminal ?? false;
-    failure = msg.failure;
-  } else {
-    terminal = false;
-    failure = msg;
-  }
-
-  const errorMessage = failure?.message ?? "(missing error message)";
-  const errorCode = failure?.code ?? ErrorCodes.INTERNAL;
-
-  return terminal
+  return terminalError
     ? new TerminalError(errorMessage, { errorCode })
     : new RestateError(errorMessage, { errorCode });
 }
