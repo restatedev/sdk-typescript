@@ -1,4 +1,13 @@
-"use strict";
+/*
+ * Copyright (c) 2023 - Restate Software, Inc., Restate GmbH
+ *
+ * This file is part of the Restate SDK for Node.js/TypeScript,
+ * which is released under the MIT license.
+ *
+ * You can find a copy of the license in file LICENSE in the root
+ * directory of this repository or package, or at
+ * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
+ */
 
 // This is a NodeJs stream transformer. It is used to convert a chunked stream of bytes to
 // a stream of JavaScript objects of the form { header: .. , message: ..} where:
@@ -10,6 +19,7 @@
 // let decodedStream = stream.pipe(streamDecoder());
 //
 // at this point the decodedStream is a high level stream of objects {header, message}
+
 import stream from "stream";
 import { PROTOBUF_MESSAGE_BY_TYPE } from "../types/protocol";
 import { Header, Message } from "../types/types";
