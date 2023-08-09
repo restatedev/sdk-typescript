@@ -124,18 +124,16 @@ describe("SyncCallGreeter", () => {
     const result = await new TestDriver(new SyncCallGreeter(), [
       startMessage(),
       inputMessage(greetRequest("Till")),
-      completionMessage(
-        1,
-        undefined,
+      invokeMessage(
+        "test.TestGreeter",
+        "Greet",
+        greetRequest("Francesco"),
         undefined,
         failure("Something went wrong")
       ),
     ]).run();
 
-    expect(result[0]).toStrictEqual(
-      invokeMessage("test.TestGreeter", "Greet", greetRequest("Francesco"))
-    );
-    checkError(result[1], "Something went wrong");
+    checkError(result[0], "Something went wrong");
   });
 });
 
