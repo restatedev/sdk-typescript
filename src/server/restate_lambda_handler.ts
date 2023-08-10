@@ -27,6 +27,7 @@ import { decodeLambdaBody } from "../io/decoder";
 import { Message } from "../types/types";
 import { StateMachine } from "../state_machine";
 import { ensureError } from "../types/errors";
+import { KeyedRouter, UnKeyedRouter } from "../public_api";
 
 /**
  * Creates an Restate entrypoint for services deployed on AWS Lambda and invoked
@@ -104,6 +105,22 @@ export class LambdaRestateServer extends BaseRestateServer {
     // Implementation note: This override if here mainly to change the return type to the more
     // concrete type LambdaRestateServer (from BaseRestateServer).
     super.bindService(serviceOpts);
+    return this;
+  }
+
+  public bindRouter<M>(
+    path: string,
+    router: UnKeyedRouter<M>
+  ): LambdaRestateServer {
+    super.bindRpcService(path, router, false);
+    return this;
+  }
+
+  public bindKeyedRouter<M>(
+    path: string,
+    router: KeyedRouter<M>
+  ): LambdaRestateServer {
+    super.bindRpcService(path, router, true);
     return this;
   }
 
