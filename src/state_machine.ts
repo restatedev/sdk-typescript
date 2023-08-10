@@ -301,10 +301,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
   }
 
   private sendRetryableError(e: Error) {
-    const msg = new Message(
-      ERROR_MESSAGE_TYPE,
-      errorToErrorMessage(e)
-    );
+    const msg = new Message(ERROR_MESSAGE_TYPE, errorToErrorMessage(e));
     rlog.debugJournalMessage(
       this.invocation.logPrefix,
       "Invocation ended with retryable error.",
