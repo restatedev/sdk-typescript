@@ -33,7 +33,7 @@ restate
 ```
 
 Restate takes care of:
-  - **reliably execution:** handlers will always run to the end. Intermediate failures result in re-tries
+  - **reliable execution:** handlers will always run to completion. Intermediate failures result in re-tries
     that use the *durable execution* mechanism to recover partial progress and not duplicate already executed
     steps.
   - **suspending handlers:** long-running handlers suspend when awaiting on a promise (or when explicitly
@@ -73,7 +73,7 @@ npx -y @restatedev/create-app
 
 ### Building the SDK
 
-Install the dependencies, build the protocol types (from ProtoBuf), and transpile the TypeScript code:
+Install the dependencies, build the Restate protocol types (from ProtoBuf), and transpile the TypeScript code:
 ```shell
 npm install
 npm run proto
