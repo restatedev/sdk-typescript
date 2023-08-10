@@ -1,13 +1,70 @@
 # Restate Typescript SDK
 
-[Restate](https://restate.dev/) is a system for easily building resilient applications using **distributed durable async/await**.
-This repository contains the Restate SDK for writing services in Node.js / Typescript.
+[Restate](https://restate.dev/) is a system for easily building resilient applications using *distributed durable async/await*. This repository contains the Restate SDK for writing services in **Node.js / Typescript**.
 
-To use this SDK, simply add the dependency to your project (`npm install @restatedev/restate-sdk`), or
-use the [Restate Node Template](https://github.com/restatedev/node-template-generator) to get started (`npx -y @restatedev/create-app`). 
+Restate applications are composed of *durably executed, stateful RPC handlers* that can run either
+as part of long-running processes, or as FaaS (AWS Lambda).
+
+```typescript
+// note that there is no failure handling in this example, because the combination of durable execution,
+// communication, and state storage makes this unnecessary here.
+const addToCart = async (ctx: restate.RpcContext, cartId: string /* the key */, ticketId: string) => {
+  // RPC participates in durable execution, so guaranteed to eventually happend and
+  // will never get duplicated. would suspend if the other takes too long
+  const success = await ctx.rpc<ticketApi>({ path: "tickets" }).reserve(ticketId);
+
+  if (success) {
+    const cart = (await ctx.get<string[]>("cart")) || []; // gets state 'cart' bound to current cartId
+    cart.push(ticketId);
+    ctx.set("cart", cart);                                // writes state bound to current cartId
+
+    // reliable delayed call sent from Restate, which also participaes in durable execution
+    ctx.sendDelayed<cartApi>({path: "cart"}, minutes(15)).expireTicket(ticketId);
+  }
+  return success;
+}
+
+...
+
+restate
+  .createServer()
+  .bindKeyedRouter("cart", restate.keyedRouter({ addToCart, expireTicket }))
+  .listen(8080);
+```
+
+Restate takes care of:
+  - **reliably execution:** handlers will always run to the end. Intermediate failures result in re-tries
+    that use the *durable execution* mechanism to recover partial progress and not duplicate already executed
+    steps.
+  - **suspending handlers:** long-running handlers suspend when awaiting on a promise (or when explicitly
+    sleeping) and resume when that promise is resolved. Lambdas finish, services may scale down.
+  - **reliable communication:** handlers communicate with *exactly-once semantics*. Restate reliably delivers
+    messages and anchors both sender and receiver in the durable execution to ensure no losses or duplicates
+    can happen.
+  - **durable timers:** handlers can sleep (and suspend) or schedule calls for later.
+  - **isolation:** handlers can be keyed, which makes Restate scheduled them to obey single-writer-per-key
+    semantics.
+  - **state:** keyed handlers can attach key/value state, which is eagerly pushed into handlers during
+    invocation, and written back upon completion. This is particularly efficient for FaaS deployments
+    (stateful serverless, yay!).
+  - **observability & introspection:** Restate automatically generates Open Telemetry traces for the
+    interactions between handlers and gives you a SQL shell to query the distributed state of the application.
+  - **gRPC support:** Handlers may optionally be defined as gRPC services, and Restate will act as the transport
+    layer for the services/clients in that case.
 
 Check [Restate GitHub](https://github.com/restatedev/) or the [docs](https://docs.restate.dev/) for further details.
 
+# Using to the SDK
+
+To use this SDK, simply add the dependency to your project:
+```shell
+npm install @restatedev/restate-sdk
+```
+
+For brand-new projects, we recommend using the [Restate Node Template](https://github.com/restatedev/node-template-generator):
+```shell
+npx -y @restatedev/create-app
+```
 
 # Contributing to the SDK
 
