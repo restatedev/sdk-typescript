@@ -432,9 +432,7 @@ export function checkError(
 ) {
   expect(outputMsg.messageType).toEqual(ERROR_MESSAGE_TYPE);
   expect((outputMsg.message as ErrorMessage).code).toStrictEqual(code);
-  expect((outputMsg.message as ErrorMessage).message).toContain(
-    errorMessage
-  );
+  expect((outputMsg.message as ErrorMessage).message).toContain(errorMessage);
 }
 
 export function checkJournalMismatchError(outputMsg: Message) {

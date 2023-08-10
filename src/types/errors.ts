@@ -131,12 +131,10 @@ export function failureToError(
 }
 
 export function errorToErrorMessage(err: Error): ErrorMessage {
-  const code = err instanceof RestateError
-    ? err.code
-    : ErrorCodes.INTERNAL;
+  const code = err instanceof RestateError ? err.code : ErrorCodes.INTERNAL;
 
   return ErrorMessage.create({
     code: code,
-    message: err.message
+    message: err.message,
   });
 }
