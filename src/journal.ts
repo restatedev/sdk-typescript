@@ -160,6 +160,11 @@ export class Journal<I, O> {
     }
   }
 
+  public isUnResolved(index: number): boolean {
+    const journalEntry = this.pendingJournalEntries.get(index);
+    return journalEntry !== undefined;
+  }
+
   public handleRuntimeCompletionMessage(m: CompletionMessage) {
     // Get message at that entryIndex in pendingJournalEntries
     const journalEntry = this.pendingJournalEntries.get(m.entryIndex);

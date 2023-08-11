@@ -311,7 +311,7 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
     const msg = AwakeableEntryMessage.create();
     const promise = this.stateMachine
       .handleUserCodeMessage<Buffer>(AWAKEABLE_ENTRY_MESSAGE_TYPE, msg)
-      .then((result: Buffer | void) => {
+      .transform((result: Buffer | void) => {
         if (!(result instanceof Buffer)) {
           // This should either be a filled buffer or an empty buffer but never anything else.
           throw RetryableError.internal(
