@@ -1,6 +1,6 @@
 {
   "name": "@restatedev/restate-sdk",
-  "version": "1.0.34",
+  "version": "1.0.35",
   "description": "Typescript SDK for Restate",
   "engines": {
     "node": ">= 10"
@@ -41,8 +41,7 @@
     "grpcexample": "RESTATE_DEBUG_LOGGING=JOURNAL ts-node-dev --respawn --transpile-only ./examples/grpc_example.ts"
   },
   "files": [
-    "dist",
-    "src"
+    "dist"
   ],
   "dependencies": {
     "protobufjs": "^7.2.2",
