@@ -358,7 +358,7 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
       instanceKey: awakeableIdentifier.instanceKey,
       invocationId: awakeableIdentifier.invocationId,
       entryIndex: awakeableIdentifier.entryIndex,
-      payload: Buffer.from(JSON.stringify(payload)),
+      value: Buffer.from(JSON.stringify(payload)),
     });
 
     this.stateMachine.handleUserCodeMessage(

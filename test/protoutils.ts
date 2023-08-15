@@ -383,7 +383,7 @@ export function completeAwakeableMessage<T>(
       instanceKey: instanceKey,
       invocationId: invocationId,
       entryIndex: entryIndex,
-      payload: Buffer.from(JSON.stringify(payload)),
+      value: Buffer.from(JSON.stringify(payload)),
     })
   );
 }
