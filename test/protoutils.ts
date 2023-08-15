@@ -383,7 +383,7 @@ export function completeAwakeableMessage<T>(
       instanceKey: instanceKey,
       invocationId: invocationId,
       entryIndex: entryIndex,
-      payload: Buffer.from(JSON.stringify(payload)),
+      value: Buffer.from(JSON.stringify(payload)),
     })
   );
 }
@@ -453,14 +453,14 @@ export function checkTerminalError(outputMsg: Message, errorMessage: string) {
 }
 
 export function getAwakeableId(entryIndex: number): string {
-  return JSON.stringify(
-    new AwakeableIdentifier(
-      "test.TestGreeter",
-      Buffer.from("123"),
-      Buffer.from("abcd"),
-      entryIndex
-    )
-  );
+  return Buffer.from(
+    AwakeableIdentifier.encode({
+      serviceName: "test.TestGreeter",
+      instanceKey: Buffer.from("123"),
+      invocationId: Buffer.from("abcd"),
+      entryIndex,
+    }).finish()
+  ).toString("base64url");
 }
 
 export function keyVal(key: string, value: any): Buffer[] {
