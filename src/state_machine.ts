@@ -111,7 +111,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
 
   public handleUserCodeMessage<T>(
     messageType: bigint,
-    message: p.ProtocolMessage | Uint8Array,
+    message: p.ProtocolMessage,
     completedFlag?: boolean,
     protocolVersion?: number,
     requiresAckFlag?: boolean

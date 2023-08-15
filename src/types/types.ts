@@ -22,7 +22,7 @@ import {
 export class Message {
   constructor(
     readonly messageType: bigint,
-    readonly message: ProtocolMessage | Uint8Array,
+    readonly message: ProtocolMessage,
     readonly completed?: boolean,
     readonly protocolVersion?: number,
     readonly requiresAck?: boolean,
