@@ -43,6 +43,7 @@ export {
   SleepEntryMessage,
   StartMessage,
   SuspensionMessage,
+  AwakeableIdentifier,
 } from "../generated/proto/protocol";
 
 // Export the protocol message types as defined by the restate protocol.
@@ -139,15 +140,6 @@ export type ProtocolMessage =
 // Export the custom message types
 // Side effects are custom messages because the runtime does not need to inspect them
 export const SIDE_EFFECT_ENTRY_MESSAGE_TYPE = 0xfc01n;
-
-export class AwakeableIdentifier {
-  constructor(
-    readonly serviceName: string,
-    readonly instanceKey: Buffer,
-    readonly invocationId: Buffer,
-    readonly entryIndex: number
-  ) {}
-}
 
 // These message types will trigger sending a suspension message from the runtime
 // for each of the protocol modes

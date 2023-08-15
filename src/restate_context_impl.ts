@@ -329,15 +329,17 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
 
     // This needs to be done after handling the message in the state machine
     // otherwise the index is not yet incremented.
-    const awakeableIdentifier = new AwakeableIdentifier(
-      this.stateMachine.getFullServiceName(),
-      this.instanceKey,
-      this.invocationId,
-      this.stateMachine.getUserCodeJournalIndex()
-    );
+    const id = AwakeableIdentifier.create({
+      serviceName: this.stateMachine.getFullServiceName(),
+      instanceKey: this.instanceKey,
+      invocationId: this.invocationId,
+      entryIndex: this.stateMachine.getUserCodeJournalIndex(),
+    });
 
     return {
-      id: JSON.stringify(awakeableIdentifier),
+      id: Buffer.from(AwakeableIdentifier.encode(id).finish()).toString(
+        "base64url"
+      ),
       promise: promise,
     };
   }
@@ -345,13 +347,9 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
   public completeAwakeable<T>(id: string, payload: T): void {
     this.checkState("completeAwakeable");
 
-    // Parse the string to an awakeable identifier
-    const awakeableIdentifier = JSON.parse(id, (key, value) => {
-      if (value !== undefined && value.type === "Buffer") {
-        return Buffer.from(value.data);
-      }
-      return value;
-    }) as AwakeableIdentifier;
+    const awakeableIdentifier = AwakeableIdentifier.decode(
+      Buffer.from(id, "base64url")
+    );
 
     const msg = CompleteAwakeableEntryMessage.create({
       serviceName: awakeableIdentifier.serviceName,
