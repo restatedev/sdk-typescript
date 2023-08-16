@@ -147,7 +147,7 @@ export interface RestateBaseContext {
   awakeable<T>(): { id: string; promise: Promise<T> };
 
   /**
-   * Complete an awakeable of another service.
+   * Resolve an awakeable of another service.
    * @param id the string ID of the awakeable.
    * This is supplied by the service that needs to be woken up.
    * @param payload the payload to pass to the service that is woken up.
@@ -157,9 +157,22 @@ export interface RestateBaseContext {
    * @example
    * const ctx = restate.useContext(this);
    * // The sleeping service should have sent the awakeableIdentifier string to this service.
-   * ctx.completeAwakeable(awakeableIdentifier, "hello");
+   * ctx.resolveAwakeable(awakeableIdentifier, "hello");
    */
-  completeAwakeable<T>(id: string, payload: T): void;
+  resolveAwakeable<T>(id: string, payload: T): void;
+
+  /**
+   * Reject an awakeable of another service. When rejecting, the service waiting on this awakeable will be woken up with a terminal error with the provided reason.
+   * @param id the string ID of the awakeable.
+   * This is supplied by the service that needs to be woken up.
+   * @param reason the reason of the rejection.
+   *
+   * @example
+   * const ctx = restate.useContext(this);
+   * // The sleeping service should have sent the awakeableIdentifier string to this service.
+   * ctx.rejectAwakeable(awakeableIdentifier, "super bad error");
+   */
+  rejectAwakeable(id: string, reason: string): void;
 
   /**
    * Sleep until a timeout has passed.

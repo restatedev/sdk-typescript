@@ -15,6 +15,7 @@ import {
   AwakeableEntryMessage,
   BackgroundInvokeEntryMessage,
   CompleteAwakeableEntryMessage,
+  DeepPartial,
   InvokeEntryMessage,
   SleepEntryMessage,
 } from "./generated/proto/protocol";
@@ -344,24 +345,36 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
     };
   }
 
-  public completeAwakeable<T>(id: string, payload: T): void {
-    this.checkState("completeAwakeable");
+  public resolveAwakeable<T>(id: string, payload: T): void {
+    this.checkState("resolveAwakeable");
+    this.completeAwakeable(id, {
+      value: Buffer.from(JSON.stringify(payload)),
+    });
+  }
 
+  public rejectAwakeable(id: string, reason: string): void {
+    this.checkState("rejectAwakeable");
+    this.completeAwakeable(id, {
+      failure: { code: ErrorCodes.UNKNOWN, message: reason },
+    });
+  }
+
+  private completeAwakeable(
+    id: string,
+    base: DeepPartial<CompleteAwakeableEntryMessage>
+  ): void {
     const awakeableIdentifier = AwakeableIdentifier.decode(
       Buffer.from(id, "base64url")
     );
 
-    const msg = CompleteAwakeableEntryMessage.create({
-      serviceName: awakeableIdentifier.serviceName,
-      instanceKey: awakeableIdentifier.instanceKey,
-      invocationId: awakeableIdentifier.invocationId,
-      entryIndex: awakeableIdentifier.entryIndex,
-      value: Buffer.from(JSON.stringify(payload)),
-    });
+    base.serviceName = awakeableIdentifier.serviceName;
+    base.instanceKey = awakeableIdentifier.instanceKey;
+    base.invocationId = awakeableIdentifier.invocationId;
+    base.entryIndex = awakeableIdentifier.entryIndex;
 
     this.stateMachine.handleUserCodeMessage(
       COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
-      msg
+      CompleteAwakeableEntryMessage.create(base)
     );
   }
 
@@ -552,8 +565,11 @@ export class RpcContextImpl implements RpcContext {
   public awakeable<T>(): { id: string; promise: Promise<T> } {
     return this.ctx.awakeable();
   }
-  public completeAwakeable<T>(id: string, payload: T): void {
-    this.ctx.completeAwakeable(id, payload);
+  public resolveAwakeable<T>(id: string, payload: T): void {
+    this.ctx.resolveAwakeable(id, payload);
+  }
+  public rejectAwakeable(id: string, reason: string): void {
+    this.ctx.rejectAwakeable(id, reason);
   }
   public sleep(millis: number): Promise<void> {
     return this.ctx.sleep(millis);

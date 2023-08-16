@@ -18,6 +18,7 @@ import { JournalEntry } from "../journal";
 import { FailureWithTerminal } from "../generated/proto/javascript";
 
 export enum ErrorCodes {
+  UNKNOWN = 2,
   INTERNAL = 13,
   JOURNAL_MISMATCH = 32,
   PROTOCOL_VIOLATION = 33,

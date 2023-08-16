@@ -16,7 +16,7 @@ import {
   awakeableMessage,
   checkJournalMismatchError,
   checkTerminalError,
-  completeAwakeableMessage,
+  resolveAwakeableMessage,
   completionMessage,
   failure,
   getAwakeableId,
@@ -149,7 +149,7 @@ describe("AwakeableGreeter", () => {
     const result = await new TestDriver(new AwakeableGreeter(), [
       startMessage(),
       inputMessage(greetRequest("Till")),
-      completeAwakeableMessage(
+      resolveAwakeableMessage(
         "TestGreeter",
         Buffer.from("123"),
         Buffer.from("abcd"),
