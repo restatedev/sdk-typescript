@@ -12,7 +12,6 @@
 import stream from "stream";
 import { PROTOBUF_MESSAGE_BY_TYPE } from "../types/protocol";
 import { Header, Message } from "../types/types";
-import { assert } from "console";
 
 export function streamEncoder(): stream.Transform {
   return new stream.Transform({
@@ -30,7 +29,11 @@ export function streamEncoder(): stream.Transform {
 
 export function encodeMessage(msg: Message): Uint8Array {
   const pbType = PROTOBUF_MESSAGE_BY_TYPE.get(BigInt(msg.messageType));
-  assert(pbType !== undefined);
+  if (pbType === undefined) {
+    throw new Error(
+      "Trying to encode a message with unknown message type " + msg.messageType
+    );
+  }
 
   const bodyBuf = pbType.encode(msg.message).finish();
   const header = new Header(
