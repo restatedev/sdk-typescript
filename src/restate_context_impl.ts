@@ -241,9 +241,9 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
         // deterministic on replay
         const error = ensureError(e);
         const failure = errorToFailureWithTerminal(error);
-        const sideEffectMsg = SideEffectEntryMessage.encode(
-          SideEffectEntryMessage.create({ failure })
-        ).finish();
+        const sideEffectMsg = SideEffectEntryMessage.create({
+          failure: failure,
+        });
 
         // this may throw an error from the SDK/runtime/connection side, in case the
         // failure message cannot be committed to the journal. That error would then
@@ -266,14 +266,10 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
       // from here is not incorrectly attributed to the side-effect
       const sideEffectMsg =
         sideEffectResult !== undefined
-          ? SideEffectEntryMessage.encode(
-              SideEffectEntryMessage.create({
-                value: Buffer.from(jsonSerialize(sideEffectResult)),
-              })
-            ).finish()
-          : SideEffectEntryMessage.encode(
-              SideEffectEntryMessage.create()
-            ).finish();
+          ? SideEffectEntryMessage.create({
+              value: Buffer.from(jsonSerialize(sideEffectResult)),
+            })
+          : SideEffectEntryMessage.create();
 
       // if an error arises from committing the side effect result, then this error will
       // be thrown here (reject the returned promise) and the function will see that error,

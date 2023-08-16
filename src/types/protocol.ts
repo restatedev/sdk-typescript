@@ -62,6 +62,10 @@ export const BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE = 0x0c02n;
 export const AWAKEABLE_ENTRY_MESSAGE_TYPE = 0x0c03n;
 export const COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE = 0x0c04n;
 
+// Export the custom message types
+// Side effects are custom messages because the runtime does not need to inspect them
+export const SIDE_EFFECT_ENTRY_MESSAGE_TYPE = 0xfc01n;
+
 // Restate DuplexStream
 
 // Message types in the protocol.
@@ -81,6 +85,7 @@ export const KNOWN_MESSAGE_TYPES = new Set([
   BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
   AWAKEABLE_ENTRY_MESSAGE_TYPE,
   COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
+  SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
 ]);
 
 export const PROTOBUF_MESSAGE_NAME_BY_TYPE = new Map<bigint, string>([
@@ -98,6 +103,7 @@ export const PROTOBUF_MESSAGE_NAME_BY_TYPE = new Map<bigint, string>([
   [BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE, "BackgroundInvokeEntryMessage"],
   [AWAKEABLE_ENTRY_MESSAGE_TYPE, "AwakeableEntryMessage"],
   [COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE, "CompleteAwakeableEntryMessage"],
+  [SIDE_EFFECT_ENTRY_MESSAGE_TYPE, "SideEffectEntryMessage"],
 ]);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -116,6 +122,7 @@ const PROTOBUF_MESSAGES: Array<[bigint, any]> = [
   [BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE, BackgroundInvokeEntryMessage],
   [AWAKEABLE_ENTRY_MESSAGE_TYPE, AwakeableEntryMessage],
   [COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE, CompleteAwakeableEntryMessage],
+  [SIDE_EFFECT_ENTRY_MESSAGE_TYPE, SideEffectEntryMessage],
 ];
 
 export const PROTOBUF_MESSAGE_BY_TYPE = new Map(PROTOBUF_MESSAGES);
@@ -136,10 +143,6 @@ export type ProtocolMessage =
   | AwakeableEntryMessage
   | CompleteAwakeableEntryMessage
   | SideEffectEntryMessage;
-
-// Export the custom message types
-// Side effects are custom messages because the runtime does not need to inspect them
-export const SIDE_EFFECT_ENTRY_MESSAGE_TYPE = 0xfc01n;
 
 // These message types will trigger sending a suspension message from the runtime
 // for each of the protocol modes

@@ -29,16 +29,13 @@ export function streamEncoder(): stream.Transform {
 
 export function encodeMessage(msg: Message): Uint8Array {
   const pbType = PROTOBUF_MESSAGE_BY_TYPE.get(BigInt(msg.messageType));
-  let bodyBuf;
   if (pbType === undefined) {
-    // this is a custom message.
-    // in this case we expect it to be already encoded.
-    // It can also be undefined (void side effect), then allocate an empty buffer
-    bodyBuf =
-      msg.message !== undefined ? (msg.message as Uint8Array) : Buffer.alloc(0);
-  } else {
-    bodyBuf = pbType.encode(msg.message).finish();
+    throw new Error(
+      "Trying to encode a message with unknown message type " + msg.messageType
+    );
   }
+
+  const bodyBuf = pbType.encode(msg.message).finish();
   const header = new Header(
     BigInt(msg.messageType),
     bodyBuf.length,

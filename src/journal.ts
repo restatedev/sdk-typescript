@@ -275,9 +275,7 @@ export class Journal<I, O> {
         break;
       }
       case SIDE_EFFECT_ENTRY_MESSAGE_TYPE: {
-        const sideEffectMsg = SideEffectEntryMessage.decode(
-          replayMessage.message as Uint8Array
-        );
+        const sideEffectMsg = replayMessage.message as SideEffectEntryMessage;
         if (sideEffectMsg.value !== undefined) {
           this.resolveResult(
             journalIndex,

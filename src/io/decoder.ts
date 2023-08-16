@@ -76,21 +76,7 @@ function decodeMessages(decoderState: DecoderState, out: Output): DecoderState {
 
         const pbType = PROTOBUF_MESSAGE_BY_TYPE.get(header.messageType);
         if (pbType === undefined) {
-          // this is a custom message.
-          // we don't know how to decode custom message
-          // so we let the user of this stream to deal with custom
-          // message serde
-
-          out.push(
-            new Message(
-              header.messageType,
-              frame,
-              header.completedFlag,
-              header.protocolVersion,
-              header.requiresAckFlag,
-              header.partialStateFlag
-            )
-          );
+          throw new Error("Got unknown message type " + header.messageType);
         } else {
           const message = pbType.decode(frame);
           out.push(

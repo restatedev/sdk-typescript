@@ -39,7 +39,6 @@ import {
   SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
   SUSPENSION_MESSAGE_TYPE,
   SuspensionMessage,
-  ProtocolMessage,
   AwakeableIdentifier,
   ERROR_MESSAGE_TYPE,
   ErrorMessage,
@@ -299,16 +298,6 @@ export function backgroundInvokeMessage(
       );
 }
 
-export function decodeSideEffectFromResult(msg: Uint8Array | ProtocolMessage) {
-  if (msg instanceof Uint8Array) {
-    return SideEffectEntryMessage.decode(
-      msg as Uint8Array
-    ) as SideEffectEntryMessage;
-  } else {
-    throw new Error("Can't decode message to side effect " + msg.toString());
-  }
-}
-
 export function sideEffectMessage<T>(
   value?: T,
   failure?: FailureWithTerminal
@@ -316,11 +305,9 @@ export function sideEffectMessage<T>(
   if (value !== undefined) {
     return new Message(
       SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-      SideEffectEntryMessage.encode(
-        SideEffectEntryMessage.create({
-          value: Buffer.from(JSON.stringify(value)),
-        })
-      ).finish(),
+      SideEffectEntryMessage.create({
+        value: Buffer.from(JSON.stringify(value)),
+      }),
       false,
       undefined,
       true
@@ -328,9 +315,7 @@ export function sideEffectMessage<T>(
   } else if (failure !== undefined) {
     return new Message(
       SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-      SideEffectEntryMessage.encode(
-        SideEffectEntryMessage.create({ failure: failure })
-      ).finish(),
+      SideEffectEntryMessage.create({ failure: failure }),
       false,
       undefined,
       true
@@ -338,7 +323,7 @@ export function sideEffectMessage<T>(
   } else {
     return new Message(
       SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-      SideEffectEntryMessage.encode(SideEffectEntryMessage.create({})).finish(),
+      SideEffectEntryMessage.create({}),
       false,
       undefined,
       true
