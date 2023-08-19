@@ -443,7 +443,11 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
   }
 
   public getFullServiceName(): string {
-    return `${this.invocation.method.packge}.${this.invocation.method.service}`;
+    if (this.invocation.method.packge) {
+      return `${this.invocation.method.packge}.${this.invocation.method.service}`;
+    } else {
+      return this.invocation.method.service;
+    }
   }
 
   public handleInputClosed(): void {
