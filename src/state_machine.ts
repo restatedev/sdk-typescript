@@ -14,7 +14,7 @@ import { RestateGrpcContextImpl } from "./restate_context_impl";
 import { Connection, RestateStreamConsumer } from "./connection/connection";
 import { ProtocolMode } from "./generated/proto/discovery";
 import { Message } from "./types/types";
-import { CompletablePromise } from "./utils/utils";
+import { CompletablePromise, makeFqServiceName } from "./utils/utils";
 import { rlog } from "./utils/logger";
 import { clearTimeout } from "timers";
 import {
@@ -443,11 +443,10 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
   }
 
   public getFullServiceName(): string {
-    if (this.invocation.method.packge) {
-      return `${this.invocation.method.packge}.${this.invocation.method.service}`;
-    } else {
-      return this.invocation.method.service;
-    }
+    return makeFqServiceName(
+      this.invocation.method.packge,
+      this.invocation.method.service
+    );
   }
 
   public handleInputClosed(): void {

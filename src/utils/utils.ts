@@ -93,6 +93,10 @@ export function uuidV7FromBuffer(buffer: Buffer): string {
   );
 }
 
+export function makeFqServiceName(pckg: string, name: string): string {
+  return pckg ? `${pckg}.${name}` : name;
+}
+
 /**
  * Equality functions
  * @param msg1 the current message from user code

@@ -19,6 +19,7 @@ import {
 } from "./generated/proto/protocol";
 import {
   CompletablePromise,
+  makeFqServiceName,
   printMessageAsJson,
   uuidV7FromBuffer,
 } from "./utils/utils";
@@ -175,9 +176,10 @@ export class Invocation<I, O> {
     public readonly localStateStore: LocalStateStore
   ) {
     this.invocationIdString = uuidV7FromBuffer(this.invocationId);
-    this.logPrefix = `[${this.method.packge}.${
+    this.logPrefix = `[${makeFqServiceName(
+      this.method.packge,
       this.method.service
-    }-${this.instanceKey.toString("base64")}-${this.invocationIdString}] [${
+    )}-${this.instanceKey.toString("base64")}-${this.invocationIdString}] [${
       this.method.method.name
     }]`;
   }
