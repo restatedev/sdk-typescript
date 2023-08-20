@@ -1,6 +1,6 @@
 {
   "name": "@restatedev/restate-sdk",
-  "version": "1.0.36",
+  "version": "1.0.37",
   "description": "Typescript SDK for Restate",
   "engines": {
     "node": ">= 10"
