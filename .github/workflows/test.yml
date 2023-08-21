@@ -32,6 +32,15 @@ jobs:
           path: restatedev-restate-sdk.tgz
           retention-days: 1
           if-no-files-found: error
+
+      - name: Publish snapshot
+        if: ${{ github.event_name == 'push' && github.ref == 'main }}
+        env:
+          NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          npm version 0.0.0-SNAPSHOT-$(date '+%Y%m%d%H%M%S')
+          npm publish
+
   e2e:
     permissions:
       contents: read
