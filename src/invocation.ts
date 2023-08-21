@@ -21,7 +21,6 @@ import {
   CompletablePromise,
   makeFqServiceName,
   printMessageAsJson,
-  uuidV7FromBuffer,
 } from "./utils/utils";
 import {
   POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
@@ -45,8 +44,8 @@ export class InvocationBuilder<I, O> implements RestateStreamConsumer {
 
   private runtimeReplayIndex = 0;
   private replayEntries = new Map<number, Message>();
-  private instanceKey?: Buffer = undefined;
-  private invocationId?: Buffer = undefined;
+  private id?: Buffer = undefined;
+  private debugId?: string = undefined;
   private invocationValue?: Buffer = undefined;
   private nbEntriesToReplay?: number = undefined;
   private localStateStore?: LocalStateStore;
@@ -120,8 +119,8 @@ export class InvocationBuilder<I, O> implements RestateStreamConsumer {
     partialState: boolean
   ): InvocationBuilder<I, O> {
     this.nbEntriesToReplay = m.knownEntries;
-    this.instanceKey = m.instanceKey;
-    this.invocationId = m.invocationId;
+    this.id = m.id;
+    this.debugId = m.debugId;
     this.localStateStore = new LocalStateStore(partialState, m.stateMap);
     return this;
   }
@@ -153,8 +152,8 @@ export class InvocationBuilder<I, O> implements RestateStreamConsumer {
     }
     return new Invocation(
       this.method!,
-      this.instanceKey!,
-      this.invocationId!,
+      this.id!,
+      this.debugId!,
       this.nbEntriesToReplay!,
       this.replayEntries!,
       this.invocationValue!,
@@ -164,24 +163,20 @@ export class InvocationBuilder<I, O> implements RestateStreamConsumer {
 }
 
 export class Invocation<I, O> {
-  public readonly invocationIdString;
   public readonly logPrefix;
   constructor(
     public readonly method: HostedGrpcServiceMethod<I, O>,
-    public readonly instanceKey: Buffer,
-    public readonly invocationId: Buffer,
+    public readonly id: Buffer,
+    public readonly debugId: string,
     public readonly nbEntriesToReplay: number,
     public readonly replayEntries: Map<number, Message>,
     public readonly invocationValue: Buffer,
     public readonly localStateStore: LocalStateStore
   ) {
-    this.invocationIdString = uuidV7FromBuffer(this.invocationId);
     this.logPrefix = `[${makeFqServiceName(
       this.method.packge,
       this.method.service
-    )}-${this.instanceKey.toString("base64")}-${this.invocationIdString}] [${
-      this.method.method.name
-    }]`;
+    )}/${this.method.method.name}] [${this.debugId}]`;
   }
 }
 

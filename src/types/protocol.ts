@@ -43,7 +43,6 @@ export {
   SleepEntryMessage,
   StartMessage,
   SuspensionMessage,
-  AwakeableIdentifier,
 } from "../generated/proto/protocol";
 
 // Export the protocol message types as defined by the restate protocol.

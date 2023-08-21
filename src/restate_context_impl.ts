@@ -21,7 +21,6 @@ import {
 } from "./generated/proto/protocol";
 import {
   AWAKEABLE_ENTRY_MESSAGE_TYPE,
-  AwakeableIdentifier,
   BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
   CLEAR_STATE_ENTRY_MESSAGE_TYPE,
   COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
@@ -75,8 +74,7 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
   private static callContext = new AsyncLocalStorage<CallContext>();
 
   constructor(
-    public readonly instanceKey: Buffer,
-    public readonly invocationId: Buffer,
+    public readonly id: Buffer,
     public readonly serviceName: string,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private readonly stateMachine: StateMachine<any, any>
@@ -326,17 +324,13 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
 
     // This needs to be done after handling the message in the state machine
     // otherwise the index is not yet incremented.
-    const id = AwakeableIdentifier.create({
-      serviceName: this.stateMachine.getFullServiceName(),
-      instanceKey: this.instanceKey,
-      invocationId: this.invocationId,
-      entryIndex: this.stateMachine.getUserCodeJournalIndex(),
-    });
+    const encodedEntryIndex = Buffer.alloc(4 /* Size of u32 */);
+    encodedEntryIndex.writeUInt32BE(
+      this.stateMachine.getUserCodeJournalIndex()
+    );
 
     return {
-      id: Buffer.from(AwakeableIdentifier.encode(id).finish()).toString(
-        "base64url"
-      ),
+      id: Buffer.concat([this.id, encodedEntryIndex]).toString("base64url"),
       promise: promise,
     };
   }
@@ -359,15 +353,7 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
     id: string,
     base: DeepPartial<CompleteAwakeableEntryMessage>
   ): void {
-    const awakeableIdentifier = AwakeableIdentifier.decode(
-      Buffer.from(id, "base64url")
-    );
-
-    base.serviceName = awakeableIdentifier.serviceName;
-    base.instanceKey = awakeableIdentifier.instanceKey;
-    base.invocationId = awakeableIdentifier.invocationId;
-    base.entryIndex = awakeableIdentifier.entryIndex;
-
+    base.id = id;
     this.stateMachine.handleUserCodeMessage(
       COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
       CompleteAwakeableEntryMessage.create(base)
@@ -487,9 +473,8 @@ async function executeWithRetries<T>(
 export class RpcContextImpl implements RpcContext {
   constructor(
     private readonly ctx: RestateGrpcContext,
-    public readonly instanceKey: Buffer = ctx.instanceKey,
-    public readonly serviceName: string = ctx.serviceName,
-    public readonly invocationId: Buffer = ctx.invocationId
+    public readonly id: Buffer = ctx.id,
+    public readonly serviceName: string = ctx.serviceName
   ) {}
 
   public rpc<M>({ path }: ServiceApi): Client<M> {

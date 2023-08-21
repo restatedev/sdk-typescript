@@ -149,13 +149,7 @@ describe("AwakeableGreeter", () => {
     const result = await new TestDriver(new AwakeableGreeter(), [
       startMessage(),
       inputMessage(greetRequest("Till")),
-      resolveAwakeableMessage(
-        "TestGreeter",
-        Buffer.from("123"),
-        Buffer.from("abcd"),
-        1,
-        "hello"
-      ), // should have been an awakeableMessage
+      resolveAwakeableMessage("awakeable-1", "hello"), // should have been an awakeableMessage
     ]).run();
 
     expect(result.length).toStrictEqual(1);

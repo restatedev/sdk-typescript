@@ -22,26 +22,15 @@ import { Client, SendClient } from "./types/router";
  */
 export interface RestateBaseContext {
   /**
-   * The key associated with the current function invocation.
-   *
-   * For keyed services, this is the key extracted from the input argument, as annotated in the
-   * protobuf service definition.
-   *
-   * For unkeyed services, this is the internal key under which restate stores the journal and
-   * transient state of the function execution.
+   * The unique id that identifies the current function invocation. This id is guaranteed to be
+   * unique across invocations, but constant across reties and suspensions.
    */
-  instanceKey: Buffer;
+  id: Buffer;
 
   /**
    * Name of the service.
    */
   serviceName: string;
-
-  /**
-   * The unique id that identifies the current function invocation. This id is guaranteed to be
-   * unique across invocations, but constant across reties and suspensions.
-   */
-  invocationId: Buffer;
 
   /**
    * Get/retrieve state from the Restate runtime.

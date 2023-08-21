@@ -39,7 +39,6 @@ import {
   SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
   SUSPENSION_MESSAGE_TYPE,
   SuspensionMessage,
-  AwakeableIdentifier,
   ERROR_MESSAGE_TYPE,
   ErrorMessage,
 } from "../src/types/protocol";
@@ -66,8 +65,8 @@ export function startMessage(
   return new Message(
     START_MESSAGE_TYPE,
     StartMessage.create({
-      instanceKey: Buffer.from("123"),
-      invocationId: Buffer.from("abcd"),
+      id: Buffer.from("123"),
+      debugId: "123",
       knownEntries: knownEntries, // only used for the Lambda case. For bidi streaming, this will be imputed by the testdriver
       stateMap: toStateEntries(state || []),
     }),
@@ -354,39 +353,21 @@ export function awakeableMessage<T>(payload?: T, failure?: Failure): Message {
   }
 }
 
-export function resolveAwakeableMessage<T>(
-  serviceName: string,
-  instanceKey: Buffer,
-  invocationId: Buffer,
-  entryIndex: number,
-  payload: T
-): Message {
+export function resolveAwakeableMessage<T>(id: string, payload: T): Message {
   return new Message(
     COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
     CompleteAwakeableEntryMessage.create({
-      serviceName: serviceName,
-      instanceKey: instanceKey,
-      invocationId: invocationId,
-      entryIndex: entryIndex,
+      id: id,
       value: Buffer.from(JSON.stringify(payload)),
     })
   );
 }
 
-export function rejectAwakeableMessage(
-  serviceName: string,
-  instanceKey: Buffer,
-  invocationId: Buffer,
-  entryIndex: number,
-  reason: string
-): Message {
+export function rejectAwakeableMessage(id: string, reason: string): Message {
   return new Message(
     COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
     CompleteAwakeableEntryMessage.create({
-      serviceName: serviceName,
-      instanceKey: instanceKey,
-      invocationId: invocationId,
-      entryIndex: entryIndex,
+      id: id,
       failure: { code: ErrorCodes.UNKNOWN, message: reason },
     })
   );
@@ -457,14 +438,12 @@ export function checkTerminalError(outputMsg: Message, errorMessage: string) {
 }
 
 export function getAwakeableId(entryIndex: number): string {
-  return Buffer.from(
-    AwakeableIdentifier.encode({
-      serviceName: "test.TestGreeter",
-      instanceKey: Buffer.from("123"),
-      invocationId: Buffer.from("abcd"),
-      entryIndex,
-    }).finish()
-  ).toString("base64url");
+  const encodedEntryIndex = Buffer.alloc(4 /* Size of u32 */);
+  encodedEntryIndex.writeUInt32BE(entryIndex);
+
+  return Buffer.concat([Buffer.from("123"), encodedEntryIndex]).toString(
+    "base64url"
+  );
 }
 
 export function keyVal(key: string, value: any): Buffer[] {
