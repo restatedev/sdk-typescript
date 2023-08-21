@@ -38,6 +38,9 @@ jobs:
         env:
           NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # We're using 0.0.0 to avoid this version to be higher than released versions.
+          # To use it: 
+          # "@restatedev/restate-sdk": "^0.0.0-SNAPSHOT"
           npm version 0.0.0-SNAPSHOT-$(date '+%Y%m%d%H%M%S')
           npm publish
 
