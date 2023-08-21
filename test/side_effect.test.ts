@@ -666,7 +666,7 @@ describe("FailingOneWayCallInSideEffectGreeter", () => {
   });
 });
 
-class FailingCompleteAwakeableSideEffectGreeter implements TestGreeter {
+class FailingResolveAwakeableSideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: number) {}
 
   async greet(): Promise<TestResponse> {
@@ -675,24 +675,55 @@ class FailingCompleteAwakeableSideEffectGreeter implements TestGreeter {
     // state
     const response = await ctx.sideEffect(async () => {
       const awakeableIdentifier = getAwakeableId(1);
-      ctx.completeAwakeable(awakeableIdentifier, "hello");
+      ctx.resolveAwakeable(awakeableIdentifier, "hello");
     });
 
     return TestResponse.create({ greeting: `Hello ${response}` });
   }
 }
 
-describe("FailingCompleteAwakeableSideEffectGreeter", () => {
-  it("fails on invalid operation completeAwakeable in sideEffect", async () => {
+describe("FailingResolveAwakeableSideEffectGreeter", () => {
+  it("fails on invalid operation resolveAwakeable in sideEffect", async () => {
     const result = await new TestDriver(
-      new FailingCompleteAwakeableSideEffectGreeter(123),
+      new FailingResolveAwakeableSideEffectGreeter(123),
       [startMessage(), inputMessage(greetRequest("Till")), completionMessage(1)]
     ).run();
 
     expect(result.length).toStrictEqual(2);
     checkTerminalError(
       result[1],
-      "You cannot do completeAwakeable calls from within a side effect."
+      "You cannot do resolveAwakeable calls from within a side effect."
+    );
+  });
+});
+
+class FailingRejectAwakeableSideEffectGreeter implements TestGreeter {
+  constructor(readonly sideEffectOutput: number) {}
+
+  async greet(): Promise<TestResponse> {
+    const ctx = restate.useContext(this);
+
+    // state
+    const response = await ctx.sideEffect(async () => {
+      const awakeableIdentifier = getAwakeableId(1);
+      ctx.rejectAwakeable(awakeableIdentifier, "hello");
+    });
+
+    return TestResponse.create({ greeting: `Hello ${response}` });
+  }
+}
+
+describe("FailingRejectAwakeableSideEffectGreeter", () => {
+  it("fails on invalid operation rejectAwakeable in sideEffect", async () => {
+    const result = await new TestDriver(
+      new FailingRejectAwakeableSideEffectGreeter(123),
+      [startMessage(), inputMessage(greetRequest("Till")), completionMessage(1)]
+    ).run();
+
+    expect(result.length).toStrictEqual(2);
+    checkTerminalError(
+      result[1],
+      "You cannot do rejectAwakeable calls from within a side effect."
     );
   });
 });

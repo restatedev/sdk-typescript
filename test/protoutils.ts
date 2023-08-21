@@ -354,7 +354,7 @@ export function awakeableMessage<T>(payload?: T, failure?: Failure): Message {
   }
 }
 
-export function completeAwakeableMessage<T>(
+export function resolveAwakeableMessage<T>(
   serviceName: string,
   instanceKey: Buffer,
   invocationId: Buffer,
@@ -369,6 +369,25 @@ export function completeAwakeableMessage<T>(
       invocationId: invocationId,
       entryIndex: entryIndex,
       value: Buffer.from(JSON.stringify(payload)),
+    })
+  );
+}
+
+export function rejectAwakeableMessage(
+  serviceName: string,
+  instanceKey: Buffer,
+  invocationId: Buffer,
+  entryIndex: number,
+  reason: string
+): Message {
+  return new Message(
+    COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
+    CompleteAwakeableEntryMessage.create({
+      serviceName: serviceName,
+      instanceKey: instanceKey,
+      invocationId: invocationId,
+      entryIndex: entryIndex,
+      failure: { code: ErrorCodes.UNKNOWN, message: reason },
     })
   );
 }

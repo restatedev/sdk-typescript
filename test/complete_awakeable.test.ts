@@ -13,7 +13,7 @@ import { TestGreeter, TestResponse } from "../src/generated/proto/test";
 import * as restate from "../src/public_api";
 import {
   checkJournalMismatchError,
-  completeAwakeableMessage,
+  resolveAwakeableMessage,
   getAwakeableId,
   greetRequest,
   greetResponse,
@@ -21,32 +21,33 @@ import {
   invokeMessage,
   outputMessage,
   startMessage,
+  rejectAwakeableMessage,
 } from "./protoutils";
 import { describe, expect } from "@jest/globals";
 import { TestDriver } from "./testdriver";
 
-class CompleteAwakeableGreeter implements TestGreeter {
+class ResolveAwakeableGreeter implements TestGreeter {
   constructor(readonly payload: string) {}
 
   async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
     const awakeableIdentifier = getAwakeableId(1);
-    ctx.completeAwakeable(awakeableIdentifier, this.payload);
+    ctx.resolveAwakeable(awakeableIdentifier, this.payload);
 
     return TestResponse.create({ greeting: `Hello` });
   }
 }
 
-describe("CompleteAwakeableGreeter", () => {
+describe("ResolveAwakeableGreeter", () => {
   it("sends message to runtime", async () => {
-    const result = await new TestDriver(new CompleteAwakeableGreeter("hello"), [
+    const result = await new TestDriver(new ResolveAwakeableGreeter("hello"), [
       startMessage(),
       inputMessage(greetRequest("Till")),
     ]).run();
 
     expect(result).toStrictEqual([
-      completeAwakeableMessage(
+      resolveAwakeableMessage(
         "test.TestGreeter",
         Buffer.from("123"),
         Buffer.from("abcd"),
@@ -58,13 +59,13 @@ describe("CompleteAwakeableGreeter", () => {
   });
 
   it("sends message to runtime for empty string", async () => {
-    const result = await new TestDriver(new CompleteAwakeableGreeter(""), [
+    const result = await new TestDriver(new ResolveAwakeableGreeter(""), [
       startMessage(),
       inputMessage(greetRequest("Till")),
     ]).run();
 
     expect(result).toStrictEqual([
-      completeAwakeableMessage(
+      resolveAwakeableMessage(
         "test.TestGreeter",
         Buffer.from("123"),
         Buffer.from("abcd"),
@@ -76,10 +77,10 @@ describe("CompleteAwakeableGreeter", () => {
   });
 
   it("handles replay with value", async () => {
-    const result = await new TestDriver(new CompleteAwakeableGreeter("hello"), [
+    const result = await new TestDriver(new ResolveAwakeableGreeter("hello"), [
       startMessage(),
       inputMessage(greetRequest("Till")),
-      completeAwakeableMessage(
+      resolveAwakeableMessage(
         "test.TestGreeter",
         Buffer.from("123"),
         Buffer.from("abcd"),
@@ -92,10 +93,10 @@ describe("CompleteAwakeableGreeter", () => {
   });
 
   it("handles replay with value empty string", async () => {
-    const result = await new TestDriver(new CompleteAwakeableGreeter(""), [
+    const result = await new TestDriver(new ResolveAwakeableGreeter(""), [
       startMessage(),
       inputMessage(greetRequest("Till")),
-      completeAwakeableMessage(
+      resolveAwakeableMessage(
         "test.TestGreeter",
         Buffer.from("123"),
         Buffer.from("abcd"),
@@ -108,7 +109,7 @@ describe("CompleteAwakeableGreeter", () => {
   });
 
   it("fails on journal mismatch. Completed with invoke during replay.", async () => {
-    const result = await new TestDriver(new CompleteAwakeableGreeter("hello"), [
+    const result = await new TestDriver(new ResolveAwakeableGreeter("hello"), [
       startMessage(),
       inputMessage(greetRequest("Till")),
       invokeMessage(
@@ -124,10 +125,10 @@ describe("CompleteAwakeableGreeter", () => {
   });
 
   it("fails on journal mismatch. Completed with wrong service name", async () => {
-    const result = await new TestDriver(new CompleteAwakeableGreeter("hello"), [
+    const result = await new TestDriver(new ResolveAwakeableGreeter("hello"), [
       startMessage(2),
       inputMessage(greetRequest("Till")),
-      completeAwakeableMessage(
+      resolveAwakeableMessage(
         "TestGreeterzzz", // this should have been TestGreeter
         Buffer.from("123"),
         Buffer.from("abcd"),
@@ -141,10 +142,10 @@ describe("CompleteAwakeableGreeter", () => {
   });
 
   it("fails on journal mismatch. Completed with wrong instance key.", async () => {
-    const result = await new TestDriver(new CompleteAwakeableGreeter("hello"), [
+    const result = await new TestDriver(new ResolveAwakeableGreeter("hello"), [
       startMessage(2),
       inputMessage(greetRequest("Till")),
-      completeAwakeableMessage(
+      resolveAwakeableMessage(
         "TestGreeter",
         Buffer.from("1234"), // this should have been a Buffer.from("123")
         Buffer.from("abcd"),
@@ -158,10 +159,10 @@ describe("CompleteAwakeableGreeter", () => {
   });
 
   it("fails on journal mismatch. Completed with wrong invocation id.", async () => {
-    const result = await new TestDriver(new CompleteAwakeableGreeter("hello"), [
+    const result = await new TestDriver(new ResolveAwakeableGreeter("hello"), [
       startMessage(2),
       inputMessage(greetRequest("Till")),
-      completeAwakeableMessage(
+      resolveAwakeableMessage(
         "TestGreeter",
         Buffer.from("123"),
         Buffer.from("abcde"), // this should have been a Buffer.from("abcd")
@@ -175,10 +176,10 @@ describe("CompleteAwakeableGreeter", () => {
   });
 
   it("fails on journal mismatch. Completed with wrong entry index.", async () => {
-    const result = await new TestDriver(new CompleteAwakeableGreeter("hello"), [
+    const result = await new TestDriver(new ResolveAwakeableGreeter("hello"), [
       startMessage(2),
       inputMessage(greetRequest("Till")),
-      completeAwakeableMessage(
+      resolveAwakeableMessage(
         "TestGreeter",
         Buffer.from("123"),
         Buffer.from("abcd"),
@@ -189,5 +190,38 @@ describe("CompleteAwakeableGreeter", () => {
 
     expect(result.length).toStrictEqual(1);
     checkJournalMismatchError(result[0]);
+  });
+});
+
+class RejectAwakeableGreeter implements TestGreeter {
+  constructor(readonly reason: string) {}
+
+  async greet(): Promise<TestResponse> {
+    const ctx = restate.useContext(this);
+
+    const awakeableIdentifier = getAwakeableId(1);
+    ctx.rejectAwakeable(awakeableIdentifier, this.reason);
+
+    return TestResponse.create({ greeting: `Hello` });
+  }
+}
+
+describe("RejectAwakeableGreeter", () => {
+  it("sends message to runtime", async () => {
+    const result = await new TestDriver(
+      new RejectAwakeableGreeter("my bad error"),
+      [startMessage(), inputMessage(greetRequest("Till"))]
+    ).run();
+
+    expect(result).toStrictEqual([
+      rejectAwakeableMessage(
+        "test.TestGreeter",
+        Buffer.from("123"),
+        Buffer.from("abcd"),
+        1,
+        "my bad error"
+      ),
+      outputMessage(greetResponse("Hello")),
+    ]);
   });
 });
