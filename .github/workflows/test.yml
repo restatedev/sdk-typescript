@@ -32,6 +32,18 @@ jobs:
           path: restatedev-restate-sdk.tgz
           retention-days: 1
           if-no-files-found: error
+
+      - name: Publish snapshot
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        env:
+          NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # We're using 0.0.0 to avoid this version to be higher than released versions.
+          # To use it: 
+          # "@restatedev/restate-sdk": "^0.0.0-SNAPSHOT"
+          npm version 0.0.0-SNAPSHOT-$(date '+%Y%m%d%H%M%S') --git-tag-version false
+          npm publish
+
   e2e:
     permissions:
       contents: read
