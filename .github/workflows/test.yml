@@ -42,7 +42,7 @@ jobs:
           # To use it: 
           # "@restatedev/restate-sdk": "^0.0.0-SNAPSHOT"
           npm version 0.0.0-SNAPSHOT-$(date '+%Y%m%d%H%M%S') --git-tag-version false
-          npm publish
+          npm publish --tag dev
 
   e2e:
     permissions:
