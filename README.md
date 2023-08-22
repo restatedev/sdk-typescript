@@ -54,7 +54,7 @@ Restate takes care of:
 
 Check [Restate GitHub](https://github.com/restatedev/) or the [docs](https://docs.restate.dev/) for further details.
 
-# Using to the SDK
+# Using the SDK
 
 To use this SDK, simply add the dependency to your project:
 ```shell
