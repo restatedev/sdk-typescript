@@ -68,8 +68,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
     this.localStateStore = invocation.localStateStore;
 
     this.restateContext = new RestateGrpcContextImpl(
-      this.invocation.instanceKey,
-      this.invocation.invocationId,
+      this.invocation.id,
       this.invocation.method.service,
       this
     );

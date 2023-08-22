@@ -81,8 +81,8 @@ export class TestDriver<I, O> implements Connection {
     entries[0] = new Message(
       msg.messageType,
       StartMessage.create({
-        instanceKey: startEntry.instanceKey,
-        invocationId: startEntry.invocationId,
+        id: startEntry.id,
+        debugId: startEntry.debugId,
         knownEntries: endOfReplay - 1,
         stateMap: startEntry.stateMap,
       }),

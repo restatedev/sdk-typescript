@@ -82,17 +82,6 @@ export function printMessageAsJson(obj: any): string {
   );
 }
 
-// Only used for logging the invocation ID in debug logging mode
-export function uuidV7FromBuffer(buffer: Buffer): string {
-  // if (buffer.length !== 16) {
-  //   throw new Error('Invalid UUIDv7 buffer length');
-  // }
-  const bytes = new Uint8Array(buffer);
-  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join(
-    ""
-  );
-}
-
 export function makeFqServiceName(pckg: string, name: string): string {
   return pckg ? `${pckg}.${name}` : name;
 }
@@ -142,14 +131,7 @@ const completeAwakeableMsgEquality = (
   msg1: CompleteAwakeableEntryMessage,
   msg2: CompleteAwakeableEntryMessage
 ) => {
-  if (
-    !(
-      msg1.serviceName === msg2.serviceName &&
-      msg1.instanceKey.equals(msg2.instanceKey) &&
-      msg1.invocationId.equals(msg2.invocationId) &&
-      msg1.entryIndex === msg2.entryIndex
-    )
-  ) {
+  if (!(msg1.id === msg2.id)) {
     return false;
   }
 

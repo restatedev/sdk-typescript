@@ -47,13 +47,7 @@ describe("ResolveAwakeableGreeter", () => {
     ]).run();
 
     expect(result).toStrictEqual([
-      resolveAwakeableMessage(
-        "test.TestGreeter",
-        Buffer.from("123"),
-        Buffer.from("abcd"),
-        1,
-        "hello"
-      ),
+      resolveAwakeableMessage(getAwakeableId(1), "hello"),
       outputMessage(greetResponse("Hello")),
     ]);
   });
@@ -65,13 +59,7 @@ describe("ResolveAwakeableGreeter", () => {
     ]).run();
 
     expect(result).toStrictEqual([
-      resolveAwakeableMessage(
-        "test.TestGreeter",
-        Buffer.from("123"),
-        Buffer.from("abcd"),
-        1,
-        ""
-      ),
+      resolveAwakeableMessage(getAwakeableId(1), ""),
       outputMessage(greetResponse("Hello")),
     ]);
   });
@@ -80,13 +68,7 @@ describe("ResolveAwakeableGreeter", () => {
     const result = await new TestDriver(new ResolveAwakeableGreeter("hello"), [
       startMessage(),
       inputMessage(greetRequest("Till")),
-      resolveAwakeableMessage(
-        "test.TestGreeter",
-        Buffer.from("123"),
-        Buffer.from("abcd"),
-        1,
-        "hello"
-      ),
+      resolveAwakeableMessage(getAwakeableId(1), "hello"),
     ]).run();
 
     expect(result).toStrictEqual([outputMessage(greetResponse("Hello"))]);
@@ -96,13 +78,7 @@ describe("ResolveAwakeableGreeter", () => {
     const result = await new TestDriver(new ResolveAwakeableGreeter(""), [
       startMessage(),
       inputMessage(greetRequest("Till")),
-      resolveAwakeableMessage(
-        "test.TestGreeter",
-        Buffer.from("123"),
-        Buffer.from("abcd"),
-        1,
-        ""
-      ),
+      resolveAwakeableMessage(getAwakeableId(1), ""),
     ]).run();
 
     expect(result).toStrictEqual([outputMessage(greetResponse("Hello"))]);
@@ -124,66 +100,12 @@ describe("ResolveAwakeableGreeter", () => {
     checkJournalMismatchError(result[0]);
   });
 
-  it("fails on journal mismatch. Completed with wrong service name", async () => {
+  it("fails on journal mismatch. Completed with wrong id.", async () => {
     const result = await new TestDriver(new ResolveAwakeableGreeter("hello"), [
       startMessage(2),
       inputMessage(greetRequest("Till")),
       resolveAwakeableMessage(
-        "TestGreeterzzz", // this should have been TestGreeter
-        Buffer.from("123"),
-        Buffer.from("abcd"),
-        1,
-        "hello"
-      ),
-    ]).run();
-
-    expect(result.length).toStrictEqual(1);
-    checkJournalMismatchError(result[0]);
-  });
-
-  it("fails on journal mismatch. Completed with wrong instance key.", async () => {
-    const result = await new TestDriver(new ResolveAwakeableGreeter("hello"), [
-      startMessage(2),
-      inputMessage(greetRequest("Till")),
-      resolveAwakeableMessage(
-        "TestGreeter",
-        Buffer.from("1234"), // this should have been a Buffer.from("123")
-        Buffer.from("abcd"),
-        1,
-        "hello"
-      ),
-    ]).run();
-
-    expect(result.length).toStrictEqual(1);
-    checkJournalMismatchError(result[0]);
-  });
-
-  it("fails on journal mismatch. Completed with wrong invocation id.", async () => {
-    const result = await new TestDriver(new ResolveAwakeableGreeter("hello"), [
-      startMessage(2),
-      inputMessage(greetRequest("Till")),
-      resolveAwakeableMessage(
-        "TestGreeter",
-        Buffer.from("123"),
-        Buffer.from("abcde"), // this should have been a Buffer.from("abcd")
-        1,
-        "hello"
-      ),
-    ]).run();
-
-    expect(result.length).toStrictEqual(1);
-    checkJournalMismatchError(result[0]);
-  });
-
-  it("fails on journal mismatch. Completed with wrong entry index.", async () => {
-    const result = await new TestDriver(new ResolveAwakeableGreeter("hello"), [
-      startMessage(2),
-      inputMessage(greetRequest("Till")),
-      resolveAwakeableMessage(
-        "TestGreeter",
-        Buffer.from("123"),
-        Buffer.from("abcd"),
-        2, // this should have been 1
+        "1234", // this should have been getAwakeableId(1)
         "hello"
       ),
     ]).run();
@@ -214,13 +136,7 @@ describe("RejectAwakeableGreeter", () => {
     ).run();
 
     expect(result).toStrictEqual([
-      rejectAwakeableMessage(
-        "test.TestGreeter",
-        Buffer.from("123"),
-        Buffer.from("abcd"),
-        1,
-        "my bad error"
-      ),
+      rejectAwakeableMessage(getAwakeableId(1), "my bad error"),
       outputMessage(greetResponse("Hello")),
     ]);
   });

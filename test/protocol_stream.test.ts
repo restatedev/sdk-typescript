@@ -90,7 +90,8 @@ describe("Restate Streaming Connection", () => {
       new Message(
         START_MESSAGE_TYPE,
         StartMessage.create({
-          invocationId: Buffer.from("abcd"),
+          id: Buffer.from("abcd"),
+          debugId: "abcd",
           knownEntries: 1337,
         })
       )
