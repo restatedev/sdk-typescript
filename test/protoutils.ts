@@ -69,11 +69,11 @@ export function startMessage(
       debugId: "123",
       knownEntries: knownEntries, // only used for the Lambda case. For bidi streaming, this will be imputed by the testdriver
       stateMap: toStateEntries(state || []),
+      partialState: partialState !== false,
     }),
     undefined,
     0,
-    undefined,
-    partialState === false ? undefined : true
+    undefined
   );
 }
 
