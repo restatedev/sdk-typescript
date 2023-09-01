@@ -81,15 +81,15 @@ export interface RestateBaseContext {
    *   - If a side effect executed and persisted before, the result (value or Error) will be
    *     taken from the Restate journal.
    *   - There is a small window where a side effect may be re-executed twice, if a failure
-   *     occured between execution and persisting the result.
-   *   - No second side-effect will be executed while a previous side-effect's result is not
+   *     occurred between execution and persisting the result.
+   *   - No second side effect will be executed while a previous side effect's result is not
    *     yet durable. That way, side effects that build on top of each other can assume
-   *     deterministic results from previous effects, and at most one side-effect will be
+   *     deterministic results from previous effects, and at most one side effect will be
    *     re-executed on replay (the latest, if the failure happened in the small windows
    *     described above).
    *
    * This function takes an optional retry policy, that determines what happens if the
-   * side-effect throws an error. The default retry policy retries infinitely, with exponential
+   * side effect throws an error. The default retry policy retries infinitely, with exponential
    * backoff and uses suspending sleep for the wait times between retries.
    *
    * @example
@@ -108,7 +108,7 @@ export interface RestateBaseContext {
    * const paymentAccepted: boolean =
    *   await ctx.sideEffect(paymentAction, { maxRetries: 10});
    *
-   * @param fn The funcion to run as a side-effect.
+   * @param fn The function to run as a side effect.
    * @param retryPolicy The optional policy describing how retries happen.
    */
   sideEffect<T>(fn: () => Promise<T>, retryPolicy?: RetrySettings): Promise<T>;
@@ -180,10 +180,10 @@ export interface RestateBaseContext {
 // ----------------------------------------------------------------------------
 
 /**
- * The context that gives access to all Restate-backed operstions, for example
+ * The context that gives access to all Restate-backed operations, for example
  *   - sending reliable messages / rpc through Restate
  *   - access/update state (for keyed services)
- *   - side-effects
+ *   - side effects
  *   - sleeps and delayed calls
  *   - awakeables
  *   - ...
@@ -305,11 +305,11 @@ export function setContext<T>(instance: T, context: RestateGrpcContext): T {
  * **Service Side:**
  * ```ts
  * const router = restate.router({
- *   someAction:    async(ctx: RpcContext, req: string) => { ... },
- *   anotherAction: async(ctx: RpcContext, count: number) => { ... }
+ *   someAction:    async(ctx: restate.RpcContext, req: string) => { ... },
+ *   anotherAction: async(ctx: restate.RpcContext, count: number) => { ... }
  * });
  *
- * export const myApi: ServiceApi<typeof router> = { path : "myservice" };
+ * export const myApi: restate.ServiceApi<typeof router> = { path : "myservice" };
  *
  * restate.createServer().bindRouter("myservice", router).listen(8080);
  * ```
@@ -323,10 +323,10 @@ export type ServiceApi<_M = unknown> = {
 };
 
 /**
- * The context that gives access to all Restate-backed operstions, for example
- *   - sending reliable messages / rpc through Restate
+ * The context that gives access to all Restate-backed operations, for example
+ *   - sending reliable messages / RPC through Restate
  *   - access/update state (for keyed services)
- *   - side-effects
+ *   - side effects
  *   - sleeps and delayed calls
  *   - awakeables
  *   - ...
@@ -336,7 +336,7 @@ export type ServiceApi<_M = unknown> = {
  */
 export interface RpcContext extends RestateBaseContext {
   /**
-   * Makes a type-safe request/reponse RPC to the specified target service.
+   * Makes a type-safe request/response RPC to the specified target service.
    *
    * The RPC goes through Restate and is guaranteed to be reliably delivered. The RPC is also
    * journaled for durable execution and will thus not be duplicated when the handler is re-invoked
@@ -345,22 +345,22 @@ export interface RpcContext extends RestateBaseContext {
    * This call will return the result produced by the target handler, or the Error, if the target
    * handler finishes with a Terminal Error.
    *
-   * This call is a suspension point: The hander might suspend while awaiting the response and
+   * This call is a suspension point: The handler might suspend while awaiting the response and
    * resume once the response is available.
    *
    * @example
    * *Service Side:*
    * ```ts
    * const router = restate.router({
-   *   someAction:    async(ctx: RpcContext, req: string) => { ... },
-   *   anotherAction: async(ctx: RpcContext, count: number) => { ... }
+   *   someAction:    async(ctx: restate.RpcContext, req: string) => { ... },
+   *   anotherAction: async(ctx: restate.RpcContext, count: number) => { ... }
    * });
    *
    * // option 1: export only the type signature of the router
    * export type myApiType = typeof router;
    *
    * // option 2: export the API definition with type and name (path)
-   * export const myApi: ServiceApi<typeof router> = { path : "myservice" };
+   * export const myApi: restate.ServiceApi<typeof router> = { path : "myservice" };
    *
    * restate.createServer().bindRouter("myservice", router).listen(8080);
    * ```
@@ -393,15 +393,15 @@ export interface RpcContext extends RestateBaseContext {
    * *Service Side:*
    * ```ts
    * const router = restate.router({
-   *   someAction:    async(ctx: RpcContext, req: string) => { ... },
-   *   anotherAction: async(ctx: RpcContext, count: number) => { ... }
+   *   someAction:    async(ctx: restate.RpcContext, req: string) => { ... },
+   *   anotherAction: async(ctx: restate.RpcContext, count: number) => { ... }
    * });
    *
    * // option 1: export only the type signature of the router
    * export type myApiType = typeof router;
    *
    * // option 2: export the API definition with type and name (path)
-   * export const myApi: ServiceApi<typeof router> = { path : "myservice" };
+   * export const myApi: restate.ServiceApi<typeof router> = { path : "myservice" };
    *
    * restate.createServer().bindRouter("myservice", router).listen(8080);
    * ```
@@ -418,7 +418,7 @@ export interface RpcContext extends RestateBaseContext {
 
   /**
    * Makes a type-safe one-way RPC to the specified target service, after a delay specified by the
-   * milliseconds argument.
+   * milliseconds' argument.
    * This method is like stetting up a fault-tolerant cron job that enqueues the message in a
    * message queue.
    * The handler calling this function does not have to stay active for the delay time.
@@ -440,25 +440,25 @@ export interface RpcContext extends RestateBaseContext {
    * *Service Side:*
    * ```ts
    * const router = restate.router({
-   *   someAction:    async(ctx: RpcContext, req: string) => { ... },
-   *   anotherAction: async(ctx: RpcContext, count: number) => { ... }
+   *   someAction:    async(ctx: restate.RpcContext, req: string) => { ... },
+   *   anotherAction: async(ctx: restate.RpcContext, count: number) => { ... }
    * });
    *
    * // option 1: export only the type signature of the router
    * export type myApiType = typeof router;
    *
    * // option 2: export the API definition with type and name (path)
-   * export const myApi: ServiceApi<typeof router> = { path : "myservice" };
+   * export const myApi: restate.ServiceApi<typeof router> = { path : "myservice" };
    *
    * restate.createServer().bindRouter("myservice", router).listen(8080);
    * ```
    * **Client side:**
    * ```ts
    * // option 1: use only types and supply service name separately
-   * ctx.send<myApiType>({path: "myservice"}, 60_000).someAction("hello!");
+   * ctx.sendDelayed<myApiType>({path: "myservice"}, 60_000).someAction("hello!");
    *
    * // option 2: use full API spec
-   * ctx.send(myApi, 60_000).anotherAction(1337);
+   * ctx.sendDelayed(myApi, 60_000).anotherAction(1337);
    * ```
    */
   sendDelayed<M>(opts: ServiceApi<M>, delay: number): SendClient<M>;
