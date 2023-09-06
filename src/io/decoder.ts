@@ -85,8 +85,7 @@ function decodeMessages(decoderState: DecoderState, out: Output): DecoderState {
               message,
               header.completedFlag,
               header.protocolVersion,
-              header.requiresAckFlag,
-              header.partialStateFlag
+              header.requiresAckFlag
             )
           );
         }

@@ -85,11 +85,11 @@ export class TestDriver<I, O> implements Connection {
         debugId: startEntry.debugId,
         knownEntries: endOfReplay - 1,
         stateMap: startEntry.stateMap,
+        partialState: startEntry.partialState,
       }),
       msg.completed,
       msg.protocolVersion,
-      msg.requiresAck,
-      msg.partialStateFlag
+      msg.requiresAck
     );
 
     const replayMessages = entries.slice(0, endOfReplay);

@@ -40,6 +40,7 @@ message StartMessage {
 
   // protolint:disable:next REPEATED_FIELD_NAMES_PLURALIZED
   repeated StateEntry state_map = 4;
+  bool partial_state = 5;
 }
 
 // Type: 0x0000 + 1

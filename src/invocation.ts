@@ -57,10 +57,7 @@ export class InvocationBuilder<I, O> implements RestateStreamConsumer {
       switch (this.state) {
         case State.ExpectingStart:
           checkState(State.ExpectingStart, START_MESSAGE_TYPE, m);
-          this.handleStartMessage(
-            m.message as StartMessage,
-            m.partialStateFlag || false
-          );
+          this.handleStartMessage(m.message as StartMessage);
           this.state = State.ExpectingInput;
           return false;
 
@@ -114,14 +111,11 @@ export class InvocationBuilder<I, O> implements RestateStreamConsumer {
     return this.complete.promise;
   }
 
-  private handleStartMessage(
-    m: StartMessage,
-    partialState: boolean
-  ): InvocationBuilder<I, O> {
+  private handleStartMessage(m: StartMessage): InvocationBuilder<I, O> {
     this.nbEntriesToReplay = m.knownEntries;
     this.id = m.id;
     this.debugId = m.debugId;
-    this.localStateStore = new LocalStateStore(partialState, m.stateMap);
+    this.localStateStore = new LocalStateStore(m.partialState, m.stateMap);
     return this;
   }
 

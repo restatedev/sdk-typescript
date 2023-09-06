@@ -35,10 +35,6 @@ describe("Header", () => {
 
   it("invoke_test", () => roundtripTest(newStart(1, 25)));
 
-  it("invoke_test_partial_state", () => roundtripTest(newStart(1, 25, true)));
-  it("invoke_test_complete_state", () =>
-    roundtripTest(newStart(1, 25, undefined)));
-
   it("completion_test", () =>
     roundtripTest(newHeader(COMPLETION_MESSAGE_TYPE, 22)));
 
@@ -187,18 +183,13 @@ function newHeader(messageTypeId: bigint, length: number): Header {
   return new Header(messageTypeId, length);
 }
 
-function newStart(
-  protocolVersion: number,
-  length: number,
-  partialStateFlag?: boolean
-): Header {
+function newStart(protocolVersion: number, length: number): Header {
   return new Header(
     START_MESSAGE_TYPE,
     length,
     undefined,
     protocolVersion,
-    undefined,
-    partialStateFlag
+    undefined
   );
 }
 

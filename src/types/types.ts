@@ -25,8 +25,7 @@ export class Message {
     readonly message: ProtocolMessage,
     readonly completed?: boolean,
     readonly protocolVersion?: number,
-    readonly requiresAck?: boolean,
-    readonly partialStateFlag?: boolean
+    readonly requiresAck?: boolean
   ) {}
 }
 
@@ -54,10 +53,6 @@ class MessageType {
     return messageType == START_MESSAGE_TYPE;
   }
 
-  static hasPartialStateFlag(messageType: bigint): boolean {
-    return messageType == START_MESSAGE_TYPE;
-  }
-
   static isCustom(messageTypeId: bigint): boolean {
     return !KNOWN_MESSAGE_TYPES.has(messageTypeId);
   }
@@ -71,7 +66,6 @@ const CUSTOM_MESSAGE_MASK = BigInt(0xfc00);
 const COMPLETED_MASK = BigInt(0x0001_0000_0000);
 const VERSION_MASK = BigInt(0x03ff_0000_0000);
 const REQUIRES_ACK_MASK = BigInt(0x0001_0000_0000);
-const PARTIAL_STATE_MASK = BigInt(0x0400_0000_0000);
 
 // The header is exported but only for tests.
 export class Header {
@@ -101,11 +95,6 @@ export class Header {
       (value & REQUIRES_ACK_MASK) !== 0n
         ? true
         : undefined;
-    const partialStateFlag =
-      MessageType.hasPartialStateFlag(messageType) &&
-      (value & PARTIAL_STATE_MASK) !== 0n
-        ? true
-        : undefined;
     const frameLength = Number(value & 0xffffffffn);
 
     return new Header(
@@ -113,8 +102,7 @@ export class Header {
       frameLength,
       completedFlag,
       protocolVersion,
-      requiresAckFlag,
-      partialStateFlag
+      requiresAckFlag
     );
   }
 
@@ -128,9 +116,6 @@ export class Header {
     }
     if (this.requiresAckFlag) {
       res = res | REQUIRES_ACK_MASK;
-    }
-    if (this.partialStateFlag) {
-      res = res | PARTIAL_STATE_MASK;
     }
     return res;
   }
