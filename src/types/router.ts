@@ -12,6 +12,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { RpcContext } from "../restate_context";
+import { Event } from "../types/types";
 
 // ----------- generics -------------------------------------------------------
 
@@ -25,11 +26,13 @@ type WithoutRpcContext<F> = F extends (
   : never;
 
 export type Client<M> = {
-  [K in keyof M]: M[K];
+  [K in keyof M as M[K] extends never ? never : K]: M[K];
 };
 
 export type SendClient<M> = {
-  [K in keyof M]: M[K] extends (...args: infer P) => any
+  [K in keyof M as M[K] extends never ? never : K]: M[K] extends (
+    ...args: infer P
+  ) => any
     ? (...args: P) => void
     : never;
 };
@@ -68,11 +71,15 @@ export type KeyedHandler<F> = F extends (ctx: RpcContext) => Promise<any>
   : never;
 
 export type KeyedRouterOpts<U> = {
-  [K in keyof U]: U[K] extends KeyedHandler<any> ? U[K] : never;
+  [K in keyof U]: U[K] extends KeyedHandler<any> | KeyedEventHandler<U[K]>
+    ? U[K]
+    : never;
 };
 
 export type KeyedRouter<U> = {
-  [K in keyof U]: U[K] extends KeyedHandler<infer F>
+  [K in keyof U]: U[K] extends KeyedEventHandler<U[K]>
+    ? never
+    : U[K] extends KeyedHandler<infer F>
     ? WithKeyArgument<WithoutRpcContext<F>>
     : never;
 };
@@ -82,4 +89,25 @@ export const keyedRouter = <M>(opts: KeyedRouterOpts<M>): KeyedRouter<M> => {
     throw new Error("router must be defined");
   }
   return opts as KeyedRouter<M>;
+};
+
+// ----------- event handlers ----------------------------------------------
+
+export type KeyedEventHandler<U> = U extends (
+  ctx: RpcContext,
+  event: Event
+) => Promise<void>
+  ? U
+  : never;
+
+export const keyedEventHandler = <H>(handler: KeyedEventHandler<H>): H => {
+  return { eventHandler: true, handler: handler } as H;
+};
+
+export const isEventHandler = (
+  handler: any
+): handler is {
+  handler: (ctx: RpcContext, event: Event) => Promise<void>;
+} => {
+  return typeof handler === "object" && handler["eventHandler"];
 };

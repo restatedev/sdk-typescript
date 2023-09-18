@@ -19,8 +19,10 @@ export {
 export {
   router,
   keyedRouter,
+  keyedEventHandler,
   UnKeyedRouter,
   KeyedRouter,
+  KeyedEventHandler,
   Client,
   SendClient,
 } from "./types/router";
@@ -32,3 +34,4 @@ export {
 } from "./server/restate_lambda_handler";
 export * as RestateUtils from "./utils/public_utils";
 export { ErrorCodes, RestateError, TerminalError } from "./types/errors";
+export { Event } from "./types/types";

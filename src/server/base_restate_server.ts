@@ -22,10 +22,13 @@ import {
   ProtocolMode,
   ServiceDiscoveryResponse,
 } from "../generated/proto/discovery";
+import { Event } from "../types/types";
+import { StringKeyedEvent } from "../generated/dev/restate/events";
 import {
   FileDescriptorProto,
   UninterpretedOption,
 } from "../generated/google/protobuf/descriptor";
+import { Empty } from "../generated/google/protobuf/empty";
 import {
   FileDescriptorProto as FileDescriptorProto1,
   ServiceDescriptorProto as ServiceDescriptorProto1,
@@ -45,6 +48,7 @@ import { RestateContext, useContext } from "../restate_context";
 import { RpcContextImpl } from "../restate_context_impl";
 import { verifyAssumptions } from "../utils/assumpsions";
 import { TerminalError } from "../public_api";
+import { isEventHandler } from "../types/router";
 
 export interface ServiceOpts {
   descriptor: ProtoMetadata;
@@ -148,6 +152,78 @@ export abstract class BaseRestateServer {
     }
   }
 
+  rpcHandler(
+    keyed: boolean,
+    route: string,
+    handler: Function
+  ): {
+    descriptor: MethodDescriptorProto1;
+    method: GrpcServiceMethod<unknown, unknown>;
+  } {
+    const descriptor = createRpcMethodDescriptor(route);
+
+    const localMethod = (instance: unknown, input: RpcRequest) => {
+      const ctx = useContext(instance);
+      if (keyed) {
+        return dispatchKeyedRpcHandler(ctx, input, handler);
+      } else {
+        return dispatchUnkeyedRpcHandler(ctx, input, handler);
+      }
+    };
+
+    const decoder = RpcRequest.decode;
+    const encoder = (message: RpcResponse) =>
+      RpcResponse.encode(message).finish();
+
+    const method = new GrpcServiceMethod<RpcRequest, RpcResponse>(
+      route,
+      route,
+      localMethod,
+      decoder,
+      encoder
+    );
+
+    return {
+      descriptor: descriptor,
+      method: method as GrpcServiceMethod<unknown, unknown>,
+    };
+  }
+
+  stringKeyedEventHandler(
+    keyed: boolean,
+    route: string,
+    handler: Function
+  ): {
+    descriptor: MethodDescriptorProto1;
+    method: GrpcServiceMethod<unknown, unknown>;
+  } {
+    if (!keyed) {
+      // TODO: support unkeyed rpc event handler
+      throw new TerminalError("Unkeyed Event handlers are not yet supported.");
+    }
+    const descriptor = createStringKeyedMethodDescriptor(route);
+    const localMethod = (instance: unknown, input: StringKeyedEvent) => {
+      const ctx = useContext(instance);
+      return dispatchKeyedEventHandler(ctx, input, handler);
+    };
+
+    const decoder = StringKeyedEvent.decode;
+    const encoder = (message: Empty) => Empty.encode(message).finish();
+
+    const method = new GrpcServiceMethod<StringKeyedEvent, Empty>(
+      route,
+      route,
+      localMethod,
+      decoder,
+      encoder
+    );
+
+    return {
+      descriptor,
+      method: method as GrpcServiceMethod<unknown, unknown>,
+    };
+  }
+
   protected bindRpcService(name: string, router: RpcRouter, keyed: boolean) {
     const lastDot = name.indexOf(".");
     const serviceName = lastDot === -1 ? name : name.substring(lastDot + 1);
@@ -161,40 +237,33 @@ export abstract class BaseRestateServer {
       ? pushKeyedService(desc, name)
       : pushUnKeyedService(desc, name);
 
-    const decoder = RpcRequest.decode;
-    const encoder = (message: RpcResponse) =>
-      RpcResponse.encode(message).finish();
-
     for (const [route, handler] of Object.entries(router)) {
-      serviceGrpcSpec.method.push(createRpcMethodDescriptor(route));
-
-      const localFn = (instance: unknown, input: RpcRequest) => {
-        const ctx = useContext(instance);
-        if (keyed) {
-          return dispatchKeyedRpcHandler(ctx, input, handler);
-        } else {
-          return dispatchUnkeyedRpcHandler(ctx, input, handler);
-        }
+      let registration: {
+        descriptor: MethodDescriptorProto1;
+        method: GrpcServiceMethod<unknown, unknown>;
       };
 
-      const method = new GrpcServiceMethod<RpcRequest, RpcResponse>(
-        route,
-        route,
-        localFn,
-        decoder,
-        encoder
-      );
-
+      if (isEventHandler(handler)) {
+        const theHandler = handler.handler;
+        registration = this.stringKeyedEventHandler(keyed, route, theHandler);
+      } else {
+        registration = this.rpcHandler(keyed, route, handler);
+      }
+      serviceGrpcSpec.method.push(registration.descriptor);
       const url = `/invoke/${name}/${route}`;
       this.methods[url] = new HostedGrpcServiceMethod(
         {}, // we don't actually execute on any class instance
         servicePackage,
         serviceName,
-        method
+        registration.method
       ) as HostedGrpcServiceMethod<unknown, unknown>;
 
       rlog.info(
-        `Registering: ${url}  -> ${JSON.stringify(method, null, "\t")}`
+        `Registering: ${url}  -> ${JSON.stringify(
+          registration.method,
+          null,
+          "\t"
+        )}`
       );
     }
 
@@ -376,6 +445,25 @@ async function dispatchUnkeyedRpcHandler(
   return RpcResponse.create({ response: result });
 }
 
+async function dispatchKeyedEventHandler(
+  origCtx: RestateContext,
+  req: StringKeyedEvent,
+  handler: Function
+): Promise<Empty> {
+  const ctx = new RpcContextImpl(origCtx);
+  const key = req.key;
+  if (typeof key !== "string" || key.length === 0) {
+    // we throw a terminal error here, because this cannot be patched by updating code:
+    // if the request is wrong (missing a key), the request can never make it
+    throw new TerminalError(
+      "Keyed handlers must recieve a non null or empty string key"
+    );
+  }
+  const jsEvent = new Event(key, req.payload, req.source, req.attributes);
+  await handler(ctx, jsEvent);
+  return Empty.create({});
+}
+
 function copyProtoMetadata(
   original: RpcServiceProtoMetadata
 ): RpcServiceProtoMetadata {
@@ -453,6 +541,16 @@ function pushUnKeyedService(
 function createRpcMethodDescriptor(methodName: string): MethodDescriptorProto1 {
   const desc = {
     ...rpcServiceProtoMetadata.fileDescriptor.service[0].method[0],
+  } as MethodDescriptorProto1;
+  desc.name = methodName;
+  return desc;
+}
+
+function createStringKeyedMethodDescriptor(
+  methodName: string
+): MethodDescriptorProto1 {
+  const desc = {
+    ...rpcServiceProtoMetadata.fileDescriptor.service[0].method[1],
   } as MethodDescriptorProto1;
   desc.name = methodName;
   return desc;

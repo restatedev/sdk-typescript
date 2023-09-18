@@ -38,7 +38,8 @@
     "verify": "npm run format -- --check && npm run test && npm run lint && npm run build",
     "release": "release-it",
     "example": "RESTATE_DEBUG_LOGGING=JOURNAL ts-node-dev --respawn --transpile-only ./examples/example.ts",
-    "grpcexample": "RESTATE_DEBUG_LOGGING=JOURNAL ts-node-dev --respawn --transpile-only ./examples/grpc_example.ts"
+    "grpcexample": "RESTATE_DEBUG_LOGGING=JOURNAL ts-node-dev --respawn --transpile-only ./examples/grpc_example.ts",
+    "handlerexample": "RESTATE_DEBUG_LOGGING=JOURNAL ts-node-dev --respawn --transpile-only ./examples/handler_example.ts"
   },
   "files": [
     "dist"

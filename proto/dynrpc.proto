@@ -12,13 +12,16 @@
 syntax = "proto3";
 
 import "dev/restate/ext.proto";
+import "dev/restate/events.proto";
 import "google/protobuf/struct.proto";
+import "google/protobuf/empty.proto";
 
 service RpcEndpoint {
 	option (dev.restate.ext.service_type) = KEYED;
 
 	rpc call(RpcRequest) returns (RpcResponse) {};
 
+	rpc handle(dev.restate.StringKeyedEvent) returns (google.protobuf.Empty) {};
 }
 
 service UnkeyedRpcEndpoint {
