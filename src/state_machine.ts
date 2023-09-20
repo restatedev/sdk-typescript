@@ -39,7 +39,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
   private journal: Journal<I, O>;
   private restateContext: RestateGrpcContextImpl;
 
-  private readonly invocationComplete = new CompletablePromise<void>();
+  private readonly invocationComplete = new CompletablePromise<Buffer | void>();
 
   // when this flag is true, no more work will (and may) happen
   // this is set to true in case of
@@ -175,7 +175,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
    * The returned promise is rejected when an unhandled error arises and the caller would be
    * expected to ensure that resources are properly cleaned up.
    */
-  public invoke(): Promise<void> {
+  public invoke(): Promise<Buffer | void> {
     // --------------------------------------------------------------------------------------------
     // Implementation note:
     //
@@ -226,11 +226,13 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
             return;
           }
 
+          const value = Buffer.from(bytes);
+
           // handle the result value
           const msg = new Message(
             OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
             OutputStreamEntryMessage.create({
-              value: Buffer.from(bytes),
+              value,
             })
           );
 
@@ -259,7 +261,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
             "Function completed successfully."
           );
 
-          this.finish();
+          this.finish(value);
         } catch (e) {
           this.unhandledError(ensureError(e));
         }
@@ -336,7 +338,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
   /**
    * Closes the state machine, flushes all output, and resolves the invocation promise.
    */
-  private async finish() {
+  private async finish(value?: Buffer) {
     try {
       this.stateMachineClosed = true;
       this.journal.close();
@@ -344,7 +346,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
 
       await this.connection.end();
 
-      this.invocationComplete.resolve();
+      this.invocationComplete.resolve(value);
     } catch (e) {
       this.invocationComplete.reject(ensureError(e));
     }

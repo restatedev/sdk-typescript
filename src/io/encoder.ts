@@ -28,23 +28,32 @@ export function streamEncoder(): stream.Transform {
 }
 
 export function encodeMessage(msg: Message): Uint8Array {
-  const pbType = PROTOBUF_MESSAGE_BY_TYPE.get(BigInt(msg.messageType));
-  if (pbType === undefined) {
-    throw new Error(
-      "Trying to encode a message with unknown message type " + msg.messageType
-    );
-  }
+  return encodeMessages([msg]);
+}
 
-  const bodyBuf = pbType.encode(msg.message).finish();
-  const header = new Header(
-    BigInt(msg.messageType),
-    bodyBuf.length,
-    msg.completed,
-    msg.protocolVersion, // only set for incoming start message
-    msg.requiresAck
-  );
-  const headerBuf = Buffer.alloc(8);
-  const encoded = header.toU64be();
-  headerBuf.writeBigUInt64BE(encoded);
-  return Buffer.concat([headerBuf, bodyBuf]);
+export function encodeMessages(messages: Message[]): Uint8Array {
+  const chunks: Buffer[] = [];
+  for (const message of messages) {
+    const pbType = PROTOBUF_MESSAGE_BY_TYPE.get(BigInt(message.messageType));
+    if (pbType === undefined) {
+      throw new Error(
+        "Trying to encode a message with unknown message type " +
+          message.messageType
+      );
+    }
+    const bodyBuf = pbType.encode(message.message).finish();
+    const header = new Header(
+      BigInt(message.messageType),
+      bodyBuf.length,
+      message.completed,
+      message.protocolVersion, // only set for incoming start message
+      message.requiresAck
+    );
+    const encoded = header.toU64be();
+    const headerBuf = Buffer.alloc(8);
+    headerBuf.writeBigUInt64BE(encoded);
+    chunks.push(headerBuf);
+    chunks.push(bodyBuf);
+  }
+  return Buffer.concat(chunks);
 }

@@ -128,14 +128,15 @@ export function decodeLambdaBody(msgBase64: string): Message[] {
         msgBase64
     );
   }
+  const buffer = Buffer.from(msgBase64, "base64");
+  return decodeMessagesBuffer(buffer);
+}
 
+export function decodeMessagesBuffer(buffer: Buffer): Message[] {
   const decodedEntries: Message[] = [];
   let finalState;
   try {
-    finalState = decodeMessages(
-      initalDecoderState(Buffer.from(msgBase64, "base64")),
-      decodedEntries
-    );
+    finalState = decodeMessages(initalDecoderState(buffer), decodedEntries);
   } catch (e) {
     const err = ensureError(e);
     throw new Error(
@@ -147,7 +148,7 @@ export function decodeLambdaBody(msgBase64: string): Message[] {
 
   if (finalState.buf.length > 0) {
     throw new Error(
-      "Cannot parse the lambda request body: Trailing data (incomplete message) in request body: " +
+      "Cannot parse the request body: Trailing data (incomplete message) in request body: " +
         finalState.buf.toString("hex")
     );
   }
