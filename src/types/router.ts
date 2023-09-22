@@ -71,7 +71,7 @@ export type KeyedHandler<F> = F extends (ctx: RpcContext) => Promise<any>
   : never;
 
 export type KeyedRouterOpts<U> = {
-  [K in keyof U]: U[K] extends KeyedHandler<any> | KeyedEventHandler<U[K]>
+  [K in keyof U]: U[K] extends KeyedHandler<U[K]> | KeyedEventHandler<U[K]>
     ? U[K]
     : never;
 };
@@ -93,10 +93,11 @@ export const keyedRouter = <M>(opts: KeyedRouterOpts<M>): KeyedRouter<M> => {
 
 // ----------- event handlers ----------------------------------------------
 
-export type KeyedEventHandler<U> = U extends (
-  ctx: RpcContext,
-  event: Event
-) => Promise<void>
+export type KeyedEventHandler<U> = U extends () => Promise<void>
+  ? never
+  : U extends (ctx: RpcContext) => Promise<void>
+  ? never
+  : U extends (ctx: RpcContext, event: Event) => Promise<void>
   ? U
   : never;
 
