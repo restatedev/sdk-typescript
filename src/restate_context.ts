@@ -311,7 +311,7 @@ export function setContext<T>(instance: T, context: RestateGrpcContext): T {
  *
  * export const myApi: restate.ServiceApi<typeof router> = { path : "myservice" };
  *
- * restate.createServer().bindRouter("myservice", router).listen(8080);
+ * restate.createServer().bindRouter("myservice", router).listen(9080);
  * ```
  * **Client side:**
  * ```ts
@@ -362,7 +362,7 @@ export interface RpcContext extends RestateBaseContext {
    * // option 2: export the API definition with type and name (path)
    * export const myApi: restate.ServiceApi<typeof router> = { path : "myservice" };
    *
-   * restate.createServer().bindRouter("myservice", router).listen(8080);
+   * restate.createServer().bindRouter("myservice", router).listen(9080);
    * ```
    * **Client side:**
    * ```ts
@@ -403,7 +403,7 @@ export interface RpcContext extends RestateBaseContext {
    * // option 2: export the API definition with type and name (path)
    * export const myApi: restate.ServiceApi<typeof router> = { path : "myservice" };
    *
-   * restate.createServer().bindRouter("myservice", router).listen(8080);
+   * restate.createServer().bindRouter("myservice", router).listen(9080);
    * ```
    * **Client side:**
    * ```ts
@@ -450,7 +450,7 @@ export interface RpcContext extends RestateBaseContext {
    * // option 2: export the API definition with type and name (path)
    * export const myApi: restate.ServiceApi<typeof router> = { path : "myservice" };
    *
-   * restate.createServer().bindRouter("myservice", router).listen(8080);
+   * restate.createServer().bindRouter("myservice", router).listen(9080);
    * ```
    * **Client side:**
    * ```ts

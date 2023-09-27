@@ -133,7 +133,7 @@ export class RestateServer extends BaseRestateServer {
    *
    * If the port is undefined, this method will use the port set in the `PORT`
    * environment variable. If that variable is undefined as well, the method will
-   * default to port 8080.
+   * default to port 9080.
    *
    * This method's result promise never completes.
    *
@@ -141,7 +141,7 @@ export class RestateServer extends BaseRestateServer {
    */
   public async listen(port?: number) {
     // Infer the port if not specified, or default it
-    const actualPort = port ?? parseInt(process.env.PORT ?? "8080");
+    const actualPort = port ?? parseInt(process.env.PORT ?? "9080");
     rlog.info(`Listening on ${actualPort}...`);
 
     for await (const connection of incomingConnectionAtPort(actualPort)) {

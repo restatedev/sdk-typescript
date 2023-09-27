@@ -29,7 +29,7 @@ const addToCart = async (ctx: restate.RpcContext, cartId: string /* the key */, 
 restate
   .createServer()
   .bindKeyedRouter("cart", restate.keyedRouter({ addToCart, expireTicket }))
-  .listen(8080);
+  .listen(9080);
 ```
 
 Restate takes care of:
@@ -109,19 +109,19 @@ Start the runtime in a Docker container and tell Restate about the example servi
     ```shell
     docker run --name restate_dev --rm --network=host ghcr.io/restatedev/restate-dist:latest
 
-    curl -X POST http://localhost:8081/endpoints -H 'content-type: application/json' -d '{"uri": "http://localhost:8080"}'
+    curl -X POST http://localhost:9070/endpoints -H 'content-type: application/json' -d '{"uri": "http://localhost:9080"}'
     ```
 - On macOS:
     ```shell
-    docker run --name restate_dev --rm -p 8081:8081 -p 9091:9091 -p 9090:9090 ghcr.io/restatedev/restate-dist:latest
+    docker run --name restate_dev --rm -p 9070:9070 -p 8080:8080 ghcr.io/restatedev/restate-dist:latest
 
-    curl -X POST http://localhost:8081/endpoints -H 'content-type: application/json' -d '{"uri": "http://host.docker.internal:8080"}'
+    curl -X POST http://localhost:9070/endpoints -H 'content-type: application/json' -d '{"uri": "http://host.docker.internal:9080"}'
     ```
 
 
 Invoke the example service from the command line:
 ```shell
-curl -X POST http://localhost:9090/greeter/greet -H 'content-type: application/json' -d '{"name": "Pete"}'
+curl -X POST http://localhost:8080/greeter/greet -H 'content-type: application/json' -d '{"name": "Pete"}'
 ```
 
 # Releasing the package
