@@ -38,5 +38,5 @@ export { Event } from "./types/types";
 export {
   RestateConnection,
   connection,
-  RestateClientOpts,
-} from "./embedded/client";
+  RestateConnectionOptions,
+} from "./embedded/api";

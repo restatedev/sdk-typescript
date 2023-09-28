@@ -133,7 +133,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
         message
       );
 
-      this.connection.send(
+      this.send(
         new Message(
           messageType,
           message,
@@ -239,7 +239,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
           this.journal.handleUserSideMessage(msg.messageType, msg.message);
 
           if (!this.journal.outputMsgWasReplayed()) {
-            this.connection.send(msg);
+            this.send(msg);
 
             rlog.debugJournalMessage(
               this.invocation.logPrefix,
@@ -312,7 +312,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
       msg.message
     );
 
-    this.connection.send(msg);
+    this.send(msg);
   }
 
   private sendTerminalError(e: TerminalError) {
@@ -331,8 +331,14 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
 
     this.journal.handleUserSideMessage(msg.messageType, msg.message);
     if (!this.journal.outputMsgWasReplayed()) {
-      this.connection.send(msg);
+      this.send(msg);
     }
+  }
+
+  private send(message: Message) {
+    this.connection.send(message).catch((err) => {
+      this.handleStreamError(err);
+    });
   }
 
   /**
@@ -424,7 +430,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
 
     this.journal.handleUserSideMessage(msg.messageType, msg.message);
     if (!this.journal.outputMsgWasReplayed()) {
-      this.connection.send(msg);
+      this.send(msg);
     }
 
     rlog.debugInvokeMessage(this.invocation.logPrefix, "Suspending function.");

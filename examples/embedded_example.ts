@@ -26,14 +26,14 @@ app.post("/workflow", async (req: Request, res: Response) => {
     id,
     input: name,
     handler: async (ctx, name) => {
-      const p1 = await ctx.sideEffect(async () => `Hello ${name}!`);
-      const p2 = await ctx.sideEffect(async () => `Bonjour ${name}`);
-      const p3 = await ctx.sideEffect(async () => `Hi ${name}`);
-      // const p4 = await ctx
-      //   .rpc<{ greet: (name: string) => Promise<string> }>({ path: "greeter" })
+      const p1 = ctx.sideEffect(async () => `Hello ${name}!`);
+      const p2 = ctx.sideEffect(async () => `Bonjour ${name}`);
+      const p3 = ctx.sideEffect(async () => `Hi ${name}`);
+      //const p4 =  ctx
+      // .rpc<{ greet: (name: string) => Promise<string> }>({ path: "greeter" })
       //   .greet(name);
 
-      return p1 + p2 + p3; //+ p4;
+      return (await p1) + (await p2) + (await p3);
     },
   });
 
