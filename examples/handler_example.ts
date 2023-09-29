@@ -53,4 +53,4 @@ const profile = restate.keyedRouter({
 });
 
 // restate server
-restate.createServer().bindKeyedRouter("profile", profile).listen(8080);
+restate.createServer().bindKeyedRouter("profile", profile).listen(9080);

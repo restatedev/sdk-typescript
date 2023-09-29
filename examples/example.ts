@@ -64,4 +64,4 @@ restate
   .createServer()
   .bindRouter("greeter", greeter)
   .bindKeyedRouter("counter", counter)
-  .listen(8080);
+  .listen(9080);
