@@ -16,8 +16,10 @@ import { InvocationBuilder } from "../invocation";
 import { HostedGrpcServiceMethod } from "../types/grpc";
 import { StateMachine } from "../state_machine";
 import { ProtocolMode } from "../generated/proto/discovery";
-import { RequestError } from "./http2_remote";
-import { EmbeddedConnection } from "../connection/embedded_connection";
+import {
+  EmbeddedConnection,
+  FencedOffError,
+} from "../connection/embedded_connection";
 
 export const doInvoke = async <I, O>(
   remote: RemoteContext,
@@ -78,16 +80,18 @@ export const doInvoke = async <I, O>(
         streamId,
       });
       if (recv.invalidStream !== undefined) {
-        throw new Error("Operation fenced off");
+        throw new FencedOffError();
+      }
+      if (recv.invocationCompleted !== undefined) {
+        break;
       }
       const buffer = recv.messages ?? Buffer.alloc(0);
       const messages = decodeMessagesBuffer(buffer);
       messages.forEach((m: Message) => stateMachine.handleMessage(m));
     }
   } catch (e) {
-    if (!(e instanceof RequestError) || !e.precondtionFailed()) {
-      stateMachine.handleStreamError(e as Error);
-    }
+    stateMachine.handleStreamError(e as Error);
+    throw e;
   }
 
   //

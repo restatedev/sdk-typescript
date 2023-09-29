@@ -9,6 +9,12 @@ export class FencedOffError extends Error {
   }
 }
 
+export class InvocationAlreadyCompletedError extends Error {
+  constructor() {
+    super("Completed");
+  }
+}
+
 export class EmbeddedConnection implements Connection {
   private queue: Message[] = [];
   private flushing: Promise<void> = Promise.resolve();
@@ -57,11 +63,11 @@ export class EmbeddedConnection implements Connection {
       messages: buffer,
     });
 
-    if (!res.ok) {
-      throw new Error("Error connecting to restate");
-    }
     if (res.invalidStream !== undefined) {
       throw new FencedOffError();
+    }
+    if (res.invocationCompleted !== undefined) {
+      throw new InvocationAlreadyCompletedError();
     }
   }
 }

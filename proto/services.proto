@@ -18,20 +18,6 @@ import "dev/restate/ext.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/struct.proto";
 
-service Proxy {
-  // Proxy invocation through this service. This service is mostly used for proxying invocations through a specific partition processor, e.g. to reuse the deduplication id map.
-  rpc ProxyThrough(ProxyThroughRequest) returns (google.protobuf.Empty);
-}
-
-message ProxyThroughRequest {
-  string target_service = 1;
-  string target_method = 2;
-  bytes target_key = 3;
-  bytes target_invocation_uuid = 4;
-
-  bytes input = 5;
-}
-
 // RemoteContext service to implement the embedded handler API
 service RemoteContext {
   option (dev.restate.ext.service_type) = KEYED;
@@ -129,6 +115,9 @@ message SendResponse {
     // nor the client should create a new stream using Start().
     // The client can instead read the invocation result using GetResult().
     google.protobuf.Empty invalid_stream = 2;
+
+    // This means the invocation is completed, and the result should be collected using GetResult
+    google.protobuf.Empty invocation_completed = 3;
   }
 }
 
@@ -150,6 +139,9 @@ message RecvResponse {
     // nor the client should create a new stream using Start().
     // The client can instead read the invocation result using GetResult().
     google.protobuf.Empty invalid_stream = 2;
+
+    // This means the invocation is completed, and the result should be collected using GetResult
+    google.protobuf.Empty invocation_completed = 3;
   }
 }
 
