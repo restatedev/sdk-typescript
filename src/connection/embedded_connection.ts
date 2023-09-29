@@ -24,7 +24,6 @@ export class EmbeddedConnection implements Connection {
     if (len === 1) {
       // we are the first in line, therefore we schedule a flush,
       // BUT we must wait for the previous flush to end.
-      //
       this.flushing = this.flushing.then(() => this.scheduleFlush());
     }
     // tag along to the previously scheduled flush.
@@ -32,7 +31,8 @@ export class EmbeddedConnection implements Connection {
   }
 
   end(): Promise<void> {
-    return this.flush();
+    this.flushing = this.flushing.then(() => this.flush());
+    return this.flushing;
   }
 
   private scheduleFlush(): Promise<void> {
