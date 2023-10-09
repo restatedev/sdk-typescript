@@ -21,7 +21,13 @@ service RpcEndpoint {
 
 	rpc call(RpcRequest) returns (RpcResponse) {};
 
-	rpc handle(dev.restate.StringKeyedEvent) returns (google.protobuf.Empty) {};
+	rpc handle(KeyedEvent) returns (google.protobuf.Empty) {};
+}
+
+message KeyedEvent {
+	string key = 1 [(dev.restate.ext.field) = KEY];
+	bytes payload = 3 [(dev.restate.ext.field) = EVENT_PAYLOAD];
+	map<string, string> attributes = 15 [(dev.restate.ext.field) = EVENT_METADATA];
 }
 
 service UnkeyedRpcEndpoint {
