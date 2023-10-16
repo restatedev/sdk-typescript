@@ -452,7 +452,7 @@ async function dispatchKeyedEventHandler(
 ): Promise<Empty> {
   const ctx = new RpcContextImpl(origCtx);
   const key = req.key;
-  if (key.length === 0) {
+  if (!key) {
     // we throw a terminal error here, because this cannot be patched by updating code:
     // if the request is wrong (missing a key), the request can never make it
     throw new TerminalError(
