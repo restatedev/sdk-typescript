@@ -23,7 +23,6 @@ import {
   ServiceDiscoveryResponse,
 } from "../generated/proto/discovery";
 import { Event } from "../types/types";
-import { StringKeyedEvent } from "../generated/dev/restate/events";
 import {
   FileDescriptorProto,
   UninterpretedOption,
@@ -43,6 +42,7 @@ import {
   RpcResponse,
   ProtoMetadata as RpcServiceProtoMetadata,
   protoMetadata as rpcServiceProtoMetadata,
+  KeyedEvent,
 } from "../generated/proto/dynrpc";
 import { RestateContext, useContext } from "../restate_context";
 import { RpcContextImpl } from "../restate_context_impl";
@@ -202,15 +202,15 @@ export abstract class BaseRestateServer {
       throw new TerminalError("Unkeyed Event handlers are not yet supported.");
     }
     const descriptor = createStringKeyedMethodDescriptor(route);
-    const localMethod = (instance: unknown, input: StringKeyedEvent) => {
+    const localMethod = (instance: unknown, input: KeyedEvent) => {
       const ctx = useContext(instance);
       return dispatchKeyedEventHandler(ctx, input, handler);
     };
 
-    const decoder = StringKeyedEvent.decode;
+    const decoder = KeyedEvent.decode;
     const encoder = (message: Empty) => Empty.encode(message).finish();
 
-    const method = new GrpcServiceMethod<StringKeyedEvent, Empty>(
+    const method = new GrpcServiceMethod<KeyedEvent, Empty>(
       route,
       route,
       localMethod,
@@ -447,19 +447,19 @@ async function dispatchUnkeyedRpcHandler(
 
 async function dispatchKeyedEventHandler(
   origCtx: RestateContext,
-  req: StringKeyedEvent,
+  req: KeyedEvent,
   handler: Function
 ): Promise<Empty> {
   const ctx = new RpcContextImpl(origCtx);
   const key = req.key;
-  if (typeof key !== "string" || key.length === 0) {
+  if (key === null || key === undefined || key.length === 0) {
     // we throw a terminal error here, because this cannot be patched by updating code:
     // if the request is wrong (missing a key), the request can never make it
     throw new TerminalError(
-      "Keyed handlers must recieve a non null or empty string key"
+      "Keyed handlers must receive a non null or empty string key"
     );
   }
-  const jsEvent = new Event(key, req.payload, req.source, req.attributes);
+  const jsEvent = new Event(key, req.payload, req.attributes);
   await handler(ctx, jsEvent);
   return Empty.create({});
 }

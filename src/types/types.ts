@@ -125,7 +125,6 @@ export class Event {
   constructor(
     readonly key: string,
     readonly payload: Buffer,
-    readonly source: string,
     readonly attributes: Record<string, string>
   ) {}
 

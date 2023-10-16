@@ -1,6 +1,6 @@
 version: v1
 deps:
-  - buf.build/restatedev/proto
+  - buf.build/restatedev/proto:0.4.0
 build:
   excludes:
     - node_modules
