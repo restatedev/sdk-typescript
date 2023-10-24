@@ -4,5 +4,5 @@ deps:
   - remote: buf.build
     owner: restatedev
     repository: proto
-    commit: 4de69fd4bcad4d829ebe7643a6f461d1
-    digest: shake256:d9e8a43e890ecbc53822abd7bff03367697f588f815b9beddc1e34675c886549ef262a1e91c8a678db31a7b18979f88ceb98d7017c79fab0ebb81062740f996e
+    commit: 19e21396f0d94b0f81dda95d44a6672a
+    digest: shake256:5e3488c434356a784f124d6ed29bd616149a1dc50dc25a4ab3144b59bd872f05aa574bed3ac5df253c261a26267e52d9bbb19ca8325356af963b09fbd3b28059
