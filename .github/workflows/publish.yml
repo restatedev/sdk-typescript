@@ -1,4 +1,4 @@
-name: Publish package to GitHub Packages
+name: Publish package to NPM
 on:
   release:
     types: [published]
@@ -10,14 +10,14 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v3
-      # Setup .npmrc file to publish to GitHub Packages
+      # Setup .npmrc file to publish to NPM
       - uses: actions/setup-node@v3
         with:
           node-version: "16.x"
-          registry-url: "https://npm.pkg.github.com"
+          registry-url: 'https://registry.npmjs.org'
       - run: npm ci
       - run: npm run proto
       - run: npm run build
-      - run: npm publish --tag latest
+      - run: npm publish --tag latest --access public
         env:
-          NPM_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
