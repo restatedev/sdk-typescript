@@ -15,31 +15,43 @@ import { wrapHandler } from "./handler";
 import crypto from "crypto";
 import { RemoteContext } from "../generated/proto/services";
 import { bufConnectRemoteContext } from "./http2_remote";
+import { OutgoingHttpHeaders } from "http";
 
 export type RestateConnectionOptions = {
-  ingress: string;
+  /**
+   * Additional headers attached to the requests sent to Restate.
+   */
+  headers: OutgoingHttpHeaders;
 };
 
-export type RestateInvocationOptions<I, O> = {
-  id: string;
-  handler: (ctx: RpcContext, input: I) => Promise<O>;
-  input: I;
+export type RestateInvocationOptions = {
+  /**
+   * Retention period for the response in seconds.
+   * After the invocation completes, the response will be persisted for the given duration.
+   * Afterward, the system will clean up the response and treats any subsequent invocation with same operation_id as new.
+   *
+   * If not set, 30 minutes will be used as retention period.
+   */
   retain?: number;
 };
 
-export const connection = (opts: RestateConnectionOptions): RestateConnection =>
-  new RestateConnection(opts);
+export const connection = (
+  address: string,
+  opt?: RestateConnectionOptions
+): RestateConnection =>
+  new RestateConnection(bufConnectRemoteContext(address, opt));
 
 export class RestateConnection {
-  private remote: RemoteContext;
+  constructor(private readonly remote: RemoteContext) {}
 
-  constructor(readonly opts: RestateConnectionOptions) {
-    this.remote = bufConnectRemoteContext(opts.ingress);
-  }
-
-  public invoke<I, O>(opt: RestateInvocationOptions<I, O>): Promise<O> {
-    const method = wrapHandler(opt.handler);
+  public invoke<I, O>(
+    id: string,
+    input: I,
+    handler: (ctx: RpcContext, input: I) => Promise<O>,
+    opt?: RestateInvocationOptions
+  ): Promise<O> {
+    const method = wrapHandler(handler);
     const streamId = crypto.randomUUID();
-    return doInvoke<I, O>(this.remote, opt.id, streamId, method, opt.input);
+    return doInvoke<I, O>(this.remote, id, streamId, input, method, opt);
   }
 }

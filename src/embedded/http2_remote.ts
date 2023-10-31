@@ -15,6 +15,8 @@ import {
   RemoteContext,
   RemoteContextClientImpl,
 } from "../generated/proto/services";
+import { RestateConnectionOptions } from "./api";
+import { OutgoingHttpHeaders } from "http";
 
 export class RequestError extends Error {
   constructor(
@@ -30,8 +32,11 @@ export class RequestError extends Error {
   }
 }
 
-export const bufConnectRemoteContext = (url: string): RemoteContext => {
-  const httpClient = new ProtobufHttp2Client(url);
+export const bufConnectRemoteContext = (
+  url: string,
+  opt?: RestateConnectionOptions
+): RemoteContext => {
+  const httpClient = new ProtobufHttp2Client(url, opt);
 
   return new RemoteContextClientImpl({
     request: (service: string, method: string, data: Uint8Array) =>
@@ -41,8 +46,14 @@ export const bufConnectRemoteContext = (url: string): RemoteContext => {
 
 class ProtobufHttp2Client {
   private session?: http2.ClientHttp2Session;
+  private additionalHeaders: OutgoingHttpHeaders;
 
-  public constructor(private readonly ingress: string) {}
+  public constructor(
+    private readonly ingress: string,
+    opt?: RestateConnectionOptions
+  ) {
+    this.additionalHeaders = opt?.headers == undefined ? {} : opt?.headers;
+  }
 
   private async client(): Promise<http2.ClientHttp2Session> {
     if (this.session !== undefined) {
@@ -65,11 +76,16 @@ class ProtobufHttp2Client {
     const client = await this.client();
 
     const req = client.request({
-      [http2.constants.HTTP2_HEADER_SCHEME]: "http",
-      [http2.constants.HTTP2_HEADER_METHOD]: http2.constants.HTTP2_METHOD_POST,
-      [http2.constants.HTTP2_HEADER_PATH]: path,
-      [http2.constants.HTTP2_HEADER_CONTENT_TYPE]: "application/proto",
-      [http2.constants.HTTP2_HEADER_CONTENT_LENGTH]: body.length,
+      ...{
+        [http2.constants.HTTP2_HEADER_SCHEME]: "http",
+        [http2.constants.HTTP2_HEADER_METHOD]:
+          http2.constants.HTTP2_METHOD_POST,
+        [http2.constants.HTTP2_HEADER_PATH]: path,
+        [http2.constants.HTTP2_HEADER_CONTENT_TYPE]: "application/proto",
+        [http2.constants.HTTP2_HEADER_ACCEPT]: "application/proto",
+        [http2.constants.HTTP2_HEADER_CONTENT_LENGTH]: body.length,
+      },
+      ...this.additionalHeaders,
     });
     req.end(body);
 
