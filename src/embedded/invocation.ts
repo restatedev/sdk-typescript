@@ -60,7 +60,8 @@ export const doInvoke = async <I, O>(
   const stateMachine = new StateMachine(
     connection,
     journal,
-    ProtocolMode.BIDI_STREAM
+    ProtocolMode.BIDI_STREAM,
+    -1
   );
 
   //

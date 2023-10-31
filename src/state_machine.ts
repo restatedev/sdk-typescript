@@ -58,12 +58,11 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
   // Suspension timeout that gets set and cleared based on completion messages;
   private suspensionTimeout?: NodeJS.Timeout;
 
-  private readonly suspensionMillis = 30_000;
-
   constructor(
     private readonly connection: Connection,
     private readonly invocation: Invocation<I, O>,
-    private readonly protocolMode: ProtocolMode
+    private readonly protocolMode: ProtocolMode,
+    private readonly suspensionMillis: number = 30_000
   ) {
     this.localStateStore = invocation.localStateStore;
 
@@ -383,11 +382,15 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
       "Scheduling suspension in " + delay + " ms"
     );
 
-    // Set a new suspension with a new timeout
-    // The suspension will only be sent if the timeout is not canceled due to a completion.
-    this.suspensionTimeout = setTimeout(() => {
+    if (delay == 0) {
       this.suspend();
-    }, delay);
+    } else if (delay > 0) {
+      // Set a new suspension with a new timeout
+      // The suspension will only be sent if the timeout is not canceled due to a completion.
+      this.suspensionTimeout = setTimeout(() => {
+        this.suspend();
+      }, delay);
+    }
   }
 
   // Suspension timeouts:
