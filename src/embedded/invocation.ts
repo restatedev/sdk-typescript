@@ -11,7 +11,11 @@
 
 import { decodeMessagesBuffer } from "../io/decoder";
 import { Message } from "../types/types";
-import { GetResultResponse, RemoteContext } from "../generated/proto/services";
+import {
+  GetResultResponse,
+  RemoteContext,
+  StartRequest,
+} from "../generated/proto/services";
 import { InvocationBuilder } from "../invocation";
 import { HostedGrpcServiceMethod } from "../types/grpc";
 import { StateMachine } from "../state_machine";
@@ -20,24 +24,29 @@ import {
   EmbeddedConnection,
   FencedOffError,
 } from "../connection/embedded_connection";
+import { RestateInvocationOptions } from "./api";
 
 export const doInvoke = async <I, O>(
   remote: RemoteContext,
   operationId: string,
   streamId: string,
+  input: I,
   method: HostedGrpcServiceMethod<I, O>,
-  input: I
+  opt?: RestateInvocationOptions
 ): Promise<O> => {
   //
   // 1. ask to Start this execution.
   //
 
-  const res = await remote.start({
+  const startRequest = StartRequest.fromPartial({
     operationId,
     streamId,
-    retentionPeriodSec: 60,
     argument: Buffer.from(JSON.stringify(input)),
   });
+  if (opt != undefined && opt.retain != undefined) {
+    startRequest.retentionPeriodSec = opt.retain;
+  }
+  const res = await remote.start(startRequest);
 
   if (res.completed !== undefined) {
     return unwrap(res.completed);
