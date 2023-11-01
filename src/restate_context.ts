@@ -180,18 +180,9 @@ export interface RestateBaseContext {
 // ----------------------------------------------------------------------------
 
 /**
- * The context that gives access to all Restate-backed operations, for example
- *   - sending reliable messages / rpc through Restate
- *   - access/update state (for keyed services)
- *   - side effects
- *   - sleeps and delayed calls
- *   - awakeables
- *   - ...
- *
- * This context is for use in **gRPC service** implementations.
- * For the rpc-handler API, use the {@link RpcContext} instead.
+ * Interface to interact with **gRPC** based services.
  */
-export interface RestateGrpcContext extends RestateBaseContext {
+export interface RestateGrpcChannel {
   /**
    * Unidirectional call to other Restate services ( = in background / async / not waiting on response).
    * To do this, wrap the call via the proto-ts client with oneWayCall, as shown in the example.
@@ -254,6 +245,27 @@ export interface RestateGrpcContext extends RestateBaseContext {
     method: string,
     data: Uint8Array
   ): Promise<Uint8Array>;
+}
+
+/**
+ * The context that gives access to all Restate-backed operations, for example
+ *   - sending reliable messages / rpc through Restate
+ *   - access/update state (for keyed services)
+ *   - side effects
+ *   - sleeps and delayed calls
+ *   - awakeables
+ *   - ...
+ *
+ * This context is for use in **gRPC service** implementations.
+ * For the rpc-handler API, use the {@link RpcContext} instead.
+ */
+export interface RestateGrpcContext
+  extends RestateBaseContext,
+    RestateGrpcChannel {
+  /**
+   * Get the {@link RpcGateway} to invoke Handler-API based services.
+   */
+  rpcGateway(): RpcGateway;
 }
 
 /**
@@ -323,18 +335,9 @@ export type ServiceApi<_M = unknown> = {
 };
 
 /**
- * The context that gives access to all Restate-backed operations, for example
- *   - sending reliable messages / RPC through Restate
- *   - access/update state (for keyed services)
- *   - side effects
- *   - sleeps and delayed calls
- *   - awakeables
- *   - ...
- *
- * This context is for use with the **rpc-handler API**.
- * For gRPC-based API, use the {@link RestateContext} instead.
+ * Interface to interact with **rpc-handler API** based services.
  */
-export interface RpcContext extends RestateBaseContext {
+export interface RpcGateway {
   /**
    * Makes a type-safe request/response RPC to the specified target service.
    *
@@ -462,4 +465,23 @@ export interface RpcContext extends RestateBaseContext {
    * ```
    */
   sendDelayed<M>(opts: ServiceApi<M>, delay: number): SendClient<M>;
+}
+
+/**
+ * The context that gives access to all Restate-backed operations, for example
+ *   - sending reliable messages / RPC through Restate
+ *   - access/update state (for keyed services)
+ *   - side effects
+ *   - sleeps and delayed calls
+ *   - awakeables
+ *   - ...
+ *
+ * This context is for use with the **rpc-handler API**.
+ * For gRPC-based API, use the {@link RestateContext} instead.
+ */
+export interface RpcContext extends RestateBaseContext, RpcGateway {
+  /**
+   * Get the {@link RestateGrpcChannel} to invoke gRPC based services.
+   */
+  grpcChannel(): RestateGrpcChannel;
 }

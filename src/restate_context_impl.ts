@@ -9,7 +9,13 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { RestateGrpcContext, RpcContext, ServiceApi } from "./restate_context";
+import {
+  RestateGrpcChannel,
+  RestateGrpcContext,
+  RpcContext,
+  RpcGateway,
+  ServiceApi,
+} from "./restate_context";
 import { StateMachine } from "./state_machine";
 import {
   AwakeableEntryMessage,
@@ -397,6 +403,10 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
       );
     }
   }
+
+  rpcGateway(): RpcGateway {
+    return new RpcContextImpl(this);
+  }
 }
 
 async function executeWithRetries<T>(
@@ -554,5 +564,9 @@ export class RpcContextImpl implements RpcContext {
   }
   public sleep(millis: number): Promise<void> {
     return this.ctx.sleep(millis);
+  }
+
+  grpcChannel(): RestateGrpcChannel {
+    return this.ctx;
   }
 }
