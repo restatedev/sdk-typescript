@@ -382,11 +382,11 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
       "Scheduling suspension in " + delay + " ms"
     );
 
-    if (delay == 0) {
-      this.suspend();
-    } else if (delay > 0) {
+    if (delay >= 0) {
       // Set a new suspension with a new timeout
       // The suspension will only be sent if the timeout is not canceled due to a completion.
+      // In case the delay is 0 we still schedule a timeout in order to process the suspension on the next process tick,
+      // without interrupting the current work.
       this.suspensionTimeout = setTimeout(() => {
         this.suspend();
       }, delay);
