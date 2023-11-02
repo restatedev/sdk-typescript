@@ -9,12 +9,12 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { RpcContext, useContext } from "../restate_context";
+import { useContext } from "../restate_context";
 import { RpcContextImpl } from "../restate_context_impl";
 import { GrpcServiceMethod, HostedGrpcServiceMethod } from "../types/grpc";
 
 export function wrapHandler<I, O>(
-  handler: (ctx: RpcContext, input: I) => Promise<O>
+  handler: (ctx: EmbeddedHandlerContext, input: I) => Promise<O>
 ): HostedGrpcServiceMethod<I, O> {
   const localMethod = (instance: unknown, input: I): Promise<O> => {
     const ctx = new RpcContextImpl(useContext(instance));

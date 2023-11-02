@@ -58,6 +58,7 @@ import { rlog } from "./utils/logger";
 import { Client, SendClient } from "./types/router";
 import { RpcRequest, RpcResponse } from "./generated/proto/dynrpc";
 import { requestFromArgs } from "./utils/assumpsions";
+import { EmbeddedHandlerContext } from "./embedded/api";
 
 enum CallContexType {
   None,
@@ -480,7 +481,7 @@ async function executeWithRetries<T>(
   }
 }
 
-export class RpcContextImpl implements RpcContext {
+export class RpcContextImpl implements RpcContext, EmbeddedHandlerContext {
   constructor(
     private readonly ctx: RestateGrpcContext,
     public readonly id: Buffer = ctx.id,
@@ -564,6 +565,10 @@ export class RpcContextImpl implements RpcContext {
   }
   public sleep(millis: number): Promise<void> {
     return this.ctx.sleep(millis);
+  }
+
+  rpcGateway(): RpcGateway {
+    return this;
   }
 
   grpcChannel(): RestateGrpcChannel {
