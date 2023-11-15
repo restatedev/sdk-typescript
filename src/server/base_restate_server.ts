@@ -62,6 +62,7 @@ export abstract class BaseRestateServer {
     HostedGrpcServiceMethod<unknown, unknown>
   > = {};
   protected readonly discovery: ServiceDiscoveryResponse;
+  protected readonly dynrpcDescriptor: RpcServiceProtoMetadata;
 
   protected constructor(protocolMode: ProtocolMode) {
     this.discovery = {
@@ -71,6 +72,7 @@ export abstract class BaseRestateServer {
       maxProtocolVersion: 0,
       protocolMode: protocolMode,
     };
+    this.dynrpcDescriptor = copyProtoMetadata(rpcServiceProtoMetadata);
   }
 
   protected addDescriptor(descriptor: ProtoMetadata) {
@@ -232,7 +234,7 @@ export abstract class BaseRestateServer {
       name.length - serviceName.length - 1
     );
 
-    const desc = dynrpcDescriptor;
+    const desc = this.dynrpcDescriptor;
     const serviceGrpcSpec = keyed
       ? pushKeyedService(desc, name)
       : pushUnKeyedService(desc, name);
@@ -555,5 +557,3 @@ function createStringKeyedMethodDescriptor(
   desc.name = methodName;
   return desc;
 }
-
-const dynrpcDescriptor = copyProtoMetadata(rpcServiceProtoMetadata);
