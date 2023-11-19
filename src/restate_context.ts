@@ -33,6 +33,11 @@ export interface RestateBaseContext {
   serviceName: string;
 
   /**
+   * Deterministic random methods
+   */
+  rand: Rand;
+
+  /**
    * Get/retrieve state from the Restate runtime.
    * Note that state objects are serialized with `Buffer.from(JSON.stringify(theObject))`
    * and deserialized with `JSON.parse(value.toString()) as T`.
@@ -173,6 +178,19 @@ export interface RestateBaseContext {
    * await ctx.sleep(1000);
    */
   sleep(millis: number): Promise<void>;
+}
+
+export interface Rand {
+  /**
+   * Equivalent of JS `Math.random()` but deterministic; seeded by the invocation ID of the current invocation,
+   * each call will return a new pseudorandom float within the range [0,1)
+   */
+  random(): number
+
+  /**
+   * Using the same random source and seed as random(), produce a UUID version 4 string
+   */
+  uuidv4(): string
 }
 
 // ----------------------------------------------------------------------------

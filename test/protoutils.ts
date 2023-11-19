@@ -65,8 +65,8 @@ export function startMessage(
   return new Message(
     START_MESSAGE_TYPE,
     StartMessage.create({
-      id: Buffer.from("123"),
-      debugId: "123",
+      id: Buffer.from("f311f1fdcb9863f0018bd3400ecd7d69b547204e776218b2", "hex"),
+      debugId: "8xHx_cuYY_AAYvTQA7NfWm1RyBOd2IYsg",
       knownEntries: knownEntries, // only used for the Lambda case. For bidi streaming, this will be imputed by the testdriver
       stateMap: toStateEntries(state || []),
       partialState: partialState !== false,
@@ -441,7 +441,7 @@ export function getAwakeableId(entryIndex: number): string {
   const encodedEntryIndex = Buffer.alloc(4 /* Size of u32 */);
   encodedEntryIndex.writeUInt32BE(entryIndex);
 
-  return Buffer.concat([Buffer.from("123"), encodedEntryIndex]).toString(
+  return Buffer.concat([Buffer.from("f311f1fdcb9863f0018bd3400ecd7d69b547204e776218b2", "hex"), encodedEntryIndex]).toString(
     "base64url"
   );
 }
