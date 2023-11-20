@@ -13,6 +13,9 @@
 //! License MIT
 
 import {Rand} from "../restate_context";
+import {ErrorCodes, TerminalError} from "../types/errors";
+import {CallContexType, RestateGrpcContextImpl} from "../restate_context_impl";
+import {createHash} from "crypto";
 
 export class RandImpl implements Rand {
   private randstate64: bigint;
@@ -21,8 +24,13 @@ export class RandImpl implements Rand {
     if (typeof id == "bigint") {
       this.randstate64 = id
     } else {
-      // seed using last 64 (random) bits of the invocation ID
-      this.randstate64 = id.readBigUInt64LE(id.byteLength - 8);
+      // hash the invocation ID, which is known to contain 74 bits of entropy
+      const hash = createHash('sha256')
+        .update(id)
+        .digest();
+
+      // seed using first 64 bits of the hash
+      this.randstate64 = hash.readBigUInt64LE(0);
     }
   }
 
@@ -41,7 +49,19 @@ export class RandImpl implements Rand {
 
   static U53_MASK = ((1n << 53n) - 1n)
 
+  checkContext() {
+    const context = RestateGrpcContextImpl.callContext.getStore();
+    if (context && context.type === CallContexType.SideEffect) {
+      throw new TerminalError(
+        `You may not call methods on Rand from within a side effect.`,
+        {errorCode: ErrorCodes.INTERNAL}
+      );
+    }
+  }
+
   public random(): number {
+    this.checkContext()
+
     // first generate a uint in range [0,2^53), which can be mapped 1:1 to a float64 in [0,1)
     const u53 = this.u64() & RandImpl.U53_MASK
     // then divide by 2^53, which will simply update the exponent
@@ -49,6 +69,8 @@ export class RandImpl implements Rand {
   }
 
   public uuidv4(): string {
+    this.checkContext()
+
     const buf = Buffer.alloc(16);
     buf.writeBigUInt64LE(this.u64(), 0);
     buf.writeBigUInt64LE(this.u64(), 8);
@@ -59,6 +81,8 @@ export class RandImpl implements Rand {
   }
 
   public clone(): Rand {
+    this.checkContext()
+
     // clone current state so we can 'peek' at the next u64 we would have emitted
     const cloned = new RandImpl(this.randstate64)
     // use that u64 as the initial state for another Rand instance; this means it should produce numbers we

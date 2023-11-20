@@ -40,6 +40,9 @@ export interface RestateBaseContext {
    * Calls to these methods will update the state variable within and this will change the output of later calls,
    * so adding a new call to an existing handler with in-flight invocations can create non-determinism issues if there
    * are later calls. To avoid this, use the clone() method to get a new Rand instance that won't mutate the state.
+   *
+   * Calls to these methods from inside side effects are disallowed and will fail - side effects must be idempotent, and
+   * these calls are not.
    */
   rand: Rand;
 

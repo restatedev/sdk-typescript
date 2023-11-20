@@ -61,13 +61,13 @@ import { RpcRequest, RpcResponse } from "./generated/proto/dynrpc";
 import { requestFromArgs } from "./utils/assumpsions";
 import {RandImpl} from "./utils/rand";
 
-enum CallContexType {
+export enum CallContexType {
   None,
   SideEffect,
   OneWayCall,
 }
 
-interface CallContext {
+export interface CallContext {
   type: CallContexType;
   delay?: number;
 }
@@ -79,7 +79,7 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
   // we also use this information to ensure we check that only allowed operations are
   // used. Within side-effects, no operations are allowed on the RestateContext.
   // For example, this is illegal: 'ctx.sideEffect(() => {await ctx.get("my-state")})'
-  private static callContext = new AsyncLocalStorage<CallContext>();
+  static callContext = new AsyncLocalStorage<CallContext>();
 
   constructor(
     public readonly id: Buffer,
