@@ -79,16 +79,6 @@ export class RandImpl implements Rand {
     buf[8] = (buf[8] & 0x3f) | 0x80;
     return uuidStringify(buf)
   }
-
-  public clone(): Rand {
-    this.checkContext()
-
-    // clone current state so we can 'peek' at the next u64 we would have emitted
-    const cloned = new RandImpl(this.randstate64)
-    // use that u64 as the initial state for another Rand instance; this means it should produce numbers we
-    // weren't about to produce in the original instance
-    return new RandImpl(cloned.u64())
-  }
 }
 
 const byteToHex: string[] = [];
