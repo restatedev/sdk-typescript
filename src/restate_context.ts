@@ -33,6 +33,17 @@ export interface RestateBaseContext {
   serviceName: string;
 
   /**
+   * Deterministic random methods; these are inherently predictable (seeded on the invocation ID, which is not secret)
+   * and so should not be used for any cryptographic purposes. They are useful for identifiers, idempotency keys,
+   * and for uniform sampling from a set of options. If a cryptographically secure value is needed, please generate that
+   * externally and capture the result with a side effect.
+   *
+   * Calls to these methods from inside side effects are disallowed and will fail - side effects must be idempotent, and
+   * these calls are not.
+   */
+  rand: Rand;
+
+  /**
    * Get/retrieve state from the Restate runtime.
    * Note that state objects are serialized with `Buffer.from(JSON.stringify(theObject))`
    * and deserialized with `JSON.parse(value.toString()) as T`.
@@ -173,6 +184,20 @@ export interface RestateBaseContext {
    * await ctx.sleep(1000);
    */
   sleep(millis: number): Promise<void>;
+}
+
+export interface Rand {
+  /**
+   * Equivalent of JS `Math.random()` but deterministic; seeded by the invocation ID of the current invocation,
+   * each call will return a new pseudorandom float within the range [0,1)
+   */
+  random(): number
+
+  /**
+   * Using the same random source and seed as random(), produce a UUID version 4 string. This is inherently predictable
+   * based on the invocation ID and should not be used in cryptographic contexts
+   */
+  uuidv4(): string
 }
 
 // ----------------------------------------------------------------------------

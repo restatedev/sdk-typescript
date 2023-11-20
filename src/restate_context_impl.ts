@@ -10,6 +10,7 @@
  */
 
 import {
+  Rand,
   RestateGrpcChannel,
   RestateGrpcContext,
   RpcContext,
@@ -58,14 +59,15 @@ import { rlog } from "./utils/logger";
 import { Client, SendClient } from "./types/router";
 import { RpcRequest, RpcResponse } from "./generated/proto/dynrpc";
 import { requestFromArgs } from "./utils/assumpsions";
+import {RandImpl} from "./utils/rand";
 
-enum CallContexType {
+export enum CallContexType {
   None,
   SideEffect,
   OneWayCall,
 }
 
-interface CallContext {
+export interface CallContext {
   type: CallContexType;
   delay?: number;
 }
@@ -77,13 +79,14 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
   // we also use this information to ensure we check that only allowed operations are
   // used. Within side-effects, no operations are allowed on the RestateContext.
   // For example, this is illegal: 'ctx.sideEffect(() => {await ctx.get("my-state")})'
-  private static callContext = new AsyncLocalStorage<CallContext>();
+  static callContext = new AsyncLocalStorage<CallContext>();
 
   constructor(
     public readonly id: Buffer,
     public readonly serviceName: string,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    private readonly stateMachine: StateMachine<any, any>
+    private readonly stateMachine: StateMachine<any, any>,
+    public readonly rand: Rand = new RandImpl(id)
   ) {}
 
   public async get<T>(name: string): Promise<T | null> {
@@ -484,6 +487,7 @@ export class RpcContextImpl implements RpcContext {
   constructor(
     private readonly ctx: RestateGrpcContext,
     public readonly id: Buffer = ctx.id,
+    public readonly rand: Rand = ctx.rand,
     public readonly serviceName: string = ctx.serviceName
   ) {}
 
