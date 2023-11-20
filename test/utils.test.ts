@@ -44,7 +44,7 @@ describe("JSON printing", () => {
 
 describe("rand", () => {
   it("expected u64 output", () => {
-    let rand = new RandImpl(1477776061723855037n)
+    const rand = new RandImpl(1477776061723855037n)
 
     const actual: bigint[] = Array.from(Array(50)).map(() => rand.u64())
 
@@ -74,7 +74,7 @@ describe("rand", () => {
   });
 
   it("expected random output", () => {
-    let rand = new RandImpl(1477776061723855037n)
+    const rand = new RandImpl(1477776061723855037n)
 
     const actual = Array.from(Array(50)).map(() => rand.random())
 
@@ -102,7 +102,7 @@ describe("rand", () => {
   });
 
   it("expected uuidv4 output", () => {
-    let rand = new RandImpl(1477776061723855037n)
+    const rand = new RandImpl(1477776061723855037n)
 
     const actual = Array.from(Array(50)).map(() => rand.uuidv4())
 
@@ -127,5 +127,22 @@ describe("rand", () => {
     ]
 
     expect(actual).toStrictEqual(expected)
+  });
+
+  it("clone should not mutate original state", () => {
+    const rand1 = new RandImpl(1477776061723855037n)
+
+    expect(rand1.random()).toStrictEqual(0.40562876273298465)
+    expect(rand1.random()).toStrictEqual(0.7660684836915536)
+
+    const rand2 = rand1.clone()
+
+    expect(rand1.random()).toStrictEqual(0.06971711937258074)
+
+    expect(rand2.random()).toStrictEqual(0.998171769797398)
+    expect(rand2.random()).toStrictEqual(0.6733753646859768)
+    expect(rand2.random()).toStrictEqual(0.9623893622218933)
+
+    expect(rand1.random()).toStrictEqual(0.3947558385769815)
   });
 });

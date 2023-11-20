@@ -33,7 +33,13 @@ export interface RestateBaseContext {
   serviceName: string;
 
   /**
-   * Deterministic random methods
+   * Deterministic random methods; these are inherently predictable (seeded on the invocation ID, which is not secret)
+   * and so should not be used for any cryptographic purposes. They are useful for identifiers, idempotency keys,
+   * and for uniform sampling from a set of options.
+   *
+   * Calls to these methods will update the state variable within and this will change the output of later calls,
+   * so adding a new call to an existing handler with in-flight invocations can create non-determinism issues if there
+   * are later calls. To avoid this, use the clone() method to get a new Rand instance that won't mutate the state.
    */
   rand: Rand;
 
@@ -191,6 +197,13 @@ export interface Rand {
    * Using the same random source and seed as random(), produce a UUID version 4 string
    */
   uuidv4(): string
+
+  /**
+   * Create a new instance of Rand with a new deterministic pseudorandom state, where calls will not affect the state used by
+   * later queries of the original instance. Useful to allow the insertion of new queries without creating non-determinism
+   * issues.
+   */
+  clone(): Rand
 }
 
 // ----------------------------------------------------------------------------
