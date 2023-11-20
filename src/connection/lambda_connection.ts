@@ -23,13 +23,12 @@ const RESOLVED: Promise<void> = Promise.resolve();
 export class LambdaConnection implements Connection {
   // Empty buffer to store journal output messages
   private outputBuffer: Buffer = Buffer.alloc(0);
-  private suspendedOrCompleted = false;
 
   // Callback to resolve the invocation promise of the Lambda handler when the response is ready
   private readonly completionPromise: Promise<Buffer>;
   private resolveOnCompleted!: (value: Buffer | PromiseLike<Buffer>) => void;
 
-  constructor() {
+  constructor(private suspendedOrCompleted = false) {
     // Promise that signals when the invocation is over, to then flush the messages
     this.completionPromise = new Promise<Buffer>((resolve) => {
       this.resolveOnCompleted = resolve;
