@@ -28,6 +28,7 @@ import { Message } from "../types/types";
 import { StateMachine } from "../state_machine";
 import { ensureError } from "../types/errors";
 import { KeyedRouter, UnKeyedRouter } from "../public_api";
+import {OUTPUT_STREAM_ENTRY_MESSAGE_TYPE} from "../types/protocol";
 
 /**
  * Creates an Restate entrypoint for services deployed on AWS Lambda and invoked
@@ -223,10 +224,11 @@ export class LambdaRestateServer extends BaseRestateServer {
       let decodedEntries: Message[] | null = decodeLambdaBody(event.body);
       const journalBuilder = new InvocationBuilder(method);
       decodedEntries.forEach((e: Message) => journalBuilder.handleMessage(e));
+      const alreadyCompleted = decodedEntries.find((e: Message) => e.messageType === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE) !== undefined
       decodedEntries = null;
 
       // set up and invoke the state machine
-      const connection = new LambdaConnection();
+      const connection = new LambdaConnection(alreadyCompleted);
       const stateMachine = new StateMachine(
         connection,
         journalBuilder.build(),
