@@ -12,64 +12,87 @@
 //! Some parts copied from https://github.com/uuidjs/uuid/blob/main/src/stringify.js
 //! License MIT
 
-import {Rand} from "../restate_context";
-import {ErrorCodes, TerminalError} from "../types/errors";
-import {CallContexType, RestateGrpcContextImpl} from "../restate_context_impl";
-import {createHash} from "crypto";
+import { Rand } from "../restate_context";
+import { ErrorCodes, TerminalError } from "../types/errors";
+import {
+  CallContexType,
+  RestateGrpcContextImpl,
+} from "../restate_context_impl";
+import { createHash } from "crypto";
 
 export class RandImpl implements Rand {
-  private randstate64: bigint;
+  private randstate256: [bigint, bigint, bigint, bigint];
 
-  constructor(id: Buffer | bigint) {
-    if (typeof id == "bigint") {
-      this.randstate64 = id
-    } else {
+  constructor(id: Buffer | [bigint, bigint, bigint, bigint]) {
+    if (id instanceof Buffer) {
       // hash the invocation ID, which is known to contain 74 bits of entropy
-      const hash = createHash('sha256')
-        .update(id)
-        .digest();
+      const hash = createHash("sha256").update(id).digest();
 
-      // seed using first 64 bits of the hash
-      this.randstate64 = hash.readBigUInt64LE(0);
+      this.randstate256 = [
+        hash.readBigUInt64LE(0),
+        hash.readBigUInt64LE(8),
+        hash.readBigUInt64LE(16),
+        hash.readBigUInt64LE(24),
+      ];
+    } else {
+      this.randstate256 = id;
     }
   }
 
-  static U64_MASK = ((1n << 64n) - 1n)
+  static U64_MASK = (1n << 64n) - 1n;
 
-  // splitmix64
-  // https://prng.di.unimi.it/splitmix64.c - public domain
+  // xoshiro256++
+  // https://prng.di.unimi.it/xoshiro256plusplus.c - public domain
   u64(): bigint {
-    this.randstate64 = (this.randstate64 + 0x9e3779b97f4a7c15n) & RandImpl.U64_MASK;
-    let next: bigint = this.randstate64;
-    next = ((next ^ (next >> 30n)) * 0xbf58476d1ce4e5b9n) & RandImpl.U64_MASK;
-    next = ((next ^ (next >> 27n)) * 0x94d049bb133111ebn) & RandImpl.U64_MASK;
-    next = next ^ (next >> 31n);
-    return next
+    const result: bigint =
+      (RandImpl.rotl(
+        (this.randstate256[0] + this.randstate256[3]) & RandImpl.U64_MASK,
+        23n
+      ) +
+        this.randstate256[0]) &
+      RandImpl.U64_MASK;
+
+    const t: bigint = (this.randstate256[1] << 17n) & RandImpl.U64_MASK;
+
+    this.randstate256[2] ^= this.randstate256[0];
+    this.randstate256[3] ^= this.randstate256[1];
+    this.randstate256[1] ^= this.randstate256[2];
+    this.randstate256[0] ^= this.randstate256[3];
+
+    this.randstate256[2] ^= t;
+
+    this.randstate256[3] = RandImpl.rotl(this.randstate256[3], 45n);
+
+    return result;
   }
 
-  static U53_MASK = ((1n << 53n) - 1n)
+  static rotl(x: bigint, k: bigint): bigint {
+    return ((x << k) & RandImpl.U64_MASK) | (x >> (64n - k));
+  }
 
   checkContext() {
     const context = RestateGrpcContextImpl.callContext.getStore();
     if (context && context.type === CallContexType.SideEffect) {
       throw new TerminalError(
         `You may not call methods on Rand from within a side effect.`,
-        {errorCode: ErrorCodes.INTERNAL}
+        { errorCode: ErrorCodes.INTERNAL }
       );
     }
   }
 
+  static U53_MASK = (1n << 53n) - 1n;
+
   public random(): number {
-    this.checkContext()
+    this.checkContext();
 
     // first generate a uint in range [0,2^53), which can be mapped 1:1 to a float64 in [0,1)
-    const u53 = this.u64() & RandImpl.U53_MASK
+    const u53 = this.u64() & RandImpl.U53_MASK;
     // then divide by 2^53, which will simply update the exponent
-    return Number(u53) / 2 ** 53
+    return Number(u53) / 2 ** 53;
   }
 
   public uuidv4(): string {
-    this.checkContext()
+    this.checkContext();
 
     const buf = Buffer.alloc(16);
     buf.writeBigUInt64LE(this.u64(), 0);
@@ -77,7 +100,7 @@ export class RandImpl implements Rand {
     // Per 4.4, set bits for version and `clock_seq_hi_and_reserved`
     buf[6] = (buf[6] & 0x0f) | 0x40;
     buf[8] = (buf[8] & 0x3f) | 0x80;
-    return uuidStringify(buf)
+    return uuidStringify(buf);
   }
 }
 
@@ -102,16 +125,16 @@ function uuidStringify(arr: Buffer, offset = 0) {
     byteToHex[arr[offset + 1]] +
     byteToHex[arr[offset + 2]] +
     byteToHex[arr[offset + 3]] +
-    '-' +
+    "-" +
     byteToHex[arr[offset + 4]] +
     byteToHex[arr[offset + 5]] +
-    '-' +
+    "-" +
     byteToHex[arr[offset + 6]] +
     byteToHex[arr[offset + 7]] +
-    '-' +
+    "-" +
     byteToHex[arr[offset + 8]] +
     byteToHex[arr[offset + 9]] +
-    '-' +
+    "-" +
     byteToHex[arr[offset + 10]] +
     byteToHex[arr[offset + 11]] +
     byteToHex[arr[offset + 12]] +

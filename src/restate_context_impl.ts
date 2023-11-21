@@ -59,7 +59,7 @@ import { rlog } from "./utils/logger";
 import { Client, SendClient } from "./types/router";
 import { RpcRequest, RpcResponse } from "./generated/proto/dynrpc";
 import { requestFromArgs } from "./utils/assumpsions";
-import {RandImpl} from "./utils/rand";
+import { RandImpl } from "./utils/rand";
 
 export enum CallContexType {
   None,
