@@ -191,13 +191,13 @@ export interface Rand {
    * Equivalent of JS `Math.random()` but deterministic; seeded by the invocation ID of the current invocation,
    * each call will return a new pseudorandom float within the range [0,1)
    */
-  random(): number
+  random(): number;
 
   /**
    * Using the same random source and seed as random(), produce a UUID version 4 string. This is inherently predictable
    * based on the invocation ID and should not be used in cryptographic contexts
    */
-  uuidv4(): string
+  uuidv4(): string;
 }
 
 // ----------------------------------------------------------------------------
