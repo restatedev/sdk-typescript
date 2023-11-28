@@ -107,13 +107,13 @@ This requires the [Docker Engine](https://docs.docker.com/engine/install/) to la
 Start the runtime in a Docker container and tell Restate about the example service. This requires the example to be running, to make the discovery succeed!
  - On Linux:
     ```shell
-    docker run --name restate_dev --rm --network=host ghcr.io/restatedev/restate-dist:latest
+    docker run --name restate_dev --rm --network=host docker.io/restatedev/restate:latest
 
     curl -X POST http://localhost:9070/endpoints -H 'content-type: application/json' -d '{"uri": "http://localhost:9080"}'
     ```
 - On macOS:
     ```shell
-    docker run --name restate_dev --rm -p 9070:9070 -p 8080:8080 ghcr.io/restatedev/restate-dist:latest
+    docker run --name restate_dev --rm -p 9070:9070 -p 8080:8080 docker.io/restatedev/restate:latest
 
     curl -X POST http://localhost:9070/endpoints -H 'content-type: application/json' -d '{"uri": "http://host.docker.internal:9080"}'
     ```
