@@ -1,3 +1,7 @@
+[![Documentation](https://img.shields.io/badge/doc-reference-blue)](https://docs.restate.dev)
+[![Discord](https://img.shields.io/badge/join-discord-purple)](https://discord.gg/skW3AZ6uGd)
+[![Twitter](https://img.shields.io/twitter/follow/restatedev.svg?style=social&label=Follow)](https://twitter.com/intent/follow?screen_name=restatedev)
+
 # Restate Typescript SDK
 
 [Restate](https://restate.dev/) is a system for easily building resilient applications using *distributed durable async/await*. This repository contains the Restate SDK for writing services in **Node.js / Typescript**.
