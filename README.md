@@ -67,7 +67,7 @@ npm install @restatedev/restate-sdk
 
 For brand-new projects, we recommend using the [Restate Node Template](https://github.com/restatedev/node-template-generator):
 ```shell
-npx -y @restatedev/create-app
+npx -y @restatedev/create-app@latest
 ```
 
 # Contributing to the SDK
