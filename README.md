@@ -13,7 +13,7 @@ as part of long-running processes, or as FaaS (AWS Lambda).
 // note that there is no failure handling in this example, because the combination of durable execution,
 // communication, and state storage makes this unnecessary here.
 const addToCart = async (ctx: restate.RpcContext, cartId: string /* the key */, ticketId: string) => {
-  // RPC participates in durable execution, so guaranteed to eventually happend and
+  // RPC participates in durable execution, so guaranteed to eventually happen and
   // will never get duplicated. would suspend if the other takes too long
   const success = await ctx.rpc<ticketApi>({ path: "tickets" }).reserve(ticketId);
 
