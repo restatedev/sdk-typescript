@@ -11,12 +11,23 @@
 
 import {
   AWAKEABLE_ENTRY_MESSAGE_TYPE,
+  BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
+  CLEAR_STATE_ENTRY_MESSAGE_TYPE,
+  COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
+  COMPLETION_MESSAGE_TYPE,
+  ENTRY_ACK_MESSAGE_TYPE,
+  ERROR_MESSAGE_TYPE,
   GET_STATE_ENTRY_MESSAGE_TYPE,
+  INVOKE_ENTRY_MESSAGE_TYPE,
   KNOWN_MESSAGE_TYPES,
+  OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
   POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
   ProtocolMessage,
+  SET_STATE_ENTRY_MESSAGE_TYPE,
+  SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
   SLEEP_ENTRY_MESSAGE_TYPE,
   START_MESSAGE_TYPE,
+  SUSPENSION_MESSAGE_TYPE,
 } from "./protocol";
 
 export class Message {
@@ -53,19 +64,21 @@ class MessageType {
     return messageType == START_MESSAGE_TYPE;
   }
 
-  static isCustom(messageTypeId: bigint): boolean {
-    return !KNOWN_MESSAGE_TYPES.has(messageTypeId);
-  }
-
-  static hasRequiresAckFlag(messageTypeId: bigint): boolean {
-    return this.isCustom(messageTypeId);
+  static hasRequiresAckFlag(messageType: bigint): boolean {
+    return (
+      messageType !== START_MESSAGE_TYPE &&
+      messageType !== ERROR_MESSAGE_TYPE &&
+      messageType !== SUSPENSION_MESSAGE_TYPE &&
+      messageType !== ENTRY_ACK_MESSAGE_TYPE &&
+      messageType !== COMPLETION_MESSAGE_TYPE
+    );
   }
 }
 
 const CUSTOM_MESSAGE_MASK = BigInt(0xfc00);
 const COMPLETED_MASK = BigInt(0x0001_0000_0000);
 const VERSION_MASK = BigInt(0x03ff_0000_0000);
-const REQUIRES_ACK_MASK = BigInt(0x0001_0000_0000);
+const REQUIRES_ACK_MASK = BigInt(0x8000_0000_0000);
 
 // The header is exported but only for tests.
 export class Header {

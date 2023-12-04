@@ -27,6 +27,7 @@ import {
   checkTerminalError,
   checkJournalMismatchError,
   failureWithTerminal,
+  ackMessage,
 } from "./protoutils";
 import {
   TestGreeter,
@@ -88,11 +89,11 @@ describe("SideEffectGreeter", () => {
     ]);
   });
 
-  it("handles completion", async () => {
+  it("handles acks", async () => {
     const result = await new TestDriver(new SideEffectGreeter("Francesco"), [
       startMessage(),
       inputMessage(greetRequest("Till")),
-      completionMessage(1),
+      ackMessage(1),
     ]).run();
 
     expect(result).toStrictEqual([
@@ -215,7 +216,7 @@ describe("SideEffectAndInvokeGreeter", () => {
     const result = await new TestDriver(new SideEffectAndInvokeGreeter(), [
       startMessage(),
       inputMessage(greetRequest("Till")),
-      completionMessage(1),
+      ackMessage(1),
       completionMessage(2, greetResponse("FRANCESCO")),
     ]).run();
 
@@ -251,7 +252,7 @@ describe("SideEffectAndOneWayCallGreeter", () => {
     const result = await new TestDriver(new SideEffectAndOneWayCallGreeter(), [
       startMessage(),
       inputMessage(greetRequest("Till")),
-      completionMessage(1),
+      ackMessage(1),
       completionMessage(3, greetResponse("FRANCESCO")),
     ]).run();
 
@@ -304,11 +305,11 @@ class NumericSideEffectGreeter implements TestGreeter {
 }
 
 describe("NumericSideEffectGreeter", () => {
-  it("handles completion", async () => {
+  it("handles acks", async () => {
     const result = await new TestDriver(new NumericSideEffectGreeter(123), [
       startMessage(),
       inputMessage(greetRequest("Till")),
-      completionMessage(1),
+      ackMessage(1),
     ]).run();
 
     expect(result).toStrictEqual([
@@ -348,11 +349,11 @@ class EnumSideEffectGreeter implements TestGreeter {
 }
 
 describe("EnumSideEffectGreeter", () => {
-  it("handles completion with value enum", async () => {
+  it("handles acks with value enum", async () => {
     const result = await new TestDriver(new EnumSideEffectGreeter(), [
       startMessage(),
       inputMessage(greetRequest("Till")),
-      completionMessage(1),
+      ackMessage(1),
     ]).run();
 
     expect(result).toStrictEqual([
@@ -394,7 +395,7 @@ describe("Side effects error-handling", () => {
     const result = await new TestDriver(new FailingSideEffectGreeter(true), [
       startMessage(),
       inputMessage(greetRequest("Till")),
-      completionMessage(1),
+      ackMessage(1),
     ]).run();
 
     // When the user code fails we do want to see a side effect message with a failure
@@ -443,7 +444,7 @@ describe("FailingGetSideEffectGreeter", () => {
     const result = await new TestDriver(new FailingGetSideEffectGreeter(123), [
       startMessage(),
       inputMessage(greetRequest("Till")),
-      completionMessage(1),
+      ackMessage(1),
     ]).run();
 
     expect(result.length).toStrictEqual(2);
@@ -475,7 +476,7 @@ describe("FailingSetSideEffectGreeter", () => {
     const result = await new TestDriver(new FailingSetSideEffectGreeter(123), [
       startMessage(),
       inputMessage(greetRequest("Till")),
-      completionMessage(1),
+      ackMessage(1),
     ]).run();
 
     expect(result.length).toStrictEqual(2);
@@ -506,7 +507,7 @@ describe("FailingClearSideEffectGreeter", () => {
   it("fails on invalid operation clearState in sideEffect", async () => {
     const result = await new TestDriver(
       new FailingClearSideEffectGreeter(123),
-      [startMessage(), inputMessage(greetRequest("Till")), completionMessage(1)]
+      [startMessage(), inputMessage(greetRequest("Till")), ackMessage(1)]
     ).run();
 
     expect(result.length).toStrictEqual(2);
@@ -538,7 +539,7 @@ describe("FailingNestedSideEffectGreeter", () => {
   it("fails on invalid operation sideEffect in sideEffect", async () => {
     const result = await new TestDriver(
       new FailingNestedSideEffectGreeter(123),
-      [startMessage(), inputMessage(greetRequest("Till")), completionMessage(1)]
+      [startMessage(), inputMessage(greetRequest("Till")), ackMessage(1)]
     ).run();
 
     expect(result.length).toStrictEqual(2);
@@ -655,7 +656,7 @@ describe("FailingOneWayCallInSideEffectGreeter", () => {
   it("fails on invalid operation oneWayCall in sideEffect", async () => {
     const result = await new TestDriver(
       new FailingOneWayCallInSideEffectGreeter(123),
-      [startMessage(), inputMessage(greetRequest("Till")), completionMessage(1)]
+      [startMessage(), inputMessage(greetRequest("Till")), ackMessage(1)]
     ).run();
 
     expect(result.length).toStrictEqual(2);
@@ -686,7 +687,7 @@ describe("FailingResolveAwakeableSideEffectGreeter", () => {
   it("fails on invalid operation resolveAwakeable in sideEffect", async () => {
     const result = await new TestDriver(
       new FailingResolveAwakeableSideEffectGreeter(123),
-      [startMessage(), inputMessage(greetRequest("Till")), completionMessage(1)]
+      [startMessage(), inputMessage(greetRequest("Till")), ackMessage(1)]
     ).run();
 
     expect(result.length).toStrictEqual(2);
@@ -717,7 +718,7 @@ describe("FailingRejectAwakeableSideEffectGreeter", () => {
   it("fails on invalid operation rejectAwakeable in sideEffect", async () => {
     const result = await new TestDriver(
       new FailingRejectAwakeableSideEffectGreeter(123),
-      [startMessage(), inputMessage(greetRequest("Till")), completionMessage(1)]
+      [startMessage(), inputMessage(greetRequest("Till")), ackMessage(1)]
     ).run();
 
     expect(result.length).toStrictEqual(2);
@@ -748,7 +749,7 @@ describe("FailingSleepSideEffectGreeter", () => {
   it("fails on invalid operation sleep in sideEffect", async () => {
     const result = await new TestDriver(
       new FailingSleepSideEffectGreeter(123),
-      [startMessage(), inputMessage(greetRequest("Till")), completionMessage(1)]
+      [startMessage(), inputMessage(greetRequest("Till")), ackMessage(1)]
     ).run();
 
     expect(result.length).toStrictEqual(2);
@@ -778,7 +779,7 @@ describe("FailingAwakeableSideEffectGreeter", () => {
   it("fails on invalid operation awakeable in sideEffect", async () => {
     const result = await new TestDriver(
       new FailingAwakeableSideEffectGreeter(123),
-      [startMessage(), inputMessage(greetRequest("Till")), completionMessage(1)]
+      [startMessage(), inputMessage(greetRequest("Till")), ackMessage(1)]
     ).run();
 
     expect(result.length).toStrictEqual(2);
@@ -811,13 +812,13 @@ export class AwaitSideEffectService implements TestGreeter {
 }
 
 describe("AwaitSideEffectService", () => {
-  it("handles completion of all side effects", async () => {
+  it("handles acks of all side effects", async () => {
     const result = await new TestDriver(new AwaitSideEffectService(), [
       startMessage(),
       inputMessage(greetRequest("Till")),
-      completionMessage(1),
-      completionMessage(2),
-      completionMessage(3),
+      ackMessage(1),
+      ackMessage(2),
+      ackMessage(3),
     ]).run();
 
     expect(result).toStrictEqual([
@@ -828,13 +829,13 @@ describe("AwaitSideEffectService", () => {
     ]);
   });
 
-  it("handles replay of first side effect and completion of the others", async () => {
+  it("handles replay of first side effect and acks of the others", async () => {
     const result = await new TestDriver(new AwaitSideEffectService(), [
       startMessage(),
       inputMessage(greetRequest("Till")),
       sideEffectMessage(),
-      completionMessage(2),
-      completionMessage(3),
+      ackMessage(2),
+      ackMessage(3),
     ]).run();
 
     expect(result).toStrictEqual([
@@ -844,13 +845,13 @@ describe("AwaitSideEffectService", () => {
     ]);
   });
 
-  it("handles replay of first two side effect and completion of the other", async () => {
+  it("handles replay of first two side effect and ack of the other", async () => {
     const result = await new TestDriver(new AwaitSideEffectService(), [
       startMessage(),
       inputMessage(greetRequest("Till")),
       sideEffectMessage(),
       sideEffectMessage(),
-      completionMessage(3),
+      ackMessage(3),
     ]).run();
 
     expect(result).toStrictEqual([
@@ -890,7 +891,7 @@ describe("TerminalErrorSideEffectService", () => {
     const result = await new TestDriver(new TerminalErrorSideEffectService(), [
       startMessage(),
       inputMessage(greetRequest("Till")),
-      completionMessage(1),
+      ackMessage(1),
     ]).run();
 
     expect(result[0]).toStrictEqual(

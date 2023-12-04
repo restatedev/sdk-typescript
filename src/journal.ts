@@ -18,6 +18,7 @@ import {
   CLEAR_STATE_ENTRY_MESSAGE_TYPE,
   COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
   CompletionMessage,
+  EntryAckMessage,
   GET_STATE_ENTRY_MESSAGE_TYPE,
   GetStateEntryMessage,
   INVOKE_ENTRY_MESSAGE_TYPE,
@@ -189,14 +190,25 @@ export class Journal<I, O> {
       journalEntry.resolve(m.empty);
       this.pendingJournalEntries.delete(m.entryIndex);
     } else {
-      if (journalEntry.messageType === p.SIDE_EFFECT_ENTRY_MESSAGE_TYPE) {
-        // Just needs and ack without completion
-        journalEntry.resolve(undefined);
-        this.pendingJournalEntries.delete(m.entryIndex);
-      } else {
-        //TODO completion message without a value/failure/empty and message is not a side effect
-      }
+      //TODO completion message without a value/failure/empty
     }
+  }
+
+  public handleEntryAckMessage(m: EntryAckMessage) {
+    // Get message at that entryIndex in pendingJournalEntries
+    const journalEntry = this.pendingJournalEntries.get(m.entryIndex);
+
+    if (
+      journalEntry === undefined ||
+      journalEntry.messageType !== p.SIDE_EFFECT_ENTRY_MESSAGE_TYPE
+    ) {
+      //TODO received completion message but for an entry that is either non existing, or is not a side effect entry
+      return;
+    }
+
+    // Just needs and ack without completion
+    journalEntry.resolve(undefined);
+    this.pendingJournalEntries.delete(m.entryIndex);
   }
 
   private handleReplay(

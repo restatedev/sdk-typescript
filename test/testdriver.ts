@@ -11,6 +11,7 @@
 
 import {
   COMPLETION_MESSAGE_TYPE,
+  ENTRY_ACK_MESSAGE_TYPE,
   START_MESSAGE_TYPE,
   StartMessage,
 } from "../src/types/protocol";
@@ -68,7 +69,9 @@ export class TestDriver<I, O> implements Connection {
 
     // Get the index of where the completion messages start in the entries list
     const firstCompletionIndex = entries.findIndex(
-      (value) => value.messageType === COMPLETION_MESSAGE_TYPE
+      (value) =>
+        value.messageType === COMPLETION_MESSAGE_TYPE ||
+        value.messageType === ENTRY_ACK_MESSAGE_TYPE
     );
 
     // The last message of the replay is the one right before the first completion
@@ -97,21 +100,25 @@ export class TestDriver<I, O> implements Connection {
 
     if (
       replayMessages.filter(
-        (value) => value.messageType === COMPLETION_MESSAGE_TYPE
+        (value) =>
+          value.messageType === COMPLETION_MESSAGE_TYPE ||
+          value.messageType === ENTRY_ACK_MESSAGE_TYPE
       ).length > 0
     ) {
       throw new Error(
-        "You cannot interleave replay messages with completion messages. First define the replay messages, then the completion messages."
+        "You cannot interleave replay messages with completion or ack messages. First define the replay messages, then the completion messages."
       );
     }
 
     if (
       this.completionMessages.filter(
-        (value) => value.messageType !== COMPLETION_MESSAGE_TYPE
+        (value) =>
+          value.messageType !== COMPLETION_MESSAGE_TYPE &&
+          value.messageType !== ENTRY_ACK_MESSAGE_TYPE
       ).length > 0
     ) {
       throw new Error(
-        "You cannot interleave replay messages with completion messages. First define the replay messages, then the completion messages."
+        "You cannot interleave replay messages with completion or ack messages. First define the replay messages, then the completion messages."
       );
     }
 

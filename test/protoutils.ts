@@ -41,6 +41,8 @@ import {
   SuspensionMessage,
   ERROR_MESSAGE_TYPE,
   ErrorMessage,
+  ENTRY_ACK_MESSAGE_TYPE,
+  EntryAckMessage,
 } from "../src/types/protocol";
 import { Message } from "../src/types/types";
 import { TestRequest, TestResponse } from "../src/generated/proto/test";
@@ -233,6 +235,15 @@ export function completionMessage(
       })
     );
   }
+}
+
+export function ackMessage(index: number): Message {
+  return new Message(
+    ENTRY_ACK_MESSAGE_TYPE,
+    EntryAckMessage.create({
+      entryIndex: index,
+    })
+  );
 }
 
 export function invokeMessage(
