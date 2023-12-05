@@ -1,6 +1,6 @@
 [![Documentation](https://img.shields.io/badge/doc-reference-blue)](https://docs.restate.dev)
 [![Examples](https://img.shields.io/badge/view-examples-blue)](https://github.com/restatedev/examples)
-[![Discord](https://img.shields.io/badge/join-discord-purple)](https://discord.gg/skW3AZ6uGd)
+[![Discord](https://img.shields.io/discord/1128210118216007792?logo=discord)](https://discord.gg/skW3AZ6uGd)
 [![Twitter](https://img.shields.io/twitter/follow/restatedev.svg?style=social&label=Follow)](https://twitter.com/intent/follow?screen_name=restatedev)
 
 # Restate Typescript SDK
@@ -57,7 +57,11 @@ Restate takes care of:
   - **gRPC support:** Handlers may optionally be defined as gRPC services, and Restate will act as the transport
     layer for the services/clients in that case.
 
-Check [Restate GitHub](https://github.com/restatedev/) or the [docs](https://docs.restate.dev/) for further details.
+📖 Check out our [docs](https://docs.restate.dev) to get quickly started!
+
+🗣️ Join our [discord channel](https://discord.gg/skW3AZ6uGd) to talk to the community.
+
+🏠 Visit our [GitHub org](https://github.com/restatedev) for more details.
 
 # Using the SDK
 
