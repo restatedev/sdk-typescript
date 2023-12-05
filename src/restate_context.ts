@@ -14,6 +14,18 @@ import "./utils/logger";
 import { RetrySettings } from "./utils/public_utils";
 import { Client, SendClient } from "./types/router";
 
+export interface RestatePromiseDecorator<T> {
+  withCompensation(
+    onFulfilledCompensation: (res: T) => Promise<void>,
+    onRejectedCompensation?: (err: Error) => Promise<void>
+  ): RestatePromise<T>;
+}
+
+/**
+ * Promise wrapper allowing to reject promises
+ */
+export type RestatePromise<T> = Promise<T> & RestatePromiseDecorator<T>;
+
 /**
  * Base Restate context, which contains all operations that are the same in the gRPC-based API
  * as in the dynamic rpc-handler-based API.
@@ -124,6 +136,13 @@ export interface RestateBaseContext {
    */
   sideEffect<T>(fn: () => Promise<T>, retryPolicy?: RetrySettings): Promise<T>;
 
+  compensatedSideEffect<T>(
+    fn: () => Promise<T>,
+    onFulfilledCompensation: (res: T) => Promise<void>,
+    onRejectedOrNotExecutedCompensation?: (err?: Error) => Promise<void>,
+    retryPolicy?: RetrySettings
+  ): Promise<T>;
+
   /**
    * Register an awakeable and pause the processing until the awakeable ID (and optional payload) have been returned to the service
    * (via ctx.completeAwakeable(...)). The SDK deserializes the payload with `JSON.parse(result.toString()) as T`.
@@ -144,7 +163,7 @@ export interface RestateBaseContext {
    * // Wait for the external service to wake this service back up
    * const result = await awakeable.promise;
    */
-  awakeable<T>(): { id: string; promise: Promise<T> };
+  awakeable<T>(): { id: string; promise: RestatePromise<T> };
 
   /**
    * Resolve an awakeable of another service.
@@ -183,7 +202,17 @@ export interface RestateBaseContext {
    * const ctx = restate.useContext(this);
    * await ctx.sleep(1000);
    */
-  sleep(millis: number): Promise<void>;
+  sleep(millis: number): RestatePromise<void>;
+
+  // We still need this for the grpc client
+  registerPromiseCompensation<T>(
+    p: Promise<T>,
+    onFulfilledCompensation: (res: T) => Promise<void>,
+    onRejectedCompensation?: (err: Error) => Promise<void>
+  ): Promise<T>;
+
+  // Generic registerCompensation
+  registerCompensation(compensation: () => Promise<void>): void;
 }
 
 export interface Rand {
@@ -224,7 +253,7 @@ export interface RestateGrpcChannel {
    * )
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  oneWayCall(call: () => Promise<any>): Promise<void>;
+  oneWayCall(call: () => Promise<any>): RestatePromise<void>;
 
   /**
    * Delayed unidirectional call to other Restate services ( = in background / async / not waiting on response).
@@ -245,7 +274,10 @@ export interface RestateGrpcChannel {
    * )
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  delayedCall(call: () => Promise<any>, delayMillis?: number): Promise<void>;
+  delayedCall(
+    call: () => Promise<any>,
+    delayMillis?: number
+  ): RestatePromise<void>;
 
   /**
    * Call another Restate service and await the response.
