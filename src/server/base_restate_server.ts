@@ -49,6 +49,7 @@ import { RpcContextImpl } from "../restate_context_impl";
 import { verifyAssumptions } from "../utils/assumpsions";
 import { TerminalError } from "../public_api";
 import { isEventHandler } from "../types/router";
+import { jsonSafeAny } from "../utils/utils";
 
 export interface ServiceOpts {
   descriptor: ProtoMetadata;
@@ -175,7 +176,9 @@ export abstract class BaseRestateServer {
 
     const decoder = RpcRequest.decode;
     const encoder = (message: RpcResponse) =>
-      RpcResponse.encode(message).finish();
+      RpcResponse.encode({
+        response: jsonSafeAny("", message.response),
+      }).finish();
 
     const method = new GrpcServiceMethod<RpcRequest, RpcResponse>(
       route,
