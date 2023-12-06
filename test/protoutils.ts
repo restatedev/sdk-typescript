@@ -55,7 +55,7 @@ import {
 import { expect } from "@jest/globals";
 import { jsonSerialize, printMessageAsJson } from "../src/utils/utils";
 import { rlog } from "../src/utils/logger";
-import { ErrorCodes } from "../src/types/errors";
+import {ErrorCodes, RestateErrorCodes} from "../src/types/errors";
 
 export function startMessage(
   knownEntries?: number,
@@ -426,7 +426,7 @@ export function checkError(
 export function checkJournalMismatchError(outputMsg: Message) {
   expect(outputMsg.messageType).toEqual(ERROR_MESSAGE_TYPE);
   expect((outputMsg.message as ErrorMessage).code).toStrictEqual(
-    ErrorCodes.JOURNAL_MISMATCH
+    RestateErrorCodes.JOURNAL_MISMATCH
   );
   expect((outputMsg.message as ErrorMessage).message).toContain(
     "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
