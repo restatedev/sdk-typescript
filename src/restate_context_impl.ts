@@ -41,6 +41,7 @@ import { SideEffectEntryMessage } from "./generated/proto/javascript";
 import { AsyncLocalStorage } from "async_hooks";
 import {
   ErrorCodes,
+  RestateErrorCodes,
   RestateError,
   RetryableError,
   TerminalError,
@@ -443,7 +444,7 @@ async function executeWithRetries<T>(
       //  - they are not retried within the service, because they will never succeed within this service,
       //    but can only succeed within a new invocation going to service with fixed code
       //  we hence break the retries here similar to terminal errors
-      if (e instanceof RestateError && e.code == ErrorCodes.JOURNAL_MISMATCH) {
+      if (e instanceof RestateError && e.code == RestateErrorCodes.JOURNAL_MISMATCH) {
         throw e;
       }
 
