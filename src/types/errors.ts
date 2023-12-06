@@ -157,16 +157,9 @@ export enum ErrorCodes {
    * HTTP 401
    */
   UNAUTHENTICATED = 16,
-
-  /**
-   * The handler code did not match its journal upon retry
-   * For sdk internal use; no HTTP mapping
-   */
+}
+export enum RestateErrorCodes {
   JOURNAL_MISMATCH = 32,
-  /**
-   * The client is not respecting the Restate protocol
-   * For sdk internal use; no HTTP mapping
-   */
   PROTOCOL_VIOLATION = 33,
 }
 
@@ -232,12 +225,12 @@ export class RetryableError extends RestateError {
         - In the replayed messages: type: ${
           replayMessage.messageType
         }, message: ${printMessageAsJson(replayMessage.message)}`;
-    return new RetryableError(msg, { errorCode: ErrorCodes.JOURNAL_MISMATCH });
+    return new RetryableError(msg, { errorCode: RestateErrorCodes.JOURNAL_MISMATCH });
   }
 
   public static protocolViolation(message: string) {
     return new RetryableError(message, {
-      errorCode: ErrorCodes.PROTOCOL_VIOLATION,
+      errorCode: RestateErrorCodes.PROTOCOL_VIOLATION,
     });
   }
 
