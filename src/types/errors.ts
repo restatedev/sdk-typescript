@@ -18,8 +18,25 @@ import { JournalEntry } from "../journal";
 import { FailureWithTerminal } from "../generated/proto/javascript";
 
 export enum ErrorCodes {
-  UNKNOWN = 2,
-  INTERNAL = 13,
+  OK = 0,
+  CANCELLED,
+  UNKNOWN,
+  INVALID_ARGUMENT,
+  DEADLINE_EXCEEDED,
+  NOT_FOUND,
+  ALREADY_EXISTS,
+  PERMISSION_DENIED,
+  RESOURCE_EXHAUSTED,
+  FAILED_PRECONDITION,
+  ABORTED,
+  OUT_OF_RANGE,
+  UNIMPLEMENTED,
+  INTERNAL,
+  UNAVAILABLE,
+  DATA_LOSS,
+  UNAUTHENTICATED,
+
+  // Custom codes for Restate SDK use
   JOURNAL_MISMATCH = 32,
   PROTOCOL_VIOLATION = 33,
 }
