@@ -39,6 +39,8 @@ import { SideEffectEntryMessage } from "./generated/proto/javascript";
 import { Invocation } from "./invocation";
 import { failureToError, RetryableError } from "./types/errors";
 
+const RESOLVED = Promise.resolve(undefined);
+
 export class Journal<I, O> {
   private state = NewExecutionState.REPLAYING;
 
@@ -113,7 +115,7 @@ export class Journal<I, O> {
           case p.COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE:
           case p.BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE: {
             // Do not need completion
-            return Promise.resolve(undefined);
+            return RESOLVED;
           }
           case p.GET_STATE_ENTRY_MESSAGE_TYPE: {
             const getStateMsg = message as GetStateEntryMessage;

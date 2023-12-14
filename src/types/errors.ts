@@ -225,7 +225,9 @@ export class RetryableError extends RestateError {
         - In the replayed messages: type: ${
           replayMessage.messageType
         }, message: ${printMessageAsJson(replayMessage.message)}`;
-    return new RetryableError(msg, { errorCode: RestateErrorCodes.JOURNAL_MISMATCH });
+    return new RetryableError(msg, {
+      errorCode: RestateErrorCodes.JOURNAL_MISMATCH,
+    });
   }
 
   public static protocolViolation(message: string) {

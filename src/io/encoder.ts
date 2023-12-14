@@ -12,6 +12,7 @@
 import stream from "stream";
 import { PROTOBUF_MESSAGE_BY_TYPE } from "../types/protocol";
 import { Header, Message } from "../types/types";
+import _m0 from "protobufjs/minimal";
 
 export function streamEncoder(): stream.Transform {
   return new stream.Transform({
@@ -32,7 +33,11 @@ export function encodeMessage(msg: Message): Uint8Array {
 }
 
 export function encodeMessages(messages: Message[]): Uint8Array {
-  const chunks: Buffer[] = [];
+  const offsets = [];
+  const headers = [];
+  let off = 0;
+
+  const writer = _m0.Writer.create();
   for (const message of messages) {
     const pbType = PROTOBUF_MESSAGE_BY_TYPE.get(BigInt(message.messageType));
     if (pbType === undefined) {
@@ -41,19 +46,27 @@ export function encodeMessages(messages: Message[]): Uint8Array {
           message.messageType
       );
     }
-    const bodyBuf = pbType.encode(message.message).finish();
+    offsets.push(off);
+    writer.fixed64(0);
+    pbType.encode(message.message, writer);
+    const messageLen = writer.len - 8 - off;
+    off = writer.len;
+
     const header = new Header(
       BigInt(message.messageType),
-      bodyBuf.length,
+      messageLen,
       message.completed,
       message.protocolVersion, // only set for incoming start message
       message.requiresAck
     );
-    const encoded = header.toU64be();
-    const headerBuf = Buffer.alloc(8);
-    headerBuf.writeBigUInt64BE(encoded);
-    chunks.push(headerBuf);
-    chunks.push(bodyBuf);
+    const header64 = header.toU64be();
+    headers.push(header64);
   }
-  return Buffer.concat(chunks);
+  const buffer = writer.finish() as Buffer;
+  for (let i = 0; i < offsets.length; i++) {
+    const offset = offsets[i];
+    const header = headers[i];
+    buffer.writeBigUInt64BE(header, offset);
+  }
+  return buffer;
 }

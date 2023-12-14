@@ -55,7 +55,7 @@ import {
 import { expect } from "@jest/globals";
 import { jsonSerialize, printMessageAsJson } from "../src/utils/utils";
 import { rlog } from "../src/utils/logger";
-import {ErrorCodes, RestateErrorCodes} from "../src/types/errors";
+import { ErrorCodes, RestateErrorCodes } from "../src/types/errors";
 
 export function startMessage(
   knownEntries?: number,

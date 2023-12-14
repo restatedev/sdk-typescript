@@ -10,12 +10,12 @@
  */
 
 import stream from "stream";
-import { encodeMessage } from "../io/encoder";
 import { streamDecoder } from "../io/decoder";
 import { Connection, RestateStreamConsumer } from "./connection";
 import { Message } from "../types/types";
 import { rlog } from "../utils/logger";
 import { finished } from "stream/promises";
+import { BufferedConnection } from "./buffered_connection";
 
 // utility promise, for cases where we want to save allocation of an extra promise
 const RESOLVED: Promise<void> = Promise.resolve();
@@ -55,19 +55,25 @@ export class RestateHttp2Connection implements Connection {
   // input as decoded messages
   private readonly sdkInput: stream.Readable;
 
-  // output as encoded bytes. we convert manually, not as transforms,
-  // to skip a layer of stream indirection
-  private readonly sdkOutput: stream.Writable;
-
   // consumer handling
   private currentConsumer: RestateStreamConsumer | null = null;
   private inputBuffer: Message[] = [];
   private consumerError?: Error;
   private consumerInputClosed = false;
 
+  private outputBuffer: BufferedConnection;
+
   constructor(private readonly rawStream: stream.Duplex) {
     this.sdkInput = rawStream.pipe(streamDecoder());
-    this.sdkOutput = rawStream;
+
+    this.outputBuffer = new BufferedConnection((buffer) => {
+      const hasMoreCapacity = rawStream.write(buffer);
+      if (hasMoreCapacity) {
+        return RESOLVED;
+      } else {
+        return new Promise((resolve) => rawStream.once("drain", resolve));
+      }
+    });
 
     // remember and forward messages
     this.sdkInput.on("data", (m: Message) => {
@@ -201,23 +207,16 @@ export class RestateHttp2Connection implements Connection {
    * capacity again, so that at least the operations that await results will respect backpressure.
    */
   public send(msg: Message): Promise<void> {
-    const encodedMessage: Uint8Array = encodeMessage(msg);
-
-    const hasMoreCapacity = this.sdkOutput.write(encodedMessage);
-    if (hasMoreCapacity) {
-      return RESOLVED;
-    }
-
-    return new Promise((resolve) => {
-      this.sdkOutput.once("drain", resolve);
-    });
+    return this.outputBuffer.send(msg);
   }
 
   /**
    * Ends the stream, awaiting pending writes.
    */
   public async end(): Promise<void> {
-    this.sdkOutput.end();
+    await this.outputBuffer.end();
+
+    this.rawStream.end();
 
     const options = {
       error: true,

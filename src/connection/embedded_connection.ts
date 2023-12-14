@@ -10,8 +10,8 @@
  */
 
 import { RemoteContext } from "../generated/proto/services";
-import { encodeMessages } from "../io/encoder";
 import { Message } from "../types/types";
+import { BufferedConnection } from "./buffered_connection";
 import { Connection } from "./connection";
 
 export class FencedOffError extends Error {
@@ -27,47 +27,25 @@ export class InvocationAlreadyCompletedError extends Error {
 }
 
 export class EmbeddedConnection implements Connection {
-  private queue: Message[] = [];
-  private flushing: Promise<void> = Promise.resolve();
+  private buffered: BufferedConnection;
 
   constructor(
     private readonly operationId: string,
     private readonly streamId: string,
     private readonly remote: RemoteContext
-  ) {}
+  ) {
+    this.buffered = new BufferedConnection((buffer) => this.sendBuffer(buffer));
+  }
 
   send(msg: Message): Promise<void> {
-    const len = this.queue.push(msg);
-    if (len === 1) {
-      // we are the first in line, therefore we schedule a flush,
-      // BUT we must wait for the previous flush to end.
-      this.flushing = this.flushing.then(() => this.scheduleFlush());
-    }
-    // tag along to the previously scheduled flush.
-    return this.flushing;
+    return this.buffered.send(msg);
   }
 
   end(): Promise<void> {
-    this.flushing = this.flushing.then(() => this.flush());
-    return this.flushing;
+    return this.buffered.end();
   }
 
-  private scheduleFlush(): Promise<void> {
-    // schedule a flush at the end of the current event loop iteration.
-    return new Promise((resolve, reject) =>
-      setImmediate(() => {
-        this.flush().then(resolve).catch(reject);
-      })
-    );
-  }
-
-  private async flush(): Promise<void> {
-    if (this.queue.length === 0) {
-      return Promise.resolve();
-    }
-    const buffer = encodeMessages(this.queue) as Buffer;
-    this.queue = [];
-
+  private async sendBuffer(buffer: Buffer): Promise<void> {
     const res = await this.remote.send({
       operationId: this.operationId,
       streamId: this.streamId,
