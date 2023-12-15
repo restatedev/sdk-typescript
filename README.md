@@ -109,6 +109,12 @@ Launch a sample program (requires no build)
 npm run example
 ```
 
+### Update the proto descriptors
+
+```shell
+npm run proto
+```
+
 ### Testing end-to-end with Restate Runtime
 
 This requires the [Docker Engine](https://docs.docker.com/engine/install/) to launch the Restate runtime for testing.
@@ -134,6 +140,10 @@ curl -X POST http://localhost:8080/greeter/greet -H 'content-type: application/j
 ```
 
 # Releasing the package
+
+## Pre-release
+
+Before release, make sure the `buf.lock` of the proto descriptors is updated. See [Update the proto descriptors](#update-the-proto-descriptors).
 
 ## Releasing via release-it
 
