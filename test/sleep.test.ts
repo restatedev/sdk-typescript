@@ -15,7 +15,9 @@ import { TestDriver } from "./testdriver";
 import {
   awakeableMessage,
   checkJournalMismatchError,
+  checkTerminalError,
   completionMessage,
+  failure,
   greetRequest,
   greetResponse,
   inputMessage,
@@ -94,6 +96,18 @@ describe("SleepGreeter", () => {
     expect(result[1]).toStrictEqual(outputMessage(greetResponse("Hello")));
   });
 
+  it("handles completion with failure", async () => {
+    const result = await new TestDriver(new SleepGreeter(), [
+      startMessage(),
+      inputMessage(greetRequest("Till")),
+      completionMessage(1, undefined, undefined, failure("Canceled")),
+    ]).run();
+
+    expect(result.length).toStrictEqual(2);
+    expect(result[0].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
+    checkTerminalError(result[1], "Canceled");
+  });
+
   it("handles replay with no empty", async () => {
     const result = await new TestDriver(new SleepGreeter(), [
       startMessage(),
@@ -114,6 +128,17 @@ describe("SleepGreeter", () => {
 
     expect(result.length).toStrictEqual(1);
     expect(result[0]).toStrictEqual(outputMessage(greetResponse("Hello")));
+  });
+
+  it("handles replay with failure", async () => {
+    const result = await new TestDriver(new SleepGreeter(), [
+      startMessage(),
+      inputMessage(greetRequest("Till")),
+      sleepMessage(wakeupTime, undefined, failure("Canceled")),
+    ]).run();
+
+    expect(result.length).toStrictEqual(1);
+    checkTerminalError(result[0], "Canceled");
   });
 
   it("fails on journal mismatch. Completed with Awakeable.", async () => {

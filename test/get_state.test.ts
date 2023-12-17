@@ -14,7 +14,9 @@ import * as restate from "../src/public_api";
 import { TestDriver } from "./testdriver";
 import {
   checkJournalMismatchError,
+  checkTerminalError,
   completionMessage,
+  failure,
   getStateMessage,
   greetRequest,
   greetResponse,
@@ -106,6 +108,18 @@ describe("GetStringStateGreeter", () => {
     ]);
   });
 
+  it("handles completion with failure", async () => {
+    const result = await new TestDriver(new GetStringStateGreeter(), [
+      startMessage(),
+      inputMessage(greetRequest("Till")),
+      completionMessage(1, undefined, undefined, failure("Canceled")),
+    ]).run();
+
+    expect(result.length).toStrictEqual(2);
+    expect(result[0]).toStrictEqual(getStateMessage("STATE"));
+    checkTerminalError(result[1], "Canceled");
+  });
+
   it("handles replay with value", async () => {
     const result = await new TestDriver(new GetStringStateGreeter(), [
       startMessage(),
@@ -128,6 +142,17 @@ describe("GetStringStateGreeter", () => {
     expect(result).toStrictEqual([
       outputMessage(greetResponse("Hello nobody")),
     ]);
+  });
+
+  it("handles replay with failure", async () => {
+    const result = await new TestDriver(new GetStringStateGreeter(), [
+      startMessage(),
+      inputMessage(greetRequest("Till")),
+      getStateMessage("STATE", undefined, undefined, failure("Canceled")),
+    ]).run();
+
+    expect(result.length).toStrictEqual(1);
+    checkTerminalError(result[0], "Canceled");
   });
 });
 

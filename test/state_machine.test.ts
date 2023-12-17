@@ -14,6 +14,8 @@ import * as restate from "../src/public_api";
 import { describe, expect } from "@jest/globals";
 import { TestDriver } from "./testdriver";
 import {
+  checkTerminalError,
+  failure,
   greetRequest,
   greetResponse,
   inputMessage,
@@ -47,5 +49,15 @@ describe("Greeter", () => {
     ]).run();
 
     expect(result).toStrictEqual([]);
+  });
+
+  it("fails invocation if input is failed", async () => {
+    const result = await new TestDriver(new Greeter(), [
+      startMessage(1),
+      inputMessage(undefined, failure("Canceled")),
+    ]).run();
+
+    expect(result.length).toStrictEqual(1);
+    checkTerminalError(result[0], "Canceled");
   });
 });

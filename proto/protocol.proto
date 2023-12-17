@@ -96,13 +96,18 @@ message ErrorMessage {
 
 // ------ Input and output ------
 
-// Kind: Completable JournalEntry
+// Completable: Yes
+// Fallible: No
 // Type: 0x0400 + 0
 message PollInputStreamEntryMessage {
-  bytes value = 14;
+  oneof result {
+    bytes value = 14;
+    Failure failure = 15;
+  }
 }
 
-// Kind: Non-Completable JournalEntry
+// Completable: No
+// Fallible: No
 // Type: 0x0400 + 1
 message OutputStreamEntryMessage {
   oneof result {
@@ -113,7 +118,8 @@ message OutputStreamEntryMessage {
 
 // ------ State access ------
 
-// Kind: Completable JournalEntry
+// Completable: Yes
+// Fallible: No
 // Type: 0x0800 + 0
 message GetStateEntryMessage {
   bytes key = 1;
@@ -121,17 +127,20 @@ message GetStateEntryMessage {
   oneof result {
     google.protobuf.Empty empty = 13;
     bytes value = 14;
+    Failure failure = 15;
   };
 }
 
-// Kind: Non-Completable JournalEntry
+// Completable: No
+// Fallible: No
 // Type: 0x0800 + 1
 message SetStateEntryMessage {
   bytes key = 1;
   bytes value = 3;
 }
 
-// Kind: Non-Completable JournalEntry
+// Completable: No
+// Fallible: No
 // Type: 0x0800 + 2
 message ClearStateEntryMessage {
   bytes key = 1;
@@ -139,17 +148,22 @@ message ClearStateEntryMessage {
 
 // ------ Syscalls ------
 
-// Kind: Completable JournalEntry
+// Completable: Yes
+// Fallible: No
 // Type: 0x0C00 + 0
 message SleepEntryMessage {
   // Wake up time.
   // The time is set as duration since UNIX Epoch.
   uint64 wake_up_time = 1;
 
-  google.protobuf.Empty result = 13;
+  oneof result {
+    google.protobuf.Empty empty = 13;
+    Failure failure = 15;
+  }
 }
 
-// Kind: Completable JournalEntry
+// Completable: Yes
+// Fallible: Yes
 // Type: 0x0C00 + 1
 message InvokeEntryMessage {
   string service_name = 1;
@@ -163,7 +177,8 @@ message InvokeEntryMessage {
   };
 }
 
-// Kind: Non-Completable JournalEntry
+// Completable: No
+// Fallible: Yes
 // Type: 0x0C00 + 2
 message BackgroundInvokeEntryMessage {
   string service_name = 1;
@@ -178,7 +193,8 @@ message BackgroundInvokeEntryMessage {
   uint64 invoke_time = 4;
 }
 
-// Kind: Completable JournalEntry
+// Completable: Yes
+// Fallible: No
 // Type: 0x0C00 + 3
 // Awakeables are addressed by an identifier exposed to the user. See the spec for more details.
 message AwakeableEntryMessage {
@@ -188,7 +204,8 @@ message AwakeableEntryMessage {
   };
 }
 
-// Kind: Non-Completable JournalEntry
+// Completable: No
+// Fallible: Yes
 // Type: 0x0C00 + 4
 message CompleteAwakeableEntryMessage {
   // Identifier of the awakeable. See the spec for more details.

@@ -260,7 +260,8 @@ export class Journal<I, O> {
         this.resolveResult(
           journalIndex,
           journalEntry,
-          getStateMsg.value || getStateMsg.empty
+          getStateMsg.value || getStateMsg.empty,
+          getStateMsg.failure
         );
         break;
       }
@@ -276,7 +277,12 @@ export class Journal<I, O> {
       }
       case SLEEP_ENTRY_MESSAGE_TYPE: {
         const sleepMsg = replayMessage.message as SleepEntryMessage;
-        this.resolveResult(journalIndex, journalEntry, sleepMsg.result);
+        this.resolveResult(
+          journalIndex,
+          journalEntry,
+          sleepMsg.empty,
+          sleepMsg.failure
+        );
         break;
       }
       case AWAKEABLE_ENTRY_MESSAGE_TYPE: {

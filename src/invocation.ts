@@ -14,6 +14,7 @@
 import { Message } from "./types/types";
 import { HostedGrpcServiceMethod } from "./types/grpc";
 import {
+  Failure,
   PollInputStreamEntryMessage,
   StartMessage,
 } from "./generated/proto/protocol";
@@ -37,6 +38,10 @@ enum State {
   Complete = 3,
 }
 
+type InvocationValue =
+  | { kind: "value"; value: Buffer }
+  | { kind: "failure"; failure: Failure };
+
 export class InvocationBuilder<I, O> implements RestateStreamConsumer {
   private readonly complete = new CompletablePromise<void>();
 
@@ -46,7 +51,7 @@ export class InvocationBuilder<I, O> implements RestateStreamConsumer {
   private replayEntries = new Map<number, Message>();
   private id?: Buffer = undefined;
   private debugId?: string = undefined;
-  private invocationValue?: Buffer = undefined;
+  private invocationValue?: InvocationValue = undefined;
   private nbEntriesToReplay?: number = undefined;
   private localStateStore?: LocalStateStore;
 
@@ -67,6 +72,8 @@ export class InvocationBuilder<I, O> implements RestateStreamConsumer {
             POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
             m
           );
+
+          this.handlePollInputStreamEntry(m);
           this.addReplayEntry(m);
           break;
 
@@ -100,6 +107,28 @@ export class InvocationBuilder<I, O> implements RestateStreamConsumer {
     }
   }
 
+  private handlePollInputStreamEntry(m: Message) {
+    const pollInputStreamMessage = m.message as PollInputStreamEntryMessage;
+
+    if (pollInputStreamMessage.value !== undefined) {
+      this.invocationValue = {
+        kind: "value",
+        value: pollInputStreamMessage.value,
+      };
+    } else if (pollInputStreamMessage.failure !== undefined) {
+      this.invocationValue = {
+        kind: "failure",
+        failure: pollInputStreamMessage.failure,
+      };
+    } else {
+      throw new Error(
+        `PollInputStreamEntry neither contains value nor failure: ${printMessageAsJson(
+          m
+        )}`
+      );
+    }
+  }
+
   public handleStreamError(e: Error): void {
     this.complete.reject(e);
   }
@@ -120,10 +149,6 @@ export class InvocationBuilder<I, O> implements RestateStreamConsumer {
   }
 
   private addReplayEntry(m: Message): InvocationBuilder<I, O> {
-    if (m.messageType === POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE) {
-      this.invocationValue = (m.message as PollInputStreamEntryMessage).value;
-    }
-
     // Will be retrieved when the user code reaches this point
     this.replayEntries.set(this.runtimeReplayIndex, m);
     this.incrementRuntimeReplayIndex();
@@ -164,7 +189,7 @@ export class Invocation<I, O> {
     public readonly debugId: string,
     public readonly nbEntriesToReplay: number,
     public readonly replayEntries: Map<number, Message>,
-    public readonly invocationValue: Buffer,
+    public readonly invocationValue: InvocationValue,
     public readonly localStateStore: LocalStateStore
   ) {
     this.logPrefix = `[${makeFqServiceName(

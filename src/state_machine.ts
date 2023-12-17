@@ -33,6 +33,7 @@ import {
   TerminalError,
   RetryableError,
   errorToErrorMessage,
+  failureToTerminalError,
 } from "./types/errors";
 import { LocalStateStore } from "./local_state_store";
 
@@ -211,10 +212,21 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
       rlog.debugInvokeMessage(this.invocation.logPrefix, "Invoking function.");
     }
 
-    const resultBytes: Promise<Uint8Array> = this.invocation.method.invoke(
-      this.restateContext,
-      this.invocation.invocationValue
-    );
+    let resultBytes: Promise<Uint8Array>;
+
+    switch (this.invocation.invocationValue.kind) {
+      case "value":
+        resultBytes = this.invocation.method.invoke(
+          this.restateContext,
+          this.invocation.invocationValue.value
+        );
+        break;
+      case "failure":
+        resultBytes = Promise.reject(
+          failureToTerminalError(this.invocation.invocationValue.failure)
+        );
+        break;
+    }
 
     resultBytes
       .then((bytes) => {

@@ -90,13 +90,24 @@ export function toStateEntries(entries: Buffer[][]) {
   );
 }
 
-export function inputMessage(value: Uint8Array): Message {
-  return new Message(
-    POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
-    PollInputStreamEntryMessage.create({
-      value: Buffer.from(value),
-    })
-  );
+export function inputMessage(value?: Uint8Array, failure?: Failure): Message {
+  if (failure !== undefined) {
+    return new Message(
+      POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
+      PollInputStreamEntryMessage.create({
+        failure: failure,
+      })
+    );
+  } else if (value !== undefined) {
+    return new Message(
+      POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
+      PollInputStreamEntryMessage.create({
+        value: Buffer.from(value),
+      })
+    );
+  } else {
+    throw new Error("Input message needs either a value or a failure set.");
+  }
 }
 
 export function outputMessage(value?: Uint8Array, failure?: Failure): Message {
@@ -130,7 +141,8 @@ export function outputMessage(value?: Uint8Array, failure?: Failure): Message {
 export function getStateMessage<T>(
   key: string,
   value?: T,
-  empty?: boolean
+  empty?: boolean,
+  failure?: Failure
 ): Message {
   if (empty === true) {
     return new Message(
@@ -146,6 +158,14 @@ export function getStateMessage<T>(
       GetStateEntryMessage.create({
         key: Buffer.from(key),
         value: Buffer.from(jsonSerialize(value)),
+      })
+    );
+  } else if (failure !== undefined) {
+    return new Message(
+      GET_STATE_ENTRY_MESSAGE_TYPE,
+      GetStateEntryMessage.create({
+        key: Buffer.from(key),
+        failure: failure,
       })
     );
   } else {
@@ -177,13 +197,25 @@ export function clearStateMessage(key: string): Message {
   );
 }
 
-export function sleepMessage(wakeupTime: number, result?: Empty): Message {
-  if (result !== undefined) {
+export function sleepMessage(
+  wakeupTime: number,
+  empty?: Empty,
+  failure?: Failure
+): Message {
+  if (empty !== undefined) {
     return new Message(
       SLEEP_ENTRY_MESSAGE_TYPE,
       SleepEntryMessage.create({
         wakeUpTime: wakeupTime,
-        result: result,
+        empty: empty,
+      })
+    );
+  } else if (failure !== undefined) {
+    return new Message(
+      SLEEP_ENTRY_MESSAGE_TYPE,
+      SleepEntryMessage.create({
+        wakeUpTime: wakeupTime,
+        failure: failure,
       })
     );
   } else {

@@ -260,6 +260,10 @@ export function errorToFailureWithTerminal(err: Error): FailureWithTerminal {
   });
 }
 
+export function failureToTerminalError(failure: Failure): TerminalError {
+  return failureToError(failure, true) as TerminalError;
+}
+
 export function failureToError(
   failure: Failure,
   terminalError: boolean
