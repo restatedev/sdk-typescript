@@ -124,13 +124,13 @@ Start the runtime in a Docker container and tell Restate about the example servi
     ```shell
     docker run --name restate_dev --rm --network=host docker.io/restatedev/restate:latest
 
-    curl -X POST http://localhost:9070/endpoints -H 'content-type: application/json' -d '{"uri": "http://localhost:9080"}'
+    curl -X POST http://localhost:9070/deployments -H 'content-type: application/json' -d '{"uri": "http://localhost:9080"}'
     ```
 - On macOS:
     ```shell
     docker run --name restate_dev --rm -p 9070:9070 -p 8080:8080 docker.io/restatedev/restate:latest
 
-    curl -X POST http://localhost:9070/endpoints -H 'content-type: application/json' -d '{"uri": "http://host.docker.internal:9080"}'
+    curl -X POST http://localhost:9070/deployments -H 'content-type: application/json' -d '{"uri": "http://host.docker.internal:9080"}'
     ```
 
 
