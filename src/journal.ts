@@ -198,10 +198,7 @@ export class Journal<I, O> {
     // Get message at that entryIndex in pendingJournalEntries
     const journalEntry = this.pendingJournalEntries.get(m.entryIndex);
 
-    if (
-      journalEntry === undefined ||
-      journalEntry.messageType !== p.SIDE_EFFECT_ENTRY_MESSAGE_TYPE
-    ) {
+    if (journalEntry === undefined) {
       return;
     }
 
