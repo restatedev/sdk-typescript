@@ -202,11 +202,10 @@ export class Journal<I, O> {
       journalEntry === undefined ||
       journalEntry.messageType !== p.SIDE_EFFECT_ENTRY_MESSAGE_TYPE
     ) {
-      //TODO received completion message but for an entry that is either non existing, or is not a side effect entry
       return;
     }
 
-    // Just needs and ack without completion
+    // Just needs an ack
     journalEntry.resolve(undefined);
     this.pendingJournalEntries.delete(m.entryIndex);
   }
