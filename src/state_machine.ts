@@ -19,6 +19,7 @@ import { rlog } from "./utils/logger";
 import { clearTimeout } from "timers";
 import {
   COMPLETION_MESSAGE_TYPE,
+  ENTRY_ACK_MESSAGE_TYPE,
   ERROR_MESSAGE_TYPE,
   OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
   OutputStreamEntryMessage,
@@ -80,21 +81,30 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
       return false;
     }
 
-    if (m.messageType !== COMPLETION_MESSAGE_TYPE) {
+    if (m.messageType === COMPLETION_MESSAGE_TYPE) {
+      rlog.debugJournalMessage(
+        this.invocation.logPrefix,
+        "Received completion message from Restate, adding to journal.",
+        m.messageType,
+        m.message
+      );
+      this.journal.handleRuntimeCompletionMessage(
+        m.message as p.CompletionMessage
+      );
+    } else if (m.messageType === ENTRY_ACK_MESSAGE_TYPE) {
+      rlog.debugJournalMessage(
+        this.invocation.logPrefix,
+        "Received entry ack message from Restate, adding to journal.",
+        m.messageType,
+        m.message
+      );
+      this.journal.handleEntryAckMessage(m.message as p.EntryAckMessage);
+    } else {
       throw RetryableError.protocolViolation(
-        `Received message of type ${m.messageType}. Can only accept completion messages after replay has finished.`
+        `Received message of type ${m.messageType}. Can only accept completion or acks messages after replay has finished.`
       );
     }
 
-    rlog.debugJournalMessage(
-      this.invocation.logPrefix,
-      "Received completion message from Restate, adding to journal.",
-      m.messageType,
-      m.message
-    );
-    this.journal.handleRuntimeCompletionMessage(
-      m.message as p.CompletionMessage
-    );
     // Remove lingering suspension timeouts, if we are not waiting for completions anymore
     if (
       this.suspensionTimeout !== undefined &&

@@ -16,6 +16,7 @@ import {
   ClearStateEntryMessage,
   CompleteAwakeableEntryMessage,
   CompletionMessage,
+  EntryAckMessage,
   ErrorMessage,
   GetStateEntryMessage,
   InvokeEntryMessage,
@@ -43,6 +44,7 @@ export {
   SleepEntryMessage,
   StartMessage,
   SuspensionMessage,
+  EntryAckMessage,
 } from "../generated/proto/protocol";
 
 // Export the protocol message types as defined by the restate protocol.
@@ -50,6 +52,7 @@ export const START_MESSAGE_TYPE = 0x0000n;
 export const COMPLETION_MESSAGE_TYPE = 0x0001n;
 export const SUSPENSION_MESSAGE_TYPE = 0x0002n;
 export const ERROR_MESSAGE_TYPE = 0x0003n;
+export const ENTRY_ACK_MESSAGE_TYPE = 0x0004n;
 export const POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE = 0x0400n;
 export const OUTPUT_STREAM_ENTRY_MESSAGE_TYPE = 0x0401n;
 export const GET_STATE_ENTRY_MESSAGE_TYPE = 0x0800n;
@@ -74,6 +77,7 @@ export const KNOWN_MESSAGE_TYPES = new Set([
   COMPLETION_MESSAGE_TYPE,
   SUSPENSION_MESSAGE_TYPE,
   ERROR_MESSAGE_TYPE,
+  ENTRY_ACK_MESSAGE_TYPE,
   POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
   OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
   GET_STATE_ENTRY_MESSAGE_TYPE,
@@ -92,6 +96,7 @@ export const PROTOBUF_MESSAGE_NAME_BY_TYPE = new Map<bigint, string>([
   [COMPLETION_MESSAGE_TYPE, "CompletionMessage"],
   [SUSPENSION_MESSAGE_TYPE, "SuspensionMessage"],
   [ERROR_MESSAGE_TYPE, "ErrorMessage"],
+  [ENTRY_ACK_MESSAGE_TYPE, "EntryAckMessage"],
   [POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE, "PollInputStreamEntryMessage"],
   [OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, "OutputStreamEntryMessage"],
   [GET_STATE_ENTRY_MESSAGE_TYPE, "GetStateEntryMessage"],
@@ -111,6 +116,7 @@ const PROTOBUF_MESSAGES: Array<[bigint, any]> = [
   [COMPLETION_MESSAGE_TYPE, CompletionMessage],
   [SUSPENSION_MESSAGE_TYPE, SuspensionMessage],
   [ERROR_MESSAGE_TYPE, ErrorMessage],
+  [ENTRY_ACK_MESSAGE_TYPE, EntryAckMessage],
   [POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE, PollInputStreamEntryMessage],
   [OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, OutputStreamEntryMessage],
   [GET_STATE_ENTRY_MESSAGE_TYPE, GetStateEntryMessage],
@@ -131,6 +137,7 @@ export type ProtocolMessage =
   | CompletionMessage
   | SuspensionMessage
   | ErrorMessage
+  | EntryAckMessage
   | PollInputStreamEntryMessage
   | OutputStreamEntryMessage
   | GetStateEntryMessage
