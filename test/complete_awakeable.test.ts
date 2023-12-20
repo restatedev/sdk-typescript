@@ -22,6 +22,7 @@ import {
   outputMessage,
   startMessage,
   rejectAwakeableMessage,
+  END_MESSAGE,
 } from "./protoutils";
 import { describe, expect } from "@jest/globals";
 import { TestDriver } from "./testdriver";
@@ -49,6 +50,7 @@ describe("ResolveAwakeableGreeter", () => {
     expect(result).toStrictEqual([
       resolveAwakeableMessage(getAwakeableId(1), "hello"),
       outputMessage(greetResponse("Hello")),
+      END_MESSAGE,
     ]);
   });
 
@@ -61,6 +63,7 @@ describe("ResolveAwakeableGreeter", () => {
     expect(result).toStrictEqual([
       resolveAwakeableMessage(getAwakeableId(1), ""),
       outputMessage(greetResponse("Hello")),
+      END_MESSAGE,
     ]);
   });
 
@@ -71,7 +74,10 @@ describe("ResolveAwakeableGreeter", () => {
       resolveAwakeableMessage(getAwakeableId(1), "hello"),
     ]).run();
 
-    expect(result).toStrictEqual([outputMessage(greetResponse("Hello"))]);
+    expect(result).toStrictEqual([
+      outputMessage(greetResponse("Hello")),
+      END_MESSAGE,
+    ]);
   });
 
   it("handles replay with value empty string", async () => {
@@ -81,7 +87,10 @@ describe("ResolveAwakeableGreeter", () => {
       resolveAwakeableMessage(getAwakeableId(1), ""),
     ]).run();
 
-    expect(result).toStrictEqual([outputMessage(greetResponse("Hello"))]);
+    expect(result).toStrictEqual([
+      outputMessage(greetResponse("Hello")),
+      END_MESSAGE,
+    ]);
   });
 
   it("fails on journal mismatch. Completed with invoke during replay.", async () => {
@@ -138,6 +147,7 @@ describe("RejectAwakeableGreeter", () => {
     expect(result).toStrictEqual([
       rejectAwakeableMessage(getAwakeableId(1), "my bad error"),
       outputMessage(greetResponse("Hello")),
+      END_MESSAGE,
     ]);
   });
 });

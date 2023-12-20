@@ -28,6 +28,7 @@ import {
   checkJournalMismatchError,
   failureWithTerminal,
   ackMessage,
+  END_MESSAGE,
 } from "./protoutils";
 import {
   TestGreeter,
@@ -99,6 +100,7 @@ describe("SideEffectGreeter", () => {
     expect(result).toStrictEqual([
       sideEffectMessage("Francesco"),
       outputMessage(greetResponse("Hello Francesco")),
+      END_MESSAGE,
     ]);
   });
 
@@ -111,6 +113,7 @@ describe("SideEffectGreeter", () => {
 
     expect(result).toStrictEqual([
       outputMessage(greetResponse("Hello undefined")),
+      END_MESSAGE,
     ]);
   });
 
@@ -123,6 +126,7 @@ describe("SideEffectGreeter", () => {
 
     expect(result).toStrictEqual([
       outputMessage(greetResponse("Hello undefined")),
+      END_MESSAGE,
     ]);
   });
 
@@ -135,6 +139,7 @@ describe("SideEffectGreeter", () => {
 
     expect(result).toStrictEqual([
       outputMessage(greetResponse("Hello Francesco")),
+      END_MESSAGE,
     ]);
   });
 
@@ -145,7 +150,10 @@ describe("SideEffectGreeter", () => {
       sideEffectMessage(""),
     ]).run();
 
-    expect(result).toStrictEqual([outputMessage(greetResponse("Hello "))]);
+    expect(result).toStrictEqual([
+      outputMessage(greetResponse("Hello ")),
+      END_MESSAGE,
+    ]);
   });
 
   it("handles replay with failure", async () => {
@@ -209,6 +217,7 @@ describe("SideEffectAndInvokeGreeter", () => {
     expect(result).toStrictEqual([
       invokeMessage("test.TestGreeter", "Greet", greetRequest("abcd")),
       outputMessage(greetResponse("Hello FRANCESCO")),
+      END_MESSAGE,
     ]);
   });
 
@@ -224,6 +233,7 @@ describe("SideEffectAndInvokeGreeter", () => {
       sideEffectMessage("abcd"),
       invokeMessage("test.TestGreeter", "Greet", greetRequest("abcd")),
       outputMessage(greetResponse("Hello FRANCESCO")),
+      END_MESSAGE,
     ]);
   });
 });
@@ -265,6 +275,7 @@ describe("SideEffectAndOneWayCallGreeter", () => {
       ),
       invokeMessage("test.TestGreeter", "Greet", greetRequest("abcd")),
       outputMessage(greetResponse("Hello FRANCESCO")),
+      END_MESSAGE,
     ]);
   });
 
@@ -284,6 +295,7 @@ describe("SideEffectAndOneWayCallGreeter", () => {
       ),
       invokeMessage("test.TestGreeter", "Greet", greetRequest("abcd")),
       outputMessage(greetResponse("Hello FRANCESCO")),
+      END_MESSAGE,
     ]);
   });
 });
@@ -315,6 +327,7 @@ describe("NumericSideEffectGreeter", () => {
     expect(result).toStrictEqual([
       sideEffectMessage(123),
       outputMessage(greetResponse("Hello 123")),
+      END_MESSAGE,
     ]);
   });
 
@@ -325,7 +338,10 @@ describe("NumericSideEffectGreeter", () => {
       sideEffectMessage(123),
     ]).run();
 
-    expect(result).toStrictEqual([outputMessage(greetResponse("Hello 123"))]);
+    expect(result).toStrictEqual([
+      outputMessage(greetResponse("Hello 123")),
+      END_MESSAGE,
+    ]);
   });
 });
 
@@ -359,6 +375,7 @@ describe("EnumSideEffectGreeter", () => {
     expect(result).toStrictEqual([
       sideEffectMessage(OrderStatus.ORDERED),
       outputMessage(greetResponse("Hello 0")),
+      END_MESSAGE,
     ]);
   });
 
@@ -369,7 +386,10 @@ describe("EnumSideEffectGreeter", () => {
       sideEffectMessage(OrderStatus.ORDERED),
     ]).run();
 
-    expect(result).toStrictEqual([outputMessage(greetResponse("Hello 0"))]);
+    expect(result).toStrictEqual([
+      outputMessage(greetResponse("Hello 0")),
+      END_MESSAGE,
+    ]);
   });
 });
 
@@ -400,8 +420,9 @@ describe("Side effects error-handling", () => {
 
     // When the user code fails we do want to see a side effect message with a failure
     // For invalid user code, we do not want to see this.
-    expect(result.length).toStrictEqual(2);
+    expect(result.length).toStrictEqual(3);
     checkTerminalError(result[1], "Failing user code");
+    expect(result[2]).toStrictEqual(END_MESSAGE);
   });
 
   it("handles non-terminal errors by retrying (with sleep and suspension)", async () => {
@@ -447,11 +468,12 @@ describe("FailingGetSideEffectGreeter", () => {
       ackMessage(1),
     ]).run();
 
-    expect(result.length).toStrictEqual(2);
+    expect(result.length).toStrictEqual(3);
     checkTerminalError(
       result[1],
       "You cannot do get state calls from within a side effect."
     );
+    expect(result[2]).toStrictEqual(END_MESSAGE);
   });
 });
 
@@ -479,11 +501,12 @@ describe("FailingSetSideEffectGreeter", () => {
       ackMessage(1),
     ]).run();
 
-    expect(result.length).toStrictEqual(2);
+    expect(result.length).toStrictEqual(3);
     checkTerminalError(
       result[1],
       "You cannot do set state calls from within a side effect."
     );
+    expect(result[2]).toStrictEqual(END_MESSAGE);
   });
 });
 
@@ -510,11 +533,12 @@ describe("FailingClearSideEffectGreeter", () => {
       [startMessage(), inputMessage(greetRequest("Till")), ackMessage(1)]
     ).run();
 
-    expect(result.length).toStrictEqual(2);
+    expect(result.length).toStrictEqual(3);
     checkTerminalError(
       result[1],
       "You cannot do clear state calls from within a side effect"
     );
+    expect(result[2]).toStrictEqual(END_MESSAGE);
   });
 });
 
@@ -542,11 +566,12 @@ describe("FailingNestedSideEffectGreeter", () => {
       [startMessage(), inputMessage(greetRequest("Till")), ackMessage(1)]
     ).run();
 
-    expect(result.length).toStrictEqual(2);
+    expect(result.length).toStrictEqual(3);
     checkTerminalError(
       result[1],
       "You cannot do sideEffect calls from within a side effect."
     );
+    expect(result[2]).toStrictEqual(END_MESSAGE);
   });
 
   it("fails on invalid replayed operation sideEffect in sideEffect", async () => {
@@ -566,11 +591,12 @@ describe("FailingNestedSideEffectGreeter", () => {
       ]
     ).run();
 
-    expect(result.length).toStrictEqual(1);
+    expect(result.length).toStrictEqual(2);
     checkTerminalError(
       result[0],
       "You cannot do sideEffect state calls from within a side effect"
     );
+    expect(result[1]).toStrictEqual(END_MESSAGE);
   });
 });
 
@@ -627,11 +653,12 @@ describe("FailingNestedWithoutAwaitSideEffectGreeter", () => {
       ]
     ).run();
 
-    expect(result.length).toStrictEqual(1);
+    expect(result.length).toStrictEqual(2);
     checkTerminalError(
       result[0],
       "You cannot do sideEffect state calls from within a side effect"
     );
+    expect(result[1]).toStrictEqual(END_MESSAGE);
   });
 });
 
@@ -659,11 +686,12 @@ describe("FailingOneWayCallInSideEffectGreeter", () => {
       [startMessage(), inputMessage(greetRequest("Till")), ackMessage(1)]
     ).run();
 
-    expect(result.length).toStrictEqual(2);
+    expect(result.length).toStrictEqual(3);
     checkTerminalError(
       result[1],
       "You cannot do oneWayCall calls from within a side effect"
     );
+    expect(result[2]).toStrictEqual(END_MESSAGE);
   });
 });
 
@@ -690,11 +718,12 @@ describe("FailingResolveAwakeableSideEffectGreeter", () => {
       [startMessage(), inputMessage(greetRequest("Till")), ackMessage(1)]
     ).run();
 
-    expect(result.length).toStrictEqual(2);
+    expect(result.length).toStrictEqual(3);
     checkTerminalError(
       result[1],
       "You cannot do resolveAwakeable calls from within a side effect."
     );
+    expect(result[2]).toStrictEqual(END_MESSAGE);
   });
 });
 
@@ -721,11 +750,12 @@ describe("FailingRejectAwakeableSideEffectGreeter", () => {
       [startMessage(), inputMessage(greetRequest("Till")), ackMessage(1)]
     ).run();
 
-    expect(result.length).toStrictEqual(2);
+    expect(result.length).toStrictEqual(3);
     checkTerminalError(
       result[1],
       "You cannot do rejectAwakeable calls from within a side effect."
     );
+    expect(result[2]).toStrictEqual(END_MESSAGE);
   });
 });
 
@@ -752,11 +782,12 @@ describe("FailingSleepSideEffectGreeter", () => {
       [startMessage(), inputMessage(greetRequest("Till")), ackMessage(1)]
     ).run();
 
-    expect(result.length).toStrictEqual(2);
+    expect(result.length).toStrictEqual(3);
     checkTerminalError(
       result[1],
       "You cannot do sleep calls from within a side effect."
     );
+    expect(result[2]).toStrictEqual(END_MESSAGE);
   });
 });
 
@@ -782,11 +813,12 @@ describe("FailingAwakeableSideEffectGreeter", () => {
       [startMessage(), inputMessage(greetRequest("Till")), ackMessage(1)]
     ).run();
 
-    expect(result.length).toStrictEqual(2);
+    expect(result.length).toStrictEqual(3);
     checkTerminalError(
       result[1],
       "You cannot do awakeable calls from within a side effect."
     );
+    expect(result[2]).toStrictEqual(END_MESSAGE);
   });
 });
 
@@ -826,6 +858,7 @@ describe("AwaitSideEffectService", () => {
       sideEffectMessage(),
       sideEffectMessage(),
       outputMessage(greetResponse("3")),
+      END_MESSAGE,
     ]);
   });
 
@@ -842,6 +875,7 @@ describe("AwaitSideEffectService", () => {
       sideEffectMessage(),
       sideEffectMessage(),
       outputMessage(greetResponse("2")),
+      END_MESSAGE,
     ]);
   });
 
@@ -857,6 +891,7 @@ describe("AwaitSideEffectService", () => {
     expect(result).toStrictEqual([
       sideEffectMessage(),
       outputMessage(greetResponse("1")),
+      END_MESSAGE,
     ]);
   });
 
@@ -869,7 +904,10 @@ describe("AwaitSideEffectService", () => {
       sideEffectMessage(),
     ]).run();
 
-    expect(result).toStrictEqual([outputMessage(greetResponse("0"))]);
+    expect(result).toStrictEqual([
+      outputMessage(greetResponse("0")),
+      END_MESSAGE,
+    ]);
   });
 });
 

@@ -15,6 +15,7 @@ import { describe, expect } from "@jest/globals";
 import { TestDriver } from "./testdriver";
 import {
   checkTerminalError,
+  END_MESSAGE,
   failure,
   greetRequest,
   greetResponse,
@@ -38,7 +39,10 @@ describe("Greeter", () => {
       inputMessage(greetRequest("Pete")),
     ]).run();
 
-    expect(result).toStrictEqual([outputMessage(greetResponse("Hello"))]);
+    expect(result).toStrictEqual([
+      outputMessage(greetResponse("Hello")),
+      END_MESSAGE,
+    ]);
   });
 
   it("handles replay of output message", async () => {
@@ -48,7 +52,7 @@ describe("Greeter", () => {
       outputMessage(greetResponse("Hello")),
     ]).run();
 
-    expect(result).toStrictEqual([]);
+    expect(result).toStrictEqual([END_MESSAGE]);
   });
 
   it("fails invocation if input is failed", async () => {
@@ -57,7 +61,8 @@ describe("Greeter", () => {
       inputMessage(undefined, failure("Canceled")),
     ]).run();
 
-    expect(result.length).toStrictEqual(1);
+    expect(result.length).toStrictEqual(2);
     checkTerminalError(result[0], "Canceled");
+    expect(result[1]).toStrictEqual(END_MESSAGE);
   });
 });

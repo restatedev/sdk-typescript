@@ -17,6 +17,7 @@ import {
   checkJournalMismatchError,
   checkTerminalError,
   completionMessage,
+  END_MESSAGE,
   failure,
   greetRequest,
   greetResponse,
@@ -73,6 +74,7 @@ describe("SyncCallGreeter", () => {
     expect(result).toStrictEqual([
       invokeMessage("test.TestGreeter", "Greet", greetRequest("Francesco")),
       outputMessage(greetResponse("Pete")),
+      END_MESSAGE,
     ]);
   });
 
@@ -106,7 +108,10 @@ describe("SyncCallGreeter", () => {
       ),
     ]).run();
 
-    expect(result).toStrictEqual([outputMessage(greetResponse("Pete"))]);
+    expect(result).toStrictEqual([
+      outputMessage(greetResponse("Pete")),
+      END_MESSAGE,
+    ]);
   });
 
   it("handles replay without value", async () => {
@@ -198,6 +203,7 @@ describe("ReverseAwaitOrder", () => {
       invokeMessage("test.TestGreeter", "Greet", greetRequest("Till")),
       setStateMessage("A2", "TILL"),
       outputMessage(greetResponse("Hello FRANCESCO-TILL")),
+      END_MESSAGE,
     ]);
   });
 
@@ -214,6 +220,7 @@ describe("ReverseAwaitOrder", () => {
       invokeMessage("test.TestGreeter", "Greet", greetRequest("Till")),
       setStateMessage("A2", "TILL"),
       outputMessage(greetResponse("Hello FRANCESCO-TILL")),
+      END_MESSAGE,
     ]);
   });
 
@@ -238,6 +245,7 @@ describe("ReverseAwaitOrder", () => {
 
     expect(result).toStrictEqual([
       outputMessage(greetResponse("Hello FRANCESCO-TILL")),
+      END_MESSAGE,
     ]);
   });
 
@@ -432,6 +440,7 @@ describe("FailingForwardGreetingService", () => {
       outputMessage(
         greetResponse("Hello Sorry, something went terribly wrong...")
       ),
+      END_MESSAGE,
     ]);
   });
 
@@ -452,6 +461,7 @@ describe("FailingForwardGreetingService", () => {
       outputMessage(
         greetResponse("Hello Sorry, something went terribly wrong...")
       ),
+      END_MESSAGE,
     ]);
   });
 });
@@ -483,6 +493,7 @@ describe("OneWayCallGreeter", () => {
         greetRequest("Francesco")
       ),
       outputMessage(greetResponse("Hello")),
+      END_MESSAGE,
     ]);
   });
 
@@ -560,11 +571,12 @@ describe("FailingOneWayCallGreeter", () => {
       inputMessage(greetRequest("Till")),
     ]).run();
 
-    expect(result.length).toStrictEqual(1);
+    expect(result.length).toStrictEqual(2);
     checkTerminalError(
       result[0],
       "Cannot do a set state from within ctx.oneWayCall(...)."
     );
+    expect(result[1]).toStrictEqual(END_MESSAGE);
   });
 });
 
@@ -585,11 +597,12 @@ describe("FailingAwakeableOneWayCallGreeter", () => {
       [startMessage(1), inputMessage(greetRequest("Till"))]
     ).run();
 
-    expect(result.length).toStrictEqual(1);
+    expect(result.length).toStrictEqual(2);
     checkTerminalError(
       result[0],
       "Cannot do a awakeable from within ctx.oneWayCall(...)."
     );
+    expect(result[1]).toStrictEqual(END_MESSAGE);
   });
 });
 
@@ -610,11 +623,12 @@ describe("FailingSideEffectInOneWayCallGreeter", () => {
       [startMessage(1), inputMessage(greetRequest("Till"))]
     ).run();
 
-    expect(result.length).toStrictEqual(1);
+    expect(result.length).toStrictEqual(2);
     checkTerminalError(
       result[0],
       "Cannot do a side effect from within ctx.oneWayCall(...). Context method ctx.oneWayCall() can only be used to invoke other services unidirectionally. e.g. ctx.oneWayCall(() => client.greet(my_request))"
     );
+    expect(result[1]).toStrictEqual(END_MESSAGE);
   });
 });
 
@@ -648,7 +662,7 @@ describe("CatchTwoFailingInvokeGreeter", () => {
       inputMessage(greetRequest("Till")),
     ]).run();
 
-    expect(result.length).toStrictEqual(2);
+    expect(result.length).toStrictEqual(3);
     expect(result).toStrictEqual([
       backgroundInvokeMessage(
         "test.TestGreeter",
@@ -657,6 +671,7 @@ describe("CatchTwoFailingInvokeGreeter", () => {
         undefined
       ),
       outputMessage(greetResponse("Hello")),
+      END_MESSAGE,
     ]);
   });
 });
@@ -716,7 +731,10 @@ describe("DelayedOneWayCallGreeter", () => {
       ]
     ).run();
 
-    expect(result).toStrictEqual([outputMessage(greetResponse("Hello"))]);
+    expect(result).toStrictEqual([
+      outputMessage(greetResponse("Hello")),
+      END_MESSAGE,
+    ]);
   });
 
   it("fails on journal mismatch. Completed with InvokeMessage.", async () => {
@@ -806,6 +824,9 @@ describe("UnawaitedRequestResponseCallGreeter", () => {
       ]
     ).run();
 
-    expect(result).toStrictEqual([outputMessage(greetResponse("Hello"))]);
+    expect(result).toStrictEqual([
+      outputMessage(greetResponse("Hello")),
+      END_MESSAGE,
+    ]);
   });
 });

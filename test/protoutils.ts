@@ -43,6 +43,8 @@ import {
   ErrorMessage,
   ENTRY_ACK_MESSAGE_TYPE,
   EntryAckMessage,
+  END_MESSAGE_TYPE,
+  EndMessage,
 } from "../src/types/protocol";
 import { Message } from "../src/types/types";
 import { TestRequest, TestResponse } from "../src/generated/proto/test";
@@ -467,12 +469,10 @@ export function checkError(
 }
 
 export function checkJournalMismatchError(outputMsg: Message) {
-  expect(outputMsg.messageType).toEqual(ERROR_MESSAGE_TYPE);
-  expect((outputMsg.message as ErrorMessage).code).toStrictEqual(
+  checkError(
+    outputMsg,
+    "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!",
     RestateErrorCodes.JOURNAL_MISMATCH
-  );
-  expect((outputMsg.message as ErrorMessage).message).toContain(
-    "Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!"
   );
 }
 
@@ -496,6 +496,8 @@ export function getAwakeableId(entryIndex: number): string {
 export function keyVal(key: string, value: any): Buffer[] {
   return [Buffer.from(key), Buffer.from(JSON.stringify(value))];
 }
+
+export const END_MESSAGE = new Message(END_MESSAGE_TYPE, EndMessage.create());
 
 // a utility function to print the results of a test
 export function printResults(results: Message[]) {

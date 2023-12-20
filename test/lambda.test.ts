@@ -26,6 +26,7 @@ import { encodeMessage } from "../src/io/encoder";
 import { Message } from "../src/types/types";
 import {
   awakeableMessage,
+  END_MESSAGE,
   getStateMessage,
   greetRequest,
   greetResponse,
@@ -143,6 +144,7 @@ describe("LambdaGreeter", () => {
     expect(result.isBase64Encoded).toStrictEqual(true);
     expect(deserializeMessages(result.body)).toStrictEqual([
       outputMessage(greetResponse("Hello Foo")),
+      END_MESSAGE,
     ]);
   });
 
