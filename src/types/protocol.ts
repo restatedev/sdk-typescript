@@ -18,6 +18,7 @@ import {
   CompletionMessage,
   EntryAckMessage,
   ErrorMessage,
+  EndMessage,
   GetStateEntryMessage,
   InvokeEntryMessage,
   OutputStreamEntryMessage,
@@ -36,6 +37,7 @@ export {
   CompleteAwakeableEntryMessage,
   CompletionMessage,
   ErrorMessage,
+  EndMessage,
   GetStateEntryMessage,
   InvokeEntryMessage,
   OutputStreamEntryMessage,
@@ -53,6 +55,7 @@ export const COMPLETION_MESSAGE_TYPE = 0x0001n;
 export const SUSPENSION_MESSAGE_TYPE = 0x0002n;
 export const ERROR_MESSAGE_TYPE = 0x0003n;
 export const ENTRY_ACK_MESSAGE_TYPE = 0x0004n;
+export const END_MESSAGE_TYPE = 0x0005n;
 export const POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE = 0x0400n;
 export const OUTPUT_STREAM_ENTRY_MESSAGE_TYPE = 0x0401n;
 export const GET_STATE_ENTRY_MESSAGE_TYPE = 0x0800n;
@@ -78,6 +81,7 @@ export const KNOWN_MESSAGE_TYPES = new Set([
   SUSPENSION_MESSAGE_TYPE,
   ERROR_MESSAGE_TYPE,
   ENTRY_ACK_MESSAGE_TYPE,
+  END_MESSAGE_TYPE,
   POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
   OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
   GET_STATE_ENTRY_MESSAGE_TYPE,
@@ -97,6 +101,7 @@ export const PROTOBUF_MESSAGE_NAME_BY_TYPE = new Map<bigint, string>([
   [SUSPENSION_MESSAGE_TYPE, "SuspensionMessage"],
   [ERROR_MESSAGE_TYPE, "ErrorMessage"],
   [ENTRY_ACK_MESSAGE_TYPE, "EntryAckMessage"],
+  [END_MESSAGE_TYPE, "EndMessage"],
   [POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE, "PollInputStreamEntryMessage"],
   [OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, "OutputStreamEntryMessage"],
   [GET_STATE_ENTRY_MESSAGE_TYPE, "GetStateEntryMessage"],
@@ -117,6 +122,7 @@ const PROTOBUF_MESSAGES: Array<[bigint, any]> = [
   [SUSPENSION_MESSAGE_TYPE, SuspensionMessage],
   [ERROR_MESSAGE_TYPE, ErrorMessage],
   [ENTRY_ACK_MESSAGE_TYPE, EntryAckMessage],
+  [END_MESSAGE_TYPE, EndMessage],
   [POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE, PollInputStreamEntryMessage],
   [OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, OutputStreamEntryMessage],
   [GET_STATE_ENTRY_MESSAGE_TYPE, GetStateEntryMessage],
@@ -138,6 +144,7 @@ export type ProtocolMessage =
   | SuspensionMessage
   | ErrorMessage
   | EntryAckMessage
+  | EndMessage
   | PollInputStreamEntryMessage
   | OutputStreamEntryMessage
   | GetStateEntryMessage
