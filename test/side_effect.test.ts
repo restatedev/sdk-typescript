@@ -28,6 +28,8 @@ import {
   checkJournalMismatchError,
   failureWithTerminal,
   ackMessage,
+  setStateMessage,
+  Latch,
   END_MESSAGE,
 } from "./protoutils";
 import {
@@ -37,6 +39,11 @@ import {
   TestResponse,
 } from "../src/generated/proto/test";
 import { ErrorCodes, TerminalError } from "../src/types/errors";
+import { setTimeout } from "timers/promises";
+import { FIXED_DELAY } from "../src/utils/public_utils";
+import exp = require("node:constants");
+import { SLEEP_ENTRY_MESSAGE_TYPE } from "../src/types/protocol";
+import { Empty } from "../src/generated/google/protobuf/empty";
 
 class SideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: unknown) {}
@@ -906,6 +913,165 @@ describe("AwaitSideEffectService", () => {
 
     expect(result).toStrictEqual([
       outputMessage(greetResponse("0")),
+      END_MESSAGE,
+    ]);
+  });
+});
+
+export class SequentialSideEffectAwaitingLaterService implements TestGreeter {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async greet(request: TestRequest): Promise<TestResponse> {
+    const ctx = restate.useContext(this);
+
+    const latch = new Latch();
+    const a1 = ctx.sideEffect<number>(async () => {
+      // Wait on a2 closure to be invoked
+      await latch.await();
+      return 1;
+    });
+    const a2 = ctx.sideEffect<number>(async () => {
+      return 2;
+    });
+
+    // Unblock a1
+    latch.resolveAtNextTick(undefined);
+
+    await a1;
+    await a2;
+
+    return TestResponse.create();
+  }
+}
+
+describe("SequentialSideEffectAwaitingLaterService", () => {
+  it("sequential side effects should create correct order of entries", async () => {
+    const result = await new TestDriver(
+      new SequentialSideEffectAwaitingLaterService(),
+      [
+        startMessage(),
+        inputMessage(greetRequest("Till")),
+        ackMessage(1),
+        ackMessage(2),
+      ]
+    ).run();
+
+    expect(result).toStrictEqual([
+      sideEffectMessage(1),
+      sideEffectMessage(2),
+      outputMessage(greetResponse()),
+      END_MESSAGE,
+    ]);
+  });
+});
+//
+export class SequentialSideEffectWithRetryAwaitingLaterService
+  implements TestGreeter
+{
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async greet(request: TestRequest): Promise<TestResponse> {
+    const ctx = restate.useContext(this);
+
+    let retriedOnce = false;
+    const latch = new Latch();
+    const a1 = ctx.sideEffect<number>(
+      async () => {
+        // Wait on a2 closure to be invoked
+        await latch.await();
+
+        if (!retriedOnce) {
+          retriedOnce = true;
+          throw new Error("error");
+        }
+        return 1;
+      },
+      { maxRetries: 2, policy: FIXED_DELAY, maxDelayMs: 1 }
+    );
+    const a2 = ctx.sideEffect<number>(async () => {
+      return 2;
+    });
+
+    // Unblock a1
+    latch.resolveAtNextTick(undefined);
+
+    await a1;
+    await a2;
+
+    return TestResponse.create();
+  }
+}
+
+describe("SequentialSideEffectWithRetryAwaitingLaterService", () => {
+  it("sequential side effects should create correct order of entries", async () => {
+    const result = await new TestDriver(
+      new SequentialSideEffectWithRetryAwaitingLaterService(),
+      [
+        startMessage(),
+        inputMessage(greetRequest("Till")),
+        ackMessage(1),
+        completionMessage(2, undefined, true),
+        ackMessage(3),
+        ackMessage(4),
+      ]
+    ).run();
+
+    expect(result[0]).toStrictEqual(
+      sideEffectMessage(new TerminalError("error"))
+    );
+    expect(result[1].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
+    expect(result.slice(2)).toStrictEqual([
+      sideEffectMessage(1),
+      sideEffectMessage(2),
+      outputMessage(greetResponse()),
+      END_MESSAGE,
+    ]);
+  });
+});
+
+export class InterleaveSideEffectAwaitingLaterWithSetStateService
+  implements TestGreeter
+{
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async greet(request: TestRequest): Promise<TestResponse> {
+    const ctx = restate.useContext(this);
+
+    const latch = new Latch();
+    const a1 = ctx.sideEffect<number>(async () => {
+      // Wait on a2 closure to be invoked
+      await latch.await();
+      return 1;
+    });
+    ctx.set("myState", "myValue");
+    const a2 = ctx.sideEffect<number>(async () => {
+      return 2;
+    });
+
+    // Unblock a1
+    latch.resolveAtNextTick(undefined);
+
+    await a1;
+    await a2;
+
+    return TestResponse.create();
+  }
+}
+
+describe("InterleaveSideEffectAwaitingLaterWithSetStateService", () => {
+  it("sequential side effects should create correct order of entries", async () => {
+    const result = await new TestDriver(
+      new InterleaveSideEffectAwaitingLaterWithSetStateService(),
+      [
+        startMessage(),
+        inputMessage(greetRequest("Till")),
+        ackMessage(1),
+        ackMessage(3),
+      ]
+    ).run();
+
+    expect(result).toStrictEqual([
+      sideEffectMessage(1),
+      setStateMessage("myState", "myValue"),
+      sideEffectMessage(2),
+      outputMessage(greetResponse()),
       END_MESSAGE,
     ]);
   });

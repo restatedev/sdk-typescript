@@ -57,7 +57,11 @@ import {
   StartMessage_StateEntry,
 } from "../src/generated/proto/protocol";
 import { expect } from "@jest/globals";
-import { jsonSerialize, printMessageAsJson } from "../src/utils/utils";
+import {
+  CompletablePromise,
+  jsonSerialize,
+  printMessageAsJson,
+} from "../src/utils/utils";
 import { rlog } from "../src/utils/logger";
 import { ErrorCodes, RestateErrorCodes } from "../src/types/errors";
 
@@ -452,7 +456,7 @@ export function greetRequest(myName: string): Uint8Array {
   return TestRequest.encode(TestRequest.create({ name: myName })).finish();
 }
 
-export function greetResponse(myGreeting: string): Uint8Array {
+export function greetResponse(myGreeting?: string): Uint8Array {
   return TestResponse.encode(
     TestResponse.create({ greeting: myGreeting })
   ).finish();
@@ -506,4 +510,24 @@ export function printResults(results: Message[]) {
       (el) => el.messageType + " - " + printMessageAsJson(el.message) + "\n"
     )
   );
+}
+
+export class Latch<T> {
+  completablePromise: CompletablePromise<T>;
+
+  constructor() {
+    this.completablePromise = new CompletablePromise<T>();
+  }
+
+  resolveNow(value: T) {
+    this.completablePromise.resolve(value);
+  }
+
+  resolveAtNextTick(value: T) {
+    setImmediate(() => this.completablePromise.resolve(value));
+  }
+
+  async await(): Promise<T> {
+    return this.completablePromise.promise;
+  }
 }

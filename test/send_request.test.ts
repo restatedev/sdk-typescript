@@ -13,6 +13,7 @@ import { describe, expect } from "@jest/globals";
 import * as restate from "../src/public_api";
 import { TestDriver } from "./testdriver";
 import {
+  ackMessage,
   backgroundInvokeMessage,
   checkJournalMismatchError,
   checkTerminalError,
@@ -23,8 +24,10 @@ import {
   greetResponse,
   inputMessage,
   invokeMessage,
+  Latch,
   outputMessage,
   setStateMessage,
+  sideEffectMessage,
   startMessage,
   suspensionMessage,
 } from "./protoutils";
@@ -577,6 +580,54 @@ describe("FailingOneWayCallGreeter", () => {
       "Cannot do a set state from within ctx.oneWayCall(...)."
     );
     expect(result[1]).toStrictEqual(END_MESSAGE);
+  });
+});
+
+export class BlockedOneWayCallClosureService implements TestGreeter {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async greet(request: TestRequest): Promise<TestResponse> {
+    const ctx = restate.useContext(this);
+
+    const latch = new Latch();
+    const a1 = ctx.oneWayCall(async () => {
+      // Block waiting on the next side effect closure
+      await latch.await();
+
+      const client = new TestGreeterClientImpl(ctx);
+      return client.greet(TestRequest.create({ name: "Francesco" }));
+    });
+    ctx.set("myKey", "myValue");
+    await ctx.sideEffect(async () => {
+      return undefined;
+    });
+
+    // Unblock the oneWayCallClosure
+    latch.resolveAtNextTick(undefined);
+    await a1;
+
+    return TestResponse.create();
+  }
+}
+
+describe("BlockedOneWayCallClosureService", () => {
+  it("blocked one way call closure should create correct journal order", async () => {
+    const result = await new TestDriver(new BlockedOneWayCallClosureService(), [
+      startMessage(),
+      inputMessage(greetRequest("Till")),
+      ackMessage(3),
+    ]).run();
+
+    expect(result).toStrictEqual([
+      backgroundInvokeMessage(
+        "test.TestGreeter",
+        "Greet",
+        greetRequest("Francesco")
+      ),
+      setStateMessage("myKey", "myValue"),
+      sideEffectMessage(),
+      outputMessage(greetResponse()),
+      END_MESSAGE,
+    ]);
   });
 });
 
