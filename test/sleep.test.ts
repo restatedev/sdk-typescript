@@ -17,6 +17,7 @@ import {
   checkJournalMismatchError,
   checkTerminalError,
   completionMessage,
+  END_MESSAGE,
   failure,
   greetRequest,
   greetResponse,
@@ -91,9 +92,10 @@ describe("SleepGreeter", () => {
       completionMessage(1, Empty.encode(Empty.create({})).finish()),
     ]).run();
 
-    expect(result.length).toStrictEqual(2);
+    expect(result.length).toStrictEqual(3);
     expect(result[0].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
     expect(result[1]).toStrictEqual(outputMessage(greetResponse("Hello")));
+    expect(result[2]).toStrictEqual(END_MESSAGE);
   });
 
   it("handles completion with failure", async () => {
@@ -103,9 +105,10 @@ describe("SleepGreeter", () => {
       completionMessage(1, undefined, undefined, failure("Canceled")),
     ]).run();
 
-    expect(result.length).toStrictEqual(2);
+    expect(result.length).toStrictEqual(3);
     expect(result[0].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
     checkTerminalError(result[1], "Canceled");
+    expect(result[2]).toStrictEqual(END_MESSAGE);
   });
 
   it("handles replay with no empty", async () => {
@@ -126,8 +129,9 @@ describe("SleepGreeter", () => {
       sleepMessage(wakeupTime, Empty.create({})),
     ]).run();
 
-    expect(result.length).toStrictEqual(1);
+    expect(result.length).toStrictEqual(2);
     expect(result[0]).toStrictEqual(outputMessage(greetResponse("Hello")));
+    expect(result[1]).toStrictEqual(END_MESSAGE);
   });
 
   it("handles replay with failure", async () => {
@@ -137,8 +141,9 @@ describe("SleepGreeter", () => {
       sleepMessage(wakeupTime, undefined, failure("Canceled")),
     ]).run();
 
-    expect(result.length).toStrictEqual(1);
+    expect(result.length).toStrictEqual(2);
     checkTerminalError(result[0], "Canceled");
+    expect(result[1]).toStrictEqual(END_MESSAGE);
   });
 
   it("fails on journal mismatch. Completed with Awakeable.", async () => {

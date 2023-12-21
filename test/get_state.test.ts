@@ -16,6 +16,7 @@ import {
   checkJournalMismatchError,
   checkTerminalError,
   completionMessage,
+  END_MESSAGE,
   failure,
   getStateMessage,
   greetRequest,
@@ -79,6 +80,7 @@ describe("GetStringStateGreeter", () => {
     expect(result).toStrictEqual([
       getStateMessage("STATE"),
       outputMessage(greetResponse("Hello Francesco")),
+      END_MESSAGE,
     ]);
   });
 
@@ -92,6 +94,7 @@ describe("GetStringStateGreeter", () => {
     expect(result).toStrictEqual([
       getStateMessage("STATE"),
       outputMessage(greetResponse("Hello nobody")),
+      END_MESSAGE,
     ]);
   });
 
@@ -105,6 +108,7 @@ describe("GetStringStateGreeter", () => {
     expect(result).toStrictEqual([
       getStateMessage("STATE"),
       outputMessage(greetResponse("Hello ")),
+      END_MESSAGE,
     ]);
   });
 
@@ -115,9 +119,10 @@ describe("GetStringStateGreeter", () => {
       completionMessage(1, undefined, undefined, failure("Canceled")),
     ]).run();
 
-    expect(result.length).toStrictEqual(2);
+    expect(result.length).toStrictEqual(3);
     expect(result[0]).toStrictEqual(getStateMessage("STATE"));
     checkTerminalError(result[1], "Canceled");
+    expect(result[2]).toStrictEqual(END_MESSAGE);
   });
 
   it("handles replay with value", async () => {
@@ -129,6 +134,7 @@ describe("GetStringStateGreeter", () => {
 
     expect(result).toStrictEqual([
       outputMessage(greetResponse("Hello Francesco")),
+      END_MESSAGE,
     ]);
   });
 
@@ -141,6 +147,7 @@ describe("GetStringStateGreeter", () => {
 
     expect(result).toStrictEqual([
       outputMessage(greetResponse("Hello nobody")),
+      END_MESSAGE,
     ]);
   });
 
@@ -151,8 +158,9 @@ describe("GetStringStateGreeter", () => {
       getStateMessage("STATE", undefined, undefined, failure("Canceled")),
     ]).run();
 
-    expect(result.length).toStrictEqual(1);
+    expect(result.length).toStrictEqual(2);
     checkTerminalError(result[0], "Canceled");
+    expect(result[1]).toStrictEqual(END_MESSAGE);
   });
 });
 
@@ -190,6 +198,7 @@ describe("GetNumberStateGreeter", () => {
     expect(result).toStrictEqual([
       getStateMessage("STATE"),
       outputMessage(greetResponse("Hello 70")),
+      END_MESSAGE,
     ]);
   });
 
@@ -203,6 +212,7 @@ describe("GetNumberStateGreeter", () => {
     expect(result).toStrictEqual([
       getStateMessage("STATE"),
       outputMessage(greetResponse("Hello 0")),
+      END_MESSAGE,
     ]);
   });
 
@@ -216,6 +226,7 @@ describe("GetNumberStateGreeter", () => {
     expect(result).toStrictEqual([
       getStateMessage("STATE"),
       outputMessage(greetResponse("Hello null")),
+      END_MESSAGE,
     ]);
   });
 
@@ -226,7 +237,10 @@ describe("GetNumberStateGreeter", () => {
       getStateMessage<number>("STATE", 70),
     ]).run();
 
-    expect(result).toStrictEqual([outputMessage(greetResponse("Hello 70"))]);
+    expect(result).toStrictEqual([
+      outputMessage(greetResponse("Hello 70")),
+      END_MESSAGE,
+    ]);
   });
 
   it("handles replay with value 0", async () => {
@@ -236,7 +250,10 @@ describe("GetNumberStateGreeter", () => {
       getStateMessage<number>("STATE", 0),
     ]).run();
 
-    expect(result).toStrictEqual([outputMessage(greetResponse("Hello 0"))]);
+    expect(result).toStrictEqual([
+      outputMessage(greetResponse("Hello 0")),
+      END_MESSAGE,
+    ]);
   });
 
   it("handles replay with empty", async () => {
@@ -246,7 +263,10 @@ describe("GetNumberStateGreeter", () => {
       getStateMessage<number>("STATE", undefined, true),
     ]).run();
 
-    expect(result).toStrictEqual([outputMessage(greetResponse("Hello null"))]);
+    expect(result).toStrictEqual([
+      outputMessage(greetResponse("Hello null")),
+      END_MESSAGE,
+    ]);
   });
 
   it("fails on journal mismatch. Completed with SetStateMessage.", async () => {
@@ -300,6 +320,7 @@ describe("GetNumberListStateGreeter", () => {
     expect(result).toStrictEqual([
       getStateMessage("STATE"),
       outputMessage(greetResponse("Hello index 0: 5 - index 1: 4")),
+      END_MESSAGE,
     ]);
   });
 
@@ -317,6 +338,7 @@ describe("GetNumberListStateGreeter", () => {
       outputMessage(
         greetResponse("Hello index 0: undefined - index 1: undefined")
       ),
+      END_MESSAGE,
     ]);
   });
 
@@ -330,6 +352,7 @@ describe("GetNumberListStateGreeter", () => {
     expect(result).toStrictEqual([
       getStateMessage("STATE"),
       outputMessage(greetResponse("Hello no state found")),
+      END_MESSAGE,
     ]);
   });
 
@@ -342,6 +365,7 @@ describe("GetNumberListStateGreeter", () => {
 
     expect(result).toStrictEqual([
       outputMessage(greetResponse("Hello index 0: 5 - index 1: 4")),
+      END_MESSAGE,
     ]);
   });
 
@@ -356,6 +380,7 @@ describe("GetNumberListStateGreeter", () => {
       outputMessage(
         greetResponse("Hello index 0: undefined - index 1: undefined")
       ),
+      END_MESSAGE,
     ]);
   });
 
@@ -368,6 +393,7 @@ describe("GetNumberListStateGreeter", () => {
 
     expect(result).toStrictEqual([
       outputMessage(greetResponse("Hello no state found")),
+      END_MESSAGE,
     ]);
   });
 

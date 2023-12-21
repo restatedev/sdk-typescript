@@ -19,6 +19,8 @@ import { rlog } from "./utils/logger";
 import { clearTimeout } from "timers";
 import {
   COMPLETION_MESSAGE_TYPE,
+  END_MESSAGE_TYPE,
+  EndMessage,
   ENTRY_ACK_MESSAGE_TYPE,
   ERROR_MESSAGE_TYPE,
   OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
@@ -282,6 +284,9 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
             "Function completed successfully."
           );
 
+          // Mark the end of the invocation
+          this.send(new Message(END_MESSAGE_TYPE, EndMessage.create()));
+
           this.finish(value);
         } catch (e) {
           this.unhandledError(ensureError(e));
@@ -303,7 +308,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
             "Function completed with an error: " + error.message
           );
 
-          this.finishWithError(error);
+          this.sendErrorAndFinish(error);
         } catch (ee) {
           this.unhandledError(ensureError(ee));
         }
@@ -314,7 +319,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
     return this.invocationComplete.promise;
   }
 
-  private async finishWithError(e: Error) {
+  private async sendErrorAndFinish(e: Error) {
     if (e instanceof TerminalError) {
       this.sendTerminalError(e);
     } else {
@@ -354,6 +359,9 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
     if (!this.journal.outputMsgWasReplayed()) {
       this.send(msg);
     }
+
+    // Mark the end of the invocation
+    this.send(new Message(END_MESSAGE_TYPE, EndMessage.create()));
   }
 
   private send(message: Message) {
@@ -464,7 +472,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
   }
 
   public async notifyHandlerExecutionError(e: RetryableError | TerminalError) {
-    await this.finishWithError(e);
+    await this.sendErrorAndFinish(e);
   }
 
   /**

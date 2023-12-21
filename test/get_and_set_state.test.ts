@@ -16,6 +16,7 @@ import {
   checkJournalMismatchError,
   clearStateMessage,
   completionMessage,
+  END_MESSAGE,
   getStateMessage,
   greetRequest,
   greetResponse,
@@ -57,6 +58,7 @@ describe("GetAndSetGreeter", () => {
       getStateMessage("STATE"),
       setStateMessage("STATE", "Till"),
       outputMessage(greetResponse("Hello Pete")),
+      END_MESSAGE,
     ]);
   });
 
@@ -83,6 +85,7 @@ describe("GetAndSetGreeter", () => {
 
     expect(result).toStrictEqual([
       outputMessage(greetResponse("Hello Francesco")),
+      END_MESSAGE,
     ]);
   });
 
@@ -185,6 +188,7 @@ describe("ClearState", () => {
       setStateMessage("STATE", "Till"),
       clearStateMessage("STATE"),
       outputMessage(greetResponse("Hello Francesco")),
+      END_MESSAGE,
     ]);
   });
 
@@ -199,6 +203,7 @@ describe("ClearState", () => {
 
     expect(result).toStrictEqual([
       outputMessage(greetResponse("Hello Francesco")),
+      END_MESSAGE,
     ]);
   });
 
@@ -272,7 +277,10 @@ describe("GetAndSetEnumGreeter", () => {
       getStateMessage("STATE", OrderStatus.ORDERED),
     ]).run();
 
-    expect(result).toStrictEqual([outputMessage(greetResponse("Hello 1 - 0"))]);
+    expect(result).toStrictEqual([
+      outputMessage(greetResponse("Hello 1 - 0")),
+      END_MESSAGE,
+    ]);
   });
 
   it("handles replays with value. First empty state, then enum state.", async () => {
@@ -286,6 +294,7 @@ describe("GetAndSetEnumGreeter", () => {
 
     expect(result).toStrictEqual([
       outputMessage(greetResponse("Hello null - 0")),
+      END_MESSAGE,
     ]);
   });
 });

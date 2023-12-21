@@ -19,6 +19,7 @@ import { TestDriver } from "./testdriver";
 import {
   clearStateMessage,
   completionMessage,
+  END_MESSAGE,
   getStateMessage,
   greetRequest,
   greetResponse,
@@ -55,6 +56,7 @@ describe("GetEmpty", () => {
     expect(result).toStrictEqual([
       getStateMessage("STATE", undefined, true),
       outputMessage(greetResponse("true")),
+      END_MESSAGE,
     ]);
   });
 
@@ -78,7 +80,10 @@ describe("GetEmpty", () => {
       ProtocolMode.BIDI_STREAM
     ).run();
 
-    expect(result).toStrictEqual([outputMessage(greetResponse("true"))]);
+    expect(result).toStrictEqual([
+      outputMessage(greetResponse("true")),
+      END_MESSAGE,
+    ]);
   });
 });
 
@@ -103,6 +108,7 @@ describe("Get", () => {
     expect(result).toStrictEqual([
       getStateMessage("STATE", "One"),
       outputMessage(greetResponse("One")),
+      END_MESSAGE,
     ]);
   });
 
@@ -116,6 +122,7 @@ describe("Get", () => {
     expect(result).toStrictEqual([
       getStateMessage("STATE", "One"),
       outputMessage(greetResponse("One")),
+      END_MESSAGE,
     ]);
   });
 
@@ -158,6 +165,7 @@ describe("GetAppendAndGet", () => {
       setStateMessage("STATE", "OneTwo"),
       getStateMessage("STATE", "OneTwo"),
       outputMessage(greetResponse("OneTwo")),
+      END_MESSAGE,
     ]);
   });
 
@@ -173,6 +181,7 @@ describe("GetAppendAndGet", () => {
       setStateMessage("STATE", "OneTwo"),
       getStateMessage("STATE", "OneTwo"),
       outputMessage(greetResponse("OneTwo")),
+      END_MESSAGE,
     ]);
   });
 });
@@ -202,6 +211,7 @@ describe("GetClearAndGet", () => {
       clearStateMessage("STATE"),
       getStateMessage("STATE", undefined, true),
       outputMessage(greetResponse("One-nothing")),
+      END_MESSAGE,
     ]);
   });
 
@@ -217,6 +227,7 @@ describe("GetClearAndGet", () => {
       clearStateMessage("STATE"),
       getStateMessage("STATE", undefined, true),
       outputMessage(greetResponse("One-nothing")),
+      END_MESSAGE,
     ]);
   });
 });
@@ -249,6 +260,7 @@ describe("MultipleGet", () => {
       getStateMessage("STATE", "One"),
       getStateMessage("STATE", "One"),
       outputMessage(greetResponse("One - One - One")),
+      END_MESSAGE,
     ]);
   });
 
@@ -264,6 +276,7 @@ describe("MultipleGet", () => {
       getStateMessage("STATE", "One"),
       getStateMessage("STATE", "One"),
       outputMessage(greetResponse("One - One - One")),
+      END_MESSAGE,
     ]);
   });
 });

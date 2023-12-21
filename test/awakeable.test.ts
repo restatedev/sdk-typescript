@@ -26,6 +26,7 @@ import {
   outputMessage,
   startMessage,
   suspensionMessage,
+  END_MESSAGE,
 } from "./protoutils";
 import { TestGreeter, TestResponse } from "../src/generated/proto/test";
 import { ProtocolMode } from "../src/generated/proto/discovery";
@@ -74,6 +75,7 @@ describe("AwakeableGreeter", () => {
     expect(result).toStrictEqual([
       awakeableMessage(),
       outputMessage(greetResponse(`Hello Francesco for ${getAwakeableId(1)}`)),
+      END_MESSAGE,
     ]);
   });
 
@@ -87,6 +89,7 @@ describe("AwakeableGreeter", () => {
     expect(result).toStrictEqual([
       awakeableMessage(),
       outputMessage(greetResponse(`Hello  for ${getAwakeableId(1)}`)),
+      END_MESSAGE,
     ]);
   });
 
@@ -102,6 +105,7 @@ describe("AwakeableGreeter", () => {
       outputMessage(
         greetResponse(`Hello [object Object] for ${getAwakeableId(1)}`)
       ),
+      END_MESSAGE,
     ]);
   });
 
@@ -117,9 +121,10 @@ describe("AwakeableGreeter", () => {
       ),
     ]).run();
 
-    expect(result.length).toStrictEqual(2);
+    expect(result.length).toStrictEqual(3);
     expect(result[0]).toStrictEqual(awakeableMessage());
     checkTerminalError(result[1], "Something went wrong");
+    expect(result[2]).toStrictEqual(END_MESSAGE);
   });
 
   it("handles replay with value", async () => {
@@ -131,6 +136,7 @@ describe("AwakeableGreeter", () => {
 
     expect(result).toStrictEqual([
       outputMessage(greetResponse(`Hello Francesco for ${getAwakeableId(1)}`)),
+      END_MESSAGE,
     ]);
   });
 
@@ -141,8 +147,9 @@ describe("AwakeableGreeter", () => {
       awakeableMessage(undefined, failure("Something went wrong")),
     ]).run();
 
-    expect(result.length).toStrictEqual(1);
+    expect(result.length).toStrictEqual(2);
     checkTerminalError(result[0], "Something went wrong");
+    expect(result[1]).toStrictEqual(END_MESSAGE);
   });
 
   it("fails on journal mismatch. Completed with CompleteAwakeable during replay.", async () => {
