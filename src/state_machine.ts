@@ -28,7 +28,11 @@ import {
   SUSPENSION_MESSAGE_TYPE,
   SuspensionMessage,
 } from "./types/protocol";
-import { Journal } from "./journal";
+import {
+  Journal,
+  JournalReservationId,
+  JournalReservationsQueue,
+} from "./journal";
 import { Invocation } from "./invocation";
 import {
   ensureError,
@@ -41,6 +45,7 @@ import { LocalStateStore } from "./local_state_store";
 
 export class StateMachine<I, O> implements RestateStreamConsumer {
   private journal: Journal<I, O>;
+  private journalReservations: JournalReservationsQueue;
   private restateContext: RestateGrpcContextImpl;
 
   private readonly invocationComplete = new CompletablePromise<Buffer | void>();
@@ -76,6 +81,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
       this
     );
     this.journal = new Journal(this.invocation);
+    this.journalReservations = new JournalReservationsQueue();
   }
 
   public handleMessage(m: Message): boolean {
@@ -120,9 +126,14 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
     return false; // we are never complete
   }
 
-  public handleUserCodeMessage<T>(
+  public reserveJournalQueue(): JournalReservationId {
+    return this.journalReservations.reserve();
+  }
+
+  public enqueueSyscall<T>(
     messageType: bigint,
     message: p.ProtocolMessage,
+    journalReservation: JournalReservationId,
     completedFlag?: boolean,
     protocolVersion?: number,
     requiresAckFlag?: boolean
@@ -145,7 +156,8 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
         message
       );
 
-      this.send(
+      this.journalReservations.add(
+        journalReservation,
         new Message(
           messageType,
           message,
@@ -161,6 +173,9 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
         messageType,
         message
       );
+
+      // Push empty to unblock the queue
+      this.journalReservations.add(journalReservation);
     }
 
     return wrapDeeply(promise, () => {
@@ -171,6 +186,33 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
         this.scheduleSuspension();
       }
     });
+  }
+
+  public sendEnqueuedEntries() {
+    for (const message of this.journalReservations.poll()) {
+      this.send(message);
+    }
+  }
+
+  // Merge usage of reserveJournalQueue, enqueueSyscall and sendEnqueuedEntries
+  public sendSyscallNow<T>(
+    messageType: bigint,
+    message: p.ProtocolMessage,
+    completedFlag?: boolean,
+    protocolVersion?: number,
+    requiresAckFlag?: boolean
+  ): WrappedPromise<T | void> {
+    const reservation = this.reserveJournalQueue();
+    const p = this.enqueueSyscall<T>(
+      messageType,
+      message,
+      reservation,
+      completedFlag,
+      protocolVersion,
+      requiresAckFlag
+    );
+    this.sendEnqueuedEntries();
+    return p;
   }
 
   /**

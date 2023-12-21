@@ -61,6 +61,7 @@ import { Client, SendClient } from "./types/router";
 import { RpcRequest, RpcResponse } from "./generated/proto/dynrpc";
 import { requestFromArgs } from "./utils/assumpsions";
 import { RandImpl } from "./utils/rand";
+import { JournalReservationId } from "./journal";
 
 export enum CallContexType {
   None,
@@ -71,6 +72,7 @@ export enum CallContexType {
 export interface CallContext {
   type: CallContexType;
   delay?: number;
+  journalReservation?: JournalReservationId;
 }
 
 export class RestateGrpcContextImpl implements RestateGrpcContext {
@@ -96,7 +98,7 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
 
     // Create the message and let the state machine process it
     const msg = this.stateMachine.localStateStore.get(name);
-    const result = await this.stateMachine.handleUserCodeMessage(
+    const result = await this.stateMachine.sendSyscallNow(
       GET_STATE_ENTRY_MESSAGE_TYPE,
       msg
     );
@@ -118,18 +120,16 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
 
   public set<T>(name: string, value: T): void {
     this.checkState("set state");
+
     const msg = this.stateMachine.localStateStore.set(name, value);
-    this.stateMachine.handleUserCodeMessage(SET_STATE_ENTRY_MESSAGE_TYPE, msg);
+    this.stateMachine.sendSyscallNow(SET_STATE_ENTRY_MESSAGE_TYPE, msg);
   }
 
   public clear(name: string): void {
     this.checkState("clear state");
 
     const msg = this.stateMachine.localStateStore.clear(name);
-    this.stateMachine.handleUserCodeMessage(
-      CLEAR_STATE_ENTRY_MESSAGE_TYPE,
-      msg
-    );
+    this.stateMachine.sendSyscallNow(CLEAR_STATE_ENTRY_MESSAGE_TYPE, msg);
   }
 
   public request(
@@ -151,15 +151,15 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
   ): Promise<Uint8Array> {
     this.checkState("invoke");
 
-    const msg = InvokeEntryMessage.create({
-      serviceName: service,
-      methodName: method,
-      parameter: Buffer.from(data),
-    });
-    const promise = this.stateMachine.handleUserCodeMessage(
+    const promise = this.stateMachine.sendSyscallNow(
       INVOKE_ENTRY_MESSAGE_TYPE,
-      msg
+      InvokeEntryMessage.create({
+        serviceName: service,
+        methodName: method,
+        parameter: Buffer.from(data),
+      })
     );
+
     return (await promise) as Uint8Array;
   }
 
@@ -177,10 +177,13 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
       invokeTime: invokeTime,
     });
 
-    await this.stateMachine.handleUserCodeMessage(
+    await this.stateMachine.enqueueSyscall(
       BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
-      msg
+      msg,
+      this.getReservation()
     );
+    this.stateMachine.sendEnqueuedEntries();
+
     return new Uint8Array();
   }
 
@@ -190,8 +193,10 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
   ): Promise<void> {
     this.checkState("oneWayCall");
 
+    const reservation = this.stateMachine.reserveJournalQueue();
+
     await RestateGrpcContextImpl.callContext.run(
-      { type: CallContexType.OneWayCall },
+      { type: CallContexType.OneWayCall, journalReservation: reservation },
       call
     );
   }
@@ -203,9 +208,15 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
   ): Promise<void> {
     this.checkState("delayedCall");
 
+    const reservation = this.stateMachine.reserveJournalQueue();
+
     // Delayed call is a one way call with a delay
     await RestateGrpcContextImpl.callContext.run(
-      { type: CallContexType.OneWayCall, delay: delayMillis },
+      {
+        type: CallContexType.OneWayCall,
+        delay: delayMillis,
+        journalReservation: reservation,
+      },
       call
     );
   }
@@ -228,20 +239,25 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
       );
     }
 
+    this.waitingForSideEffectAwait = true;
+
+    const reservation = this.stateMachine.reserveJournalQueue();
+
     const executeAndLogSideEffect = async () => {
       // in replay mode, we directly return the value from the log
       if (this.stateMachine.nextEntryWillBeReplayed()) {
         const emptyMsg = SideEffectEntryMessage.create({});
-        return this.stateMachine.handleUserCodeMessage<T>(
+        return this.stateMachine.enqueueSyscall<T>(
           SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-          emptyMsg
+          emptyMsg,
+          reservation
         ) as Promise<T>;
       }
 
       let sideEffectResult: T;
       try {
         sideEffectResult = await RestateGrpcContextImpl.callContext.run(
-          { type: CallContexType.SideEffect },
+          { type: CallContexType.SideEffect, journalReservation: reservation },
           fn
         );
       } catch (e) {
@@ -260,9 +276,10 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
         // that is acceptable, because in such a situation (failure to append to journal),
         // the state machine closes anyways and no further operations will succeed and the
         // the execution aborts
-        await this.stateMachine.handleUserCodeMessage<T>(
+        await this.stateMachine.enqueueSyscall<T>(
           SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
           sideEffectMsg,
+          reservation,
           false,
           undefined,
           true
@@ -290,9 +307,10 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
       // re-executes, and if it made it to the journal after all (error happend inly during
       // ack-back), then retries will use the journaled result.
       // So all good in any case, due to the beauty of "the runtime log is the ground thruth" approach.
-      await this.stateMachine.handleUserCodeMessage<T>(
+      await this.stateMachine.enqueueSyscall<T>(
         SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
         sideEffectMsg,
+        reservation,
         false,
         undefined,
         true
@@ -302,25 +320,35 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
     };
 
     const sleep = (millis: number) => this.sleep(millis);
-    return executeWithRetries(retryPolicy, executeAndLogSideEffect, sleep);
+    return executeWithRetries(
+      retryPolicy,
+      executeAndLogSideEffect,
+      sleep
+    ).finally(() => {
+      this.waitingForSideEffectAwait = false;
+      this.stateMachine.sendEnqueuedEntries();
+    });
   }
 
   public sleep(millis: number): Promise<void> {
     this.checkState("sleep");
 
-    const msg = SleepEntryMessage.create({ wakeUpTime: Date.now() + millis });
-    return this.stateMachine.handleUserCodeMessage<void>(
+    this.executor.run()
+
+    return this.stateMachine.sendSyscallNow<void>(
       SLEEP_ENTRY_MESSAGE_TYPE,
-      msg
+      SleepEntryMessage.create({ wakeUpTime: Date.now() + millis })
     );
   }
 
   public awakeable<T>(): { id: string; promise: Promise<T> } {
     this.checkState("awakeable");
 
-    const msg = AwakeableEntryMessage.create();
     const promise = this.stateMachine
-      .handleUserCodeMessage<Buffer>(AWAKEABLE_ENTRY_MESSAGE_TYPE, msg)
+      .sendSyscallNow<Buffer>(
+        AWAKEABLE_ENTRY_MESSAGE_TYPE,
+        AwakeableEntryMessage.create()
+      )
       .transform((result: Buffer | void) => {
         if (!(result instanceof Buffer)) {
           // This should either be a filled buffer or an empty buffer but never anything else.
@@ -364,7 +392,7 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
     base: DeepPartial<CompleteAwakeableEntryMessage>
   ): void {
     base.id = id;
-    this.stateMachine.handleUserCodeMessage(
+    this.stateMachine.sendSyscallNow(
       COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
       CompleteAwakeableEntryMessage.create(base)
     );
@@ -383,6 +411,11 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
   private getOneWayCallDelay(): number {
     const context = RestateGrpcContextImpl.callContext.getStore();
     return context?.delay || 0;
+  }
+
+  private getReservation(): JournalReservationId {
+    const context = RestateGrpcContextImpl.callContext.getStore();
+    return context?.journalReservation || 0;
   }
 
   private checkState(callType: string): void {

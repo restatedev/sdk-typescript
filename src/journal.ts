@@ -489,3 +489,67 @@ export enum NewExecutionState {
   PROCESSING = "PROCESSING",
   CLOSED = "CLOSED",
 }
+
+// --- Journal Reservations
+
+export type JournalReservationId = number;
+
+interface JournalReservation {
+  id: JournalReservationId;
+  messages: Array<Message> | undefined;
+}
+
+export class JournalReservationsQueue {
+  private last_reservation: JournalReservationId;
+  private reservations: Array<JournalReservation>;
+
+  constructor() {
+    this.last_reservation = 0;
+    this.reservations = new Array<{
+      id: JournalReservationId;
+      messages: Array<Message> | undefined;
+    }>();
+  }
+
+  // Create a journal reservation
+  public reserve(): JournalReservationId {
+    // Generate the reservation id
+    const thisReservation = this.last_reservation;
+    this.last_reservation++;
+
+    this.reservations.push({ id: thisReservation, messages: undefined });
+    return thisReservation;
+  }
+
+  // Returns false if the reservation is invalid
+  public add(id: JournalReservationId, ...messages: Message[]): boolean {
+    // A linear scan is fine here, because in the majority of cases we immediately find the reservation at the first index
+    const reservation = this.reservations.find(
+      (reservation) => reservation.id === id
+    );
+    if (reservation === undefined) {
+      return false;
+    }
+    if (reservation.messages === undefined) {
+      reservation.messages = [];
+    }
+    reservation.messages.push(...messages);
+    return true;
+  }
+
+  // Try to poll as many messages as possible
+  public poll(): Array<Message> {
+    const a: Array<Message> = [];
+    while (
+      this.reservations.length > 0 &&
+      this.reservations[0].messages != undefined
+    ) {
+      a.push(...(this.reservations.shift()?.messages as Array<Message>));
+    }
+    return a;
+  }
+
+  public clear() {
+    this.reservations = [];
+  }
+}
