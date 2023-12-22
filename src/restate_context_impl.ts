@@ -17,7 +17,7 @@ import {
   RpcGateway,
   ServiceApi,
 } from "./restate_context";
-import { StateMachine } from "./state_machine";
+import {StateMachine, WrappedPromise} from "./state_machine";
 import {
   AwakeableEntryMessage,
   BackgroundInvokeEntryMessage,
@@ -61,6 +61,7 @@ import { Client, SendClient } from "./types/router";
 import { RpcRequest, RpcResponse } from "./generated/proto/dynrpc";
 import { requestFromArgs } from "./utils/assumpsions";
 import { RandImpl } from "./utils/rand";
+import {TaskQueue} from "./utils/task_executor";
 
 export enum CallContexType {
   None,
@@ -87,6 +88,7 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
     public readonly serviceName: string,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private readonly stateMachine: StateMachine<any, any>,
+    private readonly taskQueue: TaskQueue = new TaskQueue(),
     public readonly rand: Rand = new RandImpl(id)
   ) {}
 
@@ -94,42 +96,49 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
     // Check if this is a valid action
     this.checkState("get state");
 
-    // Create the message and let the state machine process it
-    const msg = this.stateMachine.localStateStore.get(name);
-    const result = await this.stateMachine.handleUserCodeMessage(
-      GET_STATE_ENTRY_MESSAGE_TYPE,
-      msg
-    );
+    return await this.taskQueue.executeAndNotify(async () => {
+      // Create the message and let the state machine process it
+      const msg = this.stateMachine.localStateStore.get(name);
+      const result = await this.stateMachine.handleUserCodeMessage(
+          GET_STATE_ENTRY_MESSAGE_TYPE,
+          msg
+      );
 
-    // If the GetState message did not have a value or empty,
-    // then we went to the runtime to get the value.
-    // When we get the response, we set it in the localStateStore,
-    // to answer subsequent requests
-    if (msg.value === undefined && msg.empty === undefined) {
-      this.stateMachine.localStateStore.add(name, result as Buffer | Empty);
-    }
+      // If the GetState message did not have a value or empty,
+      // then we went to the runtime to get the value.
+      // When we get the response, we set it in the localStateStore,
+      // to answer subsequent requests
+      if (msg.value === undefined && msg.empty === undefined) {
+        this.stateMachine.localStateStore.add(name, result as Buffer | Empty);
+      }
 
-    if (!(result instanceof Buffer)) {
-      return null;
-    }
+      if (!(result instanceof Buffer)) {
+        return null;
+      }
 
-    return jsonDeserialize(result.toString());
+      return jsonDeserialize(result.toString());
+    })
   }
 
   public set<T>(name: string, value: T): void {
     this.checkState("set state");
-    const msg = this.stateMachine.localStateStore.set(name, value);
-    this.stateMachine.handleUserCodeMessage(SET_STATE_ENTRY_MESSAGE_TYPE, msg);
+
+    this.taskQueue.execute(async () => {
+      const msg = this.stateMachine.localStateStore.set(name, value);
+      await this.stateMachine.handleUserCodeMessage(SET_STATE_ENTRY_MESSAGE_TYPE, msg);
+    });
   }
 
   public clear(name: string): void {
     this.checkState("clear state");
 
-    const msg = this.stateMachine.localStateStore.clear(name);
-    this.stateMachine.handleUserCodeMessage(
-      CLEAR_STATE_ENTRY_MESSAGE_TYPE,
-      msg
-    );
+    this.taskQueue.execute(async () => {
+      const msg = this.stateMachine.localStateStore.clear(name);
+      await this.stateMachine.handleUserCodeMessage(
+        CLEAR_STATE_ENTRY_MESSAGE_TYPE,
+        msg
+      );
+    });
   }
 
   public request(
@@ -151,16 +160,18 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
   ): Promise<Uint8Array> {
     this.checkState("invoke");
 
-    const msg = InvokeEntryMessage.create({
-      serviceName: service,
-      methodName: method,
-      parameter: Buffer.from(data),
+    return await this.taskQueue.executeAndNotify(async () => {
+      const msg = InvokeEntryMessage.create({
+        serviceName: service,
+        methodName: method,
+        parameter: Buffer.from(data),
+      });
+      const promise = this.stateMachine.handleUserCodeMessage(
+          INVOKE_ENTRY_MESSAGE_TYPE,
+          msg
+      );
+      return promise as WrappedPromise<Uint8Array>;
     });
-    const promise = this.stateMachine.handleUserCodeMessage(
-      INVOKE_ENTRY_MESSAGE_TYPE,
-      msg
-    );
-    return (await promise) as Uint8Array;
   }
 
   private async invokeOneWay(
@@ -177,11 +188,13 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
       invokeTime: invokeTime,
     });
 
-    await this.stateMachine.handleUserCodeMessage(
-      BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
-      msg
-    );
-    return new Uint8Array();
+    return await this.taskQueue.executeAndNotify(async () => {
+      await this.stateMachine.handleUserCodeMessage(
+          BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
+          msg
+      );
+      return new Uint8Array();
+    });
   }
 
   public async oneWayCall(
@@ -301,48 +314,53 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
       return sideEffectResult;
     };
 
-    const sleep = (millis: number) => this.sleep(millis);
-    return executeWithRetries(retryPolicy, executeAndLogSideEffect, sleep);
+    return await this.taskQueue.executeAndNotify(() => {
+      return executeWithRetries(retryPolicy, executeAndLogSideEffect, this.sleep);
+    })
   }
 
-  public sleep(millis: number): Promise<void> {
+  public async sleep(millis: number): Promise<void> {
     this.checkState("sleep");
 
     const msg = SleepEntryMessage.create({ wakeUpTime: Date.now() + millis });
-    return this.stateMachine.handleUserCodeMessage<void>(
-      SLEEP_ENTRY_MESSAGE_TYPE,
-      msg
-    );
+    return await this.taskQueue.executeAndNotify(() => {
+      return this.stateMachine.handleUserCodeMessage<void>(
+          SLEEP_ENTRY_MESSAGE_TYPE,
+          msg
+      );
+    })
   }
 
-  public awakeable<T>(): { id: string; promise: Promise<T> } {
+  public async awakeable<T>(): Promise<{ id: string; promise: Promise<T> }> {
     this.checkState("awakeable");
 
-    const msg = AwakeableEntryMessage.create();
-    const promise = this.stateMachine
-      .handleUserCodeMessage<Buffer>(AWAKEABLE_ENTRY_MESSAGE_TYPE, msg)
-      .transform((result: Buffer | void) => {
-        if (!(result instanceof Buffer)) {
-          // This should either be a filled buffer or an empty buffer but never anything else.
-          throw RetryableError.internal(
-            "Awakeable was not resolved with a buffer payload"
-          );
-        }
+    return await this.taskQueue.executeAndNotify(async () => {
+      const msg = AwakeableEntryMessage.create();
+      const promise = this.stateMachine
+          .handleUserCodeMessage<Buffer>(AWAKEABLE_ENTRY_MESSAGE_TYPE, msg)
+          .transform((result: Buffer | void) => {
+            if (!(result instanceof Buffer)) {
+              // This should either be a filled buffer or an empty buffer but never anything else.
+              throw RetryableError.internal(
+                  "Awakeable was not resolved with a buffer payload"
+              );
+            }
 
-        return JSON.parse(result.toString()) as T;
-      });
+            return JSON.parse(result.toString()) as T;
+          });
 
-    // This needs to be done after handling the message in the state machine
-    // otherwise the index is not yet incremented.
-    const encodedEntryIndex = Buffer.alloc(4 /* Size of u32 */);
-    encodedEntryIndex.writeUInt32BE(
-      this.stateMachine.getUserCodeJournalIndex()
-    );
+      // This needs to be done after handling the message in the state machine
+      // otherwise the index is not yet incremented.
+      const encodedEntryIndex = Buffer.alloc(4 /* Size of u32 */);
+      encodedEntryIndex.writeUInt32BE(
+          this.stateMachine.getUserCodeJournalIndex()
+      );
 
-    return {
-      id: Buffer.concat([this.id, encodedEntryIndex]).toString("base64url"),
-      promise: promise,
-    };
+      return {
+        id: Buffer.concat([this.id, encodedEntryIndex]).toString("base64url"),
+        promise: promise,
+      };
+    });
   }
 
   public resolveAwakeable<T>(id: string, payload: T): void {
@@ -363,11 +381,13 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
     id: string,
     base: DeepPartial<CompleteAwakeableEntryMessage>
   ): void {
-    base.id = id;
-    this.stateMachine.handleUserCodeMessage(
-      COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
-      CompleteAwakeableEntryMessage.create(base)
-    );
+    this.taskQueue.execute(async () => {
+      base.id = id;
+      this.stateMachine.handleUserCodeMessage(
+          COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
+          CompleteAwakeableEntryMessage.create(base)
+      );
+    })
   }
 
   private isInSideEffect(): boolean {
