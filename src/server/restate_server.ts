@@ -138,13 +138,17 @@ export class RestateServer extends BaseRestateServer {
    * This method's result promise never completes.
    *
    * @param port The port to listen at. May be undefined (see above).
+   * @param http2ServerOptions The options to start the server with. If undefined, defaults from Node's HTTP2 server are used.
    */
-  public async listen(port?: number) {
+  public async listen(port?: number, http2ServerOptions?: http2.ServerOptions) {
     // Infer the port if not specified, or default it
     const actualPort = port ?? parseInt(process.env.PORT ?? "9080");
     rlog.info(`Listening on ${actualPort}...`);
 
-    for await (const connection of incomingConnectionAtPort(actualPort)) {
+    for await (const connection of incomingConnectionAtPort(
+      actualPort,
+      http2ServerOptions
+    )) {
       this.handleConnection(connection.url, connection.stream).catch((e) => {
         const error = ensureError(e);
         rlog.error(
@@ -190,8 +194,11 @@ export class RestateServer extends BaseRestateServer {
   }
 }
 
-async function* incomingConnectionAtPort(port: number) {
-  const server = http2.createServer();
+async function* incomingConnectionAtPort(
+  port: number,
+  http2ServerOptions?: http2.ServerOptions
+) {
+  const server = http2.createServer(http2ServerOptions || {});
 
   server.on("error", (err) =>
     rlog.error("Error in Restate service endpoint http2 server: " + err)
