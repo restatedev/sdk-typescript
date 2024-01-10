@@ -197,7 +197,7 @@ export class RestateError extends Error {
 // Does not lead to Restate retries
 // Leads to an output message with a failure defined
 export class TerminalError extends RestateError {
-  constructor(message: string, options?: { errorCode?: number; cause?: any }) {
+  constructor(message: string, options?: { errorCode?: number }) {
     super(message, options);
   }
 }
