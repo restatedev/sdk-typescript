@@ -72,7 +72,7 @@ export function jsonDeserialize<T>(json: string): T {
 // When using google.protobuf.Value in RPC handler responses, we want to roughly match the behaviour of JSON.stringify
 // for example in converting Date objects to a UTC string
 export function jsonSafeAny(key: string, value: any): any {
-  if (typeof value.toJSON == "function") {
+  if (value !== undefined && value !== null && typeof value.toJSON == "function") {
     return value.toJSON(key) as any;
   } else if (globalThis.Array.isArray(value)) {
     // in place replace
