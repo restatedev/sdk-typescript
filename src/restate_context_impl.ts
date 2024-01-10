@@ -471,7 +471,6 @@ async function executeWithRetries<T>(
           `Retries exhausted for ${name}. Last error: ${error.name}: ${error.message}`,
           {
             errorCode: ErrorCodes.INTERNAL,
-            cause: error,
           }
         );
       }
