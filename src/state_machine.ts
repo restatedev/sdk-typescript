@@ -303,9 +303,10 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
           }
 
           const error = ensureError(e);
-          rlog.debugInvokeMessage(
+          rlog.trace(
             this.invocation.logPrefix,
-            "Function completed with an error: " + error.message
+            "Function completed with an error: " + error.message,
+            e
           );
 
           this.sendErrorAndFinish(error);
