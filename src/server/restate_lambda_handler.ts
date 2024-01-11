@@ -259,7 +259,7 @@ export class LambdaRestateServer extends BaseRestateServer {
   private handleDiscovery(): APIGatewayProxyResult | APIGatewayProxyResultV2 {
     // return discovery information
     rlog.info(
-      "Answering discovery request. Registering these services: " +
+      "Answering discovery request. Announcing services: " +
         JSON.stringify(this.discovery.services)
     );
     return {

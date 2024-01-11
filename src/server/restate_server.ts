@@ -177,7 +177,7 @@ export class RestateServer extends BaseRestateServer {
     // no method under that name. might be a discovery request
     if (url.path == "/discover") {
       rlog.info(
-        "Answering discovery request. Registering these services: " +
+        "Answering discovery request. Announcing services: " +
           JSON.stringify(this.discovery.services)
       );
       await respondDiscovery(this.discovery, stream);

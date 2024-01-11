@@ -150,7 +150,7 @@ export abstract class BaseRestateServer {
       );
       // note that this log will not print all the keys.
       rlog.info(
-        `Registering: ${url}  -> ${JSON.stringify(method, null, "\t")}`
+        `Binding: ${url}  -> ${JSON.stringify(method, null, "\t")}`
       );
     }
   }
@@ -264,7 +264,7 @@ export abstract class BaseRestateServer {
       ) as HostedGrpcServiceMethod<unknown, unknown>;
 
       rlog.info(
-        `Registering: ${url}  -> ${JSON.stringify(
+        `Binding: ${url}  -> ${JSON.stringify(
           registration.method,
           null,
           "\t"
