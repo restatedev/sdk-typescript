@@ -15,7 +15,6 @@ import {
   START_MESSAGE_TYPE,
   StartMessage,
 } from "../src/types/protocol";
-import * as restate from "../src/public_api";
 import { Connection } from "../src/connection/connection";
 import { printMessageAsJson } from "../src/utils/utils";
 import { Message } from "../src/types/types";
@@ -25,6 +24,7 @@ import { rlog } from "../src/utils/logger";
 import { StateMachine } from "../src/state_machine";
 import { InvocationBuilder } from "../src/invocation";
 import { protoMetadata } from "../src/generated/proto/test";
+import { BaseRestateServer } from "../src/server/base_restate_server";
 
 export class TestDriver<I, O> implements Connection {
   private readonly result: Message[] = [];
@@ -182,7 +182,11 @@ export class TestDriver<I, O> implements Connection {
  * make it simpler for users to understand what methods are relevant for them,
  * and which ones are not.
  */
-class TestRestateServer extends restate.RestateServer {
+class TestRestateServer extends BaseRestateServer {
+  constructor() {
+    super(ProtocolMode.BIDI_STREAM);
+  }
+
   public methodByUrl<I, O>(
     url: string | null | undefined
   ): HostedGrpcServiceMethod<I, O> | undefined {
