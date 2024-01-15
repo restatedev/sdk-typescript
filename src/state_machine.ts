@@ -14,7 +14,7 @@ import { RestateGrpcContextImpl } from "./restate_context_impl";
 import { Connection, RestateStreamConsumer } from "./connection/connection";
 import { ProtocolMode } from "./generated/proto/discovery";
 import { Message } from "./types/types";
-import { CompletablePromise, makeFqServiceName } from "./utils/utils";
+import { makeFqServiceName } from "./utils/utils";
 import {
   createStateMachineConsole,
   StateMachineConsole,
@@ -42,6 +42,12 @@ import {
 } from "./types/errors";
 import { LocalStateStore } from "./local_state_store";
 import { createRestateConsole, LoggerContext } from "./logger";
+import {
+  CompletablePromise,
+  wrapDeeply,
+  WRAPPED_PROMISE_PENDING,
+  WrappedPromise,
+} from "./utils/promises";
 
 export class StateMachine<I, O> implements RestateStreamConsumer {
   private journal: Journal<I, O>;
@@ -138,7 +144,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
     // if the state machine is already closed, return a promise that never
     // completes, so that the user code does not resume
     if (this.stateMachineClosed) {
-      return wrapDeeply(new CompletablePromise<T>().promise);
+      return WRAPPED_PROMISE_PENDING as WrappedPromise<T | void>;
     }
 
     const promise = this.journal.handleUserSideMessage(messageType, message);
@@ -524,72 +530,3 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
     }
   }
 }
-/**
- * Returns a promise that wraps the original promise and calls cb() at the first time
- * this promise or any nested promise that is chained to it is awaited. (then-ed)
- */
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
-export type WrappedPromise<T> = Promise<T> & {
-  transform: <TResult1 = T, TResult2 = never>(
-    onfulfilled?:
-      | ((value: T) => TResult1 | PromiseLike<TResult1>)
-      | null
-      | undefined,
-    onrejected?:
-      | ((reason: any) => TResult2 | PromiseLike<TResult2>)
-      | null
-      | undefined
-  ) => Promise<TResult1 | TResult2>;
-};
-
-const wrapDeeply = <T>(
-  promise: Promise<T>,
-  cb?: () => void
-): WrappedPromise<T> => {
-  /* eslint-disable @typescript-eslint/no-explicit-any */
-  return {
-    transform: function <TResult1 = T, TResult2 = never>(
-      onfulfilled?:
-        | ((value: T) => TResult1 | PromiseLike<TResult1>)
-        | null
-        | undefined,
-      onrejected?:
-        | ((reason: any) => TResult2 | PromiseLike<TResult2>)
-        | null
-        | undefined
-    ): Promise<TResult1 | TResult2> {
-      return wrapDeeply(promise.then(onfulfilled, onrejected), cb);
-    },
-
-    then: function <TResult1 = T, TResult2 = never>(
-      onfulfilled?:
-        | ((value: T) => TResult1 | PromiseLike<TResult1>)
-        | null
-        | undefined,
-      onrejected?:
-        | ((reason: any) => TResult2 | PromiseLike<TResult2>)
-        | null
-        | undefined
-    ): Promise<TResult1 | TResult2> {
-      if (cb !== undefined) {
-        cb();
-      }
-      return promise.then(onfulfilled, onrejected);
-    },
-    catch: function <TResult = never>(
-      onrejected?:
-        | ((reason: any) => TResult | PromiseLike<TResult>)
-        | null
-        | undefined
-    ): Promise<T | TResult> {
-      return wrapDeeply(promise.catch(onrejected), cb);
-    },
-    finally: function (
-      onfinally?: (() => void) | null | undefined
-    ): Promise<T> {
-      return wrapDeeply(promise.finally(onfinally), cb);
-    },
-    [Symbol.toStringTag]: "",
-  };
-};

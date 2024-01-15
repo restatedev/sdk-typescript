@@ -21,8 +21,8 @@ import {
 import { RestateHttp2Connection } from "../src/connection/http_connection";
 import { Header, Message } from "../src/types/types";
 import stream from "stream";
-import { CompletablePromise } from "../src/utils/utils";
 import { setTimeout } from "timers/promises";
+import { CompletablePromise } from "../src/utils/promises";
 
 // The following test suite is taken from headers.rs
 describe("Header", () => {

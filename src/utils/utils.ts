@@ -33,28 +33,6 @@ import {
   SLEEP_ENTRY_MESSAGE_TYPE,
 } from "../types/protocol";
 
-export class CompletablePromise<T> {
-  private success!: (value: T | PromiseLike<T>) => void;
-  private failure!: (reason?: any) => void;
-
-  public readonly promise: Promise<T>;
-
-  constructor() {
-    this.promise = new Promise((resolve, reject) => {
-      this.success = resolve;
-      this.failure = reject;
-    });
-  }
-
-  public resolve(value: T) {
-    this.success(value);
-  }
-
-  public reject(reason?: any) {
-    this.failure(reason);
-  }
-}
-
 export function jsonSerialize(obj: any): string {
   return JSON.stringify(obj, (_, v) =>
     typeof v === "bigint" ? "BIGINT::" + v.toString() : v

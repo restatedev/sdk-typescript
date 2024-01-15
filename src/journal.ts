@@ -39,6 +39,7 @@ import { Message } from "./types/types";
 import { SideEffectEntryMessage } from "./generated/proto/javascript";
 import { Invocation } from "./invocation";
 import { failureToError, RetryableError } from "./types/errors";
+import { CompletablePromise } from "./utils/promises";
 
 const RESOLVED = Promise.resolve(undefined);
 
@@ -99,7 +100,7 @@ export class Journal<I, O> {
 
         const journalEntry = new JournalEntry(messageType, message);
         this.handleReplay(this.userCodeJournalIndex, replayEntry, journalEntry);
-        return journalEntry.promise;
+        return journalEntry.completablePromise.promise;
       }
       case NewExecutionState.PROCESSING: {
         switch (messageType) {
@@ -133,7 +134,7 @@ export class Journal<I, O> {
                 this.userCodeJournalIndex,
                 journalEntry
               );
-              return journalEntry.promise;
+              return journalEntry.completablePromise.promise;
             }
           }
           default: {
@@ -143,7 +144,7 @@ export class Journal<I, O> {
               this.userCodeJournalIndex,
               journalEntry
             );
-            return journalEntry.promise;
+            return journalEntry.completablePromise.promise;
           }
         }
       }
@@ -178,7 +179,7 @@ export class Journal<I, O> {
     }
 
     if (m.value !== undefined) {
-      journalEntry.resolve(m.value);
+      journalEntry.completablePromise.resolve(m.value);
       this.pendingJournalEntries.delete(m.entryIndex);
     } else if (m.failure !== undefined) {
       // we do all completions with Terminal Errors, because failures triggered by those exceptions
@@ -186,10 +187,10 @@ export class Journal<I, O> {
       // thus an infinite loop that keeps replay-ing but never makes progress
       // these failures here consequently need to cause terminal failures, unless caught and handled
       // by the handler code
-      journalEntry.reject(failureToError(m.failure, true));
+      journalEntry.completablePromise.reject(failureToError(m.failure, true));
       this.pendingJournalEntries.delete(m.entryIndex);
     } else if (m.empty !== undefined) {
-      journalEntry.resolve(m.empty);
+      journalEntry.completablePromise.resolve(m.empty);
       this.pendingJournalEntries.delete(m.entryIndex);
     } else {
       //TODO completion message without a value/failure/empty
@@ -205,7 +206,7 @@ export class Journal<I, O> {
     }
 
     // Just needs an ack
-    journalEntry.resolve(undefined);
+    journalEntry.completablePromise.resolve(undefined);
     this.pendingJournalEntries.delete(m.entryIndex);
   }
 
@@ -314,7 +315,7 @@ export class Journal<I, O> {
         } else {
           // A side effect can have a void return type
           // If it was replayed, then it is acked, so we should resolve it.
-          journalEntry.resolve(undefined);
+          journalEntry.completablePromise.resolve(undefined);
           this.pendingJournalEntries.delete(journalIndex);
         }
         break;
@@ -324,7 +325,7 @@ export class Journal<I, O> {
       case COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE:
       case BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE: {
         // Do not need a completion. So if the match has passed then the entry can be deleted.
-        journalEntry.resolve(undefined);
+        journalEntry.completablePromise.resolve(undefined);
         this.pendingJournalEntries.delete(journalIndex);
         break;
       }
@@ -342,11 +343,11 @@ export class Journal<I, O> {
     failureWouldBeTerminal?: boolean
   ) {
     if (value !== undefined) {
-      journalEntry.resolve(value);
+      journalEntry.completablePromise.resolve(value);
       this.pendingJournalEntries.delete(journalIndex);
     } else if (failure !== undefined) {
       const error = failureToError(failure, failureWouldBeTerminal ?? true);
-      journalEntry.reject(error);
+      journalEntry.completablePromise.reject(error);
       this.pendingJournalEntries.delete(journalIndex);
     } else {
       this.pendingJournalEntries.set(journalIndex, journalEntry);
@@ -369,7 +370,9 @@ export class Journal<I, O> {
     }
 
     this.pendingJournalEntries.delete(0);
-    rootJournalEntry.resolve(new Message(messageType, message));
+    rootJournalEntry.completablePromise.resolve(
+      new Message(messageType, message)
+    );
   }
 
   private checkJournalMatch(
@@ -464,22 +467,14 @@ export class Journal<I, O> {
 }
 
 export class JournalEntry {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  public promise: Promise<any>;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  public resolve!: (value: any) => void;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  public reject!: (reason?: any) => void;
+  public completablePromise: CompletablePromise<any>;
 
   constructor(
     readonly messageType: bigint,
     readonly message: p.ProtocolMessage | Uint8Array
   ) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.promise = new Promise<any>((res, rej) => {
-      this.resolve = res;
-      this.reject = rej;
-    });
+    this.completablePromise = new CompletablePromise<any>();
   }
 }
 
