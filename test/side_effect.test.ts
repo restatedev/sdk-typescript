@@ -911,6 +911,103 @@ describe("AwaitSideEffectService", () => {
   });
 });
 
+export class UnawaitedSideEffectShouldFailSubsequentContextCallService
+  implements TestGreeter
+{
+  constructor(
+    // eslint-disable-next-line @typescript-eslint/no-empty-function
+    private readonly next = (ctx: restate.RestateContext): void => {}
+  ) {}
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async greet(request: TestRequest): Promise<TestResponse> {
+    const ctx = restate.useContext(this);
+
+    ctx.sideEffect<number>(async () => {
+      // eslint-disable-next-line @typescript-eslint/no-empty-function
+      return new Promise(() => {});
+    });
+    this.next(ctx);
+
+    throw new Error("code should not reach this point");
+  }
+}
+
+describe("UnawaitedSideEffectShouldFailSubsequentContextCall", () => {
+  const defineTestCase = (
+    contextMethodCall: string,
+    next: (ctx: restate.RestateContext) => void
+  ): void => {
+    it(
+      "Not awaiting side effect should fail at next " + contextMethodCall,
+      async () => {
+        const result = await new TestDriver(
+          new UnawaitedSideEffectShouldFailSubsequentContextCallService(next),
+          [startMessage(), inputMessage(greetRequest("Till"))]
+        ).run();
+
+        checkTerminalError(
+          result[0],
+          `Invoked a RestateContext method while a side effect is still executing. 
+          Make sure you await the ctx.sideEffect call before using any other RestateContext method.`
+        );
+        expect(result.slice(1)).toStrictEqual([END_MESSAGE]);
+      }
+    );
+  };
+
+  defineTestCase("side effect", (ctx) =>
+    ctx.sideEffect<number>(async () => {
+      return 1;
+    })
+  );
+  defineTestCase("get", (ctx) => ctx.get<string>("123"));
+  defineTestCase("set", (ctx) => ctx.set("123", "abc"));
+  defineTestCase("call", (ctx) => {
+    const client = new TestGreeterClientImpl(ctx);
+    client.greet(TestRequest.create({ name: "Francesco" }));
+  });
+  defineTestCase("one way call", (ctx) => {
+    const client = new TestGreeterClientImpl(ctx);
+    ctx.oneWayCall(() =>
+      client.greet(TestRequest.create({ name: "Francesco" }))
+    );
+  });
+});
+
+export class UnawaitedSideEffectShouldFailSubsequentSetService
+  implements TestGreeter
+{
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async greet(request: TestRequest): Promise<TestResponse> {
+    const ctx = restate.useContext(this);
+
+    ctx.sideEffect<number>(async () => {
+      // eslint-disable-next-line @typescript-eslint/no-empty-function
+      return new Promise(() => {});
+    });
+    ctx.set("123", "abc");
+
+    throw new Error("code should not reach this point");
+  }
+}
+
+describe("UnawaitedSideEffectShouldFailSubsequentSetService", () => {
+  it("Not awaiting side effects should fail", async () => {
+    const result = await new TestDriver(
+      new UnawaitedSideEffectShouldFailSubsequentSetService(),
+      [startMessage(), inputMessage(greetRequest("Till"))]
+    ).run();
+
+    checkTerminalError(
+      result[0],
+      `Invoked a RestateContext method while a side effect is still executing. 
+          Make sure you await the ctx.sideEffect call before using any other RestateContext method.`
+    );
+    expect(result.slice(1)).toStrictEqual([END_MESSAGE]);
+  });
+});
+
 export class TerminalErrorSideEffectService implements TestGreeter {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
