@@ -110,7 +110,7 @@ export class Journal<I, O> {
               messageType,
               message as p.SuspensionMessage | p.OutputStreamEntryMessage
             );
-            return Promise.resolve(undefined);
+            return RESOLVED;
           }
           case p.SET_STATE_ENTRY_MESSAGE_TYPE:
           case p.CLEAR_STATE_ENTRY_MESSAGE_TYPE:
@@ -154,7 +154,7 @@ export class Journal<I, O> {
         // So no more user messages can come in...
         // - Print warning log and continue...
         //TODO received user-side message but state machine is closed
-        return Promise.resolve(undefined);
+        return RESOLVED;
       }
       default: {
         throw RetryableError.protocolViolation(
