@@ -31,20 +31,29 @@ export function wrapDeeply<T>(
   promise: Promise<T>,
   onThen?: () => void
 ): WrappedPromise<T> {
+  // We need this to support nesting of WrappedPromise
+  let transform: <TResult1 = T, TResult2 = never>(
+    onfulfilled?:
+      | ((value: T) => TResult1 | PromiseLike<TResult1>)
+      | null
+      | undefined,
+    onrejected?:
+      | ((reason: any) => TResult2 | PromiseLike<TResult2>)
+      | null
+      | undefined
+  ) => Promise<TResult1 | TResult2>;
+  if (Object.hasOwn(promise, "transform")) {
+    const wrappedPromise = promise as WrappedPromise<T>;
+    transform = (onfulfilled, onrejected) =>
+      wrapDeeply(wrappedPromise.transform(onfulfilled, onrejected), onThen);
+  } else {
+    transform = (onfulfilled, onrejected) =>
+      wrapDeeply(promise.then(onfulfilled, onrejected), onThen);
+  }
+
   /* eslint-disable @typescript-eslint/no-explicit-any */
   return {
-    transform: function <TResult1 = T, TResult2 = never>(
-      onfulfilled?:
-        | ((value: T) => TResult1 | PromiseLike<TResult1>)
-        | null
-        | undefined,
-      onrejected?:
-        | ((reason: any) => TResult2 | PromiseLike<TResult2>)
-        | null
-        | undefined
-    ): Promise<TResult1 | TResult2> {
-      return wrapDeeply(promise.then(onfulfilled, onrejected), onThen);
-    },
+    transform,
 
     then: function <TResult1 = T, TResult2 = never>(
       onfulfilled?:
