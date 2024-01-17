@@ -10,6 +10,7 @@
  */
 
 import {
+  CombineablePromise,
   Rand,
   RestateGrpcChannel,
   RestateGrpcContext,
@@ -72,6 +73,10 @@ export interface CallContext {
   type: CallContexType;
   delay?: number;
 }
+
+export type InternalCombineablePromise<T> = CombineablePromise<T> & {
+  journalIndex: number;
+};
 
 export class RestateGrpcContextImpl implements RestateGrpcContext {
   // here, we capture the context information for actions on the Restate context that
@@ -329,9 +334,9 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
     });
   }
 
-  public sleep(millis: number): Promise<void> {
+  public sleep(millis: number): CombineablePromise<void> {
     this.checkState("sleep");
-    return this.sleepInternal(millis);
+    return this.markCombineablePromise(this.sleepInternal(millis));
   }
 
   private sleepInternal(millis: number): Promise<void> {
@@ -341,7 +346,7 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
     );
   }
 
-  public awakeable<T>(): { id: string; promise: Promise<T> } {
+  public awakeable<T>(): { id: string; promise: CombineablePromise<T> } {
     this.checkState("awakeable");
 
     const msg = AwakeableEntryMessage.create();
@@ -367,7 +372,7 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
 
     return {
       id: AWAKEABLE_IDENTIFIER_PREFIX + Buffer.concat([this.id, encodedEntryIndex]).toString("base64url"),
-      promise: promise,
+      promise: this.markCombineablePromise(promise),
     };
   }
 
@@ -443,6 +448,19 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
         { errorCode: ErrorCodes.INTERNAL }
       );
     }
+  }
+
+  private markCombineablePromise<T>(
+    p: Promise<T>
+  ): InternalCombineablePromise<T> {
+    return Object.defineProperties(p, {
+      __combineable: {
+        value: undefined,
+      },
+      journalIndex: {
+        value: this.stateMachine.getUserCodeJournalIndex(),
+      },
+    }) as InternalCombineablePromise<T>;
   }
 
   rpcGateway(): RpcGateway {
@@ -599,7 +617,7 @@ export class RpcContextImpl implements RpcContext {
   public sideEffect<T>(fn: () => Promise<T>): Promise<T> {
     return this.ctx.sideEffect(fn);
   }
-  public awakeable<T>(): { id: string; promise: Promise<T> } {
+  public awakeable<T>(): { id: string; promise: CombineablePromise<T> } {
     return this.ctx.awakeable();
   }
   public resolveAwakeable<T>(id: string, payload: T): void {
@@ -608,7 +626,7 @@ export class RpcContextImpl implements RpcContext {
   public rejectAwakeable(id: string, reason: string): void {
     this.ctx.rejectAwakeable(id, reason);
   }
-  public sleep(millis: number): Promise<void> {
+  public sleep(millis: number): CombineablePromise<void> {
     return this.ctx.sleep(millis);
   }
 

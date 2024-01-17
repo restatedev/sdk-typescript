@@ -13,6 +13,11 @@ import { RetrySettings } from "./utils/public_utils";
 import { Client, SendClient } from "./types/router";
 
 /**
+ * A promise that can be combined using Promise combinators in RestateContext.
+ */
+export type CombineablePromise<T> = Promise<T> & { __combineable: void };
+
+/**
  * Base Restate context, which contains all operations that are the same in the gRPC-based API
  * as in the dynamic rpc-handler-based API.
  *
@@ -148,7 +153,7 @@ export interface RestateBaseContext {
    * // Wait for the external service to wake this service back up
    * const result = await awakeable.promise;
    */
-  awakeable<T>(): { id: string; promise: Promise<T> };
+  awakeable<T>(): { id: string; promise: CombineablePromise<T> };
 
   /**
    * Resolve an awakeable of another service.
@@ -187,7 +192,7 @@ export interface RestateBaseContext {
    * const ctx = restate.useContext(this);
    * await ctx.sleep(1000);
    */
-  sleep(millis: number): Promise<void>;
+  sleep(millis: number): CombineablePromise<void>;
 }
 
 export interface Rand {
