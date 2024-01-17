@@ -14,7 +14,6 @@ import { RestateGrpcContextImpl } from "./restate_context_impl";
 import { Connection, RestateStreamConsumer } from "./connection/connection";
 import { ProtocolMode } from "./generated/proto/discovery";
 import { Message } from "./types/types";
-import { makeFqServiceName } from "./utils/utils";
 import {
   createStateMachineConsole,
   StateMachineConsole,
@@ -471,10 +470,6 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
     await this.finish();
   }
 
-  public async notifyHandlerExecutionError(e: RetryableError | TerminalError) {
-    await this.sendErrorAndFinish(e);
-  }
-
   /**
    * WARNING: make sure you use this at the right point in the code
    * After the index has been incremented...
@@ -482,13 +477,6 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
    */
   public getUserCodeJournalIndex(): number {
     return this.journal.getUserCodeJournalIndex();
-  }
-
-  public getFullServiceName(): string {
-    return makeFqServiceName(
-      this.invocation.method.pkg,
-      this.invocation.method.service
-    );
   }
 
   public handleInputClosed(): void {
