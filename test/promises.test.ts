@@ -15,11 +15,6 @@ import {
   wrapDeeply,
   WrappedPromise,
 } from "../src/utils/promises";
-import {
-  newJournalEntryPromiseId,
-  PromiseCombinatorTracker,
-  PromiseId,
-} from "../src/promise_combinator_tracker";
 
 describe("promises.wrapDeeply", () => {
   it("should support nested wrapping", async () => {

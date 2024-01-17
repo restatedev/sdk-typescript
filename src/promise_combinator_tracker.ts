@@ -103,7 +103,7 @@ function preparePromiseCombinator(
       // These are already completed, so once we set the then callback they will be immediately resolved.
       const { originalPromise, proxyPromise } = promisesMap.get(
         promiseId.type.toString() + "-" + promiseId.id.toString()
-      )!!;
+      )!;
 
       // Because this promise is already completed, promise.then will immediately enqueue in the promise microtask queue
       // the handlers to execute.
