@@ -230,9 +230,9 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
     );
   }
 
-    rpcGateway(): RpcGateway {
-        return new RpcContextImpl(this);
-    }
+  rpcGateway(): RpcGateway {
+    return new RpcContextImpl(this);
+  }
 
   // DON'T make this function async!!!
   // The reason is that we want the erros thrown by the initial checks to be propagated in the caller context,
