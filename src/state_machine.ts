@@ -199,16 +199,30 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
 
   // -- Methods related to combinators to wire up promise combinator API with PromiseCombinatorTracker
 
-  public createCombinator() {
-    // TODO create combinator
-    //  if replay { combinator in replay mode } else { combinator in processing mode }
+  public createCombinator(
+    combinatorConstructor: (promises: PromiseLike<any>[]) => Promise<any>,
+    promises: Array<{ id: PromiseId; promise: Promise<any> }>
+  ) {
+    if (this.stateMachineClosed) {
+      return WRAPPED_PROMISE_PENDING as WrappedPromise<any>;
+    }
 
-    // We need to wrap deeply again to schedule suspension here!
-    return wrapDeeply(Promise.resolve("TODO"), () => {
-      if (this.journal.isUnResolved(0 /* TODO */)) {
-        this.scheduleSuspension();
-      }
-    });
+    if (this.journal.isProcessing()) {
+      return wrapDeeply(
+        this.promiseCombinatorTracker.createCombinatorInProcessingMode(
+          combinatorConstructor,
+          promises
+        ),
+        () => {
+          this.scheduleSuspension();
+        }
+      );
+    } else {
+      return this.promiseCombinatorTracker.createCombinatorInReplayMode(
+        combinatorConstructor,
+        promises
+      );
+    }
   }
 
   readCombinatorOrderEntry(combinatorId: number): PromiseId[] {

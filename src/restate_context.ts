@@ -193,6 +193,34 @@ export interface RestateBaseContext {
    * await ctx.sleep(1000);
    */
   sleep(millis: number): CombineablePromise<void>;
+
+  // --- Promise combinators
+
+  /**
+   * Creates a Promise that is resolved with an array of results when all of the provided Promises
+   * resolve, or rejected when any Promise is rejected.
+   *
+   * See {@link Promise.all} for more details.
+   *
+   * @param values An iterable of Promises.
+   * @returns A new Promise.
+   */
+  all<T extends readonly CombineablePromise<unknown>[] | []>(
+    values: T
+  ): Promise<{ -readonly [P in keyof T]: Awaited<T[P]> }>;
+
+  /**
+   * Creates a Promise that is resolved or rejected when any of the provided Promises are resolved
+   * or rejected.
+   *
+   * See {@link Promise.race} for more details.
+   *
+   * @param values An iterable of Promises.
+   * @returns A new Promise.
+   */
+  race<T extends readonly CombineablePromise<unknown>[] | []>(
+    values: T
+  ): Promise<Awaited<T[number]>>;
 }
 
 export interface Rand {

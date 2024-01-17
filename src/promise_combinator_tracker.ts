@@ -32,7 +32,7 @@ export function newJournalEntryPromiseId(entryIndex: number): PromiseId {
  */
 function prepareReplayedPromiseCombinator(
   combinatorIndex: number,
-  combinatorConstructor: (promises: Promise<any>[]) => Promise<any>,
+  combinatorConstructor: (promises: PromiseLike<any>[]) => Promise<any>,
   promises: Array<{ id: PromiseId; promise: Promise<any> }>,
   readReplayOrder: (combinatorIndex: number) => PromiseId[]
 ): WrappedPromise<any> {
@@ -133,7 +133,7 @@ export class PromiseCombinatorTracker {
   ) {}
 
   public createCombinatorInReplayMode(
-    combinatorConstructor: (promises: Promise<any>[]) => Promise<any>,
+    combinatorConstructor: (promises: PromiseLike<any>[]) => Promise<any>,
     promises: Array<{ id: PromiseId; promise: Promise<any> }>
   ): WrappedPromise<any> {
     const combinatorIndex = this.nextCombinatorIndex;

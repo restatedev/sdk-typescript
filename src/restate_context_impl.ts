@@ -62,6 +62,10 @@ import { Client, SendClient } from "./types/router";
 import { RpcRequest, RpcResponse } from "./generated/proto/dynrpc";
 import { requestFromArgs } from "./utils/assumptions";
 import { RandImpl } from "./utils/rand";
+import {
+  newJournalEntryPromiseId,
+  PromiseId,
+} from "./promise_combinator_tracker";
 
 export enum CallContexType {
   None,
@@ -226,6 +230,10 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
     );
   }
 
+    rpcGateway(): RpcGateway {
+        return new RpcContextImpl(this);
+    }
+
   // DON'T make this function async!!!
   // The reason is that we want the erros thrown by the initial checks to be propagated in the caller context,
   // and not in the promise context. To understand the semantic difference, make this function async and run the
@@ -346,6 +354,8 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
     );
   }
 
+  // -- Awakeables
+
   public awakeable<T>(): { id: string; promise: CombineablePromise<T> } {
     this.checkState("awakeable");
 
@@ -400,6 +410,44 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
       CompleteAwakeableEntryMessage.create(base)
     );
   }
+
+  // -- Combinators
+
+  all<T extends readonly CombineablePromise<unknown>[] | []>(
+    values: T
+  ): Promise<{ -readonly [P in keyof T]: Awaited<T[P]> }> {
+    return this.stateMachine.createCombinator(
+      Promise.all.bind(Promise),
+      this.extractPromisesWithIds(values)
+    );
+  }
+
+  race<T extends readonly CombineablePromise<unknown>[] | []>(
+    values: T
+  ): Promise<Awaited<T[number]>> {
+    return this.stateMachine.createCombinator(
+      Promise.race.bind(Promise),
+      this.extractPromisesWithIds(values)
+    );
+  }
+
+  private extractPromisesWithIds(
+    promises: Iterable<CombineablePromise<any>>
+  ): Array<{ id: PromiseId; promise: Promise<any> }> {
+    const outPromises = [];
+
+    for (const promise of promises) {
+      const index = (promise as InternalCombineablePromise<any>).journalIndex;
+      outPromises.push({
+        id: newJournalEntryPromiseId(index),
+        promise: promise,
+      });
+    }
+
+    return outPromises;
+  }
+
+  // -- Various private methods
 
   private isInSideEffect(): boolean {
     const context = RestateGrpcContextImpl.callContext.getStore();
@@ -461,10 +509,6 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
         value: this.stateMachine.getUserCodeJournalIndex(),
       },
     }) as InternalCombineablePromise<T>;
-  }
-
-  rpcGateway(): RpcGateway {
-    return new RpcContextImpl(this);
   }
 }
 
@@ -628,6 +672,18 @@ export class RpcContextImpl implements RpcContext {
   }
   public sleep(millis: number): CombineablePromise<void> {
     return this.ctx.sleep(millis);
+  }
+
+  all<T extends readonly CombineablePromise<unknown>[] | []>(
+    values: T
+  ): Promise<{ -readonly [P in keyof T]: Awaited<T[P]> }> {
+    return this.ctx.all(values);
+  }
+
+  race<T extends readonly CombineablePromise<unknown>[] | []>(
+    values: T
+  ): Promise<Awaited<T[number]>> {
+    return this.ctx.race(values);
   }
 
   grpcChannel(): RestateGrpcChannel {
