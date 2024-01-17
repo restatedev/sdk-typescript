@@ -46,10 +46,12 @@ import {
   END_MESSAGE_TYPE,
   EndMessage,
   AWAKEABLE_IDENTIFIER_PREFIX,
+  COMBINATOR_ENTRY_MESSAGE,
 } from "../src/types/protocol";
 import { Message } from "../src/types/types";
 import { TestRequest, TestResponse } from "../src/generated/proto/test";
 import {
+  CombinatorEntryMessage,
   FailureWithTerminal,
   SideEffectEntryMessage,
 } from "../src/generated/proto/javascript";
@@ -427,6 +429,19 @@ export function suspensionMessage(entryIndices: number[]): Message {
     SUSPENSION_MESSAGE_TYPE,
     SuspensionMessage.create({
       entryIndexes: entryIndices,
+    })
+  );
+}
+
+export function combinatorEntryMessage(
+  combinatorId: number,
+  journalEntriesOrder: number[]
+): Message {
+  return new Message(
+    COMBINATOR_ENTRY_MESSAGE,
+    CombinatorEntryMessage.create({
+      combinatorId,
+      journalEntriesOrder,
     })
   );
 }
