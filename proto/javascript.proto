@@ -28,3 +28,10 @@ message SideEffectEntryMessage {
     FailureWithTerminal failure = 15;
   };
 }
+
+// Type: 0xFC00 + 2
+message CombinatorEntryMessage {
+  int32 combinator_id = 1;
+
+  repeated int32 journal_entries_order = 2;
+}

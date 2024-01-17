@@ -20,6 +20,7 @@ import {
 } from "./utils/message_logger";
 import { clearTimeout } from "timers";
 import {
+  COMBINATOR_ENTRY_MESSAGE,
   COMPLETION_MESSAGE_TYPE,
   END_MESSAGE_TYPE,
   EndMessage,
@@ -47,6 +48,12 @@ import {
   WRAPPED_PROMISE_PENDING,
   WrappedPromise,
 } from "./utils/promises";
+import {
+  PromiseCombinatorTracker,
+  PromiseId,
+  PromiseType,
+} from "./promise_combinator_tracker";
+import { CombinatorEntryMessage } from "./generated/proto/javascript";
 
 export class StateMachine<I, O> implements RestateStreamConsumer {
   private journal: Journal<I, O>;
@@ -71,6 +78,8 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
   // Suspension timeout that gets set and cleared based on completion messages;
   private suspensionTimeout?: NodeJS.Timeout;
 
+  private promiseCombinatorTracker: PromiseCombinatorTracker;
+
   console: StateMachineConsole;
 
   constructor(
@@ -80,7 +89,6 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
     loggerContext: LoggerContext,
     private readonly suspensionMillis: number = 30_000
   ) {
-    this.journal = new Journal(this.invocation);
     this.localStateStore = invocation.localStateStore;
     this.console = createStateMachineConsole(loggerContext);
 
@@ -90,6 +98,11 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
       // The console exposed by RestateContext filters logs in replay, while the internal one is based on the ENV variables.
       createRestateConsole(loggerContext, () => !this.journal.isReplaying()),
       this
+    );
+    this.journal = new Journal(this.invocation);
+    this.promiseCombinatorTracker = new PromiseCombinatorTracker(
+      this.readCombinatorOrderEntry.bind(this),
+      this.writeCombinatorOrderEntry.bind(this)
     );
   }
 
@@ -182,6 +195,73 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
         this.scheduleSuspension();
       }
     });
+  }
+
+  // -- Methods related to combinators to wire up promise combinator API with PromiseCombinatorTracker
+
+  public createCombinator() {
+    // TODO create combinator
+    //  if replay { combinator in replay mode } else { combinator in processing mode }
+
+    // We need to wrap deeply again to schedule suspension here!
+    return wrapDeeply(Promise.resolve("TODO"), () => {
+      if (this.journal.isUnResolved(0 /* TODO */)) {
+        this.scheduleSuspension();
+      }
+    });
+  }
+
+  readCombinatorOrderEntry(combinatorId: number): PromiseId[] {
+    const wannabeCombinatorEntry = this.journal.readNextReplayEntry();
+    if (wannabeCombinatorEntry === undefined) {
+      throw RetryableError.internal(
+        `Illegal state: expected replay message for combinator, but none found for ${this.journal.getUserCodeJournalIndex()}`
+      );
+    }
+    if (wannabeCombinatorEntry.messageType !== COMBINATOR_ENTRY_MESSAGE) {
+      throw RetryableError.internal(
+        `Illegal state: expected this replay message to be a combinator message. This looks like an SDK bug.`
+      );
+    }
+
+    const combinatorMessage =
+      wannabeCombinatorEntry.message as CombinatorEntryMessage;
+    if (combinatorMessage.combinatorId != combinatorId) {
+      throw RetryableError.internal(
+        `Illegal state: expected this combinator message to match combinator ids ${combinatorMessage.combinatorId} != ${combinatorId}. This looks like an SDK bug.`
+      );
+    }
+
+    rlog.debugJournalMessage(
+      this.invocation.logPrefix,
+      "Matched and replayed message from journal",
+      COMBINATOR_ENTRY_MESSAGE,
+      combinatorMessage
+    );
+
+    return combinatorMessage.journalEntriesOrder.map((id) => ({
+      id,
+      type: PromiseType.JournalEntry,
+    }));
+  }
+
+  writeCombinatorOrderEntry(combinatorId: number, order: PromiseId[]) {
+    if (this.journal.isProcessing()) {
+      this.journal.incrementUserCodeIndex();
+
+      const combinatorMessage: CombinatorEntryMessage = {
+        combinatorId,
+        journalEntriesOrder: order.map((pid) => pid.id),
+      };
+      rlog.debugJournalMessage(
+        this.invocation.logPrefix,
+        "Adding message to journal and sending to Restate",
+        COMBINATOR_ENTRY_MESSAGE,
+        combinatorMessage
+      );
+
+      this.send(new Message(COMBINATOR_ENTRY_MESSAGE, combinatorMessage));
+    }
   }
 
   /**

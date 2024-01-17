@@ -415,7 +415,7 @@ export class Journal<I, O> {
     }
   }
 
-  private incrementUserCodeIndex() {
+  incrementUserCodeIndex() {
     this.userCodeJournalIndex++;
     if (
       this.userCodeJournalIndex === this.invocation.nbEntriesToReplay &&
@@ -423,6 +423,14 @@ export class Journal<I, O> {
     ) {
       this.transitionState(NewExecutionState.PROCESSING);
     }
+  }
+
+  /**
+   * Read the next replay entry
+   */
+  public readNextReplayEntry() {
+    this.incrementUserCodeIndex();
+    return this.invocation.replayEntries.get(this.userCodeJournalIndex);
   }
 
   public isClosed(): boolean {
