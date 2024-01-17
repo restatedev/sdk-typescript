@@ -26,9 +26,11 @@ describe("PromiseCombinatorTracker with Promise.any", () => {
       promises
     );
 
-    // Any doesn't return on first reject
-    completers[0].reject("bla");
-    completers[2].resolve("my value");
+    setImmediate(() => {
+      // Any doesn't return on first reject
+      completers[0].reject("bla");
+      completers[2].resolve("my value");
+    });
 
     const { order, result } = await testResultPromise;
     expect(result).toStrictEqual("my value");
@@ -45,7 +47,9 @@ describe("PromiseCombinatorTracker with Promise.any", () => {
       promises
     );
 
-    completers[2].resolve("my value");
+    setImmediate(() => {
+      completers[2].resolve("my value");
+    });
 
     const { order, result } = await testResultPromise;
     expect(result).toStrictEqual("my value");
@@ -94,8 +98,10 @@ describe("PromiseCombinatorTracker with Promise.all", () => {
       promises
     );
 
-    completers[2].resolve("my value");
-    completers[0].reject("my error");
+    setImmediate(() => {
+      completers[2].resolve("my value");
+      completers[0].reject("my error");
+    });
 
     const { order, result } = await testResultPromise;
     expect(result).toStrictEqual("my error");
@@ -110,9 +116,11 @@ describe("PromiseCombinatorTracker with Promise.all", () => {
       promises
     );
 
-    completers[2].resolve("my value 2");
-    completers[0].resolve("my value 0");
-    completers[1].resolve("my value 1");
+    setImmediate(() => {
+      completers[2].resolve("my value 2");
+      completers[0].resolve("my value 0");
+      completers[1].resolve("my value 1");
+    });
 
     const { order, result } = await testResultPromise;
     expect(result).toStrictEqual(["my value 0", "my value 1", "my value 2"]);
@@ -183,23 +191,21 @@ async function testCombinatorInProcessingMode(
   const resultMap = new Map<number, PromiseId[]>();
   const tracker = new PromiseCombinatorTracker(
     () => {
-      throw new Error("Unexpected call");
+      return undefined;
     },
     (combinatorIndex, order) => resultMap.set(combinatorIndex, order)
   );
 
-  return tracker
-    .createCombinatorInProcessingMode(combinatorConstructor, promises)
-    .then(
-      (result) => ({
-        order: resultMap.get(0),
-        result,
-      }),
-      (result) => ({
-        order: resultMap.get(0),
-        result,
-      })
-    );
+  return tracker.createCombinator(combinatorConstructor, promises).transform(
+    (result) => ({
+      order: resultMap.get(0),
+      result,
+    }),
+    (result) => ({
+      order: resultMap.get(0),
+      result,
+    })
+  );
 }
 
 async function testCombinatorInReplayMode(
@@ -219,7 +225,7 @@ async function testCombinatorInReplayMode(
 
   return (
     tracker
-      .createCombinatorInReplayMode(combinatorConstructor, promises)
+      .createCombinator(combinatorConstructor, promises)
       // To make sure it behaves like testCombinatorInProcessingMode and always succeeds
       .transform(
         (v) => v,

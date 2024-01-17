@@ -207,30 +207,26 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
       return WRAPPED_PROMISE_PENDING as WrappedPromise<any>;
     }
 
-    if (this.journal.isProcessing()) {
-      return wrapDeeply(
-        this.promiseCombinatorTracker.createCombinatorInProcessingMode(
-          combinatorConstructor,
-          promises
-        ),
-        () => {
-          this.scheduleSuspension();
-        }
-      );
-    } else {
-      return this.promiseCombinatorTracker.createCombinatorInReplayMode(
+    return wrapDeeply(
+      this.promiseCombinatorTracker.createCombinator(
         combinatorConstructor,
         promises
-      );
-    }
+      ),
+      () => {
+        // We must check the next entry, as wrapDeeply executes the outer wrap first and the inner afterward
+        // Because in the inner wrap increments the journal index, we must check for that.
+        if (this.journal.isUnResolved(this.getUserCodeJournalIndex() + 1)) {
+          this.scheduleSuspension();
+        }
+      }
+    );
   }
 
-  readCombinatorOrderEntry(combinatorId: number): PromiseId[] {
+  readCombinatorOrderEntry(combinatorId: number): PromiseId[] | undefined {
     const wannabeCombinatorEntry = this.journal.readNextReplayEntry();
     if (wannabeCombinatorEntry === undefined) {
-      throw RetryableError.internal(
-        `Illegal state: expected replay message for combinator, but none found for ${this.journal.getUserCodeJournalIndex()}`
-      );
+      // We're in processing mode
+      return undefined;
     }
     if (wannabeCombinatorEntry.messageType !== COMBINATOR_ENTRY_MESSAGE) {
       throw RetryableError.internal(
@@ -261,8 +257,6 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
 
   writeCombinatorOrderEntry(combinatorId: number, order: PromiseId[]) {
     if (this.journal.isProcessing()) {
-      this.journal.incrementUserCodeIndex();
-
       const combinatorMessage: CombinatorEntryMessage = {
         combinatorId,
         journalEntriesOrder: order.map((pid) => pid.id),
