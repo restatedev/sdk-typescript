@@ -71,15 +71,15 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
     private readonly protocolMode: ProtocolMode,
     private readonly suspensionMillis: number = 30_000
   ) {
+    this.journal = new Journal(this.invocation);
     this.localStateStore = invocation.localStateStore;
-    this.console = createRestateConsole(invocation.loggerContext);
+    this.console = createRestateConsole(invocation.loggerContext, () => !this.journal.isReplaying());
 
     this.restateContext = new RestateGrpcContextImpl(
       this.invocation.id,
       this.invocation.method.service,
       this
     );
-    this.journal = new Journal(this.invocation);
   }
 
   public handleMessage(m: Message): boolean {
