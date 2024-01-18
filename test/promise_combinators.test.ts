@@ -25,6 +25,8 @@ import {
   END_MESSAGE,
   combinatorEntryMessage,
   sleepMessage,
+  sideEffectMessage,
+  ackMessage,
 } from "./protoutils";
 import { TestGreeter, TestResponse } from "../src/generated/proto/test";
 import { SLEEP_ENTRY_MESSAGE_TYPE } from "../src/types/protocol";
@@ -155,6 +157,81 @@ describe("AwakeableSleepRaceGreeter", () => {
 
     expect(result).toStrictEqual([
       outputMessage(greetResponse(`Hello timed-out`)),
+      END_MESSAGE,
+    ]);
+  });
+});
+
+class AwakeableSleepRaceInterleavedWithSideEffectGreeter
+  implements TestGreeter
+{
+  async greet(): Promise<TestResponse> {
+    const ctx = restate.useContext(this);
+
+    const awakeable = ctx.awakeable<string>();
+    const sleep = ctx.sleep(1);
+    const combinatorPromise = ctx.race([awakeable.promise, sleep]);
+
+    await ctx.sideEffect<string>(async () => "sideEffect");
+
+    // Because the combinatorPromise generates the message when awaited, the entries order here should be:
+    // * AwakeableEntry
+    // * SleepEntry
+    // * SideEffectEntry
+    // * CombinatorOrderEntry
+    const result = await combinatorPromise;
+
+    if (typeof result === "string") {
+      return TestResponse.create({
+        greeting: `Hello ${result} for ${awakeable.id}`,
+      });
+    }
+
+    return TestResponse.create({
+      greeting: `Hello timed-out`,
+    });
+  }
+}
+
+describe("AwakeableSleepRaceInterleavedWithSideEffectGreeter", () => {
+  it("generates the combinator entry after the side effect, when processing first time", async () => {
+    const result = await new TestDriver(
+      new AwakeableSleepRaceInterleavedWithSideEffectGreeter(),
+      [
+        startMessage(),
+        inputMessage(greetRequest("Till")),
+        completionMessage(1, JSON.stringify("Francesco")),
+        ackMessage(3),
+      ]
+    ).run();
+
+    expect(result.length).toStrictEqual(6);
+    expect(result[0]).toStrictEqual(awakeableMessage());
+    expect(result[1].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
+    expect(result.slice(2)).toStrictEqual([
+      sideEffectMessage("sideEffect"),
+      combinatorEntryMessage(0, [1]),
+      outputMessage(greetResponse(`Hello Francesco for ${getAwakeableId(1)}`)),
+      END_MESSAGE,
+    ]);
+  });
+
+  it("generates the combinator entry after the side effect, when replaying up to sleep", async () => {
+    const result = await new TestDriver(
+      new AwakeableSleepRaceInterleavedWithSideEffectGreeter(),
+      [
+        startMessage(),
+        inputMessage(greetRequest("Till")),
+        awakeableMessage("Francesco"),
+        sleepMessage(1),
+        ackMessage(3),
+      ]
+    ).run();
+
+    expect(result).toStrictEqual([
+      sideEffectMessage("sideEffect"),
+      combinatorEntryMessage(0, [1]),
+      outputMessage(greetResponse(`Hello Francesco for ${getAwakeableId(1)}`)),
       END_MESSAGE,
     ]);
   });

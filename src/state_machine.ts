@@ -207,18 +207,12 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
       return WRAPPED_PROMISE_PENDING as WrappedPromise<any>;
     }
 
-    return wrapDeeply(
-      this.promiseCombinatorTracker.createCombinator(
-        combinatorConstructor,
-        promises
-      ),
-      () => {
-        // We must check the next entry, as wrapDeeply executes the outer wrap first and the inner afterward
-        // Because in the inner wrap increments the journal index, we must check for that.
-        if (this.journal.isUnResolved(this.getUserCodeJournalIndex() + 1)) {
-          this.scheduleSuspension();
-        }
-      }
+    // We don't need the promise wrapping here to schedule a suspension,
+    // because the combined promises will already have that, so once we call then() on them,
+    // if we have to suspend we will suspend.
+    return this.promiseCombinatorTracker.createCombinator(
+      combinatorConstructor,
+      promises
     );
   }
 
@@ -487,13 +481,15 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
     this.clearSuspensionTimeout();
   }
 
+  /**
+   * This method is invoked when we hit a suspension point.
+   *
+   * A suspension point is everytime the user "await"s a Promise returned by RestateContext that might be completed at a later point in time by a CompletionMessage.
+   */
   private scheduleSuspension() {
     // If there was already a timeout set, we want to reset the time to postpone suspension as long as we make progress.
     // So we first clear the old timeout, and then we set a new one.
-    if (this.suspensionTimeout !== undefined) {
-      clearTimeout(this.suspensionTimeout);
-      this.suspensionTimeout = undefined;
-    }
+    this.clearSuspensionTimeout();
 
     const delay = this.getSuspensionMillis();
     this.console.debugJournalMessage(
