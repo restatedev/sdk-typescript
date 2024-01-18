@@ -234,7 +234,7 @@ export class LambdaRestateServer extends BaseRestateServer {
       const connection = new LambdaConnection(alreadyCompleted);
       const stateMachine = new StateMachine(
         connection,
-        journalBuilder.build(),
+        journalBuilder.build(event.requestContext.requestId),
         ProtocolMode.REQUEST_RESPONSE
       );
       await stateMachine.invoke();

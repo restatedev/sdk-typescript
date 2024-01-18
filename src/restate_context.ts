@@ -44,6 +44,12 @@ export interface RestateBaseContext {
   rand: Rand;
 
   /**
+   * Console to use for logging. It attaches to each log message some contextual information,
+   * such as invoked service method and invocation id, and automatically excludes logs during replay.
+   */
+  console: Console;
+
+  /**
    * Get/retrieve state from the Restate runtime.
    * Note that state objects are serialized with `Buffer.from(JSON.stringify(theObject))`
    * and deserialized with `JSON.parse(value.toString()) as T`.

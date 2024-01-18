@@ -91,7 +91,8 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
     public readonly serviceName: string,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private readonly stateMachine: StateMachine<any, any>,
-    public readonly rand: Rand = new RandImpl(id)
+    public readonly rand: Rand = new RandImpl(id),
+    public readonly console: Console = stateMachine.console
   ) {}
 
   // DON'T make this function async!!! see sideEffect comment for details.
@@ -526,6 +527,7 @@ export class RpcContextImpl implements RpcContext {
     private readonly ctx: RestateGrpcContext,
     public readonly id: Buffer = ctx.id,
     public readonly rand: Rand = ctx.rand,
+    public readonly console: Console = ctx.console,
     public readonly serviceName: string = ctx.serviceName
   ) {}
 

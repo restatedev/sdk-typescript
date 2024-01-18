@@ -30,6 +30,7 @@ import {
 import { RestateStreamConsumer } from "./connection/connection";
 import { LocalStateStore } from "./local_state_store";
 import { ensureError } from "./types/errors";
+import { LoggerContext } from "./logger";
 
 enum State {
   ExpectingStart = 0,
@@ -163,7 +164,7 @@ export class InvocationBuilder<I, O> implements RestateStreamConsumer {
     return this.state === State.Complete;
   }
 
-  public build(): Invocation<I, O> {
+  public build(awsRequestId?: string): Invocation<I, O> {
     if (!this.isComplete()) {
       throw new Error(
         `Cannot build invocation. Not all data present: ${JSON.stringify(this)}`
@@ -176,13 +177,15 @@ export class InvocationBuilder<I, O> implements RestateStreamConsumer {
       this.nbEntriesToReplay!,
       this.replayEntries!,
       this.invocationValue!,
-      this.localStateStore!
+      this.localStateStore!,
+      awsRequestId
     );
   }
 }
 
 export class Invocation<I, O> {
   public readonly logPrefix;
+  public readonly loggerContext: LoggerContext;
   constructor(
     public readonly method: HostedGrpcServiceMethod<I, O>,
     public readonly id: Buffer,
@@ -190,12 +193,20 @@ export class Invocation<I, O> {
     public readonly nbEntriesToReplay: number,
     public readonly replayEntries: Map<number, Message>,
     public readonly invocationValue: InvocationValue,
-    public readonly localStateStore: LocalStateStore
+    public readonly localStateStore: LocalStateStore,
+    awsRequestId?: string
   ) {
     this.logPrefix = `[${makeFqServiceName(
-      this.method.packge,
+      this.method.pkg,
       this.method.service
     )}/${this.method.method.name}] [${this.debugId}]`;
+    this.loggerContext = new LoggerContext(
+      debugId,
+      this.method.pkg,
+      this.method.service,
+      this.method.method.name,
+      awsRequestId
+    );
   }
 }
 

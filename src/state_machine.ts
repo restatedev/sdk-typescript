@@ -38,6 +38,7 @@ import {
   failureToTerminalError,
 } from "./types/errors";
 import { LocalStateStore } from "./local_state_store";
+import { createRestateConsole } from "./logger";
 
 export class StateMachine<I, O> implements RestateStreamConsumer {
   private journal: Journal<I, O>;
@@ -62,6 +63,8 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
   // Suspension timeout that gets set and cleared based on completion messages;
   private suspensionTimeout?: NodeJS.Timeout;
 
+  console: Console;
+
   constructor(
     private readonly connection: Connection,
     private readonly invocation: Invocation<I, O>,
@@ -69,6 +72,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
     private readonly suspensionMillis: number = 30_000
   ) {
     this.localStateStore = invocation.localStateStore;
+    this.console = createRestateConsole(invocation.loggerContext);
 
     this.restateContext = new RestateGrpcContextImpl(
       this.invocation.id,
@@ -487,7 +491,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
 
   public getFullServiceName(): string {
     return makeFqServiceName(
-      this.invocation.method.packge,
+      this.invocation.method.pkg,
       this.invocation.method.service
     );
   }
