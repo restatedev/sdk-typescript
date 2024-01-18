@@ -431,6 +431,26 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
     );
   }
 
+  any<T extends readonly CombineablePromise<unknown>[] | []>(
+    values: T
+  ): Promise<Awaited<T[number]>> {
+    return this.stateMachine.createCombinator(
+      Promise.any.bind(Promise),
+      this.extractPromisesWithIds(values)
+    );
+  }
+
+  allSettled<T extends readonly CombineablePromise<unknown>[] | []>(
+    values: T
+  ): Promise<{
+    -readonly [P in keyof T]: PromiseSettledResult<Awaited<T[P]>>;
+  }> {
+    return this.stateMachine.createCombinator(
+      Promise.allSettled.bind(Promise),
+      this.extractPromisesWithIds(values)
+    );
+  }
+
   private extractPromisesWithIds(
     promises: Iterable<CombineablePromise<any>>
   ): Array<{ id: PromiseId; promise: Promise<any> }> {
@@ -684,6 +704,20 @@ export class RpcContextImpl implements RpcContext {
     values: T
   ): Promise<Awaited<T[number]>> {
     return this.ctx.race(values);
+  }
+
+  any<T extends readonly CombineablePromise<unknown>[] | []>(
+    values: T
+  ): Promise<Awaited<T[number]>> {
+    return this.ctx.any(values);
+  }
+
+  allSettled<T extends readonly CombineablePromise<unknown>[] | []>(
+    values: T
+  ): Promise<{
+    -readonly [P in keyof T]: PromiseSettledResult<Awaited<T[P]>>;
+  }> {
+    return this.ctx.allSettled(values);
   }
 
   grpcChannel(): RestateGrpcChannel {
