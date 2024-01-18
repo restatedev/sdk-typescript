@@ -56,7 +56,6 @@ import {
   EXPONENTIAL_BACKOFF,
   RetrySettings,
 } from "./utils/public_utils";
-import { rlog } from "./utils/logger";
 import { Client, SendClient } from "./types/router";
 import { RpcRequest, RpcResponse } from "./generated/proto/dynrpc";
 import { requestFromArgs } from "./utils/assumpsions";
@@ -89,10 +88,10 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
   constructor(
     public readonly id: Buffer,
     public readonly serviceName: string,
+    public readonly console: Console,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private readonly stateMachine: StateMachine<any, any>,
-    public readonly rand: Rand = new RandImpl(id),
-    public readonly console: Console = stateMachine.console
+    public readonly rand: Rand = new RandImpl(id)
   ) {}
 
   // DON'T make this function async!!! see sideEffect comment for details.
@@ -320,6 +319,7 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
 
     const sleep = (millis: number) => this.sleepInternal(millis);
     return executeWithRetries(
+      this.console,
       retryPolicy,
       executeAndLogSideEffect,
       sleep
@@ -450,6 +450,7 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
 }
 
 async function executeWithRetries<T>(
+  console: Console,
   retrySettings: RetrySettings,
   executeAndLogSideEffect: () => Promise<T>,
   sleep: (millis: number) => Promise<void>
@@ -489,20 +490,20 @@ async function executeWithRetries<T>(
 
       const error = ensureError(e);
 
-      rlog.debug(
+      console.debug(
         "Error while executing side effect '%s': %s - %s",
         name,
         error.name,
         error.message
       );
       if (error.stack) {
-        rlog.debug(error.stack);
+        console.debug(error.stack);
       }
 
       if (retriesLeft > 0) {
-        rlog.debug("Retrying in %d ms", currentDelayMs);
+        console.debug("Retrying in %d ms", currentDelayMs);
       } else {
-        rlog.debug("No retries left.");
+        console.debug("No retries left.");
         throw new TerminalError(
           `Retries exhausted for ${name}. Last error: ${error.name}: ${error.message}`,
           {

@@ -16,11 +16,11 @@ import {
   StartMessage,
 } from "../src/types/protocol";
 import { Connection } from "../src/connection/connection";
-import { printMessageAsJson } from "../src/utils/utils";
+import { formatMessageAsJson } from "../src/utils/utils";
 import { Message } from "../src/types/types";
 import { HostedGrpcServiceMethod } from "../src/types/grpc";
 import { ProtocolMode } from "../src/generated/proto/discovery";
-import { rlog } from "../src/utils/logger";
+import { rlog } from "../src/logger";
 import { StateMachine } from "../src/state_machine";
 import { InvocationBuilder } from "../src/invocation";
 import { protoMetadata } from "../src/generated/proto/test";
@@ -156,7 +156,7 @@ export class TestDriver<I, O> implements Connection {
         ${
           msg.message instanceof Uint8Array
             ? (msg.message as Uint8Array).toString()
-            : printMessageAsJson(msg.message)
+            : formatMessageAsJson(msg.message)
         }`
     );
     return Promise.resolve();

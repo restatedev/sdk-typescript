@@ -13,7 +13,7 @@ import stream from "stream";
 import { streamDecoder } from "../io/decoder";
 import { Connection, RestateStreamConsumer } from "./connection";
 import { Message } from "../types/types";
-import { rlog } from "../utils/logger";
+import { rlog } from "../logger";
 import { finished } from "stream/promises";
 import { BufferedConnection } from "./buffered_connection";
 

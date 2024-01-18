@@ -10,7 +10,7 @@
  */
 
 // Use our prefixed logger instead of default console logging
-import "./utils/logger";
+import "./utils/message_logger";
 import { RetrySettings } from "./utils/public_utils";
 import { Client, SendClient } from "./types/router";
 

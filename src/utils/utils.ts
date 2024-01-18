@@ -93,7 +93,7 @@ export function jsonSafeAny(key: string, value: any): any {
   }
 }
 
-export function printMessageAsJson(obj: any): string {
+export function formatMessageAsJson(obj: any): string {
   const newObj = { ...(obj as Record<string, unknown>) };
   for (const [key, value] of Object.entries(newObj)) {
     if (Buffer.isBuffer(value)) {

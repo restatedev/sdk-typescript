@@ -9,7 +9,7 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { rlog } from "../utils/logger";
+import { rlog } from "../logger";
 import {
   APIGatewayProxyEvent,
   APIGatewayProxyEventV2,
@@ -189,11 +189,8 @@ export class LambdaRestateServer extends BaseRestateServer {
     } else if (pathSegments[pathSegments.length - 1] === "discover") {
       return this.handleDiscovery();
     } else {
-      const msg =
-        "Invalid path: path doesn't end in /invoke/SvcName/MethodName and also not in /discover: " +
-        path;
-      rlog.error(msg);
-      rlog.trace();
+      const msg = `Invalid path: path doesn't end in /invoke/SvcName/MethodName and also not in /discover: ${path}`;
+      rlog.trace(msg);
       return this.toErrorResponse(500, msg);
     }
   }

@@ -95,7 +95,7 @@ export const KNOWN_MESSAGE_TYPES = new Set([
   SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
 ]);
 
-export const PROTOBUF_MESSAGE_NAME_BY_TYPE = new Map<bigint, string>([
+const PROTOBUF_MESSAGE_NAME_BY_TYPE = new Map<bigint, string>([
   [START_MESSAGE_TYPE, "StartMessage"],
   [COMPLETION_MESSAGE_TYPE, "CompletionMessage"],
   [SUSPENSION_MESSAGE_TYPE, "SuspensionMessage"],
@@ -114,6 +114,12 @@ export const PROTOBUF_MESSAGE_NAME_BY_TYPE = new Map<bigint, string>([
   [COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE, "CompleteAwakeableEntryMessage"],
   [SIDE_EFFECT_ENTRY_MESSAGE_TYPE, "SideEffectEntryMessage"],
 ]);
+
+export function formatMessageType(messageType: bigint) {
+  return (
+    PROTOBUF_MESSAGE_NAME_BY_TYPE.get(messageType) || messageType.toString()
+  );
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const PROTOBUF_MESSAGES: Array<[bigint, any]> = [

@@ -18,13 +18,13 @@ import {
   ServiceDiscoveryResponse,
 } from "../generated/proto/discovery";
 import { BaseRestateServer, ServiceOpts } from "./base_restate_server";
-import { rlog } from "../utils/logger";
 import { RestateHttp2Connection } from "../connection/http_connection";
 import { HostedGrpcServiceMethod } from "../types/grpc";
 import { ensureError } from "../types/errors";
 import { InvocationBuilder } from "../invocation";
 import { StateMachine } from "../state_machine";
 import { KeyedRouter, UnKeyedRouter } from "../types/router";
+import { rlog } from "../logger";
 
 export interface RestateServer {
   // RestateServer is a http2 server handler that you can pass to http2.createServer.

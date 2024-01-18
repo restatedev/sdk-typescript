@@ -14,7 +14,7 @@ import {
   jsonDeserialize,
   jsonSafeAny,
   jsonSerialize,
-  printMessageAsJson,
+  formatMessageAsJson,
 } from "../src/utils/utils";
 import { RandImpl } from "../src/utils/rand";
 
@@ -39,7 +39,7 @@ describe("JSON printing", () => {
       b: 42n,
     };
 
-    printMessageAsJson(myType);
+    formatMessageAsJson(myType);
   });
 });
 

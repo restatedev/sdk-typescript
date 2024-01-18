@@ -21,7 +21,7 @@ import {
 import {
   CompletablePromise,
   makeFqServiceName,
-  printMessageAsJson,
+  formatMessageAsJson,
 } from "./utils/utils";
 import {
   POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
@@ -86,7 +86,7 @@ export class InvocationBuilder<I, O> implements RestateStreamConsumer {
           throw new Error(
             `Journal builder is getting a message after the journal was complete. entries-to-replay: ${
               this.nbEntriesToReplay
-            }, message: ${printMessageAsJson(m)}`
+            }, message: ${formatMessageAsJson(m)}`
           );
       }
 
@@ -123,7 +123,7 @@ export class InvocationBuilder<I, O> implements RestateStreamConsumer {
       };
     } else {
       throw new Error(
-        `PollInputStreamEntry neither contains value nor failure: ${printMessageAsJson(
+        `PollInputStreamEntry neither contains value nor failure: ${formatMessageAsJson(
           m
         )}`
       );
@@ -213,7 +213,7 @@ export class Invocation<I, O> {
 function checkState(state: State, expected: bigint, m: Message) {
   if (m.messageType !== expected) {
     throw new Error(
-      `Unexpected message in state ${state}: ${printMessageAsJson(m)}`
+      `Unexpected message in state ${state}: ${formatMessageAsJson(m)}`
     );
   }
 }

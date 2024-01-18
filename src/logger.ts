@@ -116,4 +116,4 @@ export function createRestateConsole(
  *
  * This should be used only in cases where no contextual info is available.
  */
-export const simpleConsole = createRestateConsole();
+export const rlog = createRestateConsole();
