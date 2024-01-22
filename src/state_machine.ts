@@ -16,8 +16,8 @@ import { ProtocolMode } from "./generated/proto/discovery";
 import { Message } from "./types/types";
 import { CompletablePromise, makeFqServiceName } from "./utils/utils";
 import {
-  debugInvokeMessage,
-  debugJournalMessage,
+  createStateMachineConsole,
+  StateMachineConsole,
 } from "./utils/message_logger";
 import { clearTimeout } from "timers";
 import {
@@ -66,7 +66,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
   // Suspension timeout that gets set and cleared based on completion messages;
   private suspensionTimeout?: NodeJS.Timeout;
 
-  console: Console;
+  console: StateMachineConsole;
 
   constructor(
     private readonly connection: Connection,
@@ -77,7 +77,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
   ) {
     this.journal = new Journal(this.invocation);
     this.localStateStore = invocation.localStateStore;
-    this.console = createRestateConsole(loggerContext);
+    this.console = createStateMachineConsole(loggerContext);
 
     this.restateContext = new RestateGrpcContextImpl(
       this.invocation.id,
@@ -95,8 +95,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
     }
 
     if (m.messageType === COMPLETION_MESSAGE_TYPE) {
-      debugJournalMessage(
-        this.console,
+      this.console.debugJournalMessage(
         "Received completion message from Restate, adding to journal.",
         m.messageType,
         m.message
@@ -105,8 +104,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
         m.message as p.CompletionMessage
       );
     } else if (m.messageType === ENTRY_ACK_MESSAGE_TYPE) {
-      debugJournalMessage(
-        this.console,
+      this.console.debugJournalMessage(
         "Received entry ack message from Restate, adding to journal.",
         m.messageType,
         m.message
@@ -148,8 +146,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
 
     // Only send the message to restate if we are not in replaying mode
     if (this.journal.isProcessing()) {
-      debugJournalMessage(
-        this.console,
+      this.console.debugJournalMessage(
         "Adding message to journal and sending to Restate",
         messageType,
         message
@@ -165,8 +162,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
         )
       );
     } else {
-      debugJournalMessage(
-        this.console,
+      this.console.debugJournalMessage(
         "Matched and replayed message from journal",
         messageType,
         message
@@ -216,9 +212,9 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
     }
 
     if (this.journal.nextEntryWillBeReplayed()) {
-      debugInvokeMessage(this.console, "Resuming (replaying) function.");
+      this.console.debugInvokeMessage("Resuming (replaying) function.");
     } else {
-      debugInvokeMessage(this.console, "Invoking function.");
+      this.console.debugInvokeMessage("Invoking function.");
     }
 
     let resultBytes: Promise<Uint8Array>;
@@ -271,22 +267,20 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
           if (!this.journal.outputMsgWasReplayed()) {
             this.send(msg);
 
-            debugJournalMessage(
-              this.console,
+            this.console.debugJournalMessage(
               "Journaled and sent output message",
               msg.messageType,
               msg.message
             );
           } else {
-            debugJournalMessage(
-              this.console,
+            this.console.debugJournalMessage(
               "Replayed and matched output message from journal",
               msg.messageType,
               msg.message
             );
           }
 
-          debugInvokeMessage(this.console, "Function completed successfully.");
+          this.console.debugInvokeMessage("Function completed successfully.");
 
           // Mark the end of the invocation
           this.send(new Message(END_MESSAGE_TYPE, EndMessage.create()));
@@ -335,8 +329,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
 
   private sendRetryableError(e: Error) {
     const msg = new Message(ERROR_MESSAGE_TYPE, errorToErrorMessage(e));
-    debugJournalMessage(
-      this.console,
+    this.console.debugJournalMessage(
       "Invocation ended with retryable error.",
       msg.messageType,
       msg.message
@@ -352,8 +345,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
         failure: e.toFailure(),
       })
     );
-    debugJournalMessage(
-      this.console,
+    this.console.debugJournalMessage(
       "Invocation ended with failure message.",
       msg.messageType,
       msg.message
@@ -411,8 +403,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
     }
 
     const delay = this.getSuspensionMillis();
-    debugJournalMessage(
-      this.console,
+    this.console.debugJournalMessage(
       "Scheduling suspension in " + delay + " ms"
     );
 
@@ -458,8 +449,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
       })
     );
 
-    debugJournalMessage(
-      this.console,
+    this.console.debugJournalMessage(
       "Writing suspension message to journal.",
       msg.messageType,
       msg.message
@@ -470,7 +460,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
       this.send(msg);
     }
 
-    debugInvokeMessage(this.console, "Suspending function.");
+    this.console.debugInvokeMessage("Suspending function.");
 
     await this.finish();
   }

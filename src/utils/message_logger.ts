@@ -14,6 +14,7 @@
 
 import { formatMessageType } from "../types/protocol";
 import { formatMessageAsJson } from "./utils";
+import { createRestateConsole, LoggerContext } from "../logger";
 
 /**
  * The environment variable which is read to determine the debug log settings.
@@ -66,25 +67,46 @@ function readLogLevel(): RestateDebugLogLevel {
 
 const log_level = readLogLevel();
 
-export function debugInvokeMessage(console: Console, msg: string) {
-  if (log_level >= RestateDebugLogLevel.INVOKE) {
-    console.debug(msg);
-  }
-}
+export type StateMachineConsole = Console & {
+  debugInvokeMessage: (msg: string) => void;
 
-export function debugJournalMessage(
-  console: Console,
-  logMessage: string,
-  messageType?: bigint,
-  message?: any
-) {
-  if (log_level >= RestateDebugLogLevel.JOURNAL) {
-    const type =
-      messageType !== undefined ? " ; " + formatMessageType(messageType) : "";
-    const journalEvent =
-      log_level >= RestateDebugLogLevel.JOURNAL_VERBOSE && message !== undefined
-        ? " : " + formatMessageAsJson(message)
-        : "";
-    console.debug(`${logMessage}${type}${journalEvent}`);
-  }
+  debugJournalMessage: (
+    logMessage: string,
+    messageType?: bigint,
+    message?: any
+  ) => void;
+};
+
+export function createStateMachineConsole(
+  context: LoggerContext
+): StateMachineConsole {
+  const console = createRestateConsole(context);
+
+  Object.defineProperties(console, {
+    debugInvokeMessage: {
+      value: (msg: string) => {
+        if (log_level >= RestateDebugLogLevel.INVOKE) {
+          console.debug(msg);
+        }
+      },
+    },
+    debugJournalMessage: {
+      value: (logMessage: string, messageType?: bigint, message?: any) => {
+        if (log_level >= RestateDebugLogLevel.JOURNAL) {
+          const type =
+            messageType !== undefined
+              ? " ; " + formatMessageType(messageType)
+              : "";
+          const journalEvent =
+            log_level >= RestateDebugLogLevel.JOURNAL_VERBOSE &&
+            message !== undefined
+              ? " : " + formatMessageAsJson(message)
+              : "";
+          console.debug(`${logMessage}${type}${journalEvent}`);
+        }
+      },
+    },
+  });
+
+  return console as StateMachineConsole;
 }
