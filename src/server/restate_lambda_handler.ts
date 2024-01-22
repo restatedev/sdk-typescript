@@ -229,10 +229,14 @@ export class LambdaRestateServer extends BaseRestateServer {
 
       // set up and invoke the state machine
       const connection = new LambdaConnection(alreadyCompleted);
+      const invocation = journalBuilder.build();
       const stateMachine = new StateMachine(
         connection,
-        journalBuilder.build(event.requestContext.requestId),
-        ProtocolMode.REQUEST_RESPONSE
+        invocation,
+        ProtocolMode.REQUEST_RESPONSE,
+        invocation.inferLoggerContext({
+          AWSRequestId: event.requestContext.requestId,
+        })
       );
       await stateMachine.invoke();
       const result = await connection.getResult();

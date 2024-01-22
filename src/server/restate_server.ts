@@ -275,10 +275,12 @@ async function handleInvocation<I, O>(
   }
 
   // step 2: create the state machine
+  const invocation = journalBuilder.build();
   const stateMachine = new StateMachine<I, O>(
     connection,
-    journalBuilder.build(),
-    ProtocolMode.BIDI_STREAM
+    invocation,
+    ProtocolMode.BIDI_STREAM,
+    invocation.inferLoggerContext()
   );
   connection.pipeToConsumer(stateMachine);
 

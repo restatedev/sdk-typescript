@@ -126,7 +126,12 @@ export class TestDriver<I, O> implements Connection {
     replayMessages.forEach((el) => invocationBuilder.handleMessage(el));
     const invocation = invocationBuilder.build();
 
-    this.stateMachine = new StateMachine(this, invocation, this.protocolMode);
+    this.stateMachine = new StateMachine(
+      this,
+      invocation,
+      this.protocolMode,
+      invocation.inferLoggerContext()
+    );
   }
 
   async run(): Promise<Message[]> {

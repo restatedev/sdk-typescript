@@ -20,7 +20,7 @@ export class LoggerContext {
     packageName: string,
     serviceName: string,
     methodName: string,
-    readonly awsRequestId?: string
+    readonly additionalContext?: { [name: string]: string }
   ) {
     this.fqMethodName = packageName
       ? `${packageName}.${serviceName}/${methodName}`
@@ -33,8 +33,10 @@ function formatLogPrefix(context?: LoggerContext): string {
     return "[restate] ";
   }
   let prefix = `[restate] [${context.fqMethodName}][${context.invocationId}]`;
-  if (context.awsRequestId !== undefined) {
-    prefix = prefix + `[AWS RequestId: ${context.awsRequestId}]`;
+  if (context.additionalContext !== undefined) {
+    for (const [k, v] of Object.entries(context.additionalContext)) {
+      prefix = prefix + `[${k}: ${v}]`;
+    }
   }
   return prefix;
 }
@@ -46,7 +48,7 @@ export function createRestateConsole(
   const prefix = formatLogPrefix(context);
   const restate_logger = Object.create(console);
 
-  const shouldLog: () => boolean = filter || (() => true);
+  const shouldLog: () => boolean = filter ?? (() => true);
 
   restate_logger.log = (message?: any, ...optionalParams: any[]) => {
     if (!shouldLog()) {

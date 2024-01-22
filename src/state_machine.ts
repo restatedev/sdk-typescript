@@ -41,7 +41,7 @@ import {
   failureToTerminalError,
 } from "./types/errors";
 import { LocalStateStore } from "./local_state_store";
-import { createRestateConsole } from "./logger";
+import { createRestateConsole, LoggerContext } from "./logger";
 
 export class StateMachine<I, O> implements RestateStreamConsumer {
   private journal: Journal<I, O>;
@@ -72,20 +72,18 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
     private readonly connection: Connection,
     private readonly invocation: Invocation<I, O>,
     private readonly protocolMode: ProtocolMode,
+    loggerContext: LoggerContext,
     private readonly suspensionMillis: number = 30_000
   ) {
     this.journal = new Journal(this.invocation);
     this.localStateStore = invocation.localStateStore;
-    this.console = createRestateConsole(invocation.loggerContext);
+    this.console = createRestateConsole(loggerContext);
 
     this.restateContext = new RestateGrpcContextImpl(
       this.invocation.id,
       this.invocation.method.service,
       // The console exposed by RestateContext filters logs in replay, while the internal one is based on the ENV variables.
-      createRestateConsole(
-        invocation.loggerContext,
-        () => !this.journal.isReplaying()
-      ),
+      createRestateConsole(loggerContext, () => !this.journal.isReplaying()),
       this
     );
   }
@@ -310,7 +308,6 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
 
           const error = ensureError(e);
           this.console.trace(
-            this.invocation.logPrefix,
             "Function completed with an error: " + error.message,
             e
           );
