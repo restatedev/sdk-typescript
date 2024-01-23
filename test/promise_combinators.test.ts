@@ -30,6 +30,7 @@ import {
 } from "./protoutils";
 import { TestGreeter, TestResponse } from "../src/generated/proto/test";
 import { SLEEP_ENTRY_MESSAGE_TYPE } from "../src/types/protocol";
+import { CombineablePromise } from "../src/restate_context";
 
 class AwakeableSleepRaceGreeter implements TestGreeter {
   async greet(): Promise<TestResponse> {
@@ -38,7 +39,7 @@ class AwakeableSleepRaceGreeter implements TestGreeter {
     const awakeable = ctx.awakeable<string>();
     const sleep = ctx.sleep(1);
 
-    const result = await ctx.race([awakeable.promise, sleep]);
+    const result = await CombineablePromise.race([awakeable.promise, sleep]);
 
     if (typeof result === "string") {
       return TestResponse.create({
@@ -170,7 +171,10 @@ class AwakeableSleepRaceInterleavedWithSideEffectGreeter
 
     const awakeable = ctx.awakeable<string>();
     const sleep = ctx.sleep(1);
-    const combinatorPromise = ctx.race([awakeable.promise, sleep]);
+    const combinatorPromise = CombineablePromise.race([
+      awakeable.promise,
+      sleep,
+    ]);
 
     await ctx.sideEffect<string>(async () => "sideEffect");
 

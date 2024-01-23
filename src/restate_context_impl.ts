@@ -62,10 +62,8 @@ import { Client, SendClient } from "./types/router";
 import { RpcRequest, RpcResponse } from "./generated/proto/dynrpc";
 import { requestFromArgs } from "./utils/assumptions";
 import { RandImpl } from "./utils/rand";
-import {
-  newJournalEntryPromiseId,
-  PromiseId,
-} from "./promise_combinator_tracker";
+import { newJournalEntryPromiseId } from "./promise_combinator_tracker";
+import { WrappedPromise } from "./utils/promises";
 
 export enum CallContexType {
   None,
@@ -411,54 +409,21 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
     );
   }
 
-  // -- Combinators
-
-  all<T extends readonly CombineablePromise<unknown>[] | []>(
-    values: T
-  ): Promise<{ -readonly [P in keyof T]: Awaited<T[P]> }> {
-    return this.stateMachine.createCombinator(
-      Promise.all.bind(Promise),
-      this.extractPromisesWithIds(values)
-    ) as Promise<{ -readonly [P in keyof T]: Awaited<T[P]> }>;
-  }
-
-  race<T extends readonly CombineablePromise<unknown>[] | []>(
-    values: T
-  ): Promise<Awaited<T[number]>> {
-    return this.stateMachine.createCombinator(
-      Promise.race.bind(Promise),
-      this.extractPromisesWithIds(values)
-    ) as Promise<Awaited<T[number]>>;
-  }
-
-  any<T extends readonly CombineablePromise<unknown>[] | []>(
-    values: T
-  ): Promise<Awaited<T[number]>> {
-    return this.stateMachine.createCombinator(
-      Promise.any.bind(Promise),
-      this.extractPromisesWithIds(values)
-    ) as Promise<Awaited<T[number]>>;
-  }
-
-  allSettled<T extends readonly CombineablePromise<unknown>[] | []>(
-    values: T
-  ): Promise<{
-    -readonly [P in keyof T]: PromiseSettledResult<Awaited<T[P]>>;
-  }> {
-    return this.stateMachine.createCombinator(
-      Promise.allSettled.bind(Promise),
-      this.extractPromisesWithIds(values)
-    ) as Promise<{
-      -readonly [P in keyof T]: PromiseSettledResult<Awaited<T[P]>>;
-    }>;
-  }
-
-  private extractPromisesWithIds(
-    promises: Iterable<CombineablePromise<unknown>>
-  ): Array<{ id: PromiseId; promise: Promise<unknown> }> {
+  // Used by static methods of CombineablePromise
+  public createCombinator<T extends readonly CombineablePromise<unknown>[]>(
+    combinatorConstructor: (
+      promises: PromiseLike<unknown>[]
+    ) => Promise<unknown>,
+    promises: T
+  ): WrappedPromise<unknown> {
     const outPromises = [];
 
     for (const promise of promises) {
+      if (promise.__restate_context !== this) {
+        throw RetryableError.internal(
+          "You're mixing up CombineablePromises from different RestateContext. This is not supported."
+        );
+      }
       const index = (promise as InternalCombineablePromise<unknown>)
         .journalIndex;
       outPromises.push({
@@ -467,7 +432,10 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
       });
     }
 
-    return outPromises;
+    return this.stateMachine.createCombinator(
+      combinatorConstructor,
+      outPromises
+    );
   }
 
   // -- Various private methods
@@ -525,8 +493,8 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
     p: Promise<T>
   ): InternalCombineablePromise<T> {
     return Object.defineProperties(p, {
-      __combineable: {
-        value: undefined,
+      __restate_context: {
+        value: this,
       },
       journalIndex: {
         value: this.stateMachine.getUserCodeJournalIndex(),
@@ -695,32 +663,6 @@ export class RpcContextImpl implements RpcContext {
   }
   public sleep(millis: number): CombineablePromise<void> {
     return this.ctx.sleep(millis);
-  }
-
-  all<T extends readonly CombineablePromise<unknown>[] | []>(
-    values: T
-  ): Promise<{ -readonly [P in keyof T]: Awaited<T[P]> }> {
-    return this.ctx.all(values);
-  }
-
-  race<T extends readonly CombineablePromise<unknown>[] | []>(
-    values: T
-  ): Promise<Awaited<T[number]>> {
-    return this.ctx.race(values);
-  }
-
-  any<T extends readonly CombineablePromise<unknown>[] | []>(
-    values: T
-  ): Promise<Awaited<T[number]>> {
-    return this.ctx.any(values);
-  }
-
-  allSettled<T extends readonly CombineablePromise<unknown>[] | []>(
-    values: T
-  ): Promise<{
-    -readonly [P in keyof T]: PromiseSettledResult<Awaited<T[P]>>;
-  }> {
-    return this.ctx.allSettled(values);
   }
 
   grpcChannel(): RestateGrpcChannel {

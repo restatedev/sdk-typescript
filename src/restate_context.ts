@@ -11,11 +11,14 @@
 
 import { RetrySettings } from "./utils/public_utils";
 import { Client, SendClient } from "./types/router";
+import { RestateGrpcContextImpl } from "./restate_context_impl";
 
 /**
  * A promise that can be combined using Promise combinators in RestateContext.
  */
-export type CombineablePromise<T> = Promise<T> & { __combineable: void };
+export type CombineablePromise<T> = Promise<T> & {
+  __restate_context: RestateBaseContext;
+};
 
 /**
  * Base Restate context, which contains all operations that are the same in the gRPC-based API
@@ -193,61 +196,6 @@ export interface RestateBaseContext {
    * await ctx.sleep(1000);
    */
   sleep(millis: number): CombineablePromise<void>;
-
-  // --- Promise combinators
-
-  /**
-   * Creates a Promise that is resolved with an array of results when all of the provided Promises
-   * resolve, or rejected when any Promise is rejected.
-   *
-   * See {@link Promise.all} for more details.
-   *
-   * @param values An iterable of Promises.
-   * @returns A new Promise.
-   */
-  all<T extends readonly CombineablePromise<unknown>[] | []>(
-    values: T
-  ): Promise<{ -readonly [P in keyof T]: Awaited<T[P]> }>;
-
-  /**
-   * Creates a Promise that is resolved or rejected when any of the provided Promises are resolved
-   * or rejected.
-   *
-   * See {@link Promise.race} for more details.
-   *
-   * @param values An iterable of Promises.
-   * @returns A new Promise.
-   */
-  race<T extends readonly CombineablePromise<unknown>[] | []>(
-    values: T
-  ): Promise<Awaited<T[number]>>;
-
-  /**
-   * Creates a promise that fulfills when any of the input's promises fulfills, with this first fulfillment value.
-   * It rejects when all the input's promises reject (including when an empty iterable is passed),
-   * with an AggregateError containing an array of rejection reasons.
-   *
-   * See {@link Promise.any} for more details.
-   *
-   * @param values An iterable of Promises.
-   * @returns A new Promise.
-   */
-  any<T extends readonly CombineablePromise<unknown>[] | []>(
-    values: T
-  ): Promise<Awaited<T[number]>>;
-
-  /**
-   * Creates a promise that fulfills when all the input's promises settle (including when an empty iterable is passed),
-   * with an array of objects that describe the outcome of each promise.
-   *
-   * See {@link Promise.allSettled} for more details.
-   *
-   * @param values An iterable of Promises.
-   * @returns A new Promise.
-   */
-  allSettled<T extends readonly CombineablePromise<unknown>[] | []>(
-    values: T
-  ): Promise<{ -readonly [P in keyof T]: PromiseSettledResult<Awaited<T[P]>> }>;
 }
 
 export interface Rand {
@@ -263,6 +211,103 @@ export interface Rand {
    */
   uuidv4(): string;
 }
+
+export const CombineablePromise = {
+  /**
+   * Creates a Promise that is resolved with an array of results when all of the provided Promises
+   * resolve, or rejected when any Promise is rejected.
+   *
+   * See {@link Promise.all} for more details.
+   *
+   * @param values An iterable of Promises.
+   * @returns A new Promise.
+   */
+  all<T extends readonly CombineablePromise<unknown>[] | []>(
+    values: T
+  ): Promise<{ -readonly [P in keyof T]: Awaited<T[P]> }> {
+    if (values.length == 0) {
+      return Promise.all(values);
+    }
+
+    return (
+      values[0].__restate_context as RestateGrpcContextImpl
+    ).createCombinator(Promise.all.bind(Promise), values) as Promise<{
+      -readonly [P in keyof T]: Awaited<T[P]>;
+    }>;
+  },
+
+  /**
+   * Creates a Promise that is resolved or rejected when any of the provided Promises are resolved
+   * or rejected.
+   *
+   * See {@link Promise.race} for more details.
+   *
+   * @param values An iterable of Promises.
+   * @returns A new Promise.
+   */
+  race<T extends readonly CombineablePromise<unknown>[] | []>(
+    values: T
+  ): Promise<Awaited<T[number]>> {
+    if (values.length == 0) {
+      return Promise.race(values);
+    }
+
+    return (
+      values[0].__restate_context as RestateGrpcContextImpl
+    ).createCombinator(Promise.race.bind(Promise), values) as Promise<
+      Awaited<T[number]>
+    >;
+  },
+
+  /**
+   * Creates a promise that fulfills when any of the input's promises fulfills, with this first fulfillment value.
+   * It rejects when all the input's promises reject (including when an empty iterable is passed),
+   * with an AggregateError containing an array of rejection reasons.
+   *
+   * See {@link Promise.any} for more details.
+   *
+   * @param values An iterable of Promises.
+   * @returns A new Promise.
+   */
+  any<T extends readonly CombineablePromise<unknown>[] | []>(
+    values: T
+  ): Promise<Awaited<T[number]>> {
+    if (values.length == 0) {
+      return Promise.any(values);
+    }
+
+    return (
+      values[0].__restate_context as RestateGrpcContextImpl
+    ).createCombinator(Promise.any.bind(Promise), values) as Promise<
+      Awaited<T[number]>
+    >;
+  },
+
+  /**
+   * Creates a promise that fulfills when all the input's promises settle (including when an empty iterable is passed),
+   * with an array of objects that describe the outcome of each promise.
+   *
+   * See {@link Promise.allSettled} for more details.
+   *
+   * @param values An iterable of Promises.
+   * @returns A new Promise.
+   */
+  allSettled<T extends readonly CombineablePromise<unknown>[] | []>(
+    values: T
+  ): Promise<{
+    -readonly [P in keyof T]: PromiseSettledResult<Awaited<T[P]>>;
+  }> {
+    if (values.length == 0) {
+      return Promise.allSettled(values);
+    }
+
+    return (
+      values[0].__restate_context as RestateGrpcContextImpl
+    ).createCombinator(Promise.allSettled.bind(Promise), values) as Promise<{
+      -readonly [P in keyof T]: PromiseSettledResult<Awaited<T[P]>>;
+    }>;
+  },
+};
 
 // ----------------------------------------------------------------------------
 //  types and functions for the gRPC-based API
