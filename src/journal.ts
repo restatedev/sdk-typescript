@@ -475,7 +475,7 @@ export class Journal<I, O> {
 }
 
 export class JournalEntry {
-  public completablePromise: CompletablePromise<any>;
+  public completablePromise: CompletablePromise<unknown>;
 
   constructor(
     readonly messageType: bigint,

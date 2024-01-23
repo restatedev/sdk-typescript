@@ -419,7 +419,7 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
     return this.stateMachine.createCombinator(
       Promise.all.bind(Promise),
       this.extractPromisesWithIds(values)
-    );
+    ) as Promise<{ -readonly [P in keyof T]: Awaited<T[P]> }>;
   }
 
   race<T extends readonly CombineablePromise<unknown>[] | []>(
@@ -428,7 +428,7 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
     return this.stateMachine.createCombinator(
       Promise.race.bind(Promise),
       this.extractPromisesWithIds(values)
-    );
+    ) as Promise<Awaited<T[number]>>;
   }
 
   any<T extends readonly CombineablePromise<unknown>[] | []>(
@@ -437,7 +437,7 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
     return this.stateMachine.createCombinator(
       Promise.any.bind(Promise),
       this.extractPromisesWithIds(values)
-    );
+    ) as Promise<Awaited<T[number]>>;
   }
 
   allSettled<T extends readonly CombineablePromise<unknown>[] | []>(
@@ -448,16 +448,19 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
     return this.stateMachine.createCombinator(
       Promise.allSettled.bind(Promise),
       this.extractPromisesWithIds(values)
-    );
+    ) as Promise<{
+      -readonly [P in keyof T]: PromiseSettledResult<Awaited<T[P]>>;
+    }>;
   }
 
   private extractPromisesWithIds(
-    promises: Iterable<CombineablePromise<any>>
-  ): Array<{ id: PromiseId; promise: Promise<any> }> {
+    promises: Iterable<CombineablePromise<unknown>>
+  ): Array<{ id: PromiseId; promise: Promise<unknown> }> {
     const outPromises = [];
 
     for (const promise of promises) {
-      const index = (promise as InternalCombineablePromise<any>).journalIndex;
+      const index = (promise as InternalCombineablePromise<unknown>)
+        .journalIndex;
       outPromises.push({
         id: newJournalEntryPromiseId(index),
         promise: promise,

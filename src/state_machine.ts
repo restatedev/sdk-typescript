@@ -200,11 +200,13 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
   // -- Methods related to combinators to wire up promise combinator API with PromiseCombinatorTracker
 
   public createCombinator(
-    combinatorConstructor: (promises: PromiseLike<any>[]) => Promise<any>,
-    promises: Array<{ id: PromiseId; promise: Promise<any> }>
+    combinatorConstructor: (
+      promises: PromiseLike<unknown>[]
+    ) => Promise<unknown>,
+    promises: Array<{ id: PromiseId; promise: Promise<unknown> }>
   ) {
     if (this.stateMachineClosed) {
-      return WRAPPED_PROMISE_PENDING as WrappedPromise<any>;
+      return WRAPPED_PROMISE_PENDING as WrappedPromise<unknown>;
     }
 
     // We don't need the promise wrapping here to schedule a suspension,

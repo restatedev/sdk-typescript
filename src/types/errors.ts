@@ -13,9 +13,8 @@
 
 import { ErrorMessage, Failure } from "../generated/proto/protocol";
 import { formatMessageAsJson } from "../utils/utils";
-import { Message } from "./types";
-import { JournalEntry } from "../journal";
 import { FailureWithTerminal } from "../generated/proto/javascript";
+import * as p from "./protocol";
 
 export enum ErrorCodes {
   /**
@@ -214,17 +213,23 @@ export class RetryableError extends RestateError {
 
   public static journalMismatch(
     journalIndex: number,
-    replayMessage: Message,
-    journalEntry: JournalEntry
+    actualEntry: {
+      messageType: bigint;
+      message: p.ProtocolMessage | Uint8Array;
+    },
+    expectedEntry: {
+      messageType: bigint;
+      message: p.ProtocolMessage | Uint8Array;
+    }
   ) {
     const msg = `Journal mismatch: Replayed journal entries did not correspond to the user code. The user code has to be deterministic!
         The journal entry at position ${journalIndex} was:
         - In the user code: type: ${
-          journalEntry.messageType
-        }, message:${formatMessageAsJson(journalEntry.message)}
+          expectedEntry.messageType
+        }, message:${formatMessageAsJson(expectedEntry.message)}
         - In the replayed messages: type: ${
-          replayMessage.messageType
-        }, message: ${formatMessageAsJson(replayMessage.message)}`;
+          actualEntry.messageType
+        }, message: ${formatMessageAsJson(actualEntry.message)}`;
     return new RetryableError(msg, {
       errorCode: RestateErrorCodes.JOURNAL_MISMATCH,
     });

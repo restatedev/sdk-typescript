@@ -162,14 +162,14 @@ describe("PromiseCombinatorTracker with Promise.all", () => {
 // -- Some utility methods for these tests
 
 function generateTestPromises(n: number): {
-  completers: Array<CompletablePromise<any>>;
-  promises: Array<{ id: PromiseId; promise: Promise<any> }>;
+  completers: Array<CompletablePromise<unknown>>;
+  promises: Array<{ id: PromiseId; promise: Promise<unknown> }>;
 } {
   const completers = [];
   const promises = [];
 
   for (let i = 0; i < n; i++) {
-    const completablePromise = new CompletablePromise<any>();
+    const completablePromise = new CompletablePromise<unknown>();
     completers.push(completablePromise);
     promises.push({
       id: newJournalEntryPromiseId(i),
@@ -185,8 +185,8 @@ function createOrder(...numbers: number[]) {
 }
 
 async function testCombinatorInProcessingMode(
-  combinatorConstructor: (promises: PromiseLike<any>[]) => Promise<any>,
-  promises: Array<{ id: PromiseId; promise: Promise<any> }>
+  combinatorConstructor: (promises: PromiseLike<unknown>[]) => Promise<unknown>,
+  promises: Array<{ id: PromiseId; promise: Promise<unknown> }>
 ) {
   const resultMap = new Map<number, PromiseId[]>();
   const tracker = new PromiseCombinatorTracker(
@@ -209,8 +209,8 @@ async function testCombinatorInProcessingMode(
 }
 
 async function testCombinatorInReplayMode(
-  combinatorConstructor: (promises: PromiseLike<any>[]) => Promise<any>,
-  promises: Array<{ id: PromiseId; promise: Promise<any> }>,
+  combinatorConstructor: (promises: PromiseLike<unknown>[]) => Promise<unknown>,
+  promises: Array<{ id: PromiseId; promise: Promise<unknown> }>,
   order: PromiseId[]
 ) {
   const tracker = new PromiseCombinatorTracker(

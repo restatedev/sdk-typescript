@@ -35,18 +35,18 @@ export function newJournalEntryPromiseId(entryIndex: number): PromiseId {
  */
 function preparePromiseCombinator(
   combinatorIndex: number,
-  combinatorConstructor: (promises: PromiseLike<any>[]) => Promise<any>,
-  promises: Array<{ id: PromiseId; promise: Promise<any> }>,
+  combinatorConstructor: (promises: PromiseLike<unknown>[]) => Promise<unknown>,
+  promises: Array<{ id: PromiseId; promise: Promise<unknown> }>,
   readReplayOrder: (combinatorIndex: number) => PromiseId[] | undefined,
   onNewCompleted: (combinatorIndex: number, promiseId: PromiseId) => void,
   onCombinatorResolved: (combinatorIndex: number) => void,
   onCombinatorReplayed: (combinatorIndex: number) => void
-): WrappedPromise<any> {
+): WrappedPromise<unknown> {
   // Create the proxy promises and index them
   const promisesWithProxyPromise = promises.map((v) => ({
     id: v.id,
     originalPromise: v.promise,
-    proxyPromise: new CompletablePromise<any>(),
+    proxyPromise: new CompletablePromise<unknown>(),
   }));
   const promisesMap = new Map(
     promisesWithProxyPromise.map((v) => [
@@ -101,6 +101,7 @@ function preparePromiseCombinator(
     onCombinatorReplayed(combinatorIndex);
     for (const promiseId of replayOrder) {
       // These are already completed, so once we set the then callback they will be immediately resolved.
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
       const { originalPromise, proxyPromise } = promisesMap.get(
         promiseId.type.toString() + "-" + promiseId.id.toString()
       )!;
@@ -136,9 +137,11 @@ export class PromiseCombinatorTracker {
   ) {}
 
   public createCombinator(
-    combinatorConstructor: (promises: PromiseLike<any>[]) => Promise<any>,
-    promises: Array<{ id: PromiseId; promise: Promise<any> }>
-  ): WrappedPromise<any> {
+    combinatorConstructor: (
+      promises: PromiseLike<unknown>[]
+    ) => Promise<unknown>,
+    promises: Array<{ id: PromiseId; promise: Promise<unknown> }>
+  ): WrappedPromise<unknown> {
     const combinatorIndex = this.nextCombinatorIndex;
     this.nextCombinatorIndex++;
 
