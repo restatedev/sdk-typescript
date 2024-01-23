@@ -225,16 +225,30 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
       return undefined;
     }
     if (wannabeCombinatorEntry.messageType !== COMBINATOR_ENTRY_MESSAGE) {
-      throw RetryableError.internal(
-        `Illegal state: expected this replay message to be a combinator message. This looks like an SDK bug.`
+      throw RetryableError.journalMismatch(
+        this.journal.getUserCodeJournalIndex(),
+        wannabeCombinatorEntry,
+        {
+          messageType: COMBINATOR_ENTRY_MESSAGE,
+          message: {
+            combinatorId,
+          } as CombinatorEntryMessage,
+        }
       );
     }
 
     const combinatorMessage =
       wannabeCombinatorEntry.message as CombinatorEntryMessage;
     if (combinatorMessage.combinatorId != combinatorId) {
-      throw RetryableError.internal(
-        `Illegal state: expected this combinator message to match combinator ids ${combinatorMessage.combinatorId} != ${combinatorId}. This looks like an SDK bug.`
+      throw RetryableError.journalMismatch(
+        this.journal.getUserCodeJournalIndex(),
+        wannabeCombinatorEntry,
+        {
+          messageType: COMBINATOR_ENTRY_MESSAGE,
+          message: {
+            combinatorId,
+          } as CombinatorEntryMessage,
+        }
       );
     }
 
