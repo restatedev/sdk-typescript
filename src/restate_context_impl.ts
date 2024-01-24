@@ -80,9 +80,10 @@ export interface CallContext {
   delay?: number;
 }
 
-export type InternalCombineablePromise<T> = CombineablePromise<T> & {
-  journalIndex: number;
-};
+export type InternalCombineablePromise<T> = CombineablePromise<T> &
+  WrappedPromise<T> & {
+    journalIndex: number;
+  };
 
 export class RestateContextImpl implements RestateGrpcContext, RpcContext {
   // here, we capture the context information for actions on the Restate context that
@@ -161,7 +162,12 @@ export class RestateContextImpl implements RestateGrpcContext, RpcContext {
     data: Uint8Array
   ): Promise<Uint8Array> {
     if (this.isInOneWayCall()) {
-      return this.invokeOneWay(service, method, data);
+      return this.invokeOneWay(
+        service,
+        method,
+        data,
+        this.getOneWayCallDelay()
+      );
     } else {
       return this.invoke(service, method, data);
     }
@@ -172,7 +178,7 @@ export class RestateContextImpl implements RestateGrpcContext, RpcContext {
     service: string,
     method: string,
     data: Uint8Array
-  ): Promise<Uint8Array> {
+  ): InternalCombineablePromise<Uint8Array> {
     this.checkState("invoke");
 
     const msg = InvokeEntryMessage.create({
@@ -180,18 +186,21 @@ export class RestateContextImpl implements RestateGrpcContext, RpcContext {
       methodName: method,
       parameter: Buffer.from(data),
     });
-    return this.stateMachine
-      .handleUserCodeMessage(INVOKE_ENTRY_MESSAGE_TYPE, msg)
-      .transform((v) => v as Uint8Array);
+    return this.markCombineablePromise(
+      this.stateMachine
+        .handleUserCodeMessage(INVOKE_ENTRY_MESSAGE_TYPE, msg)
+        .transform((v) => v as Uint8Array)
+    );
   }
 
   private async invokeOneWay(
     service: string,
     method: string,
-    data: Uint8Array
+    data: Uint8Array,
+    delay?: number
   ): Promise<Uint8Array> {
-    const delay = this.getOneWayCallDelay();
-    const invokeTime = delay > 0 ? Date.now() + delay : undefined;
+    const actualDelay = delay || 0;
+    const invokeTime = actualDelay > 0 ? Date.now() + actualDelay : undefined;
     const msg = BackgroundInvokeEntryMessage.create({
       serviceName: service,
       methodName: method,
@@ -234,25 +243,21 @@ export class RestateContextImpl implements RestateGrpcContext, RpcContext {
     );
   }
 
-  public rpc<M>({ path }: ServiceApi): Client<M> {
+  rpc<M>({ path }: ServiceApi<M>): Client<M> {
     const clientProxy = new Proxy(
-        {},
-        {
-          get: (_target, prop) => {
-            const route = prop as string;
-            return async (...args: unknown[]) => {
-              const request = requestFromArgs(args);
-              const requestBytes = RpcRequest.encode(request).finish();
-              const responseBytes = await this.request(
-                  path,
-                  route,
-                  requestBytes
-              );
-              const response = RpcResponse.decode(responseBytes);
-              return response.response;
-            };
-          },
-        }
+      {},
+      {
+        get: (_target, prop) => {
+          const route = prop as string;
+          return async (...args: unknown[]) => {
+            const request = requestFromArgs(args);
+            const requestBytes = RpcRequest.encode(request).finish();
+            return this.invoke(path, route, requestBytes).transform(
+              (responseBytes) => RpcResponse.decode(responseBytes).response
+            );
+          };
+        },
+      }
     );
 
     return clientProxy as Client<M>;
@@ -263,26 +268,21 @@ export class RestateContextImpl implements RestateGrpcContext, RpcContext {
   }
 
   public sendDelayed<M>(
-      { path }: ServiceApi,
-      delayMillis: number
+    { path }: ServiceApi,
+    delayMillis: number
   ): SendClient<M> {
     const clientProxy = new Proxy(
-        {},
-        {
-          get: (_target, prop) => {
-            const route = prop as string;
-            return (...args: unknown[]) => {
-              const request = requestFromArgs(args);
-              const requestBytes = RpcRequest.encode(request).finish();
-              const sender = () => this.request(path, route, requestBytes);
-              if (delayMillis === undefined || delayMillis === 0) {
-                this.oneWayCall(sender);
-              } else {
-                this.delayedCall(sender, delayMillis);
-              }
-            };
-          },
-        }
+      {},
+      {
+        get: (_target, prop) => {
+          const route = prop as string;
+          return (...args: unknown[]) => {
+            const request = requestFromArgs(args);
+            const requestBytes = RpcRequest.encode(request).finish();
+            this.invokeOneWay(path, route, requestBytes, delayMillis);
+          };
+        },
+      }
     );
 
     return clientProxy as SendClient<M>;
@@ -518,9 +518,9 @@ export class RestateContextImpl implements RestateGrpcContext, RpcContext {
     return context?.type === CallContexType.OneWayCall;
   }
 
-  private getOneWayCallDelay(): number {
-    const context = RestateGrpcContextImpl.callContext.getStore();
-    return context?.delay || 0;
+  private getOneWayCallDelay(): number | undefined {
+    const context = RestateContextImpl.callContext.getStore();
+    return context?.delay;
   }
 
   private checkNotExecutingSideEffect() {
@@ -558,7 +558,7 @@ export class RestateContextImpl implements RestateGrpcContext, RpcContext {
   }
 
   private markCombineablePromise<T>(
-    p: Promise<T>
+    p: WrappedPromise<T>
   ): InternalCombineablePromise<T> {
     const journalIndex = this.stateMachine.getUserCodeJournalIndex();
     const orTimeout = (millis: number): Promise<T> => {
