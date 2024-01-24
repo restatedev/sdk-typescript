@@ -11,7 +11,7 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { RpcContext } from "../restate_context";
+import { CombineablePromise, RpcContext } from "../restate_context";
 import { Event } from "../types/types";
 
 // ----------- generics -------------------------------------------------------
@@ -26,7 +26,11 @@ type WithoutRpcContext<F> = F extends (
   : never;
 
 export type Client<M> = {
-  [K in keyof M as M[K] extends never ? never : K]: M[K];
+  [K in keyof M as M[K] extends never ? never : K]: M[K] extends (
+    ...args: infer P
+  ) => PromiseLike<infer O>
+    ? (...args: P) => CombineablePromise<O>
+    : never;
 };
 
 export type SendClient<M> = {
