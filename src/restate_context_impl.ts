@@ -28,6 +28,7 @@ import {
 } from "./generated/proto/protocol";
 import {
   AWAKEABLE_ENTRY_MESSAGE_TYPE,
+  AWAKEABLE_IDENTIFIER_PREFIX,
   BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
   CLEAR_STATE_ENTRY_MESSAGE_TYPE,
   COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
@@ -59,7 +60,7 @@ import {
 import { rlog } from "./utils/logger";
 import { Client, SendClient } from "./types/router";
 import { RpcRequest, RpcResponse } from "./generated/proto/dynrpc";
-import { requestFromArgs } from "./utils/assumpsions";
+import { requestFromArgs } from "./utils/assumptions";
 import { RandImpl } from "./utils/rand";
 
 export enum CallContexType {
@@ -364,7 +365,7 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
     );
 
     return {
-      id: Buffer.concat([this.id, encodedEntryIndex]).toString("base64url"),
+      id: AWAKEABLE_IDENTIFIER_PREFIX + Buffer.concat([this.id, encodedEntryIndex]).toString("base64url"),
       promise: promise,
     };
   }
