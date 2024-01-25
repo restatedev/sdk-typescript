@@ -76,8 +76,8 @@ export const verifyAssumptions = (
   isKeyed: boolean,
   request: RpcRequest
 ): { key?: string; request?: JsType } => {
-  const assumpsion = request.senderAssumes ?? 0;
-  switch (assumpsion) {
+  const assumption = request.senderAssumes ?? 0;
+  switch (assumption) {
     case 0: {
       // no assumption: this comes from an ingress.
       const hasKeyProperty =
@@ -124,7 +124,7 @@ export const verifyAssumptions = (
     }
     default: {
       throw new TerminalError(
-        `Unknown assumption id ${assumpsion}. This indicates an incorrect (or involuntary) setting of the assumption property at the ingress request, or an SDK bug.`
+        `Unknown assumption id ${assumption}. This indicates an incorrect (or involuntary) setting of the assumption property at the ingress request, or an SDK bug.`
       );
     }
   }

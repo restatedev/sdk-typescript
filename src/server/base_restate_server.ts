@@ -46,7 +46,7 @@ import {
 } from "../generated/proto/dynrpc";
 import { RestateContext, useContext } from "../restate_context";
 import { RpcContextImpl } from "../restate_context_impl";
-import { verifyAssumptions } from "../utils/assumpsions";
+import { verifyAssumptions } from "../utils/assumptions";
 import { TerminalError } from "../public_api";
 import { isEventHandler } from "../types/router";
 import { jsonSafeAny } from "../utils/utils";

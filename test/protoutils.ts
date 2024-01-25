@@ -45,6 +45,7 @@ import {
   EntryAckMessage,
   END_MESSAGE_TYPE,
   EndMessage,
+  AWAKEABLE_IDENTIFIER_PREFIX,
 } from "../src/types/protocol";
 import { Message } from "../src/types/types";
 import { TestRequest, TestResponse } from "../src/generated/proto/test";
@@ -487,7 +488,7 @@ export function getAwakeableId(entryIndex: number): string {
   const encodedEntryIndex = Buffer.alloc(4 /* Size of u32 */);
   encodedEntryIndex.writeUInt32BE(entryIndex);
 
-  return Buffer.concat([
+  return AWAKEABLE_IDENTIFIER_PREFIX + Buffer.concat([
     Buffer.from("f311f1fdcb9863f0018bd3400ecd7d69b547204e776218b2", "hex"),
     encodedEntryIndex,
   ]).toString("base64url");
