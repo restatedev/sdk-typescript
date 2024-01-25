@@ -37,35 +37,17 @@ restate
   .listen(9080);
 ```
 
-Restate takes care of:
-  - **reliable execution:** handlers will always run to completion. Intermediate failures result in re-tries
-    that use the *durable execution* mechanism to recover partial progress and not duplicate already executed
-    steps.
-  - **suspending handlers:** long-running handlers suspend when awaiting on a promise (or when explicitly
-    sleeping) and resume when that promise is resolved. Lambdas finish, services may scale down.
-  - **reliable communication:** handlers communicate with *exactly-once semantics*. Restate reliably delivers
-    messages and anchors both sender and receiver in the durable execution to ensure no losses or duplicates
-    can happen.
-  - **durable timers:** handlers can sleep (and suspend) or schedule calls for later.
-  - **isolation:** handlers can be keyed, which makes Restate scheduled them to obey single-writer-per-key
-    semantics.
-  - **state:** keyed handlers can attach key/value state, which is eagerly pushed into handlers during
-    invocation, and written back upon completion. This is particularly efficient for FaaS deployments
-    (stateful serverless, yay!).
-  - **observability & introspection:** Restate automatically generates Open Telemetry traces for the
-    interactions between handlers and gives you a SQL shell to query the distributed state of the application.
-  - **gRPC support:** Handlers may optionally be defined as gRPC services, and Restate will act as the transport
-    layer for the services/clients in that case.
+## Community
 
-📖 Check out our [docs](https://docs.restate.dev) to get quickly started!
+* 🤗️ [Join our online community](https://discord.gg/skW3AZ6uGd) for help, sharing feedback and talking to the community.
+* 📖 [Check out our documentation](https://docs.restate.dev) to get quickly started!
+* 📣 [Follow us on Twitter](https://twitter.com/restatedev) for staying up to date.
+* 🙋 [Create a GitHub issue](https://github.com/restatedev/sdk-typescript/issues) for requesting a new feature or reporting a problem.
+* 🏠 [Visit our GitHub org](https://github.com/restatedev) for exploring other repositories.
 
-🗣️ Join our [discord channel](https://discord.gg/skW3AZ6uGd) to talk to the community.
+## Using the SDK
 
-🏠 Visit our [GitHub org](https://github.com/restatedev) for more details.
-
-# Using the SDK
-
-To use this SDK, simply add the dependency to your project:
+To use this SDK, add the dependency to your project:
 ```shell
 npm install @restatedev/restate-sdk
 ```
@@ -75,12 +57,16 @@ For brand-new projects, we recommend using the [Restate Node Template](https://g
 npx -y @restatedev/create-app@latest
 ```
 
-# Contributing to the SDK
+## Contributing
 
-### Prerequisites
-- [NodeJS (and npm)](https://nodejs.org) installed
+We’re excited if you join the Restate community and start contributing!
+Whether it is feature requests, bug reports, ideas & feedback or PRs, we appreciate any and all contributions.
+We know that your time is precious and, therefore, deeply value any effort to contribute!
 
 ### Building the SDK
+
+#### Prerequisites
+- [NodeJS (and npm)](https://nodejs.org) installed
 
 Install the dependencies, build the Restate protocol types (from ProtoBuf), and transpile the TypeScript code:
 ```shell
@@ -115,37 +101,29 @@ npm run example
 npm run proto
 ```
 
-### Testing end-to-end with Restate Runtime
+### Testing end-to-end with Restate Server
 
-This requires the [Docker Engine](https://docs.docker.com/engine/install/) to launch the Restate runtime for testing.
+[Launch the Restate Server](https://github.com/restatedev/restate?tab=readme-ov-file#install-the-server) for testing your SDK changes.
 
-Start the runtime in a Docker container and tell Restate about the example service. This requires the example to be running, to make the discovery succeed!
- - On Linux:
-    ```shell
-    docker run --name restate_dev --rm --network=host docker.io/restatedev/restate:latest
+Register a service with the server via the Restate CLI. 
+This requires that the service is running to make the discovery succeed!
 
-    curl -X POST http://localhost:9070/endpoints -H 'content-type: application/json' -d '{"uri": "http://localhost:9080"}'
-    ```
-- On macOS:
-    ```shell
-    docker run --name restate_dev --rm -p 9070:9070 -p 8080:8080 docker.io/restatedev/restate:latest
-
-    curl -X POST http://localhost:9070/endpoints -H 'content-type: application/json' -d '{"uri": "http://host.docker.internal:9080"}'
-    ```
-
+```shell
+npx @restatedev/restate deployment register http://localhost:9080
+```
 
 Invoke the example service from the command line:
 ```shell
 curl -X POST http://localhost:8080/greeter/greet -H 'content-type: application/json' -d '{"name": "Pete"}'
 ```
 
-# Releasing the package
+## Releasing the package
 
-## Pre-release
+### Pre-release
 
 Before release, make sure the `buf.lock` of the proto descriptors is updated. See [Update the proto descriptors](#update-the-proto-descriptors).
 
-## Releasing via release-it
+### Releasing via release-it
 
 Releasing a new npm package from this repo requires:
 
@@ -160,7 +138,7 @@ npm run release
 
 The actual `npm publish` is run by GitHub actions once a GitHub release is created.
 
-## Releasing manually
+### Releasing manually
 
 1. Bump the version field in package.json to `X.Y.Z`
 2. Create and push a tag of the form `vX.Y.Z` to the upstream repository

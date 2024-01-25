@@ -28,6 +28,7 @@ import {
 } from "./generated/proto/protocol";
 import {
   AWAKEABLE_ENTRY_MESSAGE_TYPE,
+  AWAKEABLE_IDENTIFIER_PREFIX,
   BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
   CLEAR_STATE_ENTRY_MESSAGE_TYPE,
   COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
@@ -59,7 +60,7 @@ import {
 import { rlog } from "./utils/logger";
 import { Client, SendClient } from "./types/router";
 import { RpcRequest, RpcResponse } from "./generated/proto/dynrpc";
-import { requestFromArgs } from "./utils/assumpsions";
+import { requestFromArgs } from "./utils/assumptions";
 import { RandImpl } from "./utils/rand";
 
 export enum CallContexType {
@@ -82,6 +83,10 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
   // For example, this is illegal: 'ctx.sideEffect(() => {await ctx.get("my-state")})'
   static callContext = new AsyncLocalStorage<CallContext>();
 
+  // This is used to guard users against calling ctx.sideEffect without awaiting it.
+  // See https://github.com/restatedev/sdk-typescript/issues/197 for more details.
+  private executingSideEffect = false;
+
   constructor(
     public readonly id: Buffer,
     public readonly serviceName: string,
@@ -90,30 +95,35 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
     public readonly rand: Rand = new RandImpl(id)
   ) {}
 
-  public async get<T>(name: string): Promise<T | null> {
+  // DON'T make this function async!!! see sideEffect comment for details.
+  public get<T>(name: string): Promise<T | null> {
     // Check if this is a valid action
     this.checkState("get state");
 
     // Create the message and let the state machine process it
     const msg = this.stateMachine.localStateStore.get(name);
-    const result = await this.stateMachine.handleUserCodeMessage(
-      GET_STATE_ENTRY_MESSAGE_TYPE,
-      msg
-    );
 
-    // If the GetState message did not have a value or empty,
-    // then we went to the runtime to get the value.
-    // When we get the response, we set it in the localStateStore,
-    // to answer subsequent requests
-    if (msg.value === undefined && msg.empty === undefined) {
-      this.stateMachine.localStateStore.add(name, result as Buffer | Empty);
-    }
+    const getState = async (): Promise<T | null> => {
+      const result = await this.stateMachine.handleUserCodeMessage(
+        GET_STATE_ENTRY_MESSAGE_TYPE,
+        msg
+      );
 
-    if (!(result instanceof Buffer)) {
-      return null;
-    }
+      // If the GetState message did not have a value or empty,
+      // then we went to the runtime to get the value.
+      // When we get the response, we set it in the localStateStore,
+      // to answer subsequent requests
+      if (msg.value === undefined && msg.empty === undefined) {
+        this.stateMachine.localStateStore.add(name, result as Buffer | Empty);
+      }
 
-    return jsonDeserialize(result.toString());
+      if (!(result instanceof Buffer)) {
+        return null;
+      }
+
+      return jsonDeserialize(result.toString());
+    };
+    return getState();
   }
 
   public set<T>(name: string, value: T): void {
@@ -144,7 +154,8 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
     }
   }
 
-  private async invoke(
+  // DON'T make this function async!!! see sideEffect comment for details.
+  private invoke(
     service: string,
     method: string,
     data: Uint8Array
@@ -156,11 +167,9 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
       methodName: method,
       parameter: Buffer.from(data),
     });
-    const promise = this.stateMachine.handleUserCodeMessage(
-      INVOKE_ENTRY_MESSAGE_TYPE,
-      msg
-    );
-    return (await promise) as Uint8Array;
+    return this.stateMachine
+      .handleUserCodeMessage(INVOKE_ENTRY_MESSAGE_TYPE, msg)
+      .transform((v) => v as Uint8Array);
   }
 
   private async invokeOneWay(
@@ -184,19 +193,21 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
     return new Uint8Array();
   }
 
-  public async oneWayCall(
+  // DON'T make this function async!!! see sideEffect comment for details.
+  public oneWayCall(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     call: () => Promise<any>
   ): Promise<void> {
     this.checkState("oneWayCall");
 
-    await RestateGrpcContextImpl.callContext.run(
+    return RestateGrpcContextImpl.callContext.run(
       { type: CallContexType.OneWayCall },
       call
     );
   }
 
-  public async delayedCall(
+  // DON'T make this function async!!! see sideEffect comment for details.
+  public delayedCall(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     call: () => Promise<any>,
     delayMillis?: number
@@ -204,13 +215,17 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
     this.checkState("delayedCall");
 
     // Delayed call is a one way call with a delay
-    await RestateGrpcContextImpl.callContext.run(
+    return RestateGrpcContextImpl.callContext.run(
       { type: CallContexType.OneWayCall, delay: delayMillis },
       call
     );
   }
 
-  public async sideEffect<T>(
+  // DON'T make this function async!!!
+  // The reason is that we want the erros thrown by the initial checks to be propagated in the caller context,
+  // and not in the promise context. To understand the semantic difference, make this function async and run the
+  // UnawaitedSideEffectShouldFailSubsequentContextCall test.
+  public sideEffect<T>(
     fn: () => Promise<T>,
     retryPolicy: RetrySettings = DEFAULT_INFINITE_EXPONENTIAL_BACKOFF
   ): Promise<T> {
@@ -227,6 +242,8 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
         { errorCode: ErrorCodes.INTERNAL }
       );
     }
+    this.checkNotExecutingSideEffect();
+    this.executingSideEffect = true;
 
     const executeAndLogSideEffect = async () => {
       // in replay mode, we directly return the value from the log
@@ -301,17 +318,25 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
       return sideEffectResult;
     };
 
-    const sleep = (millis: number) => this.sleep(millis);
-    return executeWithRetries(retryPolicy, executeAndLogSideEffect, sleep);
+    const sleep = (millis: number) => this.sleepInternal(millis);
+    return executeWithRetries(
+      retryPolicy,
+      executeAndLogSideEffect,
+      sleep
+    ).finally(() => {
+      this.executingSideEffect = false;
+    });
   }
 
   public sleep(millis: number): Promise<void> {
     this.checkState("sleep");
+    return this.sleepInternal(millis);
+  }
 
-    const msg = SleepEntryMessage.create({ wakeUpTime: Date.now() + millis });
+  private sleepInternal(millis: number): Promise<void> {
     return this.stateMachine.handleUserCodeMessage<void>(
       SLEEP_ENTRY_MESSAGE_TYPE,
-      msg
+      SleepEntryMessage.create({ wakeUpTime: Date.now() + millis })
     );
   }
 
@@ -340,7 +365,7 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
     );
 
     return {
-      id: Buffer.concat([this.id, encodedEntryIndex]).toString("base64url"),
+      id: AWAKEABLE_IDENTIFIER_PREFIX + Buffer.concat([this.id, encodedEntryIndex]).toString("base64url"),
       promise: promise,
     };
   }
@@ -385,9 +410,20 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
     return context?.delay || 0;
   }
 
+  private checkNotExecutingSideEffect() {
+    if (this.executingSideEffect) {
+      throw new TerminalError(
+        `Invoked a RestateContext method while a side effect is still executing. 
+          Make sure you await the ctx.sideEffect call before using any other RestateContext method.`,
+        { errorCode: ErrorCodes.INTERNAL }
+      );
+    }
+  }
+
   private checkState(callType: string): void {
     const context = RestateGrpcContextImpl.callContext.getStore();
     if (!context) {
+      this.checkNotExecutingSideEffect();
       return;
     }
 

@@ -46,7 +46,7 @@ import {
 } from "../generated/proto/dynrpc";
 import { RestateContext, useContext } from "../restate_context";
 import { RpcContextImpl } from "../restate_context_impl";
-import { verifyAssumptions } from "../utils/assumpsions";
+import { verifyAssumptions } from "../utils/assumptions";
 import { TerminalError } from "../public_api";
 import { isEventHandler } from "../types/router";
 import { jsonSafeAny } from "../utils/utils";
@@ -149,9 +149,7 @@ export abstract class BaseRestateServer {
         method
       );
       // note that this log will not print all the keys.
-      rlog.info(
-        `Binding: ${url}  -> ${JSON.stringify(method, null, "\t")}`
-      );
+      rlog.info(`Binding: ${url}  -> ${JSON.stringify(method, null, "\t")}`);
     }
   }
 
@@ -264,11 +262,7 @@ export abstract class BaseRestateServer {
       ) as HostedGrpcServiceMethod<unknown, unknown>;
 
       rlog.info(
-        `Binding: ${url}  -> ${JSON.stringify(
-          registration.method,
-          null,
-          "\t"
-        )}`
+        `Binding: ${url}  -> ${JSON.stringify(registration.method, null, "\t")}`
       );
     }
 
