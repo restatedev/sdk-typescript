@@ -596,8 +596,11 @@ export class RpcContextImpl implements RpcContext {
   public clear(name: string): void {
     this.ctx.clear(name);
   }
-  public sideEffect<T>(fn: () => Promise<T>): Promise<T> {
-    return this.ctx.sideEffect(fn);
+  public sideEffect<T>(
+    fn: () => Promise<T>,
+    retryPolicy?: RetrySettings
+  ): Promise<T> {
+    return this.ctx.sideEffect(fn, retryPolicy);
   }
   public awakeable<T>(): { id: string; promise: Promise<T> } {
     return this.ctx.awakeable();
