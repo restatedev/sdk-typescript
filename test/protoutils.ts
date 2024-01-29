@@ -58,8 +58,8 @@ import {
   StartMessage_StateEntry,
 } from "../src/generated/proto/protocol";
 import { expect } from "@jest/globals";
-import { jsonSerialize, printMessageAsJson } from "../src/utils/utils";
-import { rlog } from "../src/utils/logger";
+import { jsonSerialize, formatMessageAsJson } from "../src/utils/utils";
+import { rlog } from "../src/logger";
 import { ErrorCodes, RestateErrorCodes } from "../src/types/errors";
 
 export function startMessage(
@@ -504,7 +504,7 @@ export const END_MESSAGE = new Message(END_MESSAGE_TYPE, EndMessage.create());
 export function printResults(results: Message[]) {
   rlog.info(
     results.map(
-      (el) => el.messageType + " - " + printMessageAsJson(el.message) + "\n"
+      (el) => el.messageType + " - " + formatMessageAsJson(el.message) + "\n"
     )
   );
 }

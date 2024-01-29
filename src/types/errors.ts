@@ -12,7 +12,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { ErrorMessage, Failure } from "../generated/proto/protocol";
-import { printMessageAsJson } from "../utils/utils";
+import { formatMessageAsJson } from "../utils/utils";
 import { Message } from "./types";
 import { JournalEntry } from "../journal";
 import { FailureWithTerminal } from "../generated/proto/javascript";
@@ -221,10 +221,10 @@ export class RetryableError extends RestateError {
         The journal entry at position ${journalIndex} was:
         - In the user code: type: ${
           journalEntry.messageType
-        }, message:${printMessageAsJson(journalEntry.message)}
+        }, message:${formatMessageAsJson(journalEntry.message)}
         - In the replayed messages: type: ${
           replayMessage.messageType
-        }, message: ${printMessageAsJson(replayMessage.message)}`;
+        }, message: ${formatMessageAsJson(replayMessage.message)}`;
     return new RetryableError(msg, {
       errorCode: RestateErrorCodes.JOURNAL_MISMATCH,
     });

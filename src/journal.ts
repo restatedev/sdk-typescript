@@ -430,6 +430,10 @@ export class Journal<I, O> {
     return this.state === NewExecutionState.PROCESSING;
   }
 
+  public isReplaying(): boolean {
+    return this.state === NewExecutionState.REPLAYING;
+  }
+
   public getUserCodeJournalIndex(): number {
     return this.userCodeJournalIndex;
   }

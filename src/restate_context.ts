@@ -9,8 +9,6 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-// Use our prefixed logger instead of default console logging
-import "./utils/logger";
 import { RetrySettings } from "./utils/public_utils";
 import { Client, SendClient } from "./types/router";
 
@@ -42,6 +40,12 @@ export interface RestateBaseContext {
    * these calls are not.
    */
   rand: Rand;
+
+  /**
+   * Console to use for logging. It attaches to each log message some contextual information,
+   * such as invoked service method and invocation id, and automatically excludes logs during replay.
+   */
+  console: Console;
 
   /**
    * Get/retrieve state from the Restate runtime.

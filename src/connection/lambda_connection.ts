@@ -17,7 +17,7 @@ import {
   SUSPENSION_MESSAGE_TYPE,
 } from "../types/protocol";
 import { Message } from "../types/types";
-import { rlog } from "../utils/logger";
+import { rlog } from "../logger";
 
 const RESOLVED: Promise<void> = Promise.resolve();
 

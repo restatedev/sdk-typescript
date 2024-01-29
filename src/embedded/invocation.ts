@@ -70,6 +70,7 @@ export const doInvoke = async <I, O>(
     connection,
     journal,
     ProtocolMode.BIDI_STREAM,
+    journal.inferLoggerContext(),
     -1
   );
 

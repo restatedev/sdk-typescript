@@ -11,7 +11,6 @@
 
 /* eslint-disable @typescript-eslint/ban-types */
 
-import { rlog } from "../utils/logger";
 import {
   GrpcService,
   GrpcServiceMethod,
@@ -50,6 +49,7 @@ import { verifyAssumptions } from "../utils/assumptions";
 import { TerminalError } from "../public_api";
 import { isEventHandler } from "../types/router";
 import { jsonSafeAny } from "../utils/utils";
+import { rlog } from "../logger";
 
 export interface ServiceOpts {
   descriptor: ProtoMetadata;

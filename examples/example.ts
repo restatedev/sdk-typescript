@@ -46,8 +46,8 @@ const countKeeper = async (ctx: restate.RpcContext): Promise<number> => {
 
 const greeter = restate.router({
   greet: doGreet,
-  logger: async (_ctx: restate.RpcContext, msg: string) => {
-    console.log(" HEEEELLLLOOOOO! " + msg);
+  logger: async (ctx: restate.RpcContext, msg: string) => {
+    ctx.console.log(" HEEEELLLLOOOOO! " + msg);
   },
 });
 

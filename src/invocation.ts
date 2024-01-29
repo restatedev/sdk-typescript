@@ -18,11 +18,7 @@ import {
   PollInputStreamEntryMessage,
   StartMessage,
 } from "./generated/proto/protocol";
-import {
-  CompletablePromise,
-  makeFqServiceName,
-  printMessageAsJson,
-} from "./utils/utils";
+import { CompletablePromise, formatMessageAsJson } from "./utils/utils";
 import {
   POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
   START_MESSAGE_TYPE,
@@ -30,6 +26,7 @@ import {
 import { RestateStreamConsumer } from "./connection/connection";
 import { LocalStateStore } from "./local_state_store";
 import { ensureError } from "./types/errors";
+import { LoggerContext } from "./logger";
 
 enum State {
   ExpectingStart = 0,
@@ -85,7 +82,7 @@ export class InvocationBuilder<I, O> implements RestateStreamConsumer {
           throw new Error(
             `Journal builder is getting a message after the journal was complete. entries-to-replay: ${
               this.nbEntriesToReplay
-            }, message: ${printMessageAsJson(m)}`
+            }, message: ${formatMessageAsJson(m)}`
           );
       }
 
@@ -122,7 +119,7 @@ export class InvocationBuilder<I, O> implements RestateStreamConsumer {
       };
     } else {
       throw new Error(
-        `PollInputStreamEntry neither contains value nor failure: ${printMessageAsJson(
+        `PollInputStreamEntry neither contains value nor failure: ${formatMessageAsJson(
           m
         )}`
       );
@@ -182,7 +179,6 @@ export class InvocationBuilder<I, O> implements RestateStreamConsumer {
 }
 
 export class Invocation<I, O> {
-  public readonly logPrefix;
   constructor(
     public readonly method: HostedGrpcServiceMethod<I, O>,
     public readonly id: Buffer,
@@ -191,18 +187,25 @@ export class Invocation<I, O> {
     public readonly replayEntries: Map<number, Message>,
     public readonly invocationValue: InvocationValue,
     public readonly localStateStore: LocalStateStore
-  ) {
-    this.logPrefix = `[${makeFqServiceName(
-      this.method.packge,
-      this.method.service
-    )}/${this.method.method.name}] [${this.debugId}]`;
+  ) {}
+
+  public inferLoggerContext(additionalContext?: {
+    [name: string]: string;
+  }): LoggerContext {
+    return new LoggerContext(
+      this.debugId,
+      this.method.pkg,
+      this.method.service,
+      this.method.method.name,
+      additionalContext
+    );
   }
 }
 
 function checkState(state: State, expected: bigint, m: Message) {
   if (m.messageType !== expected) {
     throw new Error(
-      `Unexpected message in state ${state}: ${printMessageAsJson(m)}`
+      `Unexpected message in state ${state}: ${formatMessageAsJson(m)}`
     );
   }
 }
