@@ -252,8 +252,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
       );
     }
 
-    rlog.debugJournalMessage(
-      this.invocation.logPrefix,
+    this.console.debugJournalMessage(
       "Matched and replayed message from journal",
       COMBINATOR_ENTRY_MESSAGE,
       combinatorMessage
@@ -271,8 +270,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
         combinatorId,
         journalEntriesOrder: order.map((pid) => pid.id),
       };
-      rlog.debugJournalMessage(
-        this.invocation.logPrefix,
+      this.console.debugJournalMessage(
         "Adding message to journal and sending to Restate",
         COMBINATOR_ENTRY_MESSAGE,
         combinatorMessage

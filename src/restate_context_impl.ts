@@ -379,7 +379,9 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
     );
 
     return {
-      id: AWAKEABLE_IDENTIFIER_PREFIX + Buffer.concat([this.id, encodedEntryIndex]).toString("base64url"),
+      id:
+        AWAKEABLE_IDENTIFIER_PREFIX +
+        Buffer.concat([this.id, encodedEntryIndex]).toString("base64url"),
       promise: this.markCombineablePromise(promise),
     };
   }
