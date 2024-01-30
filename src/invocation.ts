@@ -18,7 +18,7 @@ import {
   PollInputStreamEntryMessage,
   StartMessage,
 } from "./generated/proto/protocol";
-import { CompletablePromise, formatMessageAsJson } from "./utils/utils";
+import { formatMessageAsJson } from "./utils/utils";
 import {
   POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
   START_MESSAGE_TYPE,
@@ -27,6 +27,7 @@ import { RestateStreamConsumer } from "./connection/connection";
 import { LocalStateStore } from "./local_state_store";
 import { ensureError } from "./types/errors";
 import { LoggerContext } from "./logger";
+import { CompletablePromise } from "./utils/promises";
 
 enum State {
   ExpectingStart = 0,

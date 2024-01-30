@@ -14,13 +14,13 @@ import { RestateGrpcContextImpl } from "./restate_context_impl";
 import { Connection, RestateStreamConsumer } from "./connection/connection";
 import { ProtocolMode } from "./generated/proto/discovery";
 import { Message } from "./types/types";
-import { CompletablePromise, makeFqServiceName } from "./utils/utils";
 import {
   createStateMachineConsole,
   StateMachineConsole,
 } from "./utils/message_logger";
 import { clearTimeout } from "timers";
 import {
+  COMBINATOR_ENTRY_MESSAGE,
   COMPLETION_MESSAGE_TYPE,
   END_MESSAGE_TYPE,
   EndMessage,
@@ -42,6 +42,18 @@ import {
 } from "./types/errors";
 import { LocalStateStore } from "./local_state_store";
 import { createRestateConsole, LoggerContext } from "./logger";
+import {
+  CompletablePromise,
+  wrapDeeply,
+  WRAPPED_PROMISE_PENDING,
+  WrappedPromise,
+} from "./utils/promises";
+import {
+  PromiseCombinatorTracker,
+  PromiseId,
+  PromiseType,
+} from "./promise_combinator_tracker";
+import { CombinatorEntryMessage } from "./generated/proto/javascript";
 
 export class StateMachine<I, O> implements RestateStreamConsumer {
   private journal: Journal<I, O>;
@@ -66,6 +78,8 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
   // Suspension timeout that gets set and cleared based on completion messages;
   private suspensionTimeout?: NodeJS.Timeout;
 
+  private promiseCombinatorTracker: PromiseCombinatorTracker;
+
   console: StateMachineConsole;
 
   constructor(
@@ -75,7 +89,6 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
     loggerContext: LoggerContext,
     private readonly suspensionMillis: number = 30_000
   ) {
-    this.journal = new Journal(this.invocation);
     this.localStateStore = invocation.localStateStore;
     this.console = createStateMachineConsole(loggerContext);
 
@@ -85,6 +98,11 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
       // The console exposed by RestateContext filters logs in replay, while the internal one is based on the ENV variables.
       createRestateConsole(loggerContext, () => !this.journal.isReplaying()),
       this
+    );
+    this.journal = new Journal(this.invocation);
+    this.promiseCombinatorTracker = new PromiseCombinatorTracker(
+      this.readCombinatorOrderEntry.bind(this),
+      this.writeCombinatorOrderEntry.bind(this)
     );
   }
 
@@ -138,7 +156,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
     // if the state machine is already closed, return a promise that never
     // completes, so that the user code does not resume
     if (this.stateMachineClosed) {
-      return wrapDeeply(new CompletablePromise<T>().promise);
+      return WRAPPED_PROMISE_PENDING as WrappedPromise<T | void>;
     }
 
     const promise = this.journal.handleUserSideMessage(messageType, message);
@@ -177,6 +195,103 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
         this.scheduleSuspension();
       }
     });
+  }
+
+  // -- Methods related to combinators to wire up promise combinator API with PromiseCombinatorTracker
+
+  public createCombinator(
+    combinatorConstructor: (
+      promises: PromiseLike<unknown>[]
+    ) => Promise<unknown>,
+    promises: Array<{ id: PromiseId; promise: Promise<unknown> }>
+  ) {
+    if (this.stateMachineClosed) {
+      return WRAPPED_PROMISE_PENDING as WrappedPromise<unknown>;
+    }
+
+    // We don't need the promise wrapping here to schedule a suspension,
+    // because the combined promises will already have that, so once we call then() on them,
+    // if we have to suspend we will suspend.
+    return this.promiseCombinatorTracker.createCombinator(
+      combinatorConstructor,
+      promises
+    );
+  }
+
+  readCombinatorOrderEntry(combinatorId: number): PromiseId[] | undefined {
+    const wannabeCombinatorEntry = this.journal.readNextReplayEntry();
+    if (wannabeCombinatorEntry === undefined) {
+      // We're in processing mode
+      return undefined;
+    }
+    if (wannabeCombinatorEntry.messageType !== COMBINATOR_ENTRY_MESSAGE) {
+      throw RetryableError.journalMismatch(
+        this.journal.getUserCodeJournalIndex(),
+        wannabeCombinatorEntry,
+        {
+          messageType: COMBINATOR_ENTRY_MESSAGE,
+          message: {
+            combinatorId,
+          } as CombinatorEntryMessage,
+        }
+      );
+    }
+
+    const combinatorMessage =
+      wannabeCombinatorEntry.message as CombinatorEntryMessage;
+    if (combinatorMessage.combinatorId != combinatorId) {
+      throw RetryableError.journalMismatch(
+        this.journal.getUserCodeJournalIndex(),
+        wannabeCombinatorEntry,
+        {
+          messageType: COMBINATOR_ENTRY_MESSAGE,
+          message: {
+            combinatorId,
+          } as CombinatorEntryMessage,
+        }
+      );
+    }
+
+    this.console.debugJournalMessage(
+      "Matched and replayed message from journal",
+      COMBINATOR_ENTRY_MESSAGE,
+      combinatorMessage
+    );
+
+    return combinatorMessage.journalEntriesOrder.map((id) => ({
+      id,
+      type: PromiseType.JournalEntry,
+    }));
+  }
+
+  async writeCombinatorOrderEntry(combinatorId: number, order: PromiseId[]) {
+    if (this.journal.isProcessing()) {
+      const combinatorMessage: CombinatorEntryMessage = {
+        combinatorId,
+        journalEntriesOrder: order.map((pid) => pid.id),
+      };
+      this.console.debugJournalMessage(
+        "Adding message to journal and sending to Restate",
+        COMBINATOR_ENTRY_MESSAGE,
+        combinatorMessage
+      );
+
+      const ackPromise = this.journal.appendJournalEntry(
+        COMBINATOR_ENTRY_MESSAGE,
+        combinatorMessage
+      );
+      this.send(
+        new Message(
+          COMBINATOR_ENTRY_MESSAGE,
+          combinatorMessage,
+          undefined,
+          undefined,
+          true
+        )
+      );
+
+      await ackPromise;
+    }
   }
 
   /**
@@ -394,13 +509,15 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
     this.clearSuspensionTimeout();
   }
 
+  /**
+   * This method is invoked when we hit a suspension point.
+   *
+   * A suspension point is everytime the user "await"s a Promise returned by RestateContext that might be completed at a later point in time by a CompletionMessage.
+   */
   private scheduleSuspension() {
     // If there was already a timeout set, we want to reset the time to postpone suspension as long as we make progress.
     // So we first clear the old timeout, and then we set a new one.
-    if (this.suspensionTimeout !== undefined) {
-      clearTimeout(this.suspensionTimeout);
-      this.suspensionTimeout = undefined;
-    }
+    this.clearSuspensionTimeout();
 
     const delay = this.getSuspensionMillis();
     this.console.debugJournalMessage(
@@ -465,10 +582,6 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
     await this.finish();
   }
 
-  public async notifyHandlerExecutionError(e: RetryableError | TerminalError) {
-    await this.sendErrorAndFinish(e);
-  }
-
   /**
    * WARNING: make sure you use this at the right point in the code
    * After the index has been incremented...
@@ -476,13 +589,6 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
    */
   public getUserCodeJournalIndex(): number {
     return this.journal.getUserCodeJournalIndex();
-  }
-
-  public getFullServiceName(): string {
-    return makeFqServiceName(
-      this.invocation.method.pkg,
-      this.invocation.method.service
-    );
   }
 
   public handleInputClosed(): void {
@@ -524,72 +630,3 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
     }
   }
 }
-/**
- * Returns a promise that wraps the original promise and calls cb() at the first time
- * this promise or any nested promise that is chained to it is awaited. (then-ed)
- */
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
-export type WrappedPromise<T> = Promise<T> & {
-  transform: <TResult1 = T, TResult2 = never>(
-    onfulfilled?:
-      | ((value: T) => TResult1 | PromiseLike<TResult1>)
-      | null
-      | undefined,
-    onrejected?:
-      | ((reason: any) => TResult2 | PromiseLike<TResult2>)
-      | null
-      | undefined
-  ) => Promise<TResult1 | TResult2>;
-};
-
-const wrapDeeply = <T>(
-  promise: Promise<T>,
-  cb?: () => void
-): WrappedPromise<T> => {
-  /* eslint-disable @typescript-eslint/no-explicit-any */
-  return {
-    transform: function <TResult1 = T, TResult2 = never>(
-      onfulfilled?:
-        | ((value: T) => TResult1 | PromiseLike<TResult1>)
-        | null
-        | undefined,
-      onrejected?:
-        | ((reason: any) => TResult2 | PromiseLike<TResult2>)
-        | null
-        | undefined
-    ): Promise<TResult1 | TResult2> {
-      return wrapDeeply(promise.then(onfulfilled, onrejected), cb);
-    },
-
-    then: function <TResult1 = T, TResult2 = never>(
-      onfulfilled?:
-        | ((value: T) => TResult1 | PromiseLike<TResult1>)
-        | null
-        | undefined,
-      onrejected?:
-        | ((reason: any) => TResult2 | PromiseLike<TResult2>)
-        | null
-        | undefined
-    ): Promise<TResult1 | TResult2> {
-      if (cb !== undefined) {
-        cb();
-      }
-      return promise.then(onfulfilled, onrejected);
-    },
-    catch: function <TResult = never>(
-      onrejected?:
-        | ((reason: any) => TResult | PromiseLike<TResult>)
-        | null
-        | undefined
-    ): Promise<T | TResult> {
-      return wrapDeeply(promise.catch(onrejected), cb);
-    },
-    finally: function (
-      onfinally?: (() => void) | null | undefined
-    ): Promise<T> {
-      return wrapDeeply(promise.finally(onfinally), cb);
-    },
-    [Symbol.toStringTag]: "",
-  };
-};

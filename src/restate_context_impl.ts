@@ -10,6 +10,7 @@
  */
 
 import {
+  CombineablePromise,
   Rand,
   RestateGrpcChannel,
   RestateGrpcContext,
@@ -61,6 +62,8 @@ import { Client, SendClient } from "./types/router";
 import { RpcRequest, RpcResponse } from "./generated/proto/dynrpc";
 import { requestFromArgs } from "./utils/assumptions";
 import { RandImpl } from "./utils/rand";
+import { newJournalEntryPromiseId } from "./promise_combinator_tracker";
+import { WrappedPromise } from "./utils/promises";
 
 export enum CallContexType {
   None,
@@ -72,6 +75,10 @@ export interface CallContext {
   type: CallContexType;
   delay?: number;
 }
+
+export type InternalCombineablePromise<T> = CombineablePromise<T> & {
+  journalIndex: number;
+};
 
 export class RestateGrpcContextImpl implements RestateGrpcContext {
   // here, we capture the context information for actions on the Restate context that
@@ -221,6 +228,10 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
     );
   }
 
+  rpcGateway(): RpcGateway {
+    return new RpcContextImpl(this);
+  }
+
   // DON'T make this function async!!!
   // The reason is that we want the erros thrown by the initial checks to be propagated in the caller context,
   // and not in the promise context. To understand the semantic difference, make this function async and run the
@@ -329,9 +340,9 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
     });
   }
 
-  public sleep(millis: number): Promise<void> {
+  public sleep(millis: number): CombineablePromise<void> {
     this.checkState("sleep");
-    return this.sleepInternal(millis);
+    return this.markCombineablePromise(this.sleepInternal(millis));
   }
 
   private sleepInternal(millis: number): Promise<void> {
@@ -341,7 +352,9 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
     );
   }
 
-  public awakeable<T>(): { id: string; promise: Promise<T> } {
+  // -- Awakeables
+
+  public awakeable<T>(): { id: string; promise: CombineablePromise<T> } {
     this.checkState("awakeable");
 
     const msg = AwakeableEntryMessage.create();
@@ -366,8 +379,10 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
     );
 
     return {
-      id: AWAKEABLE_IDENTIFIER_PREFIX + Buffer.concat([this.id, encodedEntryIndex]).toString("base64url"),
-      promise: promise,
+      id:
+        AWAKEABLE_IDENTIFIER_PREFIX +
+        Buffer.concat([this.id, encodedEntryIndex]).toString("base64url"),
+      promise: this.markCombineablePromise(promise),
     };
   }
 
@@ -395,6 +410,37 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
       CompleteAwakeableEntryMessage.create(base)
     );
   }
+
+  // Used by static methods of CombineablePromise
+  public createCombinator<T extends readonly CombineablePromise<unknown>[]>(
+    combinatorConstructor: (
+      promises: PromiseLike<unknown>[]
+    ) => Promise<unknown>,
+    promises: T
+  ): WrappedPromise<unknown> {
+    const outPromises = [];
+
+    for (const promise of promises) {
+      if (promise.__restate_context !== this) {
+        throw RetryableError.internal(
+          "You're mixing up CombineablePromises from different RestateContext. This is not supported."
+        );
+      }
+      const index = (promise as InternalCombineablePromise<unknown>)
+        .journalIndex;
+      outPromises.push({
+        id: newJournalEntryPromiseId(index),
+        promise: promise,
+      });
+    }
+
+    return this.stateMachine.createCombinator(
+      combinatorConstructor,
+      outPromises
+    );
+  }
+
+  // -- Various private methods
 
   private isInSideEffect(): boolean {
     const context = RestateGrpcContextImpl.callContext.getStore();
@@ -445,8 +491,17 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
     }
   }
 
-  rpcGateway(): RpcGateway {
-    return new RpcContextImpl(this);
+  private markCombineablePromise<T>(
+    p: Promise<T>
+  ): InternalCombineablePromise<T> {
+    return Object.defineProperties(p, {
+      __restate_context: {
+        value: this,
+      },
+      journalIndex: {
+        value: this.stateMachine.getUserCodeJournalIndex(),
+      },
+    }) as InternalCombineablePromise<T>;
   }
 }
 
@@ -602,7 +657,7 @@ export class RpcContextImpl implements RpcContext {
   ): Promise<T> {
     return this.ctx.sideEffect(fn, retryPolicy);
   }
-  public awakeable<T>(): { id: string; promise: Promise<T> } {
+  public awakeable<T>(): { id: string; promise: CombineablePromise<T> } {
     return this.ctx.awakeable();
   }
   public resolveAwakeable<T>(id: string, payload: T): void {
@@ -611,7 +666,7 @@ export class RpcContextImpl implements RpcContext {
   public rejectAwakeable(id: string, reason: string): void {
     this.ctx.rejectAwakeable(id, reason);
   }
-  public sleep(millis: number): Promise<void> {
+  public sleep(millis: number): CombineablePromise<void> {
     return this.ctx.sleep(millis);
   }
 

@@ -13,22 +13,22 @@ import { describe, expect } from "@jest/globals";
 import * as restate from "../src/public_api";
 import { TestDriver } from "./testdriver";
 import {
+  ackMessage,
+  backgroundInvokeMessage,
+  checkJournalMismatchError,
+  checkTerminalError,
   completionMessage,
+  END_MESSAGE,
+  failureWithTerminal,
+  getAwakeableId,
+  greetRequest,
+  greetResponse,
   inputMessage,
+  invokeMessage,
   outputMessage,
   sideEffectMessage,
   startMessage,
-  greetRequest,
-  greetResponse,
-  invokeMessage,
-  getAwakeableId,
-  backgroundInvokeMessage,
   suspensionMessage,
-  checkTerminalError,
-  checkJournalMismatchError,
-  failureWithTerminal,
-  ackMessage,
-  END_MESSAGE,
 } from "./protoutils";
 import {
   TestGreeter,
@@ -37,6 +37,7 @@ import {
   TestResponse,
 } from "../src/generated/proto/test";
 import { ErrorCodes, TerminalError } from "../src/types/errors";
+import { ProtocolMode } from "../src/generated/proto/discovery";
 
 class SideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: unknown) {}
@@ -1040,5 +1041,44 @@ describe("TerminalErrorSideEffectService", () => {
       )
     );
     checkTerminalError(result[1], "Something bad happened.");
+  });
+});
+
+class SideEffectWithMutableVariable implements TestGreeter {
+  constructor(readonly externalSideEffect: { effectExecuted: boolean }) {}
+
+  async greet(): Promise<TestResponse> {
+    const ctx = restate.useContext(this);
+
+    await ctx.sideEffect(() => {
+      // I'm trying to simulate a case where the side effect resolution
+      // happens on the next event loop tick.
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          this.externalSideEffect.effectExecuted = true;
+          resolve(undefined);
+        }, 100);
+      });
+    });
+
+    throw new Error("It should not reach this point");
+  }
+}
+
+describe("SideEffectWithMutableVariable", () => {
+  it("should suspend after mutating the variable, and not before!", async () => {
+    const externalSideEffect = { effectExecuted: false };
+
+    const result = await new TestDriver(
+      new SideEffectWithMutableVariable(externalSideEffect),
+      [startMessage(), inputMessage(greetRequest("Till"))],
+      ProtocolMode.REQUEST_RESPONSE
+    ).run();
+
+    expect(result).toStrictEqual([
+      sideEffectMessage(undefined),
+      suspensionMessage([1]),
+    ]);
+    expect(externalSideEffect.effectExecuted).toBeTruthy();
   });
 });

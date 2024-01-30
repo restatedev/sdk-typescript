@@ -46,10 +46,12 @@ import {
   END_MESSAGE_TYPE,
   EndMessage,
   AWAKEABLE_IDENTIFIER_PREFIX,
+  COMBINATOR_ENTRY_MESSAGE,
 } from "../src/types/protocol";
 import { Message } from "../src/types/types";
 import { TestRequest, TestResponse } from "../src/generated/proto/test";
 import {
+  CombinatorEntryMessage,
   FailureWithTerminal,
   SideEffectEntryMessage,
 } from "../src/generated/proto/javascript";
@@ -431,6 +433,22 @@ export function suspensionMessage(entryIndices: number[]): Message {
   );
 }
 
+export function combinatorEntryMessage(
+  combinatorId: number,
+  journalEntriesOrder: number[]
+): Message {
+  return new Message(
+    COMBINATOR_ENTRY_MESSAGE,
+    CombinatorEntryMessage.create({
+      combinatorId,
+      journalEntriesOrder,
+    }),
+    undefined,
+    undefined,
+    true
+  );
+}
+
 export function failure(
   msg: string,
   code: number = ErrorCodes.INTERNAL
@@ -488,10 +506,13 @@ export function getAwakeableId(entryIndex: number): string {
   const encodedEntryIndex = Buffer.alloc(4 /* Size of u32 */);
   encodedEntryIndex.writeUInt32BE(entryIndex);
 
-  return AWAKEABLE_IDENTIFIER_PREFIX + Buffer.concat([
-    Buffer.from("f311f1fdcb9863f0018bd3400ecd7d69b547204e776218b2", "hex"),
-    encodedEntryIndex,
-  ]).toString("base64url");
+  return (
+    AWAKEABLE_IDENTIFIER_PREFIX +
+    Buffer.concat([
+      Buffer.from("f311f1fdcb9863f0018bd3400ecd7d69b547204e776218b2", "hex"),
+      encodedEntryIndex,
+    ]).toString("base64url")
+  );
 }
 
 export function keyVal(key: string, value: any): Buffer[] {

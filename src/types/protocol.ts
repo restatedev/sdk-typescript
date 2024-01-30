@@ -9,7 +9,10 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { SideEffectEntryMessage } from "../generated/proto/javascript";
+import {
+  SideEffectEntryMessage,
+  CombinatorEntryMessage,
+} from "../generated/proto/javascript";
 import {
   AwakeableEntryMessage,
   BackgroundInvokeEntryMessage,
@@ -72,6 +75,7 @@ export const AWAKEABLE_IDENTIFIER_PREFIX = "prom_1";
 // Export the custom message types
 // Side effects are custom messages because the runtime does not need to inspect them
 export const SIDE_EFFECT_ENTRY_MESSAGE_TYPE = 0xfc01n;
+export const COMBINATOR_ENTRY_MESSAGE = 0xfc02n;
 
 // Restate DuplexStream
 
@@ -95,6 +99,7 @@ export const KNOWN_MESSAGE_TYPES = new Set([
   AWAKEABLE_ENTRY_MESSAGE_TYPE,
   COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
   SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+  COMBINATOR_ENTRY_MESSAGE,
 ]);
 
 const PROTOBUF_MESSAGE_NAME_BY_TYPE = new Map<bigint, string>([
@@ -115,6 +120,7 @@ const PROTOBUF_MESSAGE_NAME_BY_TYPE = new Map<bigint, string>([
   [AWAKEABLE_ENTRY_MESSAGE_TYPE, "AwakeableEntryMessage"],
   [COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE, "CompleteAwakeableEntryMessage"],
   [SIDE_EFFECT_ENTRY_MESSAGE_TYPE, "SideEffectEntryMessage"],
+  [COMBINATOR_ENTRY_MESSAGE, "CombinatorEntryMessage"],
 ]);
 
 export function formatMessageType(messageType: bigint) {
@@ -142,6 +148,7 @@ const PROTOBUF_MESSAGES: Array<[bigint, any]> = [
   [AWAKEABLE_ENTRY_MESSAGE_TYPE, AwakeableEntryMessage],
   [COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE, CompleteAwakeableEntryMessage],
   [SIDE_EFFECT_ENTRY_MESSAGE_TYPE, SideEffectEntryMessage],
+  [COMBINATOR_ENTRY_MESSAGE, CombinatorEntryMessage],
 ];
 
 export const PROTOBUF_MESSAGE_BY_TYPE = new Map(PROTOBUF_MESSAGES);
@@ -163,14 +170,17 @@ export type ProtocolMessage =
   | BackgroundInvokeEntryMessage
   | AwakeableEntryMessage
   | CompleteAwakeableEntryMessage
-  | SideEffectEntryMessage;
+  | SideEffectEntryMessage
+  | CombinatorEntryMessage;
 
 // These message types will trigger sending a suspension message from the runtime
 // for each of the protocol modes
 export const SUSPENSION_TRIGGERS: bigint[] = [
   INVOKE_ENTRY_MESSAGE_TYPE,
   GET_STATE_ENTRY_MESSAGE_TYPE,
-  SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
   AWAKEABLE_ENTRY_MESSAGE_TYPE,
   SLEEP_ENTRY_MESSAGE_TYPE,
+  COMBINATOR_ENTRY_MESSAGE,
+  // We need it because of the ack
+  SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
 ];
