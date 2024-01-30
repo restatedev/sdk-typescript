@@ -16,6 +16,7 @@ import {
   AwakeableEntryMessage,
   BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
   CLEAR_STATE_ENTRY_MESSAGE_TYPE,
+  COMBINATOR_ENTRY_MESSAGE,
   COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
   CompletionMessage,
   EntryAckMessage,
@@ -129,22 +130,11 @@ export class Journal<I, O> {
               return Promise.resolve(getStateMsg.value || getStateMsg.empty);
             } else {
               // Need to retrieve state by going to the runtime.
-              const journalEntry = new JournalEntry(messageType, message);
-              this.pendingJournalEntries.set(
-                this.userCodeJournalIndex,
-                journalEntry
-              );
-              return journalEntry.completablePromise.promise;
+              return this.appendJournalEntry(messageType, message);
             }
           }
           default: {
-            // Need completion
-            const journalEntry = new JournalEntry(messageType, message);
-            this.pendingJournalEntries.set(
-              this.userCodeJournalIndex,
-              journalEntry
-            );
-            return journalEntry.completablePromise.promise;
+            return this.appendJournalEntry(messageType, message);
           }
         }
       }
@@ -323,7 +313,8 @@ export class Journal<I, O> {
       case SET_STATE_ENTRY_MESSAGE_TYPE:
       case CLEAR_STATE_ENTRY_MESSAGE_TYPE:
       case COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE:
-      case BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE: {
+      case BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE:
+      case COMBINATOR_ENTRY_MESSAGE: {
         // Do not need a completion. So if the match has passed then the entry can be deleted.
         journalEntry.completablePromise.resolve(undefined);
         this.pendingJournalEntries.delete(journalIndex);
@@ -431,6 +422,18 @@ export class Journal<I, O> {
   public readNextReplayEntry() {
     this.incrementUserCodeIndex();
     return this.invocation.replayEntries.get(this.userCodeJournalIndex);
+  }
+
+  /**
+   * Append journal entry. This won't increment the journal index.
+   */
+  public appendJournalEntry(
+    messageType: bigint,
+    message: p.ProtocolMessage | Uint8Array
+  ): Promise<unknown> {
+    const journalEntry = new JournalEntry(messageType, message);
+    this.pendingJournalEntries.set(this.userCodeJournalIndex, journalEntry);
+    return journalEntry.completablePromise.promise;
   }
 
   public isClosed(): boolean {

@@ -193,7 +193,10 @@ async function testCombinatorInProcessingMode(
     () => {
       return undefined;
     },
-    (combinatorIndex, order) => resultMap.set(combinatorIndex, order)
+    (combinatorIndex, order) => {
+      resultMap.set(combinatorIndex, order);
+      return new Promise<void>((r) => r());
+    }
   );
 
   return tracker.createCombinator(combinatorConstructor, promises).transform(

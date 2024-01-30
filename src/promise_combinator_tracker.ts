@@ -39,7 +39,7 @@ function preparePromiseCombinator(
   promises: Array<{ id: PromiseId; promise: Promise<unknown> }>,
   readReplayOrder: (combinatorIndex: number) => PromiseId[] | undefined,
   onNewCompleted: (combinatorIndex: number, promiseId: PromiseId) => void,
-  onCombinatorResolved: (combinatorIndex: number) => void,
+  onCombinatorResolved: (combinatorIndex: number) => Promise<void>,
   onCombinatorReplayed: (combinatorIndex: number) => void
 ): WrappedPromise<unknown> {
   // Create the proxy promises and index them
@@ -59,9 +59,10 @@ function preparePromiseCombinator(
   // Create the combinator using the proxy promises
   const combinator = combinatorConstructor(
     promisesWithProxyPromise.map((v) => v.proxyPromise.promise)
-  ).finally(() =>
-    // Once the combinator is resolved, notify back.
-    onCombinatorResolved(combinatorIndex)
+  ).finally(
+    async () =>
+      // Once the combinator is resolved, notify back.
+      await onCombinatorResolved(combinatorIndex)
   );
 
   return wrapDeeply(combinator, () => {
@@ -133,7 +134,7 @@ export class PromiseCombinatorTracker {
     private readonly onWriteCombinatorOrder: (
       combinatorIndex: number,
       order: PromiseId[]
-    ) => void
+    ) => Promise<void>
   ) {}
 
   public createCombinator(
@@ -174,7 +175,7 @@ export class PromiseCombinatorTracker {
     this.pendingCombinators.delete(idx);
   }
 
-  private onCombinatorResolved(idx: number) {
+  private async onCombinatorResolved(idx: number) {
     const order = this.pendingCombinators.get(idx);
     if (order === undefined) {
       // It was already published
@@ -185,6 +186,6 @@ export class PromiseCombinatorTracker {
     this.pendingCombinators.delete(idx);
 
     // Publish the combinator order
-    this.onWriteCombinatorOrder(idx, order);
+    await this.onWriteCombinatorOrder(idx, order);
   }
 }

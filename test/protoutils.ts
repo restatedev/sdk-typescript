@@ -442,7 +442,10 @@ export function combinatorEntryMessage(
     CombinatorEntryMessage.create({
       combinatorId,
       journalEntriesOrder,
-    })
+    }),
+    undefined,
+    undefined,
+    true
   );
 }
 

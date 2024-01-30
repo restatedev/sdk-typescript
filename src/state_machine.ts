@@ -264,7 +264,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
     }));
   }
 
-  writeCombinatorOrderEntry(combinatorId: number, order: PromiseId[]) {
+  async writeCombinatorOrderEntry(combinatorId: number, order: PromiseId[]) {
     if (this.journal.isProcessing()) {
       const combinatorMessage: CombinatorEntryMessage = {
         combinatorId,
@@ -276,7 +276,21 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
         combinatorMessage
       );
 
-      this.send(new Message(COMBINATOR_ENTRY_MESSAGE, combinatorMessage));
+      const ackPromise = this.journal.appendJournalEntry(
+        COMBINATOR_ENTRY_MESSAGE,
+        combinatorMessage
+      );
+      this.send(
+        new Message(
+          COMBINATOR_ENTRY_MESSAGE,
+          combinatorMessage,
+          undefined,
+          undefined,
+          true
+        )
+      );
+
+      await ackPromise;
     }
   }
 

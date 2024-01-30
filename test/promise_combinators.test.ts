@@ -71,6 +71,7 @@ describe("AwakeableSleepRaceGreeter", () => {
       startMessage(),
       inputMessage(greetRequest("Till")),
       completionMessage(1, JSON.stringify("Francesco")),
+      ackMessage(3),
     ]).run();
 
     expect(result.length).toStrictEqual(5);
@@ -88,6 +89,7 @@ describe("AwakeableSleepRaceGreeter", () => {
       startMessage(),
       inputMessage(greetRequest("Till")),
       completionMessage(2, undefined, true),
+      ackMessage(3),
     ]).run();
 
     expect(result.length).toStrictEqual(5);
@@ -105,6 +107,7 @@ describe("AwakeableSleepRaceGreeter", () => {
       startMessage(),
       inputMessage(greetRequest("Till")),
       awakeableMessage("Francesco"),
+      ackMessage(3),
     ]).run();
 
     expect(result.length).toStrictEqual(4);
@@ -122,6 +125,7 @@ describe("AwakeableSleepRaceGreeter", () => {
       inputMessage(greetRequest("Till")),
       awakeableMessage("Francesco"),
       sleepMessage(1),
+      ackMessage(3),
     ]).run();
 
     expect(result).toStrictEqual([
@@ -206,6 +210,7 @@ describe("AwakeableSleepRaceInterleavedWithSideEffectGreeter", () => {
         inputMessage(greetRequest("Till")),
         completionMessage(1, JSON.stringify("Francesco")),
         ackMessage(3),
+        ackMessage(4),
       ]
     ).run();
 
@@ -229,6 +234,7 @@ describe("AwakeableSleepRaceInterleavedWithSideEffectGreeter", () => {
         awakeableMessage("Francesco"),
         sleepMessage(1),
         ackMessage(3),
+        ackMessage(4),
       ]
     ).run();
 
@@ -236,6 +242,87 @@ describe("AwakeableSleepRaceInterleavedWithSideEffectGreeter", () => {
       sideEffectMessage("sideEffect"),
       combinatorEntryMessage(0, [1]),
       outputMessage(greetResponse(`Hello Francesco for ${getAwakeableId(1)}`)),
+      END_MESSAGE,
+    ]);
+  });
+});
+
+class CombineablePromiseThenSideEffect implements TestGreeter {
+  async greet(): Promise<TestResponse> {
+    const ctx = restate.useContext(this);
+
+    const a1 = ctx.awakeable<string>();
+    const a2 = ctx.awakeable<string>();
+    const combinatorResult = await CombineablePromise.race([
+      a1.promise,
+      a2.promise,
+    ]);
+
+    const sideEffectResult = await ctx.sideEffect<string>(
+      async () => "sideEffect"
+    );
+
+    return TestResponse.create({
+      greeting: combinatorResult + "-" + sideEffectResult,
+    });
+  }
+}
+
+describe("CombineablePromiseThenSideEffect", () => {
+  it("after the combinator entry, suspends waiting for ack", async () => {
+    const result = await new TestDriver(
+      new CombineablePromiseThenSideEffect(),
+      [
+        startMessage(),
+        inputMessage(greetRequest("Till")),
+        awakeableMessage("Francesco"),
+        awakeableMessage(),
+      ]
+    ).run();
+
+    expect(result).toStrictEqual([
+      combinatorEntryMessage(0, [1]),
+      suspensionMessage([2, 3]),
+    ]);
+  });
+
+  it("after the combinator entry and the ack, completes", async () => {
+    const result = await new TestDriver(
+      new CombineablePromiseThenSideEffect(),
+      [
+        startMessage(),
+        inputMessage(greetRequest("Till")),
+        awakeableMessage("Francesco"),
+        awakeableMessage(),
+        ackMessage(3),
+        ackMessage(4),
+      ]
+    ).run();
+
+    expect(result).toStrictEqual([
+      combinatorEntryMessage(0, [1]),
+      sideEffectMessage("sideEffect"),
+      outputMessage(greetResponse(`Francesco-sideEffect`)),
+      END_MESSAGE,
+    ]);
+  });
+
+  it("no need to wait for ack when replaing the combinator entry", async () => {
+    const result = await new TestDriver(
+      new CombineablePromiseThenSideEffect(),
+      [
+        startMessage(),
+        inputMessage(greetRequest("Till")),
+        awakeableMessage("Francesco"),
+        awakeableMessage(),
+        combinatorEntryMessage(0, [1]),
+        ackMessage(4),
+      ]
+    ).run();
+
+    expect(result).toStrictEqual([
+      sideEffectMessage("sideEffect"),
+      outputMessage(greetResponse(`Francesco-sideEffect`)),
       END_MESSAGE,
     ]);
   });
