@@ -11,7 +11,7 @@
 
 import { RetrySettings } from "./utils/public_utils";
 import { Client, SendClient } from "./types/router";
-import { RestateGrpcContextImpl } from "./restate_context_impl";
+import { RestateContextImpl } from "./restate_context_impl";
 
 /**
  * A promise that can be combined using Promise combinators in RestateContext.
@@ -238,9 +238,10 @@ export const CombineablePromise = {
       return Promise.all(values);
     }
 
-    return (
-      values[0].__restate_context as RestateGrpcContextImpl
-    ).createCombinator(Promise.all.bind(Promise), values) as Promise<{
+    return (values[0].__restate_context as RestateContextImpl).createCombinator(
+      Promise.all.bind(Promise),
+      values
+    ) as Promise<{
       -readonly [P in keyof T]: Awaited<T[P]>;
     }>;
   },
@@ -261,11 +262,10 @@ export const CombineablePromise = {
       return Promise.race(values);
     }
 
-    return (
-      values[0].__restate_context as RestateGrpcContextImpl
-    ).createCombinator(Promise.race.bind(Promise), values) as Promise<
-      Awaited<T[number]>
-    >;
+    return (values[0].__restate_context as RestateContextImpl).createCombinator(
+      Promise.race.bind(Promise),
+      values
+    ) as Promise<Awaited<T[number]>>;
   },
 
   /**
@@ -285,11 +285,10 @@ export const CombineablePromise = {
       return Promise.any(values);
     }
 
-    return (
-      values[0].__restate_context as RestateGrpcContextImpl
-    ).createCombinator(Promise.any.bind(Promise), values) as Promise<
-      Awaited<T[number]>
-    >;
+    return (values[0].__restate_context as RestateContextImpl).createCombinator(
+      Promise.any.bind(Promise),
+      values
+    ) as Promise<Awaited<T[number]>>;
   },
 
   /**
@@ -310,9 +309,10 @@ export const CombineablePromise = {
       return Promise.allSettled(values);
     }
 
-    return (
-      values[0].__restate_context as RestateGrpcContextImpl
-    ).createCombinator(Promise.allSettled.bind(Promise), values) as Promise<{
+    return (values[0].__restate_context as RestateContextImpl).createCombinator(
+      Promise.allSettled.bind(Promise),
+      values
+    ) as Promise<{
       -readonly [P in keyof T]: PromiseSettledResult<Awaited<T[P]>>;
     }>;
   },

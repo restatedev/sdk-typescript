@@ -14,10 +14,7 @@
 
 import { Rand } from "../restate_context";
 import { ErrorCodes, TerminalError } from "../types/errors";
-import {
-  CallContexType,
-  RestateGrpcContextImpl,
-} from "../restate_context_impl";
+import { CallContexType, RestateContextImpl } from "../restate_context_impl";
 import { createHash } from "crypto";
 
 export class RandImpl implements Rand {
@@ -71,7 +68,7 @@ export class RandImpl implements Rand {
   }
 
   checkContext() {
-    const context = RestateGrpcContextImpl.callContext.getStore();
+    const context = RestateContextImpl.callContext.getStore();
     if (context && context.type === CallContexType.SideEffect) {
       throw new TerminalError(
         `You may not call methods on Rand from within a side effect.`,

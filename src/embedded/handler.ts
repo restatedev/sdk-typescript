@@ -10,14 +10,13 @@
  */
 
 import { RpcContext, useContext } from "../restate_context";
-import { RpcContextImpl } from "../restate_context_impl";
 import { GrpcServiceMethod, HostedGrpcServiceMethod } from "../types/grpc";
 
 export function wrapHandler<I, O>(
   handler: (ctx: RpcContext, input: I) => Promise<O>
 ): HostedGrpcServiceMethod<I, O> {
   const localMethod = (instance: unknown, input: I): Promise<O> => {
-    const ctx = new RpcContextImpl(useContext(instance));
+    const ctx = useContext(instance) as unknown as RpcContext;
     return handler(ctx, input);
   };
 

@@ -24,7 +24,7 @@ export type WrappedPromise<T> = Promise<T> & {
       | ((reason: any) => TResult2 | PromiseLike<TResult2>)
       | null
       | undefined
-  ) => Promise<TResult1 | TResult2>;
+  ) => WrappedPromise<TResult1 | TResult2>;
 };
 
 export function wrapDeeply<T>(
@@ -41,7 +41,7 @@ export function wrapDeeply<T>(
       | ((reason: any) => TResult2 | PromiseLike<TResult2>)
       | null
       | undefined
-  ) => Promise<TResult1 | TResult2>;
+  ) => WrappedPromise<TResult1 | TResult2>;
   if (Object.hasOwn(promise, "transform")) {
     const wrappedPromise = promise as WrappedPromise<T>;
     transform = (onfulfilled, onrejected) =>

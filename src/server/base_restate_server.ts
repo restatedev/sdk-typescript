@@ -43,8 +43,7 @@ import {
   protoMetadata as rpcServiceProtoMetadata,
   KeyedEvent,
 } from "../generated/proto/dynrpc";
-import { RestateContext, useContext } from "../restate_context";
-import { RpcContextImpl } from "../restate_context_impl";
+import { RestateContext, RpcContext, useContext } from "../restate_context";
 import { verifyAssumptions } from "../utils/assumptions";
 import { TerminalError } from "../public_api";
 import { isEventHandler } from "../types/router";
@@ -421,7 +420,7 @@ async function dispatchKeyedRpcHandler(
   handler: Function
 ): Promise<RpcResponse> {
   const { key, request } = verifyAssumptions(true, req);
-  const ctx = new RpcContextImpl(origCtx);
+  const ctx = origCtx as unknown as RpcContext;
   if (typeof key !== "string" || key.length === 0) {
     // we throw a terminal error here, because this cannot be patched by updating code:
     // if the request is wrong (missing a key), the request can never make it
@@ -439,7 +438,7 @@ async function dispatchUnkeyedRpcHandler(
   handler: Function
 ): Promise<RpcResponse> {
   const { request } = verifyAssumptions(false, req);
-  const ctx = new RpcContextImpl(origCtx);
+  const ctx = origCtx as unknown as RpcContext;
   const result = await handler(ctx, request);
   return RpcResponse.create({ response: result });
 }
@@ -449,7 +448,7 @@ async function dispatchKeyedEventHandler(
   req: KeyedEvent,
   handler: Function
 ): Promise<Empty> {
-  const ctx = new RpcContextImpl(origCtx);
+  const ctx = origCtx as unknown as RpcContext;
   const key = req.key;
   if (key === null || key === undefined || key.length === 0) {
     // we throw a terminal error here, because this cannot be patched by updating code:
