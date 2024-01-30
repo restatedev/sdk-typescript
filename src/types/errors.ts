@@ -201,6 +201,12 @@ export class TerminalError extends RestateError {
   }
 }
 
+export class TimeoutError extends TerminalError {
+  constructor() {
+    super("Timeout occurred", { errorCode: ErrorCodes.DEADLINE_EXCEEDED });
+  }
+}
+
 // Leads to Restate retries
 export class RetryableError extends RestateError {
   constructor(message: string, options?: { errorCode?: number; cause?: any }) {

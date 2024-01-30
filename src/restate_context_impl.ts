@@ -49,6 +49,7 @@ import {
   TerminalError,
   ensureError,
   errorToFailureWithTerminal,
+  TimeoutError,
 } from "./types/errors";
 import { jsonSerialize, jsonDeserialize } from "./utils/utils";
 import { Empty } from "./generated/google/protobuf/empty";
@@ -62,7 +63,10 @@ import { Client, SendClient } from "./types/router";
 import { RpcRequest, RpcResponse } from "./generated/proto/dynrpc";
 import { requestFromArgs } from "./utils/assumptions";
 import { RandImpl } from "./utils/rand";
-import { newJournalEntryPromiseId } from "./promise_combinator_tracker";
+import {
+  newJournalEntryPromiseId,
+  PromiseId,
+} from "./promise_combinator_tracker";
 import { WrappedPromise } from "./utils/promises";
 
 export enum CallContexType {
@@ -345,7 +349,7 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
     return this.markCombineablePromise(this.sleepInternal(millis));
   }
 
-  private sleepInternal(millis: number): Promise<void> {
+  private sleepInternal(millis: number): WrappedPromise<void> {
     return this.stateMachine.handleUserCodeMessage<void>(
       SLEEP_ENTRY_MESSAGE_TYPE,
       SleepEntryMessage.create({ wakeUpTime: Date.now() + millis })
@@ -494,12 +498,36 @@ export class RestateGrpcContextImpl implements RestateGrpcContext {
   private markCombineablePromise<T>(
     p: Promise<T>
   ): InternalCombineablePromise<T> {
+    const journalIndex = this.stateMachine.getUserCodeJournalIndex();
+    const orTimeout = (millis: number): Promise<T> => {
+      const sleepPromise: Promise<T> = this.sleepInternal(millis).transform(
+        () => {
+          throw new TimeoutError();
+        }
+      );
+      const sleepPromiseIndex = this.stateMachine.getUserCodeJournalIndex();
+
+      return this.stateMachine.createCombinator(Promise.race.bind(Promise), [
+        {
+          id: newJournalEntryPromiseId(journalIndex),
+          promise: p,
+        },
+        {
+          id: newJournalEntryPromiseId(sleepPromiseIndex),
+          promise: sleepPromise,
+        },
+      ]) as Promise<T>;
+    };
+
     return Object.defineProperties(p, {
       __restate_context: {
         value: this,
       },
       journalIndex: {
-        value: this.stateMachine.getUserCodeJournalIndex(),
+        value: journalIndex,
+      },
+      orTimeout: {
+        value: orTimeout.bind(this),
       },
     }) as InternalCombineablePromise<T>;
   }

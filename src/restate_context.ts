@@ -18,6 +18,15 @@ import { RestateGrpcContextImpl } from "./restate_context_impl";
  */
 export type CombineablePromise<T> = Promise<T> & {
   __restate_context: RestateBaseContext;
+
+  /**
+   * Creates a promise that awaits for the current promise up to the specified timeout duration.
+   * If the timeout is fired, this Promise will be rejected with a {@link TimeoutError}.
+   *
+   * @param millis duration of the sleep in millis.
+   * This is a lower-bound.
+   */
+  orTimeout(millis: number): Promise<T>;
 };
 
 /**

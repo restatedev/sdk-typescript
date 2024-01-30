@@ -30,6 +30,7 @@ import {
 } from "./protoutils";
 import { TestGreeter, TestResponse } from "../src/generated/proto/test";
 import { SLEEP_ENTRY_MESSAGE_TYPE } from "../src/types/protocol";
+import { TimeoutError } from "../src/types/errors";
 import { CombineablePromise } from "../src/restate_context";
 
 class AwakeableSleepRaceGreeter implements TestGreeter {
@@ -323,6 +324,66 @@ describe("CombineablePromiseThenSideEffect", () => {
     expect(result).toStrictEqual([
       sideEffectMessage("sideEffect"),
       outputMessage(greetResponse(`Francesco-sideEffect`)),
+      END_MESSAGE,
+    ]);
+  });
+});
+
+class AwakeableOrTimeoutGreeter implements TestGreeter {
+  async greet(): Promise<TestResponse> {
+    const ctx = restate.useContext(this);
+
+    const { promise } = ctx.awakeable<string>();
+    try {
+      const result = await promise.orTimeout(100);
+      return TestResponse.create({
+        greeting: `Hello ${result}`,
+      });
+    } catch (e) {
+      if (e instanceof TimeoutError) {
+        return TestResponse.create({
+          greeting: `Hello timed-out`,
+        });
+      }
+    }
+
+    throw new Error("Unexpected result");
+  }
+}
+
+describe("AwakeableOrTimeoutGreeter", () => {
+  it("handles completion of awakeable", async () => {
+    const result = await new TestDriver(new AwakeableOrTimeoutGreeter(), [
+      startMessage(),
+      inputMessage(greetRequest("Till")),
+      completionMessage(1, JSON.stringify("Francesco")),
+      ackMessage(3),
+    ]).run();
+
+    expect(result.length).toStrictEqual(5);
+    expect(result[0]).toStrictEqual(awakeableMessage());
+    expect(result[1].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
+    expect(result.slice(2)).toStrictEqual([
+      combinatorEntryMessage(0, [1]),
+      outputMessage(greetResponse(`Hello Francesco`)),
+      END_MESSAGE,
+    ]);
+  });
+
+  it("handles completion of sleep", async () => {
+    const result = await new TestDriver(new AwakeableOrTimeoutGreeter(), [
+      startMessage(),
+      inputMessage(greetRequest("Till")),
+      completionMessage(2, undefined, true),
+      ackMessage(3),
+    ]).run();
+
+    expect(result.length).toStrictEqual(5);
+    expect(result[0]).toStrictEqual(awakeableMessage());
+    expect(result[1].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
+    expect(result.slice(2)).toStrictEqual([
+      combinatorEntryMessage(0, [2]),
+      outputMessage(greetResponse(`Hello timed-out`)),
       END_MESSAGE,
     ]);
   });
