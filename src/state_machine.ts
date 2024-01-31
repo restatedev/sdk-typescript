@@ -192,7 +192,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
         return;
       }
       if (this.journal.isUnResolved(journalIndex)) {
-        this.scheduleSuspension();
+        this.hitSuspensionPoint();
       }
     });
   }
@@ -290,6 +290,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
         )
       );
 
+      this.hitSuspensionPoint();
       await ackPromise;
     }
   }
@@ -510,11 +511,11 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
   }
 
   /**
-   * This method is invoked when we hit a suspension point.
+   * This method is invoked when we hit a suspension point. A suspension point is everytime the user "await"s a Promise returned by RestateContext that might be completed at a later point in time by a CompletionMessage/AckMessage.
    *
-   * A suspension point is everytime the user "await"s a Promise returned by RestateContext that might be completed at a later point in time by a CompletionMessage.
+   * Depending on the state of the read channel, and on the protocol mode, it might either immediately suspend, or schedule a suspension to happen at a later point in time.
    */
-  private scheduleSuspension() {
+  private hitSuspensionPoint() {
     // If there was already a timeout set, we want to reset the time to postpone suspension as long as we make progress.
     // So we first clear the old timeout, and then we set a new one.
     this.clearSuspensionTimeout();
@@ -606,7 +607,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
 
     // If there is a timeout planned, reset the timout to execute immediately when the work is done.
     if (this.suspensionTimeout !== undefined) {
-      this.scheduleSuspension();
+      this.hitSuspensionPoint();
     }
   }
 

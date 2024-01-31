@@ -29,7 +29,10 @@ import {
   ackMessage,
 } from "./protoutils";
 import { TestGreeter, TestResponse } from "../src/generated/proto/test";
-import { SLEEP_ENTRY_MESSAGE_TYPE } from "../src/types/protocol";
+import {
+  COMBINATOR_ENTRY_MESSAGE,
+  SLEEP_ENTRY_MESSAGE_TYPE,
+} from "../src/types/protocol";
 import { TimeoutError } from "../src/types/errors";
 import { CombineablePromise } from "../src/restate_context";
 
@@ -285,6 +288,23 @@ describe("CombineablePromiseThenSideEffect", () => {
       combinatorEntryMessage(0, [1]),
       suspensionMessage([2, 3]),
     ]);
+  });
+
+  it("after the combinator entry, suspends waiting only for the combinator ack", async () => {
+    const result = await new TestDriver(
+      new CombineablePromiseThenSideEffect(),
+      [
+        startMessage(),
+        inputMessage(greetRequest("Till")),
+        awakeableMessage("Francesco"),
+        awakeableMessage("Till"),
+      ]
+    ).run();
+
+    expect(result.length).toStrictEqual(2);
+    // We don't care if 1 or 2 was picked up.
+    expect(result[0].messageType).toStrictEqual(COMBINATOR_ENTRY_MESSAGE);
+    expect(result[1]).toStrictEqual(suspensionMessage([3]));
   });
 
   it("after the combinator entry and the ack, completes", async () => {
