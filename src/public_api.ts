@@ -16,6 +16,8 @@ export {
   ServiceApi,
   RpcContext,
   CombineablePromise,
+  Rand,
+  RestateGrpcChannel,
 } from "./restate_context";
 export {
   router,
