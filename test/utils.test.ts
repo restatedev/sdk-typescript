@@ -155,22 +155,24 @@ describe("jsonSafeAny", () => {
     expect(jsonSafeAny("", BigInt("9007199254740991"))).toStrictEqual(
       BigInt("9007199254740991")
     );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (BigInt.prototype as any).toJSON = function () {
       return this.toString();
     };
     expect(jsonSafeAny("", BigInt("9007199254740991"))).toStrictEqual(
       "9007199254740991"
     );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     delete (BigInt.prototype as any).toJSON;
   });
   it("handles custom types", () => {
     const numberType = {
-      toJSON(key: string): number {
+      toJSON(): number {
         return 1;
       },
     };
     const stringType = {
-      toJSON(key: string): string {
+      toJSON(): string {
         return "foo";
       },
     };
