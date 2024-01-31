@@ -916,7 +916,7 @@ export class UnawaitedSideEffectShouldFailSubsequentContextCallService
   implements TestGreeter
 {
   constructor(
-    // eslint-disable-next-line @typescript-eslint/no-empty-function
+    // eslint-disable-next-line @typescript-eslint/no-empty-function,@typescript-eslint/no-unused-vars
     private readonly next = (ctx: restate.RestateContext): void => {}
   ) {}
 
