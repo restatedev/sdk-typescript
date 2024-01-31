@@ -63,10 +63,7 @@ import { Client, SendClient } from "./types/router";
 import { RpcRequest, RpcResponse } from "./generated/proto/dynrpc";
 import { requestFromArgs } from "./utils/assumptions";
 import { RandImpl } from "./utils/rand";
-import {
-  newJournalEntryPromiseId,
-  PromiseId,
-} from "./promise_combinator_tracker";
+import { newJournalEntryPromiseId } from "./promise_combinator_tracker";
 import { WrappedPromise } from "./utils/promises";
 
 export enum CallContexType {

@@ -15,6 +15,7 @@ export {
   useContext,
   ServiceApi,
   RpcContext,
+  CombineablePromise,
 } from "./restate_context";
 export {
   router,
