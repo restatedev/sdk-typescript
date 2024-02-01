@@ -227,6 +227,16 @@ export abstract class BaseRestateServer {
   }
 
   protected bindRpcService(name: string, router: RpcRouter, keyed: boolean) {
+    if (name === undefined || router === undefined || keyed === undefined) {
+      throw new Error("incomplete arguments: (name, router, keyed)");
+    }
+    if (!(typeof name === "string") || name.length === 0) {
+      throw new Error("service name must be a non-empty string");
+    }
+    if (name.indexOf("/") !== -1) {
+      throw new Error("service name must not contain any slash '/'");
+    }
+
     const lastDot = name.indexOf(".");
     const serviceName = lastDot === -1 ? name : name.substring(lastDot + 1);
     const servicePackage = name.substring(
