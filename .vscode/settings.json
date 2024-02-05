@@ -1,18 +1,17 @@
 {
   "editor.defaultFormatter": "rvest.vs-code-prettier-eslint",
-  "editor.formatOnPaste": false, // required
-  "editor.formatOnType": false, // required
-  "editor.formatOnSave": true, // optional
-  "editor.formatOnSaveMode": "file", // required to format on save
-  "files.autoSave": "onFocusChange", // optional but recommended
+  "editor.formatOnPaste": false,
+  "editor.formatOnType": false,
+  "editor.formatOnSave": false,
+  "editor.formatOnSaveMode": "file",
+
+  "files.autoSave": "onFocusChange",
   "files.watcherExclude": {
-    "**/.git/objects/**": true,
-    "**/.git/subtree-cache/**": true,
-    "**/node_modules/*/**": true,
-    "**/.hg/store/**": true
+    "**/.git/**": true,
+    "**/node_modules/**": true
   },
 
-  "[markdown]": {
-    "editor.formatOnSave": false
+  "[typescript]": {
+    "editor.formatOnSave": true
   }
 }
