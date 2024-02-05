@@ -33,10 +33,9 @@ export class GreeterService implements TestGreeter {
     const ctx = restate.useContext(this);
 
     // state
-    let seen = (await ctx.get<number>("seen")) || 0;
+    let seen = (await ctx.get<number>("seen")) ?? 0;
     seen += 1;
-
-    await ctx.set("seen", seen);
+    ctx.set("seen", seen);
 
     // return the final response
     return TestResponse.create({

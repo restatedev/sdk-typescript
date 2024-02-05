@@ -9,25 +9,12 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-/* eslint-disable no-console */
-
 /*
- * A simple example program using the Restate's event handlers.
+ * A simple example program showing how to let services listen to events produced
+ * by systems like Kafka.
  */
 
 import * as restate from "../src/public_api";
-
-const registration = async (ctx: restate.RpcContext, event: restate.Event) => {
-  // store in state the user's information as coming from the registeration event
-  const { name } = event.json<{ name: string }>();
-  ctx.set("name", name);
-};
-
-const email = async (ctx: restate.RpcContext, event: restate.Event) => {
-  // store in state the user's information as coming from the email event
-  const { email } = event.json<{ email: string }>();
-  ctx.set("email", email);
-};
 
 type UserProfile = {
   id: string;
@@ -35,22 +22,31 @@ type UserProfile = {
   email: string;
 };
 
-const get = async (
-  ctx: restate.RpcContext,
-  id: string
-): Promise<UserProfile> => {
-  return {
-    id,
-    name: (await ctx.get<string>("name")) ?? "",
-    email: (await ctx.get<string>("email")) ?? "",
-  };
-};
+const profileService = restate.keyedRouter({
+  registration: restate.keyedEventHandler(
+    async (ctx: restate.RpcContext, event: restate.Event) => {
+      // store in state the user's information as coming from the registeration event
+      const { name } = event.json<{ name: string }>();
+      ctx.set("name", name);
+    }
+  ),
 
-const profile = restate.keyedRouter({
-  registration: restate.keyedEventHandler(registration),
-  email: restate.keyedEventHandler(email),
-  get,
+  email: restate.keyedEventHandler(
+    async (ctx: restate.RpcContext, event: restate.Event) => {
+      // store in state the user's information as coming from the email event
+      const { email } = event.json<{ email: string }>();
+      ctx.set("email", email);
+    }
+  ),
+
+  get: async (ctx: restate.RpcContext, id: string): Promise<UserProfile> => {
+    return {
+      id,
+      name: (await ctx.get<string>("name")) ?? "",
+      email: (await ctx.get<string>("email")) ?? "",
+    };
+  },
 });
 
 // restate server
-restate.createServer().bindKeyedRouter("profile", profile).listen(9080);
+restate.createServer().bindKeyedRouter("profile", profileService).listen(9080);

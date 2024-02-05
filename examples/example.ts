@@ -9,8 +9,6 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-/* eslint-disable no-console */
-
 /*
  * A simple example program using the Restate dynamic RPC-based API.
  *
@@ -20,43 +18,45 @@
 
 import * as restate from "../src/public_api";
 
-// handler implementations
-
-const doGreet = async (
-  ctx: restate.RpcContext,
-  name: string
-): Promise<string> => {
-  const countSoFar = await ctx.rpc<apiType>({ path: "counter" }).count(name);
-
-  const message = `Hello ${name}! at the ${countSoFar + 1}th time`;
-
-  ctx.send(greeterApi).logger(message);
-  ctx.sendDelayed(greeterApi, 100).logger("delayed " + message);
-
-  return message;
-};
-
-const countKeeper = async (ctx: restate.RpcContext): Promise<number> => {
-  const seen = (await ctx.get<number>("seen")) || 0;
-  ctx.set("seen", seen + 1);
-  return seen;
-};
-
-// routers (with some in-line handlers)
-
+//
+// The main entry point for the service, receiving the greeting request and name.
+//
 const greeter = restate.router({
-  greet: doGreet,
+  greet: async (ctx: restate.RpcContext, name: string) => {
+    // blocking RPC call to a keyed service (here supplying type and path separately)
+    const countSoFar = await ctx
+      .rpc<counterApiType>({ path: "counter" })
+      .count(name);
+
+    const message = `Hello ${name}, for the ${countSoFar + 1}th time!`;
+
+    // sending messages to ourselves, immediately and delayed
+    ctx.send(greeterApi).logger(message);
+    ctx.sendDelayed(greeterApi, 100).logger("delayed " + message);
+
+    return message;
+  },
+
   logger: async (ctx: restate.RpcContext, msg: string) => {
     ctx.console.log(" HEEEELLLLOOOOO! " + msg);
   },
 });
 
+//
+// The stateful aux service that keeps the counts.
+// This could in principle be the same service as the greet service, we just separate
+// them here to have this multi-service setup for testing.
+//
 const counter = restate.keyedRouter({
-  count: countKeeper,
+  count: async (ctx: restate.RpcContext): Promise<number> => {
+    const seen = (await ctx.get<number>("seen")) ?? 0;
+    ctx.set("seen", seen + 1);
+    return seen;
+  },
 });
 
-type apiType = typeof counter;
 const greeterApi: restate.ServiceApi<typeof greeter> = { path: "greeter" };
+type counterApiType = typeof counter;
 
 // restate server
 
