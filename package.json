@@ -2,33 +2,23 @@
   "name": "@restatedev/restate-sdk",
   "version": "0.7.0",
   "description": "Typescript SDK for Restate",
-  "engines": {
-    "node": ">= 18"
-  },
+  "author": "Restate Developers",
+  "license": "MIT",
+  "email": "code@restate.dev",
+  "homepage": "https://github.com/restatedev/sdk-typescript#readme",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/restatedev/sdk-typescript.git"
   },
-  "release-it": {
-    "git": {
-      "pushRepo": "https://github.com/restatedev/sdk-typescript.git"
-    },
-    "github": {
-      "release": true
-    },
-    "npm": {
-      "publish": false
-    }
-  },
-  "publishConfig": {
-    "@restatedev:registry": "https://registry.npmjs.org"
+  "bugs": {
+    "url": "https://github.com/restatedev/sdk-typescript/issues"
   },
   "type": "commonjs",
   "main": "dist/public_api.js",
   "types": "dist/public_api.d.ts",
-  "author": "Restate Developers",
-  "license": "MIT",
-  "email": "code@restate.dev",
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "proto": "npx buf mod update && npx buf generate",
     "build": "tsc --noEmitOnError",
@@ -43,9 +33,6 @@
     "handlerexample": "RESTATE_DEBUG_LOGGING=JOURNAL ts-node-dev --respawn --transpile-only ./examples/handler_example.ts",
     "expressexample": "RESTATE_DEBUG_LOGGING=JOURNAL ts-node-dev --respawn --transpile-only ./examples/embedded_example.ts"
   },
-  "files": [
-    "dist"
-  ],
   "dependencies": {
     "protobufjs": "^7.2.2",
     "ts-proto": "^1.140.0"
@@ -65,12 +52,25 @@
     "typescript": "^4.9.5",
     "express": "*"
   },
-  "bugs": {
-    "url": "https://github.com/restatedev/sdk-typescript/issues"
+  "engines": {
+    "node": ">= 18"
   },
-  "homepage": "https://github.com/restatedev/sdk-typescript#readme",
   "directories": {
     "example": "examples",
     "test": "test"
+  },
+  "publishConfig": {
+    "@restatedev:registry": "https://registry.npmjs.org"
+  },
+  "release-it": {
+    "git": {
+      "pushRepo": "https://github.com/restatedev/sdk-typescript.git"
+    },
+    "github": {
+      "release": true
+    },
+    "npm": {
+      "publish": false
+    }
   }
 }
