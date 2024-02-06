@@ -1,5 +1,4 @@
 import * as restate from "../src/public_api";
-import * as restate_wf from "../src/workflows/workflow";
 import * as restate_clients from "../src/clients/workflow_client";
 import { randomUUID } from "crypto";
 
@@ -11,13 +10,13 @@ const restateAdminUrl = process.argv[3] || "http://localhost:9070";
 //
 // (1) Definition of the workflow
 //
-const myworkflow = restate_wf.workflow("acme.myworkflow", {
+const myworkflow = restate.workflow.workflow("acme.myworkflow", {
   //
   // Each workflow must have exactly one run() function, which defines
   // the life cycle. This function isn't directly started, but indirectly
   // via the synthetic start() function.
   //
-  run: async (ctx: restate_wf.WfContext, params: { name: string }) => {
+  run: async (ctx: restate.workflow.WfContext, params: { name: string }) => {
     if (!params?.name) {
       throw new restate.TerminalError("Missing parameter 'name'");
     }
@@ -46,15 +45,18 @@ const myworkflow = restate_wf.workflow("acme.myworkflow", {
   // a 'SharedWfContext' and have shared access to state and promises
   //
 
-  signal: async (ctx: restate_wf.SharedWfContext, req: { signal: string }) => {
+  signal: async (
+    ctx: restate.workflow.SharedWfContext,
+    req: { signal: string }
+  ) => {
     ctx.promise<string>("thesignal").resolve(req.signal);
   },
 
-  getName: async (ctx: restate_wf.SharedWfContext): Promise<string> => {
+  getName: async (ctx: restate.workflow.SharedWfContext): Promise<string> => {
     return (await ctx.get("name")) ?? "(not yet set)";
   },
 
-  awaitName: async (ctx: restate_wf.SharedWfContext): Promise<string> => {
+  awaitName: async (ctx: restate.workflow.SharedWfContext): Promise<string> => {
     return ctx.promise<string>("name_promise").promise();
   },
 });
