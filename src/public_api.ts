@@ -47,3 +47,4 @@ export {
   connection,
   RestateConnectionOptions,
 } from "./embedded/api";
+export * as workflow from "./workflows/workflow";
