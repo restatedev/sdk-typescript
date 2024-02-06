@@ -3,7 +3,7 @@
   "version": "0.7.0",
   "description": "Typescript SDK for Restate",
   "engines": {
-    "node": ">= 10"
+    "node": ">= 18"
   },
   "repository": {
     "type": "git",
@@ -54,7 +54,7 @@
     "@bufbuild/buf": "^1.15.0",
     "@types/aws-lambda": "^8.10.115",
     "@types/jest": "^29.4.0",
-    "@types/node": "^18.14.2",
+    "@types/node": "^20.10.4",
     "@typescript-eslint/eslint-plugin": "^5.53.0",
     "@typescript-eslint/parser": "^5.53.0",
     "eslint": "^8.35.0",
