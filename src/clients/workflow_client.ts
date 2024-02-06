@@ -12,7 +12,6 @@
 import * as restate from "../public_api";
 import {
   LifecycleStatus,
-  StatusMessage,
   WorkflowConnectedSignature,
   WorkflowExternalSignature,
   WorkflowRequest,
@@ -52,11 +51,11 @@ export interface WorkflowClient<R, U> {
 
   workflowInterface(): restate.Client<WorkflowConnectedSignature<U>>; // call methods on workflow
 
-  latestMessage(): Promise<StatusMessage>;
+  // latestMessage(): Promise<StatusMessage>;
 
-  getMessages(
-    fromSeqNum: number
-  ): AsyncGenerator<StatusMessage, void, undefined>;
+  // getMessages(
+  //   fromSeqNum: number
+  // ): AsyncGenerator<StatusMessage, void, undefined>;
 }
 
 export function connectRestate(uri: string) {
@@ -100,21 +99,21 @@ class WorkflowClientImpl<R, U> implements WorkflowClient<R, U> {
     return clientProxy as restate.Client<WorkflowConnectedSignature<U>>;
   }
 
-  latestMessage(): Promise<StatusMessage> {
-    return this.makeCall("getLatestMessage", {});
-  }
+  // latestMessage(): Promise<StatusMessage> {
+  //   return this.makeCall("getLatestMessage", {});
+  // }
 
-  async *getMessages(fromSeqNum: number) {
-    while (true) {
-      const msgs: StatusMessage[] = await this.makeCall("pollNextMessages", {
-        from: fromSeqNum,
-      });
-      for (const msg of msgs) {
-        yield msg;
-      }
-      fromSeqNum += msgs.length;
-    }
-  }
+  // async *getMessages(fromSeqNum: number) {
+  //   while (true) {
+  //     const msgs: StatusMessage[] = await this.makeCall("pollNextMessages", {
+  //       from: fromSeqNum,
+  //     });
+  //     for (const msg of msgs) {
+  //       yield msg;
+  //     }
+  //     fromSeqNum += msgs.length;
+  //   }
+  // }
 
   private async makeCall<RR, TT>(method: string, args: TT): Promise<RR> {
     return await makeCall(
