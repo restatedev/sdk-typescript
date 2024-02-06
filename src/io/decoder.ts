@@ -32,6 +32,8 @@ type DecoderState = { state: number; header: Header | undefined; buf: Buffer };
 const WAITING_FOR_HEADER = 0;
 const WAITING_FOR_BODY = 1;
 
+export const SUPPORTED_PROTOCOL_VERSION = 0;
+
 function initalDecoderState(buf: Buffer): DecoderState {
   return {
     state: WAITING_FOR_HEADER,
@@ -57,8 +59,20 @@ function decodeMessages(decoderState: DecoderState, out: Output): DecoderState {
         }
         const h = buf.readBigUInt64BE();
         buf = buf.subarray(8);
-        decoderState.header = Header.fromU64be(h);
+        const materializedHeader = Header.fromU64be(h);
+        decoderState.header = materializedHeader;
         decoderState.state = WAITING_FOR_BODY;
+
+        // Check protocol version
+        if (
+          materializedHeader.protocolVersion !== undefined &&
+          materializedHeader.protocolVersion !== SUPPORTED_PROTOCOL_VERSION
+        ) {
+          throw new Error(
+            `Unsupported protocol version ${materializedHeader.protocolVersion}, only version ${SUPPORTED_PROTOCOL_VERSION} is supported`
+          );
+        }
+
         break;
       }
       case WAITING_FOR_BODY: {
