@@ -1,6 +1,6 @@
 import * as restate from "../src/public_api";
 import * as restate_wf from "../src/workflows/workflow";
-import * as restate_clients from "../src/clients/client";
+import * as restate_clients from "../src/clients/workflow_client";
 import { randomUUID } from "crypto";
 
 /* eslint-disable no-console */
