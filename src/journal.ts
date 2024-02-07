@@ -10,7 +10,10 @@
  */
 
 import * as p from "./types/protocol";
-import { Failure } from "./generated/proto/protocol";
+import {
+  Failure,
+  GetStateKeysEntryMessage_StateKeys,
+} from "./generated/proto/protocol";
 import {
   AWAKEABLE_ENTRY_MESSAGE_TYPE,
   AwakeableEntryMessage,
@@ -22,7 +25,9 @@ import {
   CompletionMessage,
   EntryAckMessage,
   GET_STATE_ENTRY_MESSAGE_TYPE,
+  GET_STATE_KEYS_ENTRY_MESSAGE_TYPE,
   GetStateEntryMessage,
+  GetStateKeysEntryMessage,
   INVOKE_ENTRY_MESSAGE_TYPE,
   InvokeEntryMessage,
   OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
@@ -135,6 +140,16 @@ export class Journal<I, O> {
               return this.appendJournalEntry(messageType, message);
             }
           }
+          case p.GET_STATE_KEYS_ENTRY_MESSAGE_TYPE: {
+            const getStateMsg = message as GetStateKeysEntryMessage;
+            if (getStateMsg.value !== undefined) {
+              // State was eagerly filled by the local state store
+              return Promise.resolve(getStateMsg.value);
+            } else {
+              // Need to retrieve state by going to the runtime.
+              return this.appendJournalEntry(messageType, message);
+            }
+          }
           default: {
             return this.appendJournalEntry(messageType, message);
           }
@@ -171,8 +186,16 @@ export class Journal<I, O> {
     }
 
     if (m.value !== undefined) {
-      journalEntry.completablePromise.resolve(m.value);
-      this.pendingJournalEntries.delete(m.entryIndex);
+      if (journalEntry.messageType === GET_STATE_KEYS_ENTRY_MESSAGE_TYPE) {
+        // In case of get state keys we expect the parsed message
+        journalEntry.completablePromise.resolve(
+          GetStateKeysEntryMessage_StateKeys.decode(m.value)
+        );
+        this.pendingJournalEntries.delete(m.entryIndex);
+      } else {
+        journalEntry.completablePromise.resolve(m.value);
+        this.pendingJournalEntries.delete(m.entryIndex);
+      }
     } else if (m.failure !== undefined) {
       // we do all completions with Terminal Errors, because failures triggered by those exceptions
       // when the bubble up would otherwise lead to re-tries, deterministic replay, re-throwing, and
@@ -254,6 +277,16 @@ export class Journal<I, O> {
           journalIndex,
           journalEntry,
           getStateMsg.value || getStateMsg.empty,
+          getStateMsg.failure
+        );
+        break;
+      }
+      case GET_STATE_KEYS_ENTRY_MESSAGE_TYPE: {
+        const getStateMsg = replayMessage.message as GetStateKeysEntryMessage;
+        this.resolveResult(
+          journalIndex,
+          journalEntry,
+          getStateMsg.value,
           getStateMsg.failure
         );
         break;

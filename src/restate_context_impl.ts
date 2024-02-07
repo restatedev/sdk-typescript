@@ -24,6 +24,7 @@ import {
   BackgroundInvokeEntryMessage,
   CompleteAwakeableEntryMessage,
   DeepPartial,
+  GetStateKeysEntryMessage_StateKeys,
   InvokeEntryMessage,
   SleepEntryMessage,
 } from "./generated/proto/protocol";
@@ -35,6 +36,7 @@ import {
   CLEAR_STATE_ENTRY_MESSAGE_TYPE,
   COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
   GET_STATE_ENTRY_MESSAGE_TYPE,
+  GET_STATE_KEYS_ENTRY_MESSAGE_TYPE,
   INVOKE_ENTRY_MESSAGE_TYPE,
   SET_STATE_ENTRY_MESSAGE_TYPE,
   SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
@@ -119,6 +121,8 @@ export class RestateContextImpl implements RestateGrpcContext, RpcContext {
         msg
       );
 
+      // TODO WHERE's the completed flag?
+
       // If the GetState message did not have a value or empty,
       // then we went to the runtime to get the value.
       // When we get the response, we set it in the localStateStore,
@@ -134,6 +138,27 @@ export class RestateContextImpl implements RestateGrpcContext, RpcContext {
       return jsonDeserialize(result.toString());
     };
     return getState();
+  }
+
+  // DON'T make this function async!!! see sideEffect comment for details.
+  public stateKeys(): Promise<Array<string>> {
+    // Check if this is a valid action
+    this.checkState("state keys");
+
+    // Create the message and let the state machine process it
+    const msg = this.stateMachine.localStateStore.getStateKeys();
+
+    const getStateKeys = async (): Promise<Array<string>> => {
+      const result = await this.stateMachine.handleUserCodeMessage(
+        GET_STATE_KEYS_ENTRY_MESSAGE_TYPE,
+        msg
+      );
+
+      return (result as GetStateKeysEntryMessage_StateKeys).keys.map((b) =>
+        b.toString()
+      );
+    };
+    return getStateKeys();
   }
 
   public set<T>(name: string, value: T): void {

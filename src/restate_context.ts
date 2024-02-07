@@ -78,6 +78,8 @@ export interface RestateBaseContext {
    */
   get<T>(name: string): Promise<T | null>;
 
+  stateKeys(): Promise<Array<string>>;
+
   /**
    * Set/store state in the Restate runtime.
    * Note that state objects are serialized with `Buffer.from(JSON.stringify(theObject))`

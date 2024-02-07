@@ -13,6 +13,7 @@ import {
   ClearAllStateEntryMessage,
   ClearStateEntryMessage,
   GetStateEntryMessage,
+  GetStateKeysEntryMessage,
   SetStateEntryMessage,
   StartMessage_StateEntry,
 } from "./generated/proto/protocol";
@@ -54,6 +55,18 @@ export class LocalStateStore {
         empty: stateEntry,
       });
     }
+  }
+
+  public getStateKeys(): GetStateKeysEntryMessage {
+    if (this.isPartial) {
+      return {};
+    }
+
+    return GetStateKeysEntryMessage.create({
+      value: {
+        keys: Array.from(this.state.keys()).map((b) => Buffer.from(b)),
+      },
+    });
   }
 
   public set<T>(key: string, value: T): SetStateEntryMessage {

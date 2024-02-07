@@ -49,6 +49,8 @@ import {
   COMBINATOR_ENTRY_MESSAGE,
   CLEAR_ALL_STATE_ENTRY_MESSAGE_TYPE,
   ClearAllStateEntryMessage,
+  GET_STATE_KEYS_ENTRY_MESSAGE_TYPE,
+  GetStateKeysEntryMessage,
 } from "../src/types/protocol";
 import { Message } from "../src/types/types";
 import { TestRequest, TestResponse } from "../src/generated/proto/test";
@@ -193,6 +195,21 @@ export function getStateMessageWithEmptyResult(key: string): Message {
       empty: Empty.create({}),
     })
   );
+}
+
+export function getStateKeysMessage(value?: Array<string>): Message {
+  if (value === undefined) {
+    return new Message(GET_STATE_KEYS_ENTRY_MESSAGE_TYPE, {});
+  } else {
+    return new Message(
+      GET_STATE_KEYS_ENTRY_MESSAGE_TYPE,
+      GetStateKeysEntryMessage.create({
+        value: {
+          keys: value.map((b) => Buffer.from(b)),
+        },
+      })
+    );
+  }
 }
 
 export function setStateMessage<T>(key: string, value: T): Message {

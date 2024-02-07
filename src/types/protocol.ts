@@ -24,6 +24,7 @@ import {
   ErrorMessage,
   EndMessage,
   GetStateEntryMessage,
+  GetStateKeysEntryMessage,
   InvokeEntryMessage,
   OutputStreamEntryMessage,
   PollInputStreamEntryMessage,
@@ -44,6 +45,7 @@ export {
   ErrorMessage,
   EndMessage,
   GetStateEntryMessage,
+  GetStateKeysEntryMessage,
   InvokeEntryMessage,
   OutputStreamEntryMessage,
   PollInputStreamEntryMessage,
@@ -67,6 +69,7 @@ export const GET_STATE_ENTRY_MESSAGE_TYPE = 0x0800n;
 export const SET_STATE_ENTRY_MESSAGE_TYPE = 0x0801n;
 export const CLEAR_STATE_ENTRY_MESSAGE_TYPE = 0x0802n;
 export const CLEAR_ALL_STATE_ENTRY_MESSAGE_TYPE = 0x0803n;
+export const GET_STATE_KEYS_ENTRY_MESSAGE_TYPE = 0x0804n;
 export const SLEEP_ENTRY_MESSAGE_TYPE = 0x0c00n;
 export const INVOKE_ENTRY_MESSAGE_TYPE = 0x0c01n;
 export const BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE = 0x0c02n;
@@ -94,6 +97,7 @@ export const KNOWN_MESSAGE_TYPES = new Set([
   POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
   OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
   GET_STATE_ENTRY_MESSAGE_TYPE,
+  GET_STATE_KEYS_ENTRY_MESSAGE_TYPE,
   SET_STATE_ENTRY_MESSAGE_TYPE,
   CLEAR_STATE_ENTRY_MESSAGE_TYPE,
   CLEAR_ALL_STATE_ENTRY_MESSAGE_TYPE,
@@ -116,6 +120,7 @@ const PROTOBUF_MESSAGE_NAME_BY_TYPE = new Map<bigint, string>([
   [POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE, "PollInputStreamEntryMessage"],
   [OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, "OutputStreamEntryMessage"],
   [GET_STATE_ENTRY_MESSAGE_TYPE, "GetStateEntryMessage"],
+  [GET_STATE_KEYS_ENTRY_MESSAGE_TYPE, "GetStateKeysEntryMessage"],
   [SET_STATE_ENTRY_MESSAGE_TYPE, "SetStateEntryMessage"],
   [CLEAR_STATE_ENTRY_MESSAGE_TYPE, "ClearStateEntryMessage"],
   [CLEAR_ALL_STATE_ENTRY_MESSAGE_TYPE, "ClearAllStateEntryMessage"],
@@ -145,6 +150,7 @@ const PROTOBUF_MESSAGES: Array<[bigint, any]> = [
   [POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE, PollInputStreamEntryMessage],
   [OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, OutputStreamEntryMessage],
   [GET_STATE_ENTRY_MESSAGE_TYPE, GetStateEntryMessage],
+  [GET_STATE_KEYS_ENTRY_MESSAGE_TYPE, GetStateKeysEntryMessage],
   [SET_STATE_ENTRY_MESSAGE_TYPE, SetStateEntryMessage],
   [CLEAR_STATE_ENTRY_MESSAGE_TYPE, ClearStateEntryMessage],
   [CLEAR_ALL_STATE_ENTRY_MESSAGE_TYPE, ClearAllStateEntryMessage],
@@ -169,6 +175,7 @@ export type ProtocolMessage =
   | PollInputStreamEntryMessage
   | OutputStreamEntryMessage
   | GetStateEntryMessage
+  | GetStateKeysEntryMessage
   | SetStateEntryMessage
   | ClearStateEntryMessage
   | ClearAllStateEntryMessage
@@ -185,6 +192,7 @@ export type ProtocolMessage =
 export const SUSPENSION_TRIGGERS: bigint[] = [
   INVOKE_ENTRY_MESSAGE_TYPE,
   GET_STATE_ENTRY_MESSAGE_TYPE,
+  GET_STATE_KEYS_ENTRY_MESSAGE_TYPE,
   AWAKEABLE_ENTRY_MESSAGE_TYPE,
   SLEEP_ENTRY_MESSAGE_TYPE,
   COMBINATOR_ENTRY_MESSAGE,
