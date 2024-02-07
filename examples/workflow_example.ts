@@ -1,5 +1,4 @@
 import * as restate from "../src/public_api";
-import * as restate_clients from "../src/clients/workflow_client";
 import { randomUUID } from "crypto";
 
 /* eslint-disable no-console */
@@ -67,24 +66,34 @@ const workflowApi = myworkflow.api;
 restate.createServer().bind(myworkflow).listen(9080);
 
 //
-// (2) Code to nteract with the workflow using an external client
+// (2) Code to interact with the workflow using an external client
 //
 // This submits a workflow and sends signals / queries to the workflow.
 //
-
 async function startWorkflowAndInteract(restateUrl: string) {
-  const restate = restate_clients.connectRestate(restateUrl);
+  const restateServer = restate.clients.connect(restateUrl);
 
   const args = { name: "Restatearius" };
   const workflowId = randomUUID();
 
   // Option a) we can create clients either with just the workflow service path
-  await restate.submitWorkflow("acme.myworkflow", workflowId, args);
+  const submit1 = await restateServer.submitWorkflow(
+    "acme.myworkflow",
+    workflowId,
+    args
+  );
+  console.log("Submitted workflow with result: " + submit1.status);
 
   // Option b) we can supply the API signature and get a typed interface for all the methods
   // Because the submit is idempotent, this call here will effectively attach to the
   // previous workflow
-  const client = await restate.submitWorkflow(workflowApi, workflowId, args);
+  const submit2 = await restateServer.submitWorkflow(
+    workflowApi,
+    workflowId,
+    args
+  );
+  console.log("Submitted workflow with result: " + submit2.status);
+  const client = submit2.client;
 
   // check the status (should be RUNNING)
   const status = await client.status();
