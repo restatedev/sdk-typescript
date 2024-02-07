@@ -100,12 +100,8 @@ export type WorkflowConnectedSignature<U> = Omit<
   "run"
 >;
 
-export interface WorkflowServices<R, T, U> {
+export interface WorkflowServices<R, T, U> extends restate.ServiceBundle {
   readonly api: restate.ServiceApi<WorkflowExternalSignature<R, T, U>>;
-
-  registerServices(
-    server: restate.RestateServer | restate.LambdaRestateServer
-  ): void;
 }
 
 export function workflow<R, T, U>(
@@ -127,11 +123,9 @@ export function workflow<R, T, U>(
 
   return {
     api: { path } as restate.ServiceApi<WorkflowExternalSignature<R, T, U>>,
-    registerServices: (
-      server: restate.RestateServer | restate.LambdaRestateServer
-    ) => {
-      server.bindKeyedRouter(stateServiceApi.path, stateServiceRouter);
-      server.bindRouter(path, wrapperServiceRouter);
+    registerServices: (endpoint: restate.ServiceEndpoint) => {
+      endpoint.bindKeyedRouter(stateServiceApi.path, stateServiceRouter);
+      endpoint.bindRouter(path, wrapperServiceRouter);
     },
   } satisfies WorkflowServices<R, T, U>;
 }
