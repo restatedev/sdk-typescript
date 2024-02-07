@@ -3,8 +3,18 @@ import { randomUUID } from "crypto";
 
 /* eslint-disable no-console */
 
+// ------------- NOTE !!! ------------------
+// unlike the other dev samples, this one includes a client and interaction
+// with the workflow, so it needs a running Restate runtime.
+// The protocol switched to a new version some days ago, so one needs the
+// latest nightly runtime build to run the current SDK main branch.
+//
+// start that via:
+// docker run --name restate_dev --rm -p 8080:8080 -p 9070:9070 -p 9071:9071 --add-host=host.docker.internal:host-gateway ghcr.io/restatedev/restate:main
+
 const restateIngressUrl = process.argv[2] || "http://localhost:8080";
 const restateAdminUrl = process.argv[3] || "http://localhost:9070";
+const serviceHost = process.argv[4] || "host.docker.internal";
 
 //
 // (1) Definition of the workflow
@@ -130,7 +140,7 @@ registerDeployment(restateAdminUrl, 9080)
 // --------------------- utils -----------------
 
 async function registerDeployment(restateAdminAddress: string, port: number) {
-  const serviceEndpoint = `http://host.docker.internal:${port}`;
+  const serviceEndpoint = `http://${serviceHost}:${port}`;
   const httpResponse = await fetch(restateAdminAddress + "/deployments", {
     method: "POST",
     headers: {
