@@ -47,6 +47,8 @@ import {
   EndMessage,
   AWAKEABLE_IDENTIFIER_PREFIX,
   COMBINATOR_ENTRY_MESSAGE,
+  CLEAR_ALL_STATE_ENTRY_MESSAGE_TYPE,
+  ClearAllStateEntryMessage,
 } from "../src/types/protocol";
 import { Message } from "../src/types/types";
 import { TestRequest, TestResponse } from "../src/generated/proto/test";
@@ -183,6 +185,16 @@ export function getStateMessage<T>(
   }
 }
 
+export function getStateMessageWithEmptyResult(key: string): Message {
+  return new Message(
+    GET_STATE_ENTRY_MESSAGE_TYPE,
+    GetStateEntryMessage.create({
+      key: Buffer.from(key),
+      empty: Empty.create({}),
+    })
+  );
+}
+
 export function setStateMessage<T>(key: string, value: T): Message {
   return new Message(
     SET_STATE_ENTRY_MESSAGE_TYPE,
@@ -272,6 +284,16 @@ export function completionMessage(
       })
     );
   }
+}
+
+export function completionMessageWithEmpty(index: number): Message {
+  return new Message(
+    COMPLETION_MESSAGE_TYPE,
+    CompletionMessage.create({
+      entryIndex: index,
+      empty: Empty.create(),
+    })
+  );
 }
 
 export function ackMessage(index: number): Message {
@@ -520,6 +542,10 @@ export function keyVal(key: string, value: any): Buffer[] {
 }
 
 export const END_MESSAGE = new Message(END_MESSAGE_TYPE, EndMessage.create());
+export const CLEAR_ALL_STATE_ENTRY_MESSAGE = new Message(
+  CLEAR_ALL_STATE_ENTRY_MESSAGE_TYPE,
+  ClearAllStateEntryMessage.create()
+);
 
 // a utility function to print the results of a test
 export function printResults(results: Message[]) {
