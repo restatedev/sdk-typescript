@@ -13,6 +13,8 @@ import * as restate from "../public_api";
 import * as wf from "./workflow";
 import * as wss from "./workflow_state_service";
 
+const DEFAULT_RETENTION_PERIOD = 7 * 24 * 60 * 60 * 1000; // 1 week
+
 // ----------------------------------------------------------------------------
 //                      Workflow Context Implementations
 // ----------------------------------------------------------------------------
@@ -166,7 +168,7 @@ class ExclusiveContextImpl extends SharedContextImpl implements wf.WfContext {
 }
 
 // ----------------------------------------------------------------------------
-
+//               the service that wraps the workflow methods
 // ----------------------------------------------------------------------------
 
 export function createWrapperService<R, T, M>(
@@ -216,7 +218,7 @@ export function createWrapperService<R, T, M>(
         throw err;
       } finally {
         ctx
-          .sendDelayed(stateServiceApi, 2 * 60 * 1000)
+          .sendDelayed(stateServiceApi, DEFAULT_RETENTION_PERIOD)
           .dispose(request.workflowId);
       }
     },
