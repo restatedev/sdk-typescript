@@ -48,3 +48,4 @@ export {
   RestateConnectionOptions,
 } from "./embedded/api";
 export * as workflow from "./workflows/workflow";
+export * as clients from "./clients/workflow_client";

@@ -10,59 +10,172 @@
  */
 
 import * as restate from "../public_api";
-import {
-  LifecycleStatus,
-  WorkflowConnectedSignature,
-  WorkflowExternalSignature,
-  WorkflowRequest,
-} from "../workflows/workflow";
+import { ensureError } from "../types/errors";
 
-/* eslint-disable no-console */
+/**
+ * A client to interact with running workflows.
+ */
+export interface WorkflowClient<R, U> {
+  /**
+   * Gets the ID of the workflow that this client talks to.
+   */
+  workflowId(): string;
 
-export interface Restate {
+  /**
+   * Gets the status of the workflow, as a {@link restate.workflow.LifecycleStatus}.
+   * This will take on the values "NOT_STARTED", "RUNNING", "FINISHED", "FAILED".
+   */
+  status(): Promise<restate.workflow.LifecycleStatus>;
+
+  /**
+   * Returns a promise completed with the result. This will resolve successfully on successful
+   * termination of the workflow, and will be rejected if the workflow throws an Error.
+   */
+  result(): Promise<R>;
+
+  /**
+   * Gets the interface to the workflow through which all the workflow's additional methods
+   * can be called.
+   *
+   * To get the proper typed client, use the {@link WorkflowConnection.submitWorkflow} or
+   * {@link WorkflowConnection.connectToWorkflow} functions that accpet a typed ServiceApi
+   * object, as in the example below.
+   *
+   * @example
+   * In the workflow definition:
+   * ```
+   * const myWorkflow = restate.workflow.workflow("acme.myworkflow", { ... });
+   * export const myWorkflowApi = myworkflow.api;
+   * ```
+   * In the client code:
+   * ```
+   * import { myWorkflowApi } from "../server/myWorkflow"
+   * ...
+   * const restate = connectWorkflows("https://restatehost:8080");
+   * restate.submitWorkflow(myWorkflowApi, workflowId, args);
+   * restate.connectToWorkflow(myWorkflowApi, workflowId);
+   * ```
+   */
+  workflowInterface(): restate.Client<
+    restate.workflow.WorkflowConnectedSignature<U>
+  >;
+}
+
+/**
+ * A connection to Restate that let's you submit workflows or connect to workflows.
+ * This is a typed client that internally makes HTTP calls to Restate to launch trigger
+ * an execution of a workflow service, or to connect to an existing execution.
+ */
+export interface RestateClient {
   submitWorkflow<R, T>(
     path: string,
     workflowId: string,
     params: T
-  ): Promise<WorkflowClient<R, unknown>>;
+  ): Promise<{
+    status: restate.workflow.WorkflowStartResult;
+    client: WorkflowClient<R, unknown>;
+  }>;
 
   submitWorkflow<R, T, U>(
-    workflowApi: restate.ServiceApi<WorkflowExternalSignature<R, T, U>>,
+    workflowApi: restate.ServiceApi<
+      restate.workflow.WorkflowExternalSignature<R, T, U>
+    >,
     workflowId: string,
     params: T
-  ): Promise<WorkflowClient<R, U>>;
+  ): Promise<{
+    status: restate.workflow.WorkflowStartResult;
+    client: WorkflowClient<R, U>;
+  }>;
 
   connectToWorkflow<R = unknown>(
     path: string,
     workflowId: string
-  ): Promise<WorkflowClient<R, unknown>>;
+  ): Promise<{
+    status: restate.workflow.LifecycleStatus;
+    client: WorkflowClient<R, unknown>;
+  }>;
 
   connectToWorkflow<R, T, U>(
-    workflowApi: restate.ServiceApi<WorkflowExternalSignature<R, T, U>>,
+    workflowApi: restate.ServiceApi<
+      restate.workflow.WorkflowExternalSignature<R, T, U>
+    >,
     workflowId: string
-  ): Promise<WorkflowClient<R, U>>;
+  ): Promise<{
+    status: restate.workflow.LifecycleStatus;
+    client: WorkflowClient<R, U>;
+  }>;
 }
 
-export interface WorkflowClient<R, U> {
-  workflowId(): string;
-  status(): Promise<LifecycleStatus>; // RUNNING / FINISHED / FAILED
+/**
+ * Creates a typed client to start and interact with workflow executions.
+ * The specifiec URI must point to the Restate request endpoint (ingress).
+ *
+ * This function doesn't immediately verify the connection, it will not fail
+ * if Restate is unreachable. Connection failures will only manifest when
+ * attempting to submit or connect a specific workflow.
+ */
+export function connect(restateUri: string): RestateClient {
+  return {
+    submitWorkflow: async <R, T, U>(
+      pathOrApi:
+        | string
+        | restate.ServiceApi<
+            restate.workflow.WorkflowExternalSignature<R, T, U>
+          >,
+      workflowId: string,
+      params: T
+    ): Promise<{
+      status: restate.workflow.WorkflowStartResult;
+      client: WorkflowClient<R, U>;
+    }> => {
+      const path = typeof pathOrApi === "string" ? pathOrApi : pathOrApi.path;
 
-  result(): Promise<R>;
+      let result: restate.workflow.WorkflowStartResult;
+      try {
+        result = await makeCall(restateUri, path, "start", workflowId, params);
+      } catch (err) {
+        const error = ensureError(err);
+        throw new Error("Cannot start workflow: " + error.message, {
+          cause: error,
+        });
+      }
 
-  workflowInterface(): restate.Client<WorkflowConnectedSignature<U>>; // call methods on workflow
+      return {
+        status: result,
+        client: new WorkflowClientImpl(restateUri, path, workflowId),
+      };
+    },
 
-  // latestMessage(): Promise<StatusMessage>;
-
-  // getMessages(
-  //   fromSeqNum: number
-  // ): AsyncGenerator<StatusMessage, void, undefined>;
+    async connectToWorkflow<R, T, U>(
+      pathOrApi:
+        | string
+        | restate.ServiceApi<
+            restate.workflow.WorkflowExternalSignature<R, T, U>
+          >,
+      workflowId: string
+    ): Promise<{
+      status: restate.workflow.LifecycleStatus;
+      client: WorkflowClient<R, U>;
+    }> {
+      const path = typeof pathOrApi === "string" ? pathOrApi : pathOrApi.path;
+      const client: WorkflowClient<R, U> = new WorkflowClientImpl(
+        restateUri,
+        path,
+        workflowId
+      );
+      const status = await client.status();
+      if (status === restate.workflow.LifecycleStatus.NOT_STARTED) {
+        throw new Error(
+          "No workflow running/finished/failed with ID " + workflowId
+        );
+      }
+      return {
+        status,
+        client: new WorkflowClientImpl(restateUri, path, workflowId),
+      };
+    },
+  } satisfies RestateClient;
 }
-
-export function connectRestate(uri: string) {
-  return new RestateImpl(uri);
-}
-
-// ------------------------------ implementation ------------------------------
 
 class WorkflowClientImpl<R, U> implements WorkflowClient<R, U> {
   constructor(
@@ -75,7 +188,7 @@ class WorkflowClientImpl<R, U> implements WorkflowClient<R, U> {
     return this.wfId;
   }
 
-  status(): Promise<LifecycleStatus> {
+  status(): Promise<restate.workflow.LifecycleStatus> {
     return this.makeCall("status", {});
   }
 
@@ -83,7 +196,9 @@ class WorkflowClientImpl<R, U> implements WorkflowClient<R, U> {
     return this.makeCall("waitForResult", {});
   }
 
-  workflowInterface(): restate.Client<WorkflowConnectedSignature<U>> {
+  workflowInterface(): restate.Client<
+    restate.workflow.WorkflowConnectedSignature<U>
+  > {
     const clientProxy = new Proxy(
       {},
       {
@@ -96,24 +211,10 @@ class WorkflowClientImpl<R, U> implements WorkflowClient<R, U> {
       }
     );
 
-    return clientProxy as restate.Client<WorkflowConnectedSignature<U>>;
+    return clientProxy as restate.Client<
+      restate.workflow.WorkflowConnectedSignature<U>
+    >;
   }
-
-  // latestMessage(): Promise<StatusMessage> {
-  //   return this.makeCall("getLatestMessage", {});
-  // }
-
-  // async *getMessages(fromSeqNum: number) {
-  //   while (true) {
-  //     const msgs: StatusMessage[] = await this.makeCall("pollNextMessages", {
-  //       from: fromSeqNum,
-  //     });
-  //     for (const msg of msgs) {
-  //       yield msg;
-  //     }
-  //     fromSeqNum += msgs.length;
-  //   }
-  // }
 
   private async makeCall<RR, TT>(method: string, args: TT): Promise<RR> {
     return await makeCall(
@@ -123,36 +224,6 @@ class WorkflowClientImpl<R, U> implements WorkflowClient<R, U> {
       this.wfId,
       args
     );
-  }
-}
-
-class RestateImpl implements Restate {
-  constructor(private readonly restateUri: string) {}
-
-  async submitWorkflow<R, T, U>(
-    pathOrApi: string | restate.ServiceApi<WorkflowExternalSignature<R, T, U>>,
-    workflowId: string,
-    params: T
-  ): Promise<WorkflowClient<R, U>> {
-    const path = typeof pathOrApi === "string" ? pathOrApi : pathOrApi.path;
-    const response = await makeCall(
-      this.restateUri,
-      path,
-      "start",
-      workflowId,
-      params
-    );
-    console.log("Start() call completed: Workflow is " + response);
-
-    return new WorkflowClientImpl(this.restateUri, path, workflowId);
-  }
-
-  async connectToWorkflow<R, T, U>(
-    pathOrApi: string | restate.ServiceApi<WorkflowExternalSignature<R, T, U>>,
-    workflowId: string
-  ): Promise<WorkflowClient<R, U>> {
-    const path = typeof pathOrApi === "string" ? pathOrApi : pathOrApi.path;
-    return new WorkflowClientImpl(this.restateUri, path, workflowId);
   }
 }
 
@@ -167,7 +238,7 @@ async function makeCall<R, T>(
   workflowId: string,
   params: T
 ): Promise<R> {
-  if (typeof workflowId !== "string" || workflowId.length === 0) {
+  if (!workflowId || typeof workflowId !== "string") {
     throw new Error("missing workflowId");
   }
   if (params === undefined) {
@@ -179,7 +250,10 @@ async function makeCall<R, T>(
 
   const url = `${restateUri}/${serviceName}/${method}`;
   const data = {
-    request: { workflowId, ...params } satisfies WorkflowRequest<T>,
+    request: {
+      workflowId,
+      ...params,
+    } satisfies restate.workflow.WorkflowRequest<T>,
   };
 
   let body: string;
@@ -189,7 +263,8 @@ async function makeCall<R, T>(
     throw new Error("Cannot encode request: " + err, { cause: err });
   }
 
-  console.log(`Making call to Restate workflow at ${url} with ${body}`);
+  // eslint-disable-next-line no-console
+  console.debug(`Making call to Restate at ${url}`);
 
   const httpResponse = await fetch(url, {
     method: "POST",
