@@ -56,9 +56,7 @@ export interface WorkflowClient<R, U> {
    * restate.connectToWorkflow(myWorkflowApi, workflowId);
    * ```
    */
-  workflowInterface(): restate.Client<
-    restate.workflow.WorkflowConnectedSignature<U>
-  >;
+  workflowInterface(): restate.Client<restate.workflow.WorkflowClientApi<U>>;
 }
 
 /**
@@ -78,7 +76,7 @@ export interface RestateClient {
 
   submitWorkflow<R, T, U>(
     workflowApi: restate.ServiceApi<
-      restate.workflow.WorkflowExternalSignature<R, T, U>
+      restate.workflow.WorkflowRestateRpcApi<R, T, U>
     >,
     workflowId: string,
     params: T
@@ -97,7 +95,7 @@ export interface RestateClient {
 
   connectToWorkflow<R, T, U>(
     workflowApi: restate.ServiceApi<
-      restate.workflow.WorkflowExternalSignature<R, T, U>
+      restate.workflow.WorkflowRestateRpcApi<R, T, U>
     >,
     workflowId: string
   ): Promise<{
@@ -119,9 +117,7 @@ export function connect(restateUri: string): RestateClient {
     submitWorkflow: async <R, T, U>(
       pathOrApi:
         | string
-        | restate.ServiceApi<
-            restate.workflow.WorkflowExternalSignature<R, T, U>
-          >,
+        | restate.ServiceApi<restate.workflow.WorkflowRestateRpcApi<R, T, U>>,
       workflowId: string,
       params: T
     ): Promise<{
@@ -149,9 +145,7 @@ export function connect(restateUri: string): RestateClient {
     async connectToWorkflow<R, T, U>(
       pathOrApi:
         | string
-        | restate.ServiceApi<
-            restate.workflow.WorkflowExternalSignature<R, T, U>
-          >,
+        | restate.ServiceApi<restate.workflow.WorkflowRestateRpcApi<R, T, U>>,
       workflowId: string
     ): Promise<{
       status: restate.workflow.LifecycleStatus;
@@ -196,9 +190,7 @@ class WorkflowClientImpl<R, U> implements WorkflowClient<R, U> {
     return this.makeCall("waitForResult", {});
   }
 
-  workflowInterface(): restate.Client<
-    restate.workflow.WorkflowConnectedSignature<U>
-  > {
+  workflowInterface(): restate.Client<restate.workflow.WorkflowClientApi<U>> {
     const clientProxy = new Proxy(
       {},
       {
@@ -211,9 +203,7 @@ class WorkflowClientImpl<R, U> implements WorkflowClient<R, U> {
       }
     );
 
-    return clientProxy as restate.Client<
-      restate.workflow.WorkflowConnectedSignature<U>
-    >;
+    return clientProxy as restate.Client<restate.workflow.WorkflowClientApi<U>>;
   }
 
   private async makeCall<RR, TT>(method: string, args: TT): Promise<RR> {
