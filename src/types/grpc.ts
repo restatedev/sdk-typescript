@@ -9,7 +9,7 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { Context, KeyedContext } from "../restate_context";
+import { Context, KeyedContext } from "../context";
 import { FileDescriptorProto } from "ts-proto-descriptors";
 
 export class GrpcServiceMethod<I, O> {

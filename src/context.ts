@@ -11,7 +11,7 @@
 
 import { RetrySettings } from "./utils/public_utils";
 import { Client, SendClient } from "./types/router";
-import { ContextImpl } from "./restate_context_impl";
+import { ContextImpl } from "./context_impl";
 
 /**
  * Key value store operations. Only keyed services have an attached key-value store.

@@ -48,7 +48,7 @@ import {
   KeyedContext,
   useContext,
   useKeyedContext,
-} from "../restate_context";
+} from "../context";
 import { verifyAssumptions } from "../utils/assumptions";
 import { TerminalError } from "../public_api";
 import { KeyedRouter, UnKeyedRouter, isEventHandler } from "../types/router";

@@ -11,7 +11,7 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { CombineablePromise, Context, KeyedContext } from "../restate_context";
+import { CombineablePromise, Context, KeyedContext } from "../context";
 import { Event } from "./types";
 
 // ----------- generics -------------------------------------------------------

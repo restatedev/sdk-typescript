@@ -15,7 +15,7 @@ import {
   Rand,
   RestateGrpcChannel,
   ServiceApi,
-} from "./restate_context";
+} from "./context";
 import { StateMachine } from "./state_machine";
 import {
   AwakeableEntryMessage,

@@ -9,7 +9,7 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { Context, useContext } from "../restate_context";
+import { Context, useContext } from "../context";
 import { GrpcServiceMethod, HostedGrpcServiceMethod } from "../types/grpc";
 
 export function wrapHandler<I, O>(

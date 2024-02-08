@@ -12,9 +12,9 @@
 //! Some parts copied from https://github.com/uuidjs/uuid/blob/main/src/stringify.js
 //! License MIT
 
-import { Rand } from "../restate_context";
+import { Rand } from "../context";
 import { ErrorCodes, TerminalError } from "../types/errors";
-import { CallContexType, ContextImpl } from "../restate_context_impl";
+import { CallContexType, ContextImpl } from "../context_impl";
 import { createHash } from "crypto";
 
 export class RandImpl implements Rand {

@@ -10,7 +10,7 @@
  */
 
 import * as p from "./types/protocol";
-import { ContextImpl } from "./restate_context_impl";
+import { ContextImpl } from "./context_impl";
 import { Connection, RestateStreamConsumer } from "./connection/connection";
 import { ProtocolMode } from "./generated/proto/discovery";
 import { Message } from "./types/types";

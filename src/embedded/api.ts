@@ -9,7 +9,7 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { Context } from "../restate_context";
+import { Context } from "../context";
 import { doInvoke } from "./invocation";
 import { wrapHandler } from "./handler";
 import crypto from "crypto";

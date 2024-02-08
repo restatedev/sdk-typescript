@@ -19,7 +19,7 @@ export {
   CombineablePromise,
   Rand,
   RestateGrpcChannel,
-} from "./restate_context";
+} from "./context";
 export {
   router,
   keyedRouter,
