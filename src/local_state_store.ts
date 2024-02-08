@@ -14,6 +14,7 @@ import {
   ClearStateEntryMessage,
   GetStateEntryMessage,
   GetStateKeysEntryMessage,
+  GetStateKeysEntryMessage_StateKeys,
   SetStateEntryMessage,
   StartMessage_StateEntry,
 } from "./generated/proto/protocol";
@@ -29,44 +30,39 @@ export class LocalStateStore {
     );
   }
 
-  public get(key: string): GetStateEntryMessage {
-    const present = this.state.has(key.toString());
-    if (!present && this.isPartial) {
-      // Partial eager state, so retrieve state from the runtime
-      return GetStateEntryMessage.create({ key: Buffer.from(key) });
-    } else if (!present) {
-      // Complete eager state, so state entry is null
-      return GetStateEntryMessage.create({
-        key: Buffer.from(key),
-        empty: Empty.create({}),
-      });
+  // Returns true if completed
+  public tryCompleteGet(key: string, msg: GetStateEntryMessage): boolean {
+    const stateEntry = this.state.get(key);
+    if (stateEntry === undefined) {
+      if (this.isPartial) {
+        // Partial eager state, so retrieve state from the runtime
+        return false;
+      } else {
+        // Complete eager state, so state entry is null
+        msg.empty = Empty.create({});
+        return true;
+      }
     }
 
-    const stateEntry = this.state.get(key.toString());
     if (stateEntry instanceof Buffer) {
-      return GetStateEntryMessage.create({
-        key: Buffer.from(key),
-        value: stateEntry,
-      });
+      msg.value = stateEntry;
     } else {
       // stateEntry is Empty
-      return GetStateEntryMessage.create({
-        key: Buffer.from(key),
-        empty: stateEntry,
-      });
+      msg.empty = stateEntry;
     }
+    return true;
   }
 
-  public getStateKeys(): GetStateKeysEntryMessage {
+  // Returns true if completed
+  public tryCompletedGetStateKeys(msg: GetStateKeysEntryMessage): boolean {
     if (this.isPartial) {
-      return {};
+      return false;
     }
 
-    return GetStateKeysEntryMessage.create({
-      value: {
-        keys: Array.from(this.state.keys()).map((b) => Buffer.from(b)),
-      },
+    msg.value = GetStateKeysEntryMessage_StateKeys.create({
+      keys: Array.from(this.state.keys()).map((b) => Buffer.from(b)),
     });
+    return true;
   }
 
   public set<T>(key: string, value: T): SetStateEntryMessage {

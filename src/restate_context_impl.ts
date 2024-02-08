@@ -24,6 +24,8 @@ import {
   BackgroundInvokeEntryMessage,
   CompleteAwakeableEntryMessage,
   DeepPartial,
+  GetStateEntryMessage,
+  GetStateKeysEntryMessage,
   GetStateKeysEntryMessage_StateKeys,
   InvokeEntryMessage,
   SleepEntryMessage,
@@ -113,21 +115,24 @@ export class RestateContextImpl implements RestateGrpcContext, RpcContext {
     this.checkState("get state");
 
     // Create the message and let the state machine process it
-    const msg = this.stateMachine.localStateStore.get(name);
+    const msg = GetStateEntryMessage.create({ key: Buffer.from(name) });
+    const completed = this.stateMachine.localStateStore.tryCompleteGet(
+      name,
+      msg
+    );
 
     const getState = async (): Promise<T | null> => {
       const result = await this.stateMachine.handleUserCodeMessage(
         GET_STATE_ENTRY_MESSAGE_TYPE,
-        msg
+        msg,
+        completed
       );
-
-      // TODO WHERE's the completed flag?
 
       // If the GetState message did not have a value or empty,
       // then we went to the runtime to get the value.
       // When we get the response, we set it in the localStateStore,
       // to answer subsequent requests
-      if (msg.value === undefined && msg.empty === undefined) {
+      if (!completed) {
         this.stateMachine.localStateStore.add(name, result as Buffer | Empty);
       }
 
@@ -146,12 +151,15 @@ export class RestateContextImpl implements RestateGrpcContext, RpcContext {
     this.checkState("state keys");
 
     // Create the message and let the state machine process it
-    const msg = this.stateMachine.localStateStore.getStateKeys();
+    const msg = GetStateKeysEntryMessage.create({});
+    const completed =
+      this.stateMachine.localStateStore.tryCompletedGetStateKeys(msg);
 
     const getStateKeys = async (): Promise<Array<string>> => {
       const result = await this.stateMachine.handleUserCodeMessage(
         GET_STATE_KEYS_ENTRY_MESSAGE_TYPE,
-        msg
+        msg,
+        completed
       );
 
       return (result as GetStateKeysEntryMessage_StateKeys).keys.map((b) =>
