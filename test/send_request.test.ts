@@ -42,7 +42,7 @@ class SyncCallGreeter implements TestGreeter {
   async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
-    const client = new TestGreeterClientImpl(ctx);
+    const client = new TestGreeterClientImpl(ctx.grpcChannel());
     const response = await client.greet(
       TestRequest.create({ name: "Francesco" })
     );
@@ -143,9 +143,9 @@ describe("SyncCallGreeter", () => {
 
 class ReverseAwaitOrder implements TestGreeter {
   async greet(): Promise<TestResponse> {
-    const ctx = restate.useContext(this);
+    const ctx = restate.useKeyedContext(this);
 
-    const client = new TestGreeterClientImpl(ctx);
+    const client = new TestGreeterClientImpl(ctx.grpcChannel());
     const greetingPromise1 = client.greet(
       TestRequest.create({ name: "Francesco" })
     );
@@ -397,7 +397,7 @@ class FailingForwardGreetingService implements TestGreeter {
   async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
-    const client = new TestGreeterClientImpl(ctx);
+    const client = new TestGreeterClientImpl(ctx.grpcChannel());
 
     try {
       // This will get an failure back as a completion or replay message
@@ -470,10 +470,12 @@ class OneWayCallGreeter implements TestGreeter {
   async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
-    const client = new TestGreeterClientImpl(ctx);
-    await ctx.oneWayCall(() =>
-      client.greet(TestRequest.create({ name: "Francesco" }))
-    );
+    const client = new TestGreeterClientImpl(ctx.grpcChannel());
+    await ctx
+      .grpcChannel()
+      .oneWayCall(() =>
+        client.greet(TestRequest.create({ name: "Francesco" }))
+      );
 
     return TestResponse.create({ greeting: `Hello` });
   }
@@ -556,9 +558,9 @@ describe("OneWayCallGreeter", () => {
 
 class FailingOneWayCallGreeter implements TestGreeter {
   async greet(): Promise<TestResponse> {
-    const ctx = restate.useContext(this);
+    const ctx = restate.useKeyedContext(this);
 
-    await ctx.oneWayCall(async () => ctx.set("state", 13));
+    await ctx.grpcChannel().oneWayCall(async () => ctx.set("state", 13));
 
     return TestResponse.create({ greeting: `Hello` });
   }
@@ -584,7 +586,7 @@ class FailingAwakeableOneWayCallGreeter implements TestGreeter {
   async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
-    await ctx.oneWayCall(async () => ctx.awakeable<string>());
+    await ctx.grpcChannel().oneWayCall(async () => ctx.awakeable<string>());
 
     return TestResponse.create({ greeting: `Hello` });
   }
@@ -610,7 +612,9 @@ class FailingSideEffectInOneWayCallGreeter implements TestGreeter {
   async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
-    await ctx.oneWayCall(async () => ctx.sideEffect(async () => 13));
+    await ctx
+      .grpcChannel()
+      .oneWayCall(async () => ctx.sideEffect(async () => 13));
 
     return TestResponse.create({ greeting: `Hello` });
   }
@@ -638,7 +642,7 @@ class CatchTwoFailingInvokeGreeter implements TestGreeter {
 
     // Do a failing async call
     try {
-      await ctx.oneWayCall(async () => {
+      await ctx.grpcChannel().oneWayCall(async () => {
         throw new Error("This fails.");
       });
     } catch (e) {
@@ -646,10 +650,10 @@ class CatchTwoFailingInvokeGreeter implements TestGreeter {
     }
 
     // Do a succeeding async call
-    const client = new TestGreeterClientImpl(ctx);
-    await ctx.oneWayCall(() =>
-      client.greet(TestRequest.create({ name: "Pete" }))
-    );
+    const client = new TestGreeterClientImpl(ctx.grpcChannel());
+    await ctx
+      .grpcChannel()
+      .oneWayCall(() => client.greet(TestRequest.create({ name: "Pete" })));
 
     return TestResponse.create({ greeting: `Hello` });
   }
@@ -682,11 +686,13 @@ class DelayedOneWayCallGreeter implements TestGreeter {
   async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
-    const client = new TestGreeterClientImpl(ctx);
-    await ctx.delayedCall(
-      () => client.greet(TestRequest.create({ name: "Francesco" })),
-      this.delayedCallTime - Date.now()
-    );
+    const client = new TestGreeterClientImpl(ctx.grpcChannel());
+    await ctx
+      .grpcChannel()
+      .delayedCall(
+        () => client.greet(TestRequest.create({ name: "Francesco" })),
+        this.delayedCallTime - Date.now()
+      );
 
     return TestResponse.create({ greeting: `Hello` });
   }
@@ -760,14 +766,18 @@ class DelayedAndNormalInOneWayCallGreeter implements TestGreeter {
   async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
-    const client = new TestGreeterClientImpl(ctx);
-    await ctx.delayedCall(
-      () => client.greet(TestRequest.create({ name: "Francesco" })),
-      this.delayedCallTime - Date.now()
-    );
-    await ctx.oneWayCall(() =>
-      client.greet(TestRequest.create({ name: "Francesco" }))
-    );
+    const client = new TestGreeterClientImpl(ctx.grpcChannel());
+    await ctx
+      .grpcChannel()
+      .delayedCall(
+        () => client.greet(TestRequest.create({ name: "Francesco" })),
+        this.delayedCallTime - Date.now()
+      );
+    await ctx
+      .grpcChannel()
+      .oneWayCall(() =>
+        client.greet(TestRequest.create({ name: "Francesco" }))
+      );
 
     return TestResponse.create({ greeting: `Hello` });
   }
@@ -806,7 +816,7 @@ class UnawaitedRequestResponseCallGreeter implements TestGreeter {
   async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
-    const client = new TestGreeterClientImpl(ctx);
+    const client = new TestGreeterClientImpl(ctx.grpcChannel());
     client.greet(TestRequest.create({ name: "Francesco" }));
 
     return TestResponse.create({ greeting: `Hello` });

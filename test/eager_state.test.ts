@@ -40,7 +40,7 @@ const COMPLETE_STATE = false;
 
 class GetEmpty implements TestGreeter {
   async greet(): Promise<TestResponse> {
-    const ctx = restate.useContext(this);
+    const ctx = restate.useKeyedContext(this);
 
     const stateIsEmpty = (await ctx.get<string>("STATE")) === null;
 
@@ -92,7 +92,7 @@ describe("GetEmpty", () => {
 
 class Get implements TestGreeter {
   async greet(): Promise<TestResponse> {
-    const ctx = restate.useContext(this);
+    const ctx = restate.useKeyedContext(this);
 
     const state = (await ctx.get<string>("STATE")) || "nothing";
 
@@ -145,7 +145,7 @@ describe("Get", () => {
 
 class GetAppendAndGet implements TestGreeter {
   async greet(request: TestRequest): Promise<TestResponse> {
-    const ctx = restate.useContext(this);
+    const ctx = restate.useKeyedContext(this);
 
     const oldState = (await ctx.get<string>("STATE")) || "nothing";
     ctx.set("STATE", oldState + request.name);
@@ -191,7 +191,7 @@ describe("GetAppendAndGet", () => {
 
 class GetClearAndGet implements TestGreeter {
   async greet(): Promise<TestResponse> {
-    const ctx = restate.useContext(this);
+    const ctx = restate.useKeyedContext(this);
 
     const oldState = (await ctx.get<string>("STATE")) || "not-nothing";
     ctx.clear("STATE");
@@ -237,7 +237,7 @@ describe("GetClearAndGet", () => {
 
 class MultipleGet implements TestGreeter {
   async greet(): Promise<TestResponse> {
-    const ctx = restate.useContext(this);
+    const ctx = restate.useKeyedContext(this);
 
     const state = (await ctx.get<string>("STATE")) || "nothing";
     const state1 = (await ctx.get<string>("STATE")) || "nothing";

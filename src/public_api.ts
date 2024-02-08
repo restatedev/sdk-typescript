@@ -11,10 +11,11 @@
 
 export {
   RestateContext,
-  RestateGrpcContext,
+  Context,
+  KeyedContext,
   useContext,
+  useKeyedContext,
   ServiceApi,
-  RpcContext,
   CombineablePromise,
   Rand,
   RestateGrpcChannel,

@@ -11,11 +11,9 @@
 
 import {
   CombineablePromise,
+  KeyedContext,
   Rand,
   RestateGrpcChannel,
-  RestateGrpcContext,
-  RpcContext,
-  RpcGateway,
   ServiceApi,
 } from "./restate_context";
 import { StateMachine } from "./state_machine";
@@ -87,7 +85,7 @@ export type InternalCombineablePromise<T> = CombineablePromise<T> &
     journalIndex: number;
   };
 
-export class RestateContextImpl implements RestateGrpcContext, RpcContext {
+export class RestateContextImpl implements KeyedContext, RestateGrpcChannel {
   // here, we capture the context information for actions on the Restate context that
   // are executed within other actions, such as
   // ctx.oneWayCall( () => client.foo(bar) );
@@ -332,10 +330,6 @@ export class RestateContextImpl implements RestateGrpcContext, RpcContext {
   // --- Methods exposed by respective interfaces to interact with other APIs
 
   grpcChannel(): RestateGrpcChannel {
-    return this;
-  }
-
-  rpcGateway(): RpcGateway {
     return this;
   }
 

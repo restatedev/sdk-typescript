@@ -262,7 +262,7 @@ describe("ManySleepsGreeter: With sleep not complete", () => {
 
 class ManySleepsAndSetGreeter implements TestGreeter {
   async greet(): Promise<TestResponse> {
-    const ctx = restate.useContext(this);
+    const ctx = restate.useKeyedContext(this);
 
     const mySleeps = Promise.all(
       Array.from(Array(5).keys()).map(() => ctx.sleep(wakeupTime - Date.now()))

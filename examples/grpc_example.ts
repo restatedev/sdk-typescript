@@ -30,7 +30,7 @@ import {
  */
 export class GreeterService implements TestGreeter {
   async greet(request: TestRequest): Promise<TestResponse> {
-    const ctx = restate.useContext(this);
+    const ctx = restate.useKeyedContext(this);
 
     // state
     let seen = (await ctx.get<number>("seen")) ?? 0;

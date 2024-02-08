@@ -190,7 +190,7 @@ class SideEffectAndInvokeGreeter implements TestGreeter {
   async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
-    const client = new TestGreeterClientImpl(ctx);
+    const client = new TestGreeterClientImpl(ctx.grpcChannel());
 
     // state
     const result = await ctx.sideEffect<string>(async () => "abcd");
@@ -243,14 +243,14 @@ class SideEffectAndOneWayCallGreeter implements TestGreeter {
   async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
 
-    const client = new TestGreeterClientImpl(ctx);
+    const client = new TestGreeterClientImpl(ctx.grpcChannel());
 
     // state
     const result = await ctx.sideEffect<string>(async () => "abcd");
 
-    await ctx.oneWayCall(() =>
-      client.greet(TestRequest.create({ name: result }))
-    );
+    await ctx
+      .grpcChannel()
+      .oneWayCall(() => client.greet(TestRequest.create({ name: result })));
     const response = await client.greet(TestRequest.create({ name: result }));
 
     return TestResponse.create({ greeting: `Hello ${response.greeting}` });
@@ -449,7 +449,7 @@ class FailingGetSideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: number) {}
 
   async greet(): Promise<TestResponse> {
-    const ctx = restate.useContext(this);
+    const ctx = restate.useKeyedContext(this);
 
     // state
     const response = await ctx.sideEffect(async () => {
@@ -482,7 +482,7 @@ class FailingSetSideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: number) {}
 
   async greet(): Promise<TestResponse> {
-    const ctx = restate.useContext(this);
+    const ctx = restate.useKeyedContext(this);
 
     // state
     const response = await ctx.sideEffect(async () => {
@@ -515,7 +515,7 @@ class FailingClearSideEffectGreeter implements TestGreeter {
   constructor(readonly sideEffectOutput: number) {}
 
   async greet(): Promise<TestResponse> {
-    const ctx = restate.useContext(this);
+    const ctx = restate.useKeyedContext(this);
 
     // state
     const response = await ctx.sideEffect(async () => {
@@ -671,7 +671,7 @@ class FailingOneWayCallInSideEffectGreeter implements TestGreeter {
 
     // state
     const response = await ctx.sideEffect(async () => {
-      await ctx.oneWayCall(async () => {
+      await ctx.grpcChannel().oneWayCall(async () => {
         return;
       });
     });
@@ -922,7 +922,7 @@ export class UnawaitedSideEffectShouldFailSubsequentContextCallService
 
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
-    const ctx = restate.useContext(this);
+    const ctx = restate.useKeyedContext(this);
 
     ctx.sideEffect<number>(async () => {
       // eslint-disable-next-line @typescript-eslint/no-empty-function
@@ -965,14 +965,16 @@ describe("UnawaitedSideEffectShouldFailSubsequentContextCall", () => {
   defineTestCase("get", (ctx) => ctx.get<string>("123"));
   defineTestCase("set", (ctx) => ctx.set("123", "abc"));
   defineTestCase("call", (ctx) => {
-    const client = new TestGreeterClientImpl(ctx);
+    const client = new TestGreeterClientImpl(ctx.grpcChannel());
     client.greet(TestRequest.create({ name: "Francesco" }));
   });
   defineTestCase("one way call", (ctx) => {
-    const client = new TestGreeterClientImpl(ctx);
-    ctx.oneWayCall(() =>
-      client.greet(TestRequest.create({ name: "Francesco" }))
-    );
+    const client = new TestGreeterClientImpl(ctx.grpcChannel());
+    ctx
+      .grpcChannel()
+      .oneWayCall(() =>
+        client.greet(TestRequest.create({ name: "Francesco" }))
+      );
   });
 });
 
@@ -981,7 +983,7 @@ export class UnawaitedSideEffectShouldFailSubsequentSetService
 {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   async greet(request: TestRequest): Promise<TestResponse> {
-    const ctx = restate.useContext(this);
+    const ctx = restate.useKeyedContext(this);
 
     ctx.sideEffect<number>(async () => {
       // eslint-disable-next-line @typescript-eslint/no-empty-function

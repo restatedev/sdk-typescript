@@ -9,7 +9,7 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { RestateContext, setContext } from "../restate_context";
+import { Context, KeyedContext } from "../restate_context";
 import { FileDescriptorProto } from "ts-proto-descriptors";
 
 export class GrpcServiceMethod<I, O> {
@@ -41,7 +41,7 @@ export class HostedGrpcServiceMethod<I, O> {
 
   // The end of an invoke is either a response (Uint8Array) or a SuspensionMessage
   async invoke(
-    context: RestateContext,
+    context: KeyedContext,
     inBytes: Uint8Array
   ): Promise<Uint8Array> {
     const instanceWithContext = setContext(this.instance, context);
@@ -49,6 +49,18 @@ export class HostedGrpcServiceMethod<I, O> {
     const result: O = await this.method.localFn(instanceWithContext, input);
     return this.method.outputEncoder(result);
   }
+}
+
+function setContext<T>(instance: T, context: Context): T {
+  // creates a *new*, per call object that shares all the properties that @instance has
+  // except '$$restate' which is a unique, per call pointer to a restate context.
+  //
+  // The following line create a new object, that its prototype is @instance.
+  // and that object has a $$restate property.
+  const wrapper = Object.create(instance as object, {
+    $$restate: { value: context },
+  });
+  return wrapper as T;
 }
 
 //
