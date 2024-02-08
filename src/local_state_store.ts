@@ -20,14 +20,12 @@ import { Empty } from "./generated/google/protobuf/empty";
 import { jsonSerialize } from "./utils/utils";
 
 export class LocalStateStore {
-  private isPartial: boolean;
   private state: Map<string, Buffer | Empty>;
 
-  constructor(isPartial: boolean, state: StartMessage_StateEntry[]) {
+  constructor(private isPartial: boolean, state: StartMessage_StateEntry[]) {
     this.state = new Map<string, Buffer | Empty>(
       state.map(({ key, value }) => [key.toString(), value])
     );
-    this.isPartial = isPartial;
   }
 
   public get(key: string): GetStateEntryMessage {
