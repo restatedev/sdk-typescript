@@ -10,6 +10,7 @@
  */
 
 import {
+  ClearAllStateEntryMessage,
   ClearStateEntryMessage,
   GetStateEntryMessage,
   SetStateEntryMessage,
@@ -21,7 +22,7 @@ import { jsonSerialize } from "./utils/utils";
 export class LocalStateStore {
   private state: Map<string, Buffer | Empty>;
 
-  constructor(readonly isPartial: boolean, state: StartMessage_StateEntry[]) {
+  constructor(private isPartial: boolean, state: StartMessage_StateEntry[]) {
     this.state = new Map<string, Buffer | Empty>(
       state.map(({ key, value }) => [key.toString(), value])
     );
@@ -74,5 +75,11 @@ export class LocalStateStore {
   // When we get the response of the runtime, we add the state to the localStateStore.
   public add(key: string, result: Buffer | Empty): void {
     this.state.set(key, result);
+  }
+
+  public clearAll(): ClearAllStateEntryMessage {
+    this.state.clear();
+    this.isPartial = false;
+    return {};
   }
 }

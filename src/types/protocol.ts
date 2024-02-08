@@ -17,6 +17,7 @@ import {
   AwakeableEntryMessage,
   BackgroundInvokeEntryMessage,
   ClearStateEntryMessage,
+  ClearAllStateEntryMessage,
   CompleteAwakeableEntryMessage,
   CompletionMessage,
   EntryAckMessage,
@@ -37,6 +38,7 @@ export {
   AwakeableEntryMessage,
   BackgroundInvokeEntryMessage,
   ClearStateEntryMessage,
+  ClearAllStateEntryMessage,
   CompleteAwakeableEntryMessage,
   CompletionMessage,
   ErrorMessage,
@@ -64,6 +66,7 @@ export const OUTPUT_STREAM_ENTRY_MESSAGE_TYPE = 0x0401n;
 export const GET_STATE_ENTRY_MESSAGE_TYPE = 0x0800n;
 export const SET_STATE_ENTRY_MESSAGE_TYPE = 0x0801n;
 export const CLEAR_STATE_ENTRY_MESSAGE_TYPE = 0x0802n;
+export const CLEAR_ALL_STATE_ENTRY_MESSAGE_TYPE = 0x0803n;
 export const SLEEP_ENTRY_MESSAGE_TYPE = 0x0c00n;
 export const INVOKE_ENTRY_MESSAGE_TYPE = 0x0c01n;
 export const BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE = 0x0c02n;
@@ -93,6 +96,7 @@ export const KNOWN_MESSAGE_TYPES = new Set([
   GET_STATE_ENTRY_MESSAGE_TYPE,
   SET_STATE_ENTRY_MESSAGE_TYPE,
   CLEAR_STATE_ENTRY_MESSAGE_TYPE,
+  CLEAR_ALL_STATE_ENTRY_MESSAGE_TYPE,
   SLEEP_ENTRY_MESSAGE_TYPE,
   INVOKE_ENTRY_MESSAGE_TYPE,
   BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
@@ -114,6 +118,7 @@ const PROTOBUF_MESSAGE_NAME_BY_TYPE = new Map<bigint, string>([
   [GET_STATE_ENTRY_MESSAGE_TYPE, "GetStateEntryMessage"],
   [SET_STATE_ENTRY_MESSAGE_TYPE, "SetStateEntryMessage"],
   [CLEAR_STATE_ENTRY_MESSAGE_TYPE, "ClearStateEntryMessage"],
+  [CLEAR_ALL_STATE_ENTRY_MESSAGE_TYPE, "ClearAllStateEntryMessage"],
   [SLEEP_ENTRY_MESSAGE_TYPE, "SleepEntryMessage"],
   [INVOKE_ENTRY_MESSAGE_TYPE, "InvokeEntryMessage"],
   [BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE, "BackgroundInvokeEntryMessage"],
@@ -142,6 +147,7 @@ const PROTOBUF_MESSAGES: Array<[bigint, any]> = [
   [GET_STATE_ENTRY_MESSAGE_TYPE, GetStateEntryMessage],
   [SET_STATE_ENTRY_MESSAGE_TYPE, SetStateEntryMessage],
   [CLEAR_STATE_ENTRY_MESSAGE_TYPE, ClearStateEntryMessage],
+  [CLEAR_ALL_STATE_ENTRY_MESSAGE_TYPE, ClearAllStateEntryMessage],
   [SLEEP_ENTRY_MESSAGE_TYPE, SleepEntryMessage],
   [INVOKE_ENTRY_MESSAGE_TYPE, InvokeEntryMessage],
   [BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE, BackgroundInvokeEntryMessage],
@@ -165,6 +171,7 @@ export type ProtocolMessage =
   | GetStateEntryMessage
   | SetStateEntryMessage
   | ClearStateEntryMessage
+  | ClearAllStateEntryMessage
   | SleepEntryMessage
   | InvokeEntryMessage
   | BackgroundInvokeEntryMessage

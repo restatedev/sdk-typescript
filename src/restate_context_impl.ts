@@ -31,6 +31,7 @@ import {
   AWAKEABLE_ENTRY_MESSAGE_TYPE,
   AWAKEABLE_IDENTIFIER_PREFIX,
   BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
+  CLEAR_ALL_STATE_ENTRY_MESSAGE_TYPE,
   CLEAR_STATE_ENTRY_MESSAGE_TYPE,
   COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
   GET_STATE_ENTRY_MESSAGE_TYPE,
@@ -147,6 +148,16 @@ export class RestateContextImpl implements RestateGrpcContext, RpcContext {
     const msg = this.stateMachine.localStateStore.clear(name);
     this.stateMachine.handleUserCodeMessage(
       CLEAR_STATE_ENTRY_MESSAGE_TYPE,
+      msg
+    );
+  }
+
+  public clearAll(): void {
+    this.checkState("clear all state");
+
+    const msg = this.stateMachine.localStateStore.clearAll();
+    this.stateMachine.handleUserCodeMessage(
+      CLEAR_ALL_STATE_ENTRY_MESSAGE_TYPE,
       msg
     );
   }

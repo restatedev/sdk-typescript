@@ -17,10 +17,13 @@ import {
 import * as restate from "../src/public_api";
 import { TestDriver } from "./testdriver";
 import {
+  CLEAR_ALL_STATE_ENTRY_MESSAGE,
   clearStateMessage,
   completionMessage,
+  completionMessageWithEmpty,
   END_MESSAGE,
   getStateMessage,
+  getStateMessageWithEmptyResult,
   greetRequest,
   greetResponse,
   inputMessage,
@@ -276,6 +279,71 @@ describe("MultipleGet", () => {
       getStateMessage("STATE", "One"),
       getStateMessage("STATE", "One"),
       outputMessage(greetResponse("One - One - One")),
+      END_MESSAGE,
+    ]);
+  });
+});
+
+class GetClearAllThenGet implements TestGreeter {
+  async greet(): Promise<TestResponse> {
+    const ctx = restate.useContext(this);
+
+    const state1 = (await ctx.get<string>("STATE")) || "nothing";
+    const state2 = (await ctx.get<string>("ANOTHER_STATE")) || "nothing";
+
+    ctx.clearAll();
+
+    const state3 = (await ctx.get<string>("STATE")) || "nothing";
+    const state4 = (await ctx.get<string>("ANOTHER_STATE")) || "nothing";
+
+    return {
+      greeting: [state1, state2, state3, state4].join(),
+    };
+  }
+}
+
+describe("GetClearAllThenGet", () => {
+  it("with complete state in the eager state map", async () => {
+    const result = await new TestDriver(
+      new GetClearAllThenGet(),
+      [
+        startMessage(1, false, [keyVal("STATE", "One")]),
+        inputMessage(greetRequest("")),
+      ],
+      ProtocolMode.REQUEST_RESPONSE
+    ).run();
+
+    // First get goes to the runtime, the others get completed with local state
+    expect(result).toStrictEqual([
+      getStateMessage("STATE", "One"),
+      getStateMessageWithEmptyResult("ANOTHER_STATE"),
+      CLEAR_ALL_STATE_ENTRY_MESSAGE,
+      getStateMessageWithEmptyResult("STATE"),
+      getStateMessageWithEmptyResult("ANOTHER_STATE"),
+      outputMessage(
+        greetResponse(["One", "nothing", "nothing", "nothing"].join())
+      ),
+      END_MESSAGE,
+    ]);
+  });
+
+  it("with lazy state in the eager state map", async () => {
+    const result = await new TestDriver(new GetClearAllThenGet(), [
+      startMessage(1, true, [keyVal("STATE", "One")]),
+      inputMessage(greetRequest("")),
+      completionMessageWithEmpty(2),
+    ]).run();
+
+    // First get goes to the runtime, the others get completed with local state
+    expect(result).toStrictEqual([
+      getStateMessage("STATE", "One"),
+      getStateMessage("ANOTHER_STATE"),
+      CLEAR_ALL_STATE_ENTRY_MESSAGE,
+      getStateMessageWithEmptyResult("STATE"),
+      getStateMessageWithEmptyResult("ANOTHER_STATE"),
+      outputMessage(
+        greetResponse(["One", "nothing", "nothing", "nothing"].join())
+      ),
       END_MESSAGE,
     ]);
   });

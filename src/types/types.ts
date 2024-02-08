@@ -14,9 +14,11 @@ import {
   COMPLETION_MESSAGE_TYPE,
   ENTRY_ACK_MESSAGE_TYPE,
   ERROR_MESSAGE_TYPE,
+  formatMessageType,
   GET_STATE_ENTRY_MESSAGE_TYPE,
   KNOWN_MESSAGE_TYPES,
   POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
+  PROTOBUF_MESSAGE_BY_TYPE,
   ProtocolMessage,
   SLEEP_ENTRY_MESSAGE_TYPE,
   START_MESSAGE_TYPE,
@@ -31,6 +33,18 @@ export class Message {
     readonly protocolVersion?: number,
     readonly requiresAck?: boolean
   ) {}
+
+  // For debugging purposes
+  toJSON(): unknown {
+    const pbType = PROTOBUF_MESSAGE_BY_TYPE.get(this.messageType);
+    if (pbType === undefined) {
+      return this;
+    }
+    return {
+      messageType: formatMessageType(this.messageType),
+      message: pbType.toJSON(this.message),
+    };
+  }
 }
 
 class MessageType {
