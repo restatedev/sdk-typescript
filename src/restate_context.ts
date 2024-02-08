@@ -11,7 +11,7 @@
 
 import { RetrySettings } from "./utils/public_utils";
 import { Client, SendClient } from "./types/router";
-import { RestateContextImpl } from "./restate_context_impl";
+import { ContextImpl } from "./restate_context_impl";
 
 /**
  * Key value store operations. Only keyed services have an attached key-value store.
@@ -408,7 +408,7 @@ export const CombineablePromise = {
       return Promise.all(values);
     }
 
-    return (values[0].__restate_context as RestateContextImpl).createCombinator(
+    return (values[0].__restate_context as ContextImpl).createCombinator(
       Promise.all.bind(Promise),
       values
     ) as Promise<{
@@ -432,7 +432,7 @@ export const CombineablePromise = {
       return Promise.race(values);
     }
 
-    return (values[0].__restate_context as RestateContextImpl).createCombinator(
+    return (values[0].__restate_context as ContextImpl).createCombinator(
       Promise.race.bind(Promise),
       values
     ) as Promise<Awaited<T[number]>>;
@@ -455,7 +455,7 @@ export const CombineablePromise = {
       return Promise.any(values);
     }
 
-    return (values[0].__restate_context as RestateContextImpl).createCombinator(
+    return (values[0].__restate_context as ContextImpl).createCombinator(
       Promise.any.bind(Promise),
       values
     ) as Promise<Awaited<T[number]>>;
@@ -479,7 +479,7 @@ export const CombineablePromise = {
       return Promise.allSettled(values);
     }
 
-    return (values[0].__restate_context as RestateContextImpl).createCombinator(
+    return (values[0].__restate_context as ContextImpl).createCombinator(
       Promise.allSettled.bind(Promise),
       values
     ) as Promise<{

@@ -10,7 +10,7 @@
  */
 
 import * as p from "./types/protocol";
-import { RestateContextImpl } from "./restate_context_impl";
+import { ContextImpl } from "./restate_context_impl";
 import { Connection, RestateStreamConsumer } from "./connection/connection";
 import { ProtocolMode } from "./generated/proto/discovery";
 import { Message } from "./types/types";
@@ -57,7 +57,7 @@ import { CombinatorEntryMessage } from "./generated/proto/javascript";
 
 export class StateMachine<I, O> implements RestateStreamConsumer {
   private journal: Journal<I, O>;
-  private restateContext: RestateContextImpl;
+  private restateContext: ContextImpl;
 
   private readonly invocationComplete = new CompletablePromise<Buffer | void>();
 
@@ -92,7 +92,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
     this.localStateStore = invocation.localStateStore;
     this.console = createStateMachineConsole(loggerContext);
 
-    this.restateContext = new RestateContextImpl(
+    this.restateContext = new ContextImpl(
       this.invocation.id,
       this.invocation.method.service,
       // The console exposed by RestateContext filters logs in replay, while the internal one is based on the ENV variables.

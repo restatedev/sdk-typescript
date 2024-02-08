@@ -85,7 +85,7 @@ export type InternalCombineablePromise<T> = CombineablePromise<T> &
     journalIndex: number;
   };
 
-export class RestateContextImpl implements KeyedContext, RestateGrpcChannel {
+export class ContextImpl implements KeyedContext, RestateGrpcChannel {
   // here, we capture the context information for actions on the Restate context that
   // are executed within other actions, such as
   // ctx.oneWayCall( () => client.foo(bar) );
@@ -261,7 +261,7 @@ export class RestateContextImpl implements KeyedContext, RestateGrpcChannel {
   ): Promise<void> {
     this.checkState("oneWayCall");
 
-    return RestateContextImpl.callContext.run(
+    return ContextImpl.callContext.run(
       { type: CallContexType.OneWayCall },
       call
     );
@@ -276,7 +276,7 @@ export class RestateContextImpl implements KeyedContext, RestateGrpcChannel {
     this.checkState("delayedCall");
 
     // Delayed call is a one way call with a delay
-    return RestateContextImpl.callContext.run(
+    return ContextImpl.callContext.run(
       { type: CallContexType.OneWayCall, delay: delayMillis },
       call
     );
@@ -369,7 +369,7 @@ export class RestateContextImpl implements KeyedContext, RestateGrpcChannel {
 
       let sideEffectResult: T;
       try {
-        sideEffectResult = await RestateContextImpl.callContext.run(
+        sideEffectResult = await ContextImpl.callContext.run(
           { type: CallContexType.SideEffect },
           fn
         );
@@ -544,17 +544,17 @@ export class RestateContextImpl implements KeyedContext, RestateGrpcChannel {
   // -- Various private methods
 
   private isInSideEffect(): boolean {
-    const context = RestateContextImpl.callContext.getStore();
+    const context = ContextImpl.callContext.getStore();
     return context?.type === CallContexType.SideEffect;
   }
 
   private isInOneWayCall(): boolean {
-    const context = RestateContextImpl.callContext.getStore();
+    const context = ContextImpl.callContext.getStore();
     return context?.type === CallContexType.OneWayCall;
   }
 
   private getOneWayCallDelay(): number | undefined {
-    const context = RestateContextImpl.callContext.getStore();
+    const context = ContextImpl.callContext.getStore();
     return context?.delay;
   }
 
@@ -569,7 +569,7 @@ export class RestateContextImpl implements KeyedContext, RestateGrpcChannel {
   }
 
   private checkState(callType: string): void {
-    const context = RestateContextImpl.callContext.getStore();
+    const context = ContextImpl.callContext.getStore();
     if (!context) {
       this.checkNotExecutingSideEffect();
       return;
