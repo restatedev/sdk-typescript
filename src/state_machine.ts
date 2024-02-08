@@ -86,6 +86,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
     private readonly connection: Connection,
     private readonly invocation: Invocation<I, O>,
     private readonly protocolMode: ProtocolMode,
+    keyedContext: boolean,
     loggerContext: LoggerContext,
     private readonly suspensionMillis: number = 30_000
   ) {
@@ -97,6 +98,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
       this.invocation.method.service,
       // The console exposed by RestateContext filters logs in replay, while the internal one is based on the ENV variables.
       createRestateConsole(loggerContext, () => !this.journal.isReplaying()),
+      keyedContext,
       this
     );
     this.journal = new Journal(this.invocation);

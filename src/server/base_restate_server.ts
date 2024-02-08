@@ -34,6 +34,7 @@ import {
 } from "ts-proto-descriptors";
 import {
   fieldTypeToJSON,
+  ServiceType,
   serviceTypeToJSON,
 } from "../generated/dev/restate/ext";
 import {
@@ -43,12 +44,7 @@ import {
   protoMetadata as rpcServiceProtoMetadata,
   KeyedEvent,
 } from "../generated/proto/dynrpc";
-import {
-  Context,
-  KeyedContext,
-  useContext,
-  useKeyedContext,
-} from "../context";
+import { Context, KeyedContext, useContext, useKeyedContext } from "../context";
 import { verifyAssumptions } from "../utils/assumptions";
 import { TerminalError } from "../public_api";
 import { KeyedRouter, UnKeyedRouter, isEventHandler } from "../types/router";
@@ -275,6 +271,7 @@ export abstract class BaseRestateServer {
     const method = new GrpcServiceMethod<RpcRequest, RpcResponse>(
       route,
       route,
+      keyed,
       localMethod,
       decoder,
       encoder
@@ -313,6 +310,7 @@ export abstract class BaseRestateServer {
     const method = new GrpcServiceMethod<KeyedEvent, Empty>(
       route,
       route,
+      keyed,
       localMethod,
       decoder,
       encoder
@@ -452,6 +450,10 @@ export function parseService(
 ) {
   const svcMethods: Array<GrpcServiceMethod<unknown, unknown>> = [];
 
+  const service_type =
+    meta.options?.services?.[serviceName].options?.["service_type"];
+  const keyed = service_type !== ServiceType.UNKEYED;
+
   // index all the existing properties that `instance` has.
   // we index them by the lower case represention.
   const names = indexProperties(instance);
@@ -502,12 +504,14 @@ export function parseService(
         new GrpcServiceMethod<unknown, unknown>(
           methodDescriptor.name,
           localName,
+          keyed,
           localMethod,
           decoder,
           encoder
         )
       );
     }
+
     return new GrpcService(
       serviceName,
       meta.fileDescriptor.package,

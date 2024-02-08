@@ -9,13 +9,14 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { Context, KeyedContext } from "../context";
+import { Context } from "../context";
 import { FileDescriptorProto } from "ts-proto-descriptors";
 
 export class GrpcServiceMethod<I, O> {
   constructor(
     readonly name: string, // the gRPC name as defined in the .proto file
     readonly localName: string, // the method name as defined in the class.
+    readonly keyedContext: boolean, // If the method expects a keyed context
     readonly localFn: (instance: unknown, input: I) => Promise<O>, // the actual function
     readonly inputDecoder: (buf: Uint8Array) => I, // the protobuf decoder
     readonly outputEncoder: (output: O) => Uint8Array // protobuf encoder
@@ -40,10 +41,7 @@ export class HostedGrpcServiceMethod<I, O> {
   ) {}
 
   // The end of an invoke is either a response (Uint8Array) or a SuspensionMessage
-  async invoke(
-    context: KeyedContext,
-    inBytes: Uint8Array
-  ): Promise<Uint8Array> {
+  async invoke(context: Context, inBytes: Uint8Array): Promise<Uint8Array> {
     const instanceWithContext = setContext(this.instance, context);
     const input = this.method.inputDecoder(inBytes);
     const result: O = await this.method.localFn(instanceWithContext, input);

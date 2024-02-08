@@ -230,6 +230,7 @@ class LambdaRestateServerImpl
         connection,
         invocation,
         ProtocolMode.REQUEST_RESPONSE,
+        method.method.keyedContext,
         invocation.inferLoggerContext({
           AWSRequestId: event.requestContext.requestId,
         })

@@ -26,6 +26,7 @@ export function wrapHandler<I, O>(
   const method = new GrpcServiceMethod<I, O>(
     "",
     "",
+    false,
     localMethod,
     decoder,
     encoder

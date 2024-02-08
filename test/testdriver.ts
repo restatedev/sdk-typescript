@@ -130,6 +130,7 @@ export class TestDriver<I, O> implements Connection {
       this,
       invocation,
       this.protocolMode,
+      true,
       invocation.inferLoggerContext()
     );
   }

@@ -102,6 +102,7 @@ export class ContextImpl implements KeyedContext, RestateGrpcChannel {
     public readonly id: Buffer,
     public readonly serviceName: string,
     public readonly console: Console,
+    public readonly keyedContext: boolean,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private readonly stateMachine: StateMachine<any, any>,
     public readonly rand: Rand = new RandImpl(id)
@@ -111,6 +112,7 @@ export class ContextImpl implements KeyedContext, RestateGrpcChannel {
   public get<T>(name: string): Promise<T | null> {
     // Check if this is a valid action
     this.checkState("get state");
+    this.checkStateOperation("get state");
 
     // Create the message and let the state machine process it
     const msg = GetStateEntryMessage.create({ key: Buffer.from(name) });
@@ -169,12 +171,14 @@ export class ContextImpl implements KeyedContext, RestateGrpcChannel {
 
   public set<T>(name: string, value: T): void {
     this.checkState("set state");
+    this.checkStateOperation("set state");
     const msg = this.stateMachine.localStateStore.set(name, value);
     this.stateMachine.handleUserCodeMessage(SET_STATE_ENTRY_MESSAGE_TYPE, msg);
   }
 
   public clear(name: string): void {
     this.checkState("clear state");
+    this.checkStateOperation("clear state");
 
     const msg = this.stateMachine.localStateStore.clear(name);
     this.stateMachine.handleUserCodeMessage(
@@ -587,6 +591,15 @@ export class ContextImpl implements KeyedContext, RestateGrpcChannel {
         `Cannot do a ${callType} from within ctx.oneWayCall(...).
           Context method oneWayCall() can only be used to invoke other services in the background.
           e.g. ctx.oneWayCall(() => client.greet(my_request))`,
+        { errorCode: ErrorCodes.INTERNAL }
+      );
+    }
+  }
+
+  private checkStateOperation(callType: string): void {
+    if (!this.keyedContext) {
+      throw new TerminalError(
+        `You can do ${callType} calls only from keyed services/routers.`,
         { errorCode: ErrorCodes.INTERNAL }
       );
     }
