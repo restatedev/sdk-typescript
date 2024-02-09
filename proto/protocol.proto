@@ -1,4 +1,4 @@
-// Copyright (c) 2023-2024 - Restate Software, Inc., Restate GmbH
+// Copyright (c) 2023 - Restate Software, Inc., Restate GmbH
 //
 // This file is part of the Restate service protocol, which is
 // released under the MIT license.
@@ -155,6 +155,20 @@ message ClearStateEntryMessage {
 // Fallible: No
 // Type: 0x0800 + 3
 message ClearAllStateEntryMessage {
+}
+
+// Completable: Yes
+// Fallible: No
+// Type: 0x0800 + 4
+message GetStateKeysEntryMessage {
+  message StateKeys {
+    repeated bytes keys = 1;
+  }
+
+  oneof result {
+    StateKeys value = 14;
+    Failure failure = 15;
+  };
 }
 
 // ------ Syscalls ------

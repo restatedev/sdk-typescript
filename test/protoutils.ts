@@ -49,6 +49,8 @@ import {
   COMBINATOR_ENTRY_MESSAGE,
   CLEAR_ALL_STATE_ENTRY_MESSAGE_TYPE,
   ClearAllStateEntryMessage,
+  GET_STATE_KEYS_ENTRY_MESSAGE_TYPE,
+  GetStateKeysEntryMessage,
 } from "../src/types/protocol";
 import { Message } from "../src/types/types";
 import { TestRequest, TestResponse } from "../src/generated/proto/test";
@@ -157,7 +159,8 @@ export function getStateMessage<T>(
       GetStateEntryMessage.create({
         key: Buffer.from(key),
         empty: Empty.create({}),
-      })
+      }),
+      true
     );
   } else if (value !== undefined) {
     return new Message(
@@ -165,7 +168,8 @@ export function getStateMessage<T>(
       GetStateEntryMessage.create({
         key: Buffer.from(key),
         value: Buffer.from(jsonSerialize(value)),
-      })
+      }),
+      true
     );
   } else if (failure !== undefined) {
     return new Message(
@@ -173,14 +177,16 @@ export function getStateMessage<T>(
       GetStateEntryMessage.create({
         key: Buffer.from(key),
         failure: failure,
-      })
+      }),
+      true
     );
   } else {
     return new Message(
       GET_STATE_ENTRY_MESSAGE_TYPE,
       GetStateEntryMessage.create({
         key: Buffer.from(key),
-      })
+      }),
+      false
     );
   }
 }
@@ -191,8 +197,29 @@ export function getStateMessageWithEmptyResult(key: string): Message {
     GetStateEntryMessage.create({
       key: Buffer.from(key),
       empty: Empty.create({}),
-    })
+    }),
+    true
   );
+}
+
+export function getStateKeysMessage(value?: Array<string>): Message {
+  if (value === undefined) {
+    return new Message(
+      GET_STATE_KEYS_ENTRY_MESSAGE_TYPE,
+      GetStateKeysEntryMessage.create({}),
+      false
+    );
+  } else {
+    return new Message(
+      GET_STATE_KEYS_ENTRY_MESSAGE_TYPE,
+      GetStateKeysEntryMessage.create({
+        value: {
+          keys: value.map((b) => Buffer.from(b)),
+        },
+      }),
+      true
+    );
+  }
 }
 
 export function setStateMessage<T>(key: string, value: T): Message {
