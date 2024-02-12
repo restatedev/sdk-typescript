@@ -132,6 +132,14 @@ class ExclusiveContextImpl extends SharedContextImpl implements wf.WfContext {
     this.ctx.send(this.stateServiceApi).clearState(this.wfId, stateName);
   }
 
+  stateKeys(): Promise<string[]> {
+    return this.ctx.stateKeys();
+  }
+
+  clearAll(): void {
+    this.ctx.clearAll();
+  }
+
   sideEffect<T>(
     fn: () => Promise<T>,
     retryPolicy?: restate.RestateUtils.RetrySettings
