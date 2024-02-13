@@ -18,7 +18,7 @@ import {
   ProtoMetadata,
 } from "../types/grpc";
 import {
-  ProtocolMode,
+  DeepPartial,
   ServiceDiscoveryResponse,
 } from "../generated/proto/discovery";
 import { Event } from "../types/types";
@@ -46,25 +46,21 @@ import {
 } from "../generated/proto/dynrpc";
 import { Context, KeyedContext, useContext, useKeyedContext } from "../context";
 import { verifyAssumptions } from "../utils/assumptions";
-import { TerminalError } from "../public_api";
+import { RestateEndpoint, ServiceBundle, TerminalError } from "../public_api";
 import { KeyedRouter, UnKeyedRouter, isEventHandler } from "../types/router";
 import { jsonSafeAny } from "../utils/utils";
 import { rlog } from "../logger";
-
-/**
- * The properties describing a gRPC service. Consisting of the name, the object holding the
- * implementation, and the descriptor (metadata) describing the service and types.
- */
-export interface ServiceOpts {
-  descriptor: ProtoMetadata;
-  service: string;
-  instance: unknown;
-}
+import { ServiceOpts } from "../endpoint";
+import http2, { Http2ServerRequest, Http2ServerResponse } from "http2";
+import { Http2Handler } from "./http2_handler";
+import { LambdaHandler } from "./lambda_handler";
 
 /**
  * The ServiceEndpoint the where Restate services are registered.
  * They will be invoked depending on the concrete server implementation, e.g.,
  * by HTTP/2 calls, AWS Lambda events, etc.
+ *
+ * @deprecated use {@link RestateEndpoint}
  */
 export interface ServiceEndpoint {
   /**
@@ -125,45 +121,97 @@ export interface ServiceEndpoint {
    * Restate will expose the RPC paths '/acme.myservice/foo' and '/acme.myservice/bar'.
    */
   bindKeyedRouter<M>(path: string, router: KeyedRouter<M>): ServiceEndpoint;
-
-  /**
-   * Adds one or more services to this endpoint. This will call the
-   * {@link ServiceBundle.registerServices} function to register all services at this endpoint.
-   */
-  bind(services: ServiceBundle): ServiceEndpoint;
 }
 
-/**
- * Utility interface for a bundle of one or more services belonging together
- * and being registered together.
- */
-export interface ServiceBundle {
-  /**
-   * Called to register the services at the endpoint.
-   */
-  registerServices(endpoint: ServiceEndpoint): void;
-}
-
-export abstract class BaseRestateServer {
+export class EndpointImpl implements RestateEndpoint {
   protected readonly methods: Record<
     string,
     HostedGrpcServiceMethod<unknown, unknown>
   > = {};
-  protected readonly discovery: ServiceDiscoveryResponse;
+  readonly discovery: DeepPartial<ServiceDiscoveryResponse>;
   protected readonly dynrpcDescriptor: RpcServiceProtoMetadata;
 
-  protected constructor(protocolMode: ProtocolMode) {
+  public constructor() {
     this.discovery = {
       files: { file: [] },
       services: [],
       minProtocolVersion: 0,
       maxProtocolVersion: 0,
-      protocolMode: protocolMode,
     };
     this.dynrpcDescriptor = copyProtoMetadata(rpcServiceProtoMetadata);
   }
 
-  protected addDescriptor(descriptor: ProtoMetadata) {
+  bindService({ descriptor, service, instance }: ServiceOpts): RestateEndpoint {
+    const spec = parseService(descriptor, service, instance);
+    this.addDescriptor(descriptor);
+
+    const qname =
+      spec.packge === "" ? spec.name : `${spec.packge}.${spec.name}`;
+
+    this.discovery.services?.push(qname);
+    for (const method of spec.methods) {
+      const url = `/invoke/${qname}/${method.name}`;
+      this.methods[url] = new HostedGrpcServiceMethod(
+        instance,
+        spec.packge,
+        service,
+        method
+      );
+      // note that this log will not print all the keys.
+      rlog.info(`Binding: ${url}  -> ${JSON.stringify(method, null, "\t")}`);
+    }
+
+    return this;
+  }
+
+  public bindRouter<M>(
+    path: string,
+    router: UnKeyedRouter<M>
+  ): RestateEndpoint {
+    this.bindRpcService(path, router, false);
+    return this;
+  }
+
+  public bindKeyedRouter<M>(
+    path: string,
+    router: KeyedRouter<M>
+  ): RestateEndpoint {
+    this.bindRpcService(path, router, true);
+    return this;
+  }
+
+  public bind(services: ServiceBundle): RestateEndpoint {
+    services.registerServices(this);
+    return this;
+  }
+
+  http2Handler(): (
+    request: Http2ServerRequest,
+    response: Http2ServerResponse
+  ) => void {
+    const handler = new Http2Handler(this);
+    return handler.acceptConnection.bind(handler);
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  lambdaHandler(): (event: any) => Promise<any> {
+    const handler = new LambdaHandler(this);
+    return handler.handleRequest.bind(handler);
+  }
+
+  listen(port?: number): Promise<void> {
+    const actualPort = port ?? parseInt(process.env.PORT ?? "9080");
+    rlog.info(`Listening on ${actualPort}...`);
+
+    const server = http2.createServer(this.http2Handler());
+    server.listen(actualPort);
+    // eslint-disable-next-line @typescript-eslint/no-empty-function
+    return new Promise(() => {});
+  }
+
+  // Private methods to build the endpoint
+
+  private addDescriptor(descriptor: ProtoMetadata) {
     const desc = FileDescriptorProto.fromPartial(descriptor.fileDescriptor);
 
     // extract out service options and put into the fileDescriptor
@@ -208,7 +256,7 @@ export abstract class BaseRestateServer {
     }
 
     if (
-      this.discovery.files?.file.filter(
+      this.discovery.files?.file?.filter(
         (haveDesc) => desc.name === haveDesc.name
       ).length === 0
     ) {
@@ -219,28 +267,7 @@ export abstract class BaseRestateServer {
     });
   }
 
-  bindService({ descriptor, service, instance }: ServiceOpts) {
-    const spec = parseService(descriptor, service, instance);
-    this.addDescriptor(descriptor);
-
-    const qname =
-      spec.packge === "" ? spec.name : `${spec.packge}.${spec.name}`;
-
-    this.discovery.services.push(qname);
-    for (const method of spec.methods) {
-      const url = `/invoke/${qname}/${method.name}`;
-      this.methods[url] = new HostedGrpcServiceMethod(
-        instance,
-        spec.packge,
-        service,
-        method
-      );
-      // note that this log will not print all the keys.
-      rlog.info(`Binding: ${url}  -> ${JSON.stringify(method, null, "\t")}`);
-    }
-  }
-
-  rpcHandler(
+  private rpcHandler(
     keyed: boolean,
     route: string,
     handler: Function
@@ -322,7 +349,7 @@ export abstract class BaseRestateServer {
     };
   }
 
-  protected bindRpcService(name: string, router: RpcRouter, keyed: boolean) {
+  private bindRpcService(name: string, router: RpcRouter, keyed: boolean) {
     if (name === undefined || router === undefined || keyed === undefined) {
       throw new Error("incomplete arguments: (name, router, keyed)");
     }
@@ -373,7 +400,7 @@ export abstract class BaseRestateServer {
 
     // since we modified this descriptor, we need to remove it in case it was added before,
     // so that the modified version is processed and added again
-    const filteredFiles = this.discovery.files?.file.filter(
+    const filteredFiles = this.discovery.files?.file?.filter(
       (haveDesc) => desc.fileDescriptor.name !== haveDesc.name
     );
     if (this.discovery.files !== undefined && filteredFiles !== undefined) {
@@ -381,10 +408,10 @@ export abstract class BaseRestateServer {
     }
 
     this.addDescriptor(desc);
-    this.discovery.services.push(name);
+    this.discovery.services?.push(name);
   }
 
-  protected methodByUrl<I, O>(
+  methodByUrl<I, O>(
     url: string | undefined | null
   ): HostedGrpcServiceMethod<I, O> | undefined {
     if (url == undefined || url === null) {

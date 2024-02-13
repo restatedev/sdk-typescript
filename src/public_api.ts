@@ -30,16 +30,18 @@ export {
   Client,
   SendClient,
 } from "./types/router";
-export { RestateServer, createServer } from "./server/restate_server";
-export {
-  ServiceOpts,
-  ServiceBundle,
-  ServiceEndpoint,
-} from "./server/base_restate_server";
+export { RestateServer, createServer } from "./endpoint/http2_handler";
+export { ServiceEndpoint } from "./endpoint/endpoint_impl";
 export {
   LambdaRestateServer,
   createLambdaApiGatewayHandler,
-} from "./server/restate_lambda_handler";
+} from "./endpoint/lambda_handler";
+export {
+  endpoint,
+  ServiceBundle,
+  ServiceOpts,
+  RestateEndpoint,
+} from "./endpoint";
 export * as RestateUtils from "./utils/public_utils";
 export { ErrorCodes, RestateError, TerminalError } from "./types/errors";
 export { Event } from "./types/types";

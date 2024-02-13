@@ -24,7 +24,7 @@ import { rlog } from "../src/logger";
 import { StateMachine } from "../src/state_machine";
 import { InvocationBuilder } from "../src/invocation";
 import { protoMetadata } from "../src/generated/proto/test";
-import { BaseRestateServer } from "../src/server/base_restate_server";
+import { EndpointImpl } from "../src/endpoint/endpoint_impl";
 
 export class TestDriver<I, O> implements Connection {
   private readonly result: Message[] = [];
@@ -188,11 +188,7 @@ export class TestDriver<I, O> implements Connection {
  * make it simpler for users to understand what methods are relevant for them,
  * and which ones are not.
  */
-class TestRestateServer extends BaseRestateServer {
-  constructor() {
-    super(ProtocolMode.BIDI_STREAM);
-  }
-
+class TestRestateServer extends EndpointImpl {
   public methodByUrl<I, O>(
     url: string | null | undefined
   ): HostedGrpcServiceMethod<I, O> | undefined {

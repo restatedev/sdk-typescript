@@ -17,12 +17,7 @@ import {
   ProtocolMode,
   ServiceDiscoveryResponse,
 } from "../generated/proto/discovery";
-import {
-  BaseRestateServer,
-  ServiceBundle,
-  ServiceEndpoint,
-  ServiceOpts,
-} from "./base_restate_server";
+import { EndpointImpl, ServiceEndpoint } from "./endpoint_impl";
 import { RestateHttp2Connection } from "../connection/http_connection";
 import { HostedGrpcServiceMethod } from "../types/grpc";
 import { ensureError } from "../types/errors";
@@ -30,7 +25,11 @@ import { InvocationBuilder } from "../invocation";
 import { StateMachine } from "../state_machine";
 import { KeyedRouter, UnKeyedRouter } from "../types/router";
 import { rlog } from "../logger";
+import { ServiceOpts } from "../endpoint";
 
+/**
+ * @deprecated use {@link RestateEndpoint}
+ */
 export interface RestateServer extends ServiceEndpoint {
   // RestateServer is a http2 server handler that you can pass to http2.createServer.
   (request: Http2ServerRequest, response: Http2ServerResponse): void;
@@ -46,10 +45,6 @@ export interface RestateServer extends ServiceEndpoint {
   // overridden to make return type more specific
   // docs are inherited from ServiceEndpoint
   bindRouter<M>(path: string, router: UnKeyedRouter<M>): RestateServer;
-
-  // overridden to make return type more specific
-  // docs are inherited from ServiceEndpoint
-  bind(services: ServiceBundle): RestateServer;
 
   /**
    * Starts the Restate server and listens at the given port.
@@ -101,33 +96,32 @@ export interface RestateServer extends ServiceEndpoint {
  *    })
  *   .listen(8000);
  * ```
+ *
+ * @deprecated use {@link RestateEndpoint}
  */
 export function createServer(): RestateServer {
   // See https://stackoverflow.com/questions/16508435/implementing-typescript-interface-with-bare-function-signature-plus-other-fields/16508581#16508581
   // for more details on how we implement the RestateServer interface.
 
-  const restateServerImpl = new RestateServerImpl();
+  const endpointImpl = new EndpointImpl();
+  const handler = new Http2Handler(endpointImpl);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const instance: any = (
     request: Http2ServerRequest,
     response: Http2ServerResponse
   ) => {
-    restateServerImpl.acceptConnection(request, response);
+    handler.acceptConnection(request, response);
   };
   instance.bindKeyedRouter = <M>(path: string, router: UnKeyedRouter<M>) => {
-    restateServerImpl.bindKeyedRouter(path, router);
+    endpointImpl.bindKeyedRouter(path, router);
     return instance;
   };
   instance.bindRouter = <M>(path: string, router: UnKeyedRouter<M>) => {
-    restateServerImpl.bindRouter(path, router);
+    endpointImpl.bindRouter(path, router);
     return instance;
   };
   instance.bindService = (serviceOpts: ServiceOpts) => {
-    restateServerImpl.bindService(serviceOpts);
-    return instance;
-  };
-  instance.bind = (services: ServiceBundle) => {
-    services.registerServices(instance);
+    endpointImpl.bindService(serviceOpts);
     return instance;
   };
 
@@ -144,27 +138,13 @@ export function createServer(): RestateServer {
   return <RestateServer>instance;
 }
 
-class RestateServerImpl extends BaseRestateServer {
-  constructor() {
-    super(ProtocolMode.BIDI_STREAM);
-  }
-
-  bindKeyedRouter<M>(path: string, router: KeyedRouter<M>) {
-    // Implementation note: This override if here mainly to change the return type to the more
-    // concrete type RestateServer (from BaseRestateServer).
-    super.bindRpcService(path, router, true);
-  }
-
-  bindRouter<M>(path: string, router: UnKeyedRouter<M>) {
-    // Implementation note: This override if here mainly to change the return type to the more
-    // concrete type RestateServer (from BaseRestateServer).
-    super.bindRpcService(path, router, false);
-  }
-
-  bindService(serviceOpts: ServiceOpts) {
-    // Implementation note: This override if here mainly to change the return type to the more
-    // concrete type RestateServer (from BaseRestateServer).
-    super.bindService(serviceOpts);
+export class Http2Handler {
+  private readonly discoveryResponse: ServiceDiscoveryResponse;
+  constructor(private readonly endpoint: EndpointImpl) {
+    this.discoveryResponse = ServiceDiscoveryResponse.fromPartial({
+      ...this.endpoint.discovery,
+      protocolMode: ProtocolMode.BIDI_STREAM,
+    });
   }
 
   acceptConnection(
@@ -189,7 +169,7 @@ class RestateServerImpl extends BaseRestateServer {
     url: Url,
     stream: http2.ServerHttp2Stream
   ): Promise<void> {
-    const method = this.methodByUrl(url.path);
+    const method = this.endpoint.methodByUrl(url.path);
 
     if (method !== undefined) {
       // valid connection, let's dispatch the invocation
@@ -207,9 +187,9 @@ class RestateServerImpl extends BaseRestateServer {
     if (url.path == "/discover") {
       rlog.info(
         "Answering discovery request. Announcing services: " +
-          JSON.stringify(this.discovery.services)
+          JSON.stringify(this.discoveryResponse.services)
       );
-      await respondDiscovery(this.discovery, stream);
+      await respondDiscovery(this.discoveryResponse, stream);
       return;
     }
 
