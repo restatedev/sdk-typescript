@@ -20,19 +20,14 @@ import {
   ProtocolMode,
   ServiceDiscoveryResponse,
 } from "../generated/proto/discovery";
-import {
-  BaseRestateServer,
-  ServiceBundle,
-  ServiceEndpoint,
-  ServiceOpts,
-} from "./base_restate_server";
+import { EndpointImpl, ServiceEndpoint } from "./endpoint_impl";
 import { LambdaConnection } from "../connection/lambda_connection";
 import { InvocationBuilder } from "../invocation";
 import { decodeLambdaBody } from "../io/decoder";
 import { Message } from "../types/types";
 import { StateMachine } from "../state_machine";
 import { ensureError } from "../types/errors";
-import { KeyedRouter, UnKeyedRouter } from "../public_api";
+import { KeyedRouter, ServiceOpts, UnKeyedRouter } from "../public_api";
 import { OUTPUT_STREAM_ENTRY_MESSAGE_TYPE } from "../types/protocol";
 
 /**
@@ -56,15 +51,19 @@ import { OUTPUT_STREAM_ENTRY_MESSAGE_TYPE } from "../types/protocol";
  *    })
  *   .handle();
  * ```
+ *
+ * @deprecated use {@link RestateEndpoint}
  */
 export function createLambdaApiGatewayHandler(): LambdaRestateServer {
-  return new LambdaRestateServerImpl();
+  return new LambdaRestateServerImpl(new EndpointImpl());
 }
 
 /**
  * Restate entrypoint implementation for services deployed on AWS Lambda.
  * This one decodes the requests, create the log event sequence that
  * drives the durable execution of the service invocations.
+ *
+ * @deprecated use {@link RestateEndpoint}
  */
 export interface LambdaRestateServer extends ServiceEndpoint {
   /**
@@ -104,22 +103,13 @@ export interface LambdaRestateServer extends ServiceEndpoint {
   // overridden to make return type more specific
   // docs are inherited from ServiceEndpoint
   bindKeyedRouter<M>(path: string, router: KeyedRouter<M>): LambdaRestateServer;
-
-  // overridden to make return type more specific
-  // docs are inherited from ServiceEndpoint
-  bind(services: ServiceBundle): LambdaRestateServer;
 }
 
-class LambdaRestateServerImpl
-  extends BaseRestateServer
-  implements LambdaRestateServer
-{
-  constructor() {
-    super(ProtocolMode.REQUEST_RESPONSE);
-  }
+class LambdaRestateServerImpl implements LambdaRestateServer {
+  constructor(readonly endpoint: EndpointImpl) {}
 
   public bindService(serviceOpts: ServiceOpts): LambdaRestateServer {
-    super.bindService(serviceOpts);
+    this.endpoint.bindService(serviceOpts);
     return this;
   }
 
@@ -127,7 +117,7 @@ class LambdaRestateServerImpl
     path: string,
     router: UnKeyedRouter<M>
   ): LambdaRestateServer {
-    super.bindRpcService(path, router, false);
+    this.endpoint.bindRouter(path, router);
     return this;
   }
 
@@ -135,19 +125,24 @@ class LambdaRestateServerImpl
     path: string,
     router: KeyedRouter<M>
   ): LambdaRestateServer {
-    super.bindRpcService(path, router, true);
-    return this;
-  }
-
-  public bind(services: ServiceBundle): LambdaRestateServer {
-    services.registerServices(this);
+    this.endpoint.bindKeyedRouter(path, router);
     return this;
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   public handle(): (event: any) => Promise<any> {
-    // return the handler and bind the current context to it, so that it can find the other methods in this class.
-    return this.handleRequest.bind(this);
+    const handler = new LambdaHandler(this.endpoint);
+    return handler.handleRequest.bind(handler);
+  }
+}
+
+export class LambdaHandler {
+  private readonly discoveryResponse: ServiceDiscoveryResponse;
+  constructor(private readonly endpoint: EndpointImpl) {
+    this.discoveryResponse = ServiceDiscoveryResponse.fromPartial({
+      ...this.endpoint.discovery,
+      protocolMode: ProtocolMode.REQUEST_RESPONSE,
+    });
   }
 
   // --------------------------------------------------------------------------
@@ -155,7 +150,7 @@ class LambdaRestateServerImpl
   /**
    * This is the main request handling method, effectively a typed variant of `create()`.
    */
-  private async handleRequest(
+  async handleRequest(
     event: APIGatewayProxyEvent | APIGatewayProxyEventV2
   ): Promise<APIGatewayProxyResult | APIGatewayProxyResultV2> {
     let path;
@@ -196,7 +191,7 @@ class LambdaRestateServerImpl
     event: APIGatewayProxyEvent | APIGatewayProxyEventV2
   ): Promise<APIGatewayProxyResult | APIGatewayProxyResultV2> {
     try {
-      const method = this.methodByUrl(url);
+      const method = this.endpoint.methodByUrl(url);
       if (event.body == null) {
         throw new Error("The incoming message body was null");
       }
@@ -258,7 +253,7 @@ class LambdaRestateServerImpl
     // return discovery information
     rlog.info(
       "Answering discovery request. Announcing services: " +
-        JSON.stringify(this.discovery.services)
+        JSON.stringify(this.discoveryResponse.services)
     );
     return {
       headers: {
@@ -267,7 +262,7 @@ class LambdaRestateServerImpl
       statusCode: 200,
       isBase64Encoded: true,
       body: encodeResponse(
-        ServiceDiscoveryResponse.encode(this.discovery).finish()
+        ServiceDiscoveryResponse.encode(this.discoveryResponse).finish()
       ),
     };
   }

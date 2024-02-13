@@ -362,7 +362,7 @@ This gives the following error:
     at handledRejection (node:internal/process/promises:172:23)
     at promiseRejectHandler (node:internal/process/promises:118:7)
     at ReverseAwaitOrder.greet (/home/giselle/dev/sdk-typescript/test/send_request.test.ts:41:23)
-    at GrpcServiceMethod.localMethod [as localFn] (/home/giselle/dev/sdk-typescript/src/server/base_restate_server.ts:201:16)
+    at GrpcServiceMethod.localMethod [as localFn] (/home/giselle/dev/sdk-typescript/src/server/endpoint_impl.ts:201:16)
  */
   //   it("handles completion with failure", async () => {
   //     const result = await new TestDriver(
