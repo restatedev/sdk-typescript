@@ -20,7 +20,6 @@ const LIFECYCLE_STATUS_STATE_NAME = "status";
 const RESULT_STATE_NAME = "result";
 const RESULT_LISTENERS_NAME = "result_listeners";
 const STATUS_MESSAGES_STATE_NAME = "messages";
-const STATUS_MESSAGE_LISTENERS = "message_listeners";
 const PROMISE_STATE_PREFIX = "prom_s_";
 const PROMISE_AWAKEABLE_PREFIX = "prom_l_";
 const ALL_NAMES_STATE_NAME = "all_state_names";
@@ -231,62 +230,12 @@ export const workflowStateService = restate.keyedRouter({
     }
   },
 
-  publishMessage: async (
-    ctx: restate.KeyedContext,
-    _workflowId: string,
-    msg: { message: string; timestamp: Date }
-  ): Promise<void> => {
-    // append message
-    const msgs =
-      (await ctx.get<StatusMessage[]>(STATUS_MESSAGES_STATE_NAME)) ?? [];
-    msgs.push({ sequenceNum: msgs.length, ...msg });
-    ctx.set(STATUS_MESSAGES_STATE_NAME, msgs);
-
-    // wake up all listeners
-    const listeners = (await ctx.get<string[]>(STATUS_MESSAGE_LISTENERS)) ?? [];
-    for (const awkId of listeners) {
-      ctx.resolveAwakeable(awkId, {});
-    }
-    ctx.clear(STATUS_MESSAGE_LISTENERS);
-  },
-
-  getLatestMessage: async (
-    ctx: restate.KeyedContext
-  ): Promise<StatusMessage | null> => {
-    const msgs =
-      (await ctx.get<StatusMessage[]>(STATUS_MESSAGES_STATE_NAME)) ?? [];
-    if (msgs.length === 0) {
-      return null;
-    } else {
-      return msgs[msgs.length - 1];
-    }
-  },
-
-  pollNextMessages: async (
-    ctx: restate.KeyedContext,
-    _workflowId: string,
-    req: { from: number; awakId: string }
-  ): Promise<StatusMessage[] | null> => {
-    const msgs =
-      (await ctx.get<StatusMessage[]>(STATUS_MESSAGES_STATE_NAME)) ?? [];
-    if (msgs.length > req.from) {
-      return msgs.slice(req.from);
-    }
-
-    // not yet available, register a listener to be woken up when more is available
-    const listeners = (await ctx.get<string[]>(STATUS_MESSAGE_LISTENERS)) ?? [];
-    listeners.push(req.awakId);
-    ctx.set(STATUS_MESSAGE_LISTENERS, listeners);
-    return null;
-  },
-
   dispose: async (ctx: restate.KeyedContext): Promise<void> => {
     const stateNames = (await ctx.get<string[]>(ALL_NAMES_STATE_NAME)) ?? [];
     for (const stateName of stateNames) {
       ctx.clear(stateName);
     }
     ctx.clear(ALL_NAMES_STATE_NAME);
-    ctx.clear(STATUS_MESSAGE_LISTENERS);
     ctx.clear(STATUS_MESSAGES_STATE_NAME);
     ctx.clear(RESULT_LISTENERS_NAME);
     ctx.clear(RESULT_STATE_NAME);

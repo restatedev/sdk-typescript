@@ -112,12 +112,6 @@ class ExclusiveContextImpl extends SharedContextImpl implements wf.WfContext {
     this.console = ctx.console;
   }
 
-  publishMessage(message: string): void {
-    this.ctx
-      .send(this.stateServiceApi)
-      .publishMessage(this.wfId, { message, timestamp: new Date() });
-  }
-
   grpcChannel(): restate.RestateGrpcChannel {
     return this.ctx.grpcChannel();
   }
@@ -250,37 +244,6 @@ export function createWrapperService<R, T, M>(
     ): Promise<wf.LifecycleStatus> => {
       checkRequestAndWorkflowId(request);
       return ctx.rpc(stateServiceApi).getStatus(request.workflowId);
-    },
-
-    getLatestMessage: async (
-      ctx: restate.Context,
-      request: wf.WorkflowRequest<unknown>
-    ): Promise<wf.StatusMessage | null> => {
-      checkRequestAndWorkflowId(request);
-      return ctx.rpc(stateServiceApi).getLatestMessage(request.workflowId);
-    },
-
-    pollNextMessages: async (
-      ctx: restate.Context,
-      request: wf.WorkflowRequest<{ from: number }>
-    ): Promise<wf.StatusMessage[]> => {
-      checkRequestAndWorkflowId(request);
-
-      // eslint-disable-next-line no-constant-condition
-      while (true) {
-        const awk = ctx.awakeable();
-        const messages = await ctx
-          .rpc(stateServiceApi)
-          .pollNextMessages(request.workflowId, {
-            from: request.from,
-            awakId: awk.id,
-          });
-        if (messages !== undefined && messages !== null) {
-          return messages;
-        }
-
-        await awk.promise;
-      }
     },
   };
 
