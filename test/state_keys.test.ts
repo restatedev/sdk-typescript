@@ -37,7 +37,7 @@ function stateKeys(...keys: Array<string>): GetStateKeysEntryMessage_StateKeys {
 
 class ListKeys implements TestGreeter {
   async greet(): Promise<TestResponse> {
-    const ctx = restate.useContext(this);
+    const ctx = restate.useKeyedContext(this);
 
     return {
       greeting: (await ctx.stateKeys()).join(","),

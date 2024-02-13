@@ -23,7 +23,7 @@ class SharedPromiseImpl<T> implements wf.DurablePromise<T> {
   constructor(
     private readonly workflowId: string,
     private readonly promiseName: string,
-    private readonly ctx: restate.RpcContext,
+    private readonly ctx: restate.Context,
     private readonly stateServiceApi: restate.ServiceApi<wss.api>
   ) {}
 
@@ -69,7 +69,7 @@ class SharedPromiseImpl<T> implements wf.DurablePromise<T> {
 
 class SharedContextImpl implements wf.SharedWfContext {
   constructor(
-    protected readonly ctx: restate.RpcContext,
+    protected readonly ctx: restate.Context,
     protected readonly wfId: string,
     protected readonly stateServiceApi: restate.ServiceApi<wss.api>
   ) {}
@@ -101,7 +101,7 @@ class ExclusiveContextImpl extends SharedContextImpl implements wf.WfContext {
   public readonly console: Console;
 
   constructor(
-    ctx: restate.RpcContext,
+    ctx: restate.Context,
     wfId: string,
     stateServiceApi: restate.ServiceApi<wss.api>
   ) {
@@ -132,12 +132,12 @@ class ExclusiveContextImpl extends SharedContextImpl implements wf.WfContext {
     this.ctx.send(this.stateServiceApi).clearState(this.wfId, stateName);
   }
 
-  stateKeys(): Promise<string[]> {
-    return this.ctx.stateKeys();
+  stateKeys(): Promise<Array<string>> {
+    return this.ctx.rpc(this.stateServiceApi).stateKeys(this.wfId);
   }
 
   clearAll(): void {
-    this.ctx.clearAll();
+    this.ctx.send(this.stateServiceApi).clearAllState(this.wfId);
   }
 
   sideEffect<T>(
@@ -186,7 +186,7 @@ export function createWrapperService<R, T, M>(
 ) {
   const wrapperService = {
     start: async (
-      ctx: restate.RpcContext,
+      ctx: restate.Context,
       request: wf.WorkflowRequest<T>
     ): Promise<wf.WorkflowStartResult> => {
       checkRequestAndWorkflowId(request);
@@ -201,7 +201,7 @@ export function createWrapperService<R, T, M>(
     },
 
     run: async (
-      ctx: restate.RpcContext,
+      ctx: restate.Context,
       request: wf.WorkflowRequest<T>
     ): Promise<R> => {
       checkRequestAndWorkflowId(request);
@@ -232,7 +232,7 @@ export function createWrapperService<R, T, M>(
     },
 
     waitForResult: async (
-      ctx: restate.RpcContext,
+      ctx: restate.Context,
       request: wf.WorkflowRequest<unknown>
     ): Promise<R> => {
       checkRequestAndWorkflowId(request);
@@ -245,7 +245,7 @@ export function createWrapperService<R, T, M>(
     },
 
     status: async (
-      ctx: restate.RpcContext,
+      ctx: restate.Context,
       request: wf.WorkflowRequest<unknown>
     ): Promise<wf.LifecycleStatus> => {
       checkRequestAndWorkflowId(request);
@@ -253,7 +253,7 @@ export function createWrapperService<R, T, M>(
     },
 
     getLatestMessage: async (
-      ctx: restate.RpcContext,
+      ctx: restate.Context,
       request: wf.WorkflowRequest<unknown>
     ): Promise<wf.StatusMessage | null> => {
       checkRequestAndWorkflowId(request);
@@ -261,7 +261,7 @@ export function createWrapperService<R, T, M>(
     },
 
     pollNextMessages: async (
-      ctx: restate.RpcContext,
+      ctx: restate.Context,
       request: wf.WorkflowRequest<{ from: number }>
     ): Promise<wf.StatusMessage[]> => {
       checkRequestAndWorkflowId(request);
@@ -296,7 +296,7 @@ export function createWrapperService<R, T, M>(
     }
 
     const wrappingHandler = async <OUT, IN>(
-      ctx: restate.RpcContext,
+      ctx: restate.Context,
       request: wf.WorkflowRequest<IN>
     ): Promise<OUT> => {
       checkRequestAndWorkflowId(request);

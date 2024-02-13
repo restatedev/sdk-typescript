@@ -56,6 +56,15 @@ export interface KeyValueStore {
    * ctx.clear("STATE");
    */
   clear(name: string): void;
+
+  /**
+   * Clear/delete all the state entries in the Restate runtime.
+   *
+   * @example
+   * const ctx = restate.useContext(this);
+   * ctx.clearAll();
+   */
+  clearAll(): void;
 }
 
 /**
@@ -98,15 +107,6 @@ export interface Context {
    * such as invoked service method and invocation id, and automatically excludes logs during replay.
    */
   console: Console;
-
-  /**
-   * Clear/delete all the state entries in the Restate runtime.
-   *
-   * @example
-   * const ctx = restate.useContext(this);
-   * ctx.clearAll();
-   */
-  clearAll(): void;
 
   /**
    * Execute a side effect and store the result in Restate. The side effect will thus not

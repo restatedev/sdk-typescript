@@ -19,7 +19,7 @@ import { Event } from "./types";
 type WithKeyArgument<F> = F extends () => infer R ? (key: string) => R : F;
 
 type WithoutRpcContext<F> = F extends (
-  ctx: Context,
+  ctx: infer C extends Context,
   ...args: infer P
 ) => infer R
   ? (...args: P) => R

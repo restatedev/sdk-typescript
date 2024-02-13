@@ -127,7 +127,7 @@ export interface SharedWfContext {
  * This is a full context as for stateful durable keyed services, plus the
  * workflow-specific bits, like workflowID and durable promises.
  */
-export interface WfContext extends SharedWfContext, restate.RpcContext {}
+export interface WfContext extends SharedWfContext, restate.KeyedContext {}
 
 export enum LifecycleStatus {
   NOT_STARTED = "NOT_STARTED",

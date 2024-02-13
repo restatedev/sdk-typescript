@@ -286,7 +286,7 @@ describe("MultipleGet", () => {
 
 class GetClearAllThenGet implements TestGreeter {
   async greet(): Promise<TestResponse> {
-    const ctx = restate.useContext(this);
+    const ctx = restate.useKeyedContext(this);
 
     const state1 = (await ctx.get<string>("STATE")) || "nothing";
     const state2 = (await ctx.get<string>("ANOTHER_STATE")) || "nothing";
