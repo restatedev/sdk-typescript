@@ -30,12 +30,6 @@ export {
   Client,
   SendClient,
 } from "./types/router";
-export { RestateServer, createServer } from "./endpoint/http2_handler";
-export { ServiceEndpoint } from "./endpoint/endpoint_impl";
-export {
-  LambdaRestateServer,
-  createLambdaApiGatewayHandler,
-} from "./endpoint/lambda_handler";
 export {
   endpoint,
   ServiceBundle,
