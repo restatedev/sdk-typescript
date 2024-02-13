@@ -20,121 +20,14 @@ import {
   ProtocolMode,
   ServiceDiscoveryResponse,
 } from "../generated/proto/discovery";
-import { EndpointImpl, ServiceEndpoint } from "./endpoint_impl";
+import { EndpointImpl } from "./endpoint_impl";
 import { LambdaConnection } from "../connection/lambda_connection";
 import { InvocationBuilder } from "../invocation";
 import { decodeLambdaBody } from "../io/decoder";
 import { Message } from "../types/types";
 import { StateMachine } from "../state_machine";
 import { ensureError } from "../types/errors";
-import { KeyedRouter, ServiceOpts, UnKeyedRouter } from "../public_api";
 import { OUTPUT_STREAM_ENTRY_MESSAGE_TYPE } from "../types/protocol";
-
-/**
- * Creates an Restate entrypoint for services deployed on AWS Lambda and invoked
- * through API Gateway.
- *
- * Register services on this entrypoint via {@link LambdaRestateServer.bindService } and
- * then create the Lambda invocation handler via {@link LambdaRestateServer.handle }.
- *
- * @example
- * A typical AWS Lambda entry point would look like this
- * ```
- * import * as restate from "@restatedev/restate-sdk";
- *
- * export const handler = restate
- *   .createLambdaApiGatewayHandler()
- *   .bindService({
- *      service: "MyService",
- *      instance: new myService.MyServiceImpl(),
- *      descriptor: myService.protoMetadata,
- *    })
- *   .handle();
- * ```
- *
- * @deprecated use {@link RestateEndpoint}
- */
-export function createLambdaApiGatewayHandler(): LambdaRestateServer {
-  return new LambdaRestateServerImpl(new EndpointImpl());
-}
-
-/**
- * Restate entrypoint implementation for services deployed on AWS Lambda.
- * This one decodes the requests, create the log event sequence that
- * drives the durable execution of the service invocations.
- *
- * @deprecated use {@link RestateEndpoint}
- */
-export interface LambdaRestateServer extends ServiceEndpoint {
-  /**
-   * Creates the invocation handler function to be called by AWS Lambda.
-   *
-   * The returned type of this function is `(event: APIGatewayProxyEvent | APIGatewayProxyEventV2) => Promise<APIGatewayProxyResult | APIGatewayProxyResultV2>`.
-   * We use `any` types here to avoid a dependency on the `@types/aws-lambda` dependency for consumers of this API.
-   *
-   * @example
-   * A typical AWS Lambda entry point would use this method the follwing way:
-   * ```
-   * import * as restate from "@restatedev/restate-sdk";
-   *
-   * export const handler = restate
-   *   .createLambdaApiGatewayHandler()
-   *   .bindService({
-   *      service: "MyService",
-   *      instance: new myService.MyServiceImpl(),
-   *      descriptor: myService.protoMetadata,
-   *    })
-   *   .handle();
-   * ```
-   *
-   * @returns The invocation handler function for to be called by AWS Lambda.
-   */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  handle(): (event: any) => Promise<any>;
-
-  // overridden to make return type more specific
-  // docs are inherited from ServiceEndpoint
-  bindService(serviceOpts: ServiceOpts): LambdaRestateServer;
-
-  // overridden to make return type more specific
-  // docs are inherited from ServiceEndpoint
-  bindRouter<M>(path: string, router: UnKeyedRouter<M>): LambdaRestateServer;
-
-  // overridden to make return type more specific
-  // docs are inherited from ServiceEndpoint
-  bindKeyedRouter<M>(path: string, router: KeyedRouter<M>): LambdaRestateServer;
-}
-
-class LambdaRestateServerImpl implements LambdaRestateServer {
-  constructor(readonly endpoint: EndpointImpl) {}
-
-  public bindService(serviceOpts: ServiceOpts): LambdaRestateServer {
-    this.endpoint.bindService(serviceOpts);
-    return this;
-  }
-
-  public bindRouter<M>(
-    path: string,
-    router: UnKeyedRouter<M>
-  ): LambdaRestateServer {
-    this.endpoint.bindRouter(path, router);
-    return this;
-  }
-
-  public bindKeyedRouter<M>(
-    path: string,
-    router: KeyedRouter<M>
-  ): LambdaRestateServer {
-    this.endpoint.bindKeyedRouter(path, router);
-    return this;
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  public handle(): (event: any) => Promise<any> {
-    const handler = new LambdaHandler(this.endpoint);
-    return handler.handleRequest.bind(handler);
-  }
-}
 
 export class LambdaHandler {
   private readonly discoveryResponse: ServiceDiscoveryResponse;

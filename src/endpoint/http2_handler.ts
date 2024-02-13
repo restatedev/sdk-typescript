@@ -17,126 +17,13 @@ import {
   ProtocolMode,
   ServiceDiscoveryResponse,
 } from "../generated/proto/discovery";
-import { EndpointImpl, ServiceEndpoint } from "./endpoint_impl";
+import { EndpointImpl } from "./endpoint_impl";
 import { RestateHttp2Connection } from "../connection/http_connection";
 import { HostedGrpcServiceMethod } from "../types/grpc";
 import { ensureError } from "../types/errors";
 import { InvocationBuilder } from "../invocation";
 import { StateMachine } from "../state_machine";
-import { KeyedRouter, UnKeyedRouter } from "../types/router";
 import { rlog } from "../logger";
-import { ServiceOpts } from "../endpoint";
-
-/**
- * @deprecated use {@link RestateEndpoint}
- */
-export interface RestateServer extends ServiceEndpoint {
-  // RestateServer is a http2 server handler that you can pass to http2.createServer.
-  (request: Http2ServerRequest, response: Http2ServerResponse): void;
-
-  // overridden to make return type more specific
-  // docs are inherited from ServiceEndpoint
-  bindService(serviceOpts: ServiceOpts): RestateServer;
-
-  // overridden to make return type more specific
-  // docs are inherited from ServiceEndpoint
-  bindKeyedRouter<M>(path: string, router: KeyedRouter<M>): RestateServer;
-
-  // overridden to make return type more specific
-  // docs are inherited from ServiceEndpoint
-  bindRouter<M>(path: string, router: UnKeyedRouter<M>): RestateServer;
-
-  /**
-   * Starts the Restate server and listens at the given port.
-   *
-   * If the port is undefined, this method will use the port set in the `PORT`
-   * environment variable. If that variable is undefined as well, the method will
-   * default to port 9080.
-   *
-   * This method's result promise never completes.
-   *
-   * This method is a shorthand for:
-   *
-   * @example
-   * ```
-   * const httpServer = http2.createServer(restateServer);
-   * httpServer.listen(port);
-   * ```
-   *
-   * If you need to manually control the server lifecycle, we suggest to manually instantiate the http2 server and use this object as request handler.
-   *
-   * @param port The port to listen at. May be undefined (see above).
-   */
-  listen(port?: number): Promise<void>;
-}
-
-/**
- * Creates a Restate entrypoint based on a HTTP2 server. The entrypoint will listen
- * for requests to the services at a specified port.
- *
- * This is the entrypoint to be used in most scenarios (standalone, Docker, Kubernetes, ...);
- * any deployments that forwards requests to a network endpoint. The prominent exception is
- * AWS Lambda, which uses the {@link restate_lambda_handler#lambdaApiGatewayHandler}
- * function to create an entry point.
- *
- * After creating this endpoint, register services on this entrypoint via {@link RestateServer.bindService }
- * and start it via {@link RestateServer.listen }.
- *
- * @example
- * A typical entry point would look like this:
- * ```
- * import * as restate from "@restatedev/restate-sdk";
- *
- * export const handler = restate
- *   .createServer()
- *   .bindService({
- *      service: "MyService",
- *      instance: new myService.MyServiceImpl(),
- *      descriptor: myService.protoMetadata,
- *    })
- *   .listen(8000);
- * ```
- *
- * @deprecated use {@link RestateEndpoint}
- */
-export function createServer(): RestateServer {
-  // See https://stackoverflow.com/questions/16508435/implementing-typescript-interface-with-bare-function-signature-plus-other-fields/16508581#16508581
-  // for more details on how we implement the RestateServer interface.
-
-  const endpointImpl = new EndpointImpl();
-  const handler = new Http2Handler(endpointImpl);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const instance: any = (
-    request: Http2ServerRequest,
-    response: Http2ServerResponse
-  ) => {
-    handler.acceptConnection(request, response);
-  };
-  instance.bindKeyedRouter = <M>(path: string, router: UnKeyedRouter<M>) => {
-    endpointImpl.bindKeyedRouter(path, router);
-    return instance;
-  };
-  instance.bindRouter = <M>(path: string, router: UnKeyedRouter<M>) => {
-    endpointImpl.bindRouter(path, router);
-    return instance;
-  };
-  instance.bindService = (serviceOpts: ServiceOpts) => {
-    endpointImpl.bindService(serviceOpts);
-    return instance;
-  };
-
-  instance.listen = (port?: number) => {
-    const actualPort = port ?? parseInt(process.env.PORT ?? "9080");
-    rlog.info(`Listening on ${actualPort}...`);
-
-    const server = http2.createServer(instance);
-    server.listen(actualPort);
-    // eslint-disable-next-line @typescript-eslint/no-empty-function
-    return new Promise(() => {});
-  };
-
-  return <RestateServer>instance;
-}
 
 export class Http2Handler {
   private readonly discoveryResponse: ServiceDiscoveryResponse;

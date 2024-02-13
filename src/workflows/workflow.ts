@@ -45,7 +45,7 @@ export function workflow<R, T, U>(
 
   return {
     api: { path } as restate.ServiceApi<WorkflowRestateRpcApi<R, T, U>>,
-    registerServices: (endpoint: restate.ServiceEndpoint) => {
+    registerServices: (endpoint: restate.RestateEndpoint) => {
       endpoint.bindKeyedRouter(stateServiceApi.path, stateServiceRouter);
       endpoint.bindRouter(path, wrapperServiceRouter);
     },
