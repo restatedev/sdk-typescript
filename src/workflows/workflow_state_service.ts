@@ -231,15 +231,7 @@ export const workflowStateService = restate.keyedRouter({
   },
 
   dispose: async (ctx: restate.KeyedContext): Promise<void> => {
-    const stateNames = (await ctx.get<string[]>(ALL_NAMES_STATE_NAME)) ?? [];
-    for (const stateName of stateNames) {
-      ctx.clear(stateName);
-    }
-    ctx.clear(ALL_NAMES_STATE_NAME);
-    ctx.clear(STATUS_MESSAGES_STATE_NAME);
-    ctx.clear(RESULT_LISTENERS_NAME);
-    ctx.clear(RESULT_STATE_NAME);
-    ctx.clear(LIFECYCLE_STATUS_STATE_NAME);
+    ctx.clearAll();
   },
 });
 
