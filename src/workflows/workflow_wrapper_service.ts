@@ -179,7 +179,7 @@ export function createWrapperService<R, T, M>(
   stateServiceApi: restate.ServiceApi<wss.api>
 ) {
   const wrapperService = {
-    start: async (
+    submit: async (
       ctx: restate.Context,
       request: wf.WorkflowRequest<T>
     ): Promise<wf.WorkflowStartResult> => {

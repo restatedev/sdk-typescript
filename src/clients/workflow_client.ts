@@ -128,7 +128,7 @@ export function connect(restateUri: string): RestateClient {
 
       let result: restate.workflow.WorkflowStartResult;
       try {
-        result = await makeCall(restateUri, path, "start", workflowId, params);
+        result = await makeCall(restateUri, path, "submit", workflowId, params);
       } catch (err) {
         const error = ensureError(err);
         throw new Error("Cannot start workflow: " + error.message, {
