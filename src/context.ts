@@ -11,59 +11,12 @@
 
 import { RetrySettings } from "./utils/public_utils";
 import { Client, SendClient } from "./types/router";
-import { RestateContextImpl } from "./restate_context_impl";
+import { ContextImpl } from "./context_impl";
 
 /**
- * A promise that can be combined using Promise combinators in RestateContext.
+ * Key value store operations. Only keyed services have an attached key-value store.
  */
-export type CombineablePromise<T> = Promise<T> & {
-  __restate_context: RestateBaseContext;
-
-  /**
-   * Creates a promise that awaits for the current promise up to the specified timeout duration.
-   * If the timeout is fired, this Promise will be rejected with a {@link TimeoutError}.
-   *
-   * @param millis duration of the sleep in millis.
-   * This is a lower-bound.
-   */
-  orTimeout(millis: number): Promise<T>;
-};
-
-/**
- * Base Restate context, which contains all operations that are the same in the gRPC-based API
- * as in the dynamic rpc-handler-based API.
- *
- * Those operations include state access/updates, side-effects, awakeables, or sleeps.
- */
-export interface RestateBaseContext {
-  /**
-   * The unique id that identifies the current function invocation. This id is guaranteed to be
-   * unique across invocations, but constant across reties and suspensions.
-   */
-  id: Buffer;
-
-  /**
-   * Name of the service.
-   */
-  serviceName: string;
-
-  /**
-   * Deterministic random methods; these are inherently predictable (seeded on the invocation ID, which is not secret)
-   * and so should not be used for any cryptographic purposes. They are useful for identifiers, idempotency keys,
-   * and for uniform sampling from a set of options. If a cryptographically secure value is needed, please generate that
-   * externally and capture the result with a side effect.
-   *
-   * Calls to these methods from inside side effects are disallowed and will fail - side effects must be idempotent, and
-   * these calls are not.
-   */
-  rand: Rand;
-
-  /**
-   * Console to use for logging. It attaches to each log message some contextual information,
-   * such as invoked service method and invocation id, and automatically excludes logs during replay.
-   */
-  console: Console;
-
+export interface KeyValueStore {
   /**
    * Get/retrieve state from the Restate runtime.
    * Note that state objects are serialized with `Buffer.from(JSON.stringify(theObject))`
@@ -112,6 +65,48 @@ export interface RestateBaseContext {
    * ctx.clearAll();
    */
   clearAll(): void;
+}
+
+/**
+ * The context that gives access to all Restate-backed operations, for example
+ *   - sending reliable messages / RPC through Restate
+ *   - side effects
+ *   - sleeps and delayed calls
+ *   - awakeables
+ *   - ...
+ *
+ * Keyed services can also access their key-value store using the {@link KeyedContext}.
+ *
+ * In gRPC-based API, to access this context, use {@link useContext}.
+ */
+export interface Context {
+  /**
+   * The unique id that identifies the current function invocation. This id is guaranteed to be
+   * unique across invocations, but constant across reties and suspensions.
+   */
+  id: Buffer;
+
+  /**
+   * Name of the service.
+   */
+  serviceName: string;
+
+  /**
+   * Deterministic random methods; these are inherently predictable (seeded on the invocation ID, which is not secret)
+   * and so should not be used for any cryptographic purposes. They are useful for identifiers, idempotency keys,
+   * and for uniform sampling from a set of options. If a cryptographically secure value is needed, please generate that
+   * externally and capture the result with a side effect.
+   *
+   * Calls to these methods from inside side effects are disallowed and will fail - side effects must be idempotent, and
+   * these calls are not.
+   */
+  rand: Rand;
+
+  /**
+   * Console to use for logging. It attaches to each log message some contextual information,
+   * such as invoked service method and invocation id, and automatically excludes logs during replay.
+   */
+  console: Console;
 
   /**
    * Execute a side effect and store the result in Restate. The side effect will thus not
@@ -216,282 +211,7 @@ export interface RestateBaseContext {
    * await ctx.sleep(1000);
    */
   sleep(millis: number): CombineablePromise<void>;
-}
 
-export interface Rand {
-  /**
-   * Equivalent of JS `Math.random()` but deterministic; seeded by the invocation ID of the current invocation,
-   * each call will return a new pseudorandom float within the range [0,1)
-   */
-  random(): number;
-
-  /**
-   * Using the same random source and seed as random(), produce a UUID version 4 string. This is inherently predictable
-   * based on the invocation ID and should not be used in cryptographic contexts
-   */
-  uuidv4(): string;
-}
-
-export const CombineablePromise = {
-  /**
-   * Creates a Promise that is resolved with an array of results when all of the provided Promises
-   * resolve, or rejected when any Promise is rejected.
-   *
-   * See {@link Promise.all} for more details.
-   *
-   * @param values An iterable of Promises.
-   * @returns A new Promise.
-   */
-  all<T extends readonly CombineablePromise<unknown>[] | []>(
-    values: T
-  ): Promise<{ -readonly [P in keyof T]: Awaited<T[P]> }> {
-    if (values.length == 0) {
-      return Promise.all(values);
-    }
-
-    return (values[0].__restate_context as RestateContextImpl).createCombinator(
-      Promise.all.bind(Promise),
-      values
-    ) as Promise<{
-      -readonly [P in keyof T]: Awaited<T[P]>;
-    }>;
-  },
-
-  /**
-   * Creates a Promise that is resolved or rejected when any of the provided Promises are resolved
-   * or rejected.
-   *
-   * See {@link Promise.race} for more details.
-   *
-   * @param values An iterable of Promises.
-   * @returns A new Promise.
-   */
-  race<T extends readonly CombineablePromise<unknown>[] | []>(
-    values: T
-  ): Promise<Awaited<T[number]>> {
-    if (values.length == 0) {
-      return Promise.race(values);
-    }
-
-    return (values[0].__restate_context as RestateContextImpl).createCombinator(
-      Promise.race.bind(Promise),
-      values
-    ) as Promise<Awaited<T[number]>>;
-  },
-
-  /**
-   * Creates a promise that fulfills when any of the input's promises fulfills, with this first fulfillment value.
-   * It rejects when all the input's promises reject (including when an empty iterable is passed),
-   * with an AggregateError containing an array of rejection reasons.
-   *
-   * See {@link Promise.any} for more details.
-   *
-   * @param values An iterable of Promises.
-   * @returns A new Promise.
-   */
-  any<T extends readonly CombineablePromise<unknown>[] | []>(
-    values: T
-  ): Promise<Awaited<T[number]>> {
-    if (values.length == 0) {
-      return Promise.any(values);
-    }
-
-    return (values[0].__restate_context as RestateContextImpl).createCombinator(
-      Promise.any.bind(Promise),
-      values
-    ) as Promise<Awaited<T[number]>>;
-  },
-
-  /**
-   * Creates a promise that fulfills when all the input's promises settle (including when an empty iterable is passed),
-   * with an array of objects that describe the outcome of each promise.
-   *
-   * See {@link Promise.allSettled} for more details.
-   *
-   * @param values An iterable of Promises.
-   * @returns A new Promise.
-   */
-  allSettled<T extends readonly CombineablePromise<unknown>[] | []>(
-    values: T
-  ): Promise<{
-    -readonly [P in keyof T]: PromiseSettledResult<Awaited<T[P]>>;
-  }> {
-    if (values.length == 0) {
-      return Promise.allSettled(values);
-    }
-
-    return (values[0].__restate_context as RestateContextImpl).createCombinator(
-      Promise.allSettled.bind(Promise),
-      values
-    ) as Promise<{
-      -readonly [P in keyof T]: PromiseSettledResult<Awaited<T[P]>>;
-    }>;
-  },
-};
-
-// ----------------------------------------------------------------------------
-//  types and functions for the gRPC-based API
-// ----------------------------------------------------------------------------
-
-/**
- * Interface to interact with **gRPC** based services.
- */
-export interface RestateGrpcChannel {
-  /**
-   * Unidirectional call to other Restate services ( = in background / async / not waiting on response).
-   * To do this, wrap the call via the proto-ts client with oneWayCall, as shown in the example.
-   *
-   * NOTE: this returns a Promise because we override the gRPC clients provided by proto-ts.
-   * So we are required to return a Promise.
-   *
-   * @param call Invoke another service by using the generated proto-ts client.
-   * @example
-   * const ctx = restate.useContext(this);
-   * const client = new GreeterClientImpl(ctx);
-   * await ctx.oneWayCall(() =>
-   *   client.greet(Request.create({ name: "Peter" }))
-   * )
-   */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  oneWayCall(call: () => Promise<any>): Promise<void>;
-
-  /**
-   * Delayed unidirectional call to other Restate services ( = in background / async / not waiting on response).
-   * To do this, wrap the call via the proto-ts client with delayedCall, as shown in the example.
-   * Add the delay in millis as the second parameter.
-   *
-   * NOTE: this returns a Promise because we override the gRPC clients provided by proto-ts.
-   * So we are required to return a Promise.
-   *
-   * @param call Invoke another service by using the generated proto-ts client.
-   * @param delayMillis millisecond delay duration to delay the execution of the call
-   * @example
-   * const ctx = restate.useContext(this);
-   * const client = new GreeterClientImpl(ctx);
-   * await ctx.delayedCall(() =>
-   *   client.greet(Request.create({ name: "Peter" })),
-   *   5000
-   * )
-   */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  delayedCall(call: () => Promise<any>, delayMillis?: number): Promise<void>;
-
-  /**
-   * Call another Restate service and await the response.
-   *
-   * This function is not recommended to be called directly. Instead, use the generated gRPC client
-   * that was generated based on the Protobuf service definitions (which internally use this method):
-   *
-   * @example
-   * ```
-   * const ctx = restate.useContext(this);
-   * const client = new GreeterClientImpl(ctx);
-   * client.greet(Request.create({ name: "Peter" }))
-   * ```
-   *
-   * @param service name of the service to call
-   * @param method name of the method to call
-   * @param data payload as Uint8Array
-   * @returns a Promise that is resolved with the response of the called service
-   */
-  request(
-    service: string,
-    method: string,
-    data: Uint8Array
-  ): Promise<Uint8Array>;
-}
-
-/**
- * The context that gives access to all Restate-backed operations, for example
- *   - sending reliable messages / rpc through Restate
- *   - access/update state (for keyed services)
- *   - side effects
- *   - sleeps and delayed calls
- *   - awakeables
- *   - ...
- *
- * This context is for use in **gRPC service** implementations.
- * For the rpc-handler API, use the {@link RpcContext} instead.
- */
-export interface RestateGrpcContext
-  extends RestateBaseContext,
-    RestateGrpcChannel {
-  /**
-   * Get the {@link RpcGateway} to invoke Handler-API based services.
-   */
-  rpcGateway(): RpcGateway;
-}
-
-/**
- * For compatibility, we make the support 'RestateContext' as the type for the Grpc-based API context.
- */
-export type RestateContext = RestateGrpcContext;
-
-/**
- * Returns the RestateContext which is the entrypoint for all interaction with Restate.
- * Use this from within a method to retrieve the RestateContext.
- * The context is bounded to a single invocation.
- *
- * @example
- * const ctx = restate.useContext(this);
- *
- */
-export function useContext<T>(instance: T): RestateGrpcContext {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const wrapper = instance as any;
-  if (wrapper.$$restate === undefined || wrapper.$$restate === null) {
-    throw new Error(`not running within a Restate call.`);
-  }
-  return wrapper.$$restate;
-}
-
-export function setContext<T>(instance: T, context: RestateGrpcContext): T {
-  // creates a *new*, per call object that shares all the properties that @instance has
-  // except '$$restate' which is a unique, per call pointer to a restate context.
-  //
-  // The following line create a new object, that its prototype is @instance.
-  // and that object has a $$restate property.
-  const wrapper = Object.create(instance as object, {
-    $$restate: { value: context },
-  });
-  return wrapper as T;
-}
-
-// ----------------------------------------------------------------------------
-//  types for the rpc-handler-based API
-// ----------------------------------------------------------------------------
-
-/* eslint-disable @typescript-eslint/no-unused-vars */
-
-/**
- * ServiceApi captures the type and parameters to make RPC calls and send messages to
- * a set of RPC handlers in a router.
- *
- * @example
- * **Service Side:**
- * ```ts
- * const router = restate.router({
- *   someAction:    async(ctx: restate.RpcContext, req: string) => { ... },
- *   anotherAction: async(ctx: restate.RpcContext, count: number) => { ... }
- * });
- *
- * export const myApi: restate.ServiceApi<typeof router> = { path : "myservice" };
- *
- * restate.createServer().bindRouter("myservice", router).listen(9080);
- * ```
- * **Client side:**
- * ```ts
- * ctx.rpc(myApi).someAction("hello!");
- * ```
- */
-export type ServiceApi<_M = unknown> = {
-  path: string;
-};
-
-/**
- * Interface to interact with **rpc-handler API** based services.
- */
-export interface RpcGateway {
   /**
    * Makes a type-safe request/response RPC to the specified target service.
    *
@@ -619,23 +339,295 @@ export interface RpcGateway {
    * ```
    */
   sendDelayed<M>(opts: ServiceApi<M>, delay: number): SendClient<M>;
-}
 
-/**
- * The context that gives access to all Restate-backed operations, for example
- *   - sending reliable messages / RPC through Restate
- *   - access/update state (for keyed services)
- *   - side effects
- *   - sleeps and delayed calls
- *   - awakeables
- *   - ...
- *
- * This context is for use with the **rpc-handler API**.
- * For gRPC-based API, use the {@link RestateContext} instead.
- */
-export interface RpcContext extends RestateBaseContext, RpcGateway {
   /**
    * Get the {@link RestateGrpcChannel} to invoke gRPC based services.
    */
   grpcChannel(): RestateGrpcChannel;
 }
+
+/**
+ * The context that gives access to all Restate-backed operations, for example
+ *   - sending reliable messages / RPC through Restate
+ *   - access/update state
+ *   - side effects
+ *   - sleeps and delayed calls
+ *   - awakeables
+ *   - ...
+ *
+ * This context can be used only within keyed services/routers.
+ *
+ * In gRPC-based API, to access this context, use {@link useKeyedContext}.
+ */
+export interface KeyedContext extends Context, KeyValueStore {}
+
+export interface Rand {
+  /**
+   * Equivalent of JS `Math.random()` but deterministic; seeded by the invocation ID of the current invocation,
+   * each call will return a new pseudorandom float within the range [0,1)
+   */
+  random(): number;
+
+  /**
+   * Using the same random source and seed as random(), produce a UUID version 4 string. This is inherently predictable
+   * based on the invocation ID and should not be used in cryptographic contexts
+   */
+  uuidv4(): string;
+}
+
+/**
+ * A promise that can be combined using Promise combinators in RestateContext.
+ */
+export type CombineablePromise<T> = Promise<T> & {
+  __restate_context: Context;
+
+  /**
+   * Creates a promise that awaits for the current promise up to the specified timeout duration.
+   * If the timeout is fired, this Promise will be rejected with a {@link TimeoutError}.
+   *
+   * @param millis duration of the sleep in millis.
+   * This is a lower-bound.
+   */
+  orTimeout(millis: number): Promise<T>;
+};
+
+export const CombineablePromise = {
+  /**
+   * Creates a Promise that is resolved with an array of results when all of the provided Promises
+   * resolve, or rejected when any Promise is rejected.
+   *
+   * See {@link Promise.all} for more details.
+   *
+   * @param values An iterable of Promises.
+   * @returns A new Promise.
+   */
+  all<T extends readonly CombineablePromise<unknown>[] | []>(
+    values: T
+  ): Promise<{ -readonly [P in keyof T]: Awaited<T[P]> }> {
+    if (values.length == 0) {
+      return Promise.all(values);
+    }
+
+    return (values[0].__restate_context as ContextImpl).createCombinator(
+      Promise.all.bind(Promise),
+      values
+    ) as Promise<{
+      -readonly [P in keyof T]: Awaited<T[P]>;
+    }>;
+  },
+
+  /**
+   * Creates a Promise that is resolved or rejected when any of the provided Promises are resolved
+   * or rejected.
+   *
+   * See {@link Promise.race} for more details.
+   *
+   * @param values An iterable of Promises.
+   * @returns A new Promise.
+   */
+  race<T extends readonly CombineablePromise<unknown>[] | []>(
+    values: T
+  ): Promise<Awaited<T[number]>> {
+    if (values.length == 0) {
+      return Promise.race(values);
+    }
+
+    return (values[0].__restate_context as ContextImpl).createCombinator(
+      Promise.race.bind(Promise),
+      values
+    ) as Promise<Awaited<T[number]>>;
+  },
+
+  /**
+   * Creates a promise that fulfills when any of the input's promises fulfills, with this first fulfillment value.
+   * It rejects when all the input's promises reject (including when an empty iterable is passed),
+   * with an AggregateError containing an array of rejection reasons.
+   *
+   * See {@link Promise.any} for more details.
+   *
+   * @param values An iterable of Promises.
+   * @returns A new Promise.
+   */
+  any<T extends readonly CombineablePromise<unknown>[] | []>(
+    values: T
+  ): Promise<Awaited<T[number]>> {
+    if (values.length == 0) {
+      return Promise.any(values);
+    }
+
+    return (values[0].__restate_context as ContextImpl).createCombinator(
+      Promise.any.bind(Promise),
+      values
+    ) as Promise<Awaited<T[number]>>;
+  },
+
+  /**
+   * Creates a promise that fulfills when all the input's promises settle (including when an empty iterable is passed),
+   * with an array of objects that describe the outcome of each promise.
+   *
+   * See {@link Promise.allSettled} for more details.
+   *
+   * @param values An iterable of Promises.
+   * @returns A new Promise.
+   */
+  allSettled<T extends readonly CombineablePromise<unknown>[] | []>(
+    values: T
+  ): Promise<{
+    -readonly [P in keyof T]: PromiseSettledResult<Awaited<T[P]>>;
+  }> {
+    if (values.length == 0) {
+      return Promise.allSettled(values);
+    }
+
+    return (values[0].__restate_context as ContextImpl).createCombinator(
+      Promise.allSettled.bind(Promise),
+      values
+    ) as Promise<{
+      -readonly [P in keyof T]: PromiseSettledResult<Awaited<T[P]>>;
+    }>;
+  },
+};
+
+// ----------------------------------------------------------------------------
+//  types and functions for the gRPC-based API
+// ----------------------------------------------------------------------------
+
+/**
+ * Interface to interact with **gRPC** based services. You can use this interface to instantiate a gRPC generated client.
+ */
+export interface RestateGrpcChannel {
+  /**
+   * Unidirectional call to other Restate services ( = in background / async / not waiting on response).
+   * To do this, wrap the call via the proto-ts client with oneWayCall, as shown in the example.
+   *
+   * NOTE: this returns a Promise because we override the gRPC clients provided by proto-ts.
+   * So we are required to return a Promise.
+   *
+   * @param call Invoke another service by using the generated proto-ts client.
+   * @example
+   * const ctx = restate.useContext(this);
+   * const client = new GreeterClientImpl(ctx);
+   * await ctx.oneWayCall(() =>
+   *   client.greet(Request.create({ name: "Peter" }))
+   * )
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  oneWayCall(call: () => Promise<any>): Promise<void>;
+
+  /**
+   * Delayed unidirectional call to other Restate services ( = in background / async / not waiting on response).
+   * To do this, wrap the call via the proto-ts client with delayedCall, as shown in the example.
+   * Add the delay in millis as the second parameter.
+   *
+   * NOTE: this returns a Promise because we override the gRPC clients provided by proto-ts.
+   * So we are required to return a Promise.
+   *
+   * @param call Invoke another service by using the generated proto-ts client.
+   * @param delayMillis millisecond delay duration to delay the execution of the call
+   * @example
+   * const ctx = restate.useContext(this);
+   * const client = new GreeterClientImpl(ctx);
+   * await ctx.delayedCall(() =>
+   *   client.greet(Request.create({ name: "Peter" })),
+   *   5000
+   * )
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  delayedCall(call: () => Promise<any>, delayMillis?: number): Promise<void>;
+
+  /**
+   * Call another Restate service and await the response.
+   *
+   * This function is not recommended to be called directly. Instead, use the generated gRPC client
+   * that was generated based on the Protobuf service definitions (which internally use this method):
+   *
+   * @example
+   * ```
+   * const ctx = restate.useContext(this);
+   * const client = new GreeterClientImpl(ctx);
+   * client.greet(Request.create({ name: "Peter" }))
+   * ```
+   *
+   * @param service name of the service to call
+   * @param method name of the method to call
+   * @param data payload as Uint8Array
+   * @returns a Promise that is resolved with the response of the called service
+   */
+  request(
+    service: string,
+    method: string,
+    data: Uint8Array
+  ): Promise<Uint8Array>;
+}
+
+/**
+ * @deprecated use {@link KeyedContext}.
+ */
+export type RestateContext = KeyedContext;
+
+/**
+ * Returns the {@link Context} which is the entrypoint for all interaction with Restate.
+ * Use this from within a method to retrieve the {@link Context}.
+ * The context is bounded to a single invocation.
+ *
+ * @example
+ * const ctx = restate.useContext(this);
+ *
+ */
+export function useContext<T>(instance: T): Context {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const wrapper = instance as any;
+  if (wrapper.$$restate === undefined || wrapper.$$restate === null) {
+    throw new Error(`not running within a Restate call.`);
+  }
+  return wrapper.$$restate;
+}
+
+/**
+ * Returns the {@link KeyedContext} which is the entrypoint for all interaction with Restate.
+ * Use this from within a method of a keyed service to retrieve the {@link KeyedContext}.
+ * The context is bounded to a single invocation.
+ *
+ * @example
+ * const ctx = restate.useKeyedContext(this);
+ *
+ */
+export function useKeyedContext<T>(instance: T): KeyedContext {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const wrapper = instance as any;
+  if (wrapper.$$restate === undefined || wrapper.$$restate === null) {
+    throw new Error(`not running within a Restate call.`);
+  }
+  return wrapper.$$restate;
+}
+
+// ----------------------------------------------------------------------------
+//  types for the rpc-handler-based API
+// ----------------------------------------------------------------------------
+
+/* eslint-disable @typescript-eslint/no-unused-vars */
+
+/**
+ * ServiceApi captures the type and parameters to make RPC calls and send messages to
+ * a set of RPC handlers in a router.
+ *
+ * @example
+ * **Service Side:**
+ * ```ts
+ * const router = restate.router({
+ *   someAction:    async(ctx: restate.RpcContext, req: string) => { ... },
+ *   anotherAction: async(ctx: restate.RpcContext, count: number) => { ... }
+ * });
+ *
+ * export const myApi: restate.ServiceApi<typeof router> = { path : "myservice" };
+ *
+ * restate.createServer().bindRouter("myservice", router).listen(9080);
+ * ```
+ * **Client side:**
+ * ```ts
+ * ctx.rpc(myApi).someAction("hello!");
+ * ```
+ */
+export type ServiceApi<_M = unknown> = {
+  path: string;
+};

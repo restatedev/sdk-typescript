@@ -12,9 +12,9 @@
 //! Some parts copied from https://github.com/uuidjs/uuid/blob/main/src/stringify.js
 //! License MIT
 
-import { Rand } from "../restate_context";
+import { Rand } from "../context";
 import { ErrorCodes, TerminalError } from "../types/errors";
-import { CallContexType, RestateContextImpl } from "../restate_context_impl";
+import { CallContexType, ContextImpl } from "../context_impl";
 import { createHash } from "crypto";
 
 export class RandImpl implements Rand {
@@ -68,7 +68,7 @@ export class RandImpl implements Rand {
   }
 
   checkContext() {
-    const context = RestateContextImpl.callContext.getStore();
+    const context = ContextImpl.callContext.getStore();
     if (context && context.type === CallContexType.SideEffect) {
       throw new TerminalError(
         `You may not call methods on Rand from within a side effect.`,

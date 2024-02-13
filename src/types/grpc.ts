@@ -9,13 +9,14 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { RestateContext, setContext } from "../restate_context";
+import { Context } from "../context";
 import { FileDescriptorProto } from "ts-proto-descriptors";
 
 export class GrpcServiceMethod<I, O> {
   constructor(
     readonly name: string, // the gRPC name as defined in the .proto file
     readonly localName: string, // the method name as defined in the class.
+    readonly keyedContext: boolean, // If the method expects a keyed context
     readonly localFn: (instance: unknown, input: I) => Promise<O>, // the actual function
     readonly inputDecoder: (buf: Uint8Array) => I, // the protobuf decoder
     readonly outputEncoder: (output: O) => Uint8Array // protobuf encoder
@@ -40,15 +41,24 @@ export class HostedGrpcServiceMethod<I, O> {
   ) {}
 
   // The end of an invoke is either a response (Uint8Array) or a SuspensionMessage
-  async invoke(
-    context: RestateContext,
-    inBytes: Uint8Array
-  ): Promise<Uint8Array> {
+  async invoke(context: Context, inBytes: Uint8Array): Promise<Uint8Array> {
     const instanceWithContext = setContext(this.instance, context);
     const input = this.method.inputDecoder(inBytes);
     const result: O = await this.method.localFn(instanceWithContext, input);
     return this.method.outputEncoder(result);
   }
+}
+
+function setContext<T>(instance: T, context: Context): T {
+  // creates a *new*, per call object that shares all the properties that @instance has
+  // except '$$restate' which is a unique, per call pointer to a restate context.
+  //
+  // The following line create a new object, that its prototype is @instance.
+  // and that object has a $$restate property.
+  const wrapper = Object.create(instance as object, {
+    $$restate: { value: context },
+  });
+  return wrapper as T;
 }
 
 //

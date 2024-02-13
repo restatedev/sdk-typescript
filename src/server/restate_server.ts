@@ -264,6 +264,7 @@ async function handleInvocation<I, O>(
     connection,
     invocation,
     ProtocolMode.BIDI_STREAM,
+    func.method.keyedContext,
     invocation.inferLoggerContext()
   );
   connection.pipeToConsumer(stateMachine);

@@ -34,6 +34,7 @@ import {
 } from "ts-proto-descriptors";
 import {
   fieldTypeToJSON,
+  ServiceType,
   serviceTypeToJSON,
 } from "../generated/dev/restate/ext";
 import {
@@ -43,7 +44,7 @@ import {
   protoMetadata as rpcServiceProtoMetadata,
   KeyedEvent,
 } from "../generated/proto/dynrpc";
-import { RestateContext, RpcContext, useContext } from "../restate_context";
+import { Context, KeyedContext, useContext, useKeyedContext } from "../context";
 import { verifyAssumptions } from "../utils/assumptions";
 import { TerminalError } from "../public_api";
 import { KeyedRouter, UnKeyedRouter, isEventHandler } from "../types/router";
@@ -250,11 +251,14 @@ export abstract class BaseRestateServer {
     const descriptor = createRpcMethodDescriptor(route);
 
     const localMethod = (instance: unknown, input: RpcRequest) => {
-      const ctx = useContext(instance);
       if (keyed) {
-        return dispatchKeyedRpcHandler(ctx, input, handler);
+        return dispatchKeyedRpcHandler(
+          useKeyedContext(instance),
+          input,
+          handler
+        );
       } else {
-        return dispatchUnkeyedRpcHandler(ctx, input, handler);
+        return dispatchUnkeyedRpcHandler(useContext(instance), input, handler);
       }
     };
 
@@ -267,6 +271,7 @@ export abstract class BaseRestateServer {
     const method = new GrpcServiceMethod<RpcRequest, RpcResponse>(
       route,
       route,
+      keyed,
       localMethod,
       decoder,
       encoder
@@ -292,8 +297,11 @@ export abstract class BaseRestateServer {
     }
     const descriptor = createStringKeyedMethodDescriptor(route);
     const localMethod = (instance: unknown, input: KeyedEvent) => {
-      const ctx = useContext(instance);
-      return dispatchKeyedEventHandler(ctx, input, handler);
+      return dispatchKeyedEventHandler(
+        useKeyedContext(instance),
+        input,
+        handler
+      );
     };
 
     const decoder = KeyedEvent.decode;
@@ -302,6 +310,7 @@ export abstract class BaseRestateServer {
     const method = new GrpcServiceMethod<KeyedEvent, Empty>(
       route,
       route,
+      keyed,
       localMethod,
       decoder,
       encoder
@@ -441,6 +450,10 @@ export function parseService(
 ) {
   const svcMethods: Array<GrpcServiceMethod<unknown, unknown>> = [];
 
+  const service_type =
+    meta.options?.services?.[serviceName].options?.["service_type"];
+  const keyed = service_type !== ServiceType.UNKEYED;
+
   // index all the existing properties that `instance` has.
   // we index them by the lower case represention.
   const names = indexProperties(instance);
@@ -491,12 +504,14 @@ export function parseService(
         new GrpcServiceMethod<unknown, unknown>(
           methodDescriptor.name,
           localName,
+          keyed,
           localMethod,
           decoder,
           encoder
         )
       );
     }
+
     return new GrpcService(
       serviceName,
       meta.fileDescriptor.package,
@@ -512,12 +527,11 @@ export type RpcRouter = {
 };
 
 async function dispatchKeyedRpcHandler(
-  origCtx: RestateContext,
+  ctx: KeyedContext,
   req: RpcRequest,
   handler: Function
 ): Promise<RpcResponse> {
   const { key, request } = verifyAssumptions(true, req);
-  const ctx = origCtx as unknown as RpcContext;
   if (typeof key !== "string" || key.length === 0) {
     // we throw a terminal error here, because this cannot be patched by updating code:
     // if the request is wrong (missing a key), the request can never make it
@@ -530,22 +544,20 @@ async function dispatchKeyedRpcHandler(
 }
 
 async function dispatchUnkeyedRpcHandler(
-  origCtx: RestateContext,
+  ctx: Context,
   req: RpcRequest,
   handler: Function
 ): Promise<RpcResponse> {
   const { request } = verifyAssumptions(false, req);
-  const ctx = origCtx as unknown as RpcContext;
   const result = await handler(ctx, request);
   return RpcResponse.create({ response: result });
 }
 
 async function dispatchKeyedEventHandler(
-  origCtx: RestateContext,
+  ctx: KeyedContext,
   req: KeyedEvent,
   handler: Function
 ): Promise<Empty> {
-  const ctx = origCtx as unknown as RpcContext;
   const key = req.key;
   if (key === null || key === undefined || key.length === 0) {
     // we throw a terminal error here, because this cannot be patched by updating code:

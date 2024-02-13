@@ -11,13 +11,11 @@
 
 import {
   CombineablePromise,
+  KeyedContext,
   Rand,
   RestateGrpcChannel,
-  RestateGrpcContext,
-  RpcContext,
-  RpcGateway,
   ServiceApi,
-} from "./restate_context";
+} from "./context";
 import { StateMachine } from "./state_machine";
 import {
   AwakeableEntryMessage,
@@ -87,7 +85,7 @@ export type InternalCombineablePromise<T> = CombineablePromise<T> &
     journalIndex: number;
   };
 
-export class RestateContextImpl implements RestateGrpcContext, RpcContext {
+export class ContextImpl implements KeyedContext, RestateGrpcChannel {
   // here, we capture the context information for actions on the Restate context that
   // are executed within other actions, such as
   // ctx.oneWayCall( () => client.foo(bar) );
@@ -104,6 +102,7 @@ export class RestateContextImpl implements RestateGrpcContext, RpcContext {
     public readonly id: Buffer,
     public readonly serviceName: string,
     public readonly console: Console,
+    public readonly keyedContext: boolean,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private readonly stateMachine: StateMachine<any, any>,
     public readonly rand: Rand = new RandImpl(id)
@@ -113,6 +112,7 @@ export class RestateContextImpl implements RestateGrpcContext, RpcContext {
   public get<T>(name: string): Promise<T | null> {
     // Check if this is a valid action
     this.checkState("get state");
+    this.checkStateOperation("get state");
 
     // Create the message and let the state machine process it
     const msg = GetStateEntryMessage.create({ key: Buffer.from(name) });
@@ -171,12 +171,14 @@ export class RestateContextImpl implements RestateGrpcContext, RpcContext {
 
   public set<T>(name: string, value: T): void {
     this.checkState("set state");
+    this.checkStateOperation("set state");
     const msg = this.stateMachine.localStateStore.set(name, value);
     this.stateMachine.handleUserCodeMessage(SET_STATE_ENTRY_MESSAGE_TYPE, msg);
   }
 
   public clear(name: string): void {
     this.checkState("clear state");
+    this.checkStateOperation("clear state");
 
     const msg = this.stateMachine.localStateStore.clear(name);
     this.stateMachine.handleUserCodeMessage(
@@ -263,7 +265,7 @@ export class RestateContextImpl implements RestateGrpcContext, RpcContext {
   ): Promise<void> {
     this.checkState("oneWayCall");
 
-    return RestateContextImpl.callContext.run(
+    return ContextImpl.callContext.run(
       { type: CallContexType.OneWayCall },
       call
     );
@@ -278,7 +280,7 @@ export class RestateContextImpl implements RestateGrpcContext, RpcContext {
     this.checkState("delayedCall");
 
     // Delayed call is a one way call with a delay
-    return RestateContextImpl.callContext.run(
+    return ContextImpl.callContext.run(
       { type: CallContexType.OneWayCall, delay: delayMillis },
       call
     );
@@ -335,10 +337,6 @@ export class RestateContextImpl implements RestateGrpcContext, RpcContext {
     return this;
   }
 
-  rpcGateway(): RpcGateway {
-    return this;
-  }
-
   // DON'T make this function async!!!
   // The reason is that we want the erros thrown by the initial checks to be propagated in the caller context,
   // and not in the promise context. To understand the semantic difference, make this function async and run the
@@ -375,7 +373,7 @@ export class RestateContextImpl implements RestateGrpcContext, RpcContext {
 
       let sideEffectResult: T;
       try {
-        sideEffectResult = await RestateContextImpl.callContext.run(
+        sideEffectResult = await ContextImpl.callContext.run(
           { type: CallContexType.SideEffect },
           fn
         );
@@ -550,17 +548,17 @@ export class RestateContextImpl implements RestateGrpcContext, RpcContext {
   // -- Various private methods
 
   private isInSideEffect(): boolean {
-    const context = RestateContextImpl.callContext.getStore();
+    const context = ContextImpl.callContext.getStore();
     return context?.type === CallContexType.SideEffect;
   }
 
   private isInOneWayCall(): boolean {
-    const context = RestateContextImpl.callContext.getStore();
+    const context = ContextImpl.callContext.getStore();
     return context?.type === CallContexType.OneWayCall;
   }
 
   private getOneWayCallDelay(): number | undefined {
-    const context = RestateContextImpl.callContext.getStore();
+    const context = ContextImpl.callContext.getStore();
     return context?.delay;
   }
 
@@ -575,7 +573,7 @@ export class RestateContextImpl implements RestateGrpcContext, RpcContext {
   }
 
   private checkState(callType: string): void {
-    const context = RestateContextImpl.callContext.getStore();
+    const context = ContextImpl.callContext.getStore();
     if (!context) {
       this.checkNotExecutingSideEffect();
       return;
@@ -593,6 +591,15 @@ export class RestateContextImpl implements RestateGrpcContext, RpcContext {
         `Cannot do a ${callType} from within ctx.oneWayCall(...).
           Context method oneWayCall() can only be used to invoke other services in the background.
           e.g. ctx.oneWayCall(() => client.greet(my_request))`,
+        { errorCode: ErrorCodes.INTERNAL }
+      );
+    }
+  }
+
+  private checkStateOperation(callType: string): void {
+    if (!this.keyedContext) {
+      throw new TerminalError(
+        `You can do ${callType} calls only from keyed services/routers.`,
         { errorCode: ErrorCodes.INTERNAL }
       );
     }

@@ -43,7 +43,7 @@ export type ValueOrError<T> = {
 
 export const workflowStateService = restate.keyedRouter({
   startWorkflow: async (
-    ctx: restate.RpcContext
+    ctx: restate.KeyedContext
   ): Promise<WorkflowStartResult> => {
     const status =
       (await ctx.get<LifecycleStatus>(LIFECYCLE_STATUS_STATE_NAME)) ??
@@ -60,7 +60,7 @@ export const workflowStateService = restate.keyedRouter({
   },
 
   finishOrFailWorkflow: async <R>(
-    ctx: restate.RpcContext,
+    ctx: restate.KeyedContext,
     _workflowId: string,
     result: ValueOrError<R>
   ): Promise<void> => {
@@ -90,7 +90,7 @@ export const workflowStateService = restate.keyedRouter({
     );
   },
 
-  getStatus: async (ctx: restate.RpcContext): Promise<LifecycleStatus> => {
+  getStatus: async (ctx: restate.KeyedContext): Promise<LifecycleStatus> => {
     return (
       (await ctx.get<LifecycleStatus>(LIFECYCLE_STATUS_STATE_NAME)) ??
       LifecycleStatus.NOT_STARTED
@@ -98,7 +98,7 @@ export const workflowStateService = restate.keyedRouter({
   },
 
   completePromise: async <T>(
-    ctx: restate.RpcContext,
+    ctx: restate.KeyedContext,
     _workflowId: string,
     req: { promiseName: string; completion: ValueOrError<T> }
   ): Promise<void> => {
@@ -116,7 +116,7 @@ export const workflowStateService = restate.keyedRouter({
   },
 
   peekPromise: async <T>(
-    ctx: restate.RpcContext,
+    ctx: restate.KeyedContext,
     _workflowId: string,
     req: { promiseName: string }
   ): Promise<ValueOrError<T> | null> => {
@@ -124,7 +124,7 @@ export const workflowStateService = restate.keyedRouter({
   },
 
   subscribePromise: async <T>(
-    ctx: restate.RpcContext,
+    ctx: restate.KeyedContext,
     _workflowId: string,
     req: { promiseName: string; awkId: string }
   ): Promise<ValueOrError<T> | null> => {
@@ -137,13 +137,13 @@ export const workflowStateService = restate.keyedRouter({
   },
 
   getResult: async <R>(
-    ctx: restate.RpcContext
+    ctx: restate.KeyedContext
   ): Promise<ValueOrError<R> | null> => {
     return peekPromise(ctx, RESULT_STATE_NAME);
   },
 
   subscribeResult: async <T>(
-    ctx: restate.RpcContext,
+    ctx: restate.KeyedContext,
     workflowId: string,
     awkId: string
   ): Promise<ValueOrError<T> | null> => {
@@ -164,7 +164,7 @@ export const workflowStateService = restate.keyedRouter({
   },
 
   getState: async <T>(
-    ctx: restate.RpcContext,
+    ctx: restate.KeyedContext,
     _workflowId: string,
     stateName: string
   ): Promise<T | null> => {
@@ -172,7 +172,7 @@ export const workflowStateService = restate.keyedRouter({
   },
 
   setState: async <T>(
-    ctx: restate.RpcContext,
+    ctx: restate.KeyedContext,
     _workflowId: string,
     request: { stateName: string; value: T }
   ): Promise<void> => {
@@ -213,15 +213,26 @@ export const workflowStateService = restate.keyedRouter({
   },
 
   clearState: async (
-    ctx: restate.RpcContext,
+    ctx: restate.KeyedContext,
     _workflowId: string,
     stateName: string
   ): Promise<void> => {
     ctx.clear(stateName);
   },
 
+  stateKeys: async (ctx: restate.KeyedContext): Promise<Array<string>> => {
+    return (await ctx.get<string[]>(ALL_NAMES_STATE_NAME)) ?? [];
+  },
+
+  clearAllState: async (ctx: restate.KeyedContext): Promise<void> => {
+    const stateNames = (await ctx.get<string[]>(ALL_NAMES_STATE_NAME)) ?? [];
+    for (const stateName of stateNames) {
+      ctx.clear(stateName);
+    }
+  },
+
   publishMessage: async (
-    ctx: restate.RpcContext,
+    ctx: restate.KeyedContext,
     _workflowId: string,
     msg: { message: string; timestamp: Date }
   ): Promise<void> => {
@@ -240,7 +251,7 @@ export const workflowStateService = restate.keyedRouter({
   },
 
   getLatestMessage: async (
-    ctx: restate.RpcContext
+    ctx: restate.KeyedContext
   ): Promise<StatusMessage | null> => {
     const msgs =
       (await ctx.get<StatusMessage[]>(STATUS_MESSAGES_STATE_NAME)) ?? [];
@@ -252,7 +263,7 @@ export const workflowStateService = restate.keyedRouter({
   },
 
   pollNextMessages: async (
-    ctx: restate.RpcContext,
+    ctx: restate.KeyedContext,
     _workflowId: string,
     req: { from: number; awakId: string }
   ): Promise<StatusMessage[] | null> => {
@@ -269,7 +280,7 @@ export const workflowStateService = restate.keyedRouter({
     return null;
   },
 
-  dispose: async (ctx: restate.RpcContext): Promise<void> => {
+  dispose: async (ctx: restate.KeyedContext): Promise<void> => {
     const stateNames = (await ctx.get<string[]>(ALL_NAMES_STATE_NAME)) ?? [];
     for (const stateName of stateNames) {
       ctx.clear(stateName);
@@ -288,7 +299,7 @@ export type api = typeof workflowStateService;
 // ----------------------------------------------------------------------------
 
 async function completePromise<T>(
-  ctx: restate.RpcContext,
+  ctx: restate.KeyedContext,
   stateName: string,
   awakeableStateName: string,
   completion: ValueOrError<T>
@@ -331,7 +342,7 @@ async function completePromise<T>(
 }
 
 async function subscribePromise<T>(
-  ctx: restate.RpcContext,
+  ctx: restate.KeyedContext,
   stateName: string,
   awakeableStateName: string,
   awakeableId: string
@@ -368,14 +379,14 @@ async function subscribePromise<T>(
 }
 
 async function peekPromise<T>(
-  ctx: restate.RpcContext,
+  ctx: restate.KeyedContext,
   stateName: string
 ): Promise<ValueOrError<T> | null> {
   return ctx.get<ValueOrError<T>>(stateName);
 }
 
 async function rememberNewStateName(
-  ctx: restate.RpcContext,
+  ctx: restate.KeyedContext,
   stateName: string
 ) {
   const names = (await ctx.get<string[]>(ALL_NAMES_STATE_NAME)) ?? [];
@@ -383,7 +394,7 @@ async function rememberNewStateName(
   ctx.set(ALL_NAMES_STATE_NAME, names);
 }
 
-async function checkIfRunning(ctx: restate.RpcContext): Promise<boolean> {
+async function checkIfRunning(ctx: restate.KeyedContext): Promise<boolean> {
   const status = await ctx.get<LifecycleStatus>(LIFECYCLE_STATUS_STATE_NAME);
   return status === LifecycleStatus.RUNNING;
 }

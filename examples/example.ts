@@ -22,7 +22,7 @@ import * as restate from "../src/public_api";
 // The main entry point for the service, receiving the greeting request and name.
 //
 const greeter = restate.router({
-  greet: async (ctx: restate.RpcContext, name: string) => {
+  greet: async (ctx: restate.Context, name: string) => {
     // blocking RPC call to a keyed service (here supplying type and path separately)
     const countSoFar = await ctx
       .rpc<counterApiType>({ path: "counter" })
@@ -37,7 +37,7 @@ const greeter = restate.router({
     return message;
   },
 
-  logger: async (ctx: restate.RpcContext, msg: string) => {
+  logger: async (ctx: restate.Context, msg: string) => {
     ctx.console.log(" HEEEELLLLOOOOO! " + msg);
   },
 });
@@ -48,7 +48,7 @@ const greeter = restate.router({
 // them here to have this multi-service setup for testing.
 //
 const counter = restate.keyedRouter({
-  count: async (ctx: restate.RpcContext): Promise<number> => {
+  count: async (ctx: restate.KeyedContext): Promise<number> => {
     const seen = (await ctx.get<number>("seen")) ?? 0;
     ctx.set("seen", seen + 1);
     return seen;

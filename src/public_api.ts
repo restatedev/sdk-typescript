@@ -11,14 +11,15 @@
 
 export {
   RestateContext,
-  RestateGrpcContext,
+  Context,
+  KeyedContext,
   useContext,
+  useKeyedContext,
   ServiceApi,
-  RpcContext,
   CombineablePromise,
   Rand,
   RestateGrpcChannel,
-} from "./restate_context";
+} from "./context";
 export {
   router,
   keyedRouter,

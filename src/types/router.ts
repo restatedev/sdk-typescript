@@ -11,15 +11,15 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { CombineablePromise, RpcContext } from "../restate_context";
-import { Event } from "../types/types";
+import { CombineablePromise, Context, KeyedContext } from "../context";
+import { Event } from "./types";
 
 // ----------- generics -------------------------------------------------------
 
 type WithKeyArgument<F> = F extends () => infer R ? (key: string) => R : F;
 
 type WithoutRpcContext<F> = F extends (
-  ctx: RpcContext,
+  ctx: infer C extends Context,
   ...args: infer P
 ) => infer R
   ? (...args: P) => R
@@ -43,9 +43,9 @@ export type SendClient<M> = {
 
 // ----------- unkeyed handlers ----------------------------------------------
 
-export type UnKeyedHandler<F> = F extends (ctx: RpcContext) => Promise<any>
+export type UnKeyedHandler<F> = F extends (ctx: Context) => Promise<any>
   ? F
-  : F extends (ctx: RpcContext, input: any) => Promise<any>
+  : F extends (ctx: Context, input: any) => Promise<any>
   ? F
   : never;
 
@@ -68,9 +68,9 @@ export const router = <M>(opts: UnKeyedRouterOpts<M>): UnKeyedRouter<M> => {
 
 // ----------- keyed handlers ----------------------------------------------
 
-export type KeyedHandler<F> = F extends (ctx: RpcContext) => Promise<any>
+export type KeyedHandler<F> = F extends (ctx: KeyedContext) => Promise<any>
   ? F
-  : F extends (ctx: RpcContext, key: string, value: any) => Promise<any>
+  : F extends (ctx: KeyedContext, key: string, value: any) => Promise<any>
   ? F
   : never;
 
@@ -99,9 +99,9 @@ export const keyedRouter = <M>(opts: KeyedRouterOpts<M>): KeyedRouter<M> => {
 
 export type KeyedEventHandler<U> = U extends () => Promise<void>
   ? never
-  : U extends (ctx: RpcContext) => Promise<void>
+  : U extends (ctx: KeyedContext) => Promise<void>
   ? never
-  : U extends (ctx: RpcContext, event: Event) => Promise<void>
+  : U extends (ctx: KeyedContext, event: Event) => Promise<void>
   ? U
   : never;
 
@@ -112,7 +112,7 @@ export const keyedEventHandler = <H>(handler: KeyedEventHandler<H>): H => {
 export const isEventHandler = (
   handler: any
 ): handler is {
-  handler: (ctx: RpcContext, event: Event) => Promise<void>;
+  handler: (ctx: KeyedContext, event: Event) => Promise<void>;
 } => {
   return typeof handler === "object" && handler["eventHandler"];
 };

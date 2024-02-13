@@ -32,7 +32,7 @@ import { ProtocolMode } from "../src/generated/proto/discovery";
 
 class GetStringStateGreeter implements TestGreeter {
   async greet(): Promise<TestResponse> {
-    const ctx = restate.useContext(this);
+    const ctx = restate.useKeyedContext(this);
 
     // state
     let state = await ctx.get<string>("STATE");
@@ -166,7 +166,7 @@ describe("GetStringStateGreeter", () => {
 
 class GetNumberStateGreeter implements TestGreeter {
   async greet(): Promise<TestResponse> {
-    const ctx = restate.useContext(this);
+    const ctx = restate.useKeyedContext(this);
 
     // state
     const state = await ctx.get<number>("STATE");
@@ -283,7 +283,7 @@ describe("GetNumberStateGreeter", () => {
 
 class GetNumberListStateGreeter implements TestGreeter {
   async greet(): Promise<TestResponse> {
-    const ctx = restate.useContext(this);
+    const ctx = restate.useKeyedContext(this);
 
     // state
     const state = await ctx.get<number[]>("STATE");

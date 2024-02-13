@@ -39,7 +39,7 @@ import { Empty } from "../src/generated/google/protobuf/empty";
 
 class LambdaGreeter implements TestGreeter {
   async greet(): Promise<TestResponse> {
-    const ctx = restate.useContext(this);
+    const ctx = restate.useKeyedContext(this);
 
     // state
     const state = (await ctx.get<string>("STATE")) || "nobody";

@@ -34,7 +34,7 @@ import {
   SLEEP_ENTRY_MESSAGE_TYPE,
 } from "../src/types/protocol";
 import { TimeoutError } from "../src/types/errors";
-import { CombineablePromise } from "../src/restate_context";
+import { CombineablePromise } from "../src/context";
 
 class AwakeableSleepRaceGreeter implements TestGreeter {
   async greet(): Promise<TestResponse> {

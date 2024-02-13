@@ -35,7 +35,7 @@ import { ProtocolMode } from "../src/generated/proto/discovery";
 
 class GetAndSetGreeter implements TestGreeter {
   async greet(request: TestRequest): Promise<TestResponse> {
-    const ctx = restate.useContext(this);
+    const ctx = restate.useKeyedContext(this);
 
     // state
     const state = (await ctx.get<string>("STATE")) || "nobody";
@@ -163,7 +163,7 @@ describe("GetAndSetGreeter", () => {
 
 class ClearStateGreeter implements TestGreeter {
   async greet(request: TestRequest): Promise<TestResponse> {
-    const ctx = restate.useContext(this);
+    const ctx = restate.useKeyedContext(this);
 
     // state
     const state = (await ctx.get<string>("STATE")) || "nobody";
@@ -254,7 +254,7 @@ enum OrderStatus {
 
 class GetAndSetEnumGreeter implements TestGreeter {
   async greet(): Promise<TestResponse> {
-    const ctx = restate.useContext(this);
+    const ctx = restate.useKeyedContext(this);
 
     // state
     const oldState = await ctx.get<OrderStatus>("STATE");

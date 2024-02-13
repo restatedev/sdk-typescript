@@ -9,7 +9,7 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { RpcContext } from "../restate_context";
+import { Context } from "../context";
 import { doInvoke } from "./invocation";
 import { wrapHandler } from "./handler";
 import crypto from "crypto";
@@ -47,7 +47,7 @@ export class RestateConnection {
   public invoke<I, O>(
     id: string,
     input: I,
-    handler: (ctx: RpcContext, input: I) => Promise<O>,
+    handler: (ctx: Context, input: I) => Promise<O>,
     opt?: RestateInvocationOptions
   ): Promise<O> {
     const method = wrapHandler(handler);
