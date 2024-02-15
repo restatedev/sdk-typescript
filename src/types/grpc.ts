@@ -19,7 +19,8 @@ export class GrpcServiceMethod<I, O> {
     readonly keyedContext: boolean, // If the method expects a keyed context
     readonly localFn: (instance: unknown, input: I) => Promise<O>, // the actual function
     readonly inputDecoder: (buf: Uint8Array) => I, // the protobuf decoder
-    readonly outputEncoder: (output: O) => Uint8Array // protobuf encoder
+    readonly outputEncoder: (output: O) => Uint8Array, // protobuf encoder
+    readonly outputDecoder: (buf: Uint8Array) => O
   ) {}
 }
 
@@ -46,6 +47,10 @@ export class HostedGrpcServiceMethod<I, O> {
     const input = this.method.inputDecoder(inBytes);
     const result: O = await this.method.localFn(instanceWithContext, input);
     return this.method.outputEncoder(result);
+  }
+
+  public decodeOutput(buffer: Uint8Array): O {
+    return this.method.outputDecoder(buffer);
   }
 }
 
