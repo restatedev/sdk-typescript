@@ -61,7 +61,7 @@ type counterApiType = typeof counter;
 // restate server
 
 restate
-  .createServer()
+  .endpoint()
   .bindRouter("greeter", greeter)
   .bindKeyedRouter("counter", counter)
   .listen(9080);

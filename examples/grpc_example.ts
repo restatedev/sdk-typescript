@@ -45,7 +45,7 @@ export class GreeterService implements TestGreeter {
 }
 
 restate
-  .createServer()
+  .endpoint()
   .bindService({
     descriptor: protoMetadata,
     service: "TestGreeter",

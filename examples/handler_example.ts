@@ -24,7 +24,7 @@ type UserProfile = {
 
 const profileService = restate.keyedRouter({
   registration: restate.keyedEventHandler(
-    async (ctx: restate.RpcContext, event: restate.Event) => {
+    async (ctx: restate.KeyedContext, event: restate.Event) => {
       // store in state the user's information as coming from the registeration event
       const { name } = event.json<{ name: string }>();
       ctx.set("name", name);
@@ -32,14 +32,14 @@ const profileService = restate.keyedRouter({
   ),
 
   email: restate.keyedEventHandler(
-    async (ctx: restate.RpcContext, event: restate.Event) => {
+    async (ctx: restate.KeyedContext, event: restate.Event) => {
       // store in state the user's information as coming from the email event
       const { email } = event.json<{ email: string }>();
       ctx.set("email", email);
     }
   ),
 
-  get: async (ctx: restate.RpcContext, id: string): Promise<UserProfile> => {
+  get: async (ctx: restate.KeyedContext, id: string): Promise<UserProfile> => {
     return {
       id,
       name: (await ctx.get<string>("name")) ?? "",
@@ -49,4 +49,4 @@ const profileService = restate.keyedRouter({
 });
 
 // restate server
-restate.createServer().bindKeyedRouter("profile", profileService).listen(9080);
+restate.endpoint().bindKeyedRouter("profile", profileService).listen(9080);
