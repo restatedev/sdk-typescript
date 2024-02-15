@@ -23,6 +23,7 @@ import { Header, Message } from "../src/types/types";
 import stream from "stream";
 import { setTimeout } from "timers/promises";
 import { CompletablePromise } from "../src/utils/promises";
+import { SUPPORTED_PROTOCOL_VERSION } from "../src/io/decoder";
 
 // The following test suite is taken from headers.rs
 describe("Header", () => {
@@ -89,7 +90,9 @@ describe("Restate Streaming Connection", () => {
           id: Buffer.from("abcd"),
           debugId: "abcd",
           knownEntries: 1337,
-        })
+        }),
+        undefined,
+        SUPPORTED_PROTOCOL_VERSION
       )
     );
 

@@ -67,6 +67,7 @@ import { expect } from "@jest/globals";
 import { jsonSerialize, formatMessageAsJson } from "../src/utils/utils";
 import { rlog } from "../src/logger";
 import { ErrorCodes, RestateErrorCodes } from "../src/types/errors";
+import { SUPPORTED_PROTOCOL_VERSION } from "../src/io/decoder";
 
 export function startMessage(
   knownEntries?: number,
@@ -86,7 +87,7 @@ export function startMessage(
       partialState: partialState !== false,
     }),
     undefined,
-    0,
+    SUPPORTED_PROTOCOL_VERSION,
     undefined
   );
 }
