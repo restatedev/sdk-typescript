@@ -14,7 +14,23 @@
 import express, { Request, Response } from "express";
 import * as restate from "../src/public_api";
 
-const rs = restate.connection("http://127.0.0.1:8080");
+const router = restate.router({
+  hello: async (ctx: restate.Context, param: { productId: string }) => {
+    const response = await ctx.sideEffect(async () => {
+      return (
+        await fetch(`https://dummyjson.com/products/${param.productId}`)
+      ).json();
+    });
+    return response.title;
+  },
+});
+
+const routerApi: restate.ServiceApi<typeof router> = { path: "example" };
+
+const rs = restate
+  .endpoint()
+  .bindRouter(routerApi.path, router)
+  .connect("http://127.0.0.1:8080");
 
 const app = express();
 app.use(express.json());
@@ -22,16 +38,9 @@ app.use(express.json());
 app.post("/workflow", async (req: Request, res: Response) => {
   const { id } = req.body;
 
-  const response = await rs.invoke(id, {}, async (ctx) => {
-    // You can use all RestateContext features here (except sleep)
-
-    const response = await ctx.sideEffect(async () => {
-      return (await fetch("https://dummyjson.com/products/1")).json();
-    });
-
-    return response.title;
-  });
-
+  const response = await rs
+    .rpc(routerApi, { idempotencyKey: id, retain: 60 })
+    .hello({ productId: id });
   res.send(response);
 });
 

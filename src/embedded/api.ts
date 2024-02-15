@@ -9,13 +9,16 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { Context } from "../context";
+import { ServiceApi } from "../context";
 import { doInvoke } from "./invocation";
-import { wrapHandler } from "./handler";
 import crypto from "crypto";
 import { RemoteContext } from "../generated/proto/services";
 import { bufConnectRemoteContext } from "./http2_remote";
 import { OutgoingHttpHeaders } from "http";
+import { Client, TerminalError } from "../public_api";
+import { EndpointImpl } from "../endpoint/endpoint_impl";
+import { RpcRequest } from "../generated/proto/dynrpc";
+import { requestFromArgs } from "../utils/assumptions";
 
 export type RestateConnectionOptions = {
   /**
@@ -33,25 +36,63 @@ export type RestateInvocationOptions = {
    * If not set, 30 minutes will be used as retention period.
    */
   retain?: number;
+
+  idempotencyKey: string;
 };
 
 export const connection = (
   address: string,
+  endpoints: EndpointImpl,
   opt?: RestateConnectionOptions
 ): RestateConnection =>
-  new RestateConnection(bufConnectRemoteContext(address, opt));
+  new RestateConnection(endpoints, bufConnectRemoteContext(address, opt));
 
 export class RestateConnection {
-  constructor(private readonly remote: RemoteContext) {}
+  constructor(
+    private readonly endpoints: EndpointImpl,
+    private readonly remote: RemoteContext
+  ) {}
 
-  public invoke<I, O>(
-    id: string,
-    input: I,
-    handler: (ctx: Context, input: I) => Promise<O>,
-    opt?: RestateInvocationOptions
-  ): Promise<O> {
-    const method = wrapHandler(handler);
-    const streamId = crypto.randomUUID();
-    return doInvoke<I, O>(this.remote, id, streamId, input, method, opt);
+  public rpc<M>(api: ServiceApi<M>, opts: RestateInvocationOptions): Client<M> {
+    const clientProxy = new Proxy(
+      {},
+      {
+        get: (_target, prop) => {
+          const route = prop as string;
+          return async (...args: unknown[]) => {
+            //
+            // back to gRPC world
+            //
+            const service = api.path;
+            const methodName = route;
+            const url = `/invoke/${service}/${methodName}`;
+            const method = this.endpoints.methodByUrl(url);
+            if (!method) {
+              throw new TerminalError(`type error`); // TODO: complete
+            }
+            //
+            // back to the handler world
+            //
+            const arg = RpcRequest.encode(
+              requestFromArgs(args)
+            ).finish() as Buffer;
+            //
+            // make the emb handler call
+            //
+            const streamId = crypto.randomUUID();
+            return doInvoke(
+              this.remote,
+              opts.idempotencyKey,
+              streamId,
+              arg,
+              method,
+              opts
+            );
+          };
+        },
+      }
+    );
+
+    return clientProxy as Client<M>;
   }
 }

@@ -13,6 +13,7 @@ import { KeyedRouter, UnKeyedRouter } from "./types/router";
 import { ProtoMetadata } from "./types/grpc";
 import { Http2ServerRequest, Http2ServerResponse } from "http2";
 import { EndpointImpl } from "./endpoint/endpoint_impl";
+import { RestateConnection } from "./public_api";
 
 /**
  * Create a new {@link RestateEndpoint}.
@@ -184,4 +185,6 @@ export interface RestateEndpoint {
     request: Http2ServerRequest,
     response: Http2ServerResponse
   ) => void;
+
+  connect(ingress: string): RestateConnection;
 }

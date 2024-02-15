@@ -30,7 +30,7 @@ export const doInvoke = async <I, O>(
   remote: RemoteContext,
   operationId: string,
   streamId: string,
-  input: I,
+  input: Buffer,
   method: HostedGrpcServiceMethod<I, O>,
   opt?: RestateInvocationOptions
 ): Promise<O> => {
@@ -41,7 +41,7 @@ export const doInvoke = async <I, O>(
   const startRequest = StartRequest.fromPartial({
     operationId,
     streamId,
-    argument: Buffer.from(JSON.stringify(input)),
+    argument: input,
   });
   if (opt != undefined && opt.retain != undefined) {
     startRequest.retentionPeriodSec = opt.retain;
@@ -49,7 +49,8 @@ export const doInvoke = async <I, O>(
   const res = await remote.start(startRequest);
 
   if (res.completed !== undefined) {
-    return unwrap(res.completed);
+    const buf = unwrap(res.completed);
+    return method.decodeOutput(buf);
   }
 
   //
@@ -111,16 +112,16 @@ export const doInvoke = async <I, O>(
   //
   const maybeResult = await invocation;
   if (maybeResult instanceof Buffer) {
-    return JSON.parse(maybeResult.toString());
+    return method.decodeOutput(maybeResult);
   }
 
   // TODO: no sure what to do here. The state machine has decided to be suspended?
   throw new Error("suspended");
 };
 
-const unwrap = <O>(response: GetResultResponse): O => {
+const unwrap = (response: GetResultResponse): Buffer => {
   if (response.success === undefined) {
     throw new Error(response.failure?.message ?? "");
   }
-  return JSON.parse(response.success.toString()) as O;
+  return response.success;
 };

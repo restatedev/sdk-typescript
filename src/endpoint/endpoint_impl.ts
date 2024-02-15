@@ -44,9 +44,18 @@ import {
   protoMetadata as rpcServiceProtoMetadata,
   KeyedEvent,
 } from "../generated/proto/dynrpc";
-import { Context, KeyedContext, useContext, useKeyedContext } from "../context";
-import { verifyAssumptions } from "../utils/assumptions";
-import { RestateEndpoint, ServiceBundle, TerminalError } from "../public_api";
+import {
+  Context,
+  KeyedContext,
+  RestateConnection,
+  RestateConnectionOptions,
+  RestateEndpoint,
+  ServiceBundle,
+  TerminalError,
+  connection,
+  useContext,
+  useKeyedContext,
+} from "../public_api";
 import { KeyedRouter, UnKeyedRouter, isEventHandler } from "../types/router";
 import { jsonSafeAny } from "../utils/utils";
 import { rlog } from "../logger";
@@ -54,6 +63,7 @@ import { ServiceOpts } from "../endpoint";
 import http2, { Http2ServerRequest, Http2ServerResponse } from "http2";
 import { Http2Handler } from "./http2_handler";
 import { LambdaHandler } from "./lambda_handler";
+import { verifyAssumptions } from "../utils/assumptions";
 
 export class EndpointImpl implements RestateEndpoint {
   protected readonly methods: Record<
@@ -139,6 +149,10 @@ export class EndpointImpl implements RestateEndpoint {
     server.listen(actualPort);
     // eslint-disable-next-line @typescript-eslint/no-empty-function
     return new Promise(() => {});
+  }
+
+  connect(ingress: string, opts?: RestateConnectionOptions): RestateConnection {
+    return connection(ingress, this, opts);
   }
 
   // Private methods to build the endpoint
@@ -227,13 +241,16 @@ export class EndpointImpl implements RestateEndpoint {
         response: jsonSafeAny("", message.response),
       }).finish();
 
+    const outputDecoder = (buf: Uint8Array) => RpcResponse.decode(buf);
+
     const method = new GrpcServiceMethod<RpcRequest, RpcResponse>(
       route,
       route,
       keyed,
       localMethod,
       decoder,
-      encoder
+      encoder,
+      outputDecoder
     );
 
     return {
@@ -265,6 +282,7 @@ export class EndpointImpl implements RestateEndpoint {
 
     const decoder = KeyedEvent.decode;
     const encoder = (message: Empty) => Empty.encode(message).finish();
+    const outEncoder = (buffer: Uint8Array) => Empty.decode(buffer);
 
     const method = new GrpcServiceMethod<KeyedEvent, Empty>(
       route,
@@ -272,7 +290,8 @@ export class EndpointImpl implements RestateEndpoint {
       keyed,
       localMethod,
       decoder,
-      encoder
+      encoder,
+      outEncoder
     );
 
     return {
@@ -459,6 +478,8 @@ export function parseService(
       const decoder = (buffer: Uint8Array) => inputMessage.decode(buffer);
       const encoder = (message: unknown) =>
         outputMessage.encode(message).finish();
+      const outDecoder = (buffer: Uint8Array) => outputMessage.decode(buffer);
+
       svcMethods.push(
         new GrpcServiceMethod<unknown, unknown>(
           methodDescriptor.name,
@@ -466,7 +487,8 @@ export function parseService(
           keyed,
           localMethod,
           decoder,
-          encoder
+          encoder,
+          outDecoder
         )
       );
     }
