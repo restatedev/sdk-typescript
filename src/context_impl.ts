@@ -491,10 +491,13 @@ export class ContextImpl implements KeyedContext, RestateGrpcChannel {
     };
   }
 
-  public resolveAwakeable<T>(id: string, payload: T): void {
+  public resolveAwakeable<T>(id: string, payload?: T): void {
+    // We coerce undefined to null as null can be stringified by JSON.stringify
+    const payloadToWrite = payload === undefined ? null : payload;
+
     this.checkState("resolveAwakeable");
     this.completeAwakeable(id, {
-      value: Buffer.from(JSON.stringify(payload)),
+      value: Buffer.from(JSON.stringify(payloadToWrite)),
     });
   }
 

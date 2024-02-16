@@ -53,9 +53,11 @@ class SharedPromiseImpl<T> implements wf.DurablePromise<T> {
   }
 
   resolve(value?: T): void {
+    const currentValue = value === undefined ? null : value;
+
     this.ctx.send(this.stateServiceApi).completePromise(this.workflowId, {
       promiseName: this.promiseName,
-      completion: { value },
+      completion: { value: currentValue },
     });
   }
 
