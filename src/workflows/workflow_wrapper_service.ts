@@ -117,6 +117,10 @@ class ExclusiveContextImpl extends SharedContextImpl implements wf.WfContext {
   }
 
   set<T>(stateName: string, value: T): void {
+    if (value === undefined || value === null) {
+      throw new restate.TerminalError("Cannot set state to null or undefined");
+    }
+
     this.ctx
       .send(this.stateServiceApi)
       .setState(this.wfId, { stateName, value });
