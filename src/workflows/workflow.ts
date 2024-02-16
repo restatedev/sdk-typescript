@@ -142,12 +142,6 @@ export enum WorkflowStartResult {
   ALREADY_FINISHED = "ALREADY_FINISHED",
 }
 
-export type StatusMessage = {
-  sequenceNum: number;
-  message: string;
-  timestamp: Date;
-};
-
 // ----------------------------------------------------------------------------
 //                    types and signatures for typed clients
 // ----------------------------------------------------------------------------
