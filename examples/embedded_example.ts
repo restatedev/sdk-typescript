@@ -15,14 +15,12 @@ import express, { Request, Response } from "express";
 import * as restate from "../src/public_api";
 
 const router = restate.router({
-  hello: async (ctx: restate.Context, param: { productId: string }) => {
-    const response = await ctx.sideEffect(async () => {
-      return (
-        await fetch(`https://dummyjson.com/products/${param.productId}`)
-      ).json();
-    });
-    return response.title;
-  },
+  hello: (ctx: restate.Context, param: { productId: string }) =>
+    ctx.sideEffect(() =>
+      fetch(`https://dummyjson.com/products/${param.productId}`)
+        .then((res) => res.json())
+        .then((product) => product.title)
+    ),
 });
 
 const routerApi: restate.ServiceApi<typeof router> = { path: "example" };
