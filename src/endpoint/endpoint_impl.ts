@@ -44,26 +44,22 @@ import {
   protoMetadata as rpcServiceProtoMetadata,
   KeyedEvent,
 } from "../generated/proto/dynrpc";
-import {
-  Context,
-  KeyedContext,
-  RestateConnection,
-  RestateConnectionOptions,
-  RestateEndpoint,
-  ServiceBundle,
-  TerminalError,
-  connection,
-  useContext,
-  useKeyedContext,
-} from "../public_api";
+
 import { KeyedRouter, UnKeyedRouter, isEventHandler } from "../types/router";
 import { jsonSafeAny } from "../utils/utils";
 import { rlog } from "../logger";
-import { ServiceOpts } from "../endpoint";
+import { RestateEndpoint, ServiceBundle, ServiceOpts } from "../endpoint";
 import http2, { Http2ServerRequest, Http2ServerResponse } from "http2";
 import { Http2Handler } from "./http2_handler";
 import { LambdaHandler } from "./lambda_handler";
 import { verifyAssumptions } from "../utils/assumptions";
+import {
+  RestateConnection,
+  RestateConnectionOptions,
+  connection,
+} from "../embedded/api";
+import { Context, KeyedContext, useContext, useKeyedContext } from "../context";
+import { TerminalError } from "../types/errors";
 
 export class EndpointImpl implements RestateEndpoint {
   protected readonly methods: Record<

@@ -15,10 +15,11 @@ import crypto from "crypto";
 import { RemoteContext } from "../generated/proto/services";
 import { bufConnectRemoteContext } from "./http2_remote";
 import { OutgoingHttpHeaders } from "http";
-import { Client, TerminalError } from "../public_api";
 import { EndpointImpl } from "../endpoint/endpoint_impl";
 import { RpcRequest } from "../generated/proto/dynrpc";
 import { requestFromArgs } from "../utils/assumptions";
+import { Client } from "../types/router";
+import { TerminalError } from "../types/errors";
 
 export type RestateConnectionOptions = {
   /**
