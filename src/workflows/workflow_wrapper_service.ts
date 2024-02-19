@@ -19,7 +19,7 @@ const DEFAULT_RETENTION_PERIOD = 7 * 24 * 60 * 60 * 1000; // 1 week
 //                      Workflow Context Implementations
 // ----------------------------------------------------------------------------
 
-class SharedPromiseImpl<T> implements wf.DurablePromise<T> {
+class DurablePromiseImpl<T> implements wf.DurablePromise<T> {
   constructor(
     private readonly workflowId: string,
     private readonly promiseName: string,
@@ -87,7 +87,7 @@ class SharedContextImpl implements wf.SharedWfContext {
   }
 
   promise<T = void>(name: string): wf.DurablePromise<T> {
-    return new SharedPromiseImpl(
+    return new DurablePromiseImpl(
       this.wfId,
       name,
       this.ctx,
