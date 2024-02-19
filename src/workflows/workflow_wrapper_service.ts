@@ -27,7 +27,7 @@ class SharedPromiseImpl<T> implements wf.DurablePromise<T> {
     private readonly stateServiceApi: restate.ServiceApi<wss.api>
   ) {}
 
-  promise(): Promise<T> {
+  promise(): restate.CombineablePromise<T> {
     const awk = this.ctx.awakeable<T>();
 
     this.ctx.send(this.stateServiceApi).subscribePromise(this.workflowId, {
