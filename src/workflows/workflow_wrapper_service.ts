@@ -12,9 +12,6 @@
 import * as restate from "../public_api";
 import * as wf from "./workflow";
 import * as wss from "./workflow_state_service";
-import {TimeoutError} from "../types/errors";
-import {newJournalEntryPromiseId} from "../promise_combinator_tracker";
-import {InternalCombineablePromise} from "../context_impl";
 
 const DEFAULT_RETENTION_PERIOD = 7 * 24 * 60 * 60 * 1000; // 1 week
 
@@ -51,10 +48,10 @@ class SharedContextImpl implements wf.SharedWfContext {
 
     const peek = async (): Promise<T | null> => {
       const result = await this.ctx
-          .rpc(this.stateServiceApi)
-          .peekPromise(this.wfId, { promiseName: name });
+        .rpc(this.stateServiceApi)
+        .peekPromise(this.wfId, { promiseName: name });
 
-        if (result === null) {
+      if (result === null) {
         return null;
       }
       if (result.error !== undefined) {

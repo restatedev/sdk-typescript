@@ -104,7 +104,7 @@ export type DurablePromise<T> = restate.CombineablePromise<T> & {
 
   resolve(value?: T): void;
   fail(errorMsg: string): void;
-}
+};
 
 /**
  * The context for the workflow's interaction methods, which are all methods
