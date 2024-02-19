@@ -99,8 +99,7 @@ export interface WorkflowServices<R, T, U> extends restate.ServiceBundle {
 //                workflow-specific types (promises, contexts)
 // ----------------------------------------------------------------------------
 
-export interface DurablePromise<T> {
-  promise(): Promise<T>;
+export type DurablePromise<T> = restate.CombineablePromise<T> & {
   peek(): Promise<T | null>;
 
   resolve(value?: T): void;

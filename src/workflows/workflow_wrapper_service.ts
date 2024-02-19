@@ -12,62 +12,15 @@
 import * as restate from "../public_api";
 import * as wf from "./workflow";
 import * as wss from "./workflow_state_service";
+import {TimeoutError} from "../types/errors";
+import {newJournalEntryPromiseId} from "../promise_combinator_tracker";
+import {InternalCombineablePromise} from "../context_impl";
 
 const DEFAULT_RETENTION_PERIOD = 7 * 24 * 60 * 60 * 1000; // 1 week
 
 // ----------------------------------------------------------------------------
 //                      Workflow Context Implementations
 // ----------------------------------------------------------------------------
-
-class DurablePromiseImpl<T> implements wf.DurablePromise<T> {
-  constructor(
-    private readonly workflowId: string,
-    private readonly promiseName: string,
-    private readonly ctx: restate.Context,
-    private readonly stateServiceApi: restate.ServiceApi<wss.api>
-  ) {}
-
-  promise(): restate.CombineablePromise<T> {
-    const awk = this.ctx.awakeable<T>();
-
-    this.ctx.send(this.stateServiceApi).subscribePromise(this.workflowId, {
-      promiseName: this.promiseName,
-      awkId: awk.id,
-    });
-
-    return awk.promise;
-  }
-
-  async peek(): Promise<T | null> {
-    const result = await this.ctx
-      .rpc(this.stateServiceApi)
-      .peekPromise(this.workflowId, { promiseName: this.promiseName });
-
-    if (result === null) {
-      return null;
-    }
-    if (result.error !== undefined) {
-      return Promise.reject(new Error(result.error));
-    }
-    return Promise.resolve<T>(result.value as T);
-  }
-
-  resolve(value?: T): void {
-    const currentValue = value === undefined ? null : value;
-
-    this.ctx.send(this.stateServiceApi).completePromise(this.workflowId, {
-      promiseName: this.promiseName,
-      completion: { value: currentValue },
-    });
-  }
-
-  fail(errorMsg: string): void {
-    this.ctx.send(this.stateServiceApi).completePromise(this.workflowId, {
-      promiseName: this.promiseName,
-      completion: { error: errorMsg },
-    });
-  }
-}
 
 class SharedContextImpl implements wf.SharedWfContext {
   constructor(
@@ -87,12 +40,56 @@ class SharedContextImpl implements wf.SharedWfContext {
   }
 
   promise<T = void>(name: string): wf.DurablePromise<T> {
-    return new DurablePromiseImpl(
-      this.wfId,
-      name,
-      this.ctx,
-      this.stateServiceApi
-    );
+    // Create the awakeable to complete
+    const awk = this.ctx.awakeable<T>();
+    this.ctx.send(this.stateServiceApi).subscribePromise(this.wfId, {
+      promiseName: name,
+      awkId: awk.id,
+    });
+
+    // Prepare implementation of DurablePromise
+
+    const peek = async (): Promise<T | null> => {
+      const result = await this.ctx
+          .rpc(this.stateServiceApi)
+          .peekPromise(this.wfId, { promiseName: name });
+
+        if (result === null) {
+        return null;
+      }
+      if (result.error !== undefined) {
+        return Promise.reject(new Error(result.error));
+      }
+      return Promise.resolve<T>(result.value as T);
+    };
+
+    const resolve = (value: T) => {
+      const currentValue = value === undefined ? null : value;
+
+      this.ctx.send(this.stateServiceApi).completePromise(this.wfId, {
+        promiseName: name,
+        completion: { value: currentValue },
+      });
+    };
+
+    const fail = (errorMsg: string) => {
+      this.ctx.send(this.stateServiceApi).completePromise(this.wfId, {
+        promiseName: name,
+        completion: { error: errorMsg },
+      });
+    };
+
+    return Object.defineProperties(awk.promise, {
+      peek: {
+        value: peek.bind(this),
+      },
+      resolve: {
+        value: resolve.bind(this),
+      },
+      fail: {
+        value: fail.bind(this),
+      },
+    }) as wf.DurablePromise<T>;
   }
 }
 
