@@ -28,7 +28,7 @@ import { describe, expect } from "@jest/globals";
 import { TestDriver } from "./testdriver";
 
 class ResolveAwakeableGreeter implements TestGreeter {
-  constructor(readonly payload: string) {}
+  constructor(readonly payload: string | undefined) {}
 
   async greet(): Promise<TestResponse> {
     const ctx = restate.useContext(this);
@@ -49,6 +49,19 @@ describe("ResolveAwakeableGreeter", () => {
 
     expect(result).toStrictEqual([
       resolveAwakeableMessage(getAwakeableId(1), "hello"),
+      outputMessage(greetResponse("Hello")),
+      END_MESSAGE,
+    ]);
+  });
+
+  it("resolve with undefined value", async () => {
+    const result = await new TestDriver(
+      new ResolveAwakeableGreeter(undefined),
+      [startMessage(), inputMessage(greetRequest("Till"))]
+    ).run();
+
+    expect(result).toStrictEqual([
+      resolveAwakeableMessage(getAwakeableId(1), null),
       outputMessage(greetResponse("Hello")),
       END_MESSAGE,
     ]);

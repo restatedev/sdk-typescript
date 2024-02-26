@@ -186,7 +186,7 @@ export interface Context {
    * // The sleeping service should have sent the awakeableIdentifier string to this service.
    * ctx.resolveAwakeable(awakeableIdentifier, "hello");
    */
-  resolveAwakeable<T>(id: string, payload: T): void;
+  resolveAwakeable<T>(id: string, payload?: T): void;
 
   /**
    * Reject an awakeable of another service. When rejecting, the service waiting on this awakeable will be woken up with a terminal error with the provided reason.

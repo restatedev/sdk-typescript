@@ -163,3 +163,33 @@ describe("AwakeableGreeter", () => {
     checkJournalMismatchError(result[0]);
   });
 });
+
+class AwakeableNull implements TestGreeter {
+  async greet(): Promise<TestResponse> {
+    const ctx = restate.useContext(this);
+
+    const awakeable = ctx.awakeable();
+
+    await awakeable.promise;
+
+    return TestResponse.create({
+      greeting: `Hello for ${awakeable.id}`,
+    });
+  }
+}
+
+describe("AwakeableNull", () => {
+  it("handles completion with null value", async () => {
+    const result = await new TestDriver(new AwakeableNull(), [
+      startMessage(),
+      inputMessage(greetRequest("Till")),
+      completionMessage(1, JSON.stringify(null)),
+    ]).run();
+
+    expect(result).toStrictEqual([
+      awakeableMessage(),
+      outputMessage(greetResponse(`Hello for ${getAwakeableId(1)}`)),
+      END_MESSAGE,
+    ]);
+  });
+});

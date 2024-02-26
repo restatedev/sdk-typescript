@@ -10,31 +10,14 @@
  */
 
 import * as restate from "../public_api";
-import {
-  LifecycleStatus,
-  StatusMessage,
-  WorkflowStartResult,
-} from "./workflow";
+import { LifecycleStatus, WorkflowStartResult } from "./workflow";
 
 const LIFECYCLE_STATUS_STATE_NAME = "status";
 const RESULT_STATE_NAME = "result";
 const RESULT_LISTENERS_NAME = "result_listeners";
-const STATUS_MESSAGES_STATE_NAME = "messages";
-const STATUS_MESSAGE_LISTENERS = "message_listeners";
 const PROMISE_STATE_PREFIX = "prom_s_";
+const USER_STATE_PREFIX = "state_";
 const PROMISE_AWAKEABLE_PREFIX = "prom_l_";
-const ALL_NAMES_STATE_NAME = "all_state_names";
-
-const RESERVED_STATE_NAMES = [
-  LIFECYCLE_STATUS_STATE_NAME,
-  RESULT_STATE_NAME,
-  RESULT_LISTENERS_NAME,
-  ALL_NAMES_STATE_NAME,
-];
-const RESERVED_STATE_PREFIXES = [
-  PROMISE_STATE_PREFIX,
-  PROMISE_AWAKEABLE_PREFIX,
-];
 
 export type ValueOrError<T> = {
   value?: T;
@@ -168,7 +151,7 @@ export const workflowStateService = restate.keyedRouter({
     _workflowId: string,
     stateName: string
   ): Promise<T | null> => {
-    return ctx.get(stateName);
+    return ctx.get(USER_STATE_PREFIX + stateName);
   },
 
   setState: async <T>(
@@ -190,26 +173,9 @@ export const workflowStateService = restate.keyedRouter({
       return;
     }
 
-    const stateName = request.stateName;
-
-    // guard against overwriting built-in states
-    for (const reservedStateName of RESERVED_STATE_NAMES) {
-      if (stateName === reservedStateName) {
-        throw new restate.TerminalError(
-          "State name is reserved: " + reservedStateName
-        );
-      }
-    }
-    for (const reservedStatePrefix of RESERVED_STATE_PREFIXES) {
-      if (stateName.startsWith(reservedStatePrefix)) {
-        throw new restate.TerminalError(
-          "State prefix is reserved: " + reservedStatePrefix
-        );
-      }
-    }
+    const stateName = USER_STATE_PREFIX + request.stateName;
 
     ctx.set(stateName, request.value);
-    await rememberNewStateName(ctx, stateName);
   },
 
   clearState: async (
@@ -217,80 +183,26 @@ export const workflowStateService = restate.keyedRouter({
     _workflowId: string,
     stateName: string
   ): Promise<void> => {
-    ctx.clear(stateName);
+    ctx.clear(USER_STATE_PREFIX + stateName);
   },
 
   stateKeys: async (ctx: restate.KeyedContext): Promise<Array<string>> => {
-    return (await ctx.get<string[]>(ALL_NAMES_STATE_NAME)) ?? [];
+    return (await ctx.stateKeys()).filter((name) =>
+      name.startsWith(USER_STATE_PREFIX)
+    );
   },
 
   clearAllState: async (ctx: restate.KeyedContext): Promise<void> => {
-    const stateNames = (await ctx.get<string[]>(ALL_NAMES_STATE_NAME)) ?? [];
+    const stateNames = (await ctx.stateKeys()).filter((name) =>
+      name.startsWith(USER_STATE_PREFIX)
+    );
     for (const stateName of stateNames) {
       ctx.clear(stateName);
     }
-  },
-
-  publishMessage: async (
-    ctx: restate.KeyedContext,
-    _workflowId: string,
-    msg: { message: string; timestamp: Date }
-  ): Promise<void> => {
-    // append message
-    const msgs =
-      (await ctx.get<StatusMessage[]>(STATUS_MESSAGES_STATE_NAME)) ?? [];
-    msgs.push({ sequenceNum: msgs.length, ...msg });
-    ctx.set(STATUS_MESSAGES_STATE_NAME, msgs);
-
-    // wake up all listeners
-    const listeners = (await ctx.get<string[]>(STATUS_MESSAGE_LISTENERS)) ?? [];
-    for (const awkId of listeners) {
-      ctx.resolveAwakeable(awkId, {});
-    }
-    ctx.clear(STATUS_MESSAGE_LISTENERS);
-  },
-
-  getLatestMessage: async (
-    ctx: restate.KeyedContext
-  ): Promise<StatusMessage | null> => {
-    const msgs =
-      (await ctx.get<StatusMessage[]>(STATUS_MESSAGES_STATE_NAME)) ?? [];
-    if (msgs.length === 0) {
-      return null;
-    } else {
-      return msgs[msgs.length - 1];
-    }
-  },
-
-  pollNextMessages: async (
-    ctx: restate.KeyedContext,
-    _workflowId: string,
-    req: { from: number; awakId: string }
-  ): Promise<StatusMessage[] | null> => {
-    const msgs =
-      (await ctx.get<StatusMessage[]>(STATUS_MESSAGES_STATE_NAME)) ?? [];
-    if (msgs.length > req.from) {
-      return msgs.slice(req.from);
-    }
-
-    // not yet available, register a listener to be woken up when more is available
-    const listeners = (await ctx.get<string[]>(STATUS_MESSAGE_LISTENERS)) ?? [];
-    listeners.push(req.awakId);
-    ctx.set(STATUS_MESSAGE_LISTENERS, listeners);
-    return null;
   },
 
   dispose: async (ctx: restate.KeyedContext): Promise<void> => {
-    const stateNames = (await ctx.get<string[]>(ALL_NAMES_STATE_NAME)) ?? [];
-    for (const stateName of stateNames) {
-      ctx.clear(stateName);
-    }
-    ctx.clear(ALL_NAMES_STATE_NAME);
-    ctx.clear(STATUS_MESSAGE_LISTENERS);
-    ctx.clear(STATUS_MESSAGES_STATE_NAME);
-    ctx.clear(RESULT_LISTENERS_NAME);
-    ctx.clear(RESULT_STATE_NAME);
-    ctx.clear(LIFECYCLE_STATUS_STATE_NAME);
+    ctx.clearAll();
   },
 });
 
@@ -325,7 +237,6 @@ async function completePromise<T>(
   // first completor
   // (a) set state
   ctx.set(stateName, completion);
-  await rememberNewStateName(ctx, stateName);
 
   // (b) complete awaiting awakeables
   const listeners = (await ctx.get<string[]>(awakeableStateName)) ?? [];
@@ -370,9 +281,6 @@ async function subscribePromise<T>(
   }
 
   const listeners = (await ctx.get<string[]>(awakeableStateName)) ?? [];
-  if (listeners.length === 0) {
-    await rememberNewStateName(ctx, awakeableStateName);
-  }
   listeners.push(awakeableId);
   ctx.set(awakeableStateName, listeners);
   return null;
@@ -383,15 +291,6 @@ async function peekPromise<T>(
   stateName: string
 ): Promise<ValueOrError<T> | null> {
   return ctx.get<ValueOrError<T>>(stateName);
-}
-
-async function rememberNewStateName(
-  ctx: restate.KeyedContext,
-  stateName: string
-) {
-  const names = (await ctx.get<string[]>(ALL_NAMES_STATE_NAME)) ?? [];
-  names.push(stateName);
-  ctx.set(ALL_NAMES_STATE_NAME, names);
 }
 
 async function checkIfRunning(ctx: restate.KeyedContext): Promise<boolean> {

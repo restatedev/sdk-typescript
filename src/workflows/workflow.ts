@@ -99,13 +99,12 @@ export interface WorkflowServices<R, T, U> extends restate.ServiceBundle {
 //                workflow-specific types (promises, contexts)
 // ----------------------------------------------------------------------------
 
-export interface DurablePromise<T> {
-  promise(): Promise<T>;
+export type DurablePromise<T> = restate.CombineablePromise<T> & {
   peek(): Promise<T | null>;
 
   resolve(value?: T): void;
   fail(errorMsg: string): void;
-}
+};
 
 /**
  * The context for the workflow's interaction methods, which are all methods
@@ -141,12 +140,6 @@ export enum WorkflowStartResult {
   ALREADY_STARTED = "ALREADY_STARTED",
   ALREADY_FINISHED = "ALREADY_FINISHED",
 }
-
-export type StatusMessage = {
-  sequenceNum: number;
-  message: string;
-  timestamp: Date;
-};
 
 // ----------------------------------------------------------------------------
 //                    types and signatures for typed clients

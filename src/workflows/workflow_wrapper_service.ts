@@ -19,54 +19,6 @@ const DEFAULT_RETENTION_PERIOD = 7 * 24 * 60 * 60 * 1000; // 1 week
 //                      Workflow Context Implementations
 // ----------------------------------------------------------------------------
 
-class SharedPromiseImpl<T> implements wf.DurablePromise<T> {
-  constructor(
-    private readonly workflowId: string,
-    private readonly promiseName: string,
-    private readonly ctx: restate.Context,
-    private readonly stateServiceApi: restate.ServiceApi<wss.api>
-  ) {}
-
-  promise(): Promise<T> {
-    const awk = this.ctx.awakeable<T>();
-
-    this.ctx.send(this.stateServiceApi).subscribePromise(this.workflowId, {
-      promiseName: this.promiseName,
-      awkId: awk.id,
-    });
-
-    return awk.promise;
-  }
-
-  async peek(): Promise<T | null> {
-    const result = await this.ctx
-      .rpc(this.stateServiceApi)
-      .peekPromise(this.workflowId, { promiseName: this.promiseName });
-
-    if (result === null) {
-      return null;
-    }
-    if (result.error !== undefined) {
-      return Promise.reject(new Error(result.error));
-    }
-    return Promise.resolve<T>(result.value as T);
-  }
-
-  resolve(value?: T): void {
-    this.ctx.send(this.stateServiceApi).completePromise(this.workflowId, {
-      promiseName: this.promiseName,
-      completion: { value },
-    });
-  }
-
-  fail(errorMsg: string): void {
-    this.ctx.send(this.stateServiceApi).completePromise(this.workflowId, {
-      promiseName: this.promiseName,
-      completion: { error: errorMsg },
-    });
-  }
-}
-
 class SharedContextImpl implements wf.SharedWfContext {
   constructor(
     protected readonly ctx: restate.Context,
@@ -85,12 +37,56 @@ class SharedContextImpl implements wf.SharedWfContext {
   }
 
   promise<T = void>(name: string): wf.DurablePromise<T> {
-    return new SharedPromiseImpl(
-      this.wfId,
-      name,
-      this.ctx,
-      this.stateServiceApi
-    );
+    // Create the awakeable to complete
+    const awk = this.ctx.awakeable<T>();
+    this.ctx.send(this.stateServiceApi).subscribePromise(this.wfId, {
+      promiseName: name,
+      awkId: awk.id,
+    });
+
+    // Prepare implementation of DurablePromise
+
+    const peek = async (): Promise<T | null> => {
+      const result = await this.ctx
+        .rpc(this.stateServiceApi)
+        .peekPromise(this.wfId, { promiseName: name });
+
+      if (result === null) {
+        return null;
+      }
+      if (result.error !== undefined) {
+        return Promise.reject(new Error(result.error));
+      }
+      return Promise.resolve<T>(result.value as T);
+    };
+
+    const resolve = (value: T) => {
+      const currentValue = value === undefined ? null : value;
+
+      this.ctx.send(this.stateServiceApi).completePromise(this.wfId, {
+        promiseName: name,
+        completion: { value: currentValue },
+      });
+    };
+
+    const fail = (errorMsg: string) => {
+      this.ctx.send(this.stateServiceApi).completePromise(this.wfId, {
+        promiseName: name,
+        completion: { error: errorMsg },
+      });
+    };
+
+    return Object.defineProperties(awk.promise, {
+      peek: {
+        value: peek.bind(this),
+      },
+      resolve: {
+        value: resolve.bind(this),
+      },
+      fail: {
+        value: fail.bind(this),
+      },
+    }) as wf.DurablePromise<T>;
   }
 }
 
@@ -112,17 +108,15 @@ class ExclusiveContextImpl extends SharedContextImpl implements wf.WfContext {
     this.console = ctx.console;
   }
 
-  publishMessage(message: string): void {
-    this.ctx
-      .send(this.stateServiceApi)
-      .publishMessage(this.wfId, { message, timestamp: new Date() });
-  }
-
   grpcChannel(): restate.RestateGrpcChannel {
     return this.ctx.grpcChannel();
   }
 
   set<T>(stateName: string, value: T): void {
+    if (value === undefined || value === null) {
+      throw new restate.TerminalError("Cannot set state to null or undefined");
+    }
+
     this.ctx
       .send(this.stateServiceApi)
       .setState(this.wfId, { stateName, value });
@@ -185,7 +179,7 @@ export function createWrapperService<R, T, M>(
   stateServiceApi: restate.ServiceApi<wss.api>
 ) {
   const wrapperService = {
-    start: async (
+    submit: async (
       ctx: restate.Context,
       request: wf.WorkflowRequest<T>
     ): Promise<wf.WorkflowStartResult> => {
@@ -250,37 +244,6 @@ export function createWrapperService<R, T, M>(
     ): Promise<wf.LifecycleStatus> => {
       checkRequestAndWorkflowId(request);
       return ctx.rpc(stateServiceApi).getStatus(request.workflowId);
-    },
-
-    getLatestMessage: async (
-      ctx: restate.Context,
-      request: wf.WorkflowRequest<unknown>
-    ): Promise<wf.StatusMessage | null> => {
-      checkRequestAndWorkflowId(request);
-      return ctx.rpc(stateServiceApi).getLatestMessage(request.workflowId);
-    },
-
-    pollNextMessages: async (
-      ctx: restate.Context,
-      request: wf.WorkflowRequest<{ from: number }>
-    ): Promise<wf.StatusMessage[]> => {
-      checkRequestAndWorkflowId(request);
-
-      // eslint-disable-next-line no-constant-condition
-      while (true) {
-        const awk = ctx.awakeable();
-        const messages = await ctx
-          .rpc(stateServiceApi)
-          .pollNextMessages(request.workflowId, {
-            from: request.from,
-            awakId: awk.id,
-          });
-        if (messages !== undefined && messages !== null) {
-          return messages;
-        }
-
-        await awk.promise;
-      }
     },
   };
 

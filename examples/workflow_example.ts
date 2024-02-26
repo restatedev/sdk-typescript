@@ -42,7 +42,7 @@ const myworkflow = restate.workflow.workflow("acme.myworkflow", {
 
     // to listen to signals, also use promises
     const signal = ctx.promise<string>("thesignal");
-    const message = await signal.promise();
+    const message = await signal;
 
     const result = `${message} my dear ${params.name}`;
     ctx.console.log(">>>>>>>>>>> Finishing workflow with: " + result);
@@ -66,7 +66,7 @@ const myworkflow = restate.workflow.workflow("acme.myworkflow", {
   },
 
   awaitName: async (ctx: restate.workflow.SharedWfContext): Promise<string> => {
-    return ctx.promise<string>("name_promise").promise();
+    return ctx.promise<string>("name_promise");
   },
 });
 
