@@ -32,7 +32,7 @@ export function encodeMessage(msg: Message): Uint8Array {
   return encodeMessages([msg]);
 }
 
-export function encodeMessages(messages: Message[]): Uint8Array {
+export function encodeMessages(messages: Message[]): Buffer {
   const offsets = [];
   const headers = [];
   let off = 0;
@@ -62,7 +62,13 @@ export function encodeMessages(messages: Message[]): Uint8Array {
     const header64 = header.toU64be();
     headers.push(header64);
   }
-  const buffer = writer.finish() as Buffer;
+  const array = writer.finish();
+  let buffer: Buffer;
+  if (array instanceof Buffer) {
+    buffer = array;
+  } else {
+    buffer = Buffer.from(array);
+  }
   for (let i = 0; i < offsets.length; i++) {
     const offset = offsets[i];
     const header = headers[i];

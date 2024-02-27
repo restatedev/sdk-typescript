@@ -1,6 +1,6 @@
 {
   "name": "@restatedev/restate-sdk",
-  "version": "0.7.0",
+  "version": "0.7.3-worker",
   "description": "Typescript SDK for Restate",
   "engines": {
     "node": ">= 10"
@@ -24,7 +24,7 @@
     "@restatedev:registry": "https://registry.npmjs.org"
   },
   "type": "commonjs",
-  "main": "dist/public_api.js",
+  "main": "dist/cloudflare_bundle.js",
   "types": "dist/public_api.d.ts",
   "author": "Restate Developers",
   "license": "MIT",
@@ -32,6 +32,7 @@
   "scripts": {
     "proto": "npx buf mod update && npx buf generate",
     "build": "tsc --noEmitOnError",
+    "build-worker": "tsc --emitDeclarationOnly --noEmitOnError && node build-worker.mjs",
     "test": "jest --silent --maxWorkers=1",
     "lint": "eslint --ignore-path .eslintignore --ext .ts .",
     "format": "prettier --ignore-path .eslintignore --write \"**/*.+(js|ts|json)\"",
@@ -62,7 +63,10 @@
     "ts-jest": "^29.0.5",
     "ts-node-dev": "^2.0.0",
     "typescript": "^4.9.5",
-    "express": "*"
+    "express": "*",
+    "esbuild": "^0.20.1",
+    "@esbuild-plugins/node-globals-polyfill": "^0.2.3",
+    "@esbuild-plugins/node-modules-polyfill": "^0.2.2"
   },
   "bugs": {
     "url": "https://github.com/restatedev/sdk-typescript/issues"
