@@ -17,7 +17,8 @@
   "main": "dist/public_api.js",
   "types": "dist/public_api.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "src"
   ],
   "scripts": {
     "proto": "npx buf mod update && npx buf generate",
