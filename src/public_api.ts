@@ -37,7 +37,12 @@ export {
   RestateEndpoint,
 } from "./endpoint";
 export * as RestateUtils from "./utils/public_utils";
-export { ErrorCodes, RestateError, TerminalError } from "./types/errors";
+export {
+  ErrorCodes,
+  RestateError,
+  TerminalError,
+  TimeoutError,
+} from "./types/errors";
 export { Event } from "./types/types";
 export {
   RestateConnection,
