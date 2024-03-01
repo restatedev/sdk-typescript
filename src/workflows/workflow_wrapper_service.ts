@@ -69,7 +69,7 @@ class SharedContextImpl implements wf.SharedWfContext {
       });
     };
 
-    const fail = (errorMsg: string) => {
+    const reject = (errorMsg: string) => {
       this.ctx.send(this.stateServiceApi).completePromise(this.wfId, {
         promiseName: name,
         completion: { error: errorMsg },
@@ -83,8 +83,8 @@ class SharedContextImpl implements wf.SharedWfContext {
       resolve: {
         value: resolve.bind(this),
       },
-      fail: {
-        value: fail.bind(this),
+      reject: {
+        value: reject.bind(this),
       },
     }) as wf.DurablePromise<T>;
   }

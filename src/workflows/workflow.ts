@@ -103,7 +103,7 @@ export type DurablePromise<T> = restate.CombineablePromise<T> & {
   peek(): Promise<T | null>;
 
   resolve(value?: T): void;
-  fail(errorMsg: string): void;
+  reject(errorMsg: string): void;
 };
 
 /**
