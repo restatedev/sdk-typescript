@@ -15,6 +15,7 @@ import {
   APIGatewayProxyEventV2,
   APIGatewayProxyResult,
   APIGatewayProxyResultV2,
+  Context,
 } from "aws-lambda";
 import {
   ProtocolMode,
@@ -44,7 +45,8 @@ export class LambdaHandler {
    * This is the main request handling method, effectively a typed variant of `create()`.
    */
   async handleRequest(
-    event: APIGatewayProxyEvent | APIGatewayProxyEventV2
+    event: APIGatewayProxyEvent | APIGatewayProxyEventV2,
+    context: Context
   ): Promise<APIGatewayProxyResult | APIGatewayProxyResultV2> {
     let path;
     if ("path" in event) {
@@ -69,7 +71,7 @@ export class LambdaHandler {
       pathSegments[pathSegments.length - 3] === "invoke"
     ) {
       const url = "/" + pathSegments.slice(-3).join("/");
-      return await this.handleInvoke(url, event);
+      return await this.handleInvoke(url, event, context);
     } else if (pathSegments[pathSegments.length - 1] === "discover") {
       return this.handleDiscovery();
     } else {
@@ -81,7 +83,8 @@ export class LambdaHandler {
 
   private async handleInvoke(
     url: string,
-    event: APIGatewayProxyEvent | APIGatewayProxyEventV2
+    event: APIGatewayProxyEvent | APIGatewayProxyEventV2,
+    context: Context
   ): Promise<APIGatewayProxyResult | APIGatewayProxyResultV2> {
     try {
       const method = this.endpoint.methodByUrl(url);
@@ -120,7 +123,7 @@ export class LambdaHandler {
         ProtocolMode.REQUEST_RESPONSE,
         method.method.keyedContext,
         invocation.inferLoggerContext({
-          AWSRequestId: event.requestContext.requestId,
+          AWSRequestId: context.awsRequestId,
         })
       );
       await stateMachine.invoke();

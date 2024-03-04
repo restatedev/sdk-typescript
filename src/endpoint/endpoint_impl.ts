@@ -126,7 +126,7 @@ export class EndpointImpl implements RestateEndpoint {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  lambdaHandler(): (event: any) => Promise<any> {
+  lambdaHandler(): (event: any, ctx: any) => Promise<any> {
     const handler = new LambdaHandler(this);
     return handler.handleRequest.bind(handler);
   }

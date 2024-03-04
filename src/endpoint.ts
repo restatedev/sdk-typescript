@@ -152,7 +152,7 @@ export interface RestateEndpoint {
    * @returns The invocation handler function for to be called by AWS Lambda.
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  lambdaHandler(): (event: any) => Promise<any>;
+  lambdaHandler(): (event: any, ctx: any) => Promise<any>;
 
   /**
    * Serve this Restate Endpoint as HTTP2 server, listening to the given port.
