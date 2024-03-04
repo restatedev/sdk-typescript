@@ -135,7 +135,7 @@ describe("LambdaGreeter", () => {
         getStateMessage("STATE", "Foo"),
       ])
     );
-    const result = await handler(request);
+    const result = await handler(request, {});
 
     expect(result.statusCode).toStrictEqual(200);
     expect(result.headers).toStrictEqual({
@@ -156,7 +156,7 @@ describe("LambdaGreeter", () => {
       "application/restate",
       serializeMessages([startMessage(1), inputMessage(greetRequest("Pete"))])
     );
-    const result = await handler(request);
+    const result = await handler(request, {});
 
     expect(result.statusCode).toStrictEqual(500);
     expect(result.headers).toStrictEqual({
@@ -177,7 +177,7 @@ describe("LambdaGreeter", () => {
       "application/restate",
       serializeMessages([startMessage(1), inputMessage(greetRequest("Pete"))])
     );
-    const result = await handler(request);
+    const result = await handler(request, {});
 
     expect(result.statusCode).toStrictEqual(500);
     expect(result.headers).toStrictEqual({
@@ -197,7 +197,7 @@ describe("LambdaGreeter", () => {
       "application/restate",
       serializeMessages([startMessage(1), inputMessage(greetRequest("Pete"))])
     );
-    const result = await handler(request);
+    const result = await handler(request, {});
 
     expect(result.statusCode).toStrictEqual(500);
     expect(result.headers).toStrictEqual({
@@ -217,7 +217,7 @@ describe("LambdaGreeter", () => {
       "application/restate",
       serializeMessages([startMessage(1), inputMessage(greetRequest("Pete"))])
     );
-    const result = await handler(request);
+    const result = await handler(request, {});
 
     expect(result.statusCode).toStrictEqual(404);
     expect(result.headers).toStrictEqual({
@@ -241,7 +241,7 @@ describe("LambdaGreeter", () => {
       discoverRequest
     );
 
-    const result = await handler(request);
+    const result = await handler(request, {});
 
     expect(result.statusCode).toStrictEqual(200);
     expect(result.headers).toStrictEqual({
