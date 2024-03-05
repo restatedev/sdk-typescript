@@ -142,19 +142,3 @@ export class Header {
     return res;
   }
 }
-
-export class Event {
-  constructor(
-    readonly key: string,
-    readonly payload: Buffer,
-    readonly attributes: Record<string, string>
-  ) {}
-
-  public json<T>(): T {
-    return JSON.parse(this.payload.toString("utf-8")) as T;
-  }
-
-  public body(): Uint8Array {
-    return this.payload;
-  }
-}

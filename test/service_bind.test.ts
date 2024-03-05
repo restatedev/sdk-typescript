@@ -10,19 +10,21 @@
  */
 
 import {
+  TestDriver,
   TestGreeter,
   TestRequest,
   TestResponse,
-} from "../src/generated/proto/test";
+} from "./testdriver";
 import * as restate from "../src/public_api";
 import { describe } from "@jest/globals";
-import { TestDriver } from "./testdriver";
 import { greetRequest, inputMessage, startMessage } from "./protoutils";
 
 const greeter: TestGreeter = {
   /* eslint-disable @typescript-eslint/no-unused-vars */
-  greet: async (req: TestRequest): Promise<TestResponse> => {
-    restate.useContext(this);
+  greet: async (
+    ctx: restate.ObjectContext,
+    req: TestRequest
+  ): Promise<TestResponse> => {
     return TestResponse.create({ greeting: `Hello` });
   },
 };
@@ -30,7 +32,7 @@ const greeter: TestGreeter = {
 describe("BindService", () => {
   it("should bind object literals", async () => {
     await new TestDriver(greeter, [
-      startMessage(1),
+      startMessage({ knownEntries: 1 }),
       inputMessage(greetRequest("Pete")),
     ]).run();
   });

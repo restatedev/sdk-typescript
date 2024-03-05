@@ -30,10 +30,7 @@
     "verify": "npm run format-check && npm run lint && npm run test && npm run build",
     "release": "release-it",
     "example": "RESTATE_DEBUG_LOGGING=OFF ts-node-dev --transpile-only ./examples/example.ts",
-    "grpcexample": "RESTATE_DEBUG_LOGGING=OFF ts-node-dev --transpile-only ./examples/grpc_example.ts",
-    "workflowexample": "RESTATE_DEBUG_LOGGING=OFF ts-node-dev --transpile-only ./examples/workflow_example.ts",
-    "handlerexample": "RESTATE_DEBUG_LOGGING=OFF ts-node-dev --transpile-only ./examples/handler_example.ts",
-    "expressexample": "RESTATE_DEBUG_LOGGING=OFF ts-node-dev --transpile-only ./examples/embedded_example.ts"
+    "workflowexample": "RESTATE_DEBUG_LOGGING=OFF ts-node-dev --transpile-only ./examples/workflow_example.ts"
   },
   "dependencies": {
     "protobufjs": "^7.2.2",

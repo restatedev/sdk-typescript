@@ -9,10 +9,8 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { TestGreeter, TestResponse } from "../src/generated/proto/test";
-import * as restate from "../src/public_api";
 import { describe, expect } from "@jest/globals";
-import { TestDriver } from "./testdriver";
+import { TestDriver, TestGreeter, TestResponse } from "./testdriver";
 import {
   checkTerminalError,
   END_MESSAGE,
@@ -26,8 +24,6 @@ import {
 
 class Greeter implements TestGreeter {
   async greet(): Promise<TestResponse> {
-    restate.useContext(this);
-
     return TestResponse.create({ greeting: `Hello` });
   }
 }
@@ -35,7 +31,7 @@ class Greeter implements TestGreeter {
 describe("Greeter", () => {
   it("sends message to runtime", async () => {
     const result = await new TestDriver(new Greeter(), [
-      startMessage(1),
+      startMessage({ knownEntries: 1, key: "Pete" }),
       inputMessage(greetRequest("Pete")),
     ]).run();
 
@@ -47,7 +43,7 @@ describe("Greeter", () => {
 
   it("handles replay of output message", async () => {
     const result = await new TestDriver(new Greeter(), [
-      startMessage(2),
+      startMessage({ knownEntries: 2, key: "Pete" }),
       inputMessage(greetRequest("Pete")),
       outputMessage(greetResponse("Hello")),
     ]).run();
@@ -57,7 +53,7 @@ describe("Greeter", () => {
 
   it("fails invocation if input is failed", async () => {
     const result = await new TestDriver(new Greeter(), [
-      startMessage(1),
+      startMessage({ knownEntries: 1 }),
       inputMessage(undefined, failure("Canceled")),
     ]).run();
 

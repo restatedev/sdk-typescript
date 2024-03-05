@@ -13,10 +13,10 @@ as part of long-running processes, or as FaaS (AWS Lambda).
 ```typescript
 // note that there is no failure handling in this example, because the combination of durable execution,
 // communication, and state storage makes this unnecessary here.
-const addToCart = async (ctx: restate.RpcContext, cartId: string /* the key */, ticketId: string) => {
+const addToCart = async (ctx: restateObjectContext,  ticketId: string) => {
   // RPC participates in durable execution, so guaranteed to eventually happen and
   // will never get duplicated. would suspend if the other takes too long
-  const success = await ctx.rpc<ticketApi>({ path: "tickets" }).reserve(ticketId);
+  const success = await ctx.service(ticketApi).reserve(ticketId);
 
   if (success) {
     const cart = (await ctx.get<string[]>("cart")) || []; // gets state 'cart' bound to current cartId
@@ -24,7 +24,7 @@ const addToCart = async (ctx: restate.RpcContext, cartId: string /* the key */, 
     ctx.set("cart", cart);                                // writes state bound to current cartId
 
     // reliable delayed call sent from Restate, which also participaes in durable execution
-    ctx.sendDelayed<cartApi>({path: "cart"}, minutes(15)).expireTicket(ticketId);
+    ctx.objectSendDelayed(cartApi, minutes(15)).expireTicket(ticketId);
   }
   return success;
 }
@@ -33,7 +33,7 @@ const addToCart = async (ctx: restate.RpcContext, cartId: string /* the key */, 
 
 restate
   .createServer()
-  .bindKeyedRouter("cart", restate.keyedRouter({ addToCart, expireTicket }))
+  .object("cart", restate.object({ addToCart, expireTicket }))
   .listen(9080);
 ```
 

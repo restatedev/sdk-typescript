@@ -9,13 +9,13 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
+import * as restate from "../src/public_api";
 import {
+  TestDriver,
+  TestResponse,
   TestGreeter,
   TestRequest,
-  TestResponse,
-} from "../src/generated/proto/test";
-import * as restate from "../src/public_api";
-import { TestDriver } from "./testdriver";
+} from "./testdriver";
 import {
   CLEAR_ALL_STATE_ENTRY_MESSAGE,
   clearStateMessage,
@@ -33,18 +33,16 @@ import {
   startMessage,
   suspensionMessage,
 } from "./protoutils";
-import { ProtocolMode } from "../src/generated/proto/discovery";
+import { ProtocolMode } from "../src/types/discovery";
 
 const input = inputMessage(greetRequest("Two"));
 const COMPLETE_STATE = false;
 
 class GetEmpty implements TestGreeter {
-  async greet(): Promise<TestResponse> {
-    const ctx = restate.useKeyedContext(this);
-
+  async greet(ctx: restate.ObjectContext): Promise<TestResponse> {
     const stateIsEmpty = (await ctx.get<string>("STATE")) === null;
 
-    return TestResponse.create({ greeting: `${stateIsEmpty}` });
+    return { greeting: `${stateIsEmpty}` };
   }
 }
 
@@ -52,7 +50,7 @@ describe("GetEmpty", () => {
   it("handles complete state without key present", async () => {
     const result = await new TestDriver(
       new GetEmpty(),
-      [startMessage(1, COMPLETE_STATE), input],
+      [startMessage({ knownEntries: 1, partialState: COMPLETE_STATE }), input],
       ProtocolMode.BIDI_STREAM
     ).run();
 
@@ -66,7 +64,7 @@ describe("GetEmpty", () => {
   it("handles partial state without key present ", async () => {
     const result = await new TestDriver(
       new GetEmpty(),
-      [startMessage(1), input],
+      [startMessage({ knownEntries: 1 }), input],
       ProtocolMode.BIDI_STREAM
     ).run();
 
@@ -79,7 +77,11 @@ describe("GetEmpty", () => {
   it("handles replay of partial state", async () => {
     const result = await new TestDriver(
       new GetEmpty(),
-      [startMessage(2), input, getStateMessage("STATE", undefined, true)],
+      [
+        startMessage({ knownEntries: 2 }),
+        input,
+        getStateMessage("STATE", undefined, true),
+      ],
       ProtocolMode.BIDI_STREAM
     ).run();
 
@@ -91,9 +93,7 @@ describe("GetEmpty", () => {
 });
 
 class Get implements TestGreeter {
-  async greet(): Promise<TestResponse> {
-    const ctx = restate.useKeyedContext(this);
-
+  async greet(ctx: restate.ObjectContext): Promise<TestResponse> {
     const state = (await ctx.get<string>("STATE")) || "nothing";
 
     return TestResponse.create({ greeting: state });
@@ -104,7 +104,14 @@ describe("Get", () => {
   it("handles complete state with key present", async () => {
     const result = await new TestDriver(
       new Get(),
-      [startMessage(1, COMPLETE_STATE, [keyVal("STATE", "One")]), input],
+      [
+        startMessage({
+          knownEntries: 1,
+          partialState: COMPLETE_STATE,
+          state: [keyVal("STATE", "One")],
+        }),
+        input,
+      ],
       ProtocolMode.BIDI_STREAM
     ).run();
 
@@ -118,7 +125,10 @@ describe("Get", () => {
   it("handles partial state with key present ", async () => {
     const result = await new TestDriver(
       new Get(),
-      [startMessage(1, undefined, [keyVal("STATE", "One")]), input],
+      [
+        startMessage({ knownEntries: 1, state: [keyVal("STATE", "One")] }),
+        input,
+      ],
       ProtocolMode.BIDI_STREAM
     ).run();
 
@@ -132,7 +142,7 @@ describe("Get", () => {
   it("handles partial state without key present", async () => {
     const result = await new TestDriver(
       new Get(),
-      [startMessage(2), input],
+      [startMessage({ knownEntries: 2 }), input],
       ProtocolMode.BIDI_STREAM
     ).run();
 
@@ -144,9 +154,10 @@ describe("Get", () => {
 });
 
 class GetAppendAndGet implements TestGreeter {
-  async greet(request: TestRequest): Promise<TestResponse> {
-    const ctx = restate.useKeyedContext(this);
-
+  async greet(
+    ctx: restate.ObjectContext,
+    request: TestRequest
+  ): Promise<TestResponse> {
     const oldState = (await ctx.get<string>("STATE")) || "nothing";
     ctx.set("STATE", oldState + request.name);
     const newState = (await ctx.get<string>("STATE")) || "nothing";
@@ -159,7 +170,14 @@ describe("GetAppendAndGet", () => {
   it("handles complete state with key present", async () => {
     const result = await new TestDriver(
       new GetAppendAndGet(),
-      [startMessage(1, COMPLETE_STATE, [keyVal("STATE", "One")]), input],
+      [
+        startMessage({
+          knownEntries: 1,
+          partialState: COMPLETE_STATE,
+          state: [keyVal("STATE", "One")],
+        }),
+        input,
+      ],
       ProtocolMode.BIDI_STREAM
     ).run();
 
@@ -175,7 +193,11 @@ describe("GetAppendAndGet", () => {
   it("handles partial state with key not present ", async () => {
     const result = await new TestDriver(
       new GetAppendAndGet(),
-      [startMessage(1), input, completionMessage(1, JSON.stringify("One"))],
+      [
+        startMessage({ knownEntries: 1 }),
+        input,
+        completionMessage(1, JSON.stringify("One")),
+      ],
       ProtocolMode.BIDI_STREAM
     ).run();
 
@@ -190,9 +212,7 @@ describe("GetAppendAndGet", () => {
 });
 
 class GetClearAndGet implements TestGreeter {
-  async greet(): Promise<TestResponse> {
-    const ctx = restate.useKeyedContext(this);
-
+  async greet(ctx: restate.ObjectContext): Promise<TestResponse> {
     const oldState = (await ctx.get<string>("STATE")) || "not-nothing";
     ctx.clear("STATE");
     const newState = (await ctx.get<string>("STATE")) || "nothing";
@@ -205,7 +225,14 @@ describe("GetClearAndGet", () => {
   it("handles complete state with key present", async () => {
     const result = await new TestDriver(
       new GetClearAndGet(),
-      [startMessage(1, COMPLETE_STATE, [keyVal("STATE", "One")]), input],
+      [
+        startMessage({
+          knownEntries: 1,
+          partialState: COMPLETE_STATE,
+          state: [keyVal("STATE", "One")],
+        }),
+        input,
+      ],
       ProtocolMode.BIDI_STREAM
     ).run();
 
@@ -221,7 +248,11 @@ describe("GetClearAndGet", () => {
   it("handles partial state with key not present ", async () => {
     const result = await new TestDriver(
       new GetClearAndGet(),
-      [startMessage(1), input, completionMessage(1, JSON.stringify("One"))],
+      [
+        startMessage({ knownEntries: 1 }),
+        input,
+        completionMessage(1, JSON.stringify("One")),
+      ],
       ProtocolMode.BIDI_STREAM
     ).run();
 
@@ -236,9 +267,7 @@ describe("GetClearAndGet", () => {
 });
 
 class MultipleGet implements TestGreeter {
-  async greet(): Promise<TestResponse> {
-    const ctx = restate.useKeyedContext(this);
-
+  async greet(ctx: restate.ObjectContext): Promise<TestResponse> {
     const state = (await ctx.get<string>("STATE")) || "nothing";
     const state1 = (await ctx.get<string>("STATE")) || "nothing";
     const state2 = (await ctx.get<string>("STATE")) || "nothing";
@@ -253,7 +282,7 @@ describe("MultipleGet", () => {
   it("handles multiple gets with partial state not present with completion", async () => {
     const result = await new TestDriver(
       new MultipleGet(),
-      [startMessage(), input, completionMessage(1, JSON.stringify("One"))],
+      [startMessage({}), input, completionMessage(1, JSON.stringify("One"))],
       ProtocolMode.BIDI_STREAM
     ).run();
 
@@ -270,7 +299,7 @@ describe("MultipleGet", () => {
   it("handles multiple gets with partial state not present with replay", async () => {
     const result = await new TestDriver(
       new MultipleGet(),
-      [startMessage(), input, getStateMessage("STATE", "One")],
+      [startMessage({}), input, getStateMessage("STATE", "One")],
       ProtocolMode.BIDI_STREAM
     ).run();
 
@@ -285,9 +314,7 @@ describe("MultipleGet", () => {
 });
 
 class GetClearAllThenGet implements TestGreeter {
-  async greet(): Promise<TestResponse> {
-    const ctx = restate.useKeyedContext(this);
-
+  async greet(ctx: restate.ObjectContext): Promise<TestResponse> {
     const state1 = (await ctx.get<string>("STATE")) || "nothing";
     const state2 = (await ctx.get<string>("ANOTHER_STATE")) || "nothing";
 
@@ -307,8 +334,12 @@ describe("GetClearAllThenGet", () => {
     const result = await new TestDriver(
       new GetClearAllThenGet(),
       [
-        startMessage(1, false, [keyVal("STATE", "One")]),
-        inputMessage(greetRequest("")),
+        startMessage({
+          knownEntries: 1,
+          partialState: false,
+          state: [keyVal("STATE", "One")],
+        }),
+        inputMessage(greetRequest("bob")),
       ],
       ProtocolMode.REQUEST_RESPONSE
     ).run();
@@ -329,8 +360,12 @@ describe("GetClearAllThenGet", () => {
 
   it("with lazy state in the eager state map", async () => {
     const result = await new TestDriver(new GetClearAllThenGet(), [
-      startMessage(1, true, [keyVal("STATE", "One")]),
-      inputMessage(greetRequest("")),
+      startMessage({
+        knownEntries: 1,
+        partialState: true,
+        state: [keyVal("STATE", "One")],
+      }),
+      inputMessage(greetRequest("bob")),
       completionMessageWithEmpty(2),
     ]).run();
 

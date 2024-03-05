@@ -17,10 +17,6 @@ import {
   APIGatewayProxyResultV2,
   Context,
 } from "aws-lambda";
-import {
-  ProtocolMode,
-  ServiceDiscoveryResponse,
-} from "../generated/proto/discovery";
 import { EndpointImpl } from "./endpoint_impl";
 import { LambdaConnection } from "../connection/lambda_connection";
 import { InvocationBuilder } from "../invocation";
@@ -29,15 +25,16 @@ import { Message } from "../types/types";
 import { StateMachine } from "../state_machine";
 import { ensureError } from "../types/errors";
 import { OUTPUT_STREAM_ENTRY_MESSAGE_TYPE } from "../types/protocol";
+import { ProtocolMode } from "../types/discovery";
+import {
+  ComponentHandler,
+  UrlPathComponents,
+  VirtualObjectHandler,
+  parseUrlComponents,
+} from "../types/components";
 
 export class LambdaHandler {
-  private readonly discoveryResponse: ServiceDiscoveryResponse;
-  constructor(private readonly endpoint: EndpointImpl) {
-    this.discoveryResponse = ServiceDiscoveryResponse.fromPartial({
-      ...this.endpoint.discovery,
-      protocolMode: ProtocolMode.REQUEST_RESPONSE,
-    });
-  }
+  constructor(private readonly endpoint: EndpointImpl) {}
 
   // --------------------------------------------------------------------------
 
@@ -48,65 +45,44 @@ export class LambdaHandler {
     event: APIGatewayProxyEvent | APIGatewayProxyEventV2,
     context: Context
   ): Promise<APIGatewayProxyResult | APIGatewayProxyResultV2> {
-    let path;
-    if ("path" in event) {
-      // V1
-      path = event.path;
-    } else {
-      // V2
-      path = event.rawPath;
-    }
-    const pathSegments = path.split("/");
-
-    // API Gateway can add a prefix to the path based on the name of the Lambda function and deployment stage
-    // (e.g. /default)
-    // So we only check the ending of the path on correctness.
-    // Logic:
-    // 1. Check whether there are at least three segments in the path and whether the third-last one is "invoke".
-    // If that is the case, treat it as an invocation.
-    // 2. See if the last one is "discover", answer with discovery.
-    // 3. Else report "invalid path".
-    if (
-      pathSegments.length >= 3 &&
-      pathSegments[pathSegments.length - 3] === "invoke"
-    ) {
-      const url = "/" + pathSegments.slice(-3).join("/");
-      return await this.handleInvoke(url, event, context);
-    } else if (pathSegments[pathSegments.length - 1] === "discover") {
-      return this.handleDiscovery();
-    } else {
+    const path = "path" in event ? event.path : event.rawPath;
+    const parsed = parseUrlComponents(path);
+    if (!parsed) {
       const msg = `Invalid path: path doesn't end in /invoke/SvcName/MethodName and also not in /discover: ${path}`;
       rlog.trace(msg);
-      return this.toErrorResponse(500, msg);
+      return this.toErrorResponse(404, msg);
     }
+    if (parsed === "discovery") {
+      return this.handleDiscovery();
+    }
+    const parsedUrl = parsed as UrlPathComponents;
+    const method = this.endpoint.componentByName(parsedUrl.componentName);
+    if (!method) {
+      const msg = `No service found for URL: ${parsedUrl}`;
+      rlog.error(msg);
+      return this.toErrorResponse(404, msg);
+    }
+    const handler = method?.handlerMatching(parsedUrl);
+    if (!handler) {
+      const msg = `No service found for URL: ${parsedUrl}`;
+      rlog.error(msg);
+      return this.toErrorResponse(404, msg);
+    }
+    if (!event.body) {
+      throw new Error("The incoming message body was null");
+    }
+    return this.handleInvoke(handler, event.body, context);
   }
 
   private async handleInvoke(
-    url: string,
-    event: APIGatewayProxyEvent | APIGatewayProxyEventV2,
+    handler: ComponentHandler,
+    body: string,
     context: Context
   ): Promise<APIGatewayProxyResult | APIGatewayProxyResultV2> {
     try {
-      const method = this.endpoint.methodByUrl(url);
-      if (event.body == null) {
-        throw new Error("The incoming message body was null");
-      }
-
-      if (method === undefined) {
-        if (url.includes("?")) {
-          throw new Error(
-            `Invalid path: path URL seems to include query parameters: ${url}`
-          );
-        } else {
-          const msg = `No service found for URL: ${url}`;
-          rlog.error(msg);
-          return this.toErrorResponse(404, msg);
-        }
-      }
-
       // build the previous journal from the events
-      let decodedEntries: Message[] | null = decodeLambdaBody(event.body);
-      const journalBuilder = new InvocationBuilder(method);
+      let decodedEntries: Message[] | null = decodeLambdaBody(body);
+      const journalBuilder = new InvocationBuilder(handler);
       decodedEntries.forEach((e: Message) => journalBuilder.handleMessage(e));
       const alreadyCompleted =
         decodedEntries.find(
@@ -121,7 +97,7 @@ export class LambdaHandler {
         connection,
         invocation,
         ProtocolMode.REQUEST_RESPONSE,
-        method.method.keyedContext,
+        handler instanceof VirtualObjectHandler,
         invocation.inferLoggerContext({
           AWSRequestId: context.awsRequestId,
         })
@@ -146,20 +122,17 @@ export class LambdaHandler {
   }
 
   private handleDiscovery(): APIGatewayProxyResult | APIGatewayProxyResultV2 {
-    // return discovery information
-    rlog.info(
-      "Answering discovery request. Announcing services: " +
-        JSON.stringify(this.discoveryResponse.services)
-    );
+    const disocvery = this.endpoint.computeDiscovery();
+    const discoveryJson = JSON.stringify(disocvery);
+    const body = Buffer.from(discoveryJson).toString("base64");
+
     return {
       headers: {
-        "content-type": "application/proto",
+        "content-type": "application/json",
       },
       statusCode: 200,
       isBase64Encoded: true,
-      body: encodeResponse(
-        ServiceDiscoveryResponse.encode(this.discoveryResponse).finish()
-      ),
+      body,
     };
   }
 

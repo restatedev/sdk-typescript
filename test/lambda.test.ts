@@ -11,17 +11,7 @@
 
 import { describe, expect } from "@jest/globals";
 import * as restate from "../src/public_api";
-import {
-  protoMetadata,
-  TestEmpty,
-  TestGreeter,
-  TestResponse,
-} from "../src/generated/proto/test";
 import { APIGatewayProxyEvent } from "aws-lambda";
-import {
-  ServiceDiscoveryRequest,
-  ServiceDiscoveryResponse,
-} from "../src/generated/proto/discovery";
 import { encodeMessage } from "../src/io/encoder";
 import { Message } from "../src/types/types";
 import {
@@ -35,12 +25,14 @@ import {
   startMessage,
 } from "./protoutils";
 import { decodeLambdaBody } from "../src/io/decoder";
-import { Empty } from "../src/generated/google/protobuf/empty";
+import { TestGreeter, TestResponse } from "./testdriver";
+import { ComponentType, Deployment } from "../src/types/discovery";
 
 class LambdaGreeter implements TestGreeter {
-  async greet(): Promise<TestResponse> {
-    const ctx = restate.useKeyedContext(this);
-
+  async greet(
+    ctx: restate.ObjectContext
+    /*req: TestRequest */
+  ): Promise<TestResponse> {
     // state
     const state = (await ctx.get<string>("STATE")) || "nobody";
 
@@ -51,7 +43,7 @@ class LambdaGreeter implements TestGreeter {
 describe("Lambda: decodeMessage", () => {
   it("returns a list of decoded messages", async () => {
     const messages: Message[] = [
-      startMessage(2),
+      startMessage({ knownEntries: 2 }),
       inputMessage(greetRequest("Pete")),
       getStateMessage("STATE", "Foo"),
     ];
@@ -64,12 +56,8 @@ describe("Lambda: decodeMessage", () => {
 
   it("returns a list of decoded messages when last message body is empty", async () => {
     const messages: Message[] = [
-      startMessage(2),
-      inputMessage(
-        TestEmpty.encode(
-          TestEmpty.create({ greeting: Empty.create({}) })
-        ).finish()
-      ),
+      startMessage({ knownEntries: 2 }),
+      inputMessage(Buffer.alloc(0)),
     ];
     const serializedMsgs = serializeMessages(messages);
 
@@ -80,7 +68,7 @@ describe("Lambda: decodeMessage", () => {
 
   it("returns a list of decoded messages when last message body is empty", async () => {
     const messages: Message[] = [
-      startMessage(2),
+      startMessage({ knownEntries: 2 }),
       inputMessage(greetRequest("Pete")),
       awakeableMessage(),
     ];
@@ -93,7 +81,7 @@ describe("Lambda: decodeMessage", () => {
 
   it("fails on an invalid input message with random signs at end of message", async () => {
     const messages: Message[] = [
-      startMessage(2),
+      startMessage({ knownEntries: 2 }),
       inputMessage(greetRequest("Pete")),
       getStateMessage("STATE", "Fooo"),
     ];
@@ -108,7 +96,7 @@ describe("Lambda: decodeMessage", () => {
 
   it("fails on an invalid input message with random signs in front of message", async () => {
     const messages: Message[] = [
-      startMessage(2),
+      startMessage({ knownEntries: 2 }),
       inputMessage(greetRequest("Pete")),
       getStateMessage("STATE", "Fooo"),
     ];
@@ -127,10 +115,10 @@ describe("LambdaGreeter", () => {
     const handler = getTestHandler();
 
     const request = apiProxyGatewayEvent(
-      "/invoke/test.TestGreeter/Greet",
+      "/invoke/greeter/greet",
       "application/restate",
       serializeMessages([
-        startMessage(2),
+        startMessage({ knownEntries: 2, key: "Pete" }),
         inputMessage(greetRequest("Pete")),
         getStateMessage("STATE", "Foo"),
       ])
@@ -148,74 +136,16 @@ describe("LambdaGreeter", () => {
     ]);
   });
 
-  it("fails on query parameters in path", async () => {
-    const handler = getTestHandler();
-
-    const request = apiProxyGatewayEvent(
-      "/invoke/test.TestGreeter/Greet?count=5",
-      "application/restate",
-      serializeMessages([startMessage(1), inputMessage(greetRequest("Pete"))])
-    );
-    const result = await handler(request, {});
-
-    expect(result.statusCode).toStrictEqual(500);
-    expect(result.headers).toStrictEqual({
-      "content-type": "application/restate",
-    });
-    expect(result.isBase64Encoded).toStrictEqual(true);
-    expect(Buffer.from(result.body, "base64").toString()).toContain(
-      "" +
-        "Invalid path: path URL seems to include query parameters: /invoke/test.TestGreeter/Greet?count=5"
-    );
-  });
-
   it("fails on invalid path", async () => {
     const handler = getTestHandler();
 
     const request = apiProxyGatewayEvent(
-      "/invoke/test.TestGreeter",
+      "/invoke/greeter",
       "application/restate",
-      serializeMessages([startMessage(1), inputMessage(greetRequest("Pete"))])
-    );
-    const result = await handler(request, {});
-
-    expect(result.statusCode).toStrictEqual(500);
-    expect(result.headers).toStrictEqual({
-      "content-type": "application/restate",
-    });
-    expect(result.isBase64Encoded).toStrictEqual(true);
-    expect(Buffer.from(result.body, "base64").toString()).toContain(
-      "Invalid path: path doesn't end in /invoke/SvcName/MethodName and also not in /discover: /invoke/test.TestGreeter"
-    );
-  });
-
-  it("fails on invalid path no 'invoke' or 'discover'", async () => {
-    const handler = getTestHandler();
-
-    const request = apiProxyGatewayEvent(
-      "/something/test.TestGreeter/Greet",
-      "application/restate",
-      serializeMessages([startMessage(1), inputMessage(greetRequest("Pete"))])
-    );
-    const result = await handler(request, {});
-
-    expect(result.statusCode).toStrictEqual(500);
-    expect(result.headers).toStrictEqual({
-      "content-type": "application/restate",
-    });
-    expect(result.isBase64Encoded).toStrictEqual(true);
-    expect(Buffer.from(result.body, "base64").toString()).toContain(
-      "Invalid path: path doesn't end in /invoke/SvcName/MethodName and also not in /discover: /something/test.TestGreeter/Greet"
-    );
-  });
-
-  it("fails on invalid path non-existing URL", async () => {
-    const handler = getTestHandler();
-
-    const request = apiProxyGatewayEvent(
-      "/invoke/test.TestGreeter/Greets",
-      "application/restate",
-      serializeMessages([startMessage(1), inputMessage(greetRequest("Pete"))])
+      serializeMessages([
+        startMessage({ knownEntries: 1 }),
+        inputMessage(greetRequest("Pete")),
+      ])
     );
     const result = await handler(request, {});
 
@@ -224,42 +154,71 @@ describe("LambdaGreeter", () => {
       "content-type": "application/restate",
     });
     expect(result.isBase64Encoded).toStrictEqual(true);
-    expect(Buffer.from(result.body, "base64").toString()).toContain(
-      "No service found for URL: /invoke/test.TestGreeter/Greets"
+  });
+
+  it("fails on invalid path no 'invoke' or 'discover'", async () => {
+    const handler = getTestHandler();
+
+    const request = apiProxyGatewayEvent(
+      "/something/greeter/greet",
+      "application/restate",
+      serializeMessages([
+        startMessage({ knownEntries: 1 }),
+        inputMessage(greetRequest("Pete")),
+      ])
     );
+    const result = await handler(request, {});
+
+    expect(result.statusCode).toStrictEqual(404);
+    expect(result.headers).toStrictEqual({
+      "content-type": "application/restate",
+    });
+  });
+
+  it("fails on invalid path non-existing URL", async () => {
+    const handler = getTestHandler();
+
+    const request = apiProxyGatewayEvent(
+      "/invoke/greeter/greets",
+      "application/restate",
+      serializeMessages([
+        startMessage({ knownEntries: 1 }),
+        inputMessage(greetRequest("Pete")),
+      ])
+    );
+    const result = await handler(request, {});
+
+    expect(result.statusCode).toStrictEqual(404);
+    expect(result.headers).toStrictEqual({
+      "content-type": "application/restate",
+    });
   });
 
   it("handles discovery", async () => {
     const handler = getTestHandler();
 
-    const discoverRequest = Buffer.from(
-      ServiceDiscoveryRequest.encode(ServiceDiscoveryRequest.create()).finish()
-    ).toString("base64");
     const request: APIGatewayProxyEvent = apiProxyGatewayEvent(
       "/discover",
-      "application/proto",
-      discoverRequest
+      "application/json",
+      Buffer.alloc(0).toString("base64")
     );
 
     const result = await handler(request, {});
 
     expect(result.statusCode).toStrictEqual(200);
     expect(result.headers).toStrictEqual({
-      "content-type": "application/proto",
+      "content-type": "application/json",
     });
     expect(result.isBase64Encoded).toStrictEqual(true);
 
-    const decodedResponse = ServiceDiscoveryResponse.decode(
-      Buffer.from(result.body, "base64")
+    const decodedResponse: Deployment = JSON.parse(
+      Buffer.from(result.body, "base64").toString("utf8")
     );
-
-    expect(decodedResponse.services).toContain("test.TestGreeter");
-    expect(decodedResponse.files?.file.map((el) => el.name)).toEqual(
-      expect.arrayContaining([
-        "dev/restate/ext.proto",
-        "google/protobuf/descriptor.proto",
-        "proto/test.proto",
-      ])
+    expect(
+      decodedResponse.components[0].fullyQualifiedComponentName
+    ).toStrictEqual("greeter");
+    expect(decodedResponse.components[0].componentType).toEqual(
+      ComponentType.VIRTUAL_OBJECT
     );
   });
 });
@@ -267,11 +226,14 @@ describe("LambdaGreeter", () => {
 function getTestHandler() {
   return restate
     .endpoint()
-    .bindService({
-      descriptor: protoMetadata,
-      service: "TestGreeter",
-      instance: new LambdaGreeter(),
-    })
+    .object(
+      "greeter",
+      restate.object({
+        // eslint-disable @typescript-eslint/no-unused-vars
+        greet: (ctx: restate.ObjectContext) =>
+          new LambdaGreeter().greet(ctx /*req*/),
+      })
+    )
     .lambdaHandler();
 }
 

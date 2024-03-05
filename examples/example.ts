@@ -9,30 +9,18 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-/*
- * A simple example program using the Restate dynamic RPC-based API.
- *
- * This example primarily exists to make it simple to test the code against
- * a running Restate instance.
- */
-
 import * as restate from "../src/public_api";
 
-//
-// The main entry point for the service, receiving the greeting request and name.
-//
-const greeter = restate.router({
+const greeter = restate.service({
   greet: async (ctx: restate.Context, name: string) => {
     // blocking RPC call to a keyed service (here supplying type and path separately)
-    const countSoFar = await ctx
-      .rpc<counterApiType>({ path: "counter" })
-      .count(name);
+    const countSoFar = await ctx.object(counterApi, name).count();
 
     const message = `Hello ${name}, for the ${countSoFar + 1}th time!`;
 
     // sending messages to ourselves, immediately and delayed
-    ctx.send(greeterApi).logger(message);
-    ctx.sendDelayed(greeterApi, 100).logger("delayed " + message);
+    ctx.serviceSend(greeterApi).logger(message);
+    ctx.serviceSendDelayed(greeterApi, 100).logger("delayed " + message);
 
     return message;
   },
@@ -47,21 +35,21 @@ const greeter = restate.router({
 // This could in principle be the same service as the greet service, we just separate
 // them here to have this multi-service setup for testing.
 //
-const counter = restate.keyedRouter({
-  count: async (ctx: restate.KeyedContext): Promise<number> => {
+const counter = restate.object({
+  count: async (ctx: restate.ObjectContext): Promise<number> => {
     const seen = (await ctx.get<number>("seen")) ?? 0;
     ctx.set("seen", seen + 1);
     return seen;
   },
 });
 
-const greeterApi: restate.ServiceApi<typeof greeter> = { path: "greeter" };
-type counterApiType = typeof counter;
+const greeterApi = restate.serviceApi("greeter", greeter);
+const counterApi = restate.objectApi("counter", counter);
 
 // restate server
 
 restate
   .endpoint()
-  .bindRouter("greeter", greeter)
-  .bindKeyedRouter("counter", counter)
+  .service(greeterApi.path, greeter)
+  .object(counterApi.path, counter)
   .listen(9080);

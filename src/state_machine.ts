@@ -12,7 +12,6 @@
 import * as p from "./types/protocol";
 import { ContextImpl } from "./context_impl";
 import { Connection, RestateStreamConsumer } from "./connection/connection";
-import { ProtocolMode } from "./generated/proto/discovery";
 import { Message } from "./types/types";
 import {
   createStateMachineConsole,
@@ -54,9 +53,10 @@ import {
   PromiseType,
 } from "./promise_combinator_tracker";
 import { CombinatorEntryMessage } from "./generated/proto/javascript";
+import { ProtocolMode } from "./types/discovery";
 
-export class StateMachine<I, O> implements RestateStreamConsumer {
-  private journal: Journal<I, O>;
+export class StateMachine implements RestateStreamConsumer {
+  private journal: Journal;
   private restateContext: ContextImpl;
 
   private readonly invocationComplete = new CompletablePromise<Buffer | void>();
@@ -84,7 +84,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
 
   constructor(
     private readonly connection: Connection,
-    private readonly invocation: Invocation<I, O>,
+    private readonly invocation: Invocation,
     private readonly protocolMode: ProtocolMode,
     keyedContext: boolean,
     loggerContext: LoggerContext,
@@ -95,10 +95,11 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
 
     this.restateContext = new ContextImpl(
       this.invocation.id,
-      this.invocation.method.service,
+      this.invocation.handler.component().name(),
       // The console exposed by RestateContext filters logs in replay, while the internal one is based on the ENV variables.
       createRestateConsole(loggerContext, () => !this.journal.isReplaying()),
       keyedContext,
+      invocation.userKey,
       this
     );
     this.journal = new Journal(this.invocation);
@@ -339,7 +340,7 @@ export class StateMachine<I, O> implements RestateStreamConsumer {
 
     switch (this.invocation.invocationValue.kind) {
       case "value":
-        resultBytes = this.invocation.method.invoke(
+        resultBytes = this.invocation.handler.invoke(
           this.restateContext,
           this.invocation.invocationValue.value
         );

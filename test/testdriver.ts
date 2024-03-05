@@ -18,44 +18,57 @@ import {
 import { Connection } from "../src/connection/connection";
 import { formatMessageAsJson } from "../src/utils/utils";
 import { Message } from "../src/types/types";
-import { HostedGrpcServiceMethod } from "../src/types/grpc";
-import { ProtocolMode } from "../src/generated/proto/discovery";
 import { rlog } from "../src/logger";
 import { StateMachine } from "../src/state_machine";
 import { InvocationBuilder } from "../src/invocation";
-import { protoMetadata } from "../src/generated/proto/test";
 import { EndpointImpl } from "../src/endpoint/endpoint_impl";
+import { ObjectContext, ServiceApi } from "../src/context";
+import { object } from "../src/public_api";
+import { ProtocolMode } from "../src/types/discovery";
 
-export class TestDriver<I, O> implements Connection {
+export type TestRequest = {
+  name: string;
+};
+
+export type TestResponse = {
+  greeting: string;
+};
+
+export const TestResponse = {
+  create: (test: TestResponse): TestResponse => test,
+};
+
+export type GreetType = {
+  greet: (key: string, arg: TestRequest) => Promise<TestResponse>;
+};
+
+export const GreeterApi: ServiceApi<GreetType> = { path: "greeter" };
+
+export interface TestGreeter {
+  greet(ctx: ObjectContext, message: TestRequest): Promise<TestResponse>;
+}
+
+export class TestDriver implements Connection {
   private readonly result: Message[] = [];
 
   private restateServer: TestRestateServer;
-  private method: HostedGrpcServiceMethod<I, O>;
-  private stateMachine: StateMachine<I, O>;
+  private stateMachine: StateMachine;
   private completionMessages: Message[];
 
   constructor(
-    instance: object,
+    instance: TestGreeter,
     entries: Message[],
     private readonly protocolMode: ProtocolMode = ProtocolMode.BIDI_STREAM
   ) {
     this.restateServer = new TestRestateServer();
-    this.restateServer.bindService({
-      descriptor: protoMetadata,
-      service: "TestGreeter",
-      instance: instance,
+
+    const svc = object({
+      greet: async (ctx: ObjectContext, arg: TestRequest) => {
+        return instance.greet(ctx, arg);
+      },
     });
 
-    const methodName = "/test.TestGreeter/Greet";
-
-    const hostedGrpcServiceMethod: HostedGrpcServiceMethod<I, O> | undefined =
-      this.restateServer.methodByUrl("/invoke" + methodName);
-
-    if (hostedGrpcServiceMethod) {
-      this.method = hostedGrpcServiceMethod;
-    } else {
-      throw new Error("Method not found: " + methodName);
-    }
+    this.restateServer.object(GreeterApi.path, svc);
 
     if (entries.length < 2) {
       throw new Error(
@@ -89,6 +102,7 @@ export class TestDriver<I, O> implements Connection {
         knownEntries: endOfReplay - 1,
         stateMap: startEntry.stateMap,
         partialState: startEntry.partialState,
+        key: startEntry.key,
       }),
       msg.completed,
       msg.protocolVersion,
@@ -122,7 +136,18 @@ export class TestDriver<I, O> implements Connection {
       );
     }
 
-    const invocationBuilder = new InvocationBuilder(this.method);
+    const method = this.restateServer
+      .componentByName("greeter")
+      ?.handlerMatching({
+        componentName: "greeter",
+        handlerName: "greet",
+      });
+
+    if (!method) {
+      throw new Error("Something is wrong with the test setup");
+    }
+
+    const invocationBuilder = new InvocationBuilder(method);
     replayMessages.forEach((el) => invocationBuilder.handleMessage(el));
     const invocation = invocationBuilder.build();
 
@@ -188,10 +213,4 @@ export class TestDriver<I, O> implements Connection {
  * make it simpler for users to understand what methods are relevant for them,
  * and which ones are not.
  */
-class TestRestateServer extends EndpointImpl {
-  public methodByUrl<I, O>(
-    url: string | null | undefined
-  ): HostedGrpcServiceMethod<I, O> | undefined {
-    return super.methodByUrl(url);
-  }
-}
+class TestRestateServer extends EndpointImpl {}

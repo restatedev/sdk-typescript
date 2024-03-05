@@ -11,7 +11,6 @@
 
 import { describe, expect } from "@jest/globals";
 import * as restate from "../src/public_api";
-import { TestDriver } from "./testdriver";
 import {
   awakeableMessage,
   checkJournalMismatchError,
@@ -30,20 +29,17 @@ import {
 } from "./protoutils";
 import { SLEEP_ENTRY_MESSAGE_TYPE } from "../src/types/protocol";
 import { Empty } from "../src/generated/google/protobuf/empty";
-import {
-  TestGreeter,
-  TestRequest,
-  TestResponse,
-} from "../src/generated/proto/test";
-import { ProtocolMode } from "../src/generated/proto/discovery";
+import { TestDriver, TestGreeter, TestResponse } from "./testdriver";
+import { ProtocolMode } from "../src/types/discovery";
 
 const wakeupTime = 1835661783000;
 
 class SleepGreeter implements TestGreeter {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  async greet(request: TestRequest): Promise<TestResponse> {
-    const ctx = restate.useContext(this);
-
+  async greet(
+    ctx: restate.ObjectContext
+    /*request: TestRequest*/
+  ): Promise<TestResponse> {
     await ctx.sleep(wakeupTime - Date.now());
 
     return TestResponse.create({ greeting: `Hello` });
@@ -65,7 +61,7 @@ describe("SleepGreeter", () => {
   it("sends message to runtime for request-response mode", async () => {
     const result = await new TestDriver(
       new SleepGreeter(),
-      [startMessage(1), inputMessage(greetRequest("Till"))],
+      [startMessage({ knownEntries: 1 }), inputMessage(greetRequest("Till"))],
       ProtocolMode.REQUEST_RESPONSE
     ).run();
 
@@ -159,9 +155,7 @@ describe("SleepGreeter", () => {
 });
 
 class ManySleepsGreeter implements TestGreeter {
-  async greet(): Promise<TestResponse> {
-    const ctx = restate.useContext(this);
-
+  async greet(ctx: restate.ObjectContext): Promise<TestResponse> {
     await Promise.all(
       Array.from(Array(5).keys()).map(() => ctx.sleep(wakeupTime - Date.now()))
     );
@@ -261,9 +255,7 @@ describe("ManySleepsGreeter: With sleep not complete", () => {
 });
 
 class ManySleepsAndSetGreeter implements TestGreeter {
-  async greet(): Promise<TestResponse> {
-    const ctx = restate.useKeyedContext(this);
-
+  async greet(ctx: restate.ObjectContext): Promise<TestResponse> {
     const mySleeps = Promise.all(
       Array.from(Array(5).keys()).map(() => ctx.sleep(wakeupTime - Date.now()))
     );

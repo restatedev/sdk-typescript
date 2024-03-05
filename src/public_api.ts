@@ -12,30 +12,23 @@
 export {
   RestateContext,
   Context,
-  KeyedContext,
-  useContext,
-  useKeyedContext,
+  ObjectContext,
   ServiceApi,
+  ObjectApi,
+  serviceApi,
+  objectApi,
   CombineablePromise,
   Rand,
-  RestateGrpcChannel,
 } from "./context";
 export {
-  router,
-  keyedRouter,
-  keyedEventHandler,
-  UnKeyedRouter,
-  KeyedRouter,
-  KeyedEventHandler,
+  service,
+  object,
+  Service,
+  VirtualObject,
   Client,
   SendClient,
-} from "./types/router";
-export {
-  endpoint,
-  ServiceBundle,
-  ServiceOpts,
-  RestateEndpoint,
-} from "./endpoint";
+} from "./types/rpc";
+export { endpoint, ServiceBundle, RestateEndpoint } from "./endpoint";
 export * as RestateUtils from "./utils/public_utils";
 export {
   ErrorCodes,
@@ -43,11 +36,5 @@ export {
   TerminalError,
   TimeoutError,
 } from "./types/errors";
-export { Event } from "./types/types";
-export {
-  RestateConnection,
-  connection,
-  RestateConnectionOptions,
-} from "./embedded/api";
 export * as workflow from "./workflows/workflow";
 export * as clients from "./clients/workflow_client";

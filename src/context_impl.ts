@@ -9,13 +9,7 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import {
-  CombineablePromise,
-  KeyedContext,
-  Rand,
-  RestateGrpcChannel,
-  ServiceApi,
-} from "./context";
+import { CombineablePromise, ObjectContext, Rand, ServiceApi } from "./context";
 import { StateMachine } from "./state_machine";
 import {
   AwakeableEntryMessage,
@@ -62,12 +56,12 @@ import {
   EXPONENTIAL_BACKOFF,
   RetrySettings,
 } from "./utils/public_utils";
-import { Client, SendClient } from "./types/router";
-import { RpcRequest, RpcResponse } from "./generated/proto/dynrpc";
-import { requestFromArgs } from "./utils/assumptions";
+import { Client, SendClient } from "./types/rpc";
 import { RandImpl } from "./utils/rand";
 import { newJournalEntryPromiseId } from "./promise_combinator_tracker";
 import { WrappedPromise } from "./utils/promises";
+import { Buffer } from "node:buffer";
+import { deserializeJson, serializeJson } from "./utils/serde";
 
 export enum CallContexType {
   None,
@@ -85,7 +79,7 @@ export type InternalCombineablePromise<T> = CombineablePromise<T> &
     journalIndex: number;
   };
 
-export class ContextImpl implements KeyedContext, RestateGrpcChannel {
+export class ContextImpl implements ObjectContext {
   // here, we capture the context information for actions on the Restate context that
   // are executed within other actions, such as
   // ctx.oneWayCall( () => client.foo(bar) );
@@ -103,10 +97,18 @@ export class ContextImpl implements KeyedContext, RestateGrpcChannel {
     public readonly serviceName: string,
     public readonly console: Console,
     public readonly keyedContext: boolean,
+    public readonly keyedContextKey: string | undefined,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    private readonly stateMachine: StateMachine<any, any>,
+    private readonly stateMachine: StateMachine,
     public readonly rand: Rand = new RandImpl(id)
   ) {}
+
+  public key(): string {
+    if (!this.keyedContextKey) {
+      throw new TerminalError("unexpected missing key");
+    }
+    return this.keyedContextKey;
+  }
 
   // DON'T make this function async!!! see sideEffect comment for details.
   public get<T>(name: string): Promise<T | null> {
@@ -220,7 +222,8 @@ export class ContextImpl implements KeyedContext, RestateGrpcChannel {
   private invoke(
     service: string,
     method: string,
-    data: Uint8Array
+    data: Uint8Array,
+    key?: string
   ): InternalCombineablePromise<Uint8Array> {
     this.checkState("invoke");
 
@@ -228,6 +231,7 @@ export class ContextImpl implements KeyedContext, RestateGrpcChannel {
       serviceName: service,
       methodName: method,
       parameter: Buffer.from(data),
+      key,
     });
     return this.markCombineablePromise(
       this.stateMachine
@@ -240,7 +244,8 @@ export class ContextImpl implements KeyedContext, RestateGrpcChannel {
     service: string,
     method: string,
     data: Uint8Array,
-    delay?: number
+    delay?: number,
+    key?: string
   ): Promise<Uint8Array> {
     const actualDelay = delay || 0;
     const invokeTime = actualDelay > 0 ? Date.now() + actualDelay : undefined;
@@ -249,6 +254,7 @@ export class ContextImpl implements KeyedContext, RestateGrpcChannel {
       methodName: method,
       parameter: Buffer.from(data),
       invokeTime: invokeTime,
+      key,
     });
 
     await this.stateMachine.handleUserCodeMessage(
@@ -286,17 +292,16 @@ export class ContextImpl implements KeyedContext, RestateGrpcChannel {
     );
   }
 
-  rpc<M>({ path }: ServiceApi<M>): Client<M> {
+  service<M>({ path }: ServiceApi<M>): Client<M> {
     const clientProxy = new Proxy(
       {},
       {
         get: (_target, prop) => {
           const route = prop as string;
-          return async (...args: unknown[]) => {
-            const request = requestFromArgs(args);
-            const requestBytes = RpcRequest.encode(request).finish();
+          return (...args: unknown[]) => {
+            const requestBytes = serializeJson(args.shift());
             return this.invoke(path, route, requestBytes).transform(
-              (responseBytes) => RpcResponse.decode(responseBytes).response
+              (responseBytes) => deserializeJson(responseBytes)
             );
           };
         },
@@ -306,11 +311,30 @@ export class ContextImpl implements KeyedContext, RestateGrpcChannel {
     return clientProxy as Client<M>;
   }
 
-  public send<M>(options: ServiceApi): SendClient<M> {
-    return this.sendDelayed(options, 0);
+  object<M>({ path }: ServiceApi<M>, key: string): Client<M> {
+    const clientProxy = new Proxy(
+      {},
+      {
+        get: (_target, prop) => {
+          const route = prop as string;
+          return (...args: unknown[]) => {
+            const requestBytes = serializeJson(args.shift());
+            return this.invoke(path, route, requestBytes, key).transform(
+              (responseBytes) => deserializeJson(responseBytes)
+            );
+          };
+        },
+      }
+    );
+
+    return clientProxy as Client<M>;
   }
 
-  public sendDelayed<M>(
+  public serviceSend<M>(options: ServiceApi): SendClient<M> {
+    return this.serviceSendDelayed(options, 0);
+  }
+
+  public serviceSendDelayed<M>(
     { path }: ServiceApi,
     delayMillis: number
   ): SendClient<M> {
@@ -320,8 +344,7 @@ export class ContextImpl implements KeyedContext, RestateGrpcChannel {
         get: (_target, prop) => {
           const route = prop as string;
           return (...args: unknown[]) => {
-            const request = requestFromArgs(args);
-            const requestBytes = RpcRequest.encode(request).finish();
+            const requestBytes = serializeJson(args.shift());
             this.invokeOneWay(path, route, requestBytes, delayMillis);
           };
         },
@@ -331,10 +354,29 @@ export class ContextImpl implements KeyedContext, RestateGrpcChannel {
     return clientProxy as SendClient<M>;
   }
 
-  // --- Methods exposed by respective interfaces to interact with other APIs
+  public objectSend<M>(options: ServiceApi, key: string): SendClient<M> {
+    return this.objectSendDelayed(options, 0, key);
+  }
 
-  grpcChannel(): RestateGrpcChannel {
-    return this;
+  public objectSendDelayed<M>(
+    { path }: ServiceApi,
+    delayMillis: number,
+    key: string
+  ): SendClient<M> {
+    const clientProxy = new Proxy(
+      {},
+      {
+        get: (_target, prop) => {
+          const route = prop as string;
+          return (...args: unknown[]) => {
+            const requestBytes = serializeJson(args.shift());
+            this.invokeOneWay(path, route, requestBytes, delayMillis, key);
+          };
+        },
+      }
+    );
+
+    return clientProxy as SendClient<M>;
   }
 
   // DON'T make this function async!!!
@@ -602,7 +644,7 @@ export class ContextImpl implements KeyedContext, RestateGrpcChannel {
   private checkStateOperation(callType: string): void {
     if (!this.keyedContext) {
       throw new TerminalError(
-        `You can do ${callType} calls only from keyed services/routers.`,
+        `You can do ${callType} calls only from a virtual object`,
         { errorCode: ErrorCodes.INTERNAL }
       );
     }

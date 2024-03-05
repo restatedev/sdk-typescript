@@ -47,30 +47,6 @@ export function jsonDeserialize<T>(json: string): T {
   ) as T;
 }
 
-// When using google.protobuf.Value in RPC handler responses, we want to roughly match the behaviour of JSON.stringify
-// for example in converting Date objects to a UTC string
-export function jsonSafeAny(key: string, value: any): any {
-  if (
-    value !== undefined &&
-    value !== null &&
-    typeof value.toJSON == "function"
-  ) {
-    return value.toJSON(key) as any;
-  } else if (globalThis.Array.isArray(value)) {
-    // in place replace
-    value.forEach((_, i) => (value[i] = jsonSafeAny(i.toString(), value[i])));
-    return value;
-  } else if (typeof value === "object") {
-    Object.keys(value).forEach((key) => {
-      value[key] = jsonSafeAny(key, value[key]);
-    });
-    return value;
-  } else {
-    // primitive that doesn't have a toJSON method, with no children
-    return value;
-  }
-}
-
 export function formatMessageAsJson(obj: any): string {
   const newObj = { ...(obj as Record<string, unknown>) };
   for (const [key, value] of Object.entries(newObj)) {

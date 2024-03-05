@@ -50,7 +50,7 @@ import { CompletablePromise } from "./utils/promises";
 
 const RESOLVED = Promise.resolve(undefined);
 
-export class Journal<I, O> {
+export class Journal {
   private state = NewExecutionState.REPLAYING;
 
   private userCodeJournalIndex = 0;
@@ -59,7 +59,7 @@ export class Journal<I, O> {
   // 0 = root promise of the method invocation
   private pendingJournalEntries = new Map<number, JournalEntry>();
 
-  constructor(readonly invocation: Invocation<I, O>) {
+  constructor(readonly invocation: Invocation) {
     const inputMessage = invocation.replayEntries.get(0);
     if (
       !inputMessage ||

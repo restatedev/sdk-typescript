@@ -11,7 +11,6 @@
 
 import { describe, expect } from "@jest/globals";
 import * as restate from "../src/public_api";
-import { TestDriver } from "./testdriver";
 import {
   checkJournalMismatchError,
   checkTerminalError,
@@ -27,13 +26,11 @@ import {
   startMessage,
   suspensionMessage,
 } from "./protoutils";
-import { TestGreeter, TestResponse } from "../src/generated/proto/test";
-import { ProtocolMode } from "../src/generated/proto/discovery";
+import { TestDriver, TestGreeter, TestResponse } from "./testdriver";
+import { ProtocolMode } from "../src/types/discovery";
 
 class GetStringStateGreeter implements TestGreeter {
-  async greet(): Promise<TestResponse> {
-    const ctx = restate.useKeyedContext(this);
-
+  async greet(ctx: restate.ObjectContext): Promise<TestResponse> {
     // state
     let state = await ctx.get<string>("STATE");
     if (state === null) {
@@ -47,7 +44,7 @@ class GetStringStateGreeter implements TestGreeter {
 describe("GetStringStateGreeter", () => {
   it("sends message to runtime", async () => {
     const result = await new TestDriver(new GetStringStateGreeter(), [
-      startMessage(),
+      startMessage({}),
       inputMessage(greetRequest("Till")),
     ]).run();
 
@@ -60,7 +57,7 @@ describe("GetStringStateGreeter", () => {
   it("sends message to runtime for request-response mode", async () => {
     const result = await new TestDriver(
       new GetStringStateGreeter(),
-      [startMessage(1), inputMessage(greetRequest("Till"))],
+      [startMessage({ knownEntries: 1 }), inputMessage(greetRequest("Till"))],
       ProtocolMode.REQUEST_RESPONSE
     ).run();
 
@@ -72,7 +69,7 @@ describe("GetStringStateGreeter", () => {
 
   it("handles completion with value", async () => {
     const result = await new TestDriver(new GetStringStateGreeter(), [
-      startMessage(),
+      startMessage({}),
       inputMessage(greetRequest("Till")),
       completionMessage(1, JSON.stringify("Francesco")),
     ]).run();
@@ -86,7 +83,7 @@ describe("GetStringStateGreeter", () => {
 
   it("handles completion with empty", async () => {
     const result = await new TestDriver(new GetStringStateGreeter(), [
-      startMessage(),
+      startMessage({}),
       inputMessage(greetRequest("Till")),
       completionMessage(1, undefined, true),
     ]).run();
@@ -100,7 +97,7 @@ describe("GetStringStateGreeter", () => {
 
   it("handles completion with empty string", async () => {
     const result = await new TestDriver(new GetStringStateGreeter(), [
-      startMessage(),
+      startMessage({}),
       inputMessage(greetRequest("Till")),
       completionMessage(1, Buffer.from(JSON.stringify(""))),
     ]).run();
@@ -114,7 +111,7 @@ describe("GetStringStateGreeter", () => {
 
   it("handles completion with failure", async () => {
     const result = await new TestDriver(new GetStringStateGreeter(), [
-      startMessage(),
+      startMessage({}),
       inputMessage(greetRequest("Till")),
       completionMessage(1, undefined, undefined, failure("Canceled")),
     ]).run();
@@ -127,7 +124,7 @@ describe("GetStringStateGreeter", () => {
 
   it("handles replay with value", async () => {
     const result = await new TestDriver(new GetStringStateGreeter(), [
-      startMessage(),
+      startMessage({}),
       inputMessage(greetRequest("Till")),
       getStateMessage("STATE", "Francesco"),
     ]).run();
@@ -140,7 +137,7 @@ describe("GetStringStateGreeter", () => {
 
   it("handles replay with empty", async () => {
     const result = await new TestDriver(new GetStringStateGreeter(), [
-      startMessage(),
+      startMessage({}),
       inputMessage(greetRequest("Till")),
       getStateMessage("STATE", undefined, true),
     ]).run();
@@ -153,7 +150,7 @@ describe("GetStringStateGreeter", () => {
 
   it("handles replay with failure", async () => {
     const result = await new TestDriver(new GetStringStateGreeter(), [
-      startMessage(),
+      startMessage({}),
       inputMessage(greetRequest("Till")),
       getStateMessage("STATE", undefined, undefined, failure("Canceled")),
     ]).run();
@@ -165,9 +162,7 @@ describe("GetStringStateGreeter", () => {
 });
 
 class GetNumberStateGreeter implements TestGreeter {
-  async greet(): Promise<TestResponse> {
-    const ctx = restate.useKeyedContext(this);
-
+  async greet(ctx: restate.ObjectContext): Promise<TestResponse> {
     // state
     const state = await ctx.get<number>("STATE");
 
@@ -178,7 +173,7 @@ class GetNumberStateGreeter implements TestGreeter {
 describe("GetNumberStateGreeter", () => {
   it("sends message to the runtime", async () => {
     const result = await new TestDriver(new GetNumberStateGreeter(), [
-      startMessage(),
+      startMessage({}),
       inputMessage(greetRequest("Till")),
     ]).run();
 
@@ -190,7 +185,7 @@ describe("GetNumberStateGreeter", () => {
 
   it("handles completion with value", async () => {
     const result = await new TestDriver(new GetNumberStateGreeter(), [
-      startMessage(),
+      startMessage({}),
       inputMessage(greetRequest("Till")),
       completionMessage(1, Buffer.from(JSON.stringify(70))),
     ]).run();
@@ -204,7 +199,7 @@ describe("GetNumberStateGreeter", () => {
 
   it("handles completion with value 0", async () => {
     const result = await new TestDriver(new GetNumberStateGreeter(), [
-      startMessage(),
+      startMessage({}),
       inputMessage(greetRequest("Till")),
       completionMessage(1, Buffer.from(JSON.stringify(0))),
     ]).run();
@@ -218,7 +213,7 @@ describe("GetNumberStateGreeter", () => {
 
   it("handles completion with empty", async () => {
     const result = await new TestDriver(new GetNumberStateGreeter(), [
-      startMessage(),
+      startMessage({}),
       inputMessage(greetRequest("Till")),
       completionMessage(1, undefined, true),
     ]).run();
@@ -232,7 +227,7 @@ describe("GetNumberStateGreeter", () => {
 
   it("handles replay with value", async () => {
     const result = await new TestDriver(new GetNumberStateGreeter(), [
-      startMessage(),
+      startMessage({}),
       inputMessage(greetRequest("Till")),
       getStateMessage<number>("STATE", 70),
     ]).run();
@@ -245,7 +240,7 @@ describe("GetNumberStateGreeter", () => {
 
   it("handles replay with value 0", async () => {
     const result = await new TestDriver(new GetNumberStateGreeter(), [
-      startMessage(),
+      startMessage({}),
       inputMessage(greetRequest("Till")),
       getStateMessage<number>("STATE", 0),
     ]).run();
@@ -258,7 +253,7 @@ describe("GetNumberStateGreeter", () => {
 
   it("handles replay with empty", async () => {
     const result = await new TestDriver(new GetNumberStateGreeter(), [
-      startMessage(),
+      startMessage({}),
       inputMessage(greetRequest("Till")),
       getStateMessage<number>("STATE", undefined, true),
     ]).run();
@@ -271,7 +266,7 @@ describe("GetNumberStateGreeter", () => {
 
   it("fails on journal mismatch. Completed with SetStateMessage.", async () => {
     const result = await new TestDriver(new GetNumberStateGreeter(), [
-      startMessage(),
+      startMessage({}),
       inputMessage(greetRequest("Till")),
       setStateMessage("STATE", 0),
     ]).run();
@@ -282,9 +277,7 @@ describe("GetNumberStateGreeter", () => {
 });
 
 class GetNumberListStateGreeter implements TestGreeter {
-  async greet(): Promise<TestResponse> {
-    const ctx = restate.useKeyedContext(this);
-
+  async greet(ctx: restate.ObjectContext): Promise<TestResponse> {
     // state
     const state = await ctx.get<number[]>("STATE");
     if (state) {
@@ -300,7 +293,7 @@ class GetNumberListStateGreeter implements TestGreeter {
 describe("GetNumberListStateGreeter", () => {
   it("sends message to runtime", async () => {
     const result = await new TestDriver(new GetNumberListStateGreeter(), [
-      startMessage(),
+      startMessage({}),
       inputMessage(greetRequest("Till")),
     ]).run();
 
@@ -312,7 +305,7 @@ describe("GetNumberListStateGreeter", () => {
 
   it("handles completion with value", async () => {
     const result = await new TestDriver(new GetNumberListStateGreeter(), [
-      startMessage(),
+      startMessage({}),
       inputMessage(greetRequest("Till")),
       completionMessage(1, Buffer.from(JSON.stringify([5, 4]))),
     ]).run();
@@ -326,7 +319,7 @@ describe("GetNumberListStateGreeter", () => {
 
   it("handles completion with value empty list", async () => {
     const result = await new TestDriver(new GetNumberListStateGreeter(), [
-      startMessage(),
+      startMessage({}),
       inputMessage(greetRequest("Till")),
       completionMessage(1, Buffer.from(JSON.stringify([]))),
     ]).run();
@@ -344,7 +337,7 @@ describe("GetNumberListStateGreeter", () => {
 
   it("handles completion with empty", async () => {
     const result = await new TestDriver(new GetNumberListStateGreeter(), [
-      startMessage(),
+      startMessage({}),
       inputMessage(greetRequest("Till")),
       completionMessage(1, undefined, true),
     ]).run();
@@ -358,7 +351,7 @@ describe("GetNumberListStateGreeter", () => {
 
   it("handles replay with value", async () => {
     const result = await new TestDriver(new GetNumberListStateGreeter(), [
-      startMessage(),
+      startMessage({}),
       inputMessage(greetRequest("Till")),
       getStateMessage("STATE", [5, 4]),
     ]).run();

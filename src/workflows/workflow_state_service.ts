@@ -24,9 +24,9 @@ export type ValueOrError<T> = {
   error?: string;
 };
 
-export const workflowStateService = restate.keyedRouter({
+export const workflowStateService = restate.object({
   startWorkflow: async (
-    ctx: restate.KeyedContext
+    ctx: restate.ObjectContext
   ): Promise<WorkflowStartResult> => {
     const status =
       (await ctx.get<LifecycleStatus>(LIFECYCLE_STATUS_STATE_NAME)) ??
@@ -43,8 +43,7 @@ export const workflowStateService = restate.keyedRouter({
   },
 
   finishOrFailWorkflow: async <R>(
-    ctx: restate.KeyedContext,
-    _workflowId: string,
+    ctx: restate.ObjectContext,
     result: ValueOrError<R>
   ): Promise<void> => {
     if (result.error === undefined && result.value === undefined) {
@@ -73,7 +72,7 @@ export const workflowStateService = restate.keyedRouter({
     );
   },
 
-  getStatus: async (ctx: restate.KeyedContext): Promise<LifecycleStatus> => {
+  getStatus: async (ctx: restate.ObjectContext): Promise<LifecycleStatus> => {
     return (
       (await ctx.get<LifecycleStatus>(LIFECYCLE_STATUS_STATE_NAME)) ??
       LifecycleStatus.NOT_STARTED
@@ -81,8 +80,7 @@ export const workflowStateService = restate.keyedRouter({
   },
 
   completePromise: async <T>(
-    ctx: restate.KeyedContext,
-    _workflowId: string,
+    ctx: restate.ObjectContext,
     req: { promiseName: string; completion: ValueOrError<T> }
   ): Promise<void> => {
     // we don't accept writes after the workflow is done
@@ -99,16 +97,14 @@ export const workflowStateService = restate.keyedRouter({
   },
 
   peekPromise: async <T>(
-    ctx: restate.KeyedContext,
-    _workflowId: string,
+    ctx: restate.ObjectContext,
     req: { promiseName: string }
   ): Promise<ValueOrError<T> | null> => {
     return peekPromise(ctx, PROMISE_STATE_PREFIX + req.promiseName);
   },
 
   subscribePromise: async <T>(
-    ctx: restate.KeyedContext,
-    _workflowId: string,
+    ctx: restate.ObjectContext,
     req: { promiseName: string; awkId: string }
   ): Promise<ValueOrError<T> | null> => {
     return subscribePromise(
@@ -120,14 +116,13 @@ export const workflowStateService = restate.keyedRouter({
   },
 
   getResult: async <R>(
-    ctx: restate.KeyedContext
+    ctx: restate.ObjectContext
   ): Promise<ValueOrError<R> | null> => {
     return peekPromise(ctx, RESULT_STATE_NAME);
   },
 
   subscribeResult: async <T>(
-    ctx: restate.KeyedContext,
-    workflowId: string,
+    ctx: restate.ObjectContext,
     awkId: string
   ): Promise<ValueOrError<T> | null> => {
     const status =
@@ -135,7 +130,7 @@ export const workflowStateService = restate.keyedRouter({
       LifecycleStatus.NOT_STARTED;
     if (status === LifecycleStatus.NOT_STARTED) {
       throw new restate.TerminalError(
-        `Workflow with id '${workflowId}' does not exist.`
+        `Workflow with id '${ctx.key()}' does not exist.`
       );
     }
     return subscribePromise(
@@ -147,16 +142,14 @@ export const workflowStateService = restate.keyedRouter({
   },
 
   getState: async <T>(
-    ctx: restate.KeyedContext,
-    _workflowId: string,
+    ctx: restate.ObjectContext,
     stateName: string
   ): Promise<T | null> => {
     return ctx.get(USER_STATE_PREFIX + stateName);
   },
 
   setState: async <T>(
-    ctx: restate.KeyedContext,
-    _workflowId: string,
+    ctx: restate.ObjectContext,
     request: { stateName: string; value: T }
   ): Promise<void> => {
     if (!request?.stateName) {
@@ -179,20 +172,19 @@ export const workflowStateService = restate.keyedRouter({
   },
 
   clearState: async (
-    ctx: restate.KeyedContext,
-    _workflowId: string,
+    ctx: restate.ObjectContext,
     stateName: string
   ): Promise<void> => {
     ctx.clear(USER_STATE_PREFIX + stateName);
   },
 
-  stateKeys: async (ctx: restate.KeyedContext): Promise<Array<string>> => {
+  stateKeys: async (ctx: restate.ObjectContext): Promise<Array<string>> => {
     return (await ctx.stateKeys()).filter((name) =>
       name.startsWith(USER_STATE_PREFIX)
     );
   },
 
-  clearAllState: async (ctx: restate.KeyedContext): Promise<void> => {
+  clearAllState: async (ctx: restate.ObjectContext): Promise<void> => {
     const stateNames = (await ctx.stateKeys()).filter((name) =>
       name.startsWith(USER_STATE_PREFIX)
     );
@@ -201,7 +193,7 @@ export const workflowStateService = restate.keyedRouter({
     }
   },
 
-  dispose: async (ctx: restate.KeyedContext): Promise<void> => {
+  dispose: async (ctx: restate.ObjectContext): Promise<void> => {
     ctx.clearAll();
   },
 });
@@ -211,7 +203,7 @@ export type api = typeof workflowStateService;
 // ----------------------------------------------------------------------------
 
 async function completePromise<T>(
-  ctx: restate.KeyedContext,
+  ctx: restate.ObjectContext,
   stateName: string,
   awakeableStateName: string,
   completion: ValueOrError<T>
@@ -253,7 +245,7 @@ async function completePromise<T>(
 }
 
 async function subscribePromise<T>(
-  ctx: restate.KeyedContext,
+  ctx: restate.ObjectContext,
   stateName: string,
   awakeableStateName: string,
   awakeableId: string
@@ -287,13 +279,13 @@ async function subscribePromise<T>(
 }
 
 async function peekPromise<T>(
-  ctx: restate.KeyedContext,
+  ctx: restate.ObjectContext,
   stateName: string
 ): Promise<ValueOrError<T> | null> {
   return ctx.get<ValueOrError<T>>(stateName);
 }
 
-async function checkIfRunning(ctx: restate.KeyedContext): Promise<boolean> {
+async function checkIfRunning(ctx: restate.ObjectContext): Promise<boolean> {
   const status = await ctx.get<LifecycleStatus>(LIFECYCLE_STATUS_STATE_NAME);
   return status === LifecycleStatus.RUNNING;
 }

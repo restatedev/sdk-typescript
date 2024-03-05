@@ -11,7 +11,6 @@
 
 import { describe, expect } from "@jest/globals";
 import * as restate from "../src/public_api";
-import { TestDriver } from "./testdriver";
 import {
   awakeableMessage,
   checkJournalMismatchError,
@@ -28,13 +27,12 @@ import {
   suspensionMessage,
   END_MESSAGE,
 } from "./protoutils";
-import { TestGreeter, TestResponse } from "../src/generated/proto/test";
-import { ProtocolMode } from "../src/generated/proto/discovery";
+
+import { TestDriver, TestResponse, TestGreeter } from "./testdriver";
+import { ProtocolMode } from "../src/types/discovery";
 
 class AwakeableGreeter implements TestGreeter {
-  async greet(): Promise<TestResponse> {
-    const ctx = restate.useContext(this);
-
+  async greet(ctx: restate.ObjectContext): Promise<TestResponse> {
     const awakeable = ctx.awakeable<string>();
 
     const result = await awakeable.promise;
@@ -48,7 +46,7 @@ class AwakeableGreeter implements TestGreeter {
 describe("AwakeableGreeter", () => {
   it("sends message to runtime", async () => {
     const result = await new TestDriver(new AwakeableGreeter(), [
-      startMessage(),
+      startMessage({ key: "Till" }),
       inputMessage(greetRequest("Till")),
     ]).run();
 
@@ -58,7 +56,10 @@ describe("AwakeableGreeter", () => {
   it("sends message to runtime for request-response case", async () => {
     const result = await new TestDriver(
       new AwakeableGreeter(),
-      [startMessage(1), inputMessage(greetRequest("Till"))],
+      [
+        startMessage({ knownEntries: 1, key: "Till" }),
+        inputMessage(greetRequest("Till")),
+      ],
       ProtocolMode.REQUEST_RESPONSE
     ).run();
 
@@ -67,7 +68,7 @@ describe("AwakeableGreeter", () => {
 
   it("handles completion with value", async () => {
     const result = await new TestDriver(new AwakeableGreeter(), [
-      startMessage(),
+      startMessage({ key: "Till" }),
       inputMessage(greetRequest("Till")),
       completionMessage(1, JSON.stringify("Francesco")),
     ]).run();
@@ -81,7 +82,7 @@ describe("AwakeableGreeter", () => {
 
   it("handles completion with empty string value", async () => {
     const result = await new TestDriver(new AwakeableGreeter(), [
-      startMessage(),
+      startMessage({ key: "Till" }),
       inputMessage(greetRequest("Till")),
       completionMessage(1, JSON.stringify("")),
     ]).run();
@@ -95,7 +96,7 @@ describe("AwakeableGreeter", () => {
 
   it("handles completion with empty object value", async () => {
     const result = await new TestDriver(new AwakeableGreeter(), [
-      startMessage(),
+      startMessage({ key: "Till" }),
       inputMessage(greetRequest("Till")),
       completionMessage(1, JSON.stringify({})),
     ]).run();
@@ -111,7 +112,7 @@ describe("AwakeableGreeter", () => {
 
   it("handles completion with failure", async () => {
     const result = await new TestDriver(new AwakeableGreeter(), [
-      startMessage(),
+      startMessage({ key: "Till" }),
       inputMessage(greetRequest("Till")),
       completionMessage(
         1,
@@ -129,7 +130,7 @@ describe("AwakeableGreeter", () => {
 
   it("handles replay with value", async () => {
     const result = await new TestDriver(new AwakeableGreeter(), [
-      startMessage(),
+      startMessage({ key: "Till" }),
       inputMessage(greetRequest("Till")),
       awakeableMessage("Francesco"),
     ]).run();
@@ -142,7 +143,7 @@ describe("AwakeableGreeter", () => {
 
   it("handles replay with failure", async () => {
     const result = await new TestDriver(new AwakeableGreeter(), [
-      startMessage(),
+      startMessage({ key: "Till" }),
       inputMessage(greetRequest("Till")),
       awakeableMessage(undefined, failure("Something went wrong")),
     ]).run();
@@ -154,7 +155,7 @@ describe("AwakeableGreeter", () => {
 
   it("fails on journal mismatch. Completed with CompleteAwakeable during replay.", async () => {
     const result = await new TestDriver(new AwakeableGreeter(), [
-      startMessage(),
+      startMessage({ key: "Till" }),
       inputMessage(greetRequest("Till")),
       resolveAwakeableMessage("awakeable-1", "hello"), // should have been an awakeableMessage
     ]).run();
@@ -165,9 +166,7 @@ describe("AwakeableGreeter", () => {
 });
 
 class AwakeableNull implements TestGreeter {
-  async greet(): Promise<TestResponse> {
-    const ctx = restate.useContext(this);
-
+  async greet(ctx: restate.ObjectContext): Promise<TestResponse> {
     const awakeable = ctx.awakeable();
 
     await awakeable.promise;
@@ -181,7 +180,7 @@ class AwakeableNull implements TestGreeter {
 describe("AwakeableNull", () => {
   it("handles completion with null value", async () => {
     const result = await new TestDriver(new AwakeableNull(), [
-      startMessage(),
+      startMessage({}),
       inputMessage(greetRequest("Till")),
       completionMessage(1, JSON.stringify(null)),
     ]).run();

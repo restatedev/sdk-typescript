@@ -11,7 +11,13 @@
 
 import { describe, expect } from "@jest/globals";
 import * as restate from "../src/public_api";
-import { TestDriver } from "./testdriver";
+
+import {
+  TestDriver,
+  TestGreeter,
+  TestRequest,
+  TestResponse,
+} from "./testdriver";
 import {
   checkJournalMismatchError,
   clearStateMessage,
@@ -26,17 +32,13 @@ import {
   startMessage,
   suspensionMessage,
 } from "./protoutils";
-import {
-  TestGreeter,
-  TestRequest,
-  TestResponse,
-} from "../src/generated/proto/test";
-import { ProtocolMode } from "../src/generated/proto/discovery";
+import { ProtocolMode } from "../src/types/discovery";
 
 class GetAndSetGreeter implements TestGreeter {
-  async greet(request: TestRequest): Promise<TestResponse> {
-    const ctx = restate.useKeyedContext(this);
-
+  async greet(
+    ctx: restate.ObjectContext,
+    request: TestRequest
+  ): Promise<TestResponse> {
     // state
     const state = (await ctx.get<string>("STATE")) || "nobody";
 
@@ -49,7 +51,7 @@ class GetAndSetGreeter implements TestGreeter {
 describe("GetAndSetGreeter", () => {
   it("sends get and set state message to the runtime", async () => {
     const result = await new TestDriver(new GetAndSetGreeter(), [
-      startMessage(),
+      startMessage({ key: "Till" }),
       inputMessage(greetRequest("Till")),
       completionMessage(1, JSON.stringify("Pete")),
     ]).run();
@@ -77,7 +79,7 @@ describe("GetAndSetGreeter", () => {
 
   it("handles replay with value", async () => {
     const result = await new TestDriver(new GetAndSetGreeter(), [
-      startMessage(),
+      startMessage({ key: "Till" }),
       inputMessage(greetRequest("Till")),
       getStateMessage("STATE", "Francesco"),
       setStateMessage("STATE", "Till"),
@@ -162,9 +164,10 @@ describe("GetAndSetGreeter", () => {
 });
 
 class ClearStateGreeter implements TestGreeter {
-  async greet(request: TestRequest): Promise<TestResponse> {
-    const ctx = restate.useKeyedContext(this);
-
+  async greet(
+    ctx: restate.ObjectContext,
+    request: TestRequest
+  ): Promise<TestResponse> {
     // state
     const state = (await ctx.get<string>("STATE")) || "nobody";
 
@@ -194,7 +197,7 @@ describe("ClearState", () => {
 
   it("handles replay", async () => {
     const result = await new TestDriver(new ClearStateGreeter(), [
-      startMessage(),
+      startMessage({}),
       inputMessage(greetRequest("Till")),
       getStateMessage("STATE", "Francesco"),
       setStateMessage("STATE", "Till"),
@@ -209,7 +212,7 @@ describe("ClearState", () => {
 
   it("fails on journal mismatch. ClearState completed with getState.", async () => {
     const result = await new TestDriver(new ClearStateGreeter(), [
-      startMessage(),
+      startMessage({}),
       inputMessage(greetRequest("Till")),
       getStateMessage("STATE", "Francesco"),
       setStateMessage("STATE", "Till"),
@@ -222,7 +225,7 @@ describe("ClearState", () => {
 
   it("fails on journal mismatch. ClearState completed with setState.", async () => {
     const result = await new TestDriver(new ClearStateGreeter(), [
-      startMessage(),
+      startMessage({}),
       inputMessage(greetRequest("Till")),
       getStateMessage("STATE", "Francesco"),
       setStateMessage("STATE", "Till"),
@@ -235,7 +238,7 @@ describe("ClearState", () => {
 
   it("fails on journal mismatch. ClearState completed with different key.", async () => {
     const result = await new TestDriver(new ClearStateGreeter(), [
-      startMessage(),
+      startMessage({}),
       inputMessage(greetRequest("Till")),
       getStateMessage("STATE", "Francesco"),
       setStateMessage("STATE", "Till"),
@@ -253,9 +256,7 @@ enum OrderStatus {
 }
 
 class GetAndSetEnumGreeter implements TestGreeter {
-  async greet(): Promise<TestResponse> {
-    const ctx = restate.useKeyedContext(this);
-
+  async greet(ctx: restate.ObjectContext): Promise<TestResponse> {
     // state
     const oldState = await ctx.get<OrderStatus>("STATE");
 
@@ -270,7 +271,7 @@ class GetAndSetEnumGreeter implements TestGreeter {
 describe("GetAndSetEnumGreeter", () => {
   it("handles replays with value.", async () => {
     const result = await new TestDriver(new GetAndSetEnumGreeter(), [
-      startMessage(),
+      startMessage({}),
       inputMessage(greetRequest("Till")),
       getStateMessage("STATE", OrderStatus.DELIVERED),
       setStateMessage("STATE", OrderStatus.ORDERED),
@@ -285,7 +286,7 @@ describe("GetAndSetEnumGreeter", () => {
 
   it("handles replays with value. First empty state, then enum state.", async () => {
     const result = await new TestDriver(new GetAndSetEnumGreeter(), [
-      startMessage(),
+      startMessage({}),
       inputMessage(greetRequest("Till")),
       getStateMessage("STATE", undefined, true),
       setStateMessage("STATE", OrderStatus.ORDERED),

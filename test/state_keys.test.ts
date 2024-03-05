@@ -11,7 +11,7 @@
 
 import { describe, expect } from "@jest/globals";
 import * as restate from "../src/public_api";
-import { TestDriver } from "./testdriver";
+import { TestDriver, TestGreeter, TestResponse } from "./testdriver";
 import {
   completionMessage,
   END_MESSAGE,
@@ -24,10 +24,9 @@ import {
   startMessage,
   suspensionMessage,
 } from "./protoutils";
-import { TestGreeter, TestResponse } from "../src/generated/proto/test";
 import { GetStateKeysEntryMessage_StateKeys } from "../src/generated/proto/protocol";
 
-const INPUT_MESSAGE = inputMessage(greetRequest(""));
+const INPUT_MESSAGE = inputMessage(greetRequest("bob"));
 
 function stateKeys(...keys: Array<string>): GetStateKeysEntryMessage_StateKeys {
   return {
@@ -36,9 +35,7 @@ function stateKeys(...keys: Array<string>): GetStateKeysEntryMessage_StateKeys {
 }
 
 class ListKeys implements TestGreeter {
-  async greet(): Promise<TestResponse> {
-    const ctx = restate.useKeyedContext(this);
-
+  async greet(ctx: restate.ObjectContext): Promise<TestResponse> {
     return {
       greeting: (await ctx.stateKeys()).join(","),
     };
@@ -48,7 +45,11 @@ class ListKeys implements TestGreeter {
 describe("ListKeys", () => {
   it("with partial state suspends", async () => {
     const result = await new TestDriver(new ListKeys(), [
-      startMessage(1, true, [keyVal("A", "1")]),
+      startMessage({
+        knownEntries: 1,
+        partialState: true,
+        state: [keyVal("A", "1")],
+      }),
       INPUT_MESSAGE,
     ]).run();
 
@@ -60,7 +61,11 @@ describe("ListKeys", () => {
 
   it("with partial state", async () => {
     const result = await new TestDriver(new ListKeys(), [
-      startMessage(1, true, [keyVal("A", "1")]),
+      startMessage({
+        knownEntries: 1,
+        partialState: true,
+        state: [keyVal("A", "1")],
+      }),
       INPUT_MESSAGE,
       completionMessage(
         1,
@@ -77,7 +82,11 @@ describe("ListKeys", () => {
 
   it("with complete state", async () => {
     const result = await new TestDriver(new ListKeys(), [
-      startMessage(1, false, [keyVal("A", "1")]),
+      startMessage({
+        knownEntries: 1,
+        partialState: false,
+        state: [keyVal("A", "1")],
+      }),
       INPUT_MESSAGE,
     ]).run();
 
@@ -90,7 +99,11 @@ describe("ListKeys", () => {
 
   it("replay", async () => {
     const result = await new TestDriver(new ListKeys(), [
-      startMessage(1, true, [keyVal("A", "1")]),
+      startMessage({
+        knownEntries: 1,
+        partialState: true,
+        state: [keyVal("A", "1")],
+      }),
       INPUT_MESSAGE,
       getStateKeysMessage(["A", "B", "C"]),
     ]).run();

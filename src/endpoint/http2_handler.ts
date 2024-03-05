@@ -13,26 +13,22 @@ import stream from "stream";
 import { pipeline, finished } from "stream/promises";
 import http2, { Http2ServerRequest, Http2ServerResponse } from "http2";
 import { parse as urlparse, Url } from "url";
-import {
-  ProtocolMode,
-  ServiceDiscoveryResponse,
-} from "../generated/proto/discovery";
 import { EndpointImpl } from "./endpoint_impl";
 import { RestateHttp2Connection } from "../connection/http_connection";
-import { HostedGrpcServiceMethod } from "../types/grpc";
 import { ensureError } from "../types/errors";
 import { InvocationBuilder } from "../invocation";
 import { StateMachine } from "../state_machine";
 import { rlog } from "../logger";
+import {
+  ComponentHandler,
+  UrlPathComponents,
+  VirtualObjectHandler,
+  parseUrlComponents,
+} from "../types/components";
+import { Deployment, ProtocolMode } from "../types/discovery";
 
 export class Http2Handler {
-  private readonly discoveryResponse: ServiceDiscoveryResponse;
-  constructor(private readonly endpoint: EndpointImpl) {
-    this.discoveryResponse = ServiceDiscoveryResponse.fromPartial({
-      ...this.endpoint.discovery,
-      protocolMode: ProtocolMode.BIDI_STREAM,
-    });
-  }
+  constructor(private readonly endpoint: EndpointImpl) {}
 
   acceptConnection(
     request: Http2ServerRequest,
@@ -52,49 +48,47 @@ export class Http2Handler {
     });
   }
 
-  private async handleConnection(
+  private handleConnection(
     url: Url,
     stream: http2.ServerHttp2Stream
   ): Promise<void> {
-    const method = this.endpoint.methodByUrl(url.path);
-
-    if (method !== undefined) {
-      // valid connection, let's dispatch the invocation
-      stream.respond({
-        "content-type": "application/restate",
-        ":status": 200,
-      });
-
-      const restateStream = RestateHttp2Connection.from(stream);
-      await handleInvocation(method, restateStream);
-      return;
+    const route = parseUrlComponents(url.path ?? undefined);
+    if (!route) {
+      return respondNotFound(stream);
     }
-
-    // no method under that name. might be a discovery request
-    if (url.path == "/discover") {
-      rlog.info(
-        "Answering discovery request. Announcing services: " +
-          JSON.stringify(this.discoveryResponse.services)
-      );
-      await respondDiscovery(this.discoveryResponse, stream);
-      return;
+    if (route === "discovery") {
+      return respondDiscovery(this.endpoint.computeDiscovery(), stream);
     }
-
-    // no discovery, so unknown method: 404
-    rlog.error(`No service and function found for URL ${url.path}`);
-    await respondNotFound(stream);
+    const urlComponents = route as UrlPathComponents;
+    const component = this.endpoint.componentByName(
+      urlComponents.componentName
+    );
+    if (!component) {
+      return respondNotFound(stream);
+    }
+    const handler = component.handlerMatching(urlComponents);
+    if (!handler) {
+      return respondNotFound(stream);
+    }
+    // valid connection, let's dispatch the invocation
+    stream.respond({
+      "content-type": "application/restate",
+      ":status": 200,
+    });
+    const restateStream = RestateHttp2Connection.from(stream);
+    return handleInvocation(handler, restateStream);
   }
 }
 
 async function respondDiscovery(
-  response: ServiceDiscoveryResponse,
+  response: Deployment,
   http2Stream: http2.ServerHttp2Stream
 ) {
-  const responseData = ServiceDiscoveryResponse.encode(response).finish();
+  const responseData = JSON.stringify(response);
 
   http2Stream.respond({
     ":status": 200,
-    "content-type": "application/proto",
+    "content-type": "application/json",
   });
 
   await pipeline(stream.Readable.from(responseData), http2Stream, {
@@ -104,19 +98,19 @@ async function respondDiscovery(
 
 async function respondNotFound(stream: http2.ServerHttp2Stream) {
   stream.respond({
-    "content-type": "application/restate",
+    "content-type": "application/json",
     ":status": 404,
   });
   stream.end();
   await finished(stream);
 }
 
-async function handleInvocation<I, O>(
-  func: HostedGrpcServiceMethod<I, O>,
+async function handleInvocation(
+  handler: ComponentHandler,
   connection: RestateHttp2Connection
 ) {
   // step 1: collect all journal events
-  const journalBuilder = new InvocationBuilder<I, O>(func);
+  const journalBuilder = new InvocationBuilder(handler);
   connection.pipeToConsumer(journalBuilder);
   try {
     await journalBuilder.completion();
@@ -127,11 +121,11 @@ async function handleInvocation<I, O>(
 
   // step 2: create the state machine
   const invocation = journalBuilder.build();
-  const stateMachine = new StateMachine<I, O>(
+  const stateMachine = new StateMachine(
     connection,
     invocation,
     ProtocolMode.BIDI_STREAM,
-    func.method.keyedContext,
+    handler instanceof VirtualObjectHandler,
     invocation.inferLoggerContext()
   );
   connection.pipeToConsumer(stateMachine);

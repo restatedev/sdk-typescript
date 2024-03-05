@@ -11,7 +11,7 @@
 
 import { describe, expect } from "@jest/globals";
 import * as restate from "../src/public_api";
-import { TestDriver } from "./testdriver";
+import { TestDriver, TestGreeter, TestResponse } from "./testdriver";
 import {
   awakeableMessage,
   completionMessage,
@@ -28,7 +28,6 @@ import {
   sideEffectMessage,
   ackMessage,
 } from "./protoutils";
-import { TestGreeter, TestResponse } from "../src/generated/proto/test";
 import {
   COMBINATOR_ENTRY_MESSAGE,
   SLEEP_ENTRY_MESSAGE_TYPE,
@@ -37,9 +36,7 @@ import { TimeoutError } from "../src/types/errors";
 import { CombineablePromise } from "../src/context";
 
 class AwakeableSleepRaceGreeter implements TestGreeter {
-  async greet(): Promise<TestResponse> {
-    const ctx = restate.useContext(this);
-
+  async greet(ctx: restate.ObjectContext): Promise<TestResponse> {
     const awakeable = ctx.awakeable<string>();
     const sleep = ctx.sleep(1);
 
@@ -174,9 +171,7 @@ describe("AwakeableSleepRaceGreeter", () => {
 class AwakeableSleepRaceInterleavedWithSideEffectGreeter
   implements TestGreeter
 {
-  async greet(): Promise<TestResponse> {
-    const ctx = restate.useContext(this);
-
+  async greet(ctx: restate.ObjectContext): Promise<TestResponse> {
     const awakeable = ctx.awakeable<string>();
     const sleep = ctx.sleep(1);
     const combinatorPromise = CombineablePromise.race([
@@ -252,9 +247,7 @@ describe("AwakeableSleepRaceInterleavedWithSideEffectGreeter", () => {
 });
 
 class CombineablePromiseThenSideEffect implements TestGreeter {
-  async greet(): Promise<TestResponse> {
-    const ctx = restate.useContext(this);
-
+  async greet(ctx: restate.ObjectContext): Promise<TestResponse> {
     const a1 = ctx.awakeable<string>();
     const a2 = ctx.awakeable<string>();
     const combinatorResult = await CombineablePromise.race([
@@ -350,9 +343,7 @@ describe("CombineablePromiseThenSideEffect", () => {
 });
 
 class AwakeableOrTimeoutGreeter implements TestGreeter {
-  async greet(): Promise<TestResponse> {
-    const ctx = restate.useContext(this);
-
+  async greet(ctx: restate.ObjectContext): Promise<TestResponse> {
     const { promise } = ctx.awakeable<string>();
     try {
       const result = await promise.orTimeout(100);

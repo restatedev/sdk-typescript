@@ -12,7 +12,6 @@
 /*eslint-disable @typescript-eslint/no-non-null-assertion*/
 
 import { Message } from "./types/types";
-import { HostedGrpcServiceMethod } from "./types/grpc";
 import {
   Failure,
   PollInputStreamEntryMessage,
@@ -28,6 +27,7 @@ import { LocalStateStore } from "./local_state_store";
 import { ensureError } from "./types/errors";
 import { LoggerContext } from "./logger";
 import { CompletablePromise } from "./utils/promises";
+import { ComponentHandler } from "./types/components";
 
 enum State {
   ExpectingStart = 0,
@@ -40,7 +40,7 @@ type InvocationValue =
   | { kind: "value"; value: Buffer }
   | { kind: "failure"; failure: Failure };
 
-export class InvocationBuilder<I, O> implements RestateStreamConsumer {
+export class InvocationBuilder implements RestateStreamConsumer {
   private readonly complete = new CompletablePromise<void>();
 
   private state: State = State.ExpectingStart;
@@ -52,8 +52,9 @@ export class InvocationBuilder<I, O> implements RestateStreamConsumer {
   private invocationValue?: InvocationValue = undefined;
   private nbEntriesToReplay?: number = undefined;
   private localStateStore?: LocalStateStore;
+  private userKey?: string;
 
-  constructor(private readonly method: HostedGrpcServiceMethod<I, O>) {}
+  constructor(private readonly component: ComponentHandler) {}
 
   public handleMessage(m: Message): boolean {
     try {
@@ -138,15 +139,16 @@ export class InvocationBuilder<I, O> implements RestateStreamConsumer {
     return this.complete.promise;
   }
 
-  private handleStartMessage(m: StartMessage): InvocationBuilder<I, O> {
+  private handleStartMessage(m: StartMessage): InvocationBuilder {
     this.nbEntriesToReplay = m.knownEntries;
     this.id = m.id;
     this.debugId = m.debugId;
     this.localStateStore = new LocalStateStore(m.partialState, m.stateMap);
+    this.userKey = m.key;
     return this;
   }
 
-  private addReplayEntry(m: Message): InvocationBuilder<I, O> {
+  private addReplayEntry(m: Message): InvocationBuilder {
     // Will be retrieved when the user code reaches this point
     this.replayEntries.set(this.runtimeReplayIndex, m);
     this.incrementRuntimeReplayIndex();
@@ -161,33 +163,35 @@ export class InvocationBuilder<I, O> implements RestateStreamConsumer {
     return this.state === State.Complete;
   }
 
-  public build(): Invocation<I, O> {
+  public build(): Invocation {
     if (!this.isComplete()) {
       throw new Error(
         `Cannot build invocation. Not all data present: ${JSON.stringify(this)}`
       );
     }
     return new Invocation(
-      this.method!,
+      this.component,
       this.id!,
       this.debugId!,
       this.nbEntriesToReplay!,
       this.replayEntries!,
       this.invocationValue!,
-      this.localStateStore!
+      this.localStateStore!,
+      this.userKey
     );
   }
 }
 
-export class Invocation<I, O> {
+export class Invocation {
   constructor(
-    public readonly method: HostedGrpcServiceMethod<I, O>,
+    public readonly handler: ComponentHandler,
     public readonly id: Buffer,
     public readonly debugId: string,
     public readonly nbEntriesToReplay: number,
     public readonly replayEntries: Map<number, Message>,
     public readonly invocationValue: InvocationValue,
-    public readonly localStateStore: LocalStateStore
+    public readonly localStateStore: LocalStateStore,
+    public readonly userKey?: string
   ) {}
 
   public inferLoggerContext(additionalContext?: {
@@ -195,9 +199,9 @@ export class Invocation<I, O> {
   }): LoggerContext {
     return new LoggerContext(
       this.debugId,
-      this.method.pkg,
-      this.method.service,
-      this.method.method.name,
+      "",
+      this.handler.name(),
+      this.handler.component().name(),
       additionalContext
     );
   }

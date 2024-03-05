@@ -10,7 +10,7 @@
  */
 
 import { RetrySettings } from "./utils/public_utils";
-import { Client, SendClient } from "./types/router";
+import { Client, SendClient } from "./types/rpc";
 import { ContextImpl } from "./context_impl";
 
 /**
@@ -75,9 +75,8 @@ export interface KeyValueStore {
  *   - awakeables
  *   - ...
  *
- * Keyed services can also access their key-value store using the {@link KeyedContext}.
+ * Keyed services can also access their key-value store using the {@link ObjectContext}.
  *
- * In gRPC-based API, to access this context, use {@link useContext}.
  */
 export interface Context {
   /**
@@ -250,7 +249,9 @@ export interface Context {
    * const result2 = await ctx.rpc(myApi).anotherAction(1337);
    * ```
    */
-  rpc<M>(opts: ServiceApi<M>): Client<M>;
+  service<M>(opts: ServiceApi<M>): Client<M>;
+
+  object<M>(opts: ObjectApi<M>, key: string): Client<M>;
 
   /**
    * Makes a type-safe one-way RPC to the specified target service. This method effectively behaves
@@ -291,7 +292,8 @@ export interface Context {
    * ctx.send(myApi).anotherAction(1337);
    * ```
    */
-  send<M>(opts: ServiceApi<M>): SendClient<M>;
+  objectSend<M>(opts: ObjectApi<M>, key: string): SendClient<M>;
+  serviceSend<M>(opts: ServiceApi<M>): SendClient<M>;
 
   /**
    * Makes a type-safe one-way RPC to the specified target service, after a delay specified by the
@@ -338,12 +340,12 @@ export interface Context {
    * ctx.sendDelayed(myApi, 60_000).anotherAction(1337);
    * ```
    */
-  sendDelayed<M>(opts: ServiceApi<M>, delay: number): SendClient<M>;
-
-  /**
-   * Get the {@link RestateGrpcChannel} to invoke gRPC based services.
-   */
-  grpcChannel(): RestateGrpcChannel;
+  objectSendDelayed<M>(
+    opts: ObjectApi<M>,
+    delay: number,
+    key: string
+  ): SendClient<M>;
+  serviceSendDelayed<M>(opts: ServiceApi<M>, delay: number): SendClient<M>;
 }
 
 /**
@@ -357,9 +359,10 @@ export interface Context {
  *
  * This context can be used only within keyed services/routers.
  *
- * In gRPC-based API, to access this context, use {@link useKeyedContext}.
  */
-export interface KeyedContext extends Context, KeyValueStore {}
+export interface ObjectContext extends Context, KeyValueStore {
+  key(): string;
+}
 
 export interface Rand {
   /**
@@ -488,118 +491,10 @@ export const CombineablePromise = {
   },
 };
 
-// ----------------------------------------------------------------------------
-//  types and functions for the gRPC-based API
-// ----------------------------------------------------------------------------
-
 /**
- * Interface to interact with **gRPC** based services. You can use this interface to instantiate a gRPC generated client.
+ * @deprecated use {@link ObjectContext}.
  */
-export interface RestateGrpcChannel {
-  /**
-   * Unidirectional call to other Restate services ( = in background / async / not waiting on response).
-   * To do this, wrap the call via the proto-ts client with oneWayCall, as shown in the example.
-   *
-   * NOTE: this returns a Promise because we override the gRPC clients provided by proto-ts.
-   * So we are required to return a Promise.
-   *
-   * @param call Invoke another service by using the generated proto-ts client.
-   * @example
-   * const ctx = restate.useContext(this);
-   * const client = new GreeterClientImpl(ctx);
-   * await ctx.oneWayCall(() =>
-   *   client.greet(Request.create({ name: "Peter" }))
-   * )
-   */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  oneWayCall(call: () => Promise<any>): Promise<void>;
-
-  /**
-   * Delayed unidirectional call to other Restate services ( = in background / async / not waiting on response).
-   * To do this, wrap the call via the proto-ts client with delayedCall, as shown in the example.
-   * Add the delay in millis as the second parameter.
-   *
-   * NOTE: this returns a Promise because we override the gRPC clients provided by proto-ts.
-   * So we are required to return a Promise.
-   *
-   * @param call Invoke another service by using the generated proto-ts client.
-   * @param delayMillis millisecond delay duration to delay the execution of the call
-   * @example
-   * const ctx = restate.useContext(this);
-   * const client = new GreeterClientImpl(ctx);
-   * await ctx.delayedCall(() =>
-   *   client.greet(Request.create({ name: "Peter" })),
-   *   5000
-   * )
-   */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  delayedCall(call: () => Promise<any>, delayMillis?: number): Promise<void>;
-
-  /**
-   * Call another Restate service and await the response.
-   *
-   * This function is not recommended to be called directly. Instead, use the generated gRPC client
-   * that was generated based on the Protobuf service definitions (which internally use this method):
-   *
-   * @example
-   * ```
-   * const ctx = restate.useContext(this);
-   * const client = new GreeterClientImpl(ctx);
-   * client.greet(Request.create({ name: "Peter" }))
-   * ```
-   *
-   * @param service name of the service to call
-   * @param method name of the method to call
-   * @param data payload as Uint8Array
-   * @returns a Promise that is resolved with the response of the called service
-   */
-  request(
-    service: string,
-    method: string,
-    data: Uint8Array
-  ): Promise<Uint8Array>;
-}
-
-/**
- * @deprecated use {@link KeyedContext}.
- */
-export type RestateContext = KeyedContext;
-
-/**
- * Returns the {@link Context} which is the entrypoint for all interaction with Restate.
- * Use this from within a method to retrieve the {@link Context}.
- * The context is bounded to a single invocation.
- *
- * @example
- * const ctx = restate.useContext(this);
- *
- */
-export function useContext<T>(instance: T): Context {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const wrapper = instance as any;
-  if (wrapper.$$restate === undefined || wrapper.$$restate === null) {
-    throw new Error(`not running within a Restate call.`);
-  }
-  return wrapper.$$restate;
-}
-
-/**
- * Returns the {@link KeyedContext} which is the entrypoint for all interaction with Restate.
- * Use this from within a method of a keyed service to retrieve the {@link KeyedContext}.
- * The context is bounded to a single invocation.
- *
- * @example
- * const ctx = restate.useKeyedContext(this);
- *
- */
-export function useKeyedContext<T>(instance: T): KeyedContext {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const wrapper = instance as any;
-  if (wrapper.$$restate === undefined || wrapper.$$restate === null) {
-    throw new Error(`not running within a Restate call.`);
-  }
-  return wrapper.$$restate;
-}
+export type RestateContext = ObjectContext;
 
 // ----------------------------------------------------------------------------
 //  types for the rpc-handler-based API
@@ -629,5 +524,23 @@ export function useKeyedContext<T>(instance: T): KeyedContext {
  * ```
  */
 export type ServiceApi<_M = unknown> = {
+  path: string;
+};
+
+export const serviceApi = <_M = unknown>(
+  path: string,
+  _m?: _M
+): ServiceApi<_M> => {
+  return { path };
+};
+
+export const objectApi = <_M = unknown>(
+  path: string,
+  _m?: _M
+): ObjectApi<_M> => {
+  return { path };
+};
+
+export type ObjectApi<_M = unknown> = {
   path: string;
 };

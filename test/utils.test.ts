@@ -12,7 +12,6 @@
 import { describe, expect } from "@jest/globals";
 import {
   jsonDeserialize,
-  jsonSafeAny,
   jsonSerialize,
   formatMessageAsJson,
 } from "../src/utils/utils";
@@ -126,77 +125,5 @@ describe("rand", () => {
     ];
 
     expect(actual).toStrictEqual(expected);
-  });
-});
-
-describe("jsonSafeAny", () => {
-  it("handles dates", () => {
-    expect(jsonSafeAny("", new Date(1701878170682))).toStrictEqual(
-      "2023-12-06T15:56:10.682Z"
-    );
-    expect(jsonSafeAny("", { date: new Date(1701878170682) })).toStrictEqual({
-      date: "2023-12-06T15:56:10.682Z",
-    });
-    expect(
-      jsonSafeAny("", {
-        dates: [new Date(1701878170682), new Date(1701878170683)],
-      })
-    ).toStrictEqual({
-      dates: ["2023-12-06T15:56:10.682Z", "2023-12-06T15:56:10.683Z"],
-    });
-  });
-  it("handles urls", () => {
-    expect(jsonSafeAny("", new URL("https://restate.dev"))).toStrictEqual(
-      "https://restate.dev/"
-    );
-  });
-  it("handles patched BigInts", () => {
-    // by default should do nothing
-    expect(jsonSafeAny("", BigInt("9007199254740991"))).toStrictEqual(
-      BigInt("9007199254740991")
-    );
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (BigInt.prototype as any).toJSON = function () {
-      return this.toString();
-    };
-    expect(jsonSafeAny("", BigInt("9007199254740991"))).toStrictEqual(
-      "9007199254740991"
-    );
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    delete (BigInt.prototype as any).toJSON;
-  });
-  it("handles custom types", () => {
-    const numberType = {
-      toJSON(): number {
-        return 1;
-      },
-    };
-    const stringType = {
-      toJSON(): string {
-        return "foo";
-      },
-    };
-    expect(jsonSafeAny("", numberType)).toStrictEqual(1);
-    expect(jsonSafeAny("", stringType)).toStrictEqual("foo");
-  });
-  it("provides the correct key", () => {
-    const keys: string[] = [];
-    const typ = {
-      toJSON(key: string): string {
-        keys.push(key);
-        return "";
-      },
-    };
-    expect(jsonSafeAny("", typ)).toStrictEqual("");
-    expect(jsonSafeAny("", { key: typ })).toStrictEqual({ key: "" });
-    expect(jsonSafeAny("", { key: [typ] })).toStrictEqual({ key: [""] });
-    expect(jsonSafeAny("", { key: [0, typ] })).toStrictEqual({ key: [0, ""] });
-    expect(jsonSafeAny("", { key: [0, { key2: typ }] })).toStrictEqual({
-      key: [0, { key2: "" }],
-    });
-    expect(jsonSafeAny("", { key: [0, { key2: [typ] }] })).toStrictEqual({
-      key: [0, { key2: [""] }],
-    });
-    expect(keys).toStrictEqual(["", "key", "0", "1", "key2", "0"]);
   });
 });

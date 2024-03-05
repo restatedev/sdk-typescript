@@ -53,7 +53,6 @@ import {
   GetStateKeysEntryMessage,
 } from "../src/types/protocol";
 import { Message } from "../src/types/types";
-import { TestRequest, TestResponse } from "../src/generated/proto/test";
 import {
   CombinatorEntryMessage,
   FailureWithTerminal,
@@ -69,11 +68,19 @@ import { rlog } from "../src/logger";
 import { ErrorCodes, RestateErrorCodes } from "../src/types/errors";
 import { SUPPORTED_PROTOCOL_VERSION } from "../src/io/decoder";
 
-export function startMessage(
-  knownEntries?: number,
-  partialState?: boolean,
-  state?: Buffer[][]
-): Message {
+export type StartMessageOpts = {
+  knownEntries?: number;
+  partialState?: boolean;
+  state?: Buffer[][];
+  key?: string;
+};
+
+export function startMessage({
+  knownEntries,
+  partialState,
+  state,
+  key,
+}: StartMessageOpts = {}): Message {
   return new Message(
     START_MESSAGE_TYPE,
     StartMessage.create({
@@ -85,6 +92,7 @@ export function startMessage(
       knownEntries: knownEntries, // only used for the Lambda case. For bidi streaming, this will be imputed by the testdriver
       stateMap: toStateEntries(state || []),
       partialState: partialState !== false,
+      key: key ?? "Till",
     }),
     undefined,
     SUPPORTED_PROTOCOL_VERSION,
@@ -338,7 +346,8 @@ export function invokeMessage(
   methodName: string,
   parameter: Uint8Array,
   value?: Uint8Array,
-  failure?: Failure
+  failure?: Failure,
+  key?: string
 ): Message {
   if (value != undefined) {
     return new Message(
@@ -348,6 +357,7 @@ export function invokeMessage(
         methodName: methodName,
         parameter: Buffer.from(parameter),
         value: Buffer.from(value),
+        key,
       })
     );
   } else if (failure != undefined) {
@@ -358,6 +368,7 @@ export function invokeMessage(
         methodName: methodName,
         parameter: Buffer.from(parameter),
         failure: failure,
+        key,
       })
     );
   } else {
@@ -367,6 +378,7 @@ export function invokeMessage(
         serviceName: serviceName,
         methodName: methodName,
         parameter: Buffer.from(parameter),
+        key,
       })
     );
   }
@@ -376,7 +388,8 @@ export function backgroundInvokeMessage(
   serviceName: string,
   methodName: string,
   parameter: Uint8Array,
-  invokeTime?: number
+  invokeTime?: number,
+  key?: string
 ): Message {
   return invokeTime
     ? new Message(
@@ -386,6 +399,7 @@ export function backgroundInvokeMessage(
           methodName: methodName,
           parameter: Buffer.from(parameter),
           invokeTime: invokeTime,
+          key,
         })
       )
     : new Message(
@@ -518,13 +532,13 @@ export function failureWithTerminal(
 }
 
 export function greetRequest(myName: string): Uint8Array {
-  return TestRequest.encode(TestRequest.create({ name: myName })).finish();
+  const str = JSON.stringify({ name: myName });
+  return Buffer.from(str);
 }
 
 export function greetResponse(myGreeting: string): Uint8Array {
-  return TestResponse.encode(
-    TestResponse.create({ greeting: myGreeting })
-  ).finish();
+  const str = JSON.stringify({ greeting: myGreeting });
+  return Buffer.from(str);
 }
 
 export function checkError(

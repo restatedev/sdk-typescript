@@ -32,9 +32,9 @@ export function workflow<R, T, U>(
 ): WorkflowServices<R, T, U> {
   // the state service manages all state and promises for us
   const stateServiceRouter = wss.workflowStateService;
-  const stateServiceApi: restate.ServiceApi<wss.api> = {
-    path: path + STATE_SERVICE_PATH_SUFFIX,
-  };
+  const stateServiceApi = restate.objectApi<wss.api>(
+    path + STATE_SERVICE_PATH_SUFFIX
+  );
 
   // the wrapper service manages life cycle, contexts, delegation to the state service
   const wrapperServiceRouter = wws.createWrapperService(
@@ -46,8 +46,8 @@ export function workflow<R, T, U>(
   return {
     api: { path } as restate.ServiceApi<WorkflowRestateRpcApi<R, T, U>>,
     registerServices: (endpoint: restate.RestateEndpoint) => {
-      endpoint.bindKeyedRouter(stateServiceApi.path, stateServiceRouter);
-      endpoint.bindRouter(path, wrapperServiceRouter);
+      endpoint.object(stateServiceApi.path, stateServiceRouter);
+      endpoint.service(path, wrapperServiceRouter);
     },
   } satisfies WorkflowServices<R, T, U>;
 }
@@ -126,7 +126,7 @@ export interface SharedWfContext {
  * This is a full context as for stateful durable keyed services, plus the
  * workflow-specific bits, like workflowID and durable promises.
  */
-export interface WfContext extends SharedWfContext, restate.KeyedContext {}
+export interface WfContext extends SharedWfContext, restate.ObjectContext {}
 
 export enum LifecycleStatus {
   NOT_STARTED = "NOT_STARTED",
