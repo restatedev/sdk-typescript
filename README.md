@@ -13,7 +13,7 @@ as part of long-running processes, or as FaaS (AWS Lambda).
 ```typescript
 // note that there is no failure handling in this example, because the combination of durable execution,
 // communication, and state storage makes this unnecessary here.
-const addToCart = async (ctx: restateObjectContext,  ticketId: string) => {
+const addToCart = async (ctx: restate.ObjectContext,  ticketId: string) => {
   // RPC participates in durable execution, so guaranteed to eventually happen and
   // will never get duplicated. would suspend if the other takes too long
   const success = await ctx.service(ticketApi).reserve(ticketId);
