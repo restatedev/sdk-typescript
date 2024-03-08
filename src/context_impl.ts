@@ -201,23 +201,6 @@ export class ContextImpl implements ObjectContext {
 
   // --- Calls, background calls, etc
 
-  public request(
-    service: string,
-    method: string,
-    data: Uint8Array
-  ): Promise<Uint8Array> {
-    if (this.isInOneWayCall()) {
-      return this.invokeOneWay(
-        service,
-        method,
-        data,
-        this.getOneWayCallDelay()
-      );
-    } else {
-      return this.invoke(service, method, data);
-    }
-  }
-
   // DON'T make this function async!!! see sideEffect comment for details.
   private invoke(
     service: string,
@@ -262,34 +245,6 @@ export class ContextImpl implements ObjectContext {
       msg
     );
     return new Uint8Array();
-  }
-
-  // DON'T make this function async!!! see sideEffect comment for details.
-  public oneWayCall(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    call: () => Promise<any>
-  ): Promise<void> {
-    this.checkState("oneWayCall");
-
-    return ContextImpl.callContext.run(
-      { type: CallContexType.OneWayCall },
-      call
-    );
-  }
-
-  // DON'T make this function async!!! see sideEffect comment for details.
-  public delayedCall(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    call: () => Promise<any>,
-    delayMillis?: number
-  ): Promise<void> {
-    this.checkState("delayedCall");
-
-    // Delayed call is a one way call with a delay
-    return ContextImpl.callContext.run(
-      { type: CallContexType.OneWayCall, delay: delayMillis },
-      call
-    );
   }
 
   service<M>({ path }: ServiceApi<M>): Client<M> {
@@ -345,7 +300,11 @@ export class ContextImpl implements ObjectContext {
           const route = prop as string;
           return (...args: unknown[]) => {
             const requestBytes = serializeJson(args.shift());
-            this.invokeOneWay(path, route, requestBytes, delayMillis);
+            this.invokeOneWay(path, route, requestBytes, delayMillis).catch(
+              (e) => {
+                this.stateMachine.handleDanglingPromiseError(e);
+              }
+            );
           };
         },
       }
@@ -370,7 +329,15 @@ export class ContextImpl implements ObjectContext {
           const route = prop as string;
           return (...args: unknown[]) => {
             const requestBytes = serializeJson(args.shift());
-            this.invokeOneWay(path, route, requestBytes, delayMillis, key);
+            this.invokeOneWay(
+              path,
+              route,
+              requestBytes,
+              delayMillis,
+              key
+            ).catch((e) => {
+              this.stateMachine.handleDanglingPromiseError(e);
+            });
           };
         },
       }

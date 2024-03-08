@@ -623,6 +623,15 @@ export class StateMachine implements RestateStreamConsumer {
     this.unhandledError(e);
   }
 
+  public handleDanglingPromiseError(e: Error): void {
+    this.console.info(
+      "Aborting function execution and closing state machine due to an error: " +
+        e.message
+    );
+
+    this.unhandledError(e);
+  }
+
   public nextEntryWillBeReplayed() {
     return this.journal.nextEntryWillBeReplayed();
   }
