@@ -523,24 +523,24 @@ export type RestateContext = ObjectContext;
  * ctx.rpc(myApi).someAction("hello!");
  * ```
  */
-export type ServiceApi<_M = unknown> = {
-  path: string;
+export type ServiceApi<_M = unknown, _P extends string = string> = {
+  path: _P;
 };
 
-export const serviceApi = <_M = unknown>(
-  path: string,
+export const serviceApi = <_M = unknown, _P extends string = string>(
+  path: _P,
   _m?: _M
-): ServiceApi<_M> => {
+): ServiceApi<_M, _P> => {
   return { path };
 };
 
-export const objectApi = <_M = unknown>(
-  path: string,
-  _m?: _M
-): ObjectApi<_M> => {
-  return { path };
+export type ObjectApi<_M = unknown, _P extends string = string> = {
+  path: _P;
 };
 
-export type ObjectApi<_M = unknown> = {
-  path: string;
+export const objectApi = <_M = unknown, _P extends string = string>(
+  path: _P,
+  _m?: _M
+): ObjectApi<_M, _P> => {
+  return { path };
 };
