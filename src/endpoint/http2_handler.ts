@@ -48,7 +48,7 @@ export class Http2Handler {
     });
   }
 
-  private handleConnection(
+  private async handleConnection(
     url: Url,
     stream: http2.ServerHttp2Stream
   ): Promise<void> {
@@ -76,7 +76,8 @@ export class Http2Handler {
       ":status": 200,
     });
     const restateStream = RestateHttp2Connection.from(stream);
-    return handleInvocation(handler, restateStream);
+    await handleInvocation(handler, restateStream);
+    return;
   }
 }
 
