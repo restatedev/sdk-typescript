@@ -175,7 +175,9 @@ export class ContextImpl implements ObjectContext {
     this.checkState("set state");
     this.checkStateOperation("set state");
     const msg = this.stateMachine.localStateStore.set(name, value);
-    this.stateMachine.handleUserCodeMessage(SET_STATE_ENTRY_MESSAGE_TYPE, msg);
+    this.stateMachine
+      .handleUserCodeMessage(SET_STATE_ENTRY_MESSAGE_TYPE, msg)
+      .catch((e) => this.stateMachine.handleDanglingPromiseError(e));
   }
 
   public clear(name: string): void {
@@ -183,20 +185,18 @@ export class ContextImpl implements ObjectContext {
     this.checkStateOperation("clear state");
 
     const msg = this.stateMachine.localStateStore.clear(name);
-    this.stateMachine.handleUserCodeMessage(
-      CLEAR_STATE_ENTRY_MESSAGE_TYPE,
-      msg
-    );
+    this.stateMachine
+      .handleUserCodeMessage(CLEAR_STATE_ENTRY_MESSAGE_TYPE, msg)
+      .catch((e) => this.stateMachine.handleDanglingPromiseError(e));
   }
 
   public clearAll(): void {
     this.checkState("clear all state");
 
     const msg = this.stateMachine.localStateStore.clearAll();
-    this.stateMachine.handleUserCodeMessage(
-      CLEAR_ALL_STATE_ENTRY_MESSAGE_TYPE,
-      msg
-    );
+    this.stateMachine
+      .handleUserCodeMessage(CLEAR_ALL_STATE_ENTRY_MESSAGE_TYPE, msg)
+      .catch((e) => this.stateMachine.handleDanglingPromiseError(e));
   }
 
   // --- Calls, background calls, etc
@@ -522,10 +522,12 @@ export class ContextImpl implements ObjectContext {
     base: DeepPartial<CompleteAwakeableEntryMessage>
   ): void {
     base.id = id;
-    this.stateMachine.handleUserCodeMessage(
-      COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
-      CompleteAwakeableEntryMessage.create(base)
-    );
+    this.stateMachine
+      .handleUserCodeMessage(
+        COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
+        CompleteAwakeableEntryMessage.create(base)
+      )
+      .catch((e) => this.stateMachine.handleDanglingPromiseError(e));
   }
 
   // Used by static methods of CombineablePromise
