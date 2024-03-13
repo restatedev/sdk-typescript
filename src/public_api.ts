@@ -13,10 +13,6 @@ export {
   RestateContext,
   Context,
   ObjectContext,
-  ServiceApi,
-  ObjectApi,
-  serviceApi,
-  objectApi,
   CombineablePromise,
   Rand,
 } from "./context";
@@ -24,7 +20,9 @@ export {
   service,
   object,
   Service,
+  ServiceDefintion,
   VirtualObject,
+  VirtualObjectDefintion,
   Client,
   SendClient,
 } from "./types/rpc";

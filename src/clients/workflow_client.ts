@@ -74,8 +74,9 @@ export interface RestateClient {
     client: WorkflowClient<R, unknown>;
   }>;
 
-  submitWorkflow<R, T, U>(
-    workflowApi: restate.ServiceApi<
+  submitWorkflow<P extends string, R, T, U>(
+    workflowApi: restate.ServiceDefintion<
+      P,
       restate.workflow.WorkflowRestateRpcApi<R, T, U>
     >,
     workflowId: string,
@@ -93,8 +94,9 @@ export interface RestateClient {
     client: WorkflowClient<R, unknown>;
   }>;
 
-  connectToWorkflow<R, T, U>(
-    workflowApi: restate.ServiceApi<
+  connectToWorkflow<P extends string, R, T, U>(
+    workflowApi: restate.ServiceDefintion<
+      P,
       restate.workflow.WorkflowRestateRpcApi<R, T, U>
     >,
     workflowId: string
@@ -114,10 +116,13 @@ export interface RestateClient {
  */
 export function connect(restateUri: string): RestateClient {
   return {
-    submitWorkflow: async <R, T, U>(
+    submitWorkflow: async <P extends string, R, T, U>(
       pathOrApi:
         | string
-        | restate.ServiceApi<restate.workflow.WorkflowRestateRpcApi<R, T, U>>,
+        | restate.ServiceDefintion<
+            P,
+            restate.workflow.WorkflowRestateRpcApi<R, T, U>
+          >,
       workflowId: string,
       params: T
     ): Promise<{
@@ -142,10 +147,13 @@ export function connect(restateUri: string): RestateClient {
       };
     },
 
-    async connectToWorkflow<R, T, U>(
+    async connectToWorkflow<P extends string, R, T, U>(
       pathOrApi:
         | string
-        | restate.ServiceApi<restate.workflow.WorkflowRestateRpcApi<R, T, U>>,
+        | restate.ServiceDefintion<
+            P,
+            restate.workflow.WorkflowRestateRpcApi<R, T, U>
+          >,
       workflowId: string
     ): Promise<{
       status: restate.workflow.LifecycleStatus;

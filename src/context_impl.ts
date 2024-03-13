@@ -9,7 +9,7 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { CombineablePromise, ObjectContext, Rand, ServiceApi } from "./context";
+import { CombineablePromise, ObjectContext, Rand } from "./context";
 import { StateMachine } from "./state_machine";
 import {
   AwakeableEntryMessage,
@@ -56,7 +56,7 @@ import {
   EXPONENTIAL_BACKOFF,
   RetrySettings,
 } from "./utils/public_utils";
-import { Client, SendClient } from "./types/rpc";
+import { Client, SendClient, ServiceDefintion } from "./types/rpc";
 import { RandImpl } from "./utils/rand";
 import { newJournalEntryPromiseId } from "./promise_combinator_tracker";
 import { WrappedPromise } from "./utils/promises";
@@ -247,7 +247,7 @@ export class ContextImpl implements ObjectContext {
     return new Uint8Array();
   }
 
-  service<M>({ path }: ServiceApi<M>): Client<M> {
+  service<P extends string, M>({ path }: ServiceDefintion<P, M>): Client<M> {
     const clientProxy = new Proxy(
       {},
       {
@@ -266,7 +266,10 @@ export class ContextImpl implements ObjectContext {
     return clientProxy as Client<M>;
   }
 
-  object<M>({ path }: ServiceApi<M>, key: string): Client<M> {
+  object<P extends string, M>(
+    { path }: ServiceDefintion<P, M>,
+    key: string
+  ): Client<M> {
     const clientProxy = new Proxy(
       {},
       {
@@ -285,12 +288,14 @@ export class ContextImpl implements ObjectContext {
     return clientProxy as Client<M>;
   }
 
-  public serviceSend<M>(options: ServiceApi): SendClient<M> {
+  public serviceSend<P extends string, M>(
+    options: ServiceDefintion<P, M>
+  ): SendClient<M> {
     return this.serviceSendDelayed(options, 0);
   }
 
-  public serviceSendDelayed<M>(
-    { path }: ServiceApi,
+  public serviceSendDelayed<P extends string, M>(
+    { path }: ServiceDefintion<P, M>,
     delayMillis: number
   ): SendClient<M> {
     const clientProxy = new Proxy(
@@ -313,12 +318,15 @@ export class ContextImpl implements ObjectContext {
     return clientProxy as SendClient<M>;
   }
 
-  public objectSend<M>(options: ServiceApi, key: string): SendClient<M> {
+  public objectSend<P extends string, M>(
+    options: ServiceDefintion<P, M>,
+    key: string
+  ): SendClient<M> {
     return this.objectSendDelayed(options, 0, key);
   }
 
-  public objectSendDelayed<M>(
-    { path }: ServiceApi,
+  public objectSendDelayed<P extends string, M>(
+    { path }: ServiceDefintion<P, M>,
     delayMillis: number,
     key: string
   ): SendClient<M> {

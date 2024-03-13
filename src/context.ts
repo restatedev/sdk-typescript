@@ -10,7 +10,12 @@
  */
 
 import { RetrySettings } from "./utils/public_utils";
-import { Client, SendClient } from "./types/rpc";
+import {
+  Client,
+  SendClient,
+  ServiceDefintion,
+  VirtualObjectDefintion,
+} from "./types/rpc";
 import { ContextImpl } from "./context_impl";
 
 /**
@@ -249,9 +254,12 @@ export interface Context {
    * const result2 = await ctx.rpc(myApi).anotherAction(1337);
    * ```
    */
-  service<M>(opts: ServiceApi<M>): Client<M>;
+  service<P extends string, M>(opts: ServiceDefintion<P, M>): Client<M>;
 
-  object<M>(opts: ObjectApi<M>, key: string): Client<M>;
+  object<P extends string, M>(
+    opts: VirtualObjectDefintion<P, M>,
+    key: string
+  ): Client<M>;
 
   /**
    * Makes a type-safe one-way RPC to the specified target service. This method effectively behaves
@@ -292,8 +300,11 @@ export interface Context {
    * ctx.send(myApi).anotherAction(1337);
    * ```
    */
-  objectSend<M>(opts: ObjectApi<M>, key: string): SendClient<M>;
-  serviceSend<M>(opts: ServiceApi<M>): SendClient<M>;
+  objectSend<P extends string, M>(
+    opts: VirtualObjectDefintion<P, M>,
+    key: string
+  ): SendClient<M>;
+  serviceSend<P extends string, M>(opts: ServiceDefintion<P, M>): SendClient<M>;
 
   /**
    * Makes a type-safe one-way RPC to the specified target service, after a delay specified by the
@@ -340,12 +351,15 @@ export interface Context {
    * ctx.sendDelayed(myApi, 60_000).anotherAction(1337);
    * ```
    */
-  objectSendDelayed<M>(
-    opts: ObjectApi<M>,
+  objectSendDelayed<P extends string, M>(
+    opts: VirtualObjectDefintion<P, M>,
     delay: number,
     key: string
   ): SendClient<M>;
-  serviceSendDelayed<M>(opts: ServiceApi<M>, delay: number): SendClient<M>;
+  serviceSendDelayed<P extends string, M>(
+    opts: ServiceDefintion<P, M>,
+    delay: number
+  ): SendClient<M>;
 }
 
 /**
@@ -495,52 +509,3 @@ export const CombineablePromise = {
  * @deprecated use {@link ObjectContext}.
  */
 export type RestateContext = ObjectContext;
-
-// ----------------------------------------------------------------------------
-//  types for the rpc-handler-based API
-// ----------------------------------------------------------------------------
-
-/* eslint-disable @typescript-eslint/no-unused-vars */
-
-/**
- * ServiceApi captures the type and parameters to make RPC calls and send messages to
- * a set of RPC handlers in a router.
- *
- * @example
- * **Service Side:**
- * ```ts
- * const router = restate.router({
- *   someAction:    async(ctx: restate.RpcContext, req: string) => { ... },
- *   anotherAction: async(ctx: restate.RpcContext, count: number) => { ... }
- * });
- *
- * export const myApi: restate.ServiceApi<typeof router> = { path : "myservice" };
- *
- * restate.createServer().bindRouter("myservice", router).listen(9080);
- * ```
- * **Client side:**
- * ```ts
- * ctx.rpc(myApi).someAction("hello!");
- * ```
- */
-export type ServiceApi<_M = unknown, _P extends string = string> = {
-  path: _P;
-};
-
-export const serviceApi = <_M = unknown, _P extends string = string>(
-  path: _P,
-  _m?: _M
-): ServiceApi<_M, _P> => {
-  return { path };
-};
-
-export type ObjectApi<_M = unknown, _P extends string = string> = {
-  path: _P;
-};
-
-export const objectApi = <_M = unknown, _P extends string = string>(
-  path: _P,
-  _m?: _M
-): ObjectApi<_M, _P> => {
-  return { path };
-};

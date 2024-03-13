@@ -19,11 +19,11 @@ const DEFAULT_RETENTION_PERIOD = 7 * 24 * 60 * 60 * 1000; // 1 week
 //                      Workflow Context Implementations
 // ----------------------------------------------------------------------------
 
-class SharedContextImpl implements wf.SharedWfContext {
+class SharedContextImpl<P extends string> implements wf.SharedWfContext {
   constructor(
     protected readonly ctx: restate.Context,
     protected readonly wfId: string,
-    protected readonly stateServiceApi: restate.ObjectApi<wss.api>
+    protected readonly stateServiceApi: wss.api<P>
   ) {}
 
   workflowId(): string {
@@ -90,17 +90,16 @@ class SharedContextImpl implements wf.SharedWfContext {
   }
 }
 
-class ExclusiveContextImpl extends SharedContextImpl implements wf.WfContext {
+class ExclusiveContextImpl<P extends string>
+  extends SharedContextImpl<P>
+  implements wf.WfContext
+{
   public readonly id: Buffer;
   public readonly serviceName: string;
   public readonly rand: restate.Rand;
   public readonly console: Console;
 
-  constructor(
-    ctx: restate.Context,
-    wfId: string,
-    stateServiceApi: restate.ObjectApi<wss.api>
-  ) {
+  constructor(ctx: restate.Context, wfId: string, stateServiceApi: wss.api<P>) {
     super(ctx, wfId, stateServiceApi);
     this.id = ctx.id;
     this.serviceName = ctx.serviceName;
@@ -156,30 +155,37 @@ class ExclusiveContextImpl extends SharedContextImpl implements wf.WfContext {
     return kctx.key();
   }
 
-  service<M>(opts: restate.ServiceApi<M>): restate.Client<M> {
+  service<P extends string, M>(
+    opts: restate.ServiceDefintion<P, M>
+  ): restate.Client<M> {
     return this.ctx.service(opts);
   }
-  object<M>(opts: restate.ServiceApi<M>, key: string): restate.Client<M> {
+  object<P extends string, M>(
+    opts: restate.ServiceDefintion<P, M>,
+    key: string
+  ): restate.Client<M> {
     return this.ctx.object(opts, key);
   }
-  objectSend<M>(
-    opts: restate.ServiceApi<M>,
+  objectSend<P extends string, M>(
+    opts: restate.ServiceDefintion<P, M>,
     key: string
   ): restate.SendClient<M> {
     return this.ctx.objectSend(opts, key);
   }
-  serviceSend<M>(opts: restate.ServiceApi<M>): restate.SendClient<M> {
+  serviceSend<P extends string, M>(
+    opts: restate.ServiceDefintion<P, M>
+  ): restate.SendClient<M> {
     return this.ctx.serviceSend(opts);
   }
-  objectSendDelayed<M>(
-    opts: restate.ServiceApi<M>,
+  objectSendDelayed<P extends string, M>(
+    opts: restate.ServiceDefintion<P, M>,
     delay: number,
     key: string
   ): restate.SendClient<M> {
     return this.ctx.objectSendDelayed(opts, delay, key);
   }
-  serviceSendDelayed<M>(
-    opts: restate.ServiceApi<M>,
+  serviceSendDelayed<P extends string, M>(
+    opts: restate.ServiceDefintion<P, M>,
     delay: number
   ): restate.SendClient<M> {
     return this.ctx.serviceSendDelayed(opts, delay);
@@ -190,10 +196,10 @@ class ExclusiveContextImpl extends SharedContextImpl implements wf.WfContext {
 //               the service that wraps the workflow methods
 // ----------------------------------------------------------------------------
 
-export function createWrapperService<R, T, M>(
+export function createWrapperService<P extends string, R, T, M>(
   workflow: wf.Workflow<R, T, M>,
-  path: string,
-  stateServiceApi: restate.ObjectApi<wss.api>
+  path: P,
+  stateServiceApi: wss.api<P>
 ) {
   const wrapperService = {
     submit: async (
@@ -206,7 +212,7 @@ export function createWrapperService<R, T, M>(
         .object(stateServiceApi, request.workflowId)
         .startWorkflow();
       if (started === wf.WorkflowStartResult.STARTED) {
-        ctx.service(wrapperServiceApi).run(request);
+        ctx.service(api).run(request);
       }
       return started;
     },
@@ -302,12 +308,9 @@ export function createWrapperService<R, T, M>(
     (wrapperService as any)[route] = wrappingHandler;
   }
 
-  const wrapperServiceRouter = restate.service(wrapperService);
-  const wrapperServiceApi: restate.ServiceApi<typeof wrapperServiceRouter> = {
-    path,
-  };
-
-  return wrapperServiceRouter;
+  const service = restate.service(path, wrapperService);
+  const api: typeof service = { path };
+  return service;
 }
 
 function checkRequestAndWorkflowId(request: wf.WorkflowRequest<unknown>): void {

@@ -9,7 +9,7 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { VirtualObject, Service } from "./types/rpc";
+import { VirtualObjectDefintion, ServiceDefintion } from "./types/rpc";
 import { Http2ServerRequest, Http2ServerResponse } from "http2";
 import { EndpointImpl } from "./endpoint/endpoint_impl";
 
@@ -75,7 +75,9 @@ export interface RestateEndpoint {
    * If the path is 'acme.myservice' and the router has '{ foo, bar }' as properties, the
    * Restate will expose the RPC paths '/acme.myservice/foo' and '/acme.myservice/bar'.
    */
-  service<M>(path: string, service: Service<M>): RestateEndpoint;
+  service<P extends string, M>(
+    service: ServiceDefintion<P, M>
+  ): RestateEndpoint;
 
   /**
    * Binds a new stateful keyed durable RPC service to the given path.
@@ -86,7 +88,9 @@ export interface RestateEndpoint {
    * If the path is 'acme.myservice' and the router has '{ foo, bar }' as properties, the
    * Restate will expose the RPC paths '/acme.myservice/foo' and '/acme.myservice/bar'.
    */
-  object<M>(path: string, virtualObject: VirtualObject<M>): RestateEndpoint;
+  object<P extends string, M>(
+    virtualObject: VirtualObjectDefintion<P, M>
+  ): RestateEndpoint;
 
   /**
    * Adds one or more services to this endpoint. This will call the

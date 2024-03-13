@@ -227,8 +227,7 @@ function getTestHandler() {
   return restate
     .endpoint()
     .object(
-      "greeter",
-      restate.object({
+      restate.object("greeter", {
         // eslint-disable @typescript-eslint/no-unused-vars
         greet: (ctx: restate.ObjectContext) =>
           new LambdaGreeter().greet(ctx /*req*/),

@@ -12,7 +12,7 @@
 /* eslint-disable @typescript-eslint/ban-types */
 
 import { RestateEndpoint, ServiceBundle } from "../public_api";
-import { VirtualObject, Service } from "../types/rpc";
+import { ServiceDefintion, VirtualObjectDefintion } from "../types/rpc";
 import { rlog } from "../logger";
 import http2, { Http2ServerRequest, Http2ServerResponse } from "http2";
 import { Http2Handler } from "./http2_handler";
@@ -22,7 +22,7 @@ import {
   ServiceComponent,
   ServiceHandlerFunction,
   VirtualObjectHandlerFunction,
-  VritualObjectComponent as VritualObjectComponent,
+  VritualObjectComponent,
 } from "../types/components";
 
 import * as discovery from "../types/discovery";
@@ -38,13 +38,25 @@ export class EndpointImpl implements RestateEndpoint {
     this.components.set(component.name(), component);
   }
 
-  public service<M>(path: string, router: Service<M>): RestateEndpoint {
-    this.bindServiceComponent(path, router);
+  public service<P extends string, M>(
+    defintion: ServiceDefintion<P, M>
+  ): RestateEndpoint {
+    const { path, service } = defintion;
+    if (!service) {
+      throw new TypeError(`no service implemention found.`);
+    }
+    this.bindServiceComponent(path, service);
     return this;
   }
 
-  public object<M>(path: string, router: VirtualObject<M>): RestateEndpoint {
-    this.bindVirtualObjectComponent(path, router);
+  public object<P extends string, M>(
+    defintion: VirtualObjectDefintion<P, M>
+  ): RestateEndpoint {
+    const { path, object } = defintion;
+    if (!object) {
+      throw new TypeError(`no object implemention found.`);
+    }
+    this.bindVirtualObjectComponent(path, object);
     return this;
   }
 
