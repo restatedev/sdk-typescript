@@ -56,11 +56,19 @@ export type Service<U> = {
     : never;
 };
 
-export const service = <M>(opts: ServiceOpts<M>): Service<M> => {
+export type ServiceDefintion<P extends string, M> = {
+  path: P;
+  service?: Service<M>;
+};
+
+export const service = <P extends string, M>(
+  path: P,
+  opts: ServiceOpts<M>
+): ServiceDefintion<P, Service<M>> => {
   if (opts === undefined || opts === null) {
     throw new Error("service must be defined");
   }
-  return opts as Service<M>;
+  return { path, service: opts as Service<M> };
 };
 
 // ----------- keyed handlers ----------------------------------------------
@@ -84,9 +92,17 @@ export type VirtualObject<U> = {
     : never;
 };
 
-export const object = <M>(opts: ObjectOpts<M>): VirtualObject<M> => {
+export type VirtualObjectDefintion<P extends string, M> = {
+  path: P;
+  object?: VirtualObject<M>;
+};
+
+export const object = <P extends string, M>(
+  path: P,
+  opts: ObjectOpts<M>
+): VirtualObjectDefintion<P, VirtualObject<M>> => {
   if (opts === undefined || opts === null) {
     throw new Error("object options must be defined");
   }
-  return opts as VirtualObject<M>;
+  return { path, object: opts as VirtualObject<M> };
 };

@@ -22,8 +22,8 @@ import { rlog } from "../src/logger";
 import { StateMachine } from "../src/state_machine";
 import { InvocationBuilder } from "../src/invocation";
 import { EndpointImpl } from "../src/endpoint/endpoint_impl";
-import { ObjectContext, ServiceApi } from "../src/context";
-import { object } from "../src/public_api";
+import { ObjectContext } from "../src/context";
+import { ServiceDefintion, object } from "../src/public_api";
 import { ProtocolMode } from "../src/types/discovery";
 
 export type TestRequest = {
@@ -42,7 +42,9 @@ export type GreetType = {
   greet: (key: string, arg: TestRequest) => Promise<TestResponse>;
 };
 
-export const GreeterApi: ServiceApi<GreetType> = { path: "greeter" };
+export const GreeterApi: ServiceDefintion<"greeter", GreetType> = {
+  path: "greeter",
+};
 
 export interface TestGreeter {
   greet(ctx: ObjectContext, message: TestRequest): Promise<TestResponse>;
@@ -62,13 +64,13 @@ export class TestDriver implements Connection {
   ) {
     this.restateServer = new TestRestateServer();
 
-    const svc = object({
+    const svc = object("greeter", {
       greet: async (ctx: ObjectContext, arg: TestRequest) => {
         return instance.greet(ctx, arg);
       },
     });
 
-    this.restateServer.object(GreeterApi.path, svc);
+    this.restateServer.object(svc);
 
     if (entries.length < 2) {
       throw new Error(

@@ -26,15 +26,15 @@ const STATE_SERVICE_PATH_SUFFIX = "_state";
  *   - one run method: `run(ctx: WfContext, params: T) => Promise<R>`
  *   - an arbitrary number of interaction methods: `foo(ctx: SharedWfContext, params: X) => Promise<Y>`
  */
-export function workflow<R, T, U>(
-  path: string,
+export function workflow<P extends string, R, T, U>(
+  path: P,
   workflow: Workflow<R, T, U>
-): WorkflowServices<R, T, U> {
+): WorkflowServices<P, R, T, U> {
   // the state service manages all state and promises for us
-  const stateServiceRouter = wss.workflowStateService;
-  const stateServiceApi = restate.objectApi<wss.api>(
-    path + STATE_SERVICE_PATH_SUFFIX
-  );
+  const stateServiceRouter = restate.object(path, wss.workflowStateService);
+  const stateServiceApi: wss.api<P> = {
+    path: (path + STATE_SERVICE_PATH_SUFFIX) as P,
+  };
 
   // the wrapper service manages life cycle, contexts, delegation to the state service
   const wrapperServiceRouter = wws.createWrapperService(
@@ -44,12 +44,15 @@ export function workflow<R, T, U>(
   );
 
   return {
-    api: { path } as restate.ServiceApi<WorkflowRestateRpcApi<R, T, U>>,
+    api: { path } as restate.ServiceDefintion<
+      P,
+      WorkflowRestateRpcApi<R, T, U>
+    >,
     registerServices: (endpoint: restate.RestateEndpoint) => {
-      endpoint.object(stateServiceApi.path, stateServiceRouter);
-      endpoint.service(path, wrapperServiceRouter);
+      endpoint.object(stateServiceRouter);
+      endpoint.service(wrapperServiceRouter);
     },
-  } satisfies WorkflowServices<R, T, U>;
+  } satisfies WorkflowServices<P, R, T, U>;
 }
 
 /**
@@ -87,12 +90,13 @@ type WorkflowMethods<R, T, U> = {
  * restate.createServer().bind(myWorkflow)
  * ```
  *
- * The {@link WorkflowServices.api} can be used to create typed clients, both
+ * The {@link WorkflowServices.api<P>} can be used to create typed clients, both
  * from other Restate-backed serviced (e.g., `ctx.rpc(api).triggerMySignal()`)
  * or from external clients (`clients.connectWorkflows(restateUri).connectToWorkflow(api, id);`).
  */
-export interface WorkflowServices<R, T, U> extends restate.ServiceBundle {
-  readonly api: restate.ServiceApi<WorkflowRestateRpcApi<R, T, U>>;
+export interface WorkflowServices<P extends string, R, T, U>
+  extends restate.ServiceBundle {
+  readonly api: restate.ServiceDefintion<P, WorkflowRestateRpcApi<R, T, U>>;
 }
 
 // ----------------------------------------------------------------------------

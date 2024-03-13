@@ -24,7 +24,12 @@ export type ValueOrError<T> = {
   error?: string;
 };
 
-export const workflowStateService = restate.object({
+export type api<P extends string> = restate.VirtualObjectDefintion<
+  P,
+  restate.VirtualObject<typeof workflowStateService>
+>;
+
+export const workflowStateService = {
   startWorkflow: async (
     ctx: restate.ObjectContext
   ): Promise<WorkflowStartResult> => {
@@ -196,9 +201,7 @@ export const workflowStateService = restate.object({
   dispose: async (ctx: restate.ObjectContext): Promise<void> => {
     ctx.clearAll();
   },
-});
-
-export type api = typeof workflowStateService;
+};
 
 // ----------------------------------------------------------------------------
 
