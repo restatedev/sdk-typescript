@@ -32,6 +32,7 @@ import {
   VirtualObjectHandler,
   parseUrlComponents,
 } from "../types/components";
+import { validateRequestSignature } from "./request_signing/validate";
 
 export class LambdaHandler {
   constructor(private readonly endpoint: EndpointImpl) {}
@@ -46,6 +47,20 @@ export class LambdaHandler {
     context: Context
   ): Promise<APIGatewayProxyResult | APIGatewayProxyResultV2> {
     const path = "path" in event ? event.path : event.rawPath;
+    const httpMethod =
+      "httpMethod" in event
+        ? event.httpMethod
+        : event.requestContext.http.method;
+
+    const error = this.validateConnectionSignature(
+      path,
+      httpMethod,
+      event.headers
+    );
+    if (error !== null) {
+      return error;
+    }
+
     const parsed = parseUrlComponents(path);
     if (!parsed) {
       const msg = `Invalid path: path doesn't end in /invoke/SvcName/MethodName and also not in /discover: ${path}`;
@@ -72,6 +87,42 @@ export class LambdaHandler {
       throw new Error("The incoming message body was null");
     }
     return this.handleInvoke(handler, event.body, context);
+  }
+
+  private validateConnectionSignature(
+    path: string,
+    method: string,
+    headers: { [name: string]: string | string[] | undefined }
+  ): APIGatewayProxyResult | APIGatewayProxyResultV2 | null {
+    if (!this.endpoint.keySet) {
+      // not validating
+      return null;
+    }
+
+    try {
+      const validateResponse = validateRequestSignature(
+        this.endpoint.keySet,
+        method,
+        path,
+        headers
+      );
+
+      if (!validateResponse.valid) {
+        rlog.error(
+          `Rejecting request with public keys ${validateResponse.invalidKeys} as its signature did not validate`
+        );
+        return this.toErrorResponse(401, "Unauthorized");
+      } else {
+        return null;
+      }
+    } catch (e) {
+      const error = ensureError(e);
+      rlog.error(
+        "Error while attempting to validate request signature:" + error.stack ??
+          error.message
+      );
+      return this.toErrorResponse(401, "Unauthorized");
+    }
   }
 
   private async handleInvoke(

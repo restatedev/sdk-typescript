@@ -27,6 +27,7 @@ import {
 } from "../types/components";
 
 import * as discovery from "../types/discovery";
+import { KeySetV1, parseKeySetV1 } from "./request_signing/v1";
 
 function isServiceDefinition<P extends string, M>(
   m: any
@@ -42,6 +43,11 @@ function isObjectDefinition<P extends string, M>(
 
 export class EndpointImpl implements RestateEndpoint {
   private readonly components: Map<string, Component> = new Map();
+  private _keySet?: KeySetV1;
+
+  public get keySet(): KeySetV1 | undefined {
+    return this._keySet;
+  }
 
   public componentByName(componentName: string): Component | undefined {
     return this.components.get(componentName);
@@ -79,16 +85,48 @@ export class EndpointImpl implements RestateEndpoint {
     return this;
   }
 
+  public withV1SigningKeys(...keys: string[]): RestateEndpoint {
+    if (!this._keySet) {
+      this._keySet = parseKeySetV1(keys);
+    }
+    parseKeySetV1(keys).forEach((buffer, key) =>
+      this._keySet?.set(key, buffer)
+    );
+    return this;
+  }
+
   http2Handler(): (
     request: Http2ServerRequest,
     response: Http2ServerResponse
   ) => void {
+    if (!this._keySet) {
+      rlog.warn(
+        `Accepting HTTP requests without validating request signatures; endpoint access must be restricted`
+      );
+    } else {
+      rlog.info(
+        `Validating HTTP requests using signing keys [${Array.from(
+          this._keySet.keys()
+        )}]`
+      );
+    }
     const handler = new Http2Handler(this);
     return handler.acceptConnection.bind(handler);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   lambdaHandler(): (event: any, ctx: any) => Promise<any> {
+    if (!this._keySet) {
+      rlog.warn(
+        `Accepting Lambda requests without validating request signatures; Invoke permissions must be restricted`
+      );
+    } else {
+      rlog.info(
+        `Validating Lambda requests using signing keys [${Array.from(
+          this._keySet.keys()
+        )}]`
+      );
+    }
     const handler = new LambdaHandler(this);
     return handler.handleRequest.bind(handler);
   }

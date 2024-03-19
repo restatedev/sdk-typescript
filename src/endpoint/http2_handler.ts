@@ -10,7 +10,7 @@
  */
 
 import stream from "stream";
-import { pipeline, finished } from "stream/promises";
+import { finished, pipeline } from "stream/promises";
 import http2, { Http2ServerRequest, Http2ServerResponse } from "http2";
 import { parse as urlparse, Url } from "url";
 import { EndpointImpl } from "./endpoint_impl";
@@ -21,11 +21,13 @@ import { StateMachine } from "../state_machine";
 import { rlog } from "../logger";
 import {
   ComponentHandler,
+  parseUrlComponents,
   UrlPathComponents,
   VirtualObjectHandler,
-  parseUrlComponents,
 } from "../types/components";
 import { Deployment, ProtocolMode } from "../types/discovery";
+import { validateRequestSignature } from "./request_signing/validate";
+import { ServerHttp2Stream } from "node:http2";
 
 export class Http2Handler {
   constructor(private readonly endpoint: EndpointImpl) {}
@@ -38,6 +40,10 @@ export class Http2Handler {
     const stream = request.stream;
     const url: Url = urlparse(request.url ?? "/");
 
+    if (!this.validateConnectionSignature(request, url, stream)) {
+      return;
+    }
+
     this.handleConnection(url, stream).catch((e) => {
       const error = ensureError(e);
       rlog.error(
@@ -46,6 +52,54 @@ export class Http2Handler {
       stream.end();
       stream.destroy();
     });
+  }
+
+  private validateConnectionSignature(
+    request: Http2ServerRequest,
+    url: Url,
+    stream: ServerHttp2Stream
+  ): boolean {
+    if (!this.endpoint.keySet) {
+      // not validating
+      return true;
+    }
+
+    try {
+      const validateResponse = validateRequestSignature(
+        this.endpoint.keySet,
+        request.method,
+        url.path ?? "/",
+        request.headers
+      );
+
+      if (!validateResponse.valid) {
+        rlog.error(
+          `Rejecting request with public keys ${validateResponse.invalidKeys} as its signature did not validate`
+        );
+        stream.respond({
+          "content-type": "application/restate",
+          ":status": 401,
+        });
+        stream.end();
+        stream.destroy();
+        return false;
+      } else {
+        return true;
+      }
+    } catch (e) {
+      const error = ensureError(e);
+      rlog.error(
+        "Error while attempting to validate request signature:" +
+          (error.stack ?? error.message)
+      );
+      stream.respond({
+        "content-type": "application/restate",
+        ":status": 401,
+      });
+      stream.end();
+      stream.destroy();
+      return false;
+    }
   }
 
   private handleConnection(

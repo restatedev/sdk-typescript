@@ -91,6 +91,8 @@ export interface RestateEndpoint {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   lambdaHandler(): (event: any, ctx: any) => Promise<any>;
 
+  withV1SigningKeys(...keys: string[]): RestateEndpoint;
+
   /**
    * Serve this Restate Endpoint as HTTP2 server, listening to the given port.
    *
