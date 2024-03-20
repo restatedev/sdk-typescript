@@ -25,6 +25,34 @@ export interface Ingress {
   serviceSend<P extends string, M>(
     opts: ServiceDefintion<P, M>
   ): IngressSendClient<M>;
+
+  /**
+   * Resolve an awakeable of another service.
+   * @param id the string ID of the awakeable.
+   * This is supplied by the service that needs to be woken up.
+   * @param payload the payload to pass to the service that is woken up.
+   * The SDK serializes the payload with `Buffer.from(JSON.stringify(payload))`
+   * and deserializes it in the receiving service with `JSON.parse(result.toString()) as T`.
+   *
+   * @example
+   * const ctx = restate.useContext(this);
+   * // The sleeping service should have sent the awakeableIdentifier string to this service.
+   * ctx.resolveAwakeable(awakeableIdentifier, "hello");
+   */
+  resolveAwakeable<T>(id: string, payload?: T): Promise<void>;
+
+  /**
+   * Reject an awakeable of another service. When rejecting, the service waiting on this awakeable will be woken up with a terminal error with the provided reason.
+   * @param id the string ID of the awakeable.
+   * This is supplied by the service that needs to be woken up.
+   * @param reason the reason of the rejection.
+   *
+   * @example
+   * const ctx = restate.useContext(this);
+   * // The sleeping service should have sent the awakeableIdentifier string to this service.
+   * ctx.rejectAwakeable(awakeableIdentifier, "super bad error");
+   */
+  rejectAwakeable(id: string, reason: string): Promise<void>;
 }
 
 export interface IngresCallOptions {
@@ -62,6 +90,12 @@ export type ConnectionOpts = {
   headers?: Record<string, string>;
 };
 
+/**
+ * Connect to the restate Ingress
+ *
+ * @param opts connection options
+ * @returns a connection the the restate ingress
+ */
 export function connect(opts: ConnectionOpts): Ingress {
   return new HttpIngress(opts);
 }
@@ -213,5 +247,43 @@ export class HttpIngress implements Ingress {
     opts: ServiceDefintion<P, M>
   ): IngressSendClient<M> {
     return this.proxy(opts.path, undefined, true) as IngressSendClient<M>;
+  }
+
+  async resolveAwakeable<T>(
+    id: string,
+    payload?: T | undefined
+  ): Promise<void> {
+    const url = `${this.opts.url}/restate/a/${id}/resolve`;
+    const headers = {
+      "Content-Type": "application/json",
+      ...(this.opts.headers ?? {}),
+    };
+    const body = serializeJson(payload);
+    const httpResponse = await fetch(url, {
+      method: "POST",
+      headers,
+      body,
+    });
+    if (!httpResponse.ok) {
+      const body = await httpResponse.text();
+      throw new Error(`Request failed: ${httpResponse.status}\n${body}`);
+    }
+  }
+
+  async rejectAwakeable(id: string, reason: string): Promise<void> {
+    const url = `${this.opts.url}/restate/a/${id}/reject`;
+    const headers = {
+      "Content-Type": "text/plain",
+      ...(this.opts.headers ?? {}),
+    };
+    const httpResponse = await fetch(url, {
+      method: "POST",
+      headers,
+      body: reason,
+    });
+    if (!httpResponse.ok) {
+      const body = await httpResponse.text();
+      throw new Error(`Request failed: ${httpResponse.status}\n${body}`);
+    }
   }
 }
