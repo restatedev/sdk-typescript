@@ -94,11 +94,12 @@ export class StateMachine implements RestateStreamConsumer {
 
     this.restateContext = new ContextImpl(
       this.invocation.id,
-      this.invocation.handler.component().name(),
       // The console exposed by RestateContext filters logs in replay, while the internal one is based on the ENV variables.
       createRestateConsole(loggerContext, () => !this.journal.isReplaying()),
       keyedContext,
       invocation.userKey,
+      invocation.invocationValue,
+      invocation.invocationHeaders,
       this
     );
     this.journal = new Journal(this.invocation);

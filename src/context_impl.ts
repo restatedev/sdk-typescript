@@ -9,7 +9,7 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { CombineablePromise, ObjectContext, Rand } from "./context";
+import { CombineablePromise, ObjectContext, Rand, Request } from "./context";
 import { StateMachine } from "./state_machine";
 import {
   AwakeableEntryMessage,
@@ -92,23 +92,35 @@ export class ContextImpl implements ObjectContext {
   // This is used to guard users against calling ctx.sideEffect without awaiting it.
   // See https://github.com/restatedev/sdk-typescript/issues/197 for more details.
   private executingSideEffect = false;
+  private readonly invocationRequest: Request;
 
   constructor(
-    public readonly id: Buffer,
-    public readonly serviceName: string,
+    id: Buffer,
     public readonly console: Console,
     public readonly keyedContext: boolean,
     public readonly keyedContextKey: string | undefined,
+    invocationValue: Uint8Array,
+    invocationHeaders: ReadonlyMap<string, string>,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private readonly stateMachine: StateMachine,
     public readonly rand: Rand = new RandImpl(id)
-  ) {}
+  ) {
+    this.invocationRequest = {
+      id,
+      headers: invocationHeaders,
+      body: invocationValue,
+    };
+  }
 
   public key(): string {
     if (!this.keyedContextKey) {
       throw new TerminalError("unexpected missing key");
     }
     return this.keyedContextKey;
+  }
+
+  public request(): Request {
+    return this.invocationRequest;
   }
 
   // DON'T make this function async!!! see sideEffect comment for details.
@@ -504,7 +516,9 @@ export class ContextImpl implements ObjectContext {
     return {
       id:
         AWAKEABLE_IDENTIFIER_PREFIX +
-        Buffer.concat([this.id, encodedEntryIndex]).toString("base64url"),
+        Buffer.concat([this.request().id, encodedEntryIndex]).toString(
+          "base64url"
+        ),
       promise: this.markCombineablePromise(promise),
     };
   }

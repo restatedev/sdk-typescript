@@ -42,6 +42,7 @@ export class InvocationBuilder implements RestateStreamConsumer {
   private nbEntriesToReplay?: number = undefined;
   private localStateStore?: LocalStateStore;
   private userKey?: string;
+  private invocationHeaders?: ReadonlyMap<string, string>;
 
   constructor(private readonly component: ComponentHandler) {}
 
@@ -95,6 +96,14 @@ export class InvocationBuilder implements RestateStreamConsumer {
     const pollInputStreamMessage = m.message as InputEntryMessage;
 
     this.invocationValue = pollInputStreamMessage.value;
+    if (pollInputStreamMessage.headers) {
+      const headers: Iterable<[string, string]> =
+        pollInputStreamMessage.headers.map((header) => [
+          header.key,
+          header.value,
+        ]);
+      this.invocationHeaders = new Map(headers);
+    }
   }
 
   public handleStreamError(e: Error): void {
@@ -145,6 +154,7 @@ export class InvocationBuilder implements RestateStreamConsumer {
       this.nbEntriesToReplay!,
       this.replayEntries!,
       this.invocationValue!,
+      this.invocationHeaders ?? new Map(),
       this.localStateStore!,
       this.userKey
     );
@@ -159,6 +169,7 @@ export class Invocation {
     public readonly nbEntriesToReplay: number,
     public readonly replayEntries: Map<number, Message>,
     public readonly invocationValue: Buffer,
+    public readonly invocationHeaders: ReadonlyMap<string, string>,
     public readonly localStateStore: LocalStateStore,
     public readonly userKey?: string
   ) {}
@@ -169,8 +180,8 @@ export class Invocation {
     return new LoggerContext(
       this.debugId,
       "",
-      this.handler.name(),
       this.handler.component().name(),
+      this.handler.name(),
       additionalContext
     );
   }
