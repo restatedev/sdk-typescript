@@ -4,4 +4,4 @@ managed:
 plugins:
   - plugin: es 
     out: src/generated
-    opt: target=ts
+    opt: target=ts,import_extension=.ts
