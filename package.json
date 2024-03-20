@@ -30,7 +30,8 @@
     "verify": "npm run format-check && npm run lint && npm run test && npm run build",
     "release": "release-it",
     "example": "RESTATE_DEBUG_LOGGING=OFF ts-node-dev --transpile-only ./examples/example.ts",
-    "workflowexample": "RESTATE_DEBUG_LOGGING=OFF ts-node-dev --transpile-only ./examples/workflow_example.ts"
+    "workflowexample": "RESTATE_DEBUG_LOGGING=OFF ts-node-dev --transpile-only ./examples/workflow_example.ts",
+    "ingress": "RESTATE_DEBUG_LOGGING=OFF ts-node-dev --transpile-only ./examples/ingress.ts"
   },
   "dependencies": {
     "protobufjs": "^7.2.2",
