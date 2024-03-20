@@ -51,7 +51,7 @@ import {
   PromiseId,
   PromiseType,
 } from "./promise_combinator_tracker";
-import { CombinatorEntryMessage } from "./generated/proto/javascript";
+import { CombinatorEntryMessage } from "./generated/proto/javascript_pb";
 import { ProtocolMode } from "./types/discovery";
 
 export class StateMachine implements RestateStreamConsumer {
@@ -269,10 +269,11 @@ export class StateMachine implements RestateStreamConsumer {
 
   async writeCombinatorOrderEntry(combinatorId: number, order: PromiseId[]) {
     if (this.journal.isProcessing()) {
-      const combinatorMessage: CombinatorEntryMessage = {
-        combinatorId,
-        journalEntriesOrder: order.map((pid) => pid.id),
-      };
+      const combinatorMessage: CombinatorEntryMessage =
+        new CombinatorEntryMessage({
+          combinatorId,
+          journalEntriesOrder: order.map((pid) => pid.id),
+        });
       this.console.debugJournalMessage(
         "Adding message to journal and sending to Restate",
         COMBINATOR_ENTRY_MESSAGE,
@@ -361,8 +362,8 @@ export class StateMachine implements RestateStreamConsumer {
           // handle the result value
           const msg = new Message(
             OUTPUT_ENTRY_MESSAGE_TYPE,
-            OutputEntryMessage.create({
-              value,
+            new OutputEntryMessage({
+              result: { case: "value", value },
             })
           );
 
@@ -387,7 +388,7 @@ export class StateMachine implements RestateStreamConsumer {
           this.console.debugInvokeMessage("Function completed successfully.");
 
           // Mark the end of the invocation
-          this.send(new Message(END_MESSAGE_TYPE, EndMessage.create()));
+          this.send(new Message(END_MESSAGE_TYPE, new EndMessage()));
 
           this.finish(value);
         } catch (e) {
@@ -445,8 +446,8 @@ export class StateMachine implements RestateStreamConsumer {
   private sendTerminalError(e: TerminalError) {
     const msg = new Message(
       OUTPUT_ENTRY_MESSAGE_TYPE,
-      OutputEntryMessage.create({
-        failure: e.toFailure(),
+      new OutputEntryMessage({
+        result: { case: "failure", value: e.toFailure() },
       })
     );
     this.console.debugJournalMessage(
@@ -461,7 +462,7 @@ export class StateMachine implements RestateStreamConsumer {
     }
 
     // Mark the end of the invocation
-    this.send(new Message(END_MESSAGE_TYPE, EndMessage.create()));
+    this.send(new Message(END_MESSAGE_TYPE, new EndMessage()));
   }
 
   private send(message: Message) {
@@ -550,7 +551,7 @@ export class StateMachine implements RestateStreamConsumer {
     // This will lead to a onCallSuccess call where this msg will be sent.
     const msg = new Message(
       SUSPENSION_MESSAGE_TYPE,
-      SuspensionMessage.create({
+      new SuspensionMessage({
         entryIndexes: indices,
       })
     );

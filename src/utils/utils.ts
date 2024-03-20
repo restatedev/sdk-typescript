@@ -19,7 +19,7 @@ import {
   InvokeEntryMessage,
   OutputEntryMessage,
   SetStateEntryMessage,
-} from "../generated/proto/protocol";
+} from "../generated/proto/protocol_pb";
 import {
   AWAKEABLE_ENTRY_MESSAGE_TYPE,
   BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
@@ -69,11 +69,25 @@ export function formatMessageAsJson(obj: any): string {
 // We check the fields which we can check
 // (the fields which do not contain results, because these might be filled in the result)
 
+const eq = (a: Uint8Array, b: Uint8Array): boolean => {
+  const n = a.length;
+  const m = b.length;
+  if (n !== m) {
+    return false;
+  }
+  for (let i = 0; i < n; i++) {
+    if (a.at(i) !== b.at(i)) {
+      return false;
+    }
+  }
+  return true;
+};
+
 const getStateMsgEquality = (
   msg1: GetStateEntryMessage,
   msg2: GetStateEntryMessage
 ) => {
-  return msg1.key.equals(msg2.key);
+  return eq(msg1.key, msg2.key);
 };
 
 const invokeMsgEquality = (
@@ -83,7 +97,7 @@ const invokeMsgEquality = (
   return (
     msg1.serviceName === msg2.serviceName &&
     msg1.methodName === msg2.methodName &&
-    msg1.parameter.equals(msg2.parameter)
+    eq(msg1.parameter, msg2.parameter)
   );
 };
 
@@ -91,14 +105,14 @@ const setStateMsgEquality = (
   msg1: SetStateEntryMessage,
   msg2: SetStateEntryMessage
 ) => {
-  return msg1.key.equals(msg2.key) && msg1.value.equals(msg2.value);
+  return eq(msg1.key, msg2.key) && eq(msg1.value, msg2.value);
 };
 
 const clearStateMsgEquality = (
   msg1: ClearStateEntryMessage,
   msg2: ClearStateEntryMessage
 ) => {
-  return msg1.key.equals(msg2.key);
+  return eq(msg1.key, msg2.key);
 };
 
 const completeAwakeableMsgEquality = (
@@ -109,12 +123,16 @@ const completeAwakeableMsgEquality = (
     return false;
   }
 
-  if (msg1.value && msg2.value) {
-    return msg1.value.equals(msg2.value);
-  } else if (msg1.failure && msg2.failure) {
+  if (
+    msg1.result.case === "value" &&
+    msg2.result.case === "value" &&
+    eq(msg1.result.value, msg2.result.value)
+  ) {
+    return true;
+  } else if (msg1.result.case === "failure" && msg2.result.case === "failure") {
     return (
-      msg1.failure?.code === msg2.failure?.code &&
-      msg1.failure?.message === msg2.failure?.message
+      msg1.result.value.code === msg2.result.value.code &&
+      msg1.result.value.message === msg2.result.value.message
     );
   } else {
     return false;
@@ -125,12 +143,16 @@ const outputMsgEquality = (
   msg1: OutputEntryMessage,
   msg2: OutputEntryMessage
 ) => {
-  if (msg1.value && msg2.value) {
-    return msg1.value.equals(msg2.value);
-  } else if (msg1.failure && msg2.failure) {
+  if (
+    msg1.result.case === "value" &&
+    msg2.result.case === "value" &&
+    eq(msg1.result.value, msg2.result.value)
+  ) {
+    return true;
+  } else if (msg1.result.case === "failure" && msg2.result.case === "failure") {
     return (
-      msg1.failure?.code === msg2.failure?.code &&
-      msg1.failure?.message === msg2.failure?.message
+      msg1.result.value.code === msg2.result.value.code &&
+      msg1.result.value.message === msg2.result.value.message
     );
   } else {
     return false;

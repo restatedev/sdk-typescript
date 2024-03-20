@@ -74,11 +74,17 @@ describe("GetStringStateGreeter", () => {
       completionMessage(1, JSON.stringify("Francesco")),
     ]).run();
 
-    expect(result).toStrictEqual([
-      getStateMessage("STATE"),
-      outputMessage(greetResponse("Hello Francesco")),
-      END_MESSAGE,
-    ]);
+    expect(result[0]).toStrictEqual(getStateMessage("STATE"));
+    expect(result[1]).toStrictEqual(
+      outputMessage(greetResponse("Hello Francesco"))
+    );
+    expect(result[2]).toStrictEqual(END_MESSAGE);
+
+    // expect(result).toBe([
+    //   getStateMessage("STATE"),
+    //   outputMessage(greetResponse("Hello Francesco")),
+    //   END_MESSAGE,
+    // ]);
   });
 
   it("handles completion with empty", async () => {

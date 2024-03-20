@@ -42,7 +42,8 @@ export class Message {
     }
     return {
       messageType: formatMessageType(this.messageType),
-      message: pbType.toJSON(this.message),
+      //eslint-disable-next-line @typescript-eslint/no-explicit-any
+      message: (pbType as any).toJson(this.message),
     };
   }
 }

@@ -12,7 +12,7 @@
 /*eslint-disable @typescript-eslint/no-non-null-assertion*/
 
 import { Message } from "./types/types";
-import { InputEntryMessage, StartMessage } from "./generated/proto/protocol";
+import { InputEntryMessage, StartMessage } from "./generated/proto/protocol_pb";
 import { formatMessageAsJson } from "./utils/utils";
 import { INPUT_ENTRY_MESSAGE_TYPE, START_MESSAGE_TYPE } from "./types/protocol";
 import { RestateStreamConsumer } from "./connection/connection";
@@ -21,6 +21,7 @@ import { ensureError } from "./types/errors";
 import { LoggerContext } from "./logger";
 import { CompletablePromise } from "./utils/promises";
 import { ComponentHandler } from "./types/components";
+import { Buffer } from "node:buffer";
 
 enum State {
   ExpectingStart = 0,
@@ -95,7 +96,7 @@ export class InvocationBuilder implements RestateStreamConsumer {
   private handlePollInputStreamEntry(m: Message) {
     const pollInputStreamMessage = m.message as InputEntryMessage;
 
-    this.invocationValue = pollInputStreamMessage.value;
+    this.invocationValue = Buffer.from(pollInputStreamMessage.value);
     if (pollInputStreamMessage.headers) {
       const headers: Iterable<[string, string]> =
         pollInputStreamMessage.headers.map((header) => [
@@ -119,7 +120,7 @@ export class InvocationBuilder implements RestateStreamConsumer {
 
   private handleStartMessage(m: StartMessage): InvocationBuilder {
     this.nbEntriesToReplay = m.knownEntries;
-    this.id = m.id;
+    this.id = Buffer.from(m.id);
     this.debugId = m.debugId;
     this.localStateStore = new LocalStateStore(m.partialState, m.stateMap);
     this.userKey = m.key;

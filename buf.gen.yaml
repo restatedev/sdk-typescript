@@ -2,6 +2,6 @@ version: v1
 managed:
   enabled: true
 plugins:
-  - plugin: buf.build/community/stephenh-ts-proto
+  - plugin: es 
     out: src/generated
-    opt: outputSchema=true,env=node,esModuleInterop=true,lowerCaseServiceMethods=true,paths=source_relative,useExactTypes=false
+    opt: target=ts

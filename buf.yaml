@@ -1,6 +1,4 @@
 version: v1
-#deps:
-#  - buf.build/restatedev/proto
 build:
   excludes:
     - node_modules
@@ -10,3 +8,5 @@ breaking:
 lint:
   use:
     - DEFAULT
+deps:
+  - buf.build/protocolbuffers/wellknowntypes:v21.12

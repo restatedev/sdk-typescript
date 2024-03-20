@@ -10,7 +10,7 @@
  */
 
 /* istanbul ignore file */
-import { Empty } from "../src/generated/google/protobuf/empty";
+import { Empty, protoInt64 } from "@bufbuild/protobuf";
 import {
   StartMessage,
   START_MESSAGE_TYPE,
@@ -57,11 +57,11 @@ import {
   CombinatorEntryMessage,
   FailureWithTerminal,
   SideEffectEntryMessage,
-} from "../src/generated/proto/javascript";
+} from "../src/generated/proto/javascript_pb";
 import {
   Failure,
   StartMessage_StateEntry,
-} from "../src/generated/proto/protocol";
+} from "../src/generated/proto/protocol_pb";
 import { expect } from "@jest/globals";
 import { jsonSerialize, formatMessageAsJson } from "../src/utils/utils";
 import { rlog } from "../src/logger";
@@ -87,7 +87,7 @@ export function startMessage({
 }: StartMessageOpts = {}): Message {
   return new Message(
     START_MESSAGE_TYPE,
-    StartMessage.create({
+    new StartMessage({
       id: Buffer.from(
         "f311f1fdcb9863f0018bd3400ecd7d69b547204e776218b2",
         "hex"
@@ -106,8 +106,8 @@ export function startMessage({
 
 export function toStateEntries(entries: Buffer[][]) {
   return (
-    entries.map((el) =>
-      StartMessage_StateEntry.create({ key: el[0], value: el[1] })
+    entries.map(
+      (el) => new StartMessage_StateEntry({ key: el[0], value: el[1] })
     ) || []
   );
 }
@@ -116,8 +116,8 @@ export function inputMessage(value: Uint8Array): Message {
   if (value !== undefined) {
     return new Message(
       INPUT_ENTRY_MESSAGE_TYPE,
-      InputEntryMessage.create({
-        value: Buffer.from(value),
+      new InputEntryMessage({
+        value,
       })
     );
   } else {
@@ -129,25 +129,28 @@ export function outputMessage(value?: Uint8Array, failure?: Failure): Message {
   if (value !== undefined) {
     return new Message(
       OUTPUT_ENTRY_MESSAGE_TYPE,
-      OutputEntryMessage.create({
-        value: Buffer.from(value),
+      new OutputEntryMessage({
+        result: { case: "value", value: Buffer.from(value) },
       })
     );
   } else if (failure !== undefined) {
     return new Message(
       OUTPUT_ENTRY_MESSAGE_TYPE,
-      OutputEntryMessage.create({
-        failure: failure,
+      new OutputEntryMessage({
+        result: { case: "failure", value: failure },
       })
     );
   } else {
     return new Message(
       OUTPUT_ENTRY_MESSAGE_TYPE,
-      OutputEntryMessage.create({
-        failure: Failure.create({
-          code: 13,
-          message: `Uncaught exception for invocation id abcd`,
-        }),
+      new OutputEntryMessage({
+        result: {
+          case: "failure",
+          value: new Failure({
+            code: 13,
+            message: `Uncaught exception for invocation id abcd`,
+          }),
+        },
       })
     );
   }
@@ -162,34 +165,34 @@ export function getStateMessage<T>(
   if (empty === true) {
     return new Message(
       GET_STATE_ENTRY_MESSAGE_TYPE,
-      GetStateEntryMessage.create({
+      new GetStateEntryMessage({
         key: Buffer.from(key),
-        empty: Empty.create({}),
+        result: { case: "empty", value: new Empty() },
       }),
       true
     );
   } else if (value !== undefined) {
     return new Message(
       GET_STATE_ENTRY_MESSAGE_TYPE,
-      GetStateEntryMessage.create({
+      new GetStateEntryMessage({
         key: Buffer.from(key),
-        value: Buffer.from(jsonSerialize(value)),
+        result: { case: "value", value: Buffer.from(jsonSerialize(value)) },
       }),
       true
     );
   } else if (failure !== undefined) {
     return new Message(
       GET_STATE_ENTRY_MESSAGE_TYPE,
-      GetStateEntryMessage.create({
+      new GetStateEntryMessage({
         key: Buffer.from(key),
-        failure: failure,
+        result: { case: "failure", value: failure },
       }),
       true
     );
   } else {
     return new Message(
       GET_STATE_ENTRY_MESSAGE_TYPE,
-      GetStateEntryMessage.create({
+      new GetStateEntryMessage({
         key: Buffer.from(key),
       }),
       false
@@ -198,29 +201,23 @@ export function getStateMessage<T>(
 }
 
 export function getStateMessageWithEmptyResult(key: string): Message {
-  return new Message(
-    GET_STATE_ENTRY_MESSAGE_TYPE,
-    GetStateEntryMessage.create({
-      key: Buffer.from(key),
-      empty: Empty.create({}),
-    }),
-    true
-  );
+  return getStateMessage(key, undefined, true);
 }
 
 export function getStateKeysMessage(value?: Array<string>): Message {
   if (value === undefined) {
     return new Message(
       GET_STATE_KEYS_ENTRY_MESSAGE_TYPE,
-      GetStateKeysEntryMessage.create({}),
+      new GetStateKeysEntryMessage({}),
       false
     );
   } else {
     return new Message(
       GET_STATE_KEYS_ENTRY_MESSAGE_TYPE,
-      GetStateKeysEntryMessage.create({
-        value: {
-          keys: value.map((b) => Buffer.from(b)),
+      new GetStateKeysEntryMessage({
+        result: {
+          case: "value",
+          value: { keys: value.map((b) => Buffer.from(b)) },
         },
       }),
       true
@@ -231,7 +228,7 @@ export function getStateKeysMessage(value?: Array<string>): Message {
 export function setStateMessage<T>(key: string, value: T): Message {
   return new Message(
     SET_STATE_ENTRY_MESSAGE_TYPE,
-    SetStateEntryMessage.create({
+    new SetStateEntryMessage({
       key: Buffer.from(key),
       value: Buffer.from(jsonSerialize(value)),
     })
@@ -241,7 +238,7 @@ export function setStateMessage<T>(key: string, value: T): Message {
 export function clearStateMessage(key: string): Message {
   return new Message(
     CLEAR_STATE_ENTRY_MESSAGE_TYPE,
-    ClearStateEntryMessage.create({
+    new ClearStateEntryMessage({
       key: Buffer.from(key),
     })
   );
@@ -255,24 +252,24 @@ export function sleepMessage(
   if (empty !== undefined) {
     return new Message(
       SLEEP_ENTRY_MESSAGE_TYPE,
-      SleepEntryMessage.create({
-        wakeUpTime: wakeupTime,
-        empty: empty,
+      new SleepEntryMessage({
+        wakeUpTime: protoInt64.parse(wakeupTime),
+        result: { case: "empty", value: empty },
       })
     );
   } else if (failure !== undefined) {
     return new Message(
       SLEEP_ENTRY_MESSAGE_TYPE,
-      SleepEntryMessage.create({
-        wakeUpTime: wakeupTime,
-        failure: failure,
+      new SleepEntryMessage({
+        wakeUpTime: protoInt64.parse(wakeupTime),
+        result: { case: "failure", value: failure },
       })
     );
   } else {
     return new Message(
       SLEEP_ENTRY_MESSAGE_TYPE,
-      SleepEntryMessage.create({
-        wakeUpTime: wakeupTime,
+      new SleepEntryMessage({
+        wakeUpTime: protoInt64.parse(wakeupTime),
       })
     );
   }
@@ -288,31 +285,31 @@ export function completionMessage(
   if (value !== undefined) {
     return new Message(
       COMPLETION_MESSAGE_TYPE,
-      CompletionMessage.create({
+      new CompletionMessage({
         entryIndex: index,
-        value: Buffer.from(value),
+        result: { case: "value", value: Buffer.from(value) },
       })
     );
   } else if (empty) {
     return new Message(
       COMPLETION_MESSAGE_TYPE,
-      CompletionMessage.create({
+      new CompletionMessage({
         entryIndex: index,
-        empty: Empty.create(),
+        result: { case: "empty", value: new Empty() },
       })
     );
   } else if (failure != undefined) {
     return new Message(
       COMPLETION_MESSAGE_TYPE,
-      CompletionMessage.create({
+      new CompletionMessage({
         entryIndex: index,
-        failure: failure,
+        result: { case: "failure", value: failure },
       })
     );
   } else {
     return new Message(
       COMPLETION_MESSAGE_TYPE,
-      CompletionMessage.create({
+      new CompletionMessage({
         entryIndex: index,
       })
     );
@@ -322,9 +319,9 @@ export function completionMessage(
 export function completionMessageWithEmpty(index: number): Message {
   return new Message(
     COMPLETION_MESSAGE_TYPE,
-    CompletionMessage.create({
+    new CompletionMessage({
       entryIndex: index,
-      empty: Empty.create(),
+      result: { case: "empty", value: new Empty() },
     })
   );
 }
@@ -332,7 +329,7 @@ export function completionMessageWithEmpty(index: number): Message {
 export function ackMessage(index: number): Message {
   return new Message(
     ENTRY_ACK_MESSAGE_TYPE,
-    EntryAckMessage.create({
+    new EntryAckMessage({
       entryIndex: index,
     })
   );
@@ -349,29 +346,29 @@ export function invokeMessage(
   if (value != undefined) {
     return new Message(
       INVOKE_ENTRY_MESSAGE_TYPE,
-      InvokeEntryMessage.create({
+      new InvokeEntryMessage({
         serviceName: serviceName,
         methodName: methodName,
         parameter: Buffer.from(parameter),
-        value: Buffer.from(value),
+        result: { case: "value", value: value },
         key,
       })
     );
   } else if (failure != undefined) {
     return new Message(
       INVOKE_ENTRY_MESSAGE_TYPE,
-      InvokeEntryMessage.create({
+      new InvokeEntryMessage({
         serviceName: serviceName,
         methodName: methodName,
         parameter: Buffer.from(parameter),
-        failure: failure,
+        result: { case: "failure", value: failure },
         key,
       })
     );
   } else {
     return new Message(
       INVOKE_ENTRY_MESSAGE_TYPE,
-      InvokeEntryMessage.create({
+      new InvokeEntryMessage({
         serviceName: serviceName,
         methodName: methodName,
         parameter: Buffer.from(parameter),
@@ -391,17 +388,17 @@ export function backgroundInvokeMessage(
   return invokeTime
     ? new Message(
         BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
-        BackgroundInvokeEntryMessage.create({
+        new BackgroundInvokeEntryMessage({
           serviceName: serviceName,
           methodName: methodName,
           parameter: Buffer.from(parameter),
-          invokeTime: invokeTime,
+          invokeTime: protoInt64.parse(invokeTime),
           key,
         })
       )
     : new Message(
         BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
-        BackgroundInvokeEntryMessage.create({
+        new BackgroundInvokeEntryMessage({
           serviceName: serviceName,
           methodName: methodName,
           parameter: Buffer.from(parameter),
@@ -416,8 +413,8 @@ export function sideEffectMessage<T>(
   if (value !== undefined) {
     return new Message(
       SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-      SideEffectEntryMessage.create({
-        value: Buffer.from(JSON.stringify(value)),
+      new SideEffectEntryMessage({
+        result: { case: "value", value: Buffer.from(JSON.stringify(value)) },
       }),
       false,
       undefined,
@@ -426,7 +423,9 @@ export function sideEffectMessage<T>(
   } else if (failure !== undefined) {
     return new Message(
       SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-      SideEffectEntryMessage.create({ failure: failure }),
+      new SideEffectEntryMessage({
+        result: { case: "failure", value: failure },
+      }),
       false,
       undefined,
       true
@@ -434,7 +433,7 @@ export function sideEffectMessage<T>(
   } else {
     return new Message(
       SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-      SideEffectEntryMessage.create({}),
+      new SideEffectEntryMessage({}),
       false,
       undefined,
       true
@@ -446,21 +445,21 @@ export function awakeableMessage<T>(payload?: T, failure?: Failure): Message {
   if (payload) {
     return new Message(
       AWAKEABLE_ENTRY_MESSAGE_TYPE,
-      AwakeableEntryMessage.create({
-        value: Buffer.from(JSON.stringify(payload)),
+      new AwakeableEntryMessage({
+        result: { case: "value", value: Buffer.from(JSON.stringify(payload)) },
       })
     );
   } else if (failure) {
     return new Message(
       AWAKEABLE_ENTRY_MESSAGE_TYPE,
-      AwakeableEntryMessage.create({
-        failure: failure,
+      new AwakeableEntryMessage({
+        result: { case: "failure", value: failure },
       })
     );
   } else {
     return new Message(
       AWAKEABLE_ENTRY_MESSAGE_TYPE,
-      AwakeableEntryMessage.create()
+      new AwakeableEntryMessage()
     );
   }
 }
@@ -468,9 +467,9 @@ export function awakeableMessage<T>(payload?: T, failure?: Failure): Message {
 export function resolveAwakeableMessage<T>(id: string, payload: T): Message {
   return new Message(
     COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
-    CompleteAwakeableEntryMessage.create({
+    new CompleteAwakeableEntryMessage({
       id: id,
-      value: Buffer.from(JSON.stringify(payload)),
+      result: { case: "value", value: Buffer.from(JSON.stringify(payload)) },
     })
   );
 }
@@ -478,9 +477,12 @@ export function resolveAwakeableMessage<T>(id: string, payload: T): Message {
 export function rejectAwakeableMessage(id: string, reason: string): Message {
   return new Message(
     COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
-    CompleteAwakeableEntryMessage.create({
+    new CompleteAwakeableEntryMessage({
       id: id,
-      failure: { code: UNKNOWN_ERROR_CODE, message: reason },
+      result: {
+        case: "failure",
+        value: { code: UNKNOWN_ERROR_CODE, message: reason },
+      },
     })
   );
 }
@@ -488,7 +490,7 @@ export function rejectAwakeableMessage(id: string, reason: string): Message {
 export function suspensionMessage(entryIndices: number[]): Message {
   return new Message(
     SUSPENSION_MESSAGE_TYPE,
-    SuspensionMessage.create({
+    new SuspensionMessage({
       entryIndexes: entryIndices,
     })
   );
@@ -500,7 +502,7 @@ export function combinatorEntryMessage(
 ): Message {
   return new Message(
     COMBINATOR_ENTRY_MESSAGE,
-    CombinatorEntryMessage.create({
+    new CombinatorEntryMessage({
       combinatorId,
       journalEntriesOrder,
     }),
@@ -514,7 +516,7 @@ export function failure(
   msg: string,
   code: number = INTERNAL_ERROR_CODE
 ): Failure {
-  return Failure.create({ code: code, message: msg });
+  return new Failure({ code: code, message: msg });
 }
 
 export function failureWithTerminal(
@@ -522,9 +524,9 @@ export function failureWithTerminal(
   msg: string,
   code: number = INTERNAL_ERROR_CODE
 ): FailureWithTerminal {
-  return FailureWithTerminal.create({
+  return new FailureWithTerminal({
     terminal,
-    failure: Failure.create({ code: code, message: msg }),
+    failure: new Failure({ code: code, message: msg }),
   });
 }
 
@@ -558,9 +560,9 @@ export function checkJournalMismatchError(outputMsg: Message) {
 
 export function checkTerminalError(outputMsg: Message, errorMessage: string) {
   expect(outputMsg.messageType).toEqual(OUTPUT_ENTRY_MESSAGE_TYPE);
-  expect((outputMsg.message as OutputEntryMessage).failure?.message).toContain(
-    errorMessage
-  );
+
+  const res = (outputMsg.message as OutputEntryMessage).result;
+  expect(res.case === "failure" && res.value.message).toContain(errorMessage);
 }
 
 export function getAwakeableId(entryIndex: number): string {
@@ -580,10 +582,10 @@ export function keyVal(key: string, value: any): Buffer[] {
   return [Buffer.from(key), Buffer.from(JSON.stringify(value))];
 }
 
-export const END_MESSAGE = new Message(END_MESSAGE_TYPE, EndMessage.create());
+export const END_MESSAGE = new Message(END_MESSAGE_TYPE, new EndMessage());
 export const CLEAR_ALL_STATE_ENTRY_MESSAGE = new Message(
   CLEAR_ALL_STATE_ENTRY_MESSAGE_TYPE,
-  ClearAllStateEntryMessage.create()
+  new ClearAllStateEntryMessage()
 );
 
 // a utility function to print the results of a test

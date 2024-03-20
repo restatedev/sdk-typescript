@@ -9,10 +9,11 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
+import { Message } from "@bufbuild/protobuf";
 import {
   SideEffectEntryMessage,
   CombinatorEntryMessage,
-} from "../generated/proto/javascript";
+} from "../generated/proto/javascript_pb";
 import {
   AwakeableEntryMessage,
   BackgroundInvokeEntryMessage,
@@ -32,7 +33,7 @@ import {
   SleepEntryMessage,
   StartMessage,
   SuspensionMessage,
-} from "../generated/proto/protocol";
+} from "../generated/proto/protocol_pb";
 
 // Re-export the protobuf messages.
 export {
@@ -54,7 +55,7 @@ export {
   StartMessage,
   SuspensionMessage,
   EntryAckMessage,
-} from "../generated/proto/protocol";
+} from "../generated/proto/protocol_pb";
 
 // Export the protocol message types as defined by the restate protocol.
 export const START_MESSAGE_TYPE = 0x0000n;
@@ -140,7 +141,7 @@ export function formatMessageType(messageType: bigint) {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const PROTOBUF_MESSAGES: Array<[bigint, any]> = [
+const PROTOBUF_MESSAGES: Array<[bigint, typeof Message<any>]> = [
   [START_MESSAGE_TYPE, StartMessage],
   [COMPLETION_MESSAGE_TYPE, CompletionMessage],
   [SUSPENSION_MESSAGE_TYPE, SuspensionMessage],
