@@ -19,6 +19,30 @@ import {
 import { ContextImpl } from "./context_impl";
 
 /**
+ * Represents the original request as sent to this handler.
+ *
+ * A request object includes the request headers, and the raw unparsed
+ * request body.
+ */
+export interface Request {
+  /**
+   * The unique id that identifies the current function invocation. This id is guaranteed to be
+   * unique across invocations, but constant across reties and suspensions.
+   */
+  readonly id: Buffer;
+
+  /**
+   * Request headers
+   */
+  readonly headers: ReadonlyMap<string, string>;
+
+  /**
+   * Raw unparsed request body
+   */
+  readonly body: Uint8Array;
+}
+
+/**
  * Key value store operations. Only keyed services have an attached key-value store.
  */
 export interface KeyValueStore {
@@ -84,17 +108,6 @@ export interface KeyValueStore {
  *
  */
 export interface Context {
-  /**
-   * The unique id that identifies the current function invocation. This id is guaranteed to be
-   * unique across invocations, but constant across reties and suspensions.
-   */
-  id: Buffer;
-
-  /**
-   * Name of the service.
-   */
-  serviceName: string;
-
   /**
    * Deterministic random methods; these are inherently predictable (seeded on the invocation ID, which is not secret)
    * and so should not be used for any cryptographic purposes. They are useful for identifiers, idempotency keys,
@@ -356,10 +369,17 @@ export interface Context {
     delay: number,
     key: string
   ): SendClient<M>;
+
   serviceSendDelayed<P extends string, M>(
     opts: ServiceDefintion<P, M>,
     delay: number
   ): SendClient<M>;
+
+  /**
+   * Returns the raw request that triggered that handler.
+   * Use that object to inspect the original request headers
+   */
+  request(): Request;
 }
 
 /**

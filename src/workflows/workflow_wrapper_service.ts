@@ -9,6 +9,7 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
+import { Request } from "../context";
 import * as restate from "../public_api";
 import * as wf from "./workflow";
 import * as wss from "./workflow_state_service";
@@ -94,17 +95,16 @@ class ExclusiveContextImpl<P extends string>
   extends SharedContextImpl<P>
   implements wf.WfContext
 {
-  public readonly id: Buffer;
-  public readonly serviceName: string;
   public readonly rand: restate.Rand;
   public readonly console: Console;
 
   constructor(ctx: restate.Context, wfId: string, stateServiceApi: wss.api<P>) {
     super(ctx, wfId, stateServiceApi);
-    this.id = ctx.id;
-    this.serviceName = ctx.serviceName;
     this.rand = ctx.rand;
     this.console = ctx.console;
+  }
+  request(): Request {
+    return this.ctx.request();
   }
 
   set<T>(stateName: string, value: T): void {
