@@ -39,7 +39,6 @@ import {
 import { SideEffectEntryMessage } from "./generated/proto/javascript";
 import { AsyncLocalStorage } from "async_hooks";
 import {
-  ErrorCodes,
   RestateErrorCodes,
   RestateError,
   RetryableError,
@@ -47,6 +46,8 @@ import {
   ensureError,
   errorToFailureWithTerminal,
   TimeoutError,
+  INTERNAL_ERROR_CODE,
+  UNKNOWN_ERROR_CODE,
 } from "./types/errors";
 import { jsonSerialize, jsonDeserialize } from "./utils/utils";
 import { Empty } from "./generated/google/protobuf/empty";
@@ -365,14 +366,14 @@ export class ContextImpl implements ObjectContext {
     if (this.isInSideEffect()) {
       throw new TerminalError(
         "You cannot do sideEffect calls from within a side effect.",
-        { errorCode: ErrorCodes.INTERNAL }
+        { errorCode: INTERNAL_ERROR_CODE }
       );
     } else if (this.isInOneWayCall()) {
       throw new TerminalError(
         "Cannot do a side effect from within ctx.oneWayCall(...). " +
           "Context method ctx.oneWayCall() can only be used to invoke other services unidirectionally. " +
           "e.g. ctx.oneWayCall(() => client.greet(my_request))",
-        { errorCode: ErrorCodes.INTERNAL }
+        { errorCode: INTERNAL_ERROR_CODE }
       );
     }
     this.checkNotExecutingSideEffect();
@@ -521,7 +522,7 @@ export class ContextImpl implements ObjectContext {
   public rejectAwakeable(id: string, reason: string): void {
     this.checkState("rejectAwakeable");
     this.completeAwakeable(id, {
-      failure: { code: ErrorCodes.UNKNOWN, message: reason },
+      failure: { code: UNKNOWN_ERROR_CODE, message: reason },
     });
   }
 
@@ -589,7 +590,7 @@ export class ContextImpl implements ObjectContext {
       throw new TerminalError(
         `Invoked a RestateContext method while a side effect is still executing. 
           Make sure you await the ctx.sideEffect call before using any other RestateContext method.`,
-        { errorCode: ErrorCodes.INTERNAL }
+        { errorCode: INTERNAL_ERROR_CODE }
       );
     }
   }
@@ -604,7 +605,7 @@ export class ContextImpl implements ObjectContext {
     if (context.type === CallContexType.SideEffect) {
       throw new TerminalError(
         `You cannot do ${callType} calls from within a side effect.`,
-        { errorCode: ErrorCodes.INTERNAL }
+        { errorCode: INTERNAL_ERROR_CODE }
       );
     }
 
@@ -613,7 +614,7 @@ export class ContextImpl implements ObjectContext {
         `Cannot do a ${callType} from within ctx.oneWayCall(...).
           Context method oneWayCall() can only be used to invoke other services in the background.
           e.g. ctx.oneWayCall(() => client.greet(my_request))`,
-        { errorCode: ErrorCodes.INTERNAL }
+        { errorCode: INTERNAL_ERROR_CODE }
       );
     }
   }
@@ -622,7 +623,7 @@ export class ContextImpl implements ObjectContext {
     if (!this.keyedContext) {
       throw new TerminalError(
         `You can do ${callType} calls only from a virtual object`,
-        { errorCode: ErrorCodes.INTERNAL }
+        { errorCode: INTERNAL_ERROR_CODE }
       );
     }
   }
@@ -723,7 +724,7 @@ async function executeWithRetries<T>(
         throw new TerminalError(
           `Retries exhausted for ${name}. Last error: ${error.name}: ${error.message}`,
           {
-            errorCode: ErrorCodes.INTERNAL,
+            errorCode: INTERNAL_ERROR_CODE,
           }
         );
       }

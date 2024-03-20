@@ -13,7 +13,7 @@
 //! License MIT
 
 import { Rand } from "../context";
-import { ErrorCodes, TerminalError } from "../types/errors";
+import { INTERNAL_ERROR_CODE, TerminalError } from "../types/errors";
 import { CallContexType, ContextImpl } from "../context_impl";
 import { createHash } from "crypto";
 
@@ -72,7 +72,7 @@ export class RandImpl implements Rand {
     if (context && context.type === CallContexType.SideEffect) {
       throw new TerminalError(
         `You may not call methods on Rand from within a side effect.`,
-        { errorCode: ErrorCodes.INTERNAL }
+        { errorCode: INTERNAL_ERROR_CODE }
       );
     }
   }
