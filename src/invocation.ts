@@ -12,16 +12,9 @@
 /*eslint-disable @typescript-eslint/no-non-null-assertion*/
 
 import { Message } from "./types/types";
-import {
-  Failure,
-  PollInputStreamEntryMessage,
-  StartMessage,
-} from "./generated/proto/protocol";
+import { InputEntryMessage, StartMessage } from "./generated/proto/protocol";
 import { formatMessageAsJson } from "./utils/utils";
-import {
-  POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
-  START_MESSAGE_TYPE,
-} from "./types/protocol";
+import { INPUT_ENTRY_MESSAGE_TYPE, START_MESSAGE_TYPE } from "./types/protocol";
 import { RestateStreamConsumer } from "./connection/connection";
 import { LocalStateStore } from "./local_state_store";
 import { ensureError } from "./types/errors";
@@ -36,10 +29,6 @@ enum State {
   Complete = 3,
 }
 
-type InvocationValue =
-  | { kind: "value"; value: Buffer }
-  | { kind: "failure"; failure: Failure };
-
 export class InvocationBuilder implements RestateStreamConsumer {
   private readonly complete = new CompletablePromise<void>();
 
@@ -49,7 +38,7 @@ export class InvocationBuilder implements RestateStreamConsumer {
   private replayEntries = new Map<number, Message>();
   private id?: Buffer = undefined;
   private debugId?: string = undefined;
-  private invocationValue?: InvocationValue = undefined;
+  private invocationValue?: Buffer = undefined;
   private nbEntriesToReplay?: number = undefined;
   private localStateStore?: LocalStateStore;
   private userKey?: string;
@@ -66,11 +55,7 @@ export class InvocationBuilder implements RestateStreamConsumer {
           return false;
 
         case State.ExpectingInput:
-          checkState(
-            State.ExpectingInput,
-            POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
-            m
-          );
+          checkState(State.ExpectingInput, INPUT_ENTRY_MESSAGE_TYPE, m);
 
           this.handlePollInputStreamEntry(m);
           this.addReplayEntry(m);
@@ -107,25 +92,9 @@ export class InvocationBuilder implements RestateStreamConsumer {
   }
 
   private handlePollInputStreamEntry(m: Message) {
-    const pollInputStreamMessage = m.message as PollInputStreamEntryMessage;
+    const pollInputStreamMessage = m.message as InputEntryMessage;
 
-    if (pollInputStreamMessage.value !== undefined) {
-      this.invocationValue = {
-        kind: "value",
-        value: pollInputStreamMessage.value,
-      };
-    } else if (pollInputStreamMessage.failure !== undefined) {
-      this.invocationValue = {
-        kind: "failure",
-        failure: pollInputStreamMessage.failure,
-      };
-    } else {
-      throw new Error(
-        `PollInputStreamEntry neither contains value nor failure: ${formatMessageAsJson(
-          m
-        )}`
-      );
-    }
+    this.invocationValue = pollInputStreamMessage.value;
   }
 
   public handleStreamError(e: Error): void {
@@ -189,7 +158,7 @@ export class Invocation {
     public readonly debugId: string,
     public readonly nbEntriesToReplay: number,
     public readonly replayEntries: Map<number, Message>,
-    public readonly invocationValue: InvocationValue,
+    public readonly invocationValue: Buffer,
     public readonly localStateStore: LocalStateStore,
     public readonly userKey?: string
   ) {}

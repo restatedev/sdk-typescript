@@ -26,8 +26,8 @@ import {
   GetStateEntryMessage,
   GetStateKeysEntryMessage,
   InvokeEntryMessage,
-  OutputStreamEntryMessage,
-  PollInputStreamEntryMessage,
+  OutputEntryMessage,
+  InputEntryMessage,
   SetStateEntryMessage,
   SleepEntryMessage,
   StartMessage,
@@ -47,8 +47,8 @@ export {
   GetStateEntryMessage,
   GetStateKeysEntryMessage,
   InvokeEntryMessage,
-  OutputStreamEntryMessage,
-  PollInputStreamEntryMessage,
+  OutputEntryMessage,
+  InputEntryMessage,
   SetStateEntryMessage,
   SleepEntryMessage,
   StartMessage,
@@ -63,8 +63,8 @@ export const SUSPENSION_MESSAGE_TYPE = 0x0002n;
 export const ERROR_MESSAGE_TYPE = 0x0003n;
 export const ENTRY_ACK_MESSAGE_TYPE = 0x0004n;
 export const END_MESSAGE_TYPE = 0x0005n;
-export const POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE = 0x0400n;
-export const OUTPUT_STREAM_ENTRY_MESSAGE_TYPE = 0x0401n;
+export const INPUT_ENTRY_MESSAGE_TYPE = 0x0400n;
+export const OUTPUT_ENTRY_MESSAGE_TYPE = 0x0401n;
 export const GET_STATE_ENTRY_MESSAGE_TYPE = 0x0800n;
 export const SET_STATE_ENTRY_MESSAGE_TYPE = 0x0801n;
 export const CLEAR_STATE_ENTRY_MESSAGE_TYPE = 0x0802n;
@@ -94,8 +94,8 @@ export const KNOWN_MESSAGE_TYPES = new Set([
   ERROR_MESSAGE_TYPE,
   ENTRY_ACK_MESSAGE_TYPE,
   END_MESSAGE_TYPE,
-  POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
-  OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
+  INPUT_ENTRY_MESSAGE_TYPE,
+  OUTPUT_ENTRY_MESSAGE_TYPE,
   GET_STATE_ENTRY_MESSAGE_TYPE,
   GET_STATE_KEYS_ENTRY_MESSAGE_TYPE,
   SET_STATE_ENTRY_MESSAGE_TYPE,
@@ -117,8 +117,8 @@ const PROTOBUF_MESSAGE_NAME_BY_TYPE = new Map<bigint, string>([
   [ERROR_MESSAGE_TYPE, "ErrorMessage"],
   [ENTRY_ACK_MESSAGE_TYPE, "EntryAckMessage"],
   [END_MESSAGE_TYPE, "EndMessage"],
-  [POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE, "PollInputStreamEntryMessage"],
-  [OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, "OutputStreamEntryMessage"],
+  [INPUT_ENTRY_MESSAGE_TYPE, "InputEntryMessage"],
+  [OUTPUT_ENTRY_MESSAGE_TYPE, "OutputEntryMessage"],
   [GET_STATE_ENTRY_MESSAGE_TYPE, "GetStateEntryMessage"],
   [GET_STATE_KEYS_ENTRY_MESSAGE_TYPE, "GetStateKeysEntryMessage"],
   [SET_STATE_ENTRY_MESSAGE_TYPE, "SetStateEntryMessage"],
@@ -147,8 +147,8 @@ const PROTOBUF_MESSAGES: Array<[bigint, any]> = [
   [ERROR_MESSAGE_TYPE, ErrorMessage],
   [ENTRY_ACK_MESSAGE_TYPE, EntryAckMessage],
   [END_MESSAGE_TYPE, EndMessage],
-  [POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE, PollInputStreamEntryMessage],
-  [OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, OutputStreamEntryMessage],
+  [INPUT_ENTRY_MESSAGE_TYPE, InputEntryMessage],
+  [OUTPUT_ENTRY_MESSAGE_TYPE, OutputEntryMessage],
   [GET_STATE_ENTRY_MESSAGE_TYPE, GetStateEntryMessage],
   [GET_STATE_KEYS_ENTRY_MESSAGE_TYPE, GetStateKeysEntryMessage],
   [SET_STATE_ENTRY_MESSAGE_TYPE, SetStateEntryMessage],
@@ -172,8 +172,8 @@ export type ProtocolMessage =
   | ErrorMessage
   | EntryAckMessage
   | EndMessage
-  | PollInputStreamEntryMessage
-  | OutputStreamEntryMessage
+  | InputEntryMessage
+  | OutputEntryMessage
   | GetStateEntryMessage
   | GetStateKeysEntryMessage
   | SetStateEntryMessage

@@ -17,7 +17,7 @@ import {
   CompleteAwakeableEntryMessage,
   GetStateEntryMessage,
   InvokeEntryMessage,
-  OutputStreamEntryMessage,
+  OutputEntryMessage,
   SetStateEntryMessage,
 } from "../generated/proto/protocol";
 import {
@@ -27,7 +27,7 @@ import {
   COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
   GET_STATE_ENTRY_MESSAGE_TYPE,
   INVOKE_ENTRY_MESSAGE_TYPE,
-  OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
+  OUTPUT_ENTRY_MESSAGE_TYPE,
   SET_STATE_ENTRY_MESSAGE_TYPE,
   SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
   SLEEP_ENTRY_MESSAGE_TYPE,
@@ -122,8 +122,8 @@ const completeAwakeableMsgEquality = (
 };
 
 const outputMsgEquality = (
-  msg1: OutputStreamEntryMessage,
-  msg2: OutputStreamEntryMessage
+  msg1: OutputEntryMessage,
+  msg2: OutputEntryMessage
 ) => {
   if (msg1.value && msg2.value) {
     return msg1.value.equals(msg2.value);
@@ -147,7 +147,7 @@ export const equalityCheckers = new Map<
   [INVOKE_ENTRY_MESSAGE_TYPE, invokeMsgEquality],
   [BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE, invokeMsgEquality],
   [COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE, completeAwakeableMsgEquality],
-  [OUTPUT_STREAM_ENTRY_MESSAGE_TYPE, outputMsgEquality],
+  [OUTPUT_ENTRY_MESSAGE_TYPE, outputMsgEquality],
   [AWAKEABLE_ENTRY_MESSAGE_TYPE, () => true],
   [SIDE_EFFECT_ENTRY_MESSAGE_TYPE, () => true],
   [SLEEP_ENTRY_MESSAGE_TYPE, () => true],

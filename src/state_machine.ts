@@ -25,8 +25,8 @@ import {
   EndMessage,
   ENTRY_ACK_MESSAGE_TYPE,
   ERROR_MESSAGE_TYPE,
-  OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
-  OutputStreamEntryMessage,
+  OUTPUT_ENTRY_MESSAGE_TYPE,
+  OutputEntryMessage,
   SUSPENSION_MESSAGE_TYPE,
   SuspensionMessage,
 } from "./types/protocol";
@@ -37,7 +37,6 @@ import {
   TerminalError,
   RetryableError,
   errorToErrorMessage,
-  failureToTerminalError,
 } from "./types/errors";
 import { LocalStateStore } from "./local_state_store";
 import { createRestateConsole, LoggerContext } from "./logger";
@@ -336,23 +335,8 @@ export class StateMachine implements RestateStreamConsumer {
       this.console.debugInvokeMessage("Invoking function.");
     }
 
-    let resultBytes: Promise<Uint8Array>;
-
-    switch (this.invocation.invocationValue.kind) {
-      case "value":
-        resultBytes = this.invocation.handler.invoke(
-          this.restateContext,
-          this.invocation.invocationValue.value
-        );
-        break;
-      case "failure":
-        resultBytes = Promise.reject(
-          failureToTerminalError(this.invocation.invocationValue.failure)
-        );
-        break;
-    }
-
-    resultBytes
+    this.invocation.handler
+      .invoke(this.restateContext, this.invocation.invocationValue)
       .then((bytes) => {
         // invocation successfully returned with a result value
         try {
@@ -375,8 +359,8 @@ export class StateMachine implements RestateStreamConsumer {
 
           // handle the result value
           const msg = new Message(
-            OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
-            OutputStreamEntryMessage.create({
+            OUTPUT_ENTRY_MESSAGE_TYPE,
+            OutputEntryMessage.create({
               value,
             })
           );
@@ -459,8 +443,8 @@ export class StateMachine implements RestateStreamConsumer {
 
   private sendTerminalError(e: TerminalError) {
     const msg = new Message(
-      OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
-      OutputStreamEntryMessage.create({
+      OUTPUT_ENTRY_MESSAGE_TYPE,
+      OutputEntryMessage.create({
         failure: e.toFailure(),
       })
     );

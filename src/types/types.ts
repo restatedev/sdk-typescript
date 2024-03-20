@@ -18,7 +18,6 @@ import {
   GET_STATE_ENTRY_MESSAGE_TYPE,
   GET_STATE_KEYS_ENTRY_MESSAGE_TYPE,
   KNOWN_MESSAGE_TYPES,
-  POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
   PROTOBUF_MESSAGE_BY_TYPE,
   ProtocolMessage,
   SLEEP_ENTRY_MESSAGE_TYPE,
@@ -61,7 +60,6 @@ class MessageType {
 
   static hasCompletedFlag(messageType: bigint): boolean {
     return (
-      messageType === POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE ||
       messageType === GET_STATE_ENTRY_MESSAGE_TYPE ||
       messageType === GET_STATE_KEYS_ENTRY_MESSAGE_TYPE ||
       messageType === SLEEP_ENTRY_MESSAGE_TYPE ||

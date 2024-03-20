@@ -12,9 +12,7 @@
 import { describe, expect } from "@jest/globals";
 import { TestDriver, TestGreeter, TestResponse } from "./testdriver";
 import {
-  checkTerminalError,
   END_MESSAGE,
-  failure,
   greetRequest,
   greetResponse,
   inputMessage,
@@ -49,16 +47,5 @@ describe("Greeter", () => {
     ]).run();
 
     expect(result).toStrictEqual([END_MESSAGE]);
-  });
-
-  it("fails invocation if input is failed", async () => {
-    const result = await new TestDriver(new Greeter(), [
-      startMessage({ knownEntries: 1 }),
-      inputMessage(undefined, failure("Canceled")),
-    ]).run();
-
-    expect(result.length).toStrictEqual(2);
-    checkTerminalError(result[0], "Canceled");
-    expect(result[1]).toStrictEqual(END_MESSAGE);
   });
 });

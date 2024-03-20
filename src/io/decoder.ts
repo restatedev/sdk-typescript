@@ -32,7 +32,7 @@ type DecoderState = { state: number; header: Header | undefined; buf: Buffer };
 const WAITING_FOR_HEADER = 0;
 const WAITING_FOR_BODY = 1;
 
-export const SUPPORTED_PROTOCOL_VERSION = 1;
+export const SUPPORTED_PROTOCOL_VERSION = 2;
 
 function initalDecoderState(buf: Buffer): DecoderState {
   return {
