@@ -14,8 +14,8 @@ import { Empty } from "../src/generated/google/protobuf/empty";
 import {
   StartMessage,
   START_MESSAGE_TYPE,
-  PollInputStreamEntryMessage,
-  POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
+  InputEntryMessage,
+  INPUT_ENTRY_MESSAGE_TYPE,
   GetStateEntryMessage,
   GET_STATE_ENTRY_MESSAGE_TYPE,
   SetStateEntryMessage,
@@ -24,8 +24,8 @@ import {
   COMPLETION_MESSAGE_TYPE,
   INVOKE_ENTRY_MESSAGE_TYPE,
   InvokeEntryMessage,
-  OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
-  OutputStreamEntryMessage,
+  OUTPUT_ENTRY_MESSAGE_TYPE,
+  OutputEntryMessage,
   BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
   BackgroundInvokeEntryMessage,
   AWAKEABLE_ENTRY_MESSAGE_TYPE,
@@ -108,18 +108,11 @@ export function toStateEntries(entries: Buffer[][]) {
   );
 }
 
-export function inputMessage(value?: Uint8Array, failure?: Failure): Message {
-  if (failure !== undefined) {
+export function inputMessage(value: Uint8Array): Message {
+  if (value !== undefined) {
     return new Message(
-      POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
-      PollInputStreamEntryMessage.create({
-        failure: failure,
-      })
-    );
-  } else if (value !== undefined) {
-    return new Message(
-      POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
-      PollInputStreamEntryMessage.create({
+      INPUT_ENTRY_MESSAGE_TYPE,
+      InputEntryMessage.create({
         value: Buffer.from(value),
       })
     );
@@ -131,22 +124,22 @@ export function inputMessage(value?: Uint8Array, failure?: Failure): Message {
 export function outputMessage(value?: Uint8Array, failure?: Failure): Message {
   if (value !== undefined) {
     return new Message(
-      OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
-      OutputStreamEntryMessage.create({
+      OUTPUT_ENTRY_MESSAGE_TYPE,
+      OutputEntryMessage.create({
         value: Buffer.from(value),
       })
     );
   } else if (failure !== undefined) {
     return new Message(
-      OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
-      OutputStreamEntryMessage.create({
+      OUTPUT_ENTRY_MESSAGE_TYPE,
+      OutputEntryMessage.create({
         failure: failure,
       })
     );
   } else {
     return new Message(
-      OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
-      OutputStreamEntryMessage.create({
+      OUTPUT_ENTRY_MESSAGE_TYPE,
+      OutputEntryMessage.create({
         failure: Failure.create({
           code: 13,
           message: `Uncaught exception for invocation id abcd`,
@@ -560,10 +553,10 @@ export function checkJournalMismatchError(outputMsg: Message) {
 }
 
 export function checkTerminalError(outputMsg: Message, errorMessage: string) {
-  expect(outputMsg.messageType).toEqual(OUTPUT_STREAM_ENTRY_MESSAGE_TYPE);
-  expect(
-    (outputMsg.message as OutputStreamEntryMessage).failure?.message
-  ).toContain(errorMessage);
+  expect(outputMsg.messageType).toEqual(OUTPUT_ENTRY_MESSAGE_TYPE);
+  expect((outputMsg.message as OutputEntryMessage).failure?.message).toContain(
+    errorMessage
+  );
 }
 
 export function getAwakeableId(entryIndex: number): string {

@@ -30,10 +30,10 @@ import {
   GetStateKeysEntryMessage,
   INVOKE_ENTRY_MESSAGE_TYPE,
   InvokeEntryMessage,
-  OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
-  OutputStreamEntryMessage,
-  POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
-  PollInputStreamEntryMessage,
+  OUTPUT_ENTRY_MESSAGE_TYPE,
+  OutputEntryMessage,
+  INPUT_ENTRY_MESSAGE_TYPE,
+  InputEntryMessage,
   SET_STATE_ENTRY_MESSAGE_TYPE,
   SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
   SLEEP_ENTRY_MESSAGE_TYPE,
@@ -63,26 +63,21 @@ export class Journal {
     const inputMessage = invocation.replayEntries.get(0);
     if (
       !inputMessage ||
-      inputMessage.messageType !== POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE
+      inputMessage.messageType !== INPUT_ENTRY_MESSAGE_TYPE
     ) {
       throw RetryableError.protocolViolation(
         "First message of replay entries needs to be PollInputStreamMessage"
       );
     }
-    this.handleInputMessage(
-      inputMessage.message as PollInputStreamEntryMessage
-    );
+    this.handleInputMessage(inputMessage.message as InputEntryMessage);
   }
 
-  handleInputMessage(m: p.PollInputStreamEntryMessage) {
+  handleInputMessage(m: p.InputEntryMessage) {
     if (this.invocation.nbEntriesToReplay === 1) {
       this.transitionState(NewExecutionState.PROCESSING);
     }
 
-    const rootEntry = new JournalEntry(
-      p.POLL_INPUT_STREAM_ENTRY_MESSAGE_TYPE,
-      m
-    );
+    const rootEntry = new JournalEntry(p.INPUT_ENTRY_MESSAGE_TYPE, m);
 
     this.pendingJournalEntries.set(0, rootEntry);
   }
@@ -112,10 +107,10 @@ export class Journal {
       case NewExecutionState.PROCESSING: {
         switch (messageType) {
           case p.SUSPENSION_MESSAGE_TYPE:
-          case p.OUTPUT_STREAM_ENTRY_MESSAGE_TYPE: {
+          case p.OUTPUT_ENTRY_MESSAGE_TYPE: {
             this.handleClosingMessage(
               messageType,
-              message as p.SuspensionMessage | p.OutputStreamEntryMessage
+              message as p.SuspensionMessage | p.OutputEntryMessage
             );
             return RESOLVED;
           }
@@ -264,10 +259,10 @@ export class Journal {
      */
     switch (journalEntry.messageType) {
       case SUSPENSION_MESSAGE_TYPE:
-      case OUTPUT_STREAM_ENTRY_MESSAGE_TYPE: {
+      case OUTPUT_ENTRY_MESSAGE_TYPE: {
         this.handleClosingMessage(
           journalEntry.messageType,
-          journalEntry.message as SuspensionMessage | OutputStreamEntryMessage
+          journalEntry.message as SuspensionMessage | OutputEntryMessage
         );
         break;
       }
@@ -383,7 +378,7 @@ export class Journal {
 
   handleClosingMessage(
     messageType: bigint,
-    message: OutputStreamEntryMessage | SuspensionMessage
+    message: OutputEntryMessage | SuspensionMessage
   ) {
     this.transitionState(NewExecutionState.CLOSED);
     const rootJournalEntry = this.pendingJournalEntries.get(0);
@@ -497,9 +492,7 @@ export class Journal {
     const lastEntry = this.invocation.replayEntries.get(
       this.invocation.nbEntriesToReplay - 1
     );
-    return (
-      lastEntry && lastEntry.messageType === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE
-    );
+    return lastEntry && lastEntry.messageType === OUTPUT_ENTRY_MESSAGE_TYPE;
   }
 
   // We use this for side effects.

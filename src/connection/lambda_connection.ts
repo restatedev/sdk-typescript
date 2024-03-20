@@ -13,7 +13,7 @@ import { Connection } from "./connection";
 import { encodeMessage } from "../io/encoder";
 import {
   ERROR_MESSAGE_TYPE,
-  OUTPUT_STREAM_ENTRY_MESSAGE_TYPE,
+  OUTPUT_ENTRY_MESSAGE_TYPE,
   SUSPENSION_MESSAGE_TYPE,
 } from "../types/protocol";
 import { Message } from "../types/types";
@@ -44,7 +44,7 @@ export class LambdaConnection implements Connection {
 
     // An output message, suspension message or error message is the end of a Lambda invocation
     if (
-      msg.messageType === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE ||
+      msg.messageType === OUTPUT_ENTRY_MESSAGE_TYPE ||
       msg.messageType === SUSPENSION_MESSAGE_TYPE ||
       msg.messageType === ERROR_MESSAGE_TYPE
     ) {

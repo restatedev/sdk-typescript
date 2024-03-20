@@ -24,7 +24,7 @@ import { decodeLambdaBody } from "../io/decoder";
 import { Message } from "../types/types";
 import { StateMachine } from "../state_machine";
 import { ensureError } from "../types/errors";
-import { OUTPUT_STREAM_ENTRY_MESSAGE_TYPE } from "../types/protocol";
+import { OUTPUT_ENTRY_MESSAGE_TYPE } from "../types/protocol";
 import { ProtocolMode } from "../types/discovery";
 import {
   ComponentHandler,
@@ -86,7 +86,7 @@ export class LambdaHandler {
       decodedEntries.forEach((e: Message) => journalBuilder.handleMessage(e));
       const alreadyCompleted =
         decodedEntries.find(
-          (e: Message) => e.messageType === OUTPUT_STREAM_ENTRY_MESSAGE_TYPE
+          (e: Message) => e.messageType === OUTPUT_ENTRY_MESSAGE_TYPE
         ) !== undefined;
       decodedEntries = null;
 
