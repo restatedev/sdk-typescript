@@ -65,7 +65,11 @@ import {
 import { expect } from "@jest/globals";
 import { jsonSerialize, formatMessageAsJson } from "../src/utils/utils";
 import { rlog } from "../src/logger";
-import { ErrorCodes, RestateErrorCodes } from "../src/types/errors";
+import {
+  INTERNAL_ERROR_CODE,
+  RestateErrorCodes,
+  UNKNOWN_ERROR_CODE,
+} from "../src/types/errors";
 import { SUPPORTED_PROTOCOL_VERSION } from "../src/io/decoder";
 
 export type StartMessageOpts = {
@@ -476,7 +480,7 @@ export function rejectAwakeableMessage(id: string, reason: string): Message {
     COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
     CompleteAwakeableEntryMessage.create({
       id: id,
-      failure: { code: ErrorCodes.UNKNOWN, message: reason },
+      failure: { code: UNKNOWN_ERROR_CODE, message: reason },
     })
   );
 }
@@ -508,7 +512,7 @@ export function combinatorEntryMessage(
 
 export function failure(
   msg: string,
-  code: number = ErrorCodes.INTERNAL
+  code: number = INTERNAL_ERROR_CODE
 ): Failure {
   return Failure.create({ code: code, message: msg });
 }
@@ -516,7 +520,7 @@ export function failure(
 export function failureWithTerminal(
   terminal: boolean,
   msg: string,
-  code: number = ErrorCodes.INTERNAL
+  code: number = INTERNAL_ERROR_CODE
 ): FailureWithTerminal {
   return FailureWithTerminal.create({
     terminal,
@@ -537,7 +541,7 @@ export function greetResponse(myGreeting: string): Uint8Array {
 export function checkError(
   outputMsg: Message,
   errorMessage: string,
-  code: number = ErrorCodes.INTERNAL
+  code: number = INTERNAL_ERROR_CODE
 ) {
   expect(outputMsg.messageType).toEqual(ERROR_MESSAGE_TYPE);
   expect((outputMsg.message as ErrorMessage).code).toStrictEqual(code);
