@@ -44,8 +44,6 @@ import {
 import { SideEffectEntryMessage } from "./generated/proto/javascript_pb";
 import { AsyncLocalStorage } from "async_hooks";
 import {
-  RestateErrorCodes,
-  RestateError,
   RetryableError,
   TerminalError,
   ensureError,
@@ -56,12 +54,6 @@ import {
 } from "./types/errors";
 import { jsonSerialize, jsonDeserialize } from "./utils/utils";
 import { Empty, PartialMessage, protoInt64 } from "@bufbuild/protobuf";
-import {
-  DEFAULT_INFINITE_EXPONENTIAL_BACKOFF,
-  DEFAULT_INITIAL_DELAY_MS,
-  EXPONENTIAL_BACKOFF,
-  RetrySettings,
-} from "./utils/public_utils";
 import { Client, SendClient, ServiceDefintion } from "./types/rpc";
 import { RandImpl } from "./utils/rand";
 import { newJournalEntryPromiseId } from "./promise_combinator_tracker";
@@ -387,20 +379,10 @@ export class ContextImpl implements ObjectContext {
   // The reason is that we want the erros thrown by the initial checks to be propagated in the caller context,
   // and not in the promise context. To understand the semantic difference, make this function async and run the
   // UnawaitedSideEffectShouldFailSubsequentContextCall test.
-  public sideEffect<T>(
-    fn: () => Promise<T>,
-    retryPolicy: RetrySettings = DEFAULT_INFINITE_EXPONENTIAL_BACKOFF
-  ): Promise<T> {
+  public sideEffect<T>(fn: () => Promise<T>): Promise<T> {
     if (this.isInSideEffect()) {
       throw new TerminalError(
         "You cannot do sideEffect calls from within a side effect.",
-        { errorCode: INTERNAL_ERROR_CODE }
-      );
-    } else if (this.isInOneWayCall()) {
-      throw new TerminalError(
-        "Cannot do a side effect from within ctx.oneWayCall(...). " +
-          "Context method ctx.oneWayCall() can only be used to invoke other services unidirectionally. " +
-          "e.g. ctx.oneWayCall(() => client.greet(my_request))",
         { errorCode: INTERNAL_ERROR_CODE }
       );
     }
@@ -424,7 +406,7 @@ export class ContextImpl implements ObjectContext {
           fn
         );
       } catch (e) {
-        // we commit any error from the side effet to thr journal, and re-throw it into
+        // we commit any error from the side effet to the journal, and re-throw it into
         // the function. that way, any catching by the user and reacting to it will be
         // deterministic on replay
         const error = ensureError(e);
@@ -483,13 +465,7 @@ export class ContextImpl implements ObjectContext {
       return sideEffectResult;
     };
 
-    const sleep = (millis: number) => this.sleepInternal(millis);
-    return executeWithRetries(
-      this.console,
-      retryPolicy,
-      executeAndLogSideEffect,
-      sleep
-    ).finally(() => {
+    return executeAndLogSideEffect().finally(() => {
       this.executingSideEffect = false;
     });
   }
@@ -616,16 +592,6 @@ export class ContextImpl implements ObjectContext {
     return context?.type === CallContexType.SideEffect;
   }
 
-  private isInOneWayCall(): boolean {
-    const context = ContextImpl.callContext.getStore();
-    return context?.type === CallContexType.OneWayCall;
-  }
-
-  private getOneWayCallDelay(): number | undefined {
-    const context = ContextImpl.callContext.getStore();
-    return context?.delay;
-  }
-
   private checkNotExecutingSideEffect() {
     if (this.executingSideEffect) {
       throw new TerminalError(
@@ -704,79 +670,5 @@ export class ContextImpl implements ObjectContext {
         value: orTimeout.bind(this),
       },
     }) as InternalCombineablePromise<T>;
-  }
-}
-
-async function executeWithRetries<T>(
-  console: Console,
-  retrySettings: RetrySettings,
-  executeAndLogSideEffect: () => Promise<T>,
-  sleep: (millis: number) => Promise<void>
-): Promise<T> {
-  const {
-    initialDelayMs = DEFAULT_INITIAL_DELAY_MS,
-    maxDelayMs = Number.MAX_SAFE_INTEGER,
-    maxRetries = Number.MAX_SAFE_INTEGER,
-    policy = EXPONENTIAL_BACKOFF,
-    name = "side-effect",
-  } = retrySettings;
-
-  let currentDelayMs = initialDelayMs;
-  let retriesLeft = maxRetries;
-
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
-    try {
-      return await executeAndLogSideEffect();
-    } catch (e) {
-      if (e instanceof TerminalError) {
-        throw e;
-      }
-
-      // journal mismatch errors are special:
-      //  - they are not terminal errors, because we want to allow pushing new code so
-      //    that retries succeed later
-      //  - they are not retried within the service, because they will never succeed within this service,
-      //    but can only succeed within a new invocation going to service with fixed code
-      //  we hence break the retries here similar to terminal errors
-      if (
-        e instanceof RestateError &&
-        e.code == RestateErrorCodes.JOURNAL_MISMATCH
-      ) {
-        throw e;
-      }
-
-      const error = ensureError(e);
-
-      console.debug(
-        "Error while executing side effect '%s': %s - %s",
-        name,
-        error.name,
-        error.message
-      );
-      if (error.stack) {
-        console.debug(error.stack);
-      }
-
-      if (retriesLeft > 0) {
-        console.debug("Retrying in %d ms", currentDelayMs);
-      } else {
-        console.debug("No retries left.");
-        throw new TerminalError(
-          `Retries exhausted for ${name}. Last error: ${error.name}: ${error.message}`,
-          {
-            errorCode: INTERNAL_ERROR_CODE,
-          }
-        );
-      }
-    }
-
-    await sleep(currentDelayMs);
-
-    retriesLeft -= 1;
-    currentDelayMs = Math.min(
-      policy.computeNextDelay(currentDelayMs),
-      maxDelayMs
-    );
   }
 }

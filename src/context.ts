@@ -9,7 +9,6 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { RetrySettings } from "./utils/public_utils";
 import {
   Client,
   SendClient,
@@ -159,12 +158,7 @@ export interface Context {
    *     re-executed on replay (the latest, if the failure happened in the small windows
    *     described above).
    *
-   * This function takes an optional retry policy, that determines what happens if the
-   * side effect throws an error. The default retry policy retries infinitely, with exponential
-   * backoff and uses suspending sleep for the wait times between retries.
-   *
    * @example
-   * const ctx = restate.useContext(this);
    * const result = await ctx.sideEffect(async () => someExternalAction() )
    *
    * @example
@@ -177,12 +171,11 @@ export interface Context {
    *   }
    * }
    * const paymentAccepted: boolean =
-   *   await ctx.sideEffect(paymentAction, { maxRetries: 10});
+   *   await ctx.sideEffect(paymentAction);
    *
    * @param fn The function to run as a side effect.
-   * @param retryPolicy The optional policy describing how retries happen.
    */
-  sideEffect<T>(fn: () => Promise<T>, retryPolicy?: RetrySettings): Promise<T>;
+  sideEffect<T>(fn: () => Promise<T>): Promise<T>;
 
   /**
    * Register an awakeable and pause the processing until the awakeable ID (and optional payload) have been returned to the service

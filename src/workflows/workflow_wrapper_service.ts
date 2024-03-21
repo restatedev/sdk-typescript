@@ -132,11 +132,8 @@ class ExclusiveContextImpl<P extends string>
     this.ctx.objectSend(this.stateServiceApi, this.wfId).clearAllState();
   }
 
-  sideEffect<T>(
-    fn: () => Promise<T>,
-    retryPolicy?: restate.RestateUtils.RetrySettings
-  ): Promise<T> {
-    return this.ctx.sideEffect(fn, retryPolicy);
+  sideEffect<T>(fn: () => Promise<T>): Promise<T> {
+    return this.ctx.sideEffect(fn);
   }
 
   awakeable<T>(): { id: string; promise: restate.CombineablePromise<T> } {
