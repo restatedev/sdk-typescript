@@ -9,7 +9,7 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { Request } from "../context";
+import { ContextDate, Request } from "../context";
 import * as restate from "../public_api";
 import * as wf from "./workflow";
 import * as wss from "./workflow_state_service";
@@ -97,12 +97,15 @@ class ExclusiveContextImpl<P extends string>
 {
   public readonly rand: restate.Rand;
   public readonly console: Console;
+  public readonly date: ContextDate;
 
   constructor(ctx: restate.Context, wfId: string, stateServiceApi: wss.api<P>) {
     super(ctx, wfId, stateServiceApi);
     this.rand = ctx.rand;
     this.console = ctx.console;
+    this.date = ctx.date;
   }
+
   request(): Request {
     return this.ctx.request();
   }

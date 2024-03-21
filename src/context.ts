@@ -96,6 +96,17 @@ export interface KeyValueStore {
   clearAll(): void;
 }
 
+export interface ContextDate {
+  /** Returns the number of milliseconds elapsed since midnight, January 1, 1970 Universal Coordinated Time (UTC).
+   *  This is equivalent to Date.now()
+   */
+  now(): Promise<number>;
+  /** Returns the JSON represention of the current date.
+   * This is equivalent to new Date().toJSON()
+   **/
+  toJSON(): Promise<string>;
+}
+
 /**
  * The context that gives access to all Restate-backed operations, for example
  *   - sending reliable messages / RPC through Restate
@@ -124,6 +135,11 @@ export interface Context {
    * such as invoked service method and invocation id, and automatically excludes logs during replay.
    */
   console: Console;
+
+  /**
+   * Deterministic date.
+   */
+  date: ContextDate;
 
   /**
    * Execute a side effect and store the result in Restate. The side effect will thus not
