@@ -54,7 +54,7 @@ describe("The stream decoder", () => {
     const startMessage = encodeMessage(
       new Message(
         START_MESSAGE_TYPE,
-        StartMessage.create({
+        new StartMessage({
           id: Buffer.from(
             "f311f1fdcb9863f0018bd3400ecd7d69b547204e776218b2",
             "hex"

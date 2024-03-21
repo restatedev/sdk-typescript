@@ -13,7 +13,7 @@ import * as p from "./types/protocol";
 import {
   Failure,
   GetStateKeysEntryMessage_StateKeys,
-} from "./generated/proto/protocol";
+} from "./generated/proto/protocol_pb";
 import {
   AWAKEABLE_ENTRY_MESSAGE_TYPE,
   AwakeableEntryMessage,
@@ -43,7 +43,7 @@ import {
 } from "./types/protocol";
 import { equalityCheckers, jsonDeserialize } from "./utils/utils";
 import { Message } from "./types/types";
-import { SideEffectEntryMessage } from "./generated/proto/javascript";
+import { SideEffectEntryMessage } from "./generated/proto/javascript_pb";
 import { Invocation } from "./invocation";
 import { failureToError, RetryableError } from "./types/errors";
 import { CompletablePromise } from "./utils/promises";
@@ -124,22 +124,20 @@ export class Journal {
           }
           case p.GET_STATE_ENTRY_MESSAGE_TYPE: {
             const getStateMsg = message as GetStateEntryMessage;
-            if (
-              getStateMsg.value !== undefined ||
-              getStateMsg.empty !== undefined
-            ) {
-              // State was eagerly filled by the local state store
-              return Promise.resolve(getStateMsg.value || getStateMsg.empty);
-            } else {
-              // Need to retrieve state by going to the runtime.
-              return this.appendJournalEntry(messageType, message);
+            if (getStateMsg.result.case === "value") {
+              return Promise.resolve(getStateMsg.result.value);
             }
+            if (getStateMsg.result.case === "empty") {
+              return Promise.resolve(getStateMsg.result.value);
+            }
+            // Need to retrieve state by going to the runtime.
+            return this.appendJournalEntry(messageType, message);
           }
           case p.GET_STATE_KEYS_ENTRY_MESSAGE_TYPE: {
             const getStateMsg = message as GetStateKeysEntryMessage;
-            if (getStateMsg.value !== undefined) {
+            if (getStateMsg.result.case == "value") {
               // State was eagerly filled by the local state store
-              return Promise.resolve(getStateMsg.value);
+              return Promise.resolve(getStateMsg.result.value);
             } else {
               // Need to retrieve state by going to the runtime.
               return this.appendJournalEntry(messageType, message);
@@ -180,27 +178,29 @@ export class Journal {
       return;
     }
 
-    if (m.value !== undefined) {
+    if (m.result.case == "value") {
       if (journalEntry.messageType === GET_STATE_KEYS_ENTRY_MESSAGE_TYPE) {
         // In case of get state keys we expect the parsed message
         journalEntry.completablePromise.resolve(
-          GetStateKeysEntryMessage_StateKeys.decode(m.value)
+          GetStateKeysEntryMessage_StateKeys.fromBinary(m.result.value)
         );
         this.pendingJournalEntries.delete(m.entryIndex);
       } else {
-        journalEntry.completablePromise.resolve(m.value);
+        journalEntry.completablePromise.resolve(m.result.value);
         this.pendingJournalEntries.delete(m.entryIndex);
       }
-    } else if (m.failure !== undefined) {
+    } else if (m.result.case == "failure") {
       // we do all completions with Terminal Errors, because failures triggered by those exceptions
       // when the bubble up would otherwise lead to re-tries, deterministic replay, re-throwing, and
       // thus an infinite loop that keeps replay-ing but never makes progress
       // these failures here consequently need to cause terminal failures, unless caught and handled
       // by the handler code
-      journalEntry.completablePromise.reject(failureToError(m.failure, true));
+      journalEntry.completablePromise.reject(
+        failureToError(m.result.value, true)
+      );
       this.pendingJournalEntries.delete(m.entryIndex);
-    } else if (m.empty !== undefined) {
-      journalEntry.completablePromise.resolve(m.empty);
+    } else if (m.result.case == "empty") {
+      journalEntry.completablePromise.resolve(m.result.value);
       this.pendingJournalEntries.delete(m.entryIndex);
     } else {
       //TODO completion message without a value/failure/empty
@@ -271,8 +271,13 @@ export class Journal {
         this.resolveResult(
           journalIndex,
           journalEntry,
-          getStateMsg.value || getStateMsg.empty,
-          getStateMsg.failure
+          getStateMsg.result.case == "empty" ||
+            getStateMsg.result.case == "value"
+            ? getStateMsg.result.value
+            : undefined,
+          getStateMsg.result.case == "failure"
+            ? getStateMsg.result.value
+            : undefined
         );
         break;
       }
@@ -281,8 +286,12 @@ export class Journal {
         this.resolveResult(
           journalIndex,
           journalEntry,
-          getStateMsg.value,
-          getStateMsg.failure
+          getStateMsg.result.case === "value"
+            ? getStateMsg.result.value
+            : undefined,
+          getStateMsg.result.case === "failure"
+            ? getStateMsg.result.value
+            : undefined
         );
         break;
       }
@@ -291,8 +300,12 @@ export class Journal {
         this.resolveResult(
           journalIndex,
           journalEntry,
-          invokeMsg.value,
-          invokeMsg.failure
+          invokeMsg.result.case === "value"
+            ? invokeMsg.result.value
+            : undefined,
+          invokeMsg.result.case === "failure"
+            ? invokeMsg.result.value
+            : undefined
         );
         break;
       }
@@ -301,8 +314,8 @@ export class Journal {
         this.resolveResult(
           journalIndex,
           journalEntry,
-          sleepMsg.empty,
-          sleepMsg.failure
+          sleepMsg.result.case === "empty" ? sleepMsg.result.value : undefined,
+          sleepMsg.result.case === "failure" ? sleepMsg.result.value : undefined
         );
         break;
       }
@@ -311,26 +324,27 @@ export class Journal {
         this.resolveResult(
           journalIndex,
           journalEntry,
-          awakeableMsg.value,
-          awakeableMsg.failure
+          awakeableMsg.result.case === "value"
+            ? awakeableMsg.result.value
+            : undefined,
+          awakeableMsg.result.case === "failure"
+            ? awakeableMsg.result.value
+            : undefined
         );
         break;
       }
       case SIDE_EFFECT_ENTRY_MESSAGE_TYPE: {
         const sideEffectMsg = replayMessage.message as SideEffectEntryMessage;
-        if (sideEffectMsg.value !== undefined) {
-          this.resolveResult(
-            journalIndex,
-            journalEntry,
-            jsonDeserialize(sideEffectMsg.value.toString())
-          );
-        } else if (sideEffectMsg.failure !== undefined) {
+        if (sideEffectMsg.result.case === "value") {
+          const text = Buffer.from(sideEffectMsg.result.value).toString();
+          this.resolveResult(journalIndex, journalEntry, jsonDeserialize(text));
+        } else if (sideEffectMsg.result.case === "failure") {
           this.resolveResult(
             journalIndex,
             journalEntry,
             undefined,
-            sideEffectMsg.failure.failure,
-            sideEffectMsg.failure.terminal
+            sideEffectMsg.result.value.failure,
+            sideEffectMsg.result.value.terminal
           );
         } else {
           // A side effect can have a void return type

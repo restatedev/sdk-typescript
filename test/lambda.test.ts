@@ -57,7 +57,7 @@ describe("Lambda: decodeMessage", () => {
   it("returns a list of decoded messages when last message body is empty", async () => {
     const messages: Message[] = [
       startMessage({ knownEntries: 2 }),
-      inputMessage(Buffer.alloc(0)),
+      inputMessage(new Uint8Array()),
     ];
     const serializedMsgs = serializeMessages(messages);
 
@@ -66,7 +66,7 @@ describe("Lambda: decodeMessage", () => {
     expect(decodedMessages).toStrictEqual(messages);
   });
 
-  it("returns a list of decoded messages when last message body is empty", async () => {
+  it("should returns a list of decoded messages when last message body is empty", async () => {
     const messages: Message[] = [
       startMessage({ knownEntries: 2 }),
       inputMessage(greetRequest("Pete")),

@@ -34,23 +34,23 @@
     "ingress": "RESTATE_DEBUG_LOGGING=OFF ts-node-dev --transpile-only ./examples/ingress.ts"
   },
   "dependencies": {
-    "protobufjs": "^7.2.2",
-    "ts-proto": "^1.140.0"
+    "@bufbuild/protobuf": "^1.8.0"
   },
   "devDependencies": {
     "@bufbuild/buf": "^1.15.0",
+    "@bufbuild/protoc-gen-es": "^1.8.0",
     "@types/aws-lambda": "^8.10.115",
     "@types/jest": "^29.4.0",
     "@types/node": "^20.10.4",
     "@typescript-eslint/eslint-plugin": "^5.53.0",
     "@typescript-eslint/parser": "^5.53.0",
     "eslint": "^8.35.0",
+    "express": "*",
     "prettier": "^2.8.4",
     "release-it": "^16.1.4",
     "ts-jest": "^29.0.5",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^4.9.5",
-    "express": "*"
+    "typescript": "^4.9.5"
   },
   "engines": {
     "node": ">= 18"

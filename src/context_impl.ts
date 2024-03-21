@@ -15,13 +15,12 @@ import {
   AwakeableEntryMessage,
   BackgroundInvokeEntryMessage,
   CompleteAwakeableEntryMessage,
-  DeepPartial,
   GetStateEntryMessage,
   GetStateKeysEntryMessage,
   GetStateKeysEntryMessage_StateKeys,
   InvokeEntryMessage,
   SleepEntryMessage,
-} from "./generated/proto/protocol";
+} from "./generated/proto/protocol_pb";
 import {
   AWAKEABLE_ENTRY_MESSAGE_TYPE,
   AWAKEABLE_IDENTIFIER_PREFIX,
@@ -36,7 +35,7 @@ import {
   SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
   SLEEP_ENTRY_MESSAGE_TYPE,
 } from "./types/protocol";
-import { SideEffectEntryMessage } from "./generated/proto/javascript";
+import { SideEffectEntryMessage } from "./generated/proto/javascript_pb";
 import { AsyncLocalStorage } from "async_hooks";
 import {
   RestateErrorCodes,
@@ -50,7 +49,7 @@ import {
   UNKNOWN_ERROR_CODE,
 } from "./types/errors";
 import { jsonSerialize, jsonDeserialize } from "./utils/utils";
-import { Empty } from "./generated/google/protobuf/empty";
+import { Empty, PartialMessage, protoInt64 } from "@bufbuild/protobuf";
 import {
   DEFAULT_INFINITE_EXPONENTIAL_BACKOFF,
   DEFAULT_INITIAL_DELAY_MS,
@@ -130,7 +129,7 @@ export class ContextImpl implements ObjectContext {
     this.checkStateOperation("get state");
 
     // Create the message and let the state machine process it
-    const msg = GetStateEntryMessage.create({ key: Buffer.from(name) });
+    const msg = new GetStateEntryMessage({ key: Buffer.from(name) });
     const completed = this.stateMachine.localStateStore.tryCompleteGet(
       name,
       msg
@@ -166,7 +165,7 @@ export class ContextImpl implements ObjectContext {
     this.checkState("state keys");
 
     // Create the message and let the state machine process it
-    const msg = GetStateKeysEntryMessage.create({});
+    const msg = new GetStateKeysEntryMessage({});
     const completed =
       this.stateMachine.localStateStore.tryCompletedGetStateKeys(msg);
 
@@ -223,7 +222,7 @@ export class ContextImpl implements ObjectContext {
   ): InternalCombineablePromise<Uint8Array> {
     this.checkState("invoke");
 
-    const msg = InvokeEntryMessage.create({
+    const msg = new InvokeEntryMessage({
       serviceName: service,
       methodName: method,
       parameter: Buffer.from(data),
@@ -244,12 +243,13 @@ export class ContextImpl implements ObjectContext {
     key?: string
   ): Promise<Uint8Array> {
     const actualDelay = delay || 0;
-    const invokeTime = actualDelay > 0 ? Date.now() + actualDelay : undefined;
-    const msg = BackgroundInvokeEntryMessage.create({
+    const invokeTime =
+      actualDelay > 0 ? Date.now() + actualDelay : protoInt64.zero;
+    const msg = new BackgroundInvokeEntryMessage({
       serviceName: service,
       methodName: method,
       parameter: Buffer.from(data),
-      invokeTime: invokeTime,
+      invokeTime: protoInt64.parse(invokeTime),
       key,
     });
 
@@ -394,7 +394,7 @@ export class ContextImpl implements ObjectContext {
     const executeAndLogSideEffect = async () => {
       // in replay mode, we directly return the value from the log
       if (this.stateMachine.nextEntryWillBeReplayed()) {
-        const emptyMsg = SideEffectEntryMessage.create({});
+        const emptyMsg = new SideEffectEntryMessage({});
         return this.stateMachine.handleUserCodeMessage<T>(
           SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
           emptyMsg
@@ -413,8 +413,8 @@ export class ContextImpl implements ObjectContext {
         // deterministic on replay
         const error = ensureError(e);
         const failure = errorToFailureWithTerminal(error);
-        const sideEffectMsg = SideEffectEntryMessage.create({
-          failure: failure,
+        const sideEffectMsg = new SideEffectEntryMessage({
+          result: { case: "failure", value: failure },
         });
 
         // this may throw an error from the SDK/runtime/connection side, in case the
@@ -438,10 +438,13 @@ export class ContextImpl implements ObjectContext {
       // from here is not incorrectly attributed to the side-effect
       const sideEffectMsg =
         sideEffectResult !== undefined
-          ? SideEffectEntryMessage.create({
-              value: Buffer.from(jsonSerialize(sideEffectResult)),
+          ? new SideEffectEntryMessage({
+              result: {
+                case: "value",
+                value: Buffer.from(jsonSerialize(sideEffectResult)),
+              },
             })
-          : SideEffectEntryMessage.create();
+          : new SideEffectEntryMessage();
 
       // if an error arises from committing the side effect result, then this error will
       // be thrown here (reject the returned promise) and the function will see that error,
@@ -483,7 +486,9 @@ export class ContextImpl implements ObjectContext {
   private sleepInternal(millis: number): WrappedPromise<void> {
     return this.stateMachine.handleUserCodeMessage<void>(
       SLEEP_ENTRY_MESSAGE_TYPE,
-      SleepEntryMessage.create({ wakeUpTime: Date.now() + millis })
+      new SleepEntryMessage({
+        wakeUpTime: protoInt64.parse(Date.now() + millis),
+      })
     );
   }
 
@@ -492,7 +497,7 @@ export class ContextImpl implements ObjectContext {
   public awakeable<T>(): { id: string; promise: CombineablePromise<T> } {
     this.checkState("awakeable");
 
-    const msg = AwakeableEntryMessage.create();
+    const msg = new AwakeableEntryMessage();
     const promise = this.stateMachine
       .handleUserCodeMessage<Buffer>(AWAKEABLE_ENTRY_MESSAGE_TYPE, msg)
       .transform((result: Buffer | void) => {
@@ -529,26 +534,32 @@ export class ContextImpl implements ObjectContext {
 
     this.checkState("resolveAwakeable");
     this.completeAwakeable(id, {
-      value: Buffer.from(JSON.stringify(payloadToWrite)),
+      result: {
+        case: "value",
+        value: Buffer.from(JSON.stringify(payloadToWrite)),
+      },
     });
   }
 
   public rejectAwakeable(id: string, reason: string): void {
     this.checkState("rejectAwakeable");
     this.completeAwakeable(id, {
-      failure: { code: UNKNOWN_ERROR_CODE, message: reason },
+      result: {
+        case: "failure",
+        value: { code: UNKNOWN_ERROR_CODE, message: reason },
+      },
     });
   }
 
   private completeAwakeable(
     id: string,
-    base: DeepPartial<CompleteAwakeableEntryMessage>
+    base: PartialMessage<CompleteAwakeableEntryMessage>
   ): void {
     base.id = id;
     this.stateMachine
       .handleUserCodeMessage(
         COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
-        CompleteAwakeableEntryMessage.create(base)
+        new CompleteAwakeableEntryMessage(base)
       )
       .catch((e) => this.stateMachine.handleDanglingPromiseError(e));
   }

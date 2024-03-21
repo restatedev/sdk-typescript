@@ -25,6 +25,7 @@ import { PROTOBUF_MESSAGE_BY_TYPE } from "../types/protocol";
 import { Header, Message } from "../types/types";
 import assert from "assert";
 import { ensureError } from "../types/errors";
+import { Buffer } from "node:buffer";
 
 type Output = { push(msg: Message): void };
 type DecoderState = { state: number; header: Header | undefined; buf: Buffer };
@@ -92,7 +93,8 @@ function decodeMessages(decoderState: DecoderState, out: Output): DecoderState {
         if (pbType === undefined) {
           throw new Error("Got unknown message type " + header.messageType);
         } else {
-          const message = pbType.decode(frame);
+          //eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const message = (pbType as any).fromBinary(frame);
           out.push(
             new Message(
               header.messageType,

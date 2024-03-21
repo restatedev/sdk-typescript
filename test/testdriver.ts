@@ -98,7 +98,7 @@ export class TestDriver implements Connection {
     const startEntry = msg.message as StartMessage;
     entries[0] = new Message(
       msg.messageType,
-      StartMessage.create({
+      new StartMessage({
         id: startEntry.id,
         debugId: startEntry.debugId,
         knownEntries: endOfReplay - 1,

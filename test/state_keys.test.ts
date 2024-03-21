@@ -24,14 +24,14 @@ import {
   startMessage,
   suspensionMessage,
 } from "./protoutils";
-import { GetStateKeysEntryMessage_StateKeys } from "../src/generated/proto/protocol";
+import { GetStateKeysEntryMessage_StateKeys } from "../src/generated/proto/protocol_pb";
 
 const INPUT_MESSAGE = inputMessage(greetRequest("bob"));
 
 function stateKeys(...keys: Array<string>): GetStateKeysEntryMessage_StateKeys {
-  return {
+  return new GetStateKeysEntryMessage_StateKeys({
     keys: keys.map((b) => Buffer.from(b)),
-  };
+  });
 }
 
 class ListKeys implements TestGreeter {
@@ -69,7 +69,7 @@ describe("ListKeys", () => {
       INPUT_MESSAGE,
       completionMessage(
         1,
-        GetStateKeysEntryMessage_StateKeys.encode(stateKeys("B", "C")).finish()
+        new GetStateKeysEntryMessage_StateKeys(stateKeys("B", "C")).toBinary()
       ),
     ]).run();
 

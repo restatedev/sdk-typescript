@@ -17,8 +17,8 @@ import {
   GetStateKeysEntryMessage_StateKeys,
   SetStateEntryMessage,
   StartMessage_StateEntry,
-} from "./generated/proto/protocol";
-import { Empty } from "./generated/google/protobuf/empty";
+} from "./generated/proto/protocol_pb";
+import { Empty } from "@bufbuild/protobuf";
 import { jsonSerialize } from "./utils/utils";
 
 export class LocalStateStore {
@@ -26,7 +26,7 @@ export class LocalStateStore {
 
   constructor(private isPartial: boolean, state: StartMessage_StateEntry[]) {
     this.state = new Map<string, Buffer | Empty>(
-      state.map(({ key, value }) => [key.toString(), value])
+      state.map(({ key, value }) => [key.toString(), Buffer.from(value)])
     );
   }
 
@@ -39,16 +39,15 @@ export class LocalStateStore {
         return false;
       } else {
         // Complete eager state, so state entry is null
-        msg.empty = Empty.create({});
+        msg.result = { case: "empty", value: new Empty({}) };
         return true;
       }
     }
 
     if (stateEntry instanceof Buffer) {
-      msg.value = stateEntry;
+      msg.result = { case: "value", value: stateEntry };
     } else {
-      // stateEntry is Empty
-      msg.empty = stateEntry;
+      msg.result = { case: "empty", value: new Empty({}) };
     }
     return true;
   }
@@ -59,24 +58,28 @@ export class LocalStateStore {
       return false;
     }
 
-    msg.value = GetStateKeysEntryMessage_StateKeys.create({
-      keys: Array.from(this.state.keys()).map((b) => Buffer.from(b)),
-    });
+    msg.result = {
+      case: "value",
+      value: new GetStateKeysEntryMessage_StateKeys({
+        keys: Array.from(this.state.keys()).map((b) => Buffer.from(b)),
+      }),
+    };
+
     return true;
   }
 
   public set<T>(key: string, value: T): SetStateEntryMessage {
     const bytes = Buffer.from(jsonSerialize(value));
     this.state.set(key, bytes);
-    return SetStateEntryMessage.create({
+    return new SetStateEntryMessage({
       key: Buffer.from(key, "utf8"),
       value: bytes,
     });
   }
 
   public clear(key: string): ClearStateEntryMessage {
-    this.state.set(key, Empty.create({}));
-    return ClearStateEntryMessage.create({ key: Buffer.from(key) });
+    this.state.set(key, new Empty());
+    return new ClearStateEntryMessage({ key: Buffer.from(key) });
   }
 
   // When a GetState request does not have a local entry and we have partial state,
@@ -89,6 +92,6 @@ export class LocalStateStore {
   public clearAll(): ClearAllStateEntryMessage {
     this.state.clear();
     this.isPartial = false;
-    return {};
+    return new ClearAllStateEntryMessage();
   }
 }

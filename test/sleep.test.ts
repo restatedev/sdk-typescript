@@ -28,7 +28,7 @@ import {
   suspensionMessage,
 } from "./protoutils";
 import { SLEEP_ENTRY_MESSAGE_TYPE } from "../src/types/protocol";
-import { Empty } from "../src/generated/google/protobuf/empty";
+import { Empty } from "@bufbuild/protobuf";
 import { TestDriver, TestGreeter, TestResponse } from "./testdriver";
 import { ProtocolMode } from "../src/types/discovery";
 
@@ -85,7 +85,7 @@ describe("SleepGreeter", () => {
     const result = await new TestDriver(new SleepGreeter(), [
       startMessage(),
       inputMessage(greetRequest("Till")),
-      completionMessage(1, Empty.encode(Empty.create({})).finish()),
+      completionMessage(1, new Empty().toBinary()),
     ]).run();
 
     expect(result.length).toStrictEqual(3);
@@ -122,7 +122,7 @@ describe("SleepGreeter", () => {
     const result = await new TestDriver(new SleepGreeter(), [
       startMessage(),
       inputMessage(greetRequest("Till")),
-      sleepMessage(wakeupTime, Empty.create({})),
+      sleepMessage(wakeupTime, new Empty({})),
     ]).run();
 
     expect(result.length).toStrictEqual(2);
@@ -230,9 +230,9 @@ describe("ManySleepsGreeter: With sleep not complete", () => {
       startMessage(),
       inputMessage(greetRequest("Till")),
       sleepMessage(100),
-      sleepMessage(100, Empty.create({})),
+      sleepMessage(100, new Empty({})),
       sleepMessage(100),
-      sleepMessage(100, Empty.create({})),
+      sleepMessage(100, new Empty({})),
       sleepMessage(100),
     ]).run();
 
@@ -243,11 +243,11 @@ describe("ManySleepsGreeter: With sleep not complete", () => {
     const result = await new TestDriver(new ManySleepsGreeter(), [
       startMessage(),
       inputMessage(greetRequest("Till")),
-      sleepMessage(100, Empty.create({})),
-      sleepMessage(100, Empty.create({})),
-      sleepMessage(100, Empty.create({})),
-      sleepMessage(100, Empty.create({})),
-      sleepMessage(100, Empty.create({})),
+      sleepMessage(100, new Empty({})),
+      sleepMessage(100, new Empty({})),
+      sleepMessage(100, new Empty({})),
+      sleepMessage(100, new Empty({})),
+      sleepMessage(100, new Empty({})),
     ]).run();
 
     expect(result[0]).toStrictEqual(outputMessage(greetResponse("Hello")));

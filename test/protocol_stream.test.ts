@@ -86,7 +86,7 @@ describe("Restate Streaming Connection", () => {
     restateStream.send(
       new Message(
         START_MESSAGE_TYPE,
-        StartMessage.create({
+        new StartMessage({
           id: Buffer.from("abcd"),
           debugId: "abcd",
           knownEntries: 1337,
@@ -207,7 +207,7 @@ function newCompletableEntry(
 function newMessage(size: number) {
   return new Message(
     SET_STATE_ENTRY_MESSAGE_TYPE,
-    SetStateEntryMessage.create({
+    new SetStateEntryMessage({
       key: Buffer.from("abcd"),
       value: Buffer.alloc(size),
     })

@@ -11,9 +11,9 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { ErrorMessage, Failure } from "../generated/proto/protocol";
+import { ErrorMessage, Failure } from "../generated/proto/protocol_pb";
 import { formatMessageAsJson } from "../utils/utils";
-import { FailureWithTerminal } from "../generated/proto/javascript";
+import { FailureWithTerminal } from "../generated/proto/javascript_pb";
 import * as p from "./protocol";
 
 export const INTERNAL_ERROR_CODE = 500;
@@ -49,7 +49,7 @@ export class RestateError extends Error {
   }
 
   public toFailure(): Failure {
-    return Failure.create({
+    return new Failure({
       code: this.code,
       message: this.message,
     });
@@ -120,7 +120,7 @@ export class RetryableError extends RestateError {
 export function errorToFailure(err: Error): Failure {
   return err instanceof RestateError
     ? err.toFailure()
-    : Failure.create({
+    : new Failure({
         code: INTERNAL_ERROR_CODE,
         message: err.message,
       });
@@ -128,7 +128,7 @@ export function errorToFailure(err: Error): Failure {
 
 export function errorToFailureWithTerminal(err: Error): FailureWithTerminal {
   const failure = errorToFailure(err);
-  return FailureWithTerminal.create({
+  return new FailureWithTerminal({
     failure,
     terminal: err instanceof TerminalError,
   });
@@ -153,7 +153,7 @@ export function failureToError(
 export function errorToErrorMessage(err: Error): ErrorMessage {
   const code = err instanceof RestateError ? err.code : INTERNAL_ERROR_CODE;
 
-  return ErrorMessage.create({
+  return new ErrorMessage({
     code: code,
     message: err.message,
   });
