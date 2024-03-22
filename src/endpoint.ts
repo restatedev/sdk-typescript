@@ -68,35 +68,17 @@ export interface ServiceBundle {
  */
 export interface RestateEndpoint {
   /**
-   * Binds a new durable RPC service to the given path. This method is for regular (stateless)
-   * durably executed RPC services.
-   *
-   * The service will expose all properties of the router that are functions as follows:
-   * If the path is 'acme.myservice' and the router has '{ foo, bar }' as properties, the
-   * Restate will expose the RPC paths '/acme.myservice/foo' and '/acme.myservice/bar'.
-   */
-  service<P extends string, M>(
-    service: ServiceDefintion<P, M>
-  ): RestateEndpoint;
-
-  /**
-   * Binds a new stateful keyed durable RPC service to the given path.
-   * This method is services where each invocation is bound to a key and that may maintain
-   * state per key.
-   *
-   * The service will expose all properties of the router that are functions as follows:
-   * If the path is 'acme.myservice' and the router has '{ foo, bar }' as properties, the
-   * Restate will expose the RPC paths '/acme.myservice/foo' and '/acme.myservice/bar'.
-   */
-  object<P extends string, M>(
-    virtualObject: VirtualObjectDefintion<P, M>
+   * Binds a new durable RPC service / virtual object.
+   **/
+  bind<P extends string, M>(
+    service: ServiceDefintion<P, M> | VirtualObjectDefintion<P, M>
   ): RestateEndpoint;
 
   /**
    * Adds one or more services to this endpoint. This will call the
    * {@link ServiceBundle.registerServices} function to register all services at this endpoint.
    */
-  bind(services: ServiceBundle): RestateEndpoint;
+  bindBundle(services: ServiceBundle): RestateEndpoint;
 
   /**
    * Creates the invocation handler function to be called by AWS Lambda.

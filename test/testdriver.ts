@@ -70,7 +70,7 @@ export class TestDriver implements Connection {
       },
     });
 
-    this.restateServer.object(svc);
+    this.restateServer.bind(svc);
 
     if (entries.length < 2) {
       throw new Error(

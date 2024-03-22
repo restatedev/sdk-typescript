@@ -33,23 +33,25 @@ class SharedContextImpl<P extends string> implements wf.SharedWfContext {
 
   get<T>(stateName: string): Promise<T | null> {
     return this.ctx
-      .object(this.stateServiceApi, this.wfId)
+      .objectClient(this.stateServiceApi, this.wfId)
       .getState(stateName) as Promise<T | null>;
   }
 
   promise<T = void>(name: string): wf.DurablePromise<T> {
     // Create the awakeable to complete
     const awk = this.ctx.awakeable<T>();
-    this.ctx.objectSend(this.stateServiceApi, this.wfId).subscribePromise({
-      promiseName: name,
-      awkId: awk.id,
-    });
+    this.ctx
+      .objectSendClient(this.stateServiceApi, this.wfId)
+      .subscribePromise({
+        promiseName: name,
+        awkId: awk.id,
+      });
 
     // Prepare implementation of DurablePromise
 
     const peek = async (): Promise<T | null> => {
       const result = await this.ctx
-        .object(this.stateServiceApi, this.wfId)
+        .objectClient(this.stateServiceApi, this.wfId)
         .peekPromise({ promiseName: name });
 
       if (result === null) {
@@ -64,17 +66,21 @@ class SharedContextImpl<P extends string> implements wf.SharedWfContext {
     const resolve = (value: T) => {
       const currentValue = value === undefined ? null : value;
 
-      this.ctx.objectSend(this.stateServiceApi, this.wfId).completePromise({
-        promiseName: name,
-        completion: { value: currentValue },
-      });
+      this.ctx
+        .objectSendClient(this.stateServiceApi, this.wfId)
+        .completePromise({
+          promiseName: name,
+          completion: { value: currentValue },
+        });
     };
 
     const reject = (errorMsg: string) => {
-      this.ctx.objectSend(this.stateServiceApi, this.wfId).completePromise({
-        promiseName: name,
-        completion: { error: errorMsg },
-      });
+      this.ctx
+        .objectSendClient(this.stateServiceApi, this.wfId)
+        .completePromise({
+          promiseName: name,
+          completion: { error: errorMsg },
+        });
     };
 
     return Object.defineProperties(awk.promise, {
@@ -116,20 +122,22 @@ class ExclusiveContextImpl<P extends string>
     }
 
     this.ctx
-      .objectSend(this.stateServiceApi, this.wfId)
+      .objectSendClient(this.stateServiceApi, this.wfId)
       .setState({ stateName, value });
   }
 
   clear(stateName: string): void {
-    this.ctx.objectSend(this.stateServiceApi, this.wfId).clearState(stateName);
+    this.ctx
+      .objectSendClient(this.stateServiceApi, this.wfId)
+      .clearState(stateName);
   }
 
   stateKeys(): Promise<Array<string>> {
-    return this.ctx.object(this.stateServiceApi, this.wfId).stateKeys();
+    return this.ctx.objectClient(this.stateServiceApi, this.wfId).stateKeys();
   }
 
   clearAll(): void {
-    this.ctx.objectSend(this.stateServiceApi, this.wfId).clearAllState();
+    this.ctx.objectSendClient(this.stateServiceApi, this.wfId).clearAllState();
   }
 
   sideEffect<T>(fn: () => Promise<T>): Promise<T> {
@@ -155,40 +163,40 @@ class ExclusiveContextImpl<P extends string>
     return kctx.key();
   }
 
-  service<P extends string, M>(
+  serviceClient<P extends string, M>(
     opts: restate.ServiceDefintion<P, M>
   ): restate.Client<M> {
-    return this.ctx.service(opts);
+    return this.ctx.serviceClient(opts);
   }
-  object<P extends string, M>(
+  objectClient<P extends string, M>(
     opts: restate.ServiceDefintion<P, M>,
     key: string
   ): restate.Client<M> {
-    return this.ctx.object(opts, key);
+    return this.ctx.objectClient(opts, key);
   }
-  objectSend<P extends string, M>(
+  objectSendClient<P extends string, M>(
     opts: restate.ServiceDefintion<P, M>,
     key: string
   ): restate.SendClient<M> {
-    return this.ctx.objectSend(opts, key);
+    return this.ctx.objectSendClient(opts, key);
   }
-  serviceSend<P extends string, M>(
+  serviceSendClient<P extends string, M>(
     opts: restate.ServiceDefintion<P, M>
   ): restate.SendClient<M> {
-    return this.ctx.serviceSend(opts);
+    return this.ctx.serviceSendClient(opts);
   }
-  objectSendDelayed<P extends string, M>(
+  objectSendDelayedClient<P extends string, M>(
     opts: restate.ServiceDefintion<P, M>,
     delay: number,
     key: string
   ): restate.SendClient<M> {
-    return this.ctx.objectSendDelayed(opts, delay, key);
+    return this.ctx.objectSendDelayedClient(opts, delay, key);
   }
-  serviceSendDelayed<P extends string, M>(
+  serviceSendDelayedClient<P extends string, M>(
     opts: restate.ServiceDefintion<P, M>,
     delay: number
   ): restate.SendClient<M> {
-    return this.ctx.serviceSendDelayed(opts, delay);
+    return this.ctx.serviceSendDelayedClient(opts, delay);
   }
 }
 
@@ -209,10 +217,10 @@ export function createWrapperService<P extends string, R, T, M>(
       checkRequestAndWorkflowId(request);
 
       const started = await ctx
-        .object(stateServiceApi, request.workflowId)
+        .objectClient(stateServiceApi, request.workflowId)
         .startWorkflow();
       if (started === wf.WorkflowStartResult.STARTED) {
-        ctx.service(api).run(request);
+        ctx.serviceClient(api).run(request);
       }
       return started;
     },
@@ -232,18 +240,18 @@ export function createWrapperService<P extends string, R, T, M>(
         const result = await workflow.run(wfCtx, request);
         const resultValue = result !== undefined ? result : {};
         await ctx
-          .object(stateServiceApi, request.workflowId)
+          .objectClient(stateServiceApi, request.workflowId)
           .finishOrFailWorkflow({ value: resultValue });
         return result;
       } catch (err) {
         const msg = stringifyError(err);
         await ctx
-          .object(stateServiceApi, request.workflowId)
+          .objectClient(stateServiceApi, request.workflowId)
           .finishOrFailWorkflow({ error: msg });
         throw err;
       } finally {
         ctx
-          .objectSendDelayed(
+          .objectSendDelayedClient(
             stateServiceApi,
             DEFAULT_RETENTION_PERIOD,
             request.workflowId
@@ -260,7 +268,7 @@ export function createWrapperService<P extends string, R, T, M>(
 
       const awakeable = ctx.awakeable<R>();
       await ctx
-        .object(stateServiceApi, request.workflowId)
+        .objectClient(stateServiceApi, request.workflowId)
         .subscribeResult(awakeable.id);
       return awakeable.promise;
     },
@@ -270,7 +278,7 @@ export function createWrapperService<P extends string, R, T, M>(
       request: wf.WorkflowRequest<unknown>
     ): Promise<wf.LifecycleStatus> => {
       checkRequestAndWorkflowId(request);
-      return ctx.object(stateServiceApi, request.workflowId).getStatus();
+      return ctx.objectClient(stateServiceApi, request.workflowId).getStatus();
     },
   };
 

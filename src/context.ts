@@ -276,9 +276,9 @@ export interface Context {
    * const result2 = await ctx.rpc(myApi).anotherAction(1337);
    * ```
    */
-  service<P extends string, M>(opts: ServiceDefintion<P, M>): Client<M>;
+  serviceClient<P extends string, M>(opts: ServiceDefintion<P, M>): Client<M>;
 
-  object<P extends string, M>(
+  objectClient<P extends string, M>(
     opts: VirtualObjectDefintion<P, M>,
     key: string
   ): Client<M>;
@@ -322,11 +322,13 @@ export interface Context {
    * ctx.send(myApi).anotherAction(1337);
    * ```
    */
-  objectSend<P extends string, M>(
+  objectSendClient<P extends string, M>(
     opts: VirtualObjectDefintion<P, M>,
     key: string
   ): SendClient<M>;
-  serviceSend<P extends string, M>(opts: ServiceDefintion<P, M>): SendClient<M>;
+  serviceSendClient<P extends string, M>(
+    opts: ServiceDefintion<P, M>
+  ): SendClient<M>;
 
   /**
    * Makes a type-safe one-way RPC to the specified target service, after a delay specified by the
@@ -373,13 +375,13 @@ export interface Context {
    * ctx.sendDelayed(myApi, 60_000).anotherAction(1337);
    * ```
    */
-  objectSendDelayed<P extends string, M>(
+  objectSendDelayedClient<P extends string, M>(
     opts: VirtualObjectDefintion<P, M>,
     delay: number,
     key: string
   ): SendClient<M>;
 
-  serviceSendDelayed<P extends string, M>(
+  serviceSendDelayedClient<P extends string, M>(
     opts: ServiceDefintion<P, M>,
     delay: number
   ): SendClient<M>;

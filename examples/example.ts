@@ -14,13 +14,13 @@ import * as restate from "../src/public_api";
 const greeter = restate.service("greeter", {
   greet: async (ctx: restate.Context, name: string) => {
     // blocking RPC call to a keyed service (here supplying type and path separately)
-    const countSoFar = await ctx.object(Counter, name).count();
+    const countSoFar = await ctx.objectClient(Counter, name).count();
 
     const message = `Hello ${name}, for the ${countSoFar + 1}th time!`;
 
     // sending messages to ourselves, immediately and delayed
-    ctx.serviceSend(Greeter).logger(message);
-    ctx.serviceSendDelayed(Greeter, 100).logger("delayed " + message);
+    ctx.serviceSendClient(Greeter).logger(message);
+    ctx.serviceSendDelayedClient(Greeter, 100).logger("delayed " + message);
 
     return message;
   },
@@ -51,4 +51,4 @@ export type CounterObject = typeof counter;
 const Counter: CounterObject = { path: "counter" };
 // restate server
 
-restate.endpoint().object(counter).service(greeter).listen(9080);
+restate.endpoint().bind(counter).bind(greeter).listen(9080);

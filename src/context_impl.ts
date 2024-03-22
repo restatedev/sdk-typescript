@@ -269,7 +269,9 @@ export class ContextImpl implements ObjectContext {
     return new Uint8Array();
   }
 
-  service<P extends string, M>({ path }: ServiceDefintion<P, M>): Client<M> {
+  serviceClient<P extends string, M>({
+    path,
+  }: ServiceDefintion<P, M>): Client<M> {
     const clientProxy = new Proxy(
       {},
       {
@@ -288,7 +290,7 @@ export class ContextImpl implements ObjectContext {
     return clientProxy as Client<M>;
   }
 
-  object<P extends string, M>(
+  objectClient<P extends string, M>(
     { path }: ServiceDefintion<P, M>,
     key: string
   ): Client<M> {
@@ -310,13 +312,13 @@ export class ContextImpl implements ObjectContext {
     return clientProxy as Client<M>;
   }
 
-  public serviceSend<P extends string, M>(
+  public serviceSendClient<P extends string, M>(
     options: ServiceDefintion<P, M>
   ): SendClient<M> {
-    return this.serviceSendDelayed(options, 0);
+    return this.serviceSendDelayedClient(options, 0);
   }
 
-  public serviceSendDelayed<P extends string, M>(
+  public serviceSendDelayedClient<P extends string, M>(
     { path }: ServiceDefintion<P, M>,
     delayMillis: number
   ): SendClient<M> {
@@ -340,14 +342,14 @@ export class ContextImpl implements ObjectContext {
     return clientProxy as SendClient<M>;
   }
 
-  public objectSend<P extends string, M>(
+  public objectSendClient<P extends string, M>(
     options: ServiceDefintion<P, M>,
     key: string
   ): SendClient<M> {
-    return this.objectSendDelayed(options, 0, key);
+    return this.objectSendDelayedClient(options, 0, key);
   }
 
-  public objectSendDelayed<P extends string, M>(
+  public objectSendDelayedClient<P extends string, M>(
     { path }: ServiceDefintion<P, M>,
     delayMillis: number,
     key: string

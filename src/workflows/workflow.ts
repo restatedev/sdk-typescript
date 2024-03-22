@@ -49,8 +49,8 @@ export function workflow<P extends string, R, T, U>(
       WorkflowRestateRpcApi<R, T, U>
     >,
     registerServices: (endpoint: restate.RestateEndpoint) => {
-      endpoint.object(stateServiceRouter);
-      endpoint.service(wrapperServiceRouter);
+      endpoint.bind(stateServiceRouter);
+      endpoint.bind(wrapperServiceRouter);
     },
   } satisfies WorkflowServices<P, R, T, U>;
 }

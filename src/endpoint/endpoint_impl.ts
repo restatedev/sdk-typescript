@@ -10,6 +10,7 @@
  */
 
 /* eslint-disable @typescript-eslint/ban-types */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { RestateEndpoint, ServiceBundle } from "../public_api";
 import { ServiceDefintion, VirtualObjectDefintion } from "../types/rpc";
@@ -27,6 +28,18 @@ import {
 
 import * as discovery from "../types/discovery";
 
+function isServiceDefintion<P extends string, M>(
+  m: any
+): m is ServiceDefintion<P, M> {
+  return m && m.service;
+}
+
+function isObjectDefintion<P extends string, M>(
+  m: any
+): m is VirtualObjectDefintion<P, M> {
+  return m && m.object;
+}
+
 export class EndpointImpl implements RestateEndpoint {
   private readonly components: Map<string, Component> = new Map();
 
@@ -38,30 +51,31 @@ export class EndpointImpl implements RestateEndpoint {
     this.components.set(component.name(), component);
   }
 
-  public service<P extends string, M>(
-    defintion: ServiceDefintion<P, M>
-  ): RestateEndpoint {
-    const { path, service } = defintion;
-    if (!service) {
-      throw new TypeError(`no service implemention found.`);
-    }
-    this.bindServiceComponent(path, service);
-    return this;
-  }
-
-  public object<P extends string, M>(
-    defintion: VirtualObjectDefintion<P, M>
-  ): RestateEndpoint {
-    const { path, object } = defintion;
-    if (!object) {
-      throw new TypeError(`no object implemention found.`);
-    }
-    this.bindVirtualObjectComponent(path, object);
-    return this;
-  }
-
-  public bind(services: ServiceBundle): RestateEndpoint {
+  public bindBundle(services: ServiceBundle): RestateEndpoint {
     services.registerServices(this);
+    return this;
+  }
+
+  public bind<P extends string, M>(
+    defintion: ServiceDefintion<P, M> | VirtualObjectDefintion<P, M>
+  ): RestateEndpoint {
+    if (isServiceDefintion(defintion)) {
+      const { path, service } = defintion;
+      if (!service) {
+        throw new TypeError(`no service implemention found.`);
+      }
+      this.bindServiceComponent(path, service);
+    } else if (isObjectDefintion(defintion)) {
+      const { path, object } = defintion;
+      if (!object) {
+        throw new TypeError(`no object implemention found.`);
+      }
+      this.bindVirtualObjectComponent(path, object);
+    } else {
+      throw new TypeError(
+        "can only bind a service or a virtual object definition"
+      );
+    }
     return this;
   }
 

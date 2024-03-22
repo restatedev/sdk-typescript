@@ -13,16 +13,18 @@ import { ServiceDefintion, VirtualObjectDefintion } from "../public_api";
 import { deserializeJson, serializeJson } from "../utils/serde";
 
 export interface Ingress {
-  service<P extends string, M>(opts: ServiceDefintion<P, M>): IngressClient<M>;
-  object<P extends string, M>(
+  serviceClient<P extends string, M>(
+    opts: ServiceDefintion<P, M>
+  ): IngressClient<M>;
+  objectClient<P extends string, M>(
     opts: VirtualObjectDefintion<P, M>,
     key: string
   ): IngressClient<M>;
-  objectSend<P extends string, M>(
+  objectSendClient<P extends string, M>(
     opts: VirtualObjectDefintion<P, M>,
     key: string
   ): IngressSendClient<M>;
-  serviceSend<P extends string, M>(
+  serviceSendClient<P extends string, M>(
     opts: ServiceDefintion<P, M>
   ): IngressSendClient<M>;
 
@@ -225,25 +227,27 @@ export class HttpIngress implements Ingress {
     return deserializeJson(new Uint8Array(responseBuf));
   }
 
-  service<P extends string, M>(opts: ServiceDefintion<P, M>): IngressClient<M> {
+  serviceClient<P extends string, M>(
+    opts: ServiceDefintion<P, M>
+  ): IngressClient<M> {
     return this.proxy(opts.path) as IngressClient<M>;
   }
 
-  object<P extends string, M>(
+  objectClient<P extends string, M>(
     opts: VirtualObjectDefintion<P, M>,
     key: string
   ): IngressClient<M> {
     return this.proxy(opts.path, key) as IngressClient<M>;
   }
 
-  objectSend<P extends string, M>(
+  objectSendClient<P extends string, M>(
     opts: VirtualObjectDefintion<P, M>,
     key: string
   ): IngressSendClient<M> {
     return this.proxy(opts.path, key, true) as IngressSendClient<M>;
   }
 
-  serviceSend<P extends string, M>(
+  serviceSendClient<P extends string, M>(
     opts: ServiceDefintion<P, M>
   ): IngressSendClient<M> {
     return this.proxy(opts.path, undefined, true) as IngressSendClient<M>;
