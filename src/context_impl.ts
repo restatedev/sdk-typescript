@@ -9,7 +9,13 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { CombineablePromise, ObjectContext, Rand, Request } from "./context";
+import {
+  CombineablePromise,
+  ContextDate,
+  ObjectContext,
+  Rand,
+  Request,
+} from "./context";
 import { StateMachine } from "./state_machine";
 import {
   AwakeableEntryMessage,
@@ -92,6 +98,16 @@ export class ContextImpl implements ObjectContext {
   // See https://github.com/restatedev/sdk-typescript/issues/197 for more details.
   private executingSideEffect = false;
   private readonly invocationRequest: Request;
+
+  public readonly date: ContextDate = {
+    now: (): Promise<number> => {
+      return this.sideEffect(async () => Date.now());
+    },
+
+    toJSON: (): Promise<string> => {
+      return this.sideEffect(async () => new Date().toJSON());
+    },
+  };
 
   constructor(
     id: Buffer,
