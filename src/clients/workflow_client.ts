@@ -129,7 +129,7 @@ export function connect(restateUri: string): RestateClient {
       status: restate.workflow.WorkflowStartResult;
       client: WorkflowClient<R, U>;
     }> => {
-      const path = typeof pathOrApi === "string" ? pathOrApi : pathOrApi.path;
+      const path = typeof pathOrApi === "string" ? pathOrApi : pathOrApi.name;
 
       let result: restate.workflow.WorkflowStartResult;
       try {
@@ -159,7 +159,7 @@ export function connect(restateUri: string): RestateClient {
       status: restate.workflow.LifecycleStatus;
       client: WorkflowClient<R, U>;
     }> {
-      const path = typeof pathOrApi === "string" ? pathOrApi : pathOrApi.path;
+      const path = typeof pathOrApi === "string" ? pathOrApi : pathOrApi.name;
       const client: WorkflowClient<R, U> = new WorkflowClientImpl(
         restateUri,
         path,

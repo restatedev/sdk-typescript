@@ -226,11 +226,14 @@ describe("LambdaGreeter", () => {
 function getTestHandler() {
   return restate
     .endpoint()
-    .object(
-      restate.object("greeter", {
-        // eslint-disable @typescript-eslint/no-unused-vars
-        greet: (ctx: restate.ObjectContext) =>
-          new LambdaGreeter().greet(ctx /*req*/),
+    .bind(
+      restate.object({
+        name: "greeter",
+        handlers: {
+          // eslint-disable @typescript-eslint/no-unused-vars
+          greet: (ctx: restate.ObjectContext) =>
+            new LambdaGreeter().greet(ctx /*req*/),
+        },
       })
     )
     .lambdaHandler();

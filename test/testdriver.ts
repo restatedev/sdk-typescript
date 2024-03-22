@@ -43,7 +43,7 @@ export type GreetType = {
 };
 
 export const GreeterApi: ServiceDefintion<"greeter", GreetType> = {
-  path: "greeter",
+  name: "greeter",
 };
 
 export interface TestGreeter {
@@ -64,13 +64,16 @@ export class TestDriver implements Connection {
   ) {
     this.restateServer = new TestRestateServer();
 
-    const svc = object("greeter", {
-      greet: async (ctx: ObjectContext, arg: TestRequest) => {
-        return instance.greet(ctx, arg);
+    const svc = object({
+      name: "greeter",
+      handlers: {
+        greet: async (ctx: ObjectContext, arg: TestRequest) => {
+          return instance.greet(ctx, arg);
+        },
       },
     });
 
-    this.restateServer.object(svc);
+    this.restateServer.bind(svc);
 
     if (entries.length < 2) {
       throw new Error(

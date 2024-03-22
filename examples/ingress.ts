@@ -14,27 +14,27 @@
 import * as restate from "../src/public_api";
 import type { CounterObject, GreeterService } from "./example";
 
-const Greeter: GreeterService = { path: "greeter" };
-const Counter: CounterObject = { path: "counter" };
+const Greeter: GreeterService = { name: "greeter" };
+const Counter: CounterObject = { name: "counter" };
 
 const ingress = restate.ingress.connect({ url: "http://localhost:8080" });
 
 const simpleCall = async (name: string) => {
-  const greeter = ingress.service(Greeter);
+  const greeter = ingress.serviceClient(Greeter);
   const greeting = await greeter.greet(name);
 
   console.log(greeting);
 };
 
 const objectCall = async (name: string) => {
-  const couter = ingress.object(Counter, name);
+  const couter = ingress.objectClient(Counter, name);
   const count = await couter.count();
 
   console.log(`The count for ${name} is ${count}`);
 };
 
 const idempotentCall = async (name: string, idempotencyKey: string) => {
-  const greeter = ingress.service(Greeter);
+  const greeter = ingress.serviceClient(Greeter);
 
   // send the request with the idempotent key, and ask restate
   // to remember that key for 3 seconds.
@@ -47,7 +47,7 @@ const idempotentCall = async (name: string, idempotencyKey: string) => {
 };
 
 const customHeadersCall = async (name: string) => {
-  const greeter = ingress.service(Greeter);
+  const greeter = ingress.serviceClient(Greeter);
 
   const greeting = await greeter.greet(
     name,
@@ -63,7 +63,7 @@ const globalCustomHeaders = async (name: string) => {
     headers: { Authorization: "Bearer mytoken123" },
   });
 
-  const greeting = await ingress.service(Greeter).greet(name);
+  const greeting = await ingress.serviceClient(Greeter).greet(name);
 
   console.log(greeting);
 };

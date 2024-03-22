@@ -269,7 +269,9 @@ export class ContextImpl implements ObjectContext {
     return new Uint8Array();
   }
 
-  service<P extends string, M>({ path }: ServiceDefintion<P, M>): Client<M> {
+  serviceClient<P extends string, M>({
+    name,
+  }: ServiceDefintion<P, M>): Client<M> {
     const clientProxy = new Proxy(
       {},
       {
@@ -277,7 +279,7 @@ export class ContextImpl implements ObjectContext {
           const route = prop as string;
           return (...args: unknown[]) => {
             const requestBytes = serializeJson(args.shift());
-            return this.invoke(path, route, requestBytes).transform(
+            return this.invoke(name, route, requestBytes).transform(
               (responseBytes) => deserializeJson(responseBytes)
             );
           };
@@ -288,8 +290,8 @@ export class ContextImpl implements ObjectContext {
     return clientProxy as Client<M>;
   }
 
-  object<P extends string, M>(
-    { path }: ServiceDefintion<P, M>,
+  objectClient<P extends string, M>(
+    { name }: ServiceDefintion<P, M>,
     key: string
   ): Client<M> {
     const clientProxy = new Proxy(
@@ -299,7 +301,7 @@ export class ContextImpl implements ObjectContext {
           const route = prop as string;
           return (...args: unknown[]) => {
             const requestBytes = serializeJson(args.shift());
-            return this.invoke(path, route, requestBytes, key).transform(
+            return this.invoke(name, route, requestBytes, key).transform(
               (responseBytes) => deserializeJson(responseBytes)
             );
           };
@@ -310,14 +312,14 @@ export class ContextImpl implements ObjectContext {
     return clientProxy as Client<M>;
   }
 
-  public serviceSend<P extends string, M>(
+  public serviceSendClient<P extends string, M>(
     options: ServiceDefintion<P, M>
   ): SendClient<M> {
-    return this.serviceSendDelayed(options, 0);
+    return this.serviceSendDelayedClient(options, 0);
   }
 
-  public serviceSendDelayed<P extends string, M>(
-    { path }: ServiceDefintion<P, M>,
+  public serviceSendDelayedClient<P extends string, M>(
+    { name }: ServiceDefintion<P, M>,
     delayMillis: number
   ): SendClient<M> {
     const clientProxy = new Proxy(
@@ -327,7 +329,7 @@ export class ContextImpl implements ObjectContext {
           const route = prop as string;
           return (...args: unknown[]) => {
             const requestBytes = serializeJson(args.shift());
-            this.invokeOneWay(path, route, requestBytes, delayMillis).catch(
+            this.invokeOneWay(name, route, requestBytes, delayMillis).catch(
               (e) => {
                 this.stateMachine.handleDanglingPromiseError(e);
               }
@@ -340,15 +342,15 @@ export class ContextImpl implements ObjectContext {
     return clientProxy as SendClient<M>;
   }
 
-  public objectSend<P extends string, M>(
+  public objectSendClient<P extends string, M>(
     options: ServiceDefintion<P, M>,
     key: string
   ): SendClient<M> {
-    return this.objectSendDelayed(options, 0, key);
+    return this.objectSendDelayedClient(options, 0, key);
   }
 
-  public objectSendDelayed<P extends string, M>(
-    { path }: ServiceDefintion<P, M>,
+  public objectSendDelayedClient<P extends string, M>(
+    { name }: ServiceDefintion<P, M>,
     delayMillis: number,
     key: string
   ): SendClient<M> {
@@ -360,7 +362,7 @@ export class ContextImpl implements ObjectContext {
           return (...args: unknown[]) => {
             const requestBytes = serializeJson(args.shift());
             this.invokeOneWay(
-              path,
+              name,
               route,
               requestBytes,
               delayMillis,
