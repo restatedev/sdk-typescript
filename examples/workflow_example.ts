@@ -73,7 +73,7 @@ const myworkflow = restate.workflow.workflow("acme.myworkflow", {
 // typed API similar to how other Restate RPC services work
 const workflowApi = myworkflow.api;
 
-restate.endpoint().bind(myworkflow).listen(9080);
+restate.endpoint().bindBundle(myworkflow).listen(9080);
 
 //
 // (2) Code to interact with the workflow using an external client

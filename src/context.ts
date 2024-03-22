@@ -262,15 +262,15 @@ export interface Context {
    * // option 1: export only the type signature of the router
    * export type myApiType = typeof router;
    *
-   * // option 2: export the API definition with type and name (path)
-   * export const myApi: restate.ServiceApi<typeof router> = { path : "myservice" };
+   * // option 2: export the API definition with type and name (name)
+   * export const myApi: restate.ServiceApi<typeof router> = { name : "myservice" };
    *
    * restate.createServer().bindRouter("myservice", router).listen(9080);
    * ```
    * **Client side:**
    * ```ts
    * // option 1: use only types and supply service name separately
-   * const result1 = await ctx.rpc<myApiType>({path: "myservice"}).someAction("hello!");
+   * const result1 = await ctx.rpc<myApiType>({name: "myservice"}).someAction("hello!");
    *
    * // option 2: use full API spec
    * const result2 = await ctx.rpc(myApi).anotherAction(1337);
@@ -308,15 +308,15 @@ export interface Context {
    * // option 1: export only the type signature of the router
    * export type myApiType = typeof router;
    *
-   * // option 2: export the API definition with type and name (path)
-   * export const myApi: restate.ServiceApi<typeof router> = { path : "myservice" };
+   * // option 2: export the API definition with type and name (name)
+   * export const myApi: restate.ServiceApi<typeof router> = { name : "myservice" };
    *
    * restate.createServer().bindRouter("myservice", router).listen(9080);
    * ```
    * **Client side:**
    * ```ts
    * // option 1: use only types and supply service name separately
-   * ctx.send<myApiType>({path: "myservice"}).someAction("hello!");
+   * ctx.send<myApiType>({name: "myservice"}).someAction("hello!");
    *
    * // option 2: use full API spec
    * ctx.send(myApi).anotherAction(1337);
@@ -361,15 +361,15 @@ export interface Context {
    * // option 1: export only the type signature of the router
    * export type myApiType = typeof router;
    *
-   * // option 2: export the API definition with type and name (path)
-   * export const myApi: restate.ServiceApi<typeof router> = { path : "myservice" };
+   * // option 2: export the API definition with type and name (name)
+   * export const myApi: restate.ServiceApi<typeof router> = { name : "myservice" };
    *
    * restate.createServer().bindRouter("myservice", router).listen(9080);
    * ```
    * **Client side:**
    * ```ts
    * // option 1: use only types and supply service name separately
-   * ctx.sendDelayed<myApiType>({path: "myservice"}, 60_000).someAction("hello!");
+   * ctx.sendDelayed<myApiType>({name: "myservice"}, 60_000).someAction("hello!");
    *
    * // option 2: use full API spec
    * ctx.sendDelayed(myApi, 60_000).anotherAction(1337);

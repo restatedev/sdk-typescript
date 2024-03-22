@@ -60,17 +60,17 @@ export class EndpointImpl implements RestateEndpoint {
     defintion: ServiceDefintion<P, M> | VirtualObjectDefintion<P, M>
   ): RestateEndpoint {
     if (isServiceDefintion(defintion)) {
-      const { path, service } = defintion;
+      const { name, service } = defintion;
       if (!service) {
         throw new TypeError(`no service implemention found.`);
       }
-      this.bindServiceComponent(path, service);
+      this.bindServiceComponent(name, service);
     } else if (isObjectDefintion(defintion)) {
-      const { path, object } = defintion;
+      const { name, object } = defintion;
       if (!object) {
         throw new TypeError(`no object implemention found.`);
       }
-      this.bindVirtualObjectComponent(path, object);
+      this.bindVirtualObjectComponent(name, object);
     } else {
       throw new TypeError(
         "can only bind a service or a virtual object definition"

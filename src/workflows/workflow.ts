@@ -27,24 +27,27 @@ const STATE_SERVICE_PATH_SUFFIX = "_state";
  *   - an arbitrary number of interaction methods: `foo(ctx: SharedWfContext, params: X) => Promise<Y>`
  */
 export function workflow<P extends string, R, T, U>(
-  path: P,
+  name: P,
   workflow: Workflow<R, T, U>
 ): WorkflowServices<P, R, T, U> {
   // the state service manages all state and promises for us
-  const stateServiceRouter = restate.object(path, wss.workflowStateService);
+  const stateServiceRouter = restate.object({
+    name,
+    handlers: wss.workflowStateService,
+  });
   const stateServiceApi: wss.api<P> = {
-    path: (path + STATE_SERVICE_PATH_SUFFIX) as P,
+    name: (name + STATE_SERVICE_PATH_SUFFIX) as P,
   };
 
   // the wrapper service manages life cycle, contexts, delegation to the state service
   const wrapperServiceRouter = wws.createWrapperService(
     workflow,
-    path,
+    name,
     stateServiceApi
   );
 
   return {
-    api: { path } as restate.ServiceDefintion<
+    api: { name } as restate.ServiceDefintion<
       P,
       WorkflowRestateRpcApi<R, T, U>
     >,

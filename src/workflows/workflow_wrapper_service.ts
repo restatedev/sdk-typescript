@@ -206,7 +206,7 @@ class ExclusiveContextImpl<P extends string>
 
 export function createWrapperService<P extends string, R, T, M>(
   workflow: wf.Workflow<R, T, M>,
-  path: P,
+  name: P,
   stateServiceApi: wss.api<P>
 ) {
   const wrapperService = {
@@ -316,8 +316,8 @@ export function createWrapperService<P extends string, R, T, M>(
     (wrapperService as any)[route] = wrappingHandler;
   }
 
-  const service = restate.service(path, wrapperService);
-  const api: typeof service = { path };
+  const service = restate.service({ name, handlers: wrapperService });
+  const api: typeof service = { name };
   return service;
 }
 

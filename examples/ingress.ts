@@ -14,8 +14,8 @@
 import * as restate from "../src/public_api";
 import type { CounterObject, GreeterService } from "./example";
 
-const Greeter: GreeterService = { path: "greeter" };
-const Counter: CounterObject = { path: "counter" };
+const Greeter: GreeterService = { name: "greeter" };
+const Counter: CounterObject = { name: "counter" };
 
 const ingress = restate.ingress.connect({ url: "http://localhost:8080" });
 

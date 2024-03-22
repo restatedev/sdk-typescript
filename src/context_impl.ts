@@ -270,7 +270,7 @@ export class ContextImpl implements ObjectContext {
   }
 
   serviceClient<P extends string, M>({
-    path,
+    name,
   }: ServiceDefintion<P, M>): Client<M> {
     const clientProxy = new Proxy(
       {},
@@ -279,7 +279,7 @@ export class ContextImpl implements ObjectContext {
           const route = prop as string;
           return (...args: unknown[]) => {
             const requestBytes = serializeJson(args.shift());
-            return this.invoke(path, route, requestBytes).transform(
+            return this.invoke(name, route, requestBytes).transform(
               (responseBytes) => deserializeJson(responseBytes)
             );
           };
@@ -291,7 +291,7 @@ export class ContextImpl implements ObjectContext {
   }
 
   objectClient<P extends string, M>(
-    { path }: ServiceDefintion<P, M>,
+    { name }: ServiceDefintion<P, M>,
     key: string
   ): Client<M> {
     const clientProxy = new Proxy(
@@ -301,7 +301,7 @@ export class ContextImpl implements ObjectContext {
           const route = prop as string;
           return (...args: unknown[]) => {
             const requestBytes = serializeJson(args.shift());
-            return this.invoke(path, route, requestBytes, key).transform(
+            return this.invoke(name, route, requestBytes, key).transform(
               (responseBytes) => deserializeJson(responseBytes)
             );
           };
@@ -319,7 +319,7 @@ export class ContextImpl implements ObjectContext {
   }
 
   public serviceSendDelayedClient<P extends string, M>(
-    { path }: ServiceDefintion<P, M>,
+    { name }: ServiceDefintion<P, M>,
     delayMillis: number
   ): SendClient<M> {
     const clientProxy = new Proxy(
@@ -329,7 +329,7 @@ export class ContextImpl implements ObjectContext {
           const route = prop as string;
           return (...args: unknown[]) => {
             const requestBytes = serializeJson(args.shift());
-            this.invokeOneWay(path, route, requestBytes, delayMillis).catch(
+            this.invokeOneWay(name, route, requestBytes, delayMillis).catch(
               (e) => {
                 this.stateMachine.handleDanglingPromiseError(e);
               }
@@ -350,7 +350,7 @@ export class ContextImpl implements ObjectContext {
   }
 
   public objectSendDelayedClient<P extends string, M>(
-    { path }: ServiceDefintion<P, M>,
+    { name }: ServiceDefintion<P, M>,
     delayMillis: number,
     key: string
   ): SendClient<M> {
@@ -362,7 +362,7 @@ export class ContextImpl implements ObjectContext {
           return (...args: unknown[]) => {
             const requestBytes = serializeJson(args.shift());
             this.invokeOneWay(
-              path,
+              name,
               route,
               requestBytes,
               delayMillis,

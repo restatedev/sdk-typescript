@@ -11,27 +11,30 @@
 
 import * as restate from "../src/public_api";
 
-const greeter = restate.service("greeter", {
-  greet: async (ctx: restate.Context, name: string) => {
-    // blocking RPC call to a keyed service (here supplying type and path separately)
-    const countSoFar = await ctx.objectClient(Counter, name).count();
+const greeter = restate.service({
+  name: "greeter",
+  handlers: {
+    greet: async (ctx: restate.Context, name: string) => {
+      // blocking RPC call to a keyed service (here supplying type and path separately)
+      const countSoFar = await ctx.objectClient(Counter, name).count();
 
-    const message = `Hello ${name}, for the ${countSoFar + 1}th time!`;
+      const message = `Hello ${name}, for the ${countSoFar + 1}th time!`;
 
-    // sending messages to ourselves, immediately and delayed
-    ctx.serviceSendClient(Greeter).logger(message);
-    ctx.serviceSendDelayedClient(Greeter, 100).logger("delayed " + message);
+      // sending messages to ourselves, immediately and delayed
+      ctx.serviceSendClient(Greeter).logger(message);
+      ctx.serviceSendDelayedClient(Greeter, 100).logger("delayed " + message);
 
-    return message;
-  },
+      return message;
+    },
 
-  logger: async (ctx: restate.Context, msg: string) => {
-    ctx.console.log(" HEEEELLLLOOOOO! " + msg);
+    logger: async (ctx: restate.Context, msg: string) => {
+      ctx.console.log(" HEEEELLLLOOOOO! " + msg);
+    },
   },
 });
 
 export type GreeterService = typeof greeter;
-const Greeter: GreeterService = { path: "greeter" };
+const Greeter: GreeterService = { name: "greeter" };
 
 //
 // The stateful aux service that keeps the counts.
@@ -39,16 +42,19 @@ const Greeter: GreeterService = { path: "greeter" };
 // them here to have this multi-service setup for testing.
 //
 
-const counter = restate.object("counter", {
-  count: async (ctx: restate.ObjectContext): Promise<number> => {
-    const seen = (await ctx.get<number>("seen")) ?? 0;
-    ctx.set("seen", seen + 1);
-    return seen;
+const counter = restate.object({
+  name: "counter",
+  handlers: {
+    count: async (ctx: restate.ObjectContext): Promise<number> => {
+      const seen = (await ctx.get<number>("seen")) ?? 0;
+      ctx.set("seen", seen + 1);
+      return seen;
+    },
   },
 });
 
 export type CounterObject = typeof counter;
-const Counter: CounterObject = { path: "counter" };
+const Counter: CounterObject = { name: "counter" };
 // restate server
 
 restate.endpoint().bind(counter).bind(greeter).listen(9080);

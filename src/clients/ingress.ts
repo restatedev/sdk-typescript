@@ -230,27 +230,27 @@ export class HttpIngress implements Ingress {
   serviceClient<P extends string, M>(
     opts: ServiceDefintion<P, M>
   ): IngressClient<M> {
-    return this.proxy(opts.path) as IngressClient<M>;
+    return this.proxy(opts.name) as IngressClient<M>;
   }
 
   objectClient<P extends string, M>(
     opts: VirtualObjectDefintion<P, M>,
     key: string
   ): IngressClient<M> {
-    return this.proxy(opts.path, key) as IngressClient<M>;
+    return this.proxy(opts.name, key) as IngressClient<M>;
   }
 
   objectSendClient<P extends string, M>(
     opts: VirtualObjectDefintion<P, M>,
     key: string
   ): IngressSendClient<M> {
-    return this.proxy(opts.path, key, true) as IngressSendClient<M>;
+    return this.proxy(opts.name, key, true) as IngressSendClient<M>;
   }
 
   serviceSendClient<P extends string, M>(
     opts: ServiceDefintion<P, M>
   ): IngressSendClient<M> {
-    return this.proxy(opts.path, undefined, true) as IngressSendClient<M>;
+    return this.proxy(opts.name, undefined, true) as IngressSendClient<M>;
   }
 
   async resolveAwakeable<T>(
