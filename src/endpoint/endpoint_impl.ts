@@ -109,10 +109,11 @@ export class EndpointImpl implements RestateEndpoint {
     const component = new ServiceComponent(name);
 
     for (const [route, handler] of Object.entries(router)) {
+      /* eslint-disable @typescript-eslint/no-explicit-any */
+      const fn = handler as ServiceHandlerFunction<any, any>;
       component.add({
         name: route,
-        /* eslint-disable @typescript-eslint/no-explicit-any */
-        fn: handler as ServiceHandlerFunction<any, any>,
+        fn: fn.bind(router),
       });
     }
 
@@ -126,9 +127,11 @@ export class EndpointImpl implements RestateEndpoint {
     const component = new VritualObjectComponent(name);
 
     for (const [route, handler] of Object.entries(router)) {
+      /* eslint-disable @typescript-eslint/no-explicit-any */
+      const fn = handler as VirtualObjectHandlerFunction<any, any>;
       component.add({
         name: route,
-        fn: handler as VirtualObjectHandlerFunction<any, any>,
+        fn: fn.bind(router),
       });
     }
 
