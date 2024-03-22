@@ -21,6 +21,7 @@ import {
   AwakeableEntryMessage,
   BackgroundInvokeEntryMessage,
   CompleteAwakeableEntryMessage,
+  Empty,
   GetStateEntryMessage,
   GetStateKeysEntryMessage,
   GetStateKeysEntryMessage_StateKeys,
@@ -53,7 +54,7 @@ import {
   UNKNOWN_ERROR_CODE,
 } from "./types/errors";
 import { jsonSerialize, jsonDeserialize } from "./utils/utils";
-import { Empty, PartialMessage, protoInt64 } from "@bufbuild/protobuf";
+import { PartialMessage, protoInt64 } from "@bufbuild/protobuf";
 import { Client, SendClient, ServiceDefintion } from "./types/rpc";
 import { RandImpl } from "./utils/rand";
 import { newJournalEntryPromiseId } from "./promise_combinator_tracker";
