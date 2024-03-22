@@ -19,12 +19,30 @@ export enum ComponentType {
   SERVICE = "SERVICE",
 }
 
+export enum ComponentHandlerType {
+  EXCLUSIVE = "EXCLUSIVE",
+  SHARED = "SHARED",
+}
+
+type InputPayload = {
+  contentType: string;
+  empty: "ALLOW" | "DISALLOW" | "REQUIRE";
+
+  /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+  jsonSchema?: any; // You should specify the type of jsonSchema if known
+};
+
+type OutputPayload = {
+  contentType: string;
+  setContentTypeIfEmpty: boolean;
+};
+
 export interface Handler {
   name: string;
+  handlerType?: ComponentHandlerType; // If unspecified, defaults to EXCLUSIVE for Virtual Object. This should be unset for Services.
+  input?: InputPayload;
   /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
-  inputSchema?: any;
-  /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
-  outputSchema?: any;
+  output?: OutputPayload;
 }
 
 export interface Component {

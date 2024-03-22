@@ -11,8 +11,6 @@ syntax = "proto3";
 
 package dev.restate.service.protocol;
 
-import "google/protobuf/empty.proto";
-
 option java_package = "dev.restate.generated.service.protocol";
 option go_package = "restate.dev/sdk-go/pb/service/protocol";
 
@@ -49,7 +47,7 @@ message CompletionMessage {
   uint32 entry_index = 1;
 
   oneof result {
-    google.protobuf.Empty empty = 13;
+    Empty empty = 13;
     bytes value = 14;
     Failure failure = 15;
   };
@@ -130,7 +128,7 @@ message GetStateEntryMessage {
   bytes key = 1;
 
   oneof result {
-    google.protobuf.Empty empty = 13;
+    Empty empty = 13;
     bytes value = 14;
     Failure failure = 15;
   };
@@ -182,7 +180,7 @@ message SleepEntryMessage {
   uint64 wake_up_time = 1;
 
   oneof result {
-    google.protobuf.Empty empty = 13;
+    Empty empty = 13;
     Failure failure = 15;
   }
 }
@@ -266,4 +264,7 @@ message Failure {
 message Header {
   string key = 1;
   string value = 2;
+}
+
+message Empty {
 }

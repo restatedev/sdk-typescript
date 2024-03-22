@@ -12,13 +12,13 @@
 import {
   ClearAllStateEntryMessage,
   ClearStateEntryMessage,
+  Empty,
   GetStateEntryMessage,
   GetStateKeysEntryMessage,
   GetStateKeysEntryMessage_StateKeys,
   SetStateEntryMessage,
   StartMessage_StateEntry,
 } from "./generated/proto/protocol_pb";
-import { Empty } from "@bufbuild/protobuf";
 import { jsonSerialize } from "./utils/utils";
 
 export class LocalStateStore {

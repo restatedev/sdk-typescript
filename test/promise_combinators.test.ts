@@ -34,7 +34,7 @@ import {
 } from "../src/types/protocol";
 import { TimeoutError } from "../src/types/errors";
 import { CombineablePromise } from "../src/context";
-import { Empty } from "@bufbuild/protobuf";
+import { Empty } from "../src/generated/proto/protocol_pb";
 
 class AwakeableSleepRaceGreeter implements TestGreeter {
   async greet(ctx: restate.ObjectContext): Promise<TestResponse> {
