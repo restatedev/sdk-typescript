@@ -98,9 +98,19 @@ export class EndpointImpl implements RestateEndpoint {
     rlog.info(`Listening on ${actualPort}...`);
 
     const server = http2.createServer(this.http2Handler());
-    server.listen(actualPort);
-    // eslint-disable-next-line @typescript-eslint/no-empty-function
-    return new Promise(() => {});
+
+    return new Promise((resolve, reject) => {
+      let failed = false;
+      server.once("error", (e) => {
+        failed = true;
+        reject(e);
+      });
+      server.listen(actualPort, () => {
+        if (!failed) {
+          resolve();
+        }
+      });
+    });
   }
 
   computeDiscovery(): discovery.Deployment {
