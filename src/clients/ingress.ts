@@ -9,23 +9,23 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { ServiceDefintion, VirtualObjectDefintion } from "../public_api";
+import { ServiceDefinition, VirtualObjectDefinition } from "../public_api";
 import { deserializeJson, serializeJson } from "../utils/serde";
 
 export interface Ingress {
   serviceClient<P extends string, M>(
-    opts: ServiceDefintion<P, M>
+    opts: ServiceDefinition<P, M>
   ): IngressClient<M>;
   objectClient<P extends string, M>(
-    opts: VirtualObjectDefintion<P, M>,
+    opts: VirtualObjectDefinition<P, M>,
     key: string
   ): IngressClient<M>;
   objectSendClient<P extends string, M>(
-    opts: VirtualObjectDefintion<P, M>,
+    opts: VirtualObjectDefinition<P, M>,
     key: string
   ): IngressSendClient<M>;
   serviceSendClient<P extends string, M>(
-    opts: ServiceDefintion<P, M>
+    opts: ServiceDefinition<P, M>
   ): IngressSendClient<M>;
 
   /**
@@ -228,27 +228,27 @@ export class HttpIngress implements Ingress {
   }
 
   serviceClient<P extends string, M>(
-    opts: ServiceDefintion<P, M>
+    opts: ServiceDefinition<P, M>
   ): IngressClient<M> {
     return this.proxy(opts.name) as IngressClient<M>;
   }
 
   objectClient<P extends string, M>(
-    opts: VirtualObjectDefintion<P, M>,
+    opts: VirtualObjectDefinition<P, M>,
     key: string
   ): IngressClient<M> {
     return this.proxy(opts.name, key) as IngressClient<M>;
   }
 
   objectSendClient<P extends string, M>(
-    opts: VirtualObjectDefintion<P, M>,
+    opts: VirtualObjectDefinition<P, M>,
     key: string
   ): IngressSendClient<M> {
     return this.proxy(opts.name, key, true) as IngressSendClient<M>;
   }
 
   serviceSendClient<P extends string, M>(
-    opts: ServiceDefintion<P, M>
+    opts: ServiceDefinition<P, M>
   ): IngressSendClient<M> {
     return this.proxy(opts.name, undefined, true) as IngressSendClient<M>;
   }

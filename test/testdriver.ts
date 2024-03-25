@@ -23,7 +23,7 @@ import { StateMachine } from "../src/state_machine";
 import { InvocationBuilder } from "../src/invocation";
 import { EndpointImpl } from "../src/endpoint/endpoint_impl";
 import { ObjectContext } from "../src/context";
-import { ServiceDefintion, object } from "../src/public_api";
+import { ServiceDefinition, object } from "../src/public_api";
 import { ProtocolMode } from "../src/types/discovery";
 
 export type TestRequest = {
@@ -42,7 +42,7 @@ export type GreetType = {
   greet: (key: string, arg: TestRequest) => Promise<TestResponse>;
 };
 
-export const GreeterApi: ServiceDefintion<"greeter", GreetType> = {
+export const GreeterApi: ServiceDefinition<"greeter", GreetType> = {
   name: "greeter",
 };
 

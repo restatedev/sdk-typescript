@@ -75,7 +75,7 @@ export interface RestateClient {
   }>;
 
   submitWorkflow<P extends string, R, T, U>(
-    workflowApi: restate.ServiceDefintion<
+    workflowApi: restate.ServiceDefinition<
       P,
       restate.workflow.WorkflowRestateRpcApi<R, T, U>
     >,
@@ -95,7 +95,7 @@ export interface RestateClient {
   }>;
 
   connectToWorkflow<P extends string, R, T, U>(
-    workflowApi: restate.ServiceDefintion<
+    workflowApi: restate.ServiceDefinition<
       P,
       restate.workflow.WorkflowRestateRpcApi<R, T, U>
     >,
@@ -119,7 +119,7 @@ export function connect(restateUri: string): RestateClient {
     submitWorkflow: async <P extends string, R, T, U>(
       pathOrApi:
         | string
-        | restate.ServiceDefintion<
+        | restate.ServiceDefinition<
             P,
             restate.workflow.WorkflowRestateRpcApi<R, T, U>
           >,
@@ -150,7 +150,7 @@ export function connect(restateUri: string): RestateClient {
     async connectToWorkflow<P extends string, R, T, U>(
       pathOrApi:
         | string
-        | restate.ServiceDefintion<
+        | restate.ServiceDefinition<
             P,
             restate.workflow.WorkflowRestateRpcApi<R, T, U>
           >,

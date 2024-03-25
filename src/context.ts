@@ -12,8 +12,8 @@
 import {
   Client,
   SendClient,
-  ServiceDefintion,
-  VirtualObjectDefintion,
+  ServiceDefinition,
+  VirtualObjectDefinition,
 } from "./types/rpc";
 import { ContextImpl } from "./context_impl";
 
@@ -276,10 +276,10 @@ export interface Context {
    * const result2 = await ctx.rpc(myApi).anotherAction(1337);
    * ```
    */
-  serviceClient<P extends string, M>(opts: ServiceDefintion<P, M>): Client<M>;
+  serviceClient<P extends string, M>(opts: ServiceDefinition<P, M>): Client<M>;
 
   objectClient<P extends string, M>(
-    opts: VirtualObjectDefintion<P, M>,
+    opts: VirtualObjectDefinition<P, M>,
     key: string
   ): Client<M>;
 
@@ -323,11 +323,11 @@ export interface Context {
    * ```
    */
   objectSendClient<P extends string, M>(
-    opts: VirtualObjectDefintion<P, M>,
+    opts: VirtualObjectDefinition<P, M>,
     key: string
   ): SendClient<M>;
   serviceSendClient<P extends string, M>(
-    opts: ServiceDefintion<P, M>
+    opts: ServiceDefinition<P, M>
   ): SendClient<M>;
 
   /**
@@ -376,13 +376,13 @@ export interface Context {
    * ```
    */
   objectSendDelayedClient<P extends string, M>(
-    opts: VirtualObjectDefintion<P, M>,
+    opts: VirtualObjectDefinition<P, M>,
     delay: number,
     key: string
   ): SendClient<M>;
 
   serviceSendDelayedClient<P extends string, M>(
-    opts: ServiceDefintion<P, M>,
+    opts: ServiceDefinition<P, M>,
     delay: number
   ): SendClient<M>;
 

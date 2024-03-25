@@ -20,9 +20,9 @@ export {
   service,
   object,
   Service,
-  ServiceDefintion,
+  ServiceDefinition,
   VirtualObject,
-  VirtualObjectDefintion,
+  VirtualObjectDefinition,
   Client,
   SendClient,
 } from "./types/rpc";
