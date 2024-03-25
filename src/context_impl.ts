@@ -55,7 +55,7 @@ import {
 } from "./types/errors";
 import { jsonSerialize, jsonDeserialize } from "./utils/utils";
 import { PartialMessage, protoInt64 } from "@bufbuild/protobuf";
-import { Client, SendClient, ServiceDefintion } from "./types/rpc";
+import { Client, SendClient, ServiceDefinition } from "./types/rpc";
 import { RandImpl } from "./utils/rand";
 import { newJournalEntryPromiseId } from "./promise_combinator_tracker";
 import { WrappedPromise } from "./utils/promises";
@@ -271,7 +271,7 @@ export class ContextImpl implements ObjectContext {
 
   serviceClient<P extends string, M>({
     name,
-  }: ServiceDefintion<P, M>): Client<M> {
+  }: ServiceDefinition<P, M>): Client<M> {
     const clientProxy = new Proxy(
       {},
       {
@@ -291,7 +291,7 @@ export class ContextImpl implements ObjectContext {
   }
 
   objectClient<P extends string, M>(
-    { name }: ServiceDefintion<P, M>,
+    { name }: ServiceDefinition<P, M>,
     key: string
   ): Client<M> {
     const clientProxy = new Proxy(
@@ -313,13 +313,13 @@ export class ContextImpl implements ObjectContext {
   }
 
   public serviceSendClient<P extends string, M>(
-    options: ServiceDefintion<P, M>
+    options: ServiceDefinition<P, M>
   ): SendClient<M> {
     return this.serviceSendDelayedClient(options, 0);
   }
 
   public serviceSendDelayedClient<P extends string, M>(
-    { name }: ServiceDefintion<P, M>,
+    { name }: ServiceDefinition<P, M>,
     delayMillis: number
   ): SendClient<M> {
     const clientProxy = new Proxy(
@@ -343,14 +343,14 @@ export class ContextImpl implements ObjectContext {
   }
 
   public objectSendClient<P extends string, M>(
-    options: ServiceDefintion<P, M>,
+    options: ServiceDefinition<P, M>,
     key: string
   ): SendClient<M> {
     return this.objectSendDelayedClient(options, 0, key);
   }
 
   public objectSendDelayedClient<P extends string, M>(
-    { name }: ServiceDefintion<P, M>,
+    { name }: ServiceDefinition<P, M>,
     delayMillis: number,
     key: string
   ): SendClient<M> {

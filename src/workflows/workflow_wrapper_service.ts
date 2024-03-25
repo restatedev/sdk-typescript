@@ -164,36 +164,36 @@ class ExclusiveContextImpl<P extends string>
   }
 
   serviceClient<P extends string, M>(
-    opts: restate.ServiceDefintion<P, M>
+    opts: restate.ServiceDefinition<P, M>
   ): restate.Client<M> {
     return this.ctx.serviceClient(opts);
   }
   objectClient<P extends string, M>(
-    opts: restate.ServiceDefintion<P, M>,
+    opts: restate.ServiceDefinition<P, M>,
     key: string
   ): restate.Client<M> {
     return this.ctx.objectClient(opts, key);
   }
   objectSendClient<P extends string, M>(
-    opts: restate.ServiceDefintion<P, M>,
+    opts: restate.ServiceDefinition<P, M>,
     key: string
   ): restate.SendClient<M> {
     return this.ctx.objectSendClient(opts, key);
   }
   serviceSendClient<P extends string, M>(
-    opts: restate.ServiceDefintion<P, M>
+    opts: restate.ServiceDefinition<P, M>
   ): restate.SendClient<M> {
     return this.ctx.serviceSendClient(opts);
   }
   objectSendDelayedClient<P extends string, M>(
-    opts: restate.ServiceDefintion<P, M>,
+    opts: restate.ServiceDefinition<P, M>,
     delay: number,
     key: string
   ): restate.SendClient<M> {
     return this.ctx.objectSendDelayedClient(opts, delay, key);
   }
   serviceSendDelayedClient<P extends string, M>(
-    opts: restate.ServiceDefintion<P, M>,
+    opts: restate.ServiceDefinition<P, M>,
     delay: number
   ): restate.SendClient<M> {
     return this.ctx.serviceSendDelayedClient(opts, delay);

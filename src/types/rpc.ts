@@ -56,7 +56,7 @@ export type Service<U> = {
     : never;
 };
 
-export type ServiceDefintion<P extends string, M> = {
+export type ServiceDefinition<P extends string, M> = {
   name: P;
   service?: Service<M>;
 };
@@ -64,7 +64,7 @@ export type ServiceDefintion<P extends string, M> = {
 export const service = <P extends string, M>(service: {
   name: P;
   handlers: ServiceOpts<M>;
-}): ServiceDefintion<P, Service<M>> => {
+}): ServiceDefinition<P, Service<M>> => {
   if (!service.handlers) {
     throw new Error("service must be defined");
   }
@@ -92,7 +92,7 @@ export type VirtualObject<U> = {
     : never;
 };
 
-export type VirtualObjectDefintion<P extends string, M> = {
+export type VirtualObjectDefinition<P extends string, M> = {
   name: P;
   object?: VirtualObject<M>;
 };
@@ -100,7 +100,7 @@ export type VirtualObjectDefintion<P extends string, M> = {
 export const object = <P extends string, M>(object: {
   name: P;
   handlers: ObjectOpts<M>;
-}): VirtualObjectDefintion<P, VirtualObject<M>> => {
+}): VirtualObjectDefinition<P, VirtualObject<M>> => {
   if (!object.handlers) {
     throw new Error("object options must be defined");
   }

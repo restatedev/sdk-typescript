@@ -47,7 +47,7 @@ export function workflow<P extends string, R, T, U>(
   );
 
   return {
-    api: { name } as restate.ServiceDefintion<
+    api: { name } as restate.ServiceDefinition<
       P,
       WorkflowRestateRpcApi<R, T, U>
     >,
@@ -99,7 +99,7 @@ type WorkflowMethods<R, T, U> = {
  */
 export interface WorkflowServices<P extends string, R, T, U>
   extends restate.ServiceBundle {
-  readonly api: restate.ServiceDefintion<P, WorkflowRestateRpcApi<R, T, U>>;
+  readonly api: restate.ServiceDefinition<P, WorkflowRestateRpcApi<R, T, U>>;
 }
 
 // ----------------------------------------------------------------------------

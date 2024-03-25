@@ -13,7 +13,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { RestateEndpoint, ServiceBundle } from "../public_api";
-import { ServiceDefintion, VirtualObjectDefintion } from "../types/rpc";
+import { ServiceDefinition, VirtualObjectDefinition } from "../types/rpc";
 import { rlog } from "../logger";
 import http2, { Http2ServerRequest, Http2ServerResponse } from "http2";
 import { Http2Handler } from "./http2_handler";
@@ -28,15 +28,15 @@ import {
 
 import * as discovery from "../types/discovery";
 
-function isServiceDefintion<P extends string, M>(
+function isServiceDefinition<P extends string, M>(
   m: any
-): m is ServiceDefintion<P, M> {
+): m is ServiceDefinition<P, M> {
   return m && m.service;
 }
 
-function isObjectDefintion<P extends string, M>(
+function isObjectDefinition<P extends string, M>(
   m: any
-): m is VirtualObjectDefintion<P, M> {
+): m is VirtualObjectDefinition<P, M> {
   return m && m.object;
 }
 
@@ -57,16 +57,16 @@ export class EndpointImpl implements RestateEndpoint {
   }
 
   public bind<P extends string, M>(
-    defintion: ServiceDefintion<P, M> | VirtualObjectDefintion<P, M>
+    definition: ServiceDefinition<P, M> | VirtualObjectDefinition<P, M>
   ): RestateEndpoint {
-    if (isServiceDefintion(defintion)) {
-      const { name, service } = defintion;
+    if (isServiceDefinition(definition)) {
+      const { name, service } = definition;
       if (!service) {
         throw new TypeError(`no service implemention found.`);
       }
       this.bindServiceComponent(name, service);
-    } else if (isObjectDefintion(defintion)) {
-      const { name, object } = defintion;
+    } else if (isObjectDefinition(definition)) {
+      const { name, object } = definition;
       if (!object) {
         throw new TypeError(`no object implemention found.`);
       }

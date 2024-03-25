@@ -9,7 +9,7 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { VirtualObjectDefintion, ServiceDefintion } from "./types/rpc";
+import { VirtualObjectDefinition, ServiceDefinition } from "./types/rpc";
 import { Http2ServerRequest, Http2ServerResponse } from "http2";
 import { EndpointImpl } from "./endpoint/endpoint_impl";
 
@@ -71,7 +71,7 @@ export interface RestateEndpoint {
    * Binds a new durable RPC service / virtual object.
    **/
   bind<P extends string, M>(
-    service: ServiceDefintion<P, M> | VirtualObjectDefintion<P, M>
+    service: ServiceDefinition<P, M> | VirtualObjectDefinition<P, M>
   ): RestateEndpoint;
 
   /**
