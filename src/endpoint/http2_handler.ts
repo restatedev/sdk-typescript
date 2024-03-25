@@ -48,7 +48,7 @@ export class Http2Handler {
     });
   }
 
-  private async handleConnection(
+  private handleConnection(
     url: Url,
     stream: http2.ServerHttp2Stream
   ): Promise<void> {
@@ -76,12 +76,11 @@ export class Http2Handler {
       ":status": 200,
     });
     const restateStream = RestateHttp2Connection.from(stream);
-    await handleInvocation(handler, restateStream);
-    return;
+    return handleInvocation(handler, restateStream);
   }
 }
 
-async function respondDiscovery(
+function respondDiscovery(
   response: Deployment,
   http2Stream: http2.ServerHttp2Stream
 ) {
@@ -92,18 +91,18 @@ async function respondDiscovery(
     "content-type": "application/json",
   });
 
-  await pipeline(stream.Readable.from(responseData), http2Stream, {
+  return pipeline(stream.Readable.from(responseData), http2Stream, {
     end: true,
   });
 }
 
-async function respondNotFound(stream: http2.ServerHttp2Stream) {
+function respondNotFound(stream: http2.ServerHttp2Stream) {
   stream.respond({
     "content-type": "application/json",
     ":status": 404,
   });
   stream.end();
-  await finished(stream);
+  return finished(stream);
 }
 
 async function handleInvocation(
