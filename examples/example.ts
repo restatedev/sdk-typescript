@@ -22,7 +22,9 @@ const greeter = restate.service({
 
       // sending messages to ourselves, immediately and delayed
       ctx.serviceSendClient(Greeter).logger(message);
-      ctx.serviceSendDelayedClient(Greeter, 100).logger("delayed " + message);
+      ctx
+        .serviceSendClient(Greeter, { delay: 100 })
+        .logger("delayed " + message);
 
       return message;
     },

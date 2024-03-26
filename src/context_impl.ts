@@ -15,6 +15,7 @@ import {
   ObjectContext,
   Rand,
   Request,
+  SendOptions,
 } from "./context";
 import { StateMachine } from "./state_machine";
 import {
@@ -313,46 +314,8 @@ export class ContextImpl implements ObjectContext {
   }
 
   public serviceSendClient<P extends string, M>(
-    options: ServiceDefinition<P, M>
-  ): SendClient<M> {
-    return this.serviceSendDelayedClient(options, 0);
-  }
-
-  public serviceSendDelayedClient<P extends string, M>(
-    { name }: ServiceDefinition<P, M>,
-    delayMillis: number
-  ): SendClient<M> {
-    const clientProxy = new Proxy(
-      {},
-      {
-        get: (_target, prop) => {
-          const route = prop as string;
-          return (...args: unknown[]) => {
-            const requestBytes = serializeJson(args.shift());
-            this.invokeOneWay(name, route, requestBytes, delayMillis).catch(
-              (e) => {
-                this.stateMachine.handleDanglingPromiseError(e);
-              }
-            );
-          };
-        },
-      }
-    );
-
-    return clientProxy as SendClient<M>;
-  }
-
-  public objectSendClient<P extends string, M>(
-    options: ServiceDefinition<P, M>,
-    key: string
-  ): SendClient<M> {
-    return this.objectSendDelayedClient(options, 0, key);
-  }
-
-  public objectSendDelayedClient<P extends string, M>(
-    { name }: ServiceDefinition<P, M>,
-    delayMillis: number,
-    key: string
+    service: ServiceDefinition<P, M>,
+    opts?: SendOptions
   ): SendClient<M> {
     const clientProxy = new Proxy(
       {},
@@ -362,10 +325,38 @@ export class ContextImpl implements ObjectContext {
           return (...args: unknown[]) => {
             const requestBytes = serializeJson(args.shift());
             this.invokeOneWay(
-              name,
+              service.name,
               route,
               requestBytes,
-              delayMillis,
+              opts?.delay
+            ).catch((e) => {
+              this.stateMachine.handleDanglingPromiseError(e);
+            });
+          };
+        },
+      }
+    );
+
+    return clientProxy as SendClient<M>;
+  }
+
+  public objectSendClient<P extends string, M>(
+    obj: ServiceDefinition<P, M>,
+    key: string,
+    opts?: SendOptions
+  ): SendClient<M> {
+    const clientProxy = new Proxy(
+      {},
+      {
+        get: (_target, prop) => {
+          const route = prop as string;
+          return (...args: unknown[]) => {
+            const requestBytes = serializeJson(args.shift());
+            this.invokeOneWay(
+              obj.name,
+              route,
+              requestBytes,
+              opts?.delay,
               key
             ).catch((e) => {
               this.stateMachine.handleDanglingPromiseError(e);

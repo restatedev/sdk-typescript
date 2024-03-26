@@ -95,6 +95,43 @@ export interface KeyValueStore {
   clearAll(): void;
 }
 
+export interface SendOptions {
+  /**
+   * Makes a type-safe one-way RPC to the specified target service, after a delay specified by the
+   * milliseconds' argument.
+   * This method is like stetting up a fault-tolerant cron job that enqueues the message in a
+   * message queue.
+   * The handler calling this function does not have to stay active for the delay time.
+   *
+   * Both the delay timer and the message are durably stored in Restate and guaranteed to be reliably
+   * delivered. The delivery happens no earlier than specified through the delay, but may happen
+   * later, if the target service is down, or backpressuring the system.
+   *
+   * The delay message is journaled for durable execution and will thus not be duplicated when the
+   * handler is re-invoked for retries or after suspending.
+   *
+   * This call will return immediately; the message sending happens asynchronously in the background.
+   * Despite that, the message is guaranteed to be sent, because the completion of the invocation that
+   * triggers the send (calls this function) happens logically after the sending. That means that any
+   * failure where the message does not reach Restate also cannot complete this invocation, and will
+   * hence recover this handler and (through the durable execution) recover the message to be sent.
+   *
+   * @example
+   * *Service Side:*
+   * ```ts
+   * const service = restate.service({
+   *      ...
+   *  });
+   *
+   * ```
+   * **Client side:**
+   * ```ts
+   * ctx.send(service, {delay: 60_000}).anotherAction(1337);
+   * ```
+   */
+  delay?: number;
+}
+
 export interface ContextDate {
   /** Returns the number of milliseconds elapsed since midnight, January 1, 1970 Universal Coordinated Time (UTC).
    *  This is equivalent to Date.now()
@@ -323,67 +360,14 @@ export interface Context {
    * ```
    */
   objectSendClient<P extends string, M>(
-    opts: VirtualObjectDefinition<P, M>,
-    key: string
+    obj: VirtualObjectDefinition<P, M>,
+    key: string,
+    opts?: SendOptions
   ): SendClient<M>;
+
   serviceSendClient<P extends string, M>(
-    opts: ServiceDefinition<P, M>
-  ): SendClient<M>;
-
-  /**
-   * Makes a type-safe one-way RPC to the specified target service, after a delay specified by the
-   * milliseconds' argument.
-   * This method is like stetting up a fault-tolerant cron job that enqueues the message in a
-   * message queue.
-   * The handler calling this function does not have to stay active for the delay time.
-   *
-   * Both the delay timer and the message are durably stored in Restate and guaranteed to be reliably
-   * delivered. The delivery happens no earlier than specified through the delay, but may happen
-   * later, if the target service is down, or backpressuring the system.
-   *
-   * The delay message is journaled for durable execution and will thus not be duplicated when the
-   * handler is re-invoked for retries or after suspending.
-   *
-   * This call will return immediately; the message sending happens asynchronously in the background.
-   * Despite that, the message is guaranteed to be sent, because the completion of the invocation that
-   * triggers the send (calls this function) happens logically after the sending. That means that any
-   * failure where the message does not reach Restate also cannot complete this invocation, and will
-   * hence recover this handler and (through the durable execution) recover the message to be sent.
-   *
-   * @example
-   * *Service Side:*
-   * ```ts
-   * const router = restate.router({
-   *   someAction:    async(ctx: restate.RpcContext, req: string) => { ... },
-   *   anotherAction: async(ctx: restate.RpcContext, count: number) => { ... }
-   * });
-   *
-   * // option 1: export only the type signature of the router
-   * export type myApiType = typeof router;
-   *
-   * // option 2: export the API definition with type and name (name)
-   * export const myApi: restate.ServiceApi<typeof router> = { name : "myservice" };
-   *
-   * restate.createServer().bindRouter("myservice", router).listen(9080);
-   * ```
-   * **Client side:**
-   * ```ts
-   * // option 1: use only types and supply service name separately
-   * ctx.sendDelayed<myApiType>({name: "myservice"}, 60_000).someAction("hello!");
-   *
-   * // option 2: use full API spec
-   * ctx.sendDelayed(myApi, 60_000).anotherAction(1337);
-   * ```
-   */
-  objectSendDelayedClient<P extends string, M>(
-    opts: VirtualObjectDefinition<P, M>,
-    delay: number,
-    key: string
-  ): SendClient<M>;
-
-  serviceSendDelayedClient<P extends string, M>(
-    opts: ServiceDefinition<P, M>,
-    delay: number
+    service: ServiceDefinition<P, M>,
+    opts?: SendOptions
   ): SendClient<M>;
 
   /**
