@@ -422,7 +422,7 @@ export class StateMachine implements RestateStreamConsumer {
     return this.invocationComplete.promise;
   }
 
-  private async sendErrorAndFinish(e: Error) {
+  public async sendErrorAndFinish(e: Error) {
     if (e instanceof TerminalError) {
       this.sendTerminalError(e);
     } else {
