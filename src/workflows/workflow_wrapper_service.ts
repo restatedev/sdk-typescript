@@ -9,7 +9,7 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { ContextDate, Request } from "../context";
+import { ContextDate, Request, SendOptions } from "../context";
 import * as restate from "../public_api";
 import * as wf from "./workflow";
 import * as wss from "./workflow_state_service";
@@ -176,27 +176,16 @@ class ExclusiveContextImpl<P extends string>
   }
   objectSendClient<P extends string, M>(
     opts: restate.ServiceDefinition<P, M>,
-    key: string
+    key: string,
+    sendOpts?: SendOptions
   ): restate.SendClient<M> {
-    return this.ctx.objectSendClient(opts, key);
+    return this.ctx.objectSendClient(opts, key, sendOpts);
   }
   serviceSendClient<P extends string, M>(
-    opts: restate.ServiceDefinition<P, M>
-  ): restate.SendClient<M> {
-    return this.ctx.serviceSendClient(opts);
-  }
-  objectSendDelayedClient<P extends string, M>(
     opts: restate.ServiceDefinition<P, M>,
-    delay: number,
-    key: string
+    sendOpts?: SendOptions
   ): restate.SendClient<M> {
-    return this.ctx.objectSendDelayedClient(opts, delay, key);
-  }
-  serviceSendDelayedClient<P extends string, M>(
-    opts: restate.ServiceDefinition<P, M>,
-    delay: number
-  ): restate.SendClient<M> {
-    return this.ctx.serviceSendDelayedClient(opts, delay);
+    return this.ctx.serviceSendClient(opts, sendOpts);
   }
 }
 
@@ -251,11 +240,9 @@ export function createWrapperService<P extends string, R, T, M>(
         throw err;
       } finally {
         ctx
-          .objectSendDelayedClient(
-            stateServiceApi,
-            DEFAULT_RETENTION_PERIOD,
-            request.workflowId
-          )
+          .objectSendClient(stateServiceApi, request.workflowId, {
+            delay: DEFAULT_RETENTION_PERIOD,
+          })
           .dispose();
       }
     },
