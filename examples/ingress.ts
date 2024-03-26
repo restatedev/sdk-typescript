@@ -27,8 +27,8 @@ const simpleCall = async (name: string) => {
 };
 
 const objectCall = async (name: string) => {
-  const couter = ingress.objectClient(Counter, name);
-  const count = await couter.count();
+  const counter = ingress.objectClient(Counter, name);
+  const count = await counter.count();
 
   console.log(`The count for ${name} is ${count}`);
 };
