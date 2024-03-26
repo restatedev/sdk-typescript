@@ -131,7 +131,7 @@ describe("Greeter", () => {
     expect(result).toStrictEqual([errorMessage(f)]);
   });
 
-  it("nal exception (1) does not record the sideEffect in the journal. (2) ends the current attempt", async () => {
+  it("Local recovery from a non terminal exception, has no effect.", async () => {
     const result = await new TestDriver(new GreeterTriesToCatchNonTerminal(), [
       startMessage({ knownEntries: 1, key: "Pete" }),
       inputMessage(greetRequest("Pete")),
