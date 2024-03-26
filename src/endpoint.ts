@@ -111,8 +111,9 @@ export interface RestateEndpoint {
    * If you need to manually control the server lifecycle, we suggest to manually instantiate the http2 server and use {@link http2Handler}.
    *
    * @param port The port to listen at. May be undefined (see above).
+   * @returns a Promise that resolves with the bound port, or rejects with a failure otherwise.
    */
-  listen(port?: number): Promise<void>;
+  listen(port?: number): Promise<number>;
 
   /**
    * Returns an http2 server handler. See {@link listen} for more details.

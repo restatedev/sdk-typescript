@@ -93,7 +93,7 @@ export class EndpointImpl implements RestateEndpoint {
     return handler.handleRequest.bind(handler);
   }
 
-  listen(port?: number): Promise<void> {
+  listen(port?: number): Promise<number> {
     const actualPort = port ?? parseInt(process.env.PORT ?? "9080");
     rlog.info(`Listening on ${actualPort}...`);
 
@@ -106,8 +106,18 @@ export class EndpointImpl implements RestateEndpoint {
         reject(e);
       });
       server.listen(actualPort, () => {
-        if (!failed) {
-          resolve();
+        if (failed) {
+          return;
+        }
+        const address = server.address();
+        if (address === null || typeof address === "string") {
+          reject(
+            new TypeError(
+              "endpoint.listen() currently supports only binding to a PORT"
+            )
+          );
+        } else {
+          resolve(address.port);
         }
       });
     });
