@@ -93,14 +93,34 @@ export class EndpointImpl implements RestateEndpoint {
     return handler.handleRequest.bind(handler);
   }
 
-  listen(port?: number): Promise<void> {
+  listen(port?: number): Promise<number> {
     const actualPort = port ?? parseInt(process.env.PORT ?? "9080");
     rlog.info(`Listening on ${actualPort}...`);
 
     const server = http2.createServer(this.http2Handler());
-    server.listen(actualPort);
-    // eslint-disable-next-line @typescript-eslint/no-empty-function
-    return new Promise(() => {});
+
+    return new Promise((resolve, reject) => {
+      let failed = false;
+      server.once("error", (e) => {
+        failed = true;
+        reject(e);
+      });
+      server.listen(actualPort, () => {
+        if (failed) {
+          return;
+        }
+        const address = server.address();
+        if (address === null || typeof address === "string") {
+          reject(
+            new TypeError(
+              "endpoint.listen() currently supports only binding to a PORT"
+            )
+          );
+        } else {
+          resolve(address.port);
+        }
+      });
+    });
   }
 
   computeDiscovery(): discovery.Deployment {
