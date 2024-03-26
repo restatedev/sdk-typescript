@@ -540,6 +540,16 @@ export function greetResponse(myGreeting: string): Uint8Array {
   return Buffer.from(str);
 }
 
+export function errorMessage(failure: Failure): Message {
+  return new Message(
+    ERROR_MESSAGE_TYPE,
+    new ErrorMessage({
+      message: failure.message,
+      code: failure.code,
+    })
+  );
+}
+
 export function checkError(
   outputMsg: Message,
   errorMessage: string,

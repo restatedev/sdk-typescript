@@ -409,7 +409,17 @@ export class ContextImpl implements ObjectContext {
           fn
         );
       } catch (e) {
-        // we commit any error from the side effet to the journal, and re-throw it into
+        if (!(e instanceof TerminalError)) {
+          ///non terminal errors are retirable.
+          // we do not commit the error itself into the journal, but rather let restate know about this
+          // so that restate can retry this invocation later.
+          // Before we can propagate this error to the user, we must let the state machine know that this attempt
+          // is finished with an error, and it should not append anything else to the journal from now on.
+          const error = ensureError(e);
+          await this.stateMachine.sendErrorAndFinish(error);
+          throw e;
+        }
+        // we commit a terminal error from the side effect to the journal, and re-throw it into
         // the function. that way, any catching by the user and reacting to it will be
         // deterministic on replay
         const error = ensureError(e);
