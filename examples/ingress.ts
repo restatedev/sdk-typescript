@@ -40,7 +40,7 @@ const idempotentCall = async (name: string, idempotencyKey: string) => {
   // to remember that key for 3 seconds.
   const greeting = await greeter.greet(
     name,
-    restate.ingress.Opts.from({ idempotencyKey, retain: 3 })
+    restate.ingress.Opts.from({ idempotencyKey })
   );
 
   console.log(greeting);

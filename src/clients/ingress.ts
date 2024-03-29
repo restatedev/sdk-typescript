@@ -59,7 +59,6 @@ export interface Ingress {
 
 export interface IngresCallOptions {
   idempotencyKey?: string;
-  retain?: number;
   headers?: Record<string, string>;
 }
 
@@ -143,7 +142,6 @@ function optsFromArgs(args: unknown[]): { parameter?: unknown; opts?: Opts } {
 }
 
 const IDEMPOTENCY_KEY_HEADER = "idempotency-key";
-const IDEMPOTENCY_KEY_RETAIN_HEADER = "idempotency-retention-period";
 
 export class HttpIngress implements Ingress {
   constructor(readonly opts: ConnectionOpts) {}
@@ -207,11 +205,6 @@ export class HttpIngress implements Ingress {
     if (idempotencyKey) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (headers as any)[IDEMPOTENCY_KEY_HEADER] = idempotencyKey;
-    }
-    const retain = params.opts?.opts.retain;
-    if (retain) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (headers as any)[IDEMPOTENCY_KEY_RETAIN_HEADER] = `${retain}`;
     }
     const body = serializeJson(params.parameter);
     const httpResponse = await fetch(url, {
