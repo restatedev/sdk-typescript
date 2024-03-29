@@ -83,7 +83,7 @@ export type IngressSendClient<M> = {
   [K in keyof M as M[K] extends never ? never : K]: M[K] extends (
     ...args: infer P
   ) => unknown
-    ? (...args: [...P, ...[opts?: Opts]]) => void
+    ? (...args: [...P, ...[opts?: Opts]]) => Promise<{ invocationId: string }>
     : never;
 };
 
