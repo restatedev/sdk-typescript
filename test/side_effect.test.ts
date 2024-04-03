@@ -29,15 +29,13 @@ import { TerminalError } from "../src/public_api";
 
 class GreeterNoThrows implements TestGreeter {
   async greet(ctx: ObjectContext): Promise<TestResponse> {
-    return await ctx.sideEffect(async () =>
-      TestResponse.create({ greeting: `Hello` })
-    );
+    return await ctx.run(() => TestResponse.create({ greeting: `Hello` }));
   }
 }
 
 class GreeterThrowsTerm implements TestGreeter {
   async greet(ctx: ObjectContext): Promise<TestResponse> {
-    return await ctx.sideEffect(async () => {
+    return await ctx.run(() => {
       throw new TerminalError("oh no");
     });
   }
@@ -45,7 +43,7 @@ class GreeterThrowsTerm implements TestGreeter {
 
 class GreeterThrowsRecoverable implements TestGreeter {
   async greet(ctx: ObjectContext): Promise<TestResponse> {
-    return await ctx.sideEffect(async () => {
+    return await ctx.run(() => {
       throw new TypeError("oh no");
     });
   }
@@ -54,7 +52,7 @@ class GreeterThrowsRecoverable implements TestGreeter {
 class GreeterTriesToCatchNonTerminal implements TestGreeter {
   async greet(ctx: ObjectContext): Promise<TestResponse> {
     try {
-      const result = await ctx.sideEffect(async () => {
+      const result = await ctx.run(async () => {
         throw new TypeError("oh no");
       });
       return result;

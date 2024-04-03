@@ -15,6 +15,7 @@ import {
   ObjectContext,
   Rand,
   Request,
+  RunOptions,
   SendOptions,
 } from "./context";
 import { StateMachine } from "./state_machine";
@@ -63,14 +64,13 @@ import { WrappedPromise } from "./utils/promises";
 import { Buffer } from "node:buffer";
 import { deserializeJson, serializeJson } from "./utils/serde";
 
-export enum CallContexType {
+export enum CallContextType {
   None,
-  SideEffect,
-  OneWayCall,
+  Run,
 }
 
 export interface CallContext {
-  type: CallContexType;
+  type: CallContextType;
   delay?: number;
 }
 
@@ -90,16 +90,16 @@ export class ContextImpl implements ObjectContext {
 
   // This is used to guard users against calling ctx.sideEffect without awaiting it.
   // See https://github.com/restatedev/sdk-typescript/issues/197 for more details.
-  private executingSideEffect = false;
+  private executingRun = false;
   private readonly invocationRequest: Request;
 
   public readonly date: ContextDate = {
     now: (): Promise<number> => {
-      return this.sideEffect(async () => Date.now());
+      return this.run(() => Date.now());
     },
 
     toJSON: (): Promise<string> => {
-      return this.sideEffect(async () => new Date().toJSON());
+      return this.run(() => new Date().toJSON());
     },
   };
 
@@ -373,17 +373,19 @@ export class ContextImpl implements ObjectContext {
   // The reason is that we want the erros thrown by the initial checks to be propagated in the caller context,
   // and not in the promise context. To understand the semantic difference, make this function async and run the
   // UnawaitedSideEffectShouldFailSubsequentContextCall test.
-  public sideEffect<T>(fn: () => Promise<T>): Promise<T> {
-    if (this.isInSideEffect()) {
-      throw new TerminalError(
-        "You cannot do sideEffect calls from within a side effect.",
-        { errorCode: INTERNAL_ERROR_CODE }
-      );
+  public run<T>(
+    fn: () => Promise<T> | T,
+    nameOrOpts?: string | RunOptions
+  ): Promise<T> {
+    if (this.isInRun()) {
+      throw new TerminalError("Not possible to nest runs.", {
+        errorCode: INTERNAL_ERROR_CODE,
+      });
     }
-    this.checkNotExecutingSideEffect();
-    this.executingSideEffect = true;
+    this.checkNotExecutingRun();
+    this.executingRun = true;
 
-    const executeAndLogSideEffect = async () => {
+    const executeRun = async () => {
       // in replay mode, we directly return the value from the log
       if (this.stateMachine.nextEntryWillBeReplayed()) {
         const emptyMsg = new SideEffectEntryMessage({});
@@ -396,7 +398,7 @@ export class ContextImpl implements ObjectContext {
       let sideEffectResult: T;
       try {
         sideEffectResult = await ContextImpl.callContext.run(
-          { type: CallContexType.SideEffect },
+          { type: CallContextType.Run },
           fn
         );
       } catch (e) {
@@ -416,6 +418,7 @@ export class ContextImpl implements ObjectContext {
         const error = ensureError(e);
         const failure = errorToFailureWithTerminal(error);
         const sideEffectMsg = new SideEffectEntryMessage({
+          name: maybeName(nameOrOpts),
           result: { case: "failure", value: failure },
         });
 
@@ -441,12 +444,15 @@ export class ContextImpl implements ObjectContext {
       const sideEffectMsg =
         sideEffectResult !== undefined
           ? new SideEffectEntryMessage({
+              name: maybeName(nameOrOpts),
               result: {
                 case: "value",
                 value: Buffer.from(jsonSerialize(sideEffectResult)),
               },
             })
-          : new SideEffectEntryMessage();
+          : new SideEffectEntryMessage({
+              name: maybeName(nameOrOpts),
+            });
 
       // if an error arises from committing the side effect result, then this error will
       // be thrown here (reject the returned promise) and the function will see that error,
@@ -469,8 +475,8 @@ export class ContextImpl implements ObjectContext {
       return sideEffectResult;
     };
 
-    return executeAndLogSideEffect().finally(() => {
-      this.executingSideEffect = false;
+    return executeRun().finally(() => {
+      this.executingRun = false;
     });
   }
 
@@ -591,16 +597,16 @@ export class ContextImpl implements ObjectContext {
 
   // -- Various private methods
 
-  private isInSideEffect(): boolean {
+  private isInRun(): boolean {
     const context = ContextImpl.callContext.getStore();
-    return context?.type === CallContexType.SideEffect;
+    return context?.type === CallContextType.Run;
   }
 
-  private checkNotExecutingSideEffect() {
-    if (this.executingSideEffect) {
+  private checkNotExecutingRun() {
+    if (this.executingRun) {
       throw new TerminalError(
-        `Invoked a RestateContext method while a side effect is still executing. 
-          Make sure you await the ctx.sideEffect call before using any other RestateContext method.`,
+        `Invoked a RestateContext method while a run() is still executing. 
+          Make sure you await the ctx.run() call before using any other RestateContext method.`,
         { errorCode: INTERNAL_ERROR_CODE }
       );
     }
@@ -609,22 +615,13 @@ export class ContextImpl implements ObjectContext {
   private checkState(callType: string): void {
     const context = ContextImpl.callContext.getStore();
     if (!context) {
-      this.checkNotExecutingSideEffect();
+      this.checkNotExecutingRun();
       return;
     }
 
-    if (context.type === CallContexType.SideEffect) {
+    if (context.type === CallContextType.Run) {
       throw new TerminalError(
-        `You cannot do ${callType} calls from within a side effect.`,
-        { errorCode: INTERNAL_ERROR_CODE }
-      );
-    }
-
-    if (context.type === CallContexType.OneWayCall) {
-      throw new TerminalError(
-        `Cannot do a ${callType} from within ctx.oneWayCall(...).
-          Context method oneWayCall() can only be used to invoke other services in the background.
-          e.g. ctx.oneWayCall(() => client.greet(my_request))`,
+        `You cannot do ${callType} calls from within a run.`,
         { errorCode: INTERNAL_ERROR_CODE }
       );
     }
@@ -675,4 +672,14 @@ export class ContextImpl implements ObjectContext {
       },
     }) as InternalCombineablePromise<T>;
   }
+}
+
+function maybeName(nameOrOpts?: string | RunOptions): string | undefined {
+  if (!nameOrOpts) {
+    return undefined;
+  }
+  if (typeof nameOrOpts === "string") {
+    return nameOrOpts;
+  }
+  return nameOrOpts.name;
 }
