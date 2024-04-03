@@ -14,7 +14,7 @@
 
 import { Rand } from "../context";
 import { INTERNAL_ERROR_CODE, TerminalError } from "../types/errors";
-import { CallContexType, ContextImpl } from "../context_impl";
+import { CallContextType, ContextImpl } from "../context_impl";
 import { createHash } from "crypto";
 
 export class RandImpl implements Rand {
@@ -69,9 +69,9 @@ export class RandImpl implements Rand {
 
   checkContext() {
     const context = ContextImpl.callContext.getStore();
-    if (context && context.type === CallContexType.SideEffect) {
+    if (context && context.type === CallContextType.Run) {
       throw new TerminalError(
-        `You may not call methods on Rand from within a side effect.`,
+        `You may not call methods on Rand from within a run().`,
         { errorCode: INTERNAL_ERROR_CODE }
       );
     }

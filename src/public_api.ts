@@ -14,6 +14,7 @@ export {
   Context,
   ObjectContext,
   CombineablePromise,
+  RunOptions,
   Rand,
 } from "./context";
 export {

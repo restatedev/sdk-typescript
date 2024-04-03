@@ -23,9 +23,12 @@ message FailureWithTerminal {
 // Type: 0xFC00 + 1
 // Flag: RequiresRuntimeAck
 message SideEffectEntryMessage {
+  
+  string name = 1; 
+
   oneof result {
-    bytes value = 14;
-    FailureWithTerminal failure = 15;
+    bytes value = 100;
+    FailureWithTerminal failure = 101;
   };
 }
 

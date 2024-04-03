@@ -144,6 +144,14 @@ export interface ContextDate {
 }
 
 /**
+ * Additional configuration to be used
+ * when running a durable action via ctx.run().
+ */
+export interface RunOptions {
+  name?: string;
+}
+
+/**
  * The context that gives access to all Restate-backed operations, for example
  *   - sending reliable messages / RPC through Restate
  *   - side effects
@@ -178,41 +186,45 @@ export interface Context {
   date: ContextDate;
 
   /**
-   * Execute a side effect and store the result in Restate. The side effect will thus not
-   * be re-executed during a later replay, but take the durable result from Restate.
+   * Run an operation and store the result in Restate. The operation will thus not
+   * be re-run during a later replay, but take the durable result from Restate.
    *
-   * Side effects let you capture potentially non-deterministic computation and interaction
+   * This let you capture potentially non-deterministic computation and interaction
    * with external systems in a safe way.
    *
-   * Failure semantics of side effects are:
-   *   - If a side effect executed and persisted before, the result (value or Error) will be
+   * Failure semantics are:
+   *   - If an operation has run and persisted before, the result (value or Error) will be
    *     taken from the Restate journal.
-   *   - There is a small window where a side effect may be re-executed twice, if a failure
-   *     occurred between execution and persisting the result.
-   *   - No second side effect will be executed while a previous side effect's result is not
-   *     yet durable. That way, side effects that build on top of each other can assume
-   *     deterministic results from previous effects, and at most one side effect will be
+   *   - There is a small window where an action may be re-run, if a failure
+   *     occurred between a successful run and persisting the result.
+   *   - No second action will be run while a previous run's result is not
+   *     yet durable. That way, effects that build on top of each other can assume
+   *     deterministic results from previous runs, and at most one run will be
    *     re-executed on replay (the latest, if the failure happened in the small windows
    *     described above).
    *
    * @example
-   * const result = await ctx.sideEffect(async () => someExternalAction() )
+   * const result = await ctx.run(someExternalAction)
    *
    * @example
    * const paymentAction = async () => {
    *   const result = await paymentClient.call(txId, methodIdentifier, amount);
-   *   if (result.error) {
-   *     throw result.error;
+   *   if (!result.ok) {
+   *     throw result.cause;
    *   } else {
    *     return result.payment_accepted;
    *   }
    * }
    * const paymentAccepted: boolean =
-   *   await ctx.sideEffect(paymentAction);
+   *   await ctx.run(paymentAction, "paymentAction");
    *
-   * @param fn The function to run as a side effect.
+   * @param action The function to run.
+   * @param nameOrOptions the operation's name or a run configuration
    */
-  sideEffect<T>(fn: () => Promise<T>): Promise<T>;
+  run<T>(
+    action: () => Promise<T> | T,
+    nameOrOptions?: string | RunOptions
+  ): Promise<T>;
 
   /**
    * Register an awakeable and pause the processing until the awakeable ID (and optional payload) have been returned to the service
