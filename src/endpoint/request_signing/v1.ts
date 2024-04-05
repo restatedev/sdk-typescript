@@ -1,84 +1,93 @@
-import { ed25519 } from "@noble/curves/ed25519"; // ESM and Common.js
 import * as bs58 from "bs58";
 import { Buffer } from "node:buffer";
 import { headerValue, ValidateResponse } from "./validate";
+import * as jose from "jose";
 
-const NONCE_HEADER = "x-restate-nonce";
-const SECONDS_HEADER = "x-restate-unix-seconds";
-const SIGNATURES_HEADER = "x-restate-signatures";
-const PUBLIC_KEYS_HEADER = "x-restate-public-keys";
+const JWT_HEADER = "x-restate-jwt-v1";
 
-export type KeySetV1 = Map<string, Uint8Array>;
+export type KeySetV1 = Map<string, Promise<jose.KeyLike>>;
 
-export function parseKeySetV1(keys: string[]): Map<string, Uint8Array> {
-  const map = new Map();
+// SubjectPublicKeyInfo SEQUENCE (2 elem)
+//   algorithm AlgorithmIdentifier SEQUENCE (1 elem)
+//     algorithm OBJECT IDENTIFIER 1.3.101.112 curveEd25519 (EdDSA 25519 signature algorithm)
+//   subjectPublicKey BIT STRING (256 bit) <insert 32 bytes after this>
+const asn1Prefix = "MCowBQYDK2VwAyEA";
+
+export function parseKeySetV1(keys: string[]): KeySetV1 {
+  const map: KeySetV1 = new Map();
   for (const key of keys) {
-    map.set(key, bs58.decode(key));
+    if (!key.startsWith("publickeyv1_")) {
+      throw new Error(
+        "v1 jwt public keys are expected to start with publickeyv1_"
+      );
+    }
+
+    const pubBytes = Buffer.from(bs58.decode(key.slice("publickeyv1_".length)));
+
+    if (pubBytes.length != 32) {
+      throw new Error(
+        "v1 jwt public keys are expected to have 32 bytes of data"
+      );
+    }
+
+    const publicKey = jose.importSPKI(
+      `-----BEGIN PUBLIC KEY-----
+${asn1Prefix}${pubBytes.toString("base64")}
+-----END PUBLIC KEY-----`,
+      "EdDSA"
+    );
+
+    map.set(key, publicKey);
   }
+
   return map;
 }
 
-export function validateV1(
+export async function validateV1(
   keySet: KeySetV1,
-  method: string,
   path: string,
   headers: { [name: string]: string | string[] | undefined }
-): ValidateResponse {
-  const nonce = headerValue(NONCE_HEADER, headers);
-  const seconds = headerValue(SECONDS_HEADER, headers);
-  const signatures = headerValue(SIGNATURES_HEADER, headers);
-  const keys = headerValue(PUBLIC_KEYS_HEADER, headers);
+): Promise<ValidateResponse> {
+  const jwt = headerValue(JWT_HEADER, headers);
 
-  if (!(nonce && seconds && signatures && keys)) {
+  if (!jwt) {
     throw new Error(
-      `v1 signature scheme expects the following headers: ${[
-        SIGNATURES_HEADER,
-        SECONDS_HEADER,
-        NONCE_HEADER,
-      ]}`
+      `v1 signature scheme expects the following headers: ${[JWT_HEADER]}`
     );
   }
 
-  const secondsInt = Number(seconds);
-  const nowSeconds = Date.now() / 1000;
-  const since = Math.abs(nowSeconds - secondsInt);
-  if (since > 60 * 15) {
-    throw new Error(
-      `v1 signature scheme expects timestamp within 15 minutes of now; observed skew of ${since} seconds`
+  try {
+    const result = await jose.jwtVerify(
+      jwt,
+      async (header) => {
+        if (!header.kid) {
+          throw new Error(`kid is not present in jwt header`);
+        }
+        const keyPromise = keySet.get(header.kid);
+        if (!keyPromise) {
+          throw new Error(`kid ${header.kid} is not present in keySet`);
+        }
+
+        try {
+          return await keyPromise;
+        } catch (e) {
+          throw new Error(`kid ${header.kid} failed to parse: ${e}`);
+        }
+      },
+      {
+        algorithms: ["EdDSA"],
+        audience: path,
+        typ: "JWT",
+        requiredClaims: ["aud", "exp", "iat", "nbf"],
+      }
     );
-  }
 
-  const keysList = keys.split(",");
-  const signatureList = signatures.split(",");
-
-  if (keysList.length != signatureList.length) {
-    throw new Error(
-      "v1 signature scheme expects signature count and key count to be equal"
-    );
-  }
-
-  const signed = Buffer.from(`${method}
-${path}
-${seconds}
-${nonce}`);
-
-  for (const [i, key] of keysList.entries()) {
-    const keyBuffer = keySet.get(key);
-    if (!keyBuffer) {
-      // this public key is definitely not one we accept
-      continue;
+    if (!result.protectedHeader.kid) {
+      return { valid: false, scheme: "v1" };
     }
-    // the sender claims to have used a public key we accept, now verify the signature.
-    const verified = ed25519.verify(
-      Buffer.from(signatureList[i], "base64"),
-      signed,
-      keyBuffer
-    );
-    if (verified) {
-      return { valid: true, validKey: key, scheme: "v1" };
-    }
-  }
 
-  // we don't throw because no invariants are broken, we just don't happen to accept this caller.
-  return { valid: false, invalidKeys: keysList, scheme: "v1" };
+    return { valid: true, validKey: result.protectedHeader.kid, scheme: "v1" };
+  } catch (e) {
+    return { valid: false, scheme: "v1" };
+  }
 }

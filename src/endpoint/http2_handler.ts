@@ -40,58 +40,44 @@ export class Http2Handler {
     const stream = request.stream;
     const url: Url = urlparse(request.url ?? "/");
 
-    if (!this.validateConnectionSignature(request, url, stream)) {
-      return;
-    }
-
-    this.handleConnection(url, stream).catch((e) => {
-      const error = ensureError(e);
-      rlog.error(
-        "Error while handling connection: " + (error.stack ?? error.message)
-      );
-      stream.end();
-      stream.destroy();
-    });
+    this.validateConnectionSignature(request, url, stream)
+      .then((result) => {
+        if (!result) {
+          return;
+        } else {
+          return this.handleConnection(url, stream);
+        }
+      })
+      .catch((e) => {
+        const error = ensureError(e);
+        rlog.error(
+          "Error while handling connection: " + (error.stack ?? error.message)
+        );
+        stream.end();
+        stream.destroy();
+      });
   }
 
-  private validateConnectionSignature(
+  private async validateConnectionSignature(
     request: Http2ServerRequest,
     url: Url,
     stream: ServerHttp2Stream
-  ): boolean {
+  ): Promise<boolean> {
     if (!this.endpoint.keySet) {
       // not validating
       return true;
     }
 
-    try {
-      const validateResponse = validateRequestSignature(
-        this.endpoint.keySet,
-        request.method,
-        url.path ?? "/",
-        request.headers
-      );
+    const keySet = this.endpoint.keySet;
 
-      if (!validateResponse.valid) {
-        rlog.error(
-          `Rejecting request with public keys ${validateResponse.invalidKeys} as its signature did not validate`
-        );
-        stream.respond({
-          "content-type": "application/restate",
-          ":status": 401,
-        });
-        stream.end();
-        stream.destroy();
-        return false;
-      } else {
-        return true;
-      }
-    } catch (e) {
-      const error = ensureError(e);
-      rlog.error(
-        "Error while attempting to validate request signature:" +
-          (error.stack ?? error.message)
-      );
+    const validateResponse = await validateRequestSignature(
+      keySet,
+      url.path ?? "/",
+      request.headers
+    );
+
+    if (!validateResponse.valid) {
+      rlog.error(`Rejecting request as its JWT did not validate`);
       stream.respond({
         "content-type": "application/restate",
         ":status": 401,
@@ -99,6 +85,8 @@ export class Http2Handler {
       stream.end();
       stream.destroy();
       return false;
+    } else {
+      return true;
     }
   }
 

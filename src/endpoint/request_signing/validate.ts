@@ -1,23 +1,22 @@
 import { KeySetV1, validateV1 } from "./v1";
 
-const PUBLIC_KEYS_HEADER = "x-restate-signature-scheme";
+const SIGNATURE_SCHEME_HEADER = "x-restate-signature-scheme";
 
 export type ValidateResponse =
   | { valid: true; validKey: string; scheme: string }
-  | { valid: false; invalidKeys: string[]; scheme: string };
+  | { valid: false; scheme: string };
 
-export function validateRequestSignature(
+export async function validateRequestSignature(
   keySet: KeySetV1,
-  method: string,
   path: string,
   headers: { [name: string]: string | string[] | undefined }
-): ValidateResponse {
-  const scheme = headerValue(PUBLIC_KEYS_HEADER, headers) ?? "unsigned";
+): Promise<ValidateResponse> {
+  const scheme = headerValue(SIGNATURE_SCHEME_HEADER, headers) ?? "unsigned";
   switch (scheme) {
     case "unsigned":
-      return { valid: false, invalidKeys: [], scheme: "unsigned" };
+      return { valid: false, scheme: "unsigned" };
     case "v1":
-      return validateV1(keySet, method, path, headers);
+      return await validateV1(keySet, path, headers);
     default:
       throw new Error(
         "Unexpected signature scheme: known schemes are 'unsigned', 'v1'"

@@ -47,16 +47,8 @@ export class LambdaHandler {
     context: Context
   ): Promise<APIGatewayProxyResult | APIGatewayProxyResultV2> {
     const path = "path" in event ? event.path : event.rawPath;
-    const httpMethod =
-      "httpMethod" in event
-        ? event.httpMethod
-        : event.requestContext.http.method;
 
-    const error = this.validateConnectionSignature(
-      path,
-      httpMethod,
-      event.headers
-    );
+    const error = await this.validateConnectionSignature(path, event.headers);
     if (error !== null) {
       return error;
     }
@@ -89,28 +81,24 @@ export class LambdaHandler {
     return this.handleInvoke(handler, event.body, context);
   }
 
-  private validateConnectionSignature(
+  private async validateConnectionSignature(
     path: string,
-    method: string,
     headers: { [name: string]: string | string[] | undefined }
-  ): APIGatewayProxyResult | APIGatewayProxyResultV2 | null {
+  ): Promise<APIGatewayProxyResult | APIGatewayProxyResultV2 | null> {
     if (!this.endpoint.keySet) {
       // not validating
       return null;
     }
 
     try {
-      const validateResponse = validateRequestSignature(
+      const validateResponse = await validateRequestSignature(
         this.endpoint.keySet,
-        method,
         path,
         headers
       );
 
       if (!validateResponse.valid) {
-        rlog.error(
-          `Rejecting request with public keys ${validateResponse.invalidKeys} as its signature did not validate`
-        );
+        rlog.error(`Rejecting request as its JWT did not validate`);
         return this.toErrorResponse(401, "Unauthorized");
       } else {
         return null;
