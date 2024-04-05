@@ -85,7 +85,7 @@ export class EndpointImpl implements RestateEndpoint {
     return this;
   }
 
-  public withV1SigningKeys(...keys: string[]): RestateEndpoint {
+  public withIdentityV1(...keys: string[]): RestateEndpoint {
     if (!this._keySet) {
       this._keySet = parseKeySetV1(keys);
       return this;

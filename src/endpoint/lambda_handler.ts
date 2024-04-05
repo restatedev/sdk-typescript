@@ -98,7 +98,9 @@ export class LambdaHandler {
       );
 
       if (!validateResponse.valid) {
-        rlog.error(`Rejecting request as its JWT did not validate`);
+        rlog.error(
+          `Rejecting request as its JWT did not validate: ${validateResponse.error}`
+        );
         return this.toErrorResponse(401, "Unauthorized");
       } else {
         return null;

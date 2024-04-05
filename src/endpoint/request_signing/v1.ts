@@ -4,6 +4,7 @@ import { headerValue, ValidateResponse } from "./validate";
 import * as jose from "jose";
 
 const JWT_HEADER = "x-restate-jwt-v1";
+export const SCHEME_V1 = "v1";
 
 export type KeySetV1 = Map<string, Promise<jose.KeyLike>>;
 
@@ -30,6 +31,10 @@ export function parseKeySetV1(keys: string[]): KeySetV1 {
       );
     }
 
+    // NB this returns a promise that we will only await during verification, and so failure here fails every JWT verif with this key
+    // however, as long as we have 32 bytes, this really shouldn't fail (as long as there is runtime support for ed25519)
+    // as curve25519 explicitly accepts any 32 bytes as a valid public key. Whether a private key can exist for that public key,
+    // we could never know.
     const publicKey = jose.importSPKI(
       `-----BEGIN PUBLIC KEY-----
 ${asn1Prefix}${pubBytes.toString("base64")}
@@ -83,11 +88,23 @@ export async function validateV1(
     );
 
     if (!result.protectedHeader.kid) {
-      return { valid: false, scheme: "v1" };
+      return {
+        valid: false,
+        scheme: SCHEME_V1,
+        error: new Error(`kid is not present in validd jwheader`),
+      };
     }
 
-    return { valid: true, validKey: result.protectedHeader.kid, scheme: "v1" };
+    return {
+      valid: true,
+      validKey: result.protectedHeader.kid,
+      scheme: SCHEME_V1,
+    };
   } catch (e) {
-    return { valid: false, scheme: "v1" };
+    return {
+      valid: false,
+      scheme: SCHEME_V1,
+      error: e,
+    };
   }
 }

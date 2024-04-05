@@ -10,7 +10,7 @@
  */
 
 import stream from "stream";
-import { finished, pipeline } from "stream/promises";
+import { pipeline, finished } from "stream/promises";
 import http2, { Http2ServerRequest, Http2ServerResponse } from "http2";
 import { parse as urlparse, Url } from "url";
 import { EndpointImpl } from "./endpoint_impl";
@@ -21,9 +21,9 @@ import { StateMachine } from "../state_machine";
 import { rlog } from "../logger";
 import {
   ComponentHandler,
-  parseUrlComponents,
   UrlPathComponents,
   VirtualObjectHandler,
+  parseUrlComponents,
 } from "../types/components";
 import { Deployment, ProtocolMode } from "../types/discovery";
 import { validateRequestSignature } from "./request_signing/validate";
@@ -77,7 +77,9 @@ export class Http2Handler {
     );
 
     if (!validateResponse.valid) {
-      rlog.error(`Rejecting request as its JWT did not validate`);
+      rlog.error(
+        `Rejecting request as its JWT did not validate: ${validateResponse.error}`
+      );
       stream.respond({
         "content-type": "application/restate",
         ":status": 401,

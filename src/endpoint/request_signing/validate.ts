@@ -1,10 +1,10 @@
-import { KeySetV1, validateV1 } from "./v1";
+import { KeySetV1, SCHEME_V1, validateV1 } from "./v1";
 
 const SIGNATURE_SCHEME_HEADER = "x-restate-signature-scheme";
 
 export type ValidateResponse =
   | { valid: true; validKey: string; scheme: string }
-  | { valid: false; scheme: string };
+  | { valid: false; error: unknown; scheme: string };
 
 export async function validateRequestSignature(
   keySet: KeySetV1,
@@ -14,8 +14,12 @@ export async function validateRequestSignature(
   const scheme = headerValue(SIGNATURE_SCHEME_HEADER, headers) ?? "unsigned";
   switch (scheme) {
     case "unsigned":
-      return { valid: false, scheme: "unsigned" };
-    case "v1":
+      return {
+        valid: false,
+        scheme: "unsigned",
+        error: new Error("request has no identity"),
+      };
+    case SCHEME_V1:
       return await validateV1(keySet, path, headers);
     default:
       throw new Error(
