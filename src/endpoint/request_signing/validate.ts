@@ -3,8 +3,10 @@ import { KeySetV1, SCHEME_V1, validateV1 } from "./v1";
 const SIGNATURE_SCHEME_HEADER = "x-restate-signature-scheme";
 
 export type ValidateResponse =
-  | { valid: true; validKey: string; scheme: string }
+  | ValidateSuccess
   | { valid: false; error: unknown; scheme: string };
+
+export type ValidateSuccess = { valid: true; validKey: string; scheme: string };
 
 export async function validateRequestSignature(
   keySet: KeySetV1,

@@ -1,18 +1,18 @@
 import * as bs58 from "bs58";
 import { Buffer } from "node:buffer";
-import { headerValue, ValidateResponse } from "./validate";
-import * as jose from "jose";
+import { headerValue, ValidateResponse, ValidateSuccess } from './validate';
+import { webcrypto } from 'node:crypto';
 
 const JWT_HEADER = "x-restate-jwt-v1";
 export const SCHEME_V1 = "v1";
 
-export type KeySetV1 = Map<string, Promise<jose.KeyLike>>;
+export type KeySetV1 = Map<string, Promise<webcrypto.CryptoKey>>;
 
 // SubjectPublicKeyInfo SEQUENCE (2 elem)
 //   algorithm AlgorithmIdentifier SEQUENCE (1 elem)
 //     algorithm OBJECT IDENTIFIER 1.3.101.112 curveEd25519 (EdDSA 25519 signature algorithm)
 //   subjectPublicKey BIT STRING (256 bit) <insert 32 bytes after this>
-const asn1Prefix = "MCowBQYDK2VwAyEA";
+const asn1Prefix = Buffer.from('MCowBQYDK2VwAyEA', 'base64');
 
 export function parseKeySetV1(keys: string[]): KeySetV1 {
   const map: KeySetV1 = new Map();
@@ -35,11 +35,12 @@ export function parseKeySetV1(keys: string[]): KeySetV1 {
     // however, as long as we have 32 bytes, this really shouldn't fail (as long as there is runtime support for ed25519)
     // as curve25519 explicitly accepts any 32 bytes as a valid public key. Whether a private key can exist for that public key,
     // we could never know.
-    const publicKey = jose.importSPKI(
-      `-----BEGIN PUBLIC KEY-----
-${asn1Prefix}${pubBytes.toString("base64")}
------END PUBLIC KEY-----`,
-      "EdDSA"
+    const publicKey = webcrypto.subtle.importKey(
+      'spki',
+      Buffer.concat([asn1Prefix, pubBytes]),
+      { name: 'Ed25519' },
+      false,
+      ['verify']
     );
 
     map.set(key, publicKey);
@@ -62,44 +63,7 @@ export async function validateV1(
   }
 
   try {
-    const result = await jose.jwtVerify(
-      jwt,
-      async (header) => {
-        if (!header.kid) {
-          throw new Error(`kid is not present in jwt header`);
-        }
-        const keyPromise = keySet.get(header.kid);
-        if (!keyPromise) {
-          throw new Error(`kid ${header.kid} is not present in keySet`);
-        }
-
-        try {
-          return await keyPromise;
-        } catch (e) {
-          throw new Error(`kid ${header.kid} failed to parse: ${e}`);
-        }
-      },
-      {
-        algorithms: ["EdDSA"],
-        audience: path,
-        typ: "JWT",
-        requiredClaims: ["aud", "exp", "iat", "nbf"],
-      }
-    );
-
-    if (!result.protectedHeader.kid) {
-      return {
-        valid: false,
-        scheme: SCHEME_V1,
-        error: new Error(`kid is not present in validd jwheader`),
-      };
-    }
-
-    return {
-      valid: true,
-      validKey: result.protectedHeader.kid,
-      scheme: SCHEME_V1,
-    };
+    return await jwtVerify(keySet, jwt, path);
   } catch (e) {
     return {
       valid: false,
@@ -107,4 +71,122 @@ export async function validateV1(
       error: e,
     };
   }
+}
+
+async function jwtVerify(
+  keySet: KeySetV1,
+  jwt: string,
+  expectedAud: string
+): Promise<ValidateSuccess> {
+  const {
+    0: protectedHeader,
+    1: payload,
+    2: signature,
+    length
+  } = jwt.split('.');
+
+  if (length !== 3) {
+    throw new Error('Invalid Compact JWS; expected 3 parts');
+  }
+
+  let header: Record<string, string | undefined> = {};
+  try {
+    header = JSON.parse(Buffer.from(protectedHeader, 'base64url').toString());
+  } catch (e) {
+    throw new Error('JWT header is invalid');
+  }
+
+  const { typ, alg, kid } = header;
+
+  if (typ != 'JWT') {
+    throw new Error('JWT must have "typ" header "JWT"');
+  }
+
+  if (alg != 'EdDSA') {
+    throw new Error('JWT must have "alg" header "EdDSA"');
+  }
+
+  if (typeof kid !== 'string' || !alg) {
+    throw new Error('JWT must have "kid" header, which must be a string');
+  }
+
+  const keyPromise = keySet.get(kid);
+  if (!keyPromise) {
+    throw new Error(`kid ${header.kid} is not present in keySet`);
+  }
+
+  let key: webcrypto.CryptoKey;
+  try {
+    key = await keyPromise;
+  } catch (e) {
+    throw new Error(
+      `key ${header.kid} failed to parse on startup, this will affect all requests: ${e}`
+    );
+  }
+
+  let signatureBuf: Buffer;
+  try {
+    signatureBuf = Buffer.from(signature, 'base64url');
+  } catch (e) {
+    throw new Error('JWT header is invalid');
+  }
+
+  const verified = await webcrypto.subtle.verify(
+    { name: 'Ed25519' },
+    key,
+    signatureBuf,
+    Buffer.from(`${protectedHeader}.${payload}`)
+  );
+  if (!verified) {
+    throw new Error('JWT signature did not validate');
+  }
+
+  let payloadData: Record<string, string | undefined>;
+  try {
+    payloadData = JSON.parse(Buffer.from(payload, 'base64url').toString());
+  } catch (e) {
+    throw new Error('JWT payload is invalid');
+  }
+
+  return validateClaims(kid, payloadData, expectedAud);
+}
+
+function validateClaims(
+  kid: string,
+  payload: Record<string, unknown>,
+  expectedAud: string
+): ValidateSuccess {
+  const { aud, exp, nbf } = payload;
+
+  if (!aud || !exp || !nbf) {
+    throw new Error(
+      'JWT must contain all of the following claims: aud, exp, nbf'
+    );
+  }
+
+  if (typeof aud === 'string') {
+    if (aud !== expectedAud) {
+      throw new Error('JWT aud claim is invalid');
+    }
+  } else {
+    throw new Error('JWT aud claim is invalid');
+  }
+
+  const now = Math.floor(new Date().getTime() / 1000);
+
+  if (typeof nbf !== 'number') {
+    throw new Error('nbf claim must be a number');
+  }
+  if (nbf > now) {
+    throw new Error('nbf claim timestamp check failed');
+  }
+
+  if (typeof exp !== 'number') {
+    throw new Error('exp claim must be a number');
+  }
+  if (exp <= now) {
+    throw new Error('exp claim timestamp check failed');
+  }
+
+  return { valid: true, validKey: kid, scheme: SCHEME_V1 };
 }
