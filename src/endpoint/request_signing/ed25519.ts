@@ -7,10 +7,10 @@ const USE_WEB_CRYPTO =
   globalThis.process?.release?.name !== "node";
 
 export type Key =
-  | { type: "web"; key: Promise<webcrypto.CryptoKey> }
-  | { type: "node"; key: crypto.KeyObject };
+  | { type: "web"; key: Promise<webcrypto.CryptoKey>; kid: string }
+  | { type: "node"; key: crypto.KeyObject; kid: string };
 
-export function importKey(derBytes: Buffer): Key {
+export function importKey(kid: string, derBytes: Buffer): Key {
   if (!USE_WEB_CRYPTO) {
     return {
       type: "node",
@@ -19,6 +19,7 @@ export function importKey(derBytes: Buffer): Key {
         format: "der",
         type: "spki",
       }),
+      kid,
     };
   } else {
     return {
@@ -30,6 +31,7 @@ export function importKey(derBytes: Buffer): Key {
         false,
         ["verify"]
       ),
+      kid,
     };
   }
 }
@@ -42,9 +44,18 @@ export async function verify(
   if (key.type == "node") {
     return crypto.verify(null, data, key.key, signatureBuf);
   } else {
+    let webKey: webcrypto.CryptoKey;
+    try {
+      webKey = await key.key;
+    } catch (e) {
+      throw new Error(
+        `key ${key.kid} failed to parse on startup, this will affect all requests signed with it: ${e}`
+      );
+    }
+
     return await webcrypto.subtle.verify(
       { name: "Ed25519" },
-      await key.key,
+      webKey,
       signatureBuf,
       data
     );

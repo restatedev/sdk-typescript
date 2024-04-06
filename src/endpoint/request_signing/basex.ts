@@ -8,7 +8,6 @@
 
 /* eslint-disable no-empty */
 
-
 function base(ALPHABET: string): base.BaseConverter {
   if (ALPHABET.length >= 255) throw new TypeError("Alphabet too long");
 

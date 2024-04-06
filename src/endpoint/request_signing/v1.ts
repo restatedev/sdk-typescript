@@ -39,7 +39,7 @@ export function parseKeySetV1(keys: string[]): KeySetV1 {
     // and so if this promise is in error state, every verification with that key would fail.
     // however, any 32 byte slice is a valid ed25519 public key, so failure here should only be in the case where webcrypto
     // doesn't support ed25519 at all. and deno and cloudflare workers both support it.
-    const publicKey = importKey(Buffer.concat([asn1Prefix, pubBytes]));
+    const publicKey = importKey(key, Buffer.concat([asn1Prefix, pubBytes]));
 
     map.set(key, publicKey);
   }

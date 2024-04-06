@@ -101,9 +101,11 @@ export class EndpointImpl implements RestateEndpoint {
     response: Http2ServerResponse
   ) => void {
     if (!this._keySet) {
-      rlog.warn(
-        `Accepting HTTP requests without validating request signatures; endpoint access must be restricted`
-      );
+      if (globalThis.process.env.NODE_ENV == "production") {
+        rlog.warn(
+          `Accepting HTTP requests without validating request signatures; endpoint access must be restricted`
+        );
+      }
     } else {
       rlog.info(
         `Validating HTTP requests using signing keys [${Array.from(
