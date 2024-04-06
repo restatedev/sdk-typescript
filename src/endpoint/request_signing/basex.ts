@@ -4,6 +4,11 @@
 // Distributed under the MIT software license, see the accompanying
 // file LICENSE or http://www.opensource.org/licenses/mit-license.php.
 
+/* eslint-disable @typescript-eslint/no-namespace */
+
+/* eslint-disable no-empty */
+
+
 function base(ALPHABET: string): base.BaseConverter {
   if (ALPHABET.length >= 255) throw new TypeError("Alphabet too long");
 

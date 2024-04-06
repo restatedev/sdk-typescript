@@ -6,7 +6,7 @@ import base from "./basex";
 const JWT_HEADER = "x-restate-jwt-v1";
 export const SCHEME_V1 = "v1";
 
-export type KeySetV1 = Map<string, Promise<Key>>;
+export type KeySetV1 = Map<string, Key>;
 
 const BASE58_ALPHABET =
   "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
@@ -35,10 +35,10 @@ export function parseKeySetV1(keys: string[]): KeySetV1 {
       );
     }
 
-    // NB this returns a promise that we will only await during verification, and so failure here fails every JWT verif with this key
-    // however, as long as we have 32 bytes, this really shouldn't fail (as long as there is runtime support for ed25519)
-    // as curve25519 explicitly accepts any 32 bytes as a valid public key. Whether a private key can exist for that public key,
-    // we could never know.
+    // NB in the webcrypto case (but not node) the key contains a promise that we will only await during verification
+    // and so if this promise is in error state, every verification with that key would fail.
+    // however, any 32 byte slice is a valid ed25519 public key, so failure here should only be in the case where webcrypto
+    // doesn't support ed25519 at all. and deno and cloudflare workers both support it.
     const publicKey = importKey(Buffer.concat([asn1Prefix, pubBytes]));
 
     map.set(key, publicKey);

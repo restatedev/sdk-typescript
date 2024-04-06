@@ -7,10 +7,10 @@ const USE_WEB_CRYPTO =
   globalThis.process?.release?.name !== "node";
 
 export type Key =
-  | { type: "web"; key: webcrypto.CryptoKey }
+  | { type: "web"; key: Promise<webcrypto.CryptoKey> }
   | { type: "node"; key: crypto.KeyObject };
 
-export async function importKey(derBytes: Buffer): Promise<Key> {
+export function importKey(derBytes: Buffer): Key {
   if (!USE_WEB_CRYPTO) {
     return {
       type: "node",
@@ -23,7 +23,7 @@ export async function importKey(derBytes: Buffer): Promise<Key> {
   } else {
     return {
       type: "web",
-      key: await webcrypto.subtle.importKey(
+      key: webcrypto.subtle.importKey(
         "spki",
         derBytes,
         { name: "Ed25519" },
@@ -44,7 +44,7 @@ export async function verify(
   } else {
     return await webcrypto.subtle.verify(
       { name: "Ed25519" },
-      key.key,
+      await key.key,
       signatureBuf,
       data
     );
