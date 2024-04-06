@@ -1,12 +1,16 @@
-import * as bs58 from "bs58";
 import { Buffer } from "node:buffer";
 import { headerValue, ValidateResponse, ValidateSuccess } from "./validate";
-import { importKey, Key, verify } from './ed25519';
+import { importKey, Key, verify } from "./ed25519";
+import base from "./basex";
 
 const JWT_HEADER = "x-restate-jwt-v1";
 export const SCHEME_V1 = "v1";
 
 export type KeySetV1 = Map<string, Promise<Key>>;
+
+const BASE58_ALPHABET =
+  "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+const bs58 = base(BASE58_ALPHABET);
 
 // SubjectPublicKeyInfo SEQUENCE (2 elem)
 //   algorithm AlgorithmIdentifier SEQUENCE (1 elem)

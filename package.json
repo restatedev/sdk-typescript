@@ -34,7 +34,6 @@
     "ingress": "RESTATE_DEBUG_LOGGING=OFF ts-node-dev --transpile-only ./examples/ingress.ts"
   },
   "dependencies": {
-    "bs58": "^5.0.0",
     "@bufbuild/protobuf": "^1.8.0"
   },
   "devDependencies": {
