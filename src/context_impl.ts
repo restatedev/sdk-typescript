@@ -15,7 +15,7 @@ import {
   ObjectContext,
   Rand,
   Request,
-  RunOptions,
+  RunAction,
   SendOptions,
 } from "./context";
 import { StateMachine } from "./state_machine";
@@ -370,13 +370,14 @@ export class ContextImpl implements ObjectContext {
   }
 
   // DON'T make this function async!!!
-  // The reason is that we want the erros thrown by the initial checks to be propagated in the caller context,
+  // The reason is that we want the errors thrown by the initial checks to be propagated in the caller context,
   // and not in the promise context. To understand the semantic difference, make this function async and run the
   // UnawaitedSideEffectShouldFailSubsequentContextCall test.
   public run<T>(
-    fn: () => Promise<T> | T,
-    nameOrOpts?: string | RunOptions
+    nameOrAction: string | RunAction<T>,
+    actionSecondParameter?: RunAction<T>
   ): Promise<T> {
+    const { name, action } = unpack(nameOrAction, actionSecondParameter);
     if (this.isInRun()) {
       throw new TerminalError("Not possible to nest runs.", {
         errorCode: INTERNAL_ERROR_CODE,
@@ -399,7 +400,7 @@ export class ContextImpl implements ObjectContext {
       try {
         sideEffectResult = await ContextImpl.callContext.run(
           { type: CallContextType.Run },
-          fn
+          () => action()
         );
       } catch (e) {
         if (!(e instanceof TerminalError)) {
@@ -418,7 +419,7 @@ export class ContextImpl implements ObjectContext {
         const error = ensureError(e);
         const failure = errorToFailureWithTerminal(error);
         const sideEffectMsg = new SideEffectEntryMessage({
-          name: maybeName(nameOrOpts),
+          name,
           result: { case: "failure", value: failure },
         });
 
@@ -444,14 +445,14 @@ export class ContextImpl implements ObjectContext {
       const sideEffectMsg =
         sideEffectResult !== undefined
           ? new SideEffectEntryMessage({
-              name: maybeName(nameOrOpts),
+              name,
               result: {
                 case: "value",
                 value: Buffer.from(jsonSerialize(sideEffectResult)),
               },
             })
           : new SideEffectEntryMessage({
-              name: maybeName(nameOrOpts),
+              name,
             });
 
       // if an error arises from committing the side effect result, then this error will
@@ -674,12 +675,21 @@ export class ContextImpl implements ObjectContext {
   }
 }
 
-function maybeName(nameOrOpts?: string | RunOptions): string | undefined {
-  if (!nameOrOpts) {
-    return undefined;
+function unpack<T>(
+  a: string | RunAction<T>,
+  b?: RunAction<T>
+): { name?: string; action: RunAction<T> } {
+  if (typeof a == "string") {
+    if (typeof b !== "function") {
+      throw new TypeError("");
+    }
+    return { name: a, action: b };
   }
-  if (typeof nameOrOpts === "string") {
-    return nameOrOpts;
+  if (typeof a !== "function") {
+    throw new TypeError("unexpected type at the first parameter");
   }
-  return nameOrOpts.name;
+  if (b) {
+    throw new TypeError("unexpected a function as a second parameter.");
+  }
+  return { action: a };
 }

@@ -143,13 +143,7 @@ export interface ContextDate {
   toJSON(): Promise<string>;
 }
 
-/**
- * Additional configuration to be used
- * when running a durable action via ctx.run().
- */
-export interface RunOptions {
-  name?: string;
-}
+export type RunAction<T> = (() => Promise<T>) | (() => T);
 
 /**
  * The context that gives access to all Restate-backed operations, for example
@@ -216,15 +210,21 @@ export interface Context {
    *   }
    * }
    * const paymentAccepted: boolean =
-   *   await ctx.run(paymentAction, "paymentAction");
+   *   await ctx.run("paymentAction", paymentAction);
    *
    * @param action The function to run.
    * @param nameOrOptions the operation's name or a run configuration
    */
-  run<T>(
-    action: () => Promise<T> | T,
-    nameOrOptions?: string | RunOptions
-  ): Promise<T>;
+  run<T>(action: RunAction<T>): Promise<T>;
+
+  /**
+   * Run an operation and store the result in Restate. The operation will thus not
+   * be re-run during a later replay, but take the durable result from Restate.
+   *
+   * @param name the action's name
+   * @param action the action to run.
+   */
+  run<T>(name: string, action: RunAction<T>): Promise<T>;
 
   /**
    * Register an awakeable and pause the processing until the awakeable ID (and optional payload) have been returned to the service
