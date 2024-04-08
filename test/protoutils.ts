@@ -408,12 +408,14 @@ export function backgroundInvokeMessage(
 
 export function sideEffectMessage<T>(
   value?: T,
-  failure?: FailureWithTerminal
+  failure?: FailureWithTerminal,
+  name?: string
 ): Message {
   if (value !== undefined) {
     return new Message(
       SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
       new SideEffectEntryMessage({
+        name,
         result: { case: "value", value: Buffer.from(JSON.stringify(value)) },
       }),
       false,
@@ -424,6 +426,7 @@ export function sideEffectMessage<T>(
     return new Message(
       SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
       new SideEffectEntryMessage({
+        name,
         result: { case: "failure", value: failure },
       }),
       false,
@@ -433,7 +436,7 @@ export function sideEffectMessage<T>(
   } else {
     return new Message(
       SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-      new SideEffectEntryMessage({}),
+      new SideEffectEntryMessage({ name }),
       false,
       undefined,
       true

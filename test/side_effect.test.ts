@@ -27,6 +27,13 @@ import {
 import { ObjectContext } from "../src/context";
 import { TerminalError } from "../src/public_api";
 
+class GreeterWithName implements TestGreeter {
+  async greet(ctx: ObjectContext): Promise<TestResponse> {
+    return await ctx.run("greet", () =>
+      TestResponse.create({ greeting: `Hello` })
+    );
+  }
+}
 class GreeterNoThrows implements TestGreeter {
   async greet(ctx: ObjectContext): Promise<TestResponse> {
     return await ctx.run(() => TestResponse.create({ greeting: `Hello` }));
@@ -64,6 +71,18 @@ class GreeterTriesToCatchNonTerminal implements TestGreeter {
 }
 
 describe("Greeter", () => {
+  it("That does not throw any exception is added to the journal", async () => {
+    const result = await new TestDriver(new GreeterWithName(), [
+      startMessage({ knownEntries: 1, key: "Pete" }),
+      inputMessage(greetRequest("Pete")),
+    ]).run();
+
+    expect(result).toStrictEqual([
+      sideEffectMessage({ greeting: "Hello" }, undefined, "greet"),
+      suspensionMessage([1]),
+    ]);
+  });
+
   it("That does not throw any exception is added to the journal", async () => {
     const result = await new TestDriver(new GreeterNoThrows(), [
       startMessage({ knownEntries: 1, key: "Pete" }),

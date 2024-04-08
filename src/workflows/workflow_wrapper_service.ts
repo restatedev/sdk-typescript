@@ -9,7 +9,7 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { ContextDate, Request, RunOptions, SendOptions } from "../context";
+import { ContextDate, Request, RunAction, SendOptions } from "../context";
 import * as restate from "../public_api";
 import * as wf from "./workflow";
 import * as wss from "./workflow_state_service";
@@ -140,11 +140,14 @@ class ExclusiveContextImpl<P extends string>
     this.ctx.objectSendClient(this.stateServiceApi, this.wfId).clearAllState();
   }
 
-  run<T>(
-    fn: () => Promise<T> | T,
-    nameOrOptions?: string | RunOptions
-  ): Promise<T> {
-    return this.ctx.run(fn, nameOrOptions);
+  run<T>(name: string | RunAction<T>, action?: RunAction<T>): Promise<T> {
+    if (typeof name == "string" && typeof action == "function") {
+      return this.ctx.run(name, action);
+    } else if (typeof name == "function" && typeof action == "undefined") {
+      return this.ctx.run(name);
+    } else {
+      throw new TypeError(`Unexpected arguments to run ${name} and ${action}`);
+    }
   }
 
   awakeable<T>(): { id: string; promise: restate.CombineablePromise<T> } {
