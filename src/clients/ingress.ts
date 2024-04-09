@@ -62,12 +62,28 @@ export interface IngresCallOptions {
   headers?: Record<string, string>;
 }
 
+export interface IngresSendOptions extends IngresCallOptions {
+  delay?: number;
+}
+
 export class Opts {
   public static from(opts: IngresCallOptions): Opts {
     return new Opts(opts);
   }
 
   constructor(readonly opts: IngresCallOptions) {}
+}
+
+export class SendOpts {
+  public static from(opts: IngresSendOptions): SendOpts {
+    return new SendOpts(opts);
+  }
+
+  delay(): number | undefined {
+    return this.opts.delay;
+  }
+
+  constructor(readonly opts: IngresSendOptions) {}
 }
 
 export type IngressClient<M> = {
@@ -82,7 +98,9 @@ export type IngressSendClient<M> = {
   [K in keyof M as M[K] extends never ? never : K]: M[K] extends (
     ...args: infer P
   ) => unknown
-    ? (...args: [...P, ...[opts?: Opts]]) => Promise<{ invocationId: string }>
+    ? (
+        ...args: [...P, ...[opts?: SendOpts]]
+      ) => Promise<{ invocationId: string }>
     : never;
 };
 
@@ -106,14 +124,16 @@ type InvocationParameters<I> = {
   handler: string;
   key?: string;
   send?: boolean;
-  delay?: number;
-  opts?: Opts;
+  opts?: Opts | SendOpts;
   parameter?: I;
 };
 
-function optsFromArgs(args: unknown[]): { parameter?: unknown; opts?: Opts } {
+function optsFromArgs(args: unknown[]): {
+  parameter?: unknown;
+  opts?: Opts | SendOpts;
+} {
   let parameter: unknown | undefined;
-  let opts: Opts | undefined;
+  let opts: Opts | SendOpts | undefined;
   switch (args.length) {
     case 0: {
       break;
@@ -121,6 +141,8 @@ function optsFromArgs(args: unknown[]): { parameter?: unknown; opts?: Opts } {
     case 1: {
       if (args[0] instanceof Opts) {
         opts = args[0] as Opts;
+      } else if (args[0] instanceof SendOpts) {
+        opts = args[0] as SendOpts;
       } else {
         parameter = args[0];
       }
@@ -128,11 +150,19 @@ function optsFromArgs(args: unknown[]): { parameter?: unknown; opts?: Opts } {
     }
     case 2: {
       parameter = args[0];
-      opts = args[1] as Opts;
+      if (args[1] instanceof Opts) {
+        opts = args[1] as Opts;
+      } else if (args[1] instanceof SendOpts) {
+        opts = args[1] as SendOpts;
+      } else {
+        throw new TypeError(
+          "The second argument must be either Opts or SendOpts"
+        );
+      }
       break;
     }
     default: {
-      throw new TypeError(`unexpected number of arguments`);
+      throw new TypeError("unexpected number of arguments");
     }
   }
   return {
@@ -146,12 +176,7 @@ const IDEMPOTENCY_KEY_HEADER = "idempotency-key";
 export class HttpIngress implements Ingress {
   constructor(readonly opts: ConnectionOpts) {}
 
-  private proxy(
-    component: string,
-    key?: string,
-    send?: boolean,
-    delay?: number
-  ) {
+  private proxy(component: string, key?: string, send?: boolean) {
     return new Proxy(
       {},
       {
@@ -166,7 +191,6 @@ export class HttpIngress implements Ingress {
               parameter,
               opts,
               send,
-              delay,
             });
           };
         },
@@ -188,8 +212,9 @@ export class HttpIngress implements Ingress {
     // handler
     fragments.push(params.handler);
     if (params.send ?? false) {
-      if (params.delay) {
-        fragments.push(`send?delay=${params.delay}`);
+      if (params.opts instanceof SendOpts) {
+        const sendString = computeDelayAsIso(params.opts);
+        fragments.push(sendString);
       } else {
         fragments.push("send");
       }
@@ -283,4 +308,17 @@ export class HttpIngress implements Ingress {
       throw new Error(`Request failed: ${httpResponse.status}\n${body}`);
     }
   }
+}
+
+function computeDelayAsIso(opts: SendOpts): string {
+  const delay = opts.delay();
+  if (!delay) {
+    return "send";
+  }
+  if (delay >= 1000) {
+    const delaySec = delay / 1000;
+    return `send?delaySec=${delaySec}`;
+  }
+  const delayStr = String(delay).padStart(3);
+  return `send?delay=PT0.${delayStr}0S`;
 }
