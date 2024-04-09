@@ -18,6 +18,6 @@ jobs:
       - run: npm ci
       - run: npm run proto
       - run: npm run build
-      - run: npm publish --tag latest --access public
+      - run: npm publish --workspaces true --tag latest --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

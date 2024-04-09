@@ -9,7 +9,7 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import * as restate from "../src/public_api";
+import * as restate from "@restatedev/restate-sdk";
 
 const greeter = restate.service({
   name: "greeter",

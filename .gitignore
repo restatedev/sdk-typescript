@@ -5,3 +5,10 @@ src/generated/*
 buf.lock
 
 .idea
+
+
+packages/*/node_modules/*
+packages/*/dist/*
+packages/*/src/generated/*
+packages/*/buf.lock
+

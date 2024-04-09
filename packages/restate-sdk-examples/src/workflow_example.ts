@@ -1,4 +1,4 @@
-import * as restate from "../src/public_api";
+import * as restate from "@restatedev/restate-sdk";
 import { randomUUID } from "crypto";
 
 /* eslint-disable no-console */

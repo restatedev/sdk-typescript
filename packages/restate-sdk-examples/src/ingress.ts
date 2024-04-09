@@ -11,7 +11,7 @@
 
 /* eslint-disable no-console */
 
-import * as restate from "../src/public_api";
+import * as restate from "@restatedev/restate-sdk";
 import type { CounterObject, GreeterService } from "./example";
 
 const Greeter: GreeterService = { name: "greeter" };

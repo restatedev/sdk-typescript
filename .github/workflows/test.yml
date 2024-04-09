@@ -25,13 +25,22 @@ jobs:
       - run: npm ci
       - run: npm run proto
       - run: npm run verify
-      - run: mv $(npm pack) restatedev-restate-sdk.tgz
+      - run: npm pack --workspaces true 
+      - run: mv restatedev-restate-sdk-0*.tgz restatedev-restate-sdk.tgz
+      - run: mv restatedev-restate-sdk-examples-0*.tgz restatedev-restate-sdk-examples.tgz
       - uses: actions/upload-artifact@v3
         with:
           name: restatedev-restate-sdk
           path: restatedev-restate-sdk.tgz
           retention-days: 1
           if-no-files-found: error
+      - uses: actions/upload-artifact@v3
+        with:
+          name: restatedev-restate-sdk-examples
+          path: restatedev-restate-sdk-examples.tgz
+          retention-days: 1
+          if-no-files-found: error
+
 
       - name: Publish snapshot
         if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
@@ -41,11 +50,11 @@ jobs:
           # We're using 0.0.0 to avoid this version to be higher than released versions.
           # To use it: 
           # "@restatedev/restate-sdk": "^0.0.0-SNAPSHOT"
-          npm version 0.0.0-SNAPSHOT-$(date '+%Y%m%d%H%M%S') --git-tag-version false
+          npm version  --workspaces true 0.0.0-SNAPSHOT-$(date '+%Y%m%d%H%M%S') --git-tag-version false
           # We use dist-tag dev for the snapshot releases, see https://docs.npmjs.com/cli/v9/commands/npm-dist-tag for more info
           # A snapshot MUST not be published with latest tag (omitting --tag defaults to latest) to avoid users to install snapshot releases
           # when using npm install
-          npm publish --tag dev --access public
+          npm publish --workspaces true --tag dev --access public
 
   e2e:
     permissions:
