@@ -25,13 +25,22 @@ jobs:
       - run: npm ci
       - run: npm run proto
       - run: npm run verify
-      - run: mv $(npm pack --workspace packages/restate-sdk) restatedev-restate-sdk.tgz
+      - run: npm pack --workspaces true 
+      - run: mv restatedev-restate-sdk-0*.tgz restatedev-restate-sdk.tgz
+      - run: mv restatedev-restate-sdk-examples-0*.tgz restatedev-restate-sdk-examples.tgz
       - uses: actions/upload-artifact@v3
         with:
           name: restatedev-restate-sdk
           path: restatedev-restate-sdk.tgz
           retention-days: 1
           if-no-files-found: error
+      - uses: actions/upload-artifact@v3
+        with:
+          name: restatedev-restate-sdk-examples
+          path: restatedev-restate-sdk-examples.tgz
+          retention-days: 1
+          if-no-files-found: error
+
 
       - name: Publish snapshot
         if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
