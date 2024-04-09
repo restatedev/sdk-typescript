@@ -26,6 +26,8 @@ import {
   parseUrlComponents,
 } from "../types/components";
 import { Deployment, ProtocolMode } from "../types/discovery";
+import { validateRequestSignature } from "./request_signing/validate";
+import { ServerHttp2Stream } from "node:http2";
 
 export class Http2Handler {
   constructor(private readonly endpoint: EndpointImpl) {}
@@ -38,14 +40,56 @@ export class Http2Handler {
     const stream = request.stream;
     const url: Url = urlparse(request.url ?? "/");
 
-    this.handleConnection(url, stream).catch((e) => {
-      const error = ensureError(e);
+    this.validateConnectionSignature(request, url, stream)
+      .then((result) => {
+        if (!result) {
+          return;
+        } else {
+          return this.handleConnection(url, stream);
+        }
+      })
+      .catch((e) => {
+        const error = ensureError(e);
+        rlog.error(
+          "Error while handling connection: " + (error.stack ?? error.message)
+        );
+        stream.end();
+        stream.destroy();
+      });
+  }
+
+  private async validateConnectionSignature(
+    request: Http2ServerRequest,
+    url: Url,
+    stream: ServerHttp2Stream
+  ): Promise<boolean> {
+    if (!this.endpoint.keySet) {
+      // not validating
+      return true;
+    }
+
+    const keySet = this.endpoint.keySet;
+
+    const validateResponse = await validateRequestSignature(
+      keySet,
+      url.path ?? "/",
+      request.headers
+    );
+
+    if (!validateResponse.valid) {
       rlog.error(
-        "Error while handling connection: " + (error.stack ?? error.message)
+        `Rejecting request as its JWT did not validate: ${validateResponse.error}`
       );
+      stream.respond({
+        "content-type": "application/restate",
+        ":status": 401,
+      });
       stream.end();
       stream.destroy();
-    });
+      return false;
+    } else {
+      return true;
+    }
   }
 
   private handleConnection(

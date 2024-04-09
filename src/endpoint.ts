@@ -81,6 +81,17 @@ export interface RestateEndpoint {
   bindBundle(services: ServiceBundle): RestateEndpoint;
 
   /**
+   * Provide a list of v1 request identity public keys eg `publickeyv1_2G8dCQhArfvGpzPw5Vx2ALciR4xCLHfS5YaT93XjNxX9` to validate
+   * incoming requests against, limiting requests to Restate clusters with the corresponding private keys. This public key format is
+   * logged by the Restate process at startup if a request identity private key is provided.
+   *
+   * If this function is called, all incoming requests irrelevant of endpoint type will be expected to have
+   * `x-restate-signature-scheme: v1` and `x-restate-jwt-v1: <valid jwt signed with one of these keys>`. If not called,
+   *
+   */
+  withIdentityV1(...keys: string[]): RestateEndpoint;
+
+  /**
    * Creates the invocation handler function to be called by AWS Lambda.
    *
    * The returned type of this function is `(event: APIGatewayProxyEvent | APIGatewayProxyEventV2) => Promise<APIGatewayProxyResult | APIGatewayProxyResultV2>`.
