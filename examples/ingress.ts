@@ -68,6 +68,18 @@ const globalCustomHeaders = async (name: string) => {
   console.log(greeting);
 };
 
+const delayedCall = async (name: string) => {
+  const ingress = restate.ingress.connect({
+    url: "http://localhost:8080",
+  });
+
+  const greeting = await ingress
+    .serviceSendClient(Greeter)
+    .greet(name, restate.ingress.SendOpts.from({ delay: 1000 }));
+
+  console.log(greeting);
+};
+
 // Before running this example, make sure
 // to run and register `greeter` and `counter` services.
 //
@@ -85,4 +97,5 @@ Promise.resolve()
   .then(() => idempotentCall("joe", "idemp-1"))
   .then(() => customHeadersCall("bob"))
   .then(() => globalCustomHeaders("bob"))
+  .then(() => delayedCall("bob"))
   .catch((e) => console.error(e));
