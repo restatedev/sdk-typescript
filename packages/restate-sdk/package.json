@@ -1,0 +1,76 @@
+{
+  "name": "@restatedev/restate-sdk",
+  "version": "0.8.0",
+  "description": "Typescript SDK for Restate",
+  "author": "Restate Developers",
+  "license": "MIT",
+  "email": "code@restate.dev",
+  "homepage": "https://github.com/restatedev/sdk-typescript#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/restatedev/sdk-typescript.git"
+  },
+  "bugs": {
+    "url": "https://github.com/restatedev/sdk-typescript/issues"
+  },
+  "type": "commonjs",
+  "main": "dist/public_api.js",
+  "types": "dist/public_api.d.ts",
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "proto": "npx buf mod update && npx buf generate",
+    "build": "tsc --noEmitOnError",
+    "test": "jest --silent --maxWorkers=1",
+    "lint": "eslint --ignore-path .eslintignore --max-warnings=0 --ext .ts .",
+    "format": "prettier --ignore-path .eslintignore --write \"**/*.+(js|ts|json)\"",
+    "format-check": "prettier --ignore-path .eslintignore --check \"**/*.+(js|ts|json)\"",
+    "verify": "npm run format-check && npm run lint && npm run test && npm run build",
+    "release": "release-it",
+    "example": "RESTATE_DEBUG_LOGGING=OFF ts-node-dev --transpile-only ./examples/example.ts",
+    "workflowexample": "RESTATE_DEBUG_LOGGING=OFF ts-node-dev --transpile-only ./examples/workflow_example.ts",
+    "ingress": "RESTATE_DEBUG_LOGGING=OFF ts-node-dev --transpile-only ./examples/ingress.ts"
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "^1.8.0"
+  },
+  "devDependencies": {
+    "@bufbuild/buf": "^1.15.0",
+    "@bufbuild/protoc-gen-es": "^1.8.0",
+    "@types/aws-lambda": "^8.10.115",
+    "@types/jest": "^29.4.0",
+    "@types/node": "^20.10.4",
+    "@typescript-eslint/eslint-plugin": "^5.53.0",
+    "@typescript-eslint/parser": "^5.53.0",
+    "eslint": "^8.35.0",
+    "express": "*",
+    "prettier": "^2.8.4",
+    "release-it": "^16.1.4",
+    "ts-jest": "^29.0.5",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^4.9.5"
+  },
+  "engines": {
+    "node": ">= 18"
+  },
+  "directories": {
+    "example": "examples",
+    "test": "test"
+  },
+  "publishConfig": {
+    "@restatedev:registry": "https://registry.npmjs.org"
+  },
+  "release-it": {
+    "git": {
+      "pushRepo": "https://github.com/restatedev/sdk-typescript.git"
+    },
+    "github": {
+      "release": true
+    },
+    "npm": {
+      "publish": false
+    }
+  }
+}

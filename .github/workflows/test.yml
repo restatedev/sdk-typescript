@@ -25,7 +25,7 @@ jobs:
       - run: npm ci
       - run: npm run proto
       - run: npm run verify
-      - run: mv $(npm pack) restatedev-restate-sdk.tgz
+      - run: mv $(npm pack --workspace packages/restate-sdk) restatedev-restate-sdk.tgz
       - uses: actions/upload-artifact@v3
         with:
           name: restatedev-restate-sdk

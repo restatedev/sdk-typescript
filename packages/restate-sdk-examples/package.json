@@ -1,0 +1,54 @@
+{
+  "name": "@restatedev/restate-sdk-examples",
+  "version": "0.8.0",
+  "description": "Typescript SDK examples",
+  "private": true,
+  "author": "Restate Developers",
+  "license": "MIT",
+  "email": "code@restate.dev",
+  "homepage": "https://github.com/restatedev/sdk-typescript#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/restatedev/sdk-typescript.git"
+  },
+  "bugs": {
+    "url": "https://github.com/restatedev/sdk-typescript/issues"
+  },
+  "type": "commonjs",
+  "main": "dist/public_api.js",
+  "types": "dist/public_api.d.ts",
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc --noEmitOnError",
+    "lint": "eslint --ignore-path .eslintignore --max-warnings=0 --ext .ts .",
+    "format": "prettier --ignore-path .eslintignore --write \"**/*.+(js|ts|json)\"",
+    "format-check": "prettier --ignore-path .eslintignore --check \"**/*.+(js|ts|json)\"",
+    "test": "jest --silent --maxWorkers=1",
+    "verify": "npm run format-check && npm run lint && npm run build",
+    "release": "",
+    "example": "RESTATE_DEBUG_LOGGING=OFF ts-node-dev --transpile-only ./src/example.ts",
+    "workflowexample": "RESTATE_DEBUG_LOGGING=OFF ts-node-dev --transpile-only ./src/workflow_example.ts",
+    "ingress": "RESTATE_DEBUG_LOGGING=OFF ts-node-dev --transpile-only ./src/ingress.ts"
+  },
+  "dependencies": {
+    "@restatedev/restate-sdk": "^0.8.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.115",
+    "@types/jest": "^29.4.0",
+    "@types/node": "^20.10.4",
+    "@typescript-eslint/eslint-plugin": "^5.53.0",
+    "@typescript-eslint/parser": "^5.53.0",
+    "eslint": "^8.35.0",
+    "prettier": "^2.8.4",
+    "ts-jest": "^29.0.5",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^4.9.5"
+  },
+  "engines": {
+    "node": ">= 18"
+  }
+}
