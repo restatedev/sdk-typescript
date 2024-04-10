@@ -41,6 +41,8 @@ function isObjectDefinition<P extends string, M>(
   return m && m.object;
 }
 
+export const endpointImpl = (): RestateEndpoint => new EndpointImpl();
+
 export class EndpointImpl implements RestateEndpoint {
   private readonly components: Map<string, Component> = new Map();
   private _keySet?: KeySetV1;

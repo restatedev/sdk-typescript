@@ -1,6 +1,5 @@
 {
 	"compilerOptions": {
-		"rootDir": ".",
 		"baseUrl": ".",
 		"target": "esnext",
 		"module": "commonjs",
@@ -8,7 +7,6 @@
 		"declaration": true,
 		"declarationMap": true,
 		"sourceMap": true,
-		"outDir": "./dist",
 		"strict": true,
 		"allowJs": true,
 		"esModuleInterop": true,

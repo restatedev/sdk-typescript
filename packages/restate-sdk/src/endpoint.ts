@@ -11,13 +11,13 @@
 
 import { VirtualObjectDefinition, ServiceDefinition } from "./types/rpc";
 import { Http2ServerRequest, Http2ServerResponse } from "http2";
-import { EndpointImpl } from "./endpoint/endpoint_impl";
+import { endpointImpl } from "./endpoint/endpoint_impl";
 
 /**
  * Create a new {@link RestateEndpoint}.
  */
 export function endpoint(): RestateEndpoint {
-  return new EndpointImpl();
+  return endpointImpl();
 }
 
 /**
