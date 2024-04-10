@@ -25,7 +25,7 @@ jobs:
       - run: npm ci
       - run: npm run proto
       - run: npm run verify
-      - run: npm pack --workspaces true 
+      - run: npm pack --workspaces true --include-workspace-root false 
       - run: mv restatedev-restate-sdk-0*.tgz restatedev-restate-sdk.tgz
       - run: mv restatedev-restate-sdk-examples-0*.tgz restatedev-restate-sdk-examples.tgz
       - uses: actions/upload-artifact@v3
@@ -54,7 +54,7 @@ jobs:
           # We use dist-tag dev for the snapshot releases, see https://docs.npmjs.com/cli/v9/commands/npm-dist-tag for more info
           # A snapshot MUST not be published with latest tag (omitting --tag defaults to latest) to avoid users to install snapshot releases
           # when using npm install
-          npm publish --workspaces true --tag dev --access public
+          npm publish --workspaces true --tag dev --access public --include-workspace-root false
 
   e2e:
     permissions:

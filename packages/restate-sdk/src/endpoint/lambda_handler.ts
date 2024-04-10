@@ -10,7 +10,7 @@
  */
 
 import { rlog } from "../logger";
-import {
+import type {
   APIGatewayProxyEvent,
   APIGatewayProxyEventV2,
   APIGatewayProxyResult,

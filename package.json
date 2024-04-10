@@ -1,5 +1,5 @@
 {
-  "name": "@restatedev/restate-sdk",
+  "name": "root",
   "version": "0.8.0",
   "description": "Typescript SDK for Restate",
   "author": "Restate Developers",
@@ -44,8 +44,9 @@
     "node": ">= 18"
   },
   "publishConfig": {
-    "@restatedev:registry": "https://registry.npmjs.org"
-  },
+		"@restatedev:registry": "https://registry.npmjs.org",
+		"include-workspace-root" : false
+	},
   "release-it": {
     "git": {
       "pushRepo": "https://github.com/restatedev/sdk-typescript.git"
