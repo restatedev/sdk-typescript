@@ -26,6 +26,7 @@ export {
   Client,
   SendClient,
 } from "./types/rpc";
+
 export { endpoint, ServiceBundle, RestateEndpoint } from "./endpoint";
 export { RestateError, TerminalError, TimeoutError } from "./types/errors";
 export * as workflow from "./workflows/workflow";

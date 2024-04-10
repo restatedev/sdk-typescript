@@ -14,11 +14,10 @@
     "url": "https://github.com/restatedev/sdk-typescript/issues"
   },
   "type": "commonjs",
-  "main": "dist/public_api.js",
-  "types": "dist/public_api.d.ts",
+  "main": "./dist/public_api.js",
+  "types": "./dist/public_api.d.ts",
   "files": [
-    "dist",
-    "src"
+    "dist"
   ],
   "scripts": {
     "proto": "npx buf mod update && npx buf generate",
