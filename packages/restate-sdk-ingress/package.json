@@ -1,5 +1,5 @@
 {
-  "name": "@restatedev/restate-sdk",
+  "name": "@restatedev/restate-sdk-ingress",
   "version": "0.8.0",
   "description": "Typescript SDK for Restate",
   "author": "Restate Developers",
@@ -20,17 +20,13 @@
     "dist"
   ],
   "scripts": {
-    "proto": "npx buf mod update && npx buf generate",
     "build": "tsc -b",
-    "test": "jest --silent --maxWorkers=1",
+    "test": "jest --silent --maxWorkers=1 --passWithNoTests",
     "lint": "eslint --ignore-path .eslintignore --max-warnings=0 --ext .ts .",
     "format": "prettier --ignore-path .eslintignore --write \"**/*.+(js|ts|json)\"",
     "format-check": "prettier --ignore-path .eslintignore --check \"**/*.+(js|ts|json)\"",
     "verify": "npm run format-check && npm run lint && npm run test && npm run build",
-    "release": "release-it",
-    "example": "RESTATE_DEBUG_LOGGING=OFF ts-node-dev --transpile-only ./examples/example.ts",
-    "workflowexample": "RESTATE_DEBUG_LOGGING=OFF ts-node-dev --transpile-only ./examples/workflow_example.ts",
-    "ingress": "RESTATE_DEBUG_LOGGING=OFF ts-node-dev --transpile-only ./examples/ingress.ts"
+    "release": "release-it"
   },
   "dependencies": {
     "@bufbuild/protobuf": "^1.8.0"
@@ -55,7 +51,6 @@
     "node": ">= 18"
   },
   "directories": {
-    "example": "examples",
     "test": "test"
   },
   "publishConfig": {

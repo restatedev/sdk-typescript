@@ -4,8 +4,5 @@
     "outDir": "./dist"
   },
   "include": ["src/**/*.ts"],
-  "references": [
-    { "path": "../restate-sdk" },
-    { "path": "../restate-sdk-ingress" }
-  ]
+  "references": [{ "path": "../restate-sdk" }]
 }

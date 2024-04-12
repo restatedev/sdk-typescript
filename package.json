@@ -26,6 +26,7 @@
     "format": "npm run format -ws --if-present",
     "format-check": "npm run format-check -ws --if-present",
     "verify": "npm run verify -ws --if-present",
+		"clean" : "rm -rf packages/restate-sdk/dist && rm -rf packages/restate-sdk-examples/dist && rm -rf packages/restate-sdk-ingress/dist",
     "release": "npm run release-it -ws --if-present"
   },
   "devDependencies": {

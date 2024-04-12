@@ -11,13 +11,14 @@
 
 /* eslint-disable no-console */
 
-import * as restate from "@restatedev/restate-sdk";
+import * as restate from "@restatedev/restate-sdk-ingress";
+
 import type { CounterObject, GreeterService } from "./example";
 
 const Greeter: GreeterService = { name: "greeter" };
 const Counter: CounterObject = { name: "counter" };
 
-const ingress = restate.ingress.connect({ url: "http://localhost:8080" });
+const ingress = restate.connect({ url: "http://localhost:8080" });
 
 const simpleCall = async (name: string) => {
   const greeter = ingress.serviceClient(Greeter);
@@ -40,7 +41,7 @@ const idempotentCall = async (name: string, idempotencyKey: string) => {
   // to remember that key for 3 seconds.
   const greeting = await greeter.greet(
     name,
-    restate.ingress.Opts.from({ idempotencyKey })
+    restate.Opts.from({ idempotencyKey })
   );
 
   console.log(greeting);
@@ -51,14 +52,14 @@ const customHeadersCall = async (name: string) => {
 
   const greeting = await greeter.greet(
     name,
-    restate.ingress.Opts.from({ headers: { "x-bob": "1234" } })
+    restate.Opts.from({ headers: { "x-bob": "1234" } })
   );
 
   console.log(greeting);
 };
 
 const globalCustomHeaders = async (name: string) => {
-  const ingress = restate.ingress.connect({
+  const ingress = restate.connect({
     url: "http://localhost:8080",
     headers: { Authorization: "Bearer mytoken123" },
   });
@@ -69,13 +70,13 @@ const globalCustomHeaders = async (name: string) => {
 };
 
 const delayedCall = async (name: string) => {
-  const ingress = restate.ingress.connect({
+  const ingress = restate.connect({
     url: "http://localhost:8080",
   });
 
   const greeting = await ingress
     .serviceSendClient(Greeter)
-    .greet(name, restate.ingress.SendOpts.from({ delay: 1000 }));
+    .greet(name, restate.SendOpts.from({ delay: 1000 }));
 
   console.log(greeting);
 };

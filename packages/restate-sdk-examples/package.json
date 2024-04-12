@@ -15,13 +15,13 @@
     "url": "https://github.com/restatedev/sdk-typescript/issues"
   },
   "type": "commonjs",
-  "main": "./dist/public_api.js",
-  "types": "./dist/public_api.d.ts",
+  "main": "./dist/src/public_api.js",
+  "types": "./dist/src/public_api.d.ts",
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsc --noEmitOnError",
+    "build": "tsc -b",
     "lint": "eslint --ignore-path .eslintignore --max-warnings=0 --ext .ts .",
     "format": "prettier --ignore-path .eslintignore --write \"**/*.+(js|ts|json)\"",
     "format-check": "prettier --ignore-path .eslintignore --check \"**/*.+(js|ts|json)\"",
@@ -33,7 +33,8 @@
     "ingress": "RESTATE_DEBUG_LOGGING=OFF ts-node-dev --transpile-only ./src/ingress.ts"
   },
   "dependencies": {
-    "@restatedev/restate-sdk": "^0.8.0"
+    "@restatedev/restate-sdk": "^0.8.0",
+    "@restatedev/restate-sdk-ingress": "^0.8.0"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.115",

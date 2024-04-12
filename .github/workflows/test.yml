@@ -22,12 +22,14 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           registry-url: 'https://registry.npmjs.org'
+      - run: npm run clean
       - run: npm ci
       - run: npm run proto
       - run: npm run verify
       - run: npm pack --workspaces true --include-workspace-root false 
       - run: mv restatedev-restate-sdk-0*.tgz restatedev-restate-sdk.tgz
       - run: mv restatedev-restate-sdk-examples-0*.tgz restatedev-restate-sdk-examples.tgz
+      - run: mv restatedev-restate-sdk-ingress-0*.tgz restatedev-restate-sdk-ingress.tgz
       - uses: actions/upload-artifact@v3
         with:
           name: restatedev-restate-sdk
@@ -38,6 +40,12 @@ jobs:
         with:
           name: restatedev-restate-sdk-examples
           path: restatedev-restate-sdk-examples.tgz
+          retention-days: 1
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v3
+        with:
+          name: restatedev-restate-sdk-ingress
+          path: restatedev-restate-sdk-ingress.tgz
           retention-days: 1
           if-no-files-found: error
 
