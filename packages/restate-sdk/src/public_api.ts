@@ -31,4 +31,3 @@ export { endpoint, ServiceBundle, RestateEndpoint } from "./endpoint";
 export { RestateError, TerminalError, TimeoutError } from "./types/errors";
 export * as workflow from "./workflows/workflow";
 export * as clients from "./clients/workflow_client";
-export * as ingress from "./clients/ingress";
