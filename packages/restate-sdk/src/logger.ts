@@ -12,6 +12,88 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable no-console */
 
+export enum RestateLogLevel {
+  UNSET = 0,
+  DEBUG = 1,
+  TRACE = 2,
+  INFO = 3,
+  WARN = 4,
+  ERROR = 5,
+}
+
+function logLevelName(level: RestateLogLevel) {
+  switch (level) {
+    case RestateLogLevel.UNSET:
+      return "UNSET";
+    case RestateLogLevel.DEBUG:
+      return "DEBUG";
+    case RestateLogLevel.TRACE:
+      return "TRACE";
+    case RestateLogLevel.INFO:
+      return "INFO";
+    case RestateLogLevel.WARN:
+      return "WARN";
+    case RestateLogLevel.ERROR:
+      return "ERROR";
+  }
+}
+
+function logLevelFromName(name?: string): RestateLogLevel {
+  if (!name) {
+    return RestateLogLevel.UNSET;
+  }
+  const n = name.toUpperCase();
+  switch (n) {
+    case "DEBUG":
+      return RestateLogLevel.DEBUG;
+    case "TRACE":
+      return RestateLogLevel.TRACE;
+    case "INFO":
+      return RestateLogLevel.INFO;
+    case "WARN":
+      return RestateLogLevel.WARN;
+    case "ERROR":
+      return RestateLogLevel.ERROR;
+    default:
+      throw new TypeError(`unknown name ${name}`);
+  }
+}
+
+function logFunction(level: RestateLogLevel) {
+  switch (level) {
+    case RestateLogLevel.DEBUG:
+      return console.debug;
+    case RestateLogLevel.TRACE:
+      return console.trace;
+    case RestateLogLevel.INFO:
+      return console.info;
+    case RestateLogLevel.WARN:
+      return console.warn;
+    case RestateLogLevel.ERROR:
+      return console.error;
+    default:
+      throw new TypeError(`unset or unknown log level ${level}`);
+  }
+}
+
+function readRestateLogLevel(): RestateLogLevel {
+  const env = process.env.RESTATE_LOGGING;
+  const level = logLevelFromName(env);
+  if (level != RestateLogLevel.UNSET) {
+    return level;
+  }
+  const nodeEnv = process.env.NODE_ENV;
+  if (!nodeEnv) {
+    return RestateLogLevel.TRACE;
+  }
+  if (nodeEnv.toUpperCase() == "PRODUCTION") {
+    return RestateLogLevel.INFO;
+  }
+  return RestateLogLevel.INFO;
+}
+
+const RESTATE_LOG_LEVEL = readRestateLogLevel();
+
 export class LoggerContext {
   readonly fqMethodName: string;
 
@@ -41,76 +123,53 @@ function formatLogPrefix(context?: LoggerContext): string {
   return prefix;
 }
 
+const NOOP_DESCRIPTOR = {
+  get() {
+    return () => {
+      // a no-op function
+    };
+  },
+};
+
+function loggerForLevel(
+  level: RestateLogLevel,
+  shouldLog: () => boolean,
+  prefix: string
+): PropertyDescriptor {
+  if (level < RESTATE_LOG_LEVEL) {
+    return NOOP_DESCRIPTOR;
+  }
+
+  const name = logLevelName(level);
+  const fn = logFunction(level);
+
+  return {
+    get: () => {
+      if (!shouldLog()) {
+        return () => {
+          // empty logger
+        };
+      }
+      const p = `${prefix}[${new Date().toISOString()}] ${name}: `;
+      return fn.bind(console, p);
+    },
+  };
+}
+
 export function createRestateConsole(
   context?: LoggerContext,
   filter?: () => boolean
 ): Console {
   const prefix = formatLogPrefix(context);
-  const restate_logger = Object.create(console);
-
   const shouldLog: () => boolean = filter ?? (() => true);
 
-  restate_logger.log = (message?: any, ...optionalParams: any[]) => {
-    if (!shouldLog()) {
-      return;
-    }
-    console.log(
-      prefix + `[${new Date().toISOString()}] LOG: ` + message,
-      ...optionalParams
-    );
-  };
-
-  restate_logger.info = (message?: any, ...optionalParams: any[]) => {
-    if (!shouldLog()) {
-      return;
-    }
-    console.info(
-      prefix + `[${new Date().toISOString()}] INFO: ` + message,
-      ...optionalParams
-    );
-  };
-
-  restate_logger.warn = (message?: any, ...optionalParams: any[]) => {
-    if (!shouldLog()) {
-      return;
-    }
-    console.warn(
-      prefix + `[${new Date().toISOString()}] WARN: ` + message,
-      ...optionalParams
-    );
-  };
-
-  restate_logger.error = (message?: any, ...optionalParams: any[]) => {
-    if (!shouldLog()) {
-      return;
-    }
-    console.error(
-      prefix + `[${new Date().toISOString()}] ERROR: ` + message,
-      ...optionalParams
-    );
-  };
-
-  restate_logger.debug = (message?: any, ...optionalParams: any[]) => {
-    if (!shouldLog()) {
-      return;
-    }
-    console.debug(
-      prefix + `[${new Date().toISOString()}] DEBUG: ` + message,
-      ...optionalParams
-    );
-  };
-
-  restate_logger.trace = (message?: any, ...optionalParams: any[]) => {
-    if (!shouldLog()) {
-      return;
-    }
-    console.trace(
-      prefix + `[${new Date().toISOString()}] TRACE: ` + message,
-      ...optionalParams
-    );
-  };
-
-  return restate_logger;
+  return Object.create(console, {
+    debug: loggerForLevel(RestateLogLevel.DEBUG, shouldLog, prefix),
+    trace: loggerForLevel(RestateLogLevel.TRACE, shouldLog, prefix),
+    info: loggerForLevel(RestateLogLevel.INFO, shouldLog, prefix),
+    warn: loggerForLevel(RestateLogLevel.WARN, shouldLog, prefix),
+    error: loggerForLevel(RestateLogLevel.ERROR, shouldLog, prefix),
+  });
 }
 
 /**
