@@ -21,7 +21,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc --noEmitOnError",
+    "build": "tsc -b",
     "lint": "eslint --ignore-path .eslintignore --max-warnings=0 --ext .ts .",
     "format": "prettier --ignore-path .eslintignore --write \"**/*.+(js|ts|json)\"",
     "format-check": "prettier --ignore-path .eslintignore --check \"**/*.+(js|ts|json)\"",
