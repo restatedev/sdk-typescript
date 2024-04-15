@@ -121,7 +121,7 @@ export class ContextImpl implements ObjectContext {
     };
   }
 
-  public key(): string {
+  public get key(): string {
     if (!this.keyedContextKey) {
       throw new TerminalError("unexpected missing key");
     }

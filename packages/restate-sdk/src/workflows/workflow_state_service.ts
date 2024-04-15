@@ -135,7 +135,7 @@ export const workflowStateService = {
       LifecycleStatus.NOT_STARTED;
     if (status === LifecycleStatus.NOT_STARTED) {
       throw new restate.TerminalError(
-        `Workflow with id '${ctx.key()}' does not exist.`
+        `Workflow with id '${ctx.key}' does not exist.`
       );
     }
     return subscribePromise(
