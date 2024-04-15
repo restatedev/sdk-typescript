@@ -164,9 +164,9 @@ class ExclusiveContextImpl<P extends string>
     return this.ctx.sleep(millis);
   }
 
-  key(): string {
+  get key(): string {
     const kctx = this.ctx as restate.ObjectContext;
-    return kctx.key();
+    return kctx.key;
   }
 
   serviceClient<P extends string, M>(

@@ -402,7 +402,7 @@ export interface Context {
  *
  */
 export interface ObjectContext extends Context, KeyValueStore {
-  key(): string;
+  key: string;
 }
 
 export interface Rand {
