@@ -37,6 +37,7 @@ import {
   TerminalError,
   RetryableError,
   errorToErrorMessage,
+  JournalErrorContext,
 } from "./types/errors";
 import { LocalStateStore } from "./local_state_store";
 import { createRestateConsole, LoggerContext } from "./logger";
@@ -422,18 +423,18 @@ export class StateMachine implements RestateStreamConsumer {
     return this.invocationComplete.promise;
   }
 
-  public async sendErrorAndFinish(e: Error) {
+  public async sendErrorAndFinish(e: Error, ctx?: JournalErrorContext) {
     if (e instanceof TerminalError) {
       this.sendTerminalError(e);
     } else {
-      this.sendRetryableError(e);
+      this.sendRetryableError(e, ctx);
     }
 
     await this.finish();
   }
 
-  private sendRetryableError(e: Error) {
-    const msg = new Message(ERROR_MESSAGE_TYPE, errorToErrorMessage(e));
+  private sendRetryableError(e: Error, ctx?: JournalErrorContext) {
+    const msg = new Message(ERROR_MESSAGE_TYPE, errorToErrorMessage(e, ctx));
     this.console.debugJournalMessage(
       "Invocation ended with retryable error.",
       msg.messageType,

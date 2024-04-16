@@ -410,7 +410,11 @@ export class ContextImpl implements ObjectContext {
           // Before we can propagate this error to the user, we must let the state machine know that this attempt
           // is finished with an error, and it should not append anything else to the journal from now on.
           const error = ensureError(e);
-          await this.stateMachine.sendErrorAndFinish(error);
+          const additionalContext = {
+            relatedEntryName: name,
+            relatedEntryType: SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+          };
+          await this.stateMachine.sendErrorAndFinish(error, additionalContext);
           throw e;
         }
         // we commit a terminal error from the side effect to the journal, and re-throw it into
