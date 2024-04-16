@@ -24,6 +24,12 @@ export enum RestateErrorCodes {
   PROTOCOL_VIOLATION = 571,
 }
 
+export type JournalErrorContext = {
+  relatedEntryName?: string;
+  relatedEntryIndex?: number;
+  relatedEntryType?: bigint;
+};
+
 export function ensureError(e: unknown): Error {
   if (e instanceof Error) {
     return e;
@@ -141,11 +147,19 @@ export function failureToError(
     : new RestateError(errorMessage, { errorCode });
 }
 
-export function errorToErrorMessage(err: Error): ErrorMessage {
+export function errorToErrorMessage(
+  err: Error,
+  additionalContext?: JournalErrorContext
+): ErrorMessage {
   const code = err instanceof RestateError ? err.code : INTERNAL_ERROR_CODE;
+
+  const ty = additionalContext?.relatedEntryType;
 
   return new ErrorMessage({
     code: code,
     message: err.message,
+    relatedEntryName: additionalContext?.relatedEntryName,
+    relatedEntryIndex: additionalContext?.relatedEntryIndex,
+    relatedEntryType: ty !== undefined ? Number(ty) : undefined,
   });
 }

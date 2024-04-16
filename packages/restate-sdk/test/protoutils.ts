@@ -64,6 +64,7 @@ import { jsonSerialize, formatMessageAsJson } from "../src/utils/utils";
 import { rlog } from "../src/logger";
 import {
   INTERNAL_ERROR_CODE,
+  JournalErrorContext,
   RestateErrorCodes,
   UNKNOWN_ERROR_CODE,
 } from "../src/types/errors";
@@ -529,12 +530,20 @@ export function greetResponse(myGreeting: string): Uint8Array {
   return Buffer.from(str);
 }
 
-export function errorMessage(failure: Failure): Message {
+export function errorMessage(
+  failure: Failure,
+  ctx?: JournalErrorContext
+): Message {
   return new Message(
     ERROR_MESSAGE_TYPE,
     new ErrorMessage({
       message: failure.message,
       code: failure.code,
+      relatedEntryIndex: ctx?.relatedEntryIndex,
+      relatedEntryType: ctx?.relatedEntryType
+        ? Number(ctx.relatedEntryType)
+        : undefined,
+      relatedEntryName: ctx?.relatedEntryName,
     })
   );
 }

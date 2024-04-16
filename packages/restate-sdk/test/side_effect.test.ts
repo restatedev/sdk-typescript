@@ -25,6 +25,7 @@ import {
 } from "./protoutils";
 import { ObjectContext } from "../src/context";
 import { TerminalError } from "../src/public_api";
+import { SIDE_EFFECT_ENTRY_MESSAGE_TYPE } from "../src/types/protocol";
 
 class GreeterWithName implements TestGreeter {
   async greet(ctx: ObjectContext): Promise<TestResponse> {
@@ -49,7 +50,7 @@ class GreeterThrowsTerm implements TestGreeter {
 
 class GreeterThrowsRecoverable implements TestGreeter {
   async greet(ctx: ObjectContext): Promise<TestResponse> {
-    return await ctx.run(() => {
+    return await ctx.run("greet", () => {
       throw new TypeError("oh no");
     });
   }
@@ -58,7 +59,7 @@ class GreeterThrowsRecoverable implements TestGreeter {
 class GreeterTriesToCatchNonTerminal implements TestGreeter {
   async greet(ctx: ObjectContext): Promise<TestResponse> {
     try {
-      const result = await ctx.run(async () => {
+      const result = await ctx.run("greet", async () => {
         throw new TypeError("oh no");
       });
       return result;
@@ -141,7 +142,12 @@ describe("Greeter", () => {
 
     const f = failure("oh no");
 
-    expect(result).toStrictEqual([errorMessage(f)]);
+    expect(result).toStrictEqual([
+      errorMessage(f, {
+        relatedEntryType: SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+        relatedEntryName: "greet",
+      }),
+    ]);
   });
 
   it("Local recovery from a non terminal exception, has no effect.", async () => {
@@ -152,6 +158,11 @@ describe("Greeter", () => {
 
     const f = failure("oh no");
 
-    expect(result).toStrictEqual([errorMessage(f)]);
+    expect(result).toStrictEqual([
+      errorMessage(f, {
+        relatedEntryType: SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+        relatedEntryName: "greet",
+      }),
+    ]);
   });
 });
