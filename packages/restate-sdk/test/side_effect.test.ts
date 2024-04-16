@@ -13,8 +13,6 @@ import { describe, expect } from "@jest/globals";
 import { TestDriver, TestGreeter, TestResponse } from "./testdriver";
 import {
   END_MESSAGE,
-  failure,
-  failureWithTerminal,
   errorMessage,
   greetRequest,
   inputMessage,
@@ -23,6 +21,7 @@ import {
   startMessage,
   suspensionMessage,
   greetResponse,
+  failure,
 } from "./protoutils";
 import { ObjectContext } from "../src/context";
 import { TerminalError } from "../src/public_api";
@@ -114,27 +113,24 @@ describe("Greeter", () => {
       inputMessage(greetRequest("Pete")),
     ]).run();
 
-    const failure = failureWithTerminal(true, "oh no");
+    const f = failure("oh no");
 
     expect(result).toStrictEqual([
-      sideEffectMessage(undefined, failure),
+      sideEffectMessage(undefined, f),
       suspensionMessage([1]),
     ]);
   });
 
   it("After a terminal exception is acknowledge, the execution ends", async () => {
-    const failure = failureWithTerminal(true, "oh no");
+    const f = failure("oh no");
 
     const result = await new TestDriver(new GreeterThrowsTerm(), [
       startMessage({ knownEntries: 3, key: "Pete" }),
       inputMessage(greetRequest("Pete")),
-      sideEffectMessage(undefined, failure),
+      sideEffectMessage(undefined, f),
     ]).run();
 
-    expect(result).toStrictEqual([
-      outputMessage(undefined, failure.failure),
-      END_MESSAGE,
-    ]);
+    expect(result).toStrictEqual([outputMessage(undefined, f), END_MESSAGE]);
   });
 
   it("A non terminal exception (1) does not record the sideEffect in the journal. (2) ends the current attempt", async () => {

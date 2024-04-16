@@ -53,13 +53,10 @@ import {
   GetStateKeysEntryMessage,
 } from "../src/types/protocol";
 import { Message } from "../src/types/types";
-import {
-  CombinatorEntryMessage,
-  FailureWithTerminal,
-  SideEffectEntryMessage,
-} from "../src/generated/proto/javascript_pb";
+import { CombinatorEntryMessage } from "../src/generated/proto/javascript_pb";
 import {
   Failure,
+  SideEffectEntryMessage,
   StartMessage_StateEntry,
 } from "../src/generated/proto/protocol_pb";
 import { expect } from "@jest/globals";
@@ -408,7 +405,7 @@ export function backgroundInvokeMessage(
 
 export function sideEffectMessage<T>(
   value?: T,
-  failure?: FailureWithTerminal,
+  failure?: Failure,
   name?: string
 ): Message {
   if (value !== undefined) {
@@ -520,17 +517,6 @@ export function failure(
   code: number = INTERNAL_ERROR_CODE
 ): Failure {
   return new Failure({ code: code, message: msg });
-}
-
-export function failureWithTerminal(
-  terminal: boolean,
-  msg: string,
-  code: number = INTERNAL_ERROR_CODE
-): FailureWithTerminal {
-  return new FailureWithTerminal({
-    terminal,
-    failure: new Failure({ code: code, message: msg }),
-  });
 }
 
 export function greetRequest(myName: string): Uint8Array {

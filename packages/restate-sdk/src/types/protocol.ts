@@ -10,10 +10,7 @@
  */
 
 import { Message } from "@bufbuild/protobuf";
-import {
-  SideEffectEntryMessage,
-  CombinatorEntryMessage,
-} from "../generated/proto/javascript_pb";
+import { CombinatorEntryMessage } from "../generated/proto/javascript_pb";
 import {
   AwakeableEntryMessage,
   BackgroundInvokeEntryMessage,
@@ -33,6 +30,7 @@ import {
   SleepEntryMessage,
   StartMessage,
   SuspensionMessage,
+  SideEffectEntryMessage,
 } from "../generated/proto/protocol_pb";
 
 // Re-export the protobuf messages.
@@ -79,9 +77,10 @@ export const COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE = 0x0c04n;
 
 export const AWAKEABLE_IDENTIFIER_PREFIX = "prom_1";
 
+export const SIDE_EFFECT_ENTRY_MESSAGE_TYPE = 0x0c00n + 5n;
+
 // Export the custom message types
 // Side effects are custom messages because the runtime does not need to inspect them
-export const SIDE_EFFECT_ENTRY_MESSAGE_TYPE = 0xfc01n;
 export const COMBINATOR_ENTRY_MESSAGE = 0xfc02n;
 
 // Restate DuplexStream

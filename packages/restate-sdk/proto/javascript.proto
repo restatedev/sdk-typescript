@@ -15,23 +15,6 @@ package dev.restate.sdk.javascript;
 
 import "proto/protocol.proto";
 
-message FailureWithTerminal {
-  dev.restate.service.protocol.Failure failure = 1;
-  bool terminal = 2;
-}
-
-// Type: 0xFC00 + 1
-// Flag: RequiresRuntimeAck
-message SideEffectEntryMessage {
-  
-  string name = 1; 
-
-  oneof result {
-    bytes value = 100;
-    FailureWithTerminal failure = 101;
-  };
-}
-
 // Type: 0xFC00 + 2
 message CombinatorEntryMessage {
   int32 combinator_id = 1;
