@@ -13,7 +13,6 @@
 
 import { ErrorMessage, Failure } from "../generated/proto/protocol_pb";
 import { formatMessageAsJson } from "../utils/utils";
-import { FailureWithTerminal } from "../generated/proto/javascript_pb";
 import * as p from "./protocol";
 
 export const INTERNAL_ERROR_CODE = 500;
@@ -124,14 +123,6 @@ export function errorToFailure(err: Error): Failure {
         code: INTERNAL_ERROR_CODE,
         message: err.message,
       });
-}
-
-export function errorToFailureWithTerminal(err: Error): FailureWithTerminal {
-  const failure = errorToFailure(err);
-  return new FailureWithTerminal({
-    failure,
-    terminal: err instanceof TerminalError,
-  });
 }
 
 export function failureToTerminalError(failure: Failure): TerminalError {

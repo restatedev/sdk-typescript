@@ -28,6 +28,7 @@ import {
   GetStateKeysEntryMessage,
   GetStateKeysEntryMessage_StateKeys,
   InvokeEntryMessage,
+  SideEffectEntryMessage,
   SleepEntryMessage,
 } from "./generated/proto/protocol_pb";
 import {
@@ -44,16 +45,15 @@ import {
   SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
   SLEEP_ENTRY_MESSAGE_TYPE,
 } from "./types/protocol";
-import { SideEffectEntryMessage } from "./generated/proto/javascript_pb";
 import { AsyncLocalStorage } from "async_hooks";
 import {
   RetryableError,
   TerminalError,
   ensureError,
-  errorToFailureWithTerminal,
   TimeoutError,
   INTERNAL_ERROR_CODE,
   UNKNOWN_ERROR_CODE,
+  errorToFailure,
 } from "./types/errors";
 import { jsonSerialize, jsonDeserialize } from "./utils/utils";
 import { PartialMessage, protoInt64 } from "@bufbuild/protobuf";
@@ -417,7 +417,7 @@ export class ContextImpl implements ObjectContext {
         // the function. that way, any catching by the user and reacting to it will be
         // deterministic on replay
         const error = ensureError(e);
-        const failure = errorToFailureWithTerminal(error);
+        const failure = errorToFailure(error);
         const sideEffectMsg = new SideEffectEntryMessage({
           name,
           result: { case: "failure", value: failure },

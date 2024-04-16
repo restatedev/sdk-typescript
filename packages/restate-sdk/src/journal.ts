@@ -13,6 +13,7 @@ import * as p from "./types/protocol";
 import {
   Failure,
   GetStateKeysEntryMessage_StateKeys,
+  SideEffectEntryMessage,
 } from "./generated/proto/protocol_pb";
 import {
   AWAKEABLE_ENTRY_MESSAGE_TYPE,
@@ -43,7 +44,6 @@ import {
 } from "./types/protocol";
 import { equalityCheckers, jsonDeserialize } from "./utils/utils";
 import { Message } from "./types/types";
-import { SideEffectEntryMessage } from "./generated/proto/javascript_pb";
 import { Invocation } from "./invocation";
 import { failureToError, RetryableError } from "./types/errors";
 import { CompletablePromise } from "./utils/promises";
@@ -343,8 +343,8 @@ export class Journal {
             journalIndex,
             journalEntry,
             undefined,
-            sideEffectMsg.result.value.failure,
-            sideEffectMsg.result.value.terminal
+            sideEffectMsg.result.value,
+            true
           );
         } else {
           // A side effect can have a void return type
