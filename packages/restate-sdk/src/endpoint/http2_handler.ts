@@ -28,6 +28,7 @@ import {
 import { Deployment, ProtocolMode } from "../types/discovery";
 import { validateRequestSignature } from "./request_signing/validate";
 import { ServerHttp2Stream } from "node:http2";
+import { X_RESTATE_SERVER } from "../user_agent";
 
 export class Http2Handler {
   constructor(private readonly endpoint: EndpointImpl) {}
@@ -82,6 +83,7 @@ export class Http2Handler {
       );
       stream.respond({
         "content-type": "application/restate",
+        "x-restate-server": X_RESTATE_SERVER,
         ":status": 401,
       });
       stream.end();
@@ -101,7 +103,10 @@ export class Http2Handler {
       return respondNotFound(stream);
     }
     if (route === "discovery") {
-      return respondDiscovery(this.endpoint.computeDiscovery(), stream);
+      const discovery = this.endpoint.computeDiscovery(
+        ProtocolMode.BIDI_STREAM
+      );
+      return respondDiscovery(discovery, stream);
     }
     const urlComponents = route as UrlPathComponents;
     const component = this.endpoint.componentByName(
@@ -117,6 +122,7 @@ export class Http2Handler {
     // valid connection, let's dispatch the invocation
     stream.respond({
       "content-type": "application/restate",
+      "x-restate-server": X_RESTATE_SERVER,
       ":status": 200,
     });
     const restateStream = RestateHttp2Connection.from(stream);
@@ -133,6 +139,7 @@ function respondDiscovery(
   http2Stream.respond({
     ":status": 200,
     "content-type": "application/json",
+    "x-restate-server": X_RESTATE_SERVER,
   });
 
   return pipeline(stream.Readable.from(responseData), http2Stream, {
@@ -143,6 +150,7 @@ function respondDiscovery(
 function respondNotFound(stream: http2.ServerHttp2Stream) {
   stream.respond({
     "content-type": "application/json",
+    "x-restate-server": X_RESTATE_SERVER,
     ":status": 404,
   });
   stream.end();
