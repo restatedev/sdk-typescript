@@ -33,6 +33,7 @@ import {
   parseUrlComponents,
 } from "../types/components";
 import { validateRequestSignature } from "./request_signing/validate";
+import { X_RESTATE_SERVER } from "../user_agent";
 
 export class LambdaHandler {
   constructor(private readonly endpoint: EndpointImpl) {}
@@ -149,6 +150,7 @@ export class LambdaHandler {
       return {
         headers: {
           "content-type": "application/restate",
+          "x-restate-server": X_RESTATE_SERVER,
         },
         statusCode: 200,
         isBase64Encoded: true,
@@ -163,13 +165,16 @@ export class LambdaHandler {
   }
 
   private handleDiscovery(): APIGatewayProxyResult | APIGatewayProxyResultV2 {
-    const disocvery = this.endpoint.computeDiscovery();
+    const disocvery = this.endpoint.computeDiscovery(
+      ProtocolMode.REQUEST_RESPONSE
+    );
     const discoveryJson = JSON.stringify(disocvery);
     const body = Buffer.from(discoveryJson).toString("base64");
 
     return {
       headers: {
         "content-type": "application/json",
+        "x-restate-server": X_RESTATE_SERVER,
       },
       statusCode: 200,
       isBase64Encoded: true,
@@ -181,6 +186,7 @@ export class LambdaHandler {
     return {
       headers: {
         "content-type": "application/restate",
+        "x-restate-server": X_RESTATE_SERVER,
       },
       statusCode: code,
       isBase64Encoded: true,

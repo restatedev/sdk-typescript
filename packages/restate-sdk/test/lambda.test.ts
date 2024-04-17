@@ -27,6 +27,7 @@ import {
 import { decodeLambdaBody } from "../src/io/decoder";
 import { TestGreeter, TestResponse } from "./testdriver";
 import { ComponentType, Deployment } from "../src/types/discovery";
+import { X_RESTATE_SERVER } from "../src/user_agent";
 
 class LambdaGreeter implements TestGreeter {
   async greet(
@@ -128,6 +129,7 @@ describe("LambdaGreeter", () => {
     expect(result.statusCode).toStrictEqual(200);
     expect(result.headers).toStrictEqual({
       "content-type": "application/restate",
+      "x-restate-server": X_RESTATE_SERVER,
     });
     expect(result.isBase64Encoded).toStrictEqual(true);
     expect(deserializeMessages(result.body)).toStrictEqual([
@@ -152,6 +154,7 @@ describe("LambdaGreeter", () => {
     expect(result.statusCode).toStrictEqual(404);
     expect(result.headers).toStrictEqual({
       "content-type": "application/restate",
+      "x-restate-server": X_RESTATE_SERVER,
     });
     expect(result.isBase64Encoded).toStrictEqual(true);
   });
@@ -172,6 +175,7 @@ describe("LambdaGreeter", () => {
     expect(result.statusCode).toStrictEqual(404);
     expect(result.headers).toStrictEqual({
       "content-type": "application/restate",
+      "x-restate-server": X_RESTATE_SERVER,
     });
   });
 
@@ -191,6 +195,7 @@ describe("LambdaGreeter", () => {
     expect(result.statusCode).toStrictEqual(404);
     expect(result.headers).toStrictEqual({
       "content-type": "application/restate",
+      "x-restate-server": X_RESTATE_SERVER,
     });
   });
 
@@ -208,6 +213,7 @@ describe("LambdaGreeter", () => {
     expect(result.statusCode).toStrictEqual(200);
     expect(result.headers).toStrictEqual({
       "content-type": "application/json",
+      "x-restate-server": X_RESTATE_SERVER,
     });
     expect(result.isBase64Encoded).toStrictEqual(true);
 

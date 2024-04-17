@@ -166,11 +166,11 @@ export class EndpointImpl implements RestateEndpoint {
     });
   }
 
-  computeDiscovery(): discovery.Deployment {
+  computeDiscovery(protocolMode: discovery.ProtocolMode): discovery.Deployment {
     const components = [...this.components.values()].map((c) => c.discovery());
 
     const deployment: discovery.Deployment = {
-      protocolMode: discovery.ProtocolMode.BIDI_STREAM,
+      protocolMode,
       minProtocolVersion: 1,
       maxProtocolVersion: 2,
       components,

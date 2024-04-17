@@ -20,17 +20,17 @@
     "dist"
   ],
   "scripts": {
+    "gen:version": "node ./scripts/version.js",
     "proto": "npx buf mod update && npx buf generate",
+    "prebuild": "npm run gen:version",
     "build": "tsc -b",
+    "pretest": "npm run gen:version",
     "test": "jest --silent --maxWorkers=1",
     "lint": "eslint --ignore-path .eslintignore --max-warnings=0 --ext .ts .",
     "format": "prettier --ignore-path .eslintignore --write \"**/*.+(js|ts|json)\"",
     "format-check": "prettier --ignore-path .eslintignore --check \"**/*.+(js|ts|json)\"",
     "verify": "npm run format-check && npm run lint && npm run test && npm run build",
-    "release": "release-it",
-    "example": "RESTATE_DEBUG_LOGGING=OFF ts-node-dev --transpile-only ./examples/example.ts",
-    "workflowexample": "RESTATE_DEBUG_LOGGING=OFF ts-node-dev --transpile-only ./examples/workflow_example.ts",
-    "ingress": "RESTATE_DEBUG_LOGGING=OFF ts-node-dev --transpile-only ./examples/ingress.ts"
+    "release": "release-it"
   },
   "dependencies": {
     "@bufbuild/protobuf": "^1.8.0"
