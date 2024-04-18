@@ -28,18 +28,11 @@ jobs:
       - run: npm run verify
       - run: npm pack --workspaces true --include-workspace-root false 
       - run: mv restatedev-restate-sdk-0*.tgz restatedev-restate-sdk.tgz
-      - run: mv restatedev-restate-sdk-examples-0*.tgz restatedev-restate-sdk-examples.tgz
       - run: mv restatedev-restate-sdk-clients-0*.tgz restatedev-restate-sdk-clients.tgz
       - uses: actions/upload-artifact@v3
         with:
           name: restatedev-restate-sdk
           path: restatedev-restate-sdk.tgz
-          retention-days: 1
-          if-no-files-found: error
-      - uses: actions/upload-artifact@v3
-        with:
-          name: restatedev-restate-sdk-examples
-          path: restatedev-restate-sdk-examples.tgz
           retention-days: 1
           if-no-files-found: error
       - uses: actions/upload-artifact@v3
