@@ -47,6 +47,7 @@ import { Message } from "./types/types";
 import { Invocation } from "./invocation";
 import { failureToError, RetryableError } from "./types/errors";
 import { CompletablePromise } from "./utils/promises";
+import { Buffer } from "node:buffer";
 
 const RESOLVED = Promise.resolve(undefined);
 

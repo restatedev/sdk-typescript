@@ -165,7 +165,7 @@ function base(ALPHABET: string): base.BaseConverter {
   };
 }
 
-export = base;
+export default base;
 
 declare namespace base {
   interface BaseConverter {

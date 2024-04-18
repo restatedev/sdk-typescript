@@ -42,12 +42,12 @@ export enum RestateDebugLogLevel {
 }
 
 const DEFAULT_DEBUG_LOG_LEVEL =
-  process.env["NODE_ENV"]?.toUpperCase() === "PRODUCTION"
+  globalThis?.process?.env["NODE_ENV"]?.toUpperCase() === "PRODUCTION"
     ? RestateDebugLogLevel.OFF
     : RestateDebugLogLevel.INVOKE;
 
 function readLogLevel(): RestateDebugLogLevel {
-  const env = process.env[DEBUG_LOGGING_ENV]?.toUpperCase();
+  const env = globalThis?.process?.env[DEBUG_LOGGING_ENV]?.toUpperCase();
   if (env == undefined) {
     return DEFAULT_DEBUG_LOG_LEVEL;
   }

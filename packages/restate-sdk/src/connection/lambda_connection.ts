@@ -18,6 +18,7 @@ import {
 } from "../types/protocol";
 import { Message } from "../types/types";
 import { rlog } from "../logger";
+import { Buffer } from "node:buffer";
 
 const RESOLVED: Promise<void> = Promise.resolve();
 
