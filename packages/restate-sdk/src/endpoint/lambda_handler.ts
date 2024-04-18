@@ -34,6 +34,7 @@ import {
 } from "../types/components";
 import { validateRequestSignature } from "./request_signing/validate";
 import { X_RESTATE_SERVER } from "../user_agent";
+import { Buffer } from "node:buffer";
 
 export class LambdaHandler {
   constructor(private readonly endpoint: EndpointImpl) {}

@@ -20,6 +20,7 @@ import {
   StartMessage_StateEntry,
 } from "./generated/proto/protocol_pb";
 import { jsonSerialize } from "./utils/utils";
+import { Buffer } from "node:buffer";
 
 export class LocalStateStore {
   private state: Map<string, Buffer | Empty>;

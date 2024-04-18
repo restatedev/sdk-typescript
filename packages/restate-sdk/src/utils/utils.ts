@@ -32,6 +32,7 @@ import {
   SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
   SLEEP_ENTRY_MESSAGE_TYPE,
 } from "../types/protocol";
+import { Buffer } from "node:buffer";
 
 export function jsonSerialize(obj: any): string {
   return JSON.stringify(obj, (_, v) =>

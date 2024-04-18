@@ -9,12 +9,12 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import stream from "stream";
+import stream from "node:stream";
 import { streamDecoder } from "../io/decoder";
 import { Connection, RestateStreamConsumer } from "./connection";
 import { Message } from "../types/types";
 import { rlog } from "../logger";
-import { finished } from "stream/promises";
+import { finished } from "node:stream/promises";
 import { BufferedConnection } from "./buffered_connection";
 
 // utility promise, for cases where we want to save allocation of an extra promise

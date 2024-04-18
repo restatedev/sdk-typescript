@@ -9,10 +9,9 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import stream from "stream";
-import { pipeline, finished } from "stream/promises";
+import stream from "node:stream";
+import { pipeline, finished } from "node:stream/promises";
 import http2, { Http2ServerRequest, Http2ServerResponse } from "http2";
-import { parse as urlparse, Url } from "url";
 import { EndpointImpl } from "./endpoint_impl";
 import { RestateHttp2Connection } from "../connection/http_connection";
 import { ensureError } from "../types/errors";
@@ -39,7 +38,7 @@ export class Http2Handler {
     _response: Http2ServerResponse
   ) {
     const stream = request.stream;
-    const url: Url = urlparse(request.url ?? "/");
+    const url: URL = new URL(request.url ?? "/", "https://restate.dev"); // use a dummy base; we only care about path
 
     this.validateConnectionSignature(request, url, stream)
       .then((result) => {
@@ -61,7 +60,7 @@ export class Http2Handler {
 
   private async validateConnectionSignature(
     request: Http2ServerRequest,
-    url: Url,
+    url: URL,
     stream: ServerHttp2Stream
   ): Promise<boolean> {
     if (!this.endpoint.keySet) {
@@ -73,7 +72,7 @@ export class Http2Handler {
 
     const validateResponse = await validateRequestSignature(
       keySet,
-      url.path ?? "/",
+      url.pathname ?? "/",
       request.headers
     );
 
@@ -95,10 +94,10 @@ export class Http2Handler {
   }
 
   private handleConnection(
-    url: Url,
+    url: URL,
     stream: http2.ServerHttp2Stream
   ): Promise<void> {
-    const route = parseUrlComponents(url.path ?? undefined);
+    const route = parseUrlComponents(url.pathname ?? undefined);
     if (!route) {
       return respondNotFound(stream);
     }

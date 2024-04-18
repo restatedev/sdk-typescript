@@ -17,7 +17,6 @@ import {
   createStateMachineConsole,
   StateMachineConsole,
 } from "./utils/message_logger";
-import { clearTimeout } from "timers";
 import {
   COMBINATOR_ENTRY_MESSAGE,
   COMPLETION_MESSAGE_TYPE,
@@ -54,6 +53,7 @@ import {
 } from "./promise_combinator_tracker";
 import { CombinatorEntryMessage } from "./generated/proto/javascript_pb";
 import { ProtocolMode } from "./types/discovery";
+import { Buffer } from "node:buffer";
 
 export class StateMachine implements RestateStreamConsumer {
   private journal: Journal;

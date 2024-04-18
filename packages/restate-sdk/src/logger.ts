@@ -77,12 +77,12 @@ function logFunction(level: RestateLogLevel) {
 }
 
 function readRestateLogLevel(): RestateLogLevel {
-  const env = process.env.RESTATE_LOGGING;
+  const env = globalThis.process?.env?.RESTATE_LOGGING;
   const level = logLevelFromName(env);
   if (level != RestateLogLevel.UNSET) {
     return level;
   }
-  const nodeEnv = process.env.NODE_ENV;
+  const nodeEnv = globalThis.process?.env?.NODE_ENV;
   if (!nodeEnv) {
     return RestateLogLevel.TRACE;
   }
