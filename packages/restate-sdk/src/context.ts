@@ -423,8 +423,6 @@ export interface Rand {
  * A promise that can be combined using Promise combinators in RestateContext.
  */
 export type CombineablePromise<T> = Promise<T> & {
-  __restate_context: Context;
-
   /**
    * Creates a promise that awaits for the current promise up to the specified timeout duration.
    * If the timeout is fired, this Promise will be rejected with a {@link TimeoutError}.
@@ -451,8 +449,7 @@ export const CombineablePromise = {
     if (values.length == 0) {
       return Promise.all(values);
     }
-
-    return (values[0].__restate_context as ContextImpl).createCombinator(
+    return ContextImpl.createCombinator(
       Promise.all.bind(Promise),
       values
     ) as Promise<{
@@ -475,8 +472,7 @@ export const CombineablePromise = {
     if (values.length == 0) {
       return Promise.race(values);
     }
-
-    return (values[0].__restate_context as ContextImpl).createCombinator(
+    return ContextImpl.createCombinator(
       Promise.race.bind(Promise),
       values
     ) as Promise<Awaited<T[number]>>;
@@ -498,8 +494,7 @@ export const CombineablePromise = {
     if (values.length == 0) {
       return Promise.any(values);
     }
-
-    return (values[0].__restate_context as ContextImpl).createCombinator(
+    return ContextImpl.createCombinator(
       Promise.any.bind(Promise),
       values
     ) as Promise<Awaited<T[number]>>;
@@ -522,8 +517,7 @@ export const CombineablePromise = {
     if (values.length == 0) {
       return Promise.allSettled(values);
     }
-
-    return (values[0].__restate_context as ContextImpl).createCombinator(
+    return ContextImpl.createCombinator(
       Promise.allSettled.bind(Promise),
       values
     ) as Promise<{
