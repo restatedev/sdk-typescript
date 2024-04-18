@@ -572,16 +572,21 @@ export class ContextImpl implements ObjectContext {
   }
 
   // Used by static methods of CombineablePromise
-  public createCombinator<T extends readonly CombineablePromise<unknown>[]>(
+  public static createCombinator<
+    T extends readonly CombineablePromise<unknown>[]
+  >(
     combinatorConstructor: (
       promises: PromiseLike<unknown>[]
     ) => Promise<unknown>,
     promises: T
   ): WrappedPromise<unknown> {
+    const self = extractContext(promises[0]);
+    if (!self) {
+      throw RetryableError.internal("Not a combinable promise");
+    }
     const outPromises = [];
-
     for (const promise of promises) {
-      if (promise.__restate_context !== this) {
+      if (extractContext(promise) !== self) {
         throw RetryableError.internal(
           "You're mixing up CombineablePromises from different RestateContext. This is not supported."
         );
@@ -594,7 +599,7 @@ export class ContextImpl implements ObjectContext {
       });
     }
 
-    return this.stateMachine.createCombinator(
+    return self.stateMachine.createCombinator(
       combinatorConstructor,
       outPromises
     );
@@ -666,7 +671,7 @@ export class ContextImpl implements ObjectContext {
     };
 
     return Object.defineProperties(p, {
-      __restate_context: {
+      [RESTATE_CTX_SYMBOL]: {
         value: this,
       },
       journalIndex: {
@@ -696,4 +701,11 @@ function unpack<T>(
     throw new TypeError("unexpected a function as a second parameter.");
   }
   return { action: a };
+}
+
+const RESTATE_CTX_SYMBOL = Symbol("restateContext");
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function extractContext(n: any): ContextImpl | undefined {
+  return n[RESTATE_CTX_SYMBOL];
 }
