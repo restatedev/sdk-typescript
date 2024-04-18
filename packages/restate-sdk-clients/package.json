@@ -1,7 +1,7 @@
 {
-  "name": "@restatedev/restate-sdk-ingress",
+  "name": "@restatedev/restate-sdk-clients",
   "version": "0.8.0",
-  "description": "Typescript SDK for Restate",
+  "description": "Typescript SDK for Restate Clients",
   "author": "Restate Developers",
   "license": "MIT",
   "email": "code@restate.dev",
@@ -35,7 +35,6 @@
     "@typescript-eslint/eslint-plugin": "^5.53.0",
     "@typescript-eslint/parser": "^5.53.0",
     "eslint": "^8.35.0",
-    "express": "*",
     "prettier": "^2.8.4",
     "release-it": "^16.1.4",
     "ts-jest": "^29.0.5",

@@ -34,7 +34,7 @@
   },
   "dependencies": {
     "@restatedev/restate-sdk": "^0.8.0",
-    "@restatedev/restate-sdk-ingress": "^0.8.0"
+    "@restatedev/restate-sdk-clients": "^0.8.0"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.115",

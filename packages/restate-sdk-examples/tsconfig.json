@@ -6,6 +6,6 @@
   "include": ["src/**/*.ts"],
   "references": [
     { "path": "../restate-sdk" },
-    { "path": "../restate-sdk-ingress" }
+    { "path": "../restate-sdk-clients" }
   ]
 }
