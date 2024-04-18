@@ -45,7 +45,7 @@ import {
   SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
   SLEEP_ENTRY_MESSAGE_TYPE,
 } from "./types/protocol";
-import { AsyncLocalStorage } from "async_hooks";
+import { AsyncLocalStorage } from "node:async_hooks";
 import {
   RetryableError,
   TerminalError,
@@ -610,7 +610,7 @@ export class ContextImpl implements ObjectContext {
   private checkNotExecutingRun() {
     if (this.executingRun) {
       throw new TerminalError(
-        `Invoked a RestateContext method while a run() is still executing. 
+        `Invoked a RestateContext method while a run() is still executing.
           Make sure you await the ctx.run() call before using any other RestateContext method.`,
         { errorCode: INTERNAL_ERROR_CODE }
       );

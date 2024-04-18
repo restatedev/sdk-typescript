@@ -15,7 +15,7 @@
 import { Rand } from "../context";
 import { INTERNAL_ERROR_CODE, TerminalError } from "../types/errors";
 import { CallContextType, ContextImpl } from "../context_impl";
-import { createHash } from "crypto";
+import { createHash } from "node:crypto";
 
 export class RandImpl implements Rand {
   private randstate256: [bigint, bigint, bigint, bigint];

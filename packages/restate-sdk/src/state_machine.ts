@@ -17,7 +17,6 @@ import {
   createStateMachineConsole,
   StateMachineConsole,
 } from "./utils/message_logger";
-import { clearTimeout } from "timers";
 import {
   COMBINATOR_ENTRY_MESSAGE,
   COMPLETION_MESSAGE_TYPE,
