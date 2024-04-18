@@ -11,7 +11,7 @@
 
 /* eslint-disable no-console */
 
-import * as restate from "@restatedev/restate-sdk-ingress";
+import * as restate from "@restatedev/restate-sdk-clients";
 
 import type { CounterObject, GreeterService } from "./example";
 
