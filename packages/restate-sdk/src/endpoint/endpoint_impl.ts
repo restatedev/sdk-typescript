@@ -44,7 +44,7 @@ function isObjectDefinition<P extends string, M>(
 export const endpointImpl = (): RestateEndpoint => new EndpointImpl();
 
 export class EndpointImpl implements RestateEndpoint {
-  private readonly components: Map<string, Component> = new Map();
+  private readonly services: Map<string, Component> = new Map();
   private _keySet?: KeySetV1;
 
   public get keySet(): KeySetV1 | undefined {
@@ -52,11 +52,11 @@ export class EndpointImpl implements RestateEndpoint {
   }
 
   public componentByName(componentName: string): Component | undefined {
-    return this.components.get(componentName);
+    return this.services.get(componentName);
   }
 
   public addComponent(component: Component) {
-    this.components.set(component.name(), component);
+    this.services.set(component.name(), component);
   }
 
   public bindBundle(services: ServiceBundle): RestateEndpoint {
@@ -167,13 +167,13 @@ export class EndpointImpl implements RestateEndpoint {
   }
 
   computeDiscovery(protocolMode: discovery.ProtocolMode): discovery.Deployment {
-    const components = [...this.components.values()].map((c) => c.discovery());
+    const services = [...this.services.values()].map((c) => c.discovery());
 
     const deployment: discovery.Deployment = {
       protocolMode,
       minProtocolVersion: 1,
       maxProtocolVersion: 2,
-      components,
+      services,
     };
 
     return deployment;

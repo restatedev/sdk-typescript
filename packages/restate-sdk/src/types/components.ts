@@ -23,7 +23,7 @@ import { deserializeJson, serializeJson } from "../utils/serde";
 export interface Component {
   name(): string;
   handlerMatching(url: UrlPathComponents): ComponentHandler | undefined;
-  discovery(): d.Component;
+  discovery(): d.Service;
 }
 
 export interface ComponentHandler {
@@ -60,7 +60,7 @@ export class ServiceComponent implements Component {
     this.handlers.set(opts.name, c);
   }
 
-  discovery(): d.Component {
+  discovery(): d.Service {
     const handlers: d.Handler[] = [...this.handlers.keys()].map((name) => {
       return {
         name,
@@ -68,8 +68,8 @@ export class ServiceComponent implements Component {
     });
 
     return {
-      fullyQualifiedComponentName: this.componentName,
-      componentType: d.ComponentType.SERVICE,
+      name: this.componentName,
+      ty: d.ServiceType.SERVICE,
       handlers,
     };
   }
@@ -132,7 +132,7 @@ export class VritualObjectComponent implements Component {
     this.opts.set(opts.name, opts as VirtualObjectHandlerOpts<any, any>);
   }
 
-  discovery(): d.Component {
+  discovery(): d.Service {
     const handlers: d.Handler[] = [...this.opts.keys()].map((name) => {
       return {
         name,
@@ -140,8 +140,8 @@ export class VritualObjectComponent implements Component {
     });
 
     return {
-      fullyQualifiedComponentName: this.componentName,
-      componentType: d.ComponentType.VIRTUAL_OBJECT,
+      name: this.componentName,
+      ty: d.ServiceType.VIRTUAL_OBJECT,
       handlers,
     };
   }

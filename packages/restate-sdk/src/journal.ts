@@ -13,7 +13,7 @@ import * as p from "./types/protocol";
 import {
   Failure,
   GetStateKeysEntryMessage_StateKeys,
-  SideEffectEntryMessage,
+  RunEntryMessage,
 } from "./generated/proto/protocol_pb";
 import {
   AWAKEABLE_ENTRY_MESSAGE_TYPE,
@@ -30,7 +30,7 @@ import {
   GetStateEntryMessage,
   GetStateKeysEntryMessage,
   INVOKE_ENTRY_MESSAGE_TYPE,
-  InvokeEntryMessage,
+  CallEntryMessage,
   OUTPUT_ENTRY_MESSAGE_TYPE,
   OutputEntryMessage,
   INPUT_ENTRY_MESSAGE_TYPE,
@@ -297,7 +297,7 @@ export class Journal {
         break;
       }
       case INVOKE_ENTRY_MESSAGE_TYPE: {
-        const invokeMsg = replayMessage.message as InvokeEntryMessage;
+        const invokeMsg = replayMessage.message as CallEntryMessage;
         this.resolveResult(
           journalIndex,
           journalEntry,
@@ -335,7 +335,7 @@ export class Journal {
         break;
       }
       case SIDE_EFFECT_ENTRY_MESSAGE_TYPE: {
-        const sideEffectMsg = replayMessage.message as SideEffectEntryMessage;
+        const sideEffectMsg = replayMessage.message as RunEntryMessage;
         if (sideEffectMsg.result.case === "value") {
           const text = Buffer.from(sideEffectMsg.result.value).toString();
           this.resolveResult(journalIndex, journalEntry, jsonDeserialize(text));

@@ -57,7 +57,7 @@ export class LambdaHandler {
 
     const parsed = parseUrlComponents(path);
     if (!parsed) {
-      const msg = `Invalid path: path doesn't end in /invoke/SvcName/MethodName and also not in /discover: ${path}`;
+      const msg = `Invalid path: path doesn't end in /invoke/SvcName/handlerName and also not in /discover: ${path}`;
       rlog.trace(msg);
       return this.toErrorResponse(404, msg);
     }

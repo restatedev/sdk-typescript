@@ -23,11 +23,11 @@ import {
   CompletionMessage,
   COMPLETION_MESSAGE_TYPE,
   INVOKE_ENTRY_MESSAGE_TYPE,
-  InvokeEntryMessage,
+  CallEntryMessage,
   OUTPUT_ENTRY_MESSAGE_TYPE,
   OutputEntryMessage,
   BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
-  BackgroundInvokeEntryMessage,
+  OneWayCallEntryMessage,
   AWAKEABLE_ENTRY_MESSAGE_TYPE,
   AwakeableEntryMessage,
   COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
@@ -56,7 +56,7 @@ import { Message } from "../src/types/types";
 import { CombinatorEntryMessage } from "../src/generated/proto/javascript_pb";
 import {
   Failure,
-  SideEffectEntryMessage,
+  RunEntryMessage,
   StartMessage_StateEntry,
 } from "../src/generated/proto/protocol_pb";
 import { expect } from "@jest/globals";
@@ -335,7 +335,7 @@ export function ackMessage(index: number): Message {
 
 export function invokeMessage(
   serviceName: string,
-  methodName: string,
+  handlerName: string,
   parameter: Uint8Array,
   value?: Uint8Array,
   failure?: Failure,
@@ -344,9 +344,9 @@ export function invokeMessage(
   if (value != undefined) {
     return new Message(
       INVOKE_ENTRY_MESSAGE_TYPE,
-      new InvokeEntryMessage({
+      new CallEntryMessage({
         serviceName: serviceName,
-        methodName: methodName,
+        handlerName: handlerName,
         parameter: Buffer.from(parameter),
         result: { case: "value", value: value },
         key,
@@ -355,9 +355,9 @@ export function invokeMessage(
   } else if (failure != undefined) {
     return new Message(
       INVOKE_ENTRY_MESSAGE_TYPE,
-      new InvokeEntryMessage({
+      new CallEntryMessage({
         serviceName: serviceName,
-        methodName: methodName,
+        handlerName: handlerName,
         parameter: Buffer.from(parameter),
         result: { case: "failure", value: failure },
         key,
@@ -366,9 +366,9 @@ export function invokeMessage(
   } else {
     return new Message(
       INVOKE_ENTRY_MESSAGE_TYPE,
-      new InvokeEntryMessage({
+      new CallEntryMessage({
         serviceName: serviceName,
-        methodName: methodName,
+        handlerName: handlerName,
         parameter: Buffer.from(parameter),
         key,
       })
@@ -378,7 +378,7 @@ export function invokeMessage(
 
 export function backgroundInvokeMessage(
   serviceName: string,
-  methodName: string,
+  handlerName: string,
   parameter: Uint8Array,
   invokeTime?: number,
   key?: string
@@ -386,9 +386,9 @@ export function backgroundInvokeMessage(
   return invokeTime
     ? new Message(
         BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
-        new BackgroundInvokeEntryMessage({
+        new OneWayCallEntryMessage({
           serviceName: serviceName,
-          methodName: methodName,
+          handlerName: handlerName,
           parameter: Buffer.from(parameter),
           invokeTime: protoInt64.parse(invokeTime),
           key,
@@ -396,9 +396,9 @@ export function backgroundInvokeMessage(
       )
     : new Message(
         BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
-        new BackgroundInvokeEntryMessage({
+        new OneWayCallEntryMessage({
           serviceName: serviceName,
-          methodName: methodName,
+          handlerName: handlerName,
           parameter: Buffer.from(parameter),
         })
       );
@@ -412,7 +412,7 @@ export function sideEffectMessage<T>(
   if (value !== undefined) {
     return new Message(
       SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-      new SideEffectEntryMessage({
+      new RunEntryMessage({
         name,
         result: { case: "value", value: Buffer.from(JSON.stringify(value)) },
       }),
@@ -423,7 +423,7 @@ export function sideEffectMessage<T>(
   } else if (failure !== undefined) {
     return new Message(
       SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-      new SideEffectEntryMessage({
+      new RunEntryMessage({
         name,
         result: { case: "failure", value: failure },
       }),
@@ -434,7 +434,7 @@ export function sideEffectMessage<T>(
   } else {
     return new Message(
       SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-      new SideEffectEntryMessage({ name }),
+      new RunEntryMessage({ name }),
       false,
       undefined,
       true

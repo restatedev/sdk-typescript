@@ -101,12 +101,12 @@ export class LoggerContext {
     readonly invocationId: string,
     packageName: string,
     serviceName: string,
-    methodName: string,
+    handlerName: string,
     readonly additionalContext?: { [name: string]: string }
   ) {
     this.fqMethodName = packageName
-      ? `${packageName}.${serviceName}/${methodName}`
-      : `${serviceName}/${methodName}`;
+      ? `${packageName}.${serviceName}/${handlerName}`
+      : `${serviceName}/${handlerName}`;
   }
 }
 

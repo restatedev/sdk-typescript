@@ -14,12 +14,12 @@ export enum ProtocolMode {
   REQUEST_RESPONSE = "REQUEST_RESPONSE",
 }
 
-export enum ComponentType {
+export enum ServiceType {
   VIRTUAL_OBJECT = "VIRTUAL_OBJECT",
   SERVICE = "SERVICE",
 }
 
-export enum ComponentHandlerType {
+export enum ServiceHandlerType {
   EXCLUSIVE = "EXCLUSIVE",
   SHARED = "SHARED",
 }
@@ -39,15 +39,15 @@ type OutputPayload = {
 
 export interface Handler {
   name: string;
-  handlerType?: ComponentHandlerType; // If unspecified, defaults to EXCLUSIVE for Virtual Object. This should be unset for Services.
+  ty?: ServiceHandlerType; // If unspecified, defaults to EXCLUSIVE for Virtual Object. This should be unset for Services.
   input?: InputPayload;
   /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
   output?: OutputPayload;
 }
 
-export interface Component {
-  fullyQualifiedComponentName: string;
-  componentType: ComponentType;
+export interface Service {
+  name: string;
+  ty: ServiceType;
   handlers: Handler[];
 }
 
@@ -55,5 +55,5 @@ export interface Deployment {
   protocolMode: ProtocolMode;
   minProtocolVersion: number;
   maxProtocolVersion: number;
-  components: Component[];
+  services: Service[];
 }

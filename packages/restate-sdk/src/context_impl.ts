@@ -21,14 +21,14 @@ import {
 import { StateMachine } from "./state_machine";
 import {
   AwakeableEntryMessage,
-  BackgroundInvokeEntryMessage,
+  OneWayCallEntryMessage,
   CompleteAwakeableEntryMessage,
   Empty,
   GetStateEntryMessage,
   GetStateKeysEntryMessage,
   GetStateKeysEntryMessage_StateKeys,
-  InvokeEntryMessage,
-  SideEffectEntryMessage,
+  CallEntryMessage,
+  RunEntryMessage,
   SleepEntryMessage,
 } from "./generated/proto/protocol_pb";
 import {
@@ -232,9 +232,9 @@ export class ContextImpl implements ObjectContext {
   ): InternalCombineablePromise<Uint8Array> {
     this.checkState("invoke");
 
-    const msg = new InvokeEntryMessage({
+    const msg = new CallEntryMessage({
       serviceName: service,
-      methodName: method,
+      handlerName: method,
       parameter: Buffer.from(data),
       key,
     });
@@ -255,9 +255,9 @@ export class ContextImpl implements ObjectContext {
     const actualDelay = delay || 0;
     const invokeTime =
       actualDelay > 0 ? Date.now() + actualDelay : protoInt64.zero;
-    const msg = new BackgroundInvokeEntryMessage({
+    const msg = new OneWayCallEntryMessage({
       serviceName: service,
-      methodName: method,
+      handlerName: method,
       parameter: Buffer.from(data),
       invokeTime: protoInt64.parse(invokeTime),
       key,
@@ -389,7 +389,7 @@ export class ContextImpl implements ObjectContext {
     const executeRun = async () => {
       // in replay mode, we directly return the value from the log
       if (this.stateMachine.nextEntryWillBeReplayed()) {
-        const emptyMsg = new SideEffectEntryMessage({});
+        const emptyMsg = new RunEntryMessage({});
         return this.stateMachine.handleUserCodeMessage<T>(
           SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
           emptyMsg
@@ -422,7 +422,7 @@ export class ContextImpl implements ObjectContext {
         // deterministic on replay
         const error = ensureError(e);
         const failure = errorToFailure(error);
-        const sideEffectMsg = new SideEffectEntryMessage({
+        const sideEffectMsg = new RunEntryMessage({
           name,
           result: { case: "failure", value: failure },
         });
@@ -448,14 +448,14 @@ export class ContextImpl implements ObjectContext {
       // from here is not incorrectly attributed to the side-effect
       const sideEffectMsg =
         sideEffectResult !== undefined
-          ? new SideEffectEntryMessage({
+          ? new RunEntryMessage({
               name,
               result: {
                 case: "value",
                 value: Buffer.from(jsonSerialize(sideEffectResult)),
               },
             })
-          : new SideEffectEntryMessage({
+          : new RunEntryMessage({
               name,
             });
 

@@ -26,7 +26,7 @@ import {
 } from "./protoutils";
 import { decodeLambdaBody } from "../src/io/decoder";
 import { TestGreeter, TestResponse } from "./testdriver";
-import { ComponentType, Deployment } from "../src/types/discovery";
+import { ServiceType, Deployment } from "../src/types/discovery";
 import { X_RESTATE_SERVER } from "../src/user_agent";
 
 class LambdaGreeter implements TestGreeter {
@@ -220,12 +220,8 @@ describe("LambdaGreeter", () => {
     const decodedResponse: Deployment = JSON.parse(
       Buffer.from(result.body, "base64").toString("utf8")
     );
-    expect(
-      decodedResponse.components[0].fullyQualifiedComponentName
-    ).toStrictEqual("greeter");
-    expect(decodedResponse.components[0].componentType).toEqual(
-      ComponentType.VIRTUAL_OBJECT
-    );
+    expect(decodedResponse.services[0].name).toStrictEqual("greeter");
+    expect(decodedResponse.services[0].ty).toEqual(ServiceType.VIRTUAL_OBJECT);
   });
 });
 
