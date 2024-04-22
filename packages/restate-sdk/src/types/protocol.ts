@@ -13,7 +13,7 @@ import { Message } from "@bufbuild/protobuf";
 import { CombinatorEntryMessage } from "../generated/proto/javascript_pb";
 import {
   AwakeableEntryMessage,
-  BackgroundInvokeEntryMessage,
+  OneWayCallEntryMessage,
   ClearStateEntryMessage,
   ClearAllStateEntryMessage,
   CompleteAwakeableEntryMessage,
@@ -23,20 +23,20 @@ import {
   EndMessage,
   GetStateEntryMessage,
   GetStateKeysEntryMessage,
-  InvokeEntryMessage,
+  CallEntryMessage,
   OutputEntryMessage,
   InputEntryMessage,
   SetStateEntryMessage,
   SleepEntryMessage,
   StartMessage,
   SuspensionMessage,
-  SideEffectEntryMessage,
+  RunEntryMessage,
 } from "../generated/proto/protocol_pb";
 
 // Re-export the protobuf messages.
 export {
   AwakeableEntryMessage,
-  BackgroundInvokeEntryMessage,
+  OneWayCallEntryMessage,
   ClearStateEntryMessage,
   ClearAllStateEntryMessage,
   CompleteAwakeableEntryMessage,
@@ -45,7 +45,7 @@ export {
   EndMessage,
   GetStateEntryMessage,
   GetStateKeysEntryMessage,
-  InvokeEntryMessage,
+  CallEntryMessage,
   OutputEntryMessage,
   InputEntryMessage,
   SetStateEntryMessage,
@@ -125,11 +125,11 @@ const PROTOBUF_MESSAGE_NAME_BY_TYPE = new Map<bigint, string>([
   [CLEAR_STATE_ENTRY_MESSAGE_TYPE, "ClearStateEntryMessage"],
   [CLEAR_ALL_STATE_ENTRY_MESSAGE_TYPE, "ClearAllStateEntryMessage"],
   [SLEEP_ENTRY_MESSAGE_TYPE, "SleepEntryMessage"],
-  [INVOKE_ENTRY_MESSAGE_TYPE, "InvokeEntryMessage"],
-  [BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE, "BackgroundInvokeEntryMessage"],
+  [INVOKE_ENTRY_MESSAGE_TYPE, "CallEntryMessage"],
+  [BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE, "OneWayCallEntryMessage"],
   [AWAKEABLE_ENTRY_MESSAGE_TYPE, "AwakeableEntryMessage"],
   [COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE, "CompleteAwakeableEntryMessage"],
-  [SIDE_EFFECT_ENTRY_MESSAGE_TYPE, "SideEffectEntryMessage"],
+  [SIDE_EFFECT_ENTRY_MESSAGE_TYPE, "RunEntryMessage"],
   [COMBINATOR_ENTRY_MESSAGE, "CombinatorEntryMessage"],
 ]);
 
@@ -155,11 +155,11 @@ const PROTOBUF_MESSAGES: Array<[bigint, typeof Message<any>]> = [
   [CLEAR_STATE_ENTRY_MESSAGE_TYPE, ClearStateEntryMessage],
   [CLEAR_ALL_STATE_ENTRY_MESSAGE_TYPE, ClearAllStateEntryMessage],
   [SLEEP_ENTRY_MESSAGE_TYPE, SleepEntryMessage],
-  [INVOKE_ENTRY_MESSAGE_TYPE, InvokeEntryMessage],
-  [BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE, BackgroundInvokeEntryMessage],
+  [INVOKE_ENTRY_MESSAGE_TYPE, CallEntryMessage],
+  [BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE, OneWayCallEntryMessage],
   [AWAKEABLE_ENTRY_MESSAGE_TYPE, AwakeableEntryMessage],
   [COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE, CompleteAwakeableEntryMessage],
-  [SIDE_EFFECT_ENTRY_MESSAGE_TYPE, SideEffectEntryMessage],
+  [SIDE_EFFECT_ENTRY_MESSAGE_TYPE, RunEntryMessage],
   [COMBINATOR_ENTRY_MESSAGE, CombinatorEntryMessage],
 ];
 
@@ -180,11 +180,11 @@ export type ProtocolMessage =
   | ClearStateEntryMessage
   | ClearAllStateEntryMessage
   | SleepEntryMessage
-  | InvokeEntryMessage
-  | BackgroundInvokeEntryMessage
+  | CallEntryMessage
+  | OneWayCallEntryMessage
   | AwakeableEntryMessage
   | CompleteAwakeableEntryMessage
-  | SideEffectEntryMessage
+  | RunEntryMessage
   | CombinatorEntryMessage;
 
 // These message types will trigger sending a suspension message from the runtime

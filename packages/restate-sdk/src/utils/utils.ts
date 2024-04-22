@@ -12,11 +12,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import {
-  BackgroundInvokeEntryMessage,
+  OneWayCallEntryMessage,
   ClearStateEntryMessage,
   CompleteAwakeableEntryMessage,
   GetStateEntryMessage,
-  InvokeEntryMessage,
+  CallEntryMessage,
   OutputEntryMessage,
   SetStateEntryMessage,
 } from "../generated/proto/protocol_pb";
@@ -92,12 +92,12 @@ const getStateMsgEquality = (
 };
 
 const invokeMsgEquality = (
-  msg1: InvokeEntryMessage | BackgroundInvokeEntryMessage,
-  msg2: InvokeEntryMessage | BackgroundInvokeEntryMessage
+  msg1: CallEntryMessage | OneWayCallEntryMessage,
+  msg2: CallEntryMessage | OneWayCallEntryMessage
 ) => {
   return (
     msg1.serviceName === msg2.serviceName &&
-    msg1.methodName === msg2.methodName &&
+    msg1.handlerName === msg2.handlerName &&
     eq(msg1.parameter, msg2.parameter)
   );
 };
