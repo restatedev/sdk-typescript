@@ -120,7 +120,7 @@ export type DurablePromise<T> = restate.CombineablePromise<T> & {
  * This gives primarily access to state reads and promises.
  */
 export interface SharedWfContext {
-  workflowId(): string;
+  workflowId: string;
 
   get<T>(stateName: string): Promise<T | null>;
 

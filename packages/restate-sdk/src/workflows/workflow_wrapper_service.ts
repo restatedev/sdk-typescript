@@ -27,7 +27,7 @@ class SharedContextImpl<P extends string> implements wf.SharedWfContext {
     protected readonly stateServiceApi: wss.api<P>
   ) {}
 
-  workflowId(): string {
+  public get workflowId(): string {
     return this.wfId;
   }
 

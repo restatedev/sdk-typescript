@@ -54,7 +54,6 @@ export interface KeyValueStore {
    * @returns a Promise that is resolved with the value of the state key
    *
    * @example
-   * const ctx = restate.useContext(this);
    * const state = await ctx.get<string>("STATE");
    */
   get<T>(name: string): Promise<T | null>;
@@ -70,7 +69,6 @@ export interface KeyValueStore {
    * @param value value to set
    *
    * @example
-   * const ctx = restate.useContext(this);
    * ctx.set("STATE", "Hello");
    */
   set<T>(name: string, value: T): void;
@@ -80,7 +78,6 @@ export interface KeyValueStore {
    * @param name key of the state to delete
    *
    * @example
-   * const ctx = restate.useContext(this);
    * ctx.clear("STATE");
    */
   clear(name: string): void;
@@ -89,7 +86,6 @@ export interface KeyValueStore {
    * Clear/delete all the state entries in the Restate runtime.
    *
    * @example
-   * const ctx = restate.useContext(this);
    * ctx.clearAll();
    */
   clearAll(): void;
@@ -99,7 +95,7 @@ export interface SendOptions {
   /**
    * Makes a type-safe one-way RPC to the specified target service, after a delay specified by the
    * milliseconds' argument.
-   * This method is like stetting up a fault-tolerant cron job that enqueues the message in a
+   * This method is like setting up a fault-tolerant cron job that enqueues the message in a
    * message queue.
    * The handler calling this function does not have to stay active for the delay time.
    *
@@ -148,12 +144,12 @@ export type RunAction<T> = (() => Promise<T>) | (() => T);
 /**
  * The context that gives access to all Restate-backed operations, for example
  *   - sending reliable messages / RPC through Restate
- *   - side effects
+ *   - execute non-deterministic closures and memoize their result
  *   - sleeps and delayed calls
  *   - awakeables
  *   - ...
  *
- * Keyed services can also access their key-value store using the {@link ObjectContext}.
+ * Virtual objects can also access their key-value store using the {@link ObjectContext}.
  *
  */
 export interface Context {
@@ -163,7 +159,7 @@ export interface Context {
    * and for uniform sampling from a set of options. If a cryptographically secure value is needed, please generate that
    * externally and capture the result with a side effect.
    *
-   * Calls to these methods from inside side effects are disallowed and will fail - side effects must be idempotent, and
+   * Calls to these methods from inside `ctx.run` are disallowed and will fail - side effects must be idempotent, and
    * these calls are not.
    */
   rand: Rand;
@@ -234,7 +230,6 @@ export interface Context {
    * - promise: the Promise that needs to be awaited and that is resolved with the payload that was supplied by the service which completed the awakeable
    *
    * @example
-   * const ctx = restate.useContext(this);
    * const awakeable = ctx.awakeable<string>();
    *
    * // send the awakeable ID to some external service that will wake this one back up
@@ -249,7 +244,7 @@ export interface Context {
   awakeable<T>(): { id: string; promise: CombineablePromise<T> };
 
   /**
-   * Resolve an awakeable of another service.
+   * Resolve an awakeable.
    * @param id the string ID of the awakeable.
    * This is supplied by the service that needs to be woken up.
    * @param payload the payload to pass to the service that is woken up.
@@ -257,20 +252,18 @@ export interface Context {
    * and deserializes it in the receiving service with `JSON.parse(result.toString()) as T`.
    *
    * @example
-   * const ctx = restate.useContext(this);
    * // The sleeping service should have sent the awakeableIdentifier string to this service.
    * ctx.resolveAwakeable(awakeableIdentifier, "hello");
    */
   resolveAwakeable<T>(id: string, payload?: T): void;
 
   /**
-   * Reject an awakeable of another service. When rejecting, the service waiting on this awakeable will be woken up with a terminal error with the provided reason.
+   * Reject an awakeable. When rejecting, the service waiting on this awakeable will be woken up with a terminal error with the provided reason.
    * @param id the string ID of the awakeable.
    * This is supplied by the service that needs to be woken up.
    * @param reason the reason of the rejection.
    *
    * @example
-   * const ctx = restate.useContext(this);
    * // The sleeping service should have sent the awakeableIdentifier string to this service.
    * ctx.rejectAwakeable(awakeableIdentifier, "super bad error");
    */
@@ -282,7 +275,6 @@ export interface Context {
    * This is a lower-bound.
    *
    * @example
-   * const ctx = restate.useContext(this);
    * await ctx.sleep(1000);
    */
   sleep(millis: number): CombineablePromise<void>;
@@ -303,30 +295,38 @@ export interface Context {
    * @example
    * *Service Side:*
    * ```ts
-   * const router = restate.router({
-   *   someAction:    async(ctx: restate.RpcContext, req: string) => { ... },
-   *   anotherAction: async(ctx: restate.RpcContext, count: number) => { ... }
+   * const service = restate.service(
+   *   name: "myservice",
+   *   handlers: {
+   *    someAction:    async(ctx: restate.RpcContext, req: string) => { ... },
+   *    anotherAction: async(ctx: restate.RpcContext, count: number) => { ... }
    * });
    *
    * // option 1: export only the type signature of the router
-   * export type myApiType = typeof router;
+   * export type MyApi = typeof service;
    *
    * // option 2: export the API definition with type and name (name)
-   * export const myApi: restate.ServiceApi<typeof router> = { name : "myservice" };
+   * const MyService: MyApi = { name: "myservice" };
    *
-   * restate.createServer().bindRouter("myservice", router).listen(9080);
+   * restate.createServer().bind(service).listen(9080);
    * ```
    * **Client side:**
    * ```ts
    * // option 1: use only types and supply service name separately
-   * const result1 = await ctx.rpc<myApiType>({name: "myservice"}).someAction("hello!");
+   * const result1 = await ctx.serviceClient<MyApi>({name: "myservice"}).someAction("hello!");
    *
    * // option 2: use full API spec
-   * const result2 = await ctx.rpc(myApi).anotherAction(1337);
+   * const result2 = await ctx.serviceClient(MyService).anotherAction(1337);
    * ```
    */
   serviceClient<P extends string, M>(opts: ServiceDefinition<P, M>): Client<M>;
 
+  /**
+   * Same as {@link serviceClient} but for virtual objects.
+   *
+   * @param opts
+   * @param key the virtual object key
+   */
   objectClient<P extends string, M>(
     opts: VirtualObjectDefinition<P, M>,
     key: string
@@ -349,36 +349,45 @@ export interface Context {
    * @example
    * *Service Side:*
    * ```ts
-   * const router = restate.router({
-   *   someAction:    async(ctx: restate.RpcContext, req: string) => { ... },
-   *   anotherAction: async(ctx: restate.RpcContext, count: number) => { ... }
+   * const service = restate.service(
+   *   name: "myservice",
+   *   handlers: {
+   *    someAction:    async(ctx: restate.RpcContext, req: string) => { ... },
+   *    anotherAction: async(ctx: restate.RpcContext, count: number) => { ... }
    * });
    *
    * // option 1: export only the type signature of the router
-   * export type myApiType = typeof router;
+   * export type MyApi = typeof service;
    *
    * // option 2: export the API definition with type and name (name)
-   * export const myApi: restate.ServiceApi<typeof router> = { name : "myservice" };
+   * const MyService: MyApi = { name: "myservice" };
    *
-   * restate.createServer().bindRouter("myservice", router).listen(9080);
+   * restate.createServer().bind(service).listen(9080);
    * ```
    * **Client side:**
    * ```ts
    * // option 1: use only types and supply service name separately
-   * ctx.send<myApiType>({name: "myservice"}).someAction("hello!");
+   * ctx.serviceSendClient<MyApi>({name: "myservice"}).someAction("hello!");
    *
    * // option 2: use full API spec
-   * ctx.send(myApi).anotherAction(1337);
+   * ctx.serviceSendClient(MyService).anotherAction(1337);
    * ```
+   */
+  serviceSendClient<P extends string, M>(
+    service: ServiceDefinition<P, M>,
+    opts?: SendOptions
+  ): SendClient<M>;
+
+  /**
+   * Same as {@link serviceSendClient} but for virtual objects.
+   *
+   * @param obj
+   * @param key the virtual object key
+   * @param opts Send options
    */
   objectSendClient<P extends string, M>(
     obj: VirtualObjectDefinition<P, M>,
     key: string,
-    opts?: SendOptions
-  ): SendClient<M>;
-
-  serviceSendClient<P extends string, M>(
-    service: ServiceDefinition<P, M>,
     opts?: SendOptions
   ): SendClient<M>;
 
@@ -393,12 +402,12 @@ export interface Context {
  * The context that gives access to all Restate-backed operations, for example
  *   - sending reliable messages / RPC through Restate
  *   - access/update state
- *   - side effects
+ *   - execute non-deterministic closures and memoize their result
  *   - sleeps and delayed calls
  *   - awakeables
  *   - ...
  *
- * This context can be used only within keyed services/routers.
+ * This context can be used only within virtual objects.
  *
  */
 export interface ObjectContext extends Context, KeyValueStore {
@@ -525,8 +534,3 @@ export const CombineablePromise = {
     }>;
   },
 };
-
-/**
- * @deprecated use {@link ObjectContext}.
- */
-export type RestateContext = ObjectContext;

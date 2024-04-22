@@ -44,11 +44,7 @@ export interface ServiceBundle {
  *
  * restate
  *   .endpoint()
- *   .bindService({
- *      service: "MyService",
- *      instance: new myService.MyServiceImpl(),
- *      descriptor: myService.protoMetadata,
- *    })
+ *   .bind(myService)
  *   .listen(8000);
  * ```
  * @example
@@ -58,11 +54,7 @@ export interface ServiceBundle {
  *
  * export const handler = restate
  *   .endpoint()
- *   .bindService({
- *      service: "MyService",
- *      instance: new myService.MyServiceImpl(),
- *      descriptor: myService.protoMetadata,
- *    })
+ *   .bind(myService)
  *   .lambdaHandler();
  * ```
  */

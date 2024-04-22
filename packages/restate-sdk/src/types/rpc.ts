@@ -61,6 +61,11 @@ export type ServiceDefinition<P extends string, M> = {
   service?: Service<M>;
 };
 
+/**
+ * Define a Restate service.
+ *
+ * @param service
+ */
 export const service = <P extends string, M>(service: {
   name: P;
   handlers: ServiceOpts<M>;
@@ -97,6 +102,11 @@ export type VirtualObjectDefinition<P extends string, M> = {
   object?: VirtualObject<M>;
 };
 
+/**
+ * Define a Restate virtual object.
+ *
+ * @param object
+ */
 export const object = <P extends string, M>(object: {
   name: P;
   handlers: ObjectOpts<M>;

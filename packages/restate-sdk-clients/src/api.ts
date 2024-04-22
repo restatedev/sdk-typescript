@@ -4,56 +4,65 @@ import type {
 } from "@restatedev/restate-sdk";
 
 export interface Ingress {
+  /**
+   * Create a client from a {@link ServiceDefinition}.
+   */
   serviceClient<P extends string, M>(
     opts: ServiceDefinition<P, M>
   ): IngressClient<M>;
+
+  /**
+   * Create a client from a {@link VirtualObjectDefinition}.
+   */
   objectClient<P extends string, M>(
     opts: VirtualObjectDefinition<P, M>,
     key: string
   ): IngressClient<M>;
-  objectSendClient<P extends string, M>(
-    opts: VirtualObjectDefinition<P, M>,
-    key: string
-  ): IngressSendClient<M>;
+
+  /**
+   * Create a client from a {@link ServiceDefinition}.
+   */
   serviceSendClient<P extends string, M>(
     opts: ServiceDefinition<P, M>
   ): IngressSendClient<M>;
 
   /**
-   * Resolve an awakeable of another service.
-   * @param id the string ID of the awakeable.
-   * This is supplied by the service that needs to be woken up.
-   * @param payload the payload to pass to the service that is woken up.
-   * The SDK serializes the payload with `Buffer.from(JSON.stringify(payload))`
-   * and deserializes it in the receiving service with `JSON.parse(result.toString()) as T`.
-   *
-   * @example
-   * const ctx = restate.useContext(this);
-   * // The sleeping service should have sent the awakeableIdentifier string to this service.
-   * ctx.resolveAwakeable(awakeableIdentifier, "hello");
+   * Create a client from a {@link VirtualObjectDefinition}.
+   */
+  objectSendClient<P extends string, M>(
+    opts: VirtualObjectDefinition<P, M>,
+    key: string
+  ): IngressSendClient<M>;
+
+  /**
+   * Resolve an awakeable from the ingress client.
    */
   resolveAwakeable<T>(id: string, payload?: T): Promise<void>;
 
   /**
-   * Reject an awakeable of another service. When rejecting, the service waiting on this awakeable will be woken up with a terminal error with the provided reason.
-   * @param id the string ID of the awakeable.
-   * This is supplied by the service that needs to be woken up.
-   * @param reason the reason of the rejection.
-   *
-   * @example
-   * const ctx = restate.useContext(this);
-   * // The sleeping service should have sent the awakeableIdentifier string to this service.
-   * ctx.rejectAwakeable(awakeableIdentifier, "super bad error");
+   * Reject an awakeable from the ingress client.
    */
   rejectAwakeable(id: string, reason: string): Promise<void>;
 }
 
 export interface IngresCallOptions {
+  /**
+   * Key to use for idempotency key.
+   *
+   * See https://docs.restate.dev/operate/invocation#invoke-a-service-idempotently for more details.
+   */
   idempotencyKey?: string;
+
+  /**
+   * Headers to attach to the request.
+   */
   headers?: Record<string, string>;
 }
 
 export interface IngresSendOptions extends IngresCallOptions {
+  /**
+   * If set, the invocation will be executed after the provided delay. In milliseconds.
+   */
   delay?: number;
 }
 
@@ -96,6 +105,12 @@ export type IngressSendClient<M> = {
 };
 
 export type ConnectionOpts = {
+  /**
+   * Restate URL.
+   */
   url: string;
+  /**
+   * Headers to attach on every request.
+   */
   headers?: Record<string, string>;
 };
