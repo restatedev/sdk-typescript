@@ -11,30 +11,20 @@ Restate applications are composed of *durably executed, stateful RPC handlers* t
 as part of long-running processes, or as FaaS (AWS Lambda).
 
 ```typescript
-// note that there is no failure handling in this example, because the combination of durable execution,
-// communication, and state storage makes this unnecessary here.
-const addToCart = async (ctx: restate.ObjectContext,  ticketId: string) => {
-  // RPC participates in durable execution, so guaranteed to eventually happen and
-  // will never get duplicated. would suspend if the other takes too long
-  const success = await ctx.service(ticketApi).reserve(ticketId);
+import * as restate from "@restatedev/restate-sdk";
 
-  if (success) {
-    const cart = (await ctx.get<string[]>("cart")) || []; // gets state 'cart' bound to current cartId
-    cart.push(ticketId);
-    ctx.set("cart", cart);                                // writes state bound to current cartId
+const greeter = restate.service({
+    name: "greeter",
+    handlers: {
+        greet: async (ctx: restate.Context, name: string) => {
+            return `Hello ${name}!`;
+        },
+    },
+});
 
-    // reliable delayed call sent from Restate, which also participaes in durable execution
-    ctx.objectSendDelayed(cartApi, minutes(15)).expireTicket(ticketId);
-  }
-  return success;
-}
-
-...
-
-restate
-  .createServer()
-  .object("cart", restate.object({ addToCart, expireTicket }))
-  .listen(9080);
+restate.endpoint()
+    .bind(greeter)
+    .listen(9080);
 ```
 
 ## Community
@@ -103,19 +93,7 @@ npm run proto
 
 ### Testing end-to-end with Restate Server
 
-[Launch the Restate Server](https://github.com/restatedev/restate?tab=readme-ov-file#install-the-server) for testing your SDK changes.
-
-Register a service with the server via the Restate CLI. 
-This requires that the service is running to make the discovery succeed!
-
-```shell
-npx @restatedev/restate deployment register http://localhost:9080
-```
-
-Invoke the example service from the command line:
-```shell
-curl -X POST http://localhost:8080/greeter/greet -H 'content-type: application/json' -d '{"name": "Pete"}'
-```
+See https://github.com/restatedev/e2e/ for more details.
 
 ## Releasing the package
 
