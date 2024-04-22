@@ -51,7 +51,13 @@ jobs:
           # We're using 0.0.0 to avoid this version to be higher than released versions.
           # To use it: 
           # "@restatedev/restate-sdk": "^0.0.0-SNAPSHOT"
-          npm version  --workspaces true 0.0.0-SNAPSHOT-$(date '+%Y%m%d%H%M%S') --git-tag-version false
+          # Hack around the fact that npm version simply doesn't update dependants -_-"
+          # see https://github.com/npm/cli/pull/4588
+          VERSION="0.0.0-SNAPSHOT-$(date '+%Y%m%d%H%M%S')"
+          npm --workspaces version $VERSION --no-git-tag-version --no-workspaces-update
+          npm --workspaces pkg set "dependencies.@restatedev/restate-sdk=$VERSION"
+          npm --workspaces pkg set "dependencies.@restatedev/restate-sdk-clients=$VERSION"
+          npm --workspaces update
           # We use dist-tag dev for the snapshot releases, see https://docs.npmjs.com/cli/v9/commands/npm-dist-tag for more info
           # A snapshot MUST not be published with latest tag (omitting --tag defaults to latest) to avoid users to install snapshot releases
           # when using npm install
