@@ -14,44 +14,47 @@
 
 import { formatMessageType } from "../types/protocol";
 import { formatMessageAsJson } from "./utils";
-import { createRestateConsole, LoggerContext } from "../logger";
+import {
+  createRestateConsole,
+  LoggerContext,
+  RESTATE_LOG_LEVEL,
+  RestateLogLevel,
+} from "../logger";
 
 /**
  * The environment variable which is read to determine the debug log settings.
  */
-export const DEBUG_LOGGING_ENV = "RESTATE_DEBUG_LOGGING";
+const RESTATE_JOURNAL_LOGGING = "RESTATE_JOURNAL_LOGGING";
 
 /**
- * The values for the {@link DEBUG_LOGGING_ENV} variable.
+ * The values for the {@link RESTATE_JOURNAL_LOGGING} variable.
  */
-export enum RestateDebugLogLevel {
+enum JournalLoggingLogLevel {
   /** No debug logging at all. Good for performance and avoid per-invocation log volume */
   OFF,
 
-  /** Logs debug information for every Restate function invocation. */
-  INVOKE,
-
   /** Logs debug information for every Restate effect (=journal event) inside an invocation,
    *  like RPC, state access, sideEffect, ... */
-  JOURNAL,
+  DEBUG,
 
   /** Logs debug information for every Restate effect (=journal event) inside an invocation,
    *  like RPC, state access, sideEffect, ... Additionally, this adds a JSON representation
    *  of the journal message to the log. */
-  JOURNAL_VERBOSE,
+  TRACE,
 }
 
 const DEFAULT_DEBUG_LOG_LEVEL =
-  globalThis?.process?.env["NODE_ENV"]?.toUpperCase() === "PRODUCTION"
-    ? RestateDebugLogLevel.OFF
-    : RestateDebugLogLevel.INVOKE;
+  globalThis?.process?.env["NODE_ENV"]?.toUpperCase() === "PRODUCTION" ||
+  RESTATE_LOG_LEVEL > RestateLogLevel.DEBUG
+    ? JournalLoggingLogLevel.OFF
+    : JournalLoggingLogLevel.DEBUG;
 
-function readLogLevel(): RestateDebugLogLevel {
-  const env = globalThis?.process?.env[DEBUG_LOGGING_ENV]?.toUpperCase();
+function readLogLevel(): JournalLoggingLogLevel {
+  const env = globalThis?.process?.env[RESTATE_JOURNAL_LOGGING]?.toUpperCase();
   if (env == undefined) {
     return DEFAULT_DEBUG_LOG_LEVEL;
   }
-  const idx = Object.keys(RestateDebugLogLevel)
+  const idx = Object.keys(JournalLoggingLogLevel)
     .filter((t) =>
       // Object.keys contains the numbers as well
       // https://stackoverflow.com/questions/48768774/how-to-get-all-the-values-of-an-enum-with-typescript
@@ -68,8 +71,6 @@ function readLogLevel(): RestateDebugLogLevel {
 const log_level = readLogLevel();
 
 export type StateMachineConsole = Console & {
-  debugInvokeMessage: (msg: string) => void;
-
   debugJournalMessage: (
     logMessage: string,
     messageType?: bigint,
@@ -83,23 +84,15 @@ export function createStateMachineConsole(
   const console = createRestateConsole(context);
 
   Object.defineProperties(console, {
-    debugInvokeMessage: {
-      value: (msg: string) => {
-        if (log_level >= RestateDebugLogLevel.INVOKE) {
-          console.debug(msg);
-        }
-      },
-    },
     debugJournalMessage: {
       value: (logMessage: string, messageType?: bigint, message?: any) => {
-        if (log_level >= RestateDebugLogLevel.JOURNAL) {
+        if (log_level >= JournalLoggingLogLevel.DEBUG) {
           const type =
             messageType !== undefined
               ? " ; " + formatMessageType(messageType)
               : "";
           const journalEvent =
-            log_level >= RestateDebugLogLevel.JOURNAL_VERBOSE &&
-            message !== undefined
+            log_level >= JournalLoggingLogLevel.TRACE && message !== undefined
               ? " : " + formatMessageAsJson(message)
               : "";
           console.debug(`${logMessage}${type}${journalEvent}`);
