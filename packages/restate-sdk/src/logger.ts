@@ -13,9 +13,8 @@
 /* eslint-disable no-console */
 
 export enum RestateLogLevel {
-  UNSET = 0,
-  DEBUG = 1,
-  TRACE = 2,
+  TRACE = 1,
+  DEBUG = 2,
   INFO = 3,
   WARN = 4,
   ERROR = 5,
@@ -23,12 +22,10 @@ export enum RestateLogLevel {
 
 function logLevelName(level: RestateLogLevel) {
   switch (level) {
-    case RestateLogLevel.UNSET:
-      return "UNSET";
-    case RestateLogLevel.DEBUG:
-      return "DEBUG";
     case RestateLogLevel.TRACE:
       return "TRACE";
+    case RestateLogLevel.DEBUG:
+      return "DEBUG";
     case RestateLogLevel.INFO:
       return "INFO";
     case RestateLogLevel.WARN:
@@ -38,16 +35,16 @@ function logLevelName(level: RestateLogLevel) {
   }
 }
 
-function logLevelFromName(name?: string): RestateLogLevel {
+function logLevelFromName(name?: string): RestateLogLevel | null {
   if (!name) {
-    return RestateLogLevel.UNSET;
+    return null;
   }
   const n = name.toUpperCase();
   switch (n) {
-    case "DEBUG":
-      return RestateLogLevel.DEBUG;
     case "TRACE":
       return RestateLogLevel.TRACE;
+    case "DEBUG":
+      return RestateLogLevel.DEBUG;
     case "INFO":
       return RestateLogLevel.INFO;
     case "WARN":
@@ -61,10 +58,10 @@ function logLevelFromName(name?: string): RestateLogLevel {
 
 function logFunction(level: RestateLogLevel) {
   switch (level) {
-    case RestateLogLevel.DEBUG:
-      return console.debug;
     case RestateLogLevel.TRACE:
       return console.trace;
+    case RestateLogLevel.DEBUG:
+      return console.debug;
     case RestateLogLevel.INFO:
       return console.info;
     case RestateLogLevel.WARN:
@@ -79,7 +76,7 @@ function logFunction(level: RestateLogLevel) {
 function readRestateLogLevel(): RestateLogLevel {
   const env = globalThis.process?.env?.RESTATE_LOGGING;
   const level = logLevelFromName(env);
-  if (level != RestateLogLevel.UNSET) {
+  if (level != null) {
     return level;
   }
   const nodeEnv = globalThis.process?.env?.NODE_ENV;
@@ -92,7 +89,7 @@ function readRestateLogLevel(): RestateLogLevel {
   return RestateLogLevel.INFO;
 }
 
-const RESTATE_LOG_LEVEL = readRestateLogLevel();
+export const RESTATE_LOG_LEVEL = readRestateLogLevel();
 
 export class LoggerContext {
   readonly fqMethodName: string;
@@ -164,8 +161,8 @@ export function createRestateConsole(
   const shouldLog: () => boolean = filter ?? (() => true);
 
   return Object.create(console, {
-    debug: loggerForLevel(RestateLogLevel.DEBUG, shouldLog, prefix),
     trace: loggerForLevel(RestateLogLevel.TRACE, shouldLog, prefix),
+    debug: loggerForLevel(RestateLogLevel.DEBUG, shouldLog, prefix),
     info: loggerForLevel(RestateLogLevel.INFO, shouldLog, prefix),
     warn: loggerForLevel(RestateLogLevel.WARN, shouldLog, prefix),
     error: loggerForLevel(RestateLogLevel.ERROR, shouldLog, prefix),
