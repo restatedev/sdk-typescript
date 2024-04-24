@@ -49,7 +49,7 @@ export interface IngresCallOptions {
   /**
    * Key to use for idempotency key.
    *
-   * See https://docs.restate.dev/operate/invocation#invoke-a-service-idempotently for more details.
+   * See https://docs.restate.dev/operate/invocation#invoke-a-handler-idempotently for more details.
    */
   idempotencyKey?: string;
 
