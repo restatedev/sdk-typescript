@@ -81,7 +81,7 @@ function readRestateLogLevel(): RestateLogLevel {
   }
   const nodeEnv = globalThis.process?.env?.NODE_ENV;
   if (!nodeEnv) {
-    return RestateLogLevel.TRACE;
+    return RestateLogLevel.DEBUG;
   }
   if (nodeEnv.toUpperCase() == "PRODUCTION") {
     return RestateLogLevel.INFO;
