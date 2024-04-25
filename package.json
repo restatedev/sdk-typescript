@@ -1,12 +1,12 @@
 {
   "name": "root",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Typescript SDK for Restate",
   "author": "Restate Developers",
   "license": "MIT",
   "email": "code@restate.dev",
   "homepage": "https://github.com/restatedev/sdk-typescript#readme",
-	"private": true,
+  "private": true,
   "repository": {
     "type": "git",
     "url": "git+https://github.com/restatedev/sdk-typescript.git"
@@ -15,18 +15,20 @@
     "url": "https://github.com/restatedev/sdk-typescript/issues"
   },
   "workspaces": [
-    "packages/*"
+    "packages/restate-sdk",
+    "packages/restate-sdk-clients",
+    "packages/restate-sdk-examples"
   ],
   "type": "commonjs",
   "scripts": {
     "build": "npm run build -ws --if-present",
-		"proto"  : "npm run proto -ws --if-present",
+    "proto": "npm run proto -ws --if-present",
     "test": "npm run test -ws --if-present",
     "lint": "npm run lint -ws --if-present",
     "format": "npm run format -ws --if-present",
     "format-check": "npm run format-check -ws --if-present",
     "verify": "npm run verify -ws --if-present",
-		"clean" : "rm -rf packages/restate-sdk/dist && rm -rf packages/restate-sdk-examples/dist && rm -rf packages/restate-sdk-ingress/dist",
+    "clean" : "rm -rf packages/restate-sdk/dist && rm -rf packages/restate-sdk-examples/dist && rm -rf packages/restate-sdk-ingress/dist",
     "release": "npm run release-it -ws --if-present"
   },
   "devDependencies": {
@@ -45,9 +47,9 @@
     "node": ">= 18"
   },
   "publishConfig": {
-		"@restatedev:registry": "https://registry.npmjs.org",
-		"include-workspace-root" : false
-	},
+    "@restatedev:registry": "https://registry.npmjs.org",
+    "include-workspace-root" : false
+  },
   "release-it": {
     "git": {
       "pushRepo": "https://github.com/restatedev/sdk-typescript.git"
