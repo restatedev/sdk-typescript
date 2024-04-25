@@ -2,9 +2,9 @@ name: Build and test
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   build:
@@ -16,32 +16,31 @@ jobs:
         node-version: [19.x]
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Use Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
-          registry-url: 'https://registry.npmjs.org'
+          registry-url: "https://registry.npmjs.org"
       - run: npm run clean
       - run: npm ci
       - run: npm run proto
       - run: npm run verify
-      - run: npm pack --workspaces true --include-workspace-root false 
+      - run: npm pack --workspaces true --include-workspace-root false
       - run: mv restatedev-restate-sdk-0*.tgz restatedev-restate-sdk.tgz
       - run: mv restatedev-restate-sdk-clients-0*.tgz restatedev-restate-sdk-clients.tgz
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: restatedev-restate-sdk
           path: restatedev-restate-sdk.tgz
           retention-days: 1
           if-no-files-found: error
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: restatedev-restate-sdk-clients
           path: restatedev-restate-sdk-clients.tgz
           retention-days: 1
           if-no-files-found: error
-
 
       - name: Publish snapshot
         if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
@@ -49,7 +48,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           # We're using 0.0.0 to avoid this version to be higher than released versions.
-          # To use it: 
+          # To use it:
           # "@restatedev/restate-sdk": "^0.0.0-SNAPSHOT"
           # Hack around the fact that npm version simply doesn't update dependants -_-"
           # see https://github.com/npm/cli/pull/4588
