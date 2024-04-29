@@ -406,13 +406,7 @@ export class StateMachine implements RestateStreamConsumer {
             return;
           }
 
-          const error = ensureError(e);
-          this.console.trace(
-            "Function completed with an error: " + error.message,
-            e
-          );
-
-          this.sendErrorAndFinish(error);
+          this.sendErrorAndFinish(ensureError(e));
         } catch (ee) {
           this.unhandledError(ensureError(ee));
         }
@@ -424,6 +418,7 @@ export class StateMachine implements RestateStreamConsumer {
   }
 
   public async sendErrorAndFinish(e: Error, ctx?: JournalErrorContext) {
+    this.console.warn("Function completed with an error.\n", e);
     if (e instanceof TerminalError) {
       this.sendTerminalError(e);
     } else {
