@@ -108,10 +108,8 @@ Releasing a new npm package from this repo requires:
 * [SSH access configured for Github](https://docs.github.com/en/authentication/connecting-to-github-with-ssh) in order to push commits and tags to GitHub
 * A GitHub personal access token with access to https://github.com/restatedev/sdk-typescript in your environment as `GITHUB_TOKEN` in order to create a Github release
 
-
 ```bash
-npm run release
-# now select what type of release you want to do and say yes to the rest of the options
+release-it
 ```
 
 The actual `npm publish` is run by GitHub actions once a GitHub release is created.
