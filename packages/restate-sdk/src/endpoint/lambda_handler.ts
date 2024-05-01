@@ -110,8 +110,8 @@ export class LambdaHandler {
     } catch (e) {
       const error = ensureError(e);
       rlog.error(
-        "Error while attempting to validate request signature:" + error.stack ??
-          error.message
+        "Error while attempting to validate request signature: " +
+          (error.stack ?? error.message)
       );
       return this.toErrorResponse(401, "Unauthorized");
     }
