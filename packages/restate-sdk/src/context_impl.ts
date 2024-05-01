@@ -229,7 +229,8 @@ export class ContextImpl implements ObjectContext {
     method: string,
     data: Uint8Array,
     key?: string
-  ): InternalCombineablePromise<Uint8Array> {
+    /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+  ): InternalCombineablePromise<any> {
     this.checkState("invoke");
 
     const msg = new CallEntryMessage({
@@ -241,7 +242,7 @@ export class ContextImpl implements ObjectContext {
     return this.markCombineablePromise(
       this.stateMachine
         .handleUserCodeMessage(INVOKE_ENTRY_MESSAGE_TYPE, msg)
-        .transform((v) => v as Uint8Array)
+        .transform((v) => deserializeJson(v as Uint8Array))
     );
   }
 
@@ -280,9 +281,7 @@ export class ContextImpl implements ObjectContext {
           const route = prop as string;
           return (...args: unknown[]) => {
             const requestBytes = serializeJson(args.shift());
-            return this.invoke(name, route, requestBytes).transform(
-              (responseBytes) => deserializeJson(responseBytes)
-            );
+            return this.invoke(name, route, requestBytes);
           };
         },
       }
@@ -302,9 +301,7 @@ export class ContextImpl implements ObjectContext {
           const route = prop as string;
           return (...args: unknown[]) => {
             const requestBytes = serializeJson(args.shift());
-            return this.invoke(name, route, requestBytes, key).transform(
-              (responseBytes) => deserializeJson(responseBytes)
-            );
+            return this.invoke(name, route, requestBytes, key);
           };
         },
       }
