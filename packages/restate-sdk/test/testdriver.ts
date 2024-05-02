@@ -23,7 +23,11 @@ import { StateMachine } from "../src/state_machine";
 import { InvocationBuilder } from "../src/invocation";
 import { EndpointImpl } from "../src/endpoint/endpoint_impl";
 import { ObjectContext } from "../src/context";
-import { ServiceDefinition, object } from "../src/public_api";
+import {
+  object,
+  VirtualObjectDefinition,
+  VirtualObject,
+} from "../src/public_api";
 import { ProtocolMode } from "../src/types/discovery";
 
 export type TestRequest = {
@@ -38,11 +42,10 @@ export const TestResponse = {
   create: (test: TestResponse): TestResponse => test,
 };
 
-export type GreetType = {
-  greet: (key: string, arg: TestRequest) => Promise<TestResponse>;
-};
-
-export const GreeterApi: ServiceDefinition<"greeter", GreetType> = {
+export const GreeterApi: VirtualObjectDefinition<
+  "greeter",
+  VirtualObject<TestGreeter>
+> = {
   name: "greeter",
 };
 
@@ -188,7 +191,7 @@ export class TestDriver implements Connection {
     rlog.debug(
       `Adding result to the result array. Message type: ${
         msg.messageType
-      }, message: 
+      }, message:
         ${
           msg.message instanceof Uint8Array
             ? (msg.message as Uint8Array).toString()

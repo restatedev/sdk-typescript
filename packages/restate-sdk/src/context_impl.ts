@@ -74,10 +74,9 @@ export interface CallContext {
   delay?: number;
 }
 
-export type InternalCombineablePromise<T> = CombineablePromise<T> &
-  WrappedPromise<T> & {
-    journalIndex: number;
-  };
+export type InternalCombineablePromise<T> = CombineablePromise<T> & {
+  journalIndex: number;
+};
 
 export class ContextImpl implements ObjectContext {
   // here, we capture the context information for actions on the Restate context that
@@ -229,7 +228,8 @@ export class ContextImpl implements ObjectContext {
     method: string,
     data: Uint8Array,
     key?: string
-  ): InternalCombineablePromise<Uint8Array> {
+    /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+  ): InternalCombineablePromise<any> {
     this.checkState("invoke");
 
     const msg = new CallEntryMessage({
@@ -241,7 +241,7 @@ export class ContextImpl implements ObjectContext {
     return this.markCombineablePromise(
       this.stateMachine
         .handleUserCodeMessage(INVOKE_ENTRY_MESSAGE_TYPE, msg)
-        .transform((v) => v as Uint8Array)
+        .transform((v) => deserializeJson(v as Uint8Array))
     );
   }
 
@@ -280,9 +280,7 @@ export class ContextImpl implements ObjectContext {
           const route = prop as string;
           return (...args: unknown[]) => {
             const requestBytes = serializeJson(args.shift());
-            return this.invoke(name, route, requestBytes).transform(
-              (responseBytes) => deserializeJson(responseBytes)
-            );
+            return this.invoke(name, route, requestBytes);
           };
         },
       }
@@ -302,9 +300,7 @@ export class ContextImpl implements ObjectContext {
           const route = prop as string;
           return (...args: unknown[]) => {
             const requestBytes = serializeJson(args.shift());
-            return this.invoke(name, route, requestBytes, key).transform(
-              (responseBytes) => deserializeJson(responseBytes)
-            );
+            return this.invoke(name, route, requestBytes, key);
           };
         },
       }
@@ -670,18 +666,21 @@ export class ContextImpl implements ObjectContext {
       ]) as Promise<T>;
     };
 
-    return Object.defineProperties(p, {
-      [RESTATE_CTX_SYMBOL]: {
-        value: this,
-      },
-      journalIndex: {
-        value: journalIndex,
-      },
-      orTimeout: {
-        value: orTimeout.bind(this),
-      },
-    }) as InternalCombineablePromise<T>;
+    defineProperty(p, RESTATE_CTX_SYMBOL, this);
+    defineProperty(p, "journalIndex", journalIndex);
+    defineProperty(p, "orTimeout", orTimeout.bind(this));
+
+    return p;
   }
+}
+
+// wraps defineProperty such that it informs tsc of the correct type of its output
+function defineProperty<Obj extends object, Key extends PropertyKey, T>(
+  obj: Obj,
+  prop: Key,
+  value: T
+): asserts obj is Obj & Readonly<Record<Key, T>> {
+  Object.defineProperty(obj, prop, { value });
 }
 
 function unpack<T>(
