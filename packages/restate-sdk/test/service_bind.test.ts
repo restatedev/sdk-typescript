@@ -29,9 +29,30 @@ const greeter: TestGreeter = {
   },
 };
 
+const greeterFoo = {
+  /* eslint-disable @typescript-eslint/no-unused-vars */
+  greet(ctx: restate.ObjectContext, req: TestRequest): Promise<TestResponse> {
+    return this.foo(ctx, req);
+  },
+
+  async foo(
+    ctx: restate.ObjectContext,
+    req: TestRequest
+  ): Promise<TestResponse> {
+    return TestResponse.create({ greeting: `Hello` });
+  },
+};
+
 describe("BindService", () => {
   it("should bind object literals", async () => {
     await new TestDriver(greeter, [
+      startMessage({ knownEntries: 1 }),
+      inputMessage(greetRequest("Pete")),
+    ]).run();
+  });
+
+  it("should bind and preserve `this`", async () => {
+    await new TestDriver(greeterFoo, [
       startMessage({ knownEntries: 1 }),
       inputMessage(greetRequest("Pete")),
     ]).run();

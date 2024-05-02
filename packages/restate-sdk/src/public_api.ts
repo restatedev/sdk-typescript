@@ -9,7 +9,13 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-export { Context, ObjectContext, CombineablePromise, Rand } from "./context";
+export {
+  Context,
+  ObjectContext,
+  ObjectSharedContext,
+  CombineablePromise,
+  Rand,
+} from "./context";
 export {
   service,
   object,
@@ -19,6 +25,7 @@ export {
   VirtualObjectDefinition,
   Client,
   SendClient,
+  handlers,
 } from "./types/rpc";
 
 export { endpoint, ServiceBundle, RestateEndpoint } from "./endpoint";

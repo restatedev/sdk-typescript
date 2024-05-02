@@ -12,10 +12,9 @@
 /* eslint-disable @typescript-eslint/ban-types */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { Context, ObjectContext } from "../context";
 import * as d from "./discovery";
 import { ContextImpl } from "../context_impl";
-import { deserializeJson, serializeJson } from "../utils/serde";
+import { HandlerKind, HandlerWrapper } from "./rpc";
 
 //
 // Interfaces
@@ -36,16 +35,6 @@ export interface ComponentHandler {
 // Service
 //
 
-export type ServiceHandlerFunction<I, O> = (
-  ctx: Context,
-  param: I
-) => Promise<O>;
-
-export type ServiceHandlerOpts<I, O> = {
-  name: string;
-  fn: ServiceHandlerFunction<I, O>;
-};
-
 export class ServiceComponent implements Component {
   private readonly handlers: Map<string, ServiceHandler> = new Map();
 
@@ -55,17 +44,29 @@ export class ServiceComponent implements Component {
     return this.componentName;
   }
 
-  add<I, O>(opts: ServiceHandlerOpts<I, O>) {
-    const c = new ServiceHandler(opts, this);
-    this.handlers.set(opts.name, c);
+  add(name: string, handlerWrapper: HandlerWrapper) {
+    const serviceHandler = new ServiceHandler(name, handlerWrapper, this);
+    this.handlers.set(name, serviceHandler);
   }
 
   discovery(): d.Service {
-    const handlers: d.Handler[] = [...this.handlers.keys()].map((name) => {
-      return {
-        name,
-      };
-    });
+    const handlers: d.Handler[] = [...this.handlers.entries()].map(
+      ([name, serviceHandler]) => {
+        return {
+          name,
+          input: {
+            required: false,
+            contentType:
+              serviceHandler.handlerWrapper.accept ?? "application/json",
+          },
+          output: {
+            setContentTypeIfEmpty: true,
+            contentType:
+              serviceHandler.handlerWrapper.contentType ?? "application/json",
+          },
+        };
+      }
+    );
 
     return {
       name: this.componentName,
@@ -82,18 +83,20 @@ export class ServiceComponent implements Component {
 export class ServiceHandler implements ComponentHandler {
   private readonly handlerName: string;
   private readonly parent: ServiceComponent;
-  private readonly fn: ServiceHandlerFunction<any, any>;
+  public readonly handlerWrapper: HandlerWrapper;
 
-  constructor(opts: ServiceHandlerOpts<any, any>, parent: ServiceComponent) {
-    this.handlerName = opts.name;
+  constructor(
+    name: string,
+    handlerWrapper: HandlerWrapper,
+    parent: ServiceComponent
+  ) {
+    this.handlerName = name;
     this.parent = parent;
-    this.fn = opts.fn;
+    this.handlerWrapper = handlerWrapper;
   }
 
-  async invoke(context: ContextImpl, input: Uint8Array): Promise<Uint8Array> {
-    const req = deserializeJson(input);
-    const res = await this.fn(context, req);
-    return serializeJson(res);
+  invoke(context: ContextImpl, input: Uint8Array): Promise<Uint8Array> {
+    return this.handlerWrapper.invoke(context, input);
   }
 
   name(): string {
@@ -108,19 +111,8 @@ export class ServiceHandler implements ComponentHandler {
 // Virtual Object
 //
 
-export type VirtualObjectHandlerFunction<I, O> = (
-  ctx: ObjectContext,
-  param: I
-) => Promise<O>;
-
-export type VirtualObjectHandlerOpts<I, O> = {
-  name: string;
-  fn: VirtualObjectHandlerFunction<I, O>;
-};
-
-export class VritualObjectComponent implements Component {
-  private readonly opts: Map<string, VirtualObjectHandlerOpts<any, any>> =
-    new Map();
+export class VirtualObjectComponent implements Component {
+  private readonly handlers: Map<string, HandlerWrapper> = new Map();
 
   constructor(public readonly componentName: string) {}
 
@@ -128,16 +120,30 @@ export class VritualObjectComponent implements Component {
     return this.componentName;
   }
 
-  add<I, O>(opts: VirtualObjectHandlerOpts<I, O>) {
-    this.opts.set(opts.name, opts as VirtualObjectHandlerOpts<any, any>);
+  add(name: string, wrapper: HandlerWrapper) {
+    this.handlers.set(name, wrapper);
   }
 
   discovery(): d.Service {
-    const handlers: d.Handler[] = [...this.opts.keys()].map((name) => {
-      return {
-        name,
-      };
-    });
+    const handlers: d.Handler[] = [...this.handlers.entries()].map(
+      ([name, opts]) => {
+        return {
+          name,
+          input: {
+            required: false,
+            contentType: opts.accept ?? "application/json",
+          },
+          output: {
+            setContentTypeIfEmpty: true,
+            contentType: opts.contentType ?? "application/json",
+          },
+          ty:
+            opts.kind == HandlerKind.EXCLUSIVE
+              ? d.ServiceHandlerType.EXCLUSIVE
+              : d.ServiceHandlerType.SHARED,
+        };
+      }
+    );
 
     return {
       name: this.componentName,
@@ -147,19 +153,19 @@ export class VritualObjectComponent implements Component {
   }
 
   handlerMatching(url: UrlPathComponents): ComponentHandler | undefined {
-    const opts = this.opts.get(url.handlerName);
-    if (!opts) {
+    const wrapper = this.handlers.get(url.handlerName);
+    if (!wrapper) {
       return undefined;
     }
-    return new VirtualObjectHandler(url.handlerName, this, opts);
+    return new VirtualObjectHandler(url.handlerName, this, wrapper);
   }
 }
 
 export class VirtualObjectHandler implements ComponentHandler {
   constructor(
     private readonly componentName: string,
-    private readonly parent: VritualObjectComponent,
-    private readonly opts: VirtualObjectHandlerOpts<any, any>
+    private readonly parent: VirtualObjectComponent,
+    private readonly handlerWrapper: HandlerWrapper
   ) {}
 
   name(): string {
@@ -169,10 +175,8 @@ export class VirtualObjectHandler implements ComponentHandler {
     return this.parent;
   }
 
-  async invoke(context: ContextImpl, input: Uint8Array): Promise<Uint8Array> {
-    const req = deserializeJson(input);
-    const res = await this.opts.fn(context, req);
-    return serializeJson(res);
+  invoke(context: ContextImpl, input: Uint8Array): Promise<Uint8Array> {
+    return this.handlerWrapper.invoke(context, input);
   }
 }
 

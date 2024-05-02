@@ -26,7 +26,7 @@ export enum ServiceHandlerType {
 
 type InputPayload = {
   contentType: string;
-  empty: "ALLOW" | "DISALLOW" | "REQUIRE";
+  required: boolean;
 
   /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
   jsonSchema?: any; // You should specify the type of jsonSchema if known
