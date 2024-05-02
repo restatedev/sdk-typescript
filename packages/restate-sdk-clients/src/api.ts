@@ -7,14 +7,14 @@ export interface Ingress {
   /**
    * Create a client from a {@link ServiceDefinition}.
    */
-  serviceClient<P extends string, M>(
+  serviceClient<M, P extends string = string>(
     opts: ServiceDefinition<P, M>
   ): IngressClient<M>;
 
   /**
    * Create a client from a {@link VirtualObjectDefinition}.
    */
-  objectClient<P extends string, M>(
+  objectClient<M, P extends string = string>(
     opts: VirtualObjectDefinition<P, M>,
     key: string
   ): IngressClient<M>;
