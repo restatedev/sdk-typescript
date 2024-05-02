@@ -11,7 +11,12 @@
 
 import { describe, expect } from "@jest/globals";
 import * as restate from "../src/public_api";
-import { TestDriver, TestGreeter, TestResponse } from "./testdriver";
+import {
+  GreeterApi,
+  TestDriver,
+  TestGreeter,
+  TestResponse,
+} from "./testdriver";
 import {
   awakeableMessage,
   completionMessage,
@@ -27,6 +32,7 @@ import {
   sleepMessage,
   sideEffectMessage,
   ackMessage,
+  invokeMessage,
 } from "./protoutils";
 import {
   COMBINATOR_ENTRY_MESSAGE,
@@ -35,6 +41,7 @@ import {
 import { TimeoutError } from "../src/types/errors";
 import { CombineablePromise } from "../src/context";
 import { Empty } from "../src/generated/proto/protocol_pb";
+import { Buffer } from "node:buffer";
 
 class AwakeableSleepRaceGreeter implements TestGreeter {
   async greet(ctx: restate.ObjectContext): Promise<TestResponse> {
@@ -394,6 +401,185 @@ describe("AwakeableOrTimeoutGreeter", () => {
     expect(result.slice(2)).toStrictEqual([
       combinatorEntryMessage(0, [2]),
       outputMessage(greetResponse(`Hello timed-out`)),
+      END_MESSAGE,
+    ]);
+  });
+});
+
+class InvokeRaceGreeter implements TestGreeter {
+  async greet(ctx: restate.ObjectContext): Promise<TestResponse> {
+    const jack = ctx.objectClient(GreeterApi, "Jack").greet({ name: "Jack" });
+    const jill = ctx.objectClient(GreeterApi, "Jill").greet({ name: "Jill" });
+
+    const result = await CombineablePromise.race([jack, jill]);
+
+    return TestResponse.create({
+      greeting: result.greeting,
+    });
+  }
+}
+
+describe("InvokeRaceGreeter", () => {
+  const jackInvoke = invokeMessage(
+    "greeter",
+    "greet",
+    Buffer.from(JSON.stringify({ name: "Jack" })),
+    undefined,
+    undefined,
+    "Jack"
+  );
+  const jillInvoke = invokeMessage(
+    "greeter",
+    "greet",
+    Buffer.from(JSON.stringify({ name: "Jill" })),
+    undefined,
+    undefined,
+    "Jill"
+  );
+
+  it("should suspend without completions", async () => {
+    const result = await new TestDriver(new InvokeRaceGreeter(), [
+      startMessage(),
+      inputMessage(greetRequest("Till")),
+    ]).run();
+
+    expect(result.length).toStrictEqual(3);
+    expect(result[0]).toStrictEqual(jackInvoke);
+    expect(result[1]).toStrictEqual(jillInvoke);
+    expect(result[2]).toStrictEqual(suspensionMessage([1, 2]));
+  });
+
+  it("handles completion of first invoke", async () => {
+    const result = await new TestDriver(new InvokeRaceGreeter(), [
+      startMessage(),
+      inputMessage(greetRequest("Till")),
+      completionMessage(1, greetResponse("Hi Jack")),
+      ackMessage(3),
+    ]).run();
+
+    expect(result.length).toStrictEqual(5);
+    expect(result[0]).toStrictEqual(jackInvoke);
+    expect(result[1]).toStrictEqual(jillInvoke);
+    expect(result.slice(2)).toStrictEqual([
+      combinatorEntryMessage(0, [1]),
+      outputMessage(greetResponse("Hi Jack")),
+      END_MESSAGE,
+    ]);
+  });
+
+  it("handles completion of second invoke", async () => {
+    const result = await new TestDriver(new InvokeRaceGreeter(), [
+      startMessage(),
+      inputMessage(greetRequest("Till")),
+      completionMessage(2, greetResponse("Hi Jill")),
+      ackMessage(3),
+    ]).run();
+
+    expect(result.length).toStrictEqual(5);
+    expect(result[0]).toStrictEqual(jackInvoke);
+    expect(result[1]).toStrictEqual(jillInvoke);
+    expect(result.slice(2)).toStrictEqual([
+      combinatorEntryMessage(0, [2]),
+      outputMessage(greetResponse(`Hi Jill`)),
+      END_MESSAGE,
+    ]);
+  });
+
+  it("handles replay of the first invoke", async () => {
+    const result = await new TestDriver(new InvokeRaceGreeter(), [
+      startMessage(),
+      inputMessage(greetRequest("Till")),
+      invokeMessage(
+        "greeter",
+        "greet",
+        Buffer.from(JSON.stringify({ name: "Jack" })),
+        greetResponse("Hi Jack"),
+        undefined,
+        "Jack"
+      ),
+      ackMessage(3),
+    ]).run();
+
+    expect(result.length).toStrictEqual(4);
+    expect(result[0]).toStrictEqual(jillInvoke);
+    expect(result.slice(1)).toStrictEqual([
+      combinatorEntryMessage(0, [1]),
+      outputMessage(greetResponse("Hi Jack")),
+      END_MESSAGE,
+    ]);
+  });
+
+  it("handles replay of both invokes", async () => {
+    const result = await new TestDriver(new InvokeRaceGreeter(), [
+      startMessage(),
+      inputMessage(greetRequest("Till")),
+      invokeMessage(
+        "greeter",
+        "greet",
+        Buffer.from(JSON.stringify({ name: "Jack" })),
+        greetResponse("Hi Jack"),
+        undefined,
+        "Jack"
+      ),
+      invokeMessage(
+        "greeter",
+        "greet",
+        Buffer.from(JSON.stringify({ name: "Jill" })),
+        greetResponse("Hi Jill"),
+        undefined,
+        "Jill"
+      ),
+      ackMessage(3),
+    ]).run();
+
+    expect(result).toStrictEqual([
+      // The first invoke will be chosen because Promise.race will pick the first promise, in case both are resolved
+      combinatorEntryMessage(0, [1, 2]),
+      outputMessage(greetResponse("Hi Jack")),
+      END_MESSAGE,
+    ]);
+  });
+
+  it("handles replay of the combinator with first invoke completed", async () => {
+    const result = await new TestDriver(new InvokeRaceGreeter(), [
+      startMessage(),
+      inputMessage(greetRequest("Till")),
+      invokeMessage(
+        "greeter",
+        "greet",
+        Buffer.from(JSON.stringify({ name: "Jack" })),
+        greetResponse("Hi Jack"),
+        undefined,
+        "Jack"
+      ),
+      jillInvoke,
+      combinatorEntryMessage(0, [1]),
+    ]).run();
+
+    expect(result).toStrictEqual([
+      outputMessage(greetResponse("Hi Jack")),
+      END_MESSAGE,
+    ]);
+  });
+
+  it("handles replay of the combinator with second invoke completed", async () => {
+    const result = await new TestDriver(new InvokeRaceGreeter(), [
+      startMessage(),
+      inputMessage(greetRequest("Till")),
+      jackInvoke,
+      invokeMessage(
+        "greeter",
+        "greet",
+        Buffer.from(JSON.stringify({ name: "Jill" })),
+        greetResponse("Hi Jill"),
+        undefined,
+        "Jill"
+      ),
+      combinatorEntryMessage(0, [2]),
+    ]).run();
+
+    expect(result).toStrictEqual([
+      outputMessage(greetResponse("Hi Jill")),
       END_MESSAGE,
     ]);
   });
