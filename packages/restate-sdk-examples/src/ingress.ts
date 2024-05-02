@@ -81,13 +81,13 @@ const delayedCall = async (name: string) => {
   console.log(greeting);
 };
 
-const untypedCall = async (name: string) => {
+const customInterface = async (name: string) => {
   // This example demonstrates how to invoke a service
   // potentially written in a different language / or we can't
   // import its type definition.
   //
   // To call that service, simply write down the interface
-  // and pass trough
+  // and pass it trough
   interface SomeService {
     greet(name: string): Promise<string>;
   }
@@ -118,6 +118,6 @@ Promise.resolve()
   .then(() => idempotentCall("joe", "idemp-1"))
   .then(() => customHeadersCall("bob"))
   .then(() => globalCustomHeaders("bob"))
-  .then(() => untypedCall("bob"))
+  .then(() => customInterface("bob"))
   .then(() => delayedCall("bob"))
   .catch((e) => console.error(e));
