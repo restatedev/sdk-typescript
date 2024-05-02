@@ -270,7 +270,7 @@ export class ContextImpl implements ObjectContext {
     return new Uint8Array();
   }
 
-  serviceClient<P extends string, M>({
+  serviceClient<M, P extends string = string>({
     name,
   }: ServiceDefinition<P, M>): Client<M> {
     const clientProxy = new Proxy(
@@ -291,7 +291,7 @@ export class ContextImpl implements ObjectContext {
     return clientProxy as Client<M>;
   }
 
-  objectClient<P extends string, M>(
+  objectClient<M, P extends string = string>(
     { name }: ServiceDefinition<P, M>,
     key: string
   ): Client<M> {
@@ -313,7 +313,7 @@ export class ContextImpl implements ObjectContext {
     return clientProxy as Client<M>;
   }
 
-  public serviceSendClient<P extends string, M>(
+  public serviceSendClient<M, P extends string = string>(
     service: ServiceDefinition<P, M>,
     opts?: SendOptions
   ): SendClient<M> {
@@ -340,7 +340,7 @@ export class ContextImpl implements ObjectContext {
     return clientProxy as SendClient<M>;
   }
 
-  public objectSendClient<P extends string, M>(
+  public objectSendClient<M, P extends string = string>(
     obj: ServiceDefinition<P, M>,
     key: string,
     opts?: SendOptions
