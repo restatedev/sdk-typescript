@@ -22,14 +22,14 @@ export interface Ingress {
   /**
    * Create a client from a {@link ServiceDefinition}.
    */
-  serviceSendClient<P extends string, M>(
+  serviceSendClient<M, P extends string = string>(
     opts: ServiceDefinition<P, M>
   ): IngressSendClient<M>;
 
   /**
    * Create a client from a {@link VirtualObjectDefinition}.
    */
-  objectSendClient<P extends string, M>(
+  objectSendClient<M, P extends string = string>(
     opts: VirtualObjectDefinition<P, M>,
     key: string
   ): IngressSendClient<M>;
