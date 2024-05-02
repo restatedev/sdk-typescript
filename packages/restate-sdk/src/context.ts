@@ -319,7 +319,9 @@ export interface Context {
    * const result2 = await ctx.serviceClient(MyService).anotherAction(1337);
    * ```
    */
-  serviceClient<P extends string, M>(opts: ServiceDefinition<P, M>): Client<M>;
+  serviceClient<M, P extends string = string>(
+    opts: ServiceDefinition<P, M>
+  ): Client<M>;
 
   /**
    * Same as {@link serviceClient} but for virtual objects.
@@ -327,7 +329,7 @@ export interface Context {
    * @param opts
    * @param key the virtual object key
    */
-  objectClient<P extends string, M>(
+  objectClient<M, P extends string = string>(
     opts: VirtualObjectDefinition<P, M>,
     key: string
   ): Client<M>;
@@ -373,7 +375,7 @@ export interface Context {
    * ctx.serviceSendClient(MyService).anotherAction(1337);
    * ```
    */
-  serviceSendClient<P extends string, M>(
+  serviceSendClient<M, P extends string = string>(
     service: ServiceDefinition<P, M>,
     opts?: SendOptions
   ): SendClient<M>;
@@ -385,7 +387,7 @@ export interface Context {
    * @param key the virtual object key
    * @param opts Send options
    */
-  objectSendClient<P extends string, M>(
+  objectSendClient<M, P extends string = string>(
     obj: VirtualObjectDefinition<P, M>,
     key: string,
     opts?: SendOptions
