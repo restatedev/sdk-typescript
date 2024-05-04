@@ -47,11 +47,17 @@ const Greeter: GreeterService = { name: "greeter" };
 const counter = restate.object({
   name: "counter",
   handlers: {
-    count: async (ctx: restate.ObjectContext): Promise<number> => {
+    count: async (ctx: restate.ObjectContext) => {
       const seen = (await ctx.get<number>("seen")) ?? 0;
       ctx.set("seen", seen + 1);
       return seen;
     },
+
+    get: restate.handlers.shared(
+      async (ctx: restate.ObjectSharedContext): Promise<number> => {
+        return (await ctx.get("count")) ?? 0;
+      }
+    ),
   },
 });
 

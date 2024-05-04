@@ -13,7 +13,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { RestateEndpoint, ServiceBundle } from "../public_api";
-import { ServiceDefinition, VirtualObjectDefinition } from "../types/rpc";
+import {
+  HandlerWrapper,
+  Service,
+  ServiceDefinition,
+  VirtualObject,
+  VirtualObjectDefinition,
+} from "../types/rpc";
 import { rlog } from "../logger";
 import http2, { Http2ServerRequest, Http2ServerResponse } from "http2";
 import { Http2Handler } from "./http2_handler";
@@ -21,9 +27,7 @@ import { LambdaHandler } from "./lambda_handler";
 import {
   Component,
   ServiceComponent,
-  ServiceHandlerFunction,
-  VirtualObjectHandlerFunction,
-  VritualObjectComponent,
+  VirtualObjectComponent,
 } from "../types/components";
 
 import * as discovery from "../types/discovery";
@@ -70,13 +74,13 @@ export class EndpointImpl implements RestateEndpoint {
     if (isServiceDefinition(definition)) {
       const { name, service } = definition;
       if (!service) {
-        throw new TypeError(`no service implemention found.`);
+        throw new TypeError(`no service implementation found.`);
       }
       this.bindServiceComponent(name, service);
     } else if (isObjectDefinition(definition)) {
       const { name, object } = definition;
       if (!object) {
-        throw new TypeError(`no object implemention found.`);
+        throw new TypeError(`no object implementation found.`);
       }
       this.bindVirtualObjectComponent(name, object);
     } else {
@@ -179,43 +183,33 @@ export class EndpointImpl implements RestateEndpoint {
     return deployment;
   }
 
-  private bindServiceComponent(name: string, router: RpcRouter) {
+  private bindServiceComponent(name: string, router: Service<any>) {
     if (name.indexOf("/") !== -1) {
       throw new Error("service name must not contain any slash '/'");
     }
     const component = new ServiceComponent(name);
 
     for (const [route, handler] of Object.entries(router)) {
-      /* eslint-disable @typescript-eslint/no-explicit-any */
-      const fn = handler as ServiceHandlerFunction<any, any>;
-      component.add({
-        name: route,
-        fn: fn.bind(router),
-      });
+      const wrapper = HandlerWrapper.fromHandler(handler);
+      wrapper.bindInstance(router);
+      component.add(route, wrapper);
     }
 
     this.addComponent(component);
   }
 
-  private bindVirtualObjectComponent(name: string, router: RpcRouter) {
+  private bindVirtualObjectComponent(name: string, router: VirtualObject<any>) {
     if (name.indexOf("/") !== -1) {
       throw new Error("service name must not contain any slash '/'");
     }
-    const component = new VritualObjectComponent(name);
+    const component = new VirtualObjectComponent(name);
 
     for (const [route, handler] of Object.entries(router)) {
-      /* eslint-disable @typescript-eslint/no-explicit-any */
-      const fn = handler as VirtualObjectHandlerFunction<any, any>;
-      component.add({
-        name: route,
-        fn: fn.bind(router),
-      });
+      const wrapper = HandlerWrapper.fromHandler(handler);
+      wrapper.bindInstance(router);
+      component.add(route, wrapper);
     }
 
     this.addComponent(component);
   }
 }
-
-export type RpcRouter = {
-  [key: string]: Function;
-};

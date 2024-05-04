@@ -416,6 +416,36 @@ export interface ObjectContext extends Context, KeyValueStore {
   key: string;
 }
 
+/**
+ * The context that gives access to all Restate-backed operations, for example
+ *   - sending reliable messages / RPC through Restate
+ *   - execute non-deterministic closures and memoize their result
+ *   - sleeps and delayed calls
+ *   - awakeables
+ *   - ...
+ *
+ * This context can be used only within a shared virtual objects.
+ *
+ */
+export interface ObjectSharedContext extends Context {
+  key: string;
+
+  /**
+   * Get/retrieve state from the Restate runtime.
+   * Note that state objects are serialized with `Buffer.from(JSON.stringify(theObject))`
+   * and deserialized with `JSON.parse(value.toString()) as T`.
+   *
+   * @param name key of the state to retrieve
+   * @returns a Promise that is resolved with the value of the state key
+   *
+   * @example
+   * const state = await ctx.get<string>("STATE");
+   */
+  get<T>(name: string): Promise<T | null>;
+
+  stateKeys(): Promise<Array<string>>;
+}
+
 export interface Rand {
   /**
    * Equivalent of JS `Math.random()` but deterministic; seeded by the invocation ID of the current invocation,
