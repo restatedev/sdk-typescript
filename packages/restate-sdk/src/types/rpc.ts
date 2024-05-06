@@ -92,7 +92,7 @@ export const service = <P extends string, M>(service: {
     if (handler instanceof Function) {
       return [
         name,
-        new HandlerWrapper(HandlerKind.SERVICE, handler).transpose(),
+        HandlerWrapper.from(HandlerKind.SERVICE, handler).transpose(),
       ];
     }
     throw new TypeError(`Unexpected handler type ${name}`);
@@ -127,11 +127,15 @@ export type ObjectHandler<F> = F extends (
 export type ObjectHandlerOpts = {
   accept?: string;
   contentType?: string;
+  inputDeserializer?: <T>(input: Uint8Array) => T | undefined;
+  outputSerializer?: <T>(output: T | undefined) => Uint8Array;
 };
 
 export type ServiceHandlerOpts = {
   accept?: string;
   contentType?: string;
+  inputDeserializer?: <T>(input: Uint8Array) => T | undefined;
+  outputSerializer?: <T>(output: T | undefined) => Uint8Array;
 };
 
 export enum HandlerKind {
@@ -144,28 +148,59 @@ export enum HandlerKind {
 const JSON_CONTENT_TYPE = "application/json";
 
 export class HandlerWrapper {
-  private readonly serializer: (input: unknown) => Uint8Array;
-  private readonly deserializer: (input: Uint8Array) => unknown;
+  public static from(
+    kind: HandlerKind,
+    handler: Function,
+    opts?: ServiceHandlerOpts | ObjectHandlerOpts
+  ): HandlerWrapper {
+    const input = opts?.accept ?? JSON_CONTENT_TYPE;
+    const output = opts?.contentType ?? JSON_CONTENT_TYPE;
 
-  constructor(
+    const deserializer =
+      opts?.inputDeserializer ??
+      (input.toLocaleLowerCase() == JSON_CONTENT_TYPE
+        ? deserializeJson
+        : deserializeNoop);
+
+    const serializer =
+      opts?.outputSerializer ??
+      (output.toLocaleLowerCase() == JSON_CONTENT_TYPE
+        ? serializeJson
+        : serializeNoop);
+
+    // we must create here a copy of the handler
+    // to be able to reuse the original handler in other places.
+    // like for example the same logic but under different routes.
+    const handlerCopy = function (this: any, ...args: any[]) {
+      return handler.apply(this, args);
+    };
+
+    return new HandlerWrapper(
+      kind,
+      handlerCopy,
+      input,
+      output,
+      deserializer,
+      serializer
+    );
+  }
+
+  public static fromHandler(handler: any): HandlerWrapper | undefined {
+    const wrapper = handler[HANDLER_SYMBOL];
+    if (wrapper instanceof HandlerWrapper) {
+      return wrapper;
+    }
+    return undefined;
+  }
+
+  private constructor(
     public readonly kind: HandlerKind,
     private handler: Function,
-    public readonly accept?: string,
-    public readonly contentType?: string
-  ) {
-    const input = accept ?? JSON_CONTENT_TYPE;
-    if (input.toLocaleLowerCase() == JSON_CONTENT_TYPE) {
-      this.serializer = serializeJson;
-    } else {
-      this.serializer = serializeNoop;
-    }
-    const output = contentType ?? JSON_CONTENT_TYPE;
-    if (output.toLocaleLowerCase() == JSON_CONTENT_TYPE) {
-      this.deserializer = deserializeJson;
-    } else {
-      this.deserializer = deserializeNoop;
-    }
-  }
+    public readonly accept: string,
+    public readonly contentType: string,
+    public readonly deserializer: (input: Uint8Array) => unknown,
+    public readonly serializer: (input: unknown) => Uint8Array
+  ) {}
 
   bindInstance(t: unknown) {
     this.handler = this.handler.bind(t);
@@ -185,17 +220,9 @@ export class HandlerWrapper {
    * work.
    */
   transpose<F>(): F {
-    const h = this.handler;
-    defineProperty(h, HANDLER_SYMBOL, this);
-    return h as F;
-  }
-
-  public static fromHandler(handler: any): HandlerWrapper {
-    const wrapper = handler[HANDLER_SYMBOL];
-    if (wrapper instanceof HandlerWrapper) {
-      return wrapper;
-    }
-    throw new TypeError(`Not a wrapped handler`);
+    const handler = this.handler;
+    defineProperty(handler, HANDLER_SYMBOL, this);
+    return handler as F;
   }
 }
 
@@ -220,12 +247,7 @@ export namespace handlers {
     opts: ServiceHandlerOpts,
     fn: ServiceHandler<F>
   ): F {
-    return new HandlerWrapper(
-      HandlerKind.SERVICE,
-      fn,
-      opts.accept,
-      opts.contentType
-    ) as F;
+    return HandlerWrapper.from(HandlerKind.SERVICE, fn, opts) as F;
   }
 
   /**
@@ -273,18 +295,13 @@ export namespace handlers {
     fn?: ObjectHandler<F>
   ): F {
     if (typeof optsOrFn == "function") {
-      return new HandlerWrapper(HandlerKind.EXCLUSIVE, optsOrFn) as F;
+      return HandlerWrapper.from(HandlerKind.EXCLUSIVE, optsOrFn) as F;
     }
     const opts = optsOrFn satisfies ObjectHandlerOpts;
     if (typeof fn !== "function") {
       throw new TypeError("The second argument must be a function");
     }
-    return new HandlerWrapper(
-      HandlerKind.EXCLUSIVE,
-      fn,
-      opts.accept,
-      opts.contentType
-    ) as F;
+    return HandlerWrapper.from(HandlerKind.EXCLUSIVE, fn, opts) as F;
   }
 
   /**
@@ -332,18 +349,13 @@ export namespace handlers {
     fn?: ObjectSharedHandler<F>
   ): F {
     if (typeof optsOrFn == "function") {
-      return new HandlerWrapper(HandlerKind.SHARED, optsOrFn) as F;
+      return HandlerWrapper.from(HandlerKind.SHARED, optsOrFn) as F;
     }
     const opts = optsOrFn satisfies ObjectHandlerOpts;
     if (typeof fn !== "function") {
       throw new TypeError("The second argument must be a function");
     }
-    return new HandlerWrapper(
-      HandlerKind.SHARED,
-      fn,
-      opts.accept,
-      opts.contentType
-    ) as F;
+    return HandlerWrapper.from(HandlerKind.SHARED, fn, opts) as F;
   }
 }
 
@@ -382,7 +394,7 @@ export const object = <P extends string, M>(object: {
     if (handler instanceof Function) {
       return [
         name,
-        new HandlerWrapper(HandlerKind.EXCLUSIVE, handler).transpose(),
+        HandlerWrapper.from(HandlerKind.EXCLUSIVE, handler).transpose(),
       ];
     }
     throw new TypeError(`Unexpected handler type ${name}`);

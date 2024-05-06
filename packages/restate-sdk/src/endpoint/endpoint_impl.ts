@@ -191,6 +191,9 @@ export class EndpointImpl implements RestateEndpoint {
 
     for (const [route, handler] of Object.entries(router)) {
       const wrapper = HandlerWrapper.fromHandler(handler);
+      if (!wrapper) {
+        throw new TypeError(`${route} is not a restate handler.`);
+      }
       wrapper.bindInstance(router);
       component.add(route, wrapper);
     }
@@ -206,10 +209,12 @@ export class EndpointImpl implements RestateEndpoint {
 
     for (const [route, handler] of Object.entries(router)) {
       const wrapper = HandlerWrapper.fromHandler(handler);
+      if (!wrapper) {
+        throw new TypeError(`${route} is not a restate handler.`);
+      }
       wrapper.bindInstance(router);
       component.add(route, wrapper);
     }
-
     this.addComponent(component);
   }
 }
