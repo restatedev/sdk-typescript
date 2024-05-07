@@ -210,7 +210,7 @@ export namespace handlers {
     opts: ServiceHandlerOpts,
     fn: ServiceHandler<F>
   ): F {
-    return HandlerWrapper.from(HandlerKind.SERVICE, fn, opts) as F;
+    return HandlerWrapper.from(HandlerKind.SERVICE, fn, opts).transpose();
   }
 
   /**
