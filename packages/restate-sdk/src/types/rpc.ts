@@ -258,13 +258,13 @@ export namespace handlers {
     fn?: ObjectHandler<F>
   ): F {
     if (typeof optsOrFn == "function") {
-      return HandlerWrapper.from(HandlerKind.EXCLUSIVE, optsOrFn) as F;
+      return HandlerWrapper.from(HandlerKind.EXCLUSIVE, optsOrFn).transpose();
     }
     const opts = optsOrFn satisfies ObjectHandlerOpts;
     if (typeof fn !== "function") {
       throw new TypeError("The second argument must be a function");
     }
-    return HandlerWrapper.from(HandlerKind.EXCLUSIVE, fn, opts) as F;
+    return HandlerWrapper.from(HandlerKind.EXCLUSIVE, fn, opts).transpose();
   }
 
   /**
@@ -312,13 +312,13 @@ export namespace handlers {
     fn?: ObjectSharedHandler<F>
   ): F {
     if (typeof optsOrFn == "function") {
-      return HandlerWrapper.from(HandlerKind.SHARED, optsOrFn) as F;
+      return HandlerWrapper.from(HandlerKind.SHARED, optsOrFn).transpose();
     }
     const opts = optsOrFn satisfies ObjectHandlerOpts;
     if (typeof fn !== "function") {
       throw new TypeError("The second argument must be a function");
     }
-    return HandlerWrapper.from(HandlerKind.SHARED, fn, opts) as F;
+    return HandlerWrapper.from(HandlerKind.SHARED, fn, opts).transpose();
   }
 }
 
@@ -340,10 +340,11 @@ export const object = <P extends string, M>(object: {
   }
 
   const handlers = Object.entries(object.handlers).map(([name, handler]) => {
-    if (handler instanceof HandlerWrapper) {
-      return [name, handler.transpose()];
-    }
     if (handler instanceof Function) {
+      if (HandlerWrapper.fromHandler(handler) !== undefined) {
+        return [name, handler];
+      }
+
       return [
         name,
         HandlerWrapper.from(HandlerKind.EXCLUSIVE, handler).transpose(),
