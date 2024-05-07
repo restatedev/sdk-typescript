@@ -16,17 +16,16 @@ export {
   CombineablePromise,
   Rand,
 } from "./context";
-export {
-  service,
-  object,
+
+export type { Client, SendClient } from "./types/rpc";
+export { service, object, handlers } from "./types/rpc";
+
+export type {
   Service,
   ServiceDefinition,
   VirtualObject,
   VirtualObjectDefinition,
-  Client,
-  SendClient,
-  handlers,
-} from "./types/rpc";
+} from "@restatedev/restate-sdk-core";
 
 export { endpoint, ServiceBundle, RestateEndpoint } from "./endpoint";
 export { RestateError, TerminalError, TimeoutError } from "./types/errors";

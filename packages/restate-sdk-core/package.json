@@ -1,7 +1,7 @@
 {
-  "name": "@restatedev/restate-sdk",
+  "name": "@restatedev/restate-sdk-core",
   "version": "0.9.2",
-  "description": "Typescript SDK for Restate",
+  "description": "Restate Typescript SDK core",
   "author": "Restate Developers",
   "license": "MIT",
   "email": "code@restate.dev",
@@ -20,26 +20,15 @@
     "dist"
   ],
   "scripts": {
-    "gen:version": "node ./scripts/version.js",
-    "proto": "npx buf mod update && npx buf generate",
-    "prebuild": "npm run gen:version",
     "build": "tsc -b",
-    "pretest": "npm run gen:version",
-    "test": "jest --silent --maxWorkers=1",
     "lint": "eslint --ignore-path .eslintignore --max-warnings=0 --ext .ts .",
     "format": "prettier --ignore-path .eslintignore --write \"**/*.+(js|ts|json)\"",
     "format-check": "prettier --ignore-path .eslintignore --check \"**/*.+(js|ts|json)\"",
-    "verify": "npm run format-check && npm run lint && npm run test && npm run build",
+    "verify": "npm run format-check && npm run lint && npm run build",
     "release": "release-it"
   },
-  "dependencies": {
-    "@bufbuild/protobuf": "^1.8.0",
-    "@restatedev/restate-sdk-core": "^0.9.2"
-  },
+  "dependencies": {},
   "devDependencies": {
-    "@bufbuild/buf": "^1.15.0",
-    "@bufbuild/protoc-gen-es": "^1.8.0",
-    "@types/aws-lambda": "^8.10.115",
     "@types/jest": "^29.4.0",
     "@types/node": "^20.10.4",
     "@typescript-eslint/eslint-plugin": "^5.53.0",

@@ -57,7 +57,11 @@ import {
 } from "./types/errors";
 import { jsonSerialize, jsonDeserialize } from "./utils/utils";
 import { PartialMessage, protoInt64 } from "@bufbuild/protobuf";
-import { Client, SendClient, ServiceDefinition } from "./types/rpc";
+import type { Client, SendClient } from "./types/rpc";
+import type {
+  ServiceDefinition,
+  VirtualObjectDefinition,
+} from "@restatedev/restate-sdk-core";
 import { RandImpl } from "./utils/rand";
 import { newJournalEntryPromiseId } from "./promise_combinator_tracker";
 import { WrappedPromise } from "./utils/promises";
@@ -290,7 +294,7 @@ export class ContextImpl implements ObjectContext {
   }
 
   objectClient<M, P extends string = string>(
-    { name }: ServiceDefinition<P, M>,
+    { name }: VirtualObjectDefinition<P, M>,
     key: string
   ): Client<M> {
     const clientProxy = new Proxy(
@@ -337,7 +341,7 @@ export class ContextImpl implements ObjectContext {
   }
 
   public objectSendClient<M, P extends string = string>(
-    obj: ServiceDefinition<P, M>,
+    obj: VirtualObjectDefinition<P, M>,
     key: string,
     opts?: SendOptions
   ): SendClient<M> {

@@ -12,7 +12,7 @@
 import {
   ServiceDefinition,
   VirtualObjectDefinition,
-} from "packages/restate-sdk/src/types/rpc";
+} from "@restatedev/restate-sdk";
 import {
   ConnectionOpts,
   Ingress,

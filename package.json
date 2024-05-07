@@ -15,6 +15,7 @@
     "url": "https://github.com/restatedev/sdk-typescript/issues"
   },
   "workspaces": [
+    "packages/restate-sdk-core",
     "packages/restate-sdk",
     "packages/restate-sdk-clients",
     "packages/restate-sdk-examples"

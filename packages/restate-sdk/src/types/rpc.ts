@@ -12,12 +12,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-namespace */
 /* eslint-disable @typescript-eslint/ban-types */
-import {
-  CombineablePromise,
-  Context,
-  ObjectContext,
-  ObjectSharedContext,
-} from "../context";
+import { CombineablePromise } from "../context";
 import {
   deserializeJson,
   deserializeNoop,
@@ -25,14 +20,17 @@ import {
   serializeNoop,
 } from "../utils/serde";
 
-// ----------- generics -------------------------------------------------------
+import {
+  ServiceHandler,
+  Service,
+  ServiceDefinition,
+  ObjectHandler,
+  ObjectSharedHandler,
+  VirtualObjectDefinition,
+  VirtualObject,
+} from "@restatedev/restate-sdk-core";
 
-type WithoutRpcContext<F> = F extends (
-  ctx: infer C extends Context,
-  ...args: infer P
-) => infer R
-  ? (...args: P) => R
-  : never;
+// ----------- generics -------------------------------------------------------
 
 export type Client<M> = {
   [K in keyof M as M[K] extends never ? never : K]: M[K] extends (
@@ -52,25 +50,8 @@ export type SendClient<M> = {
 
 // ----------- unkeyed handlers ----------------------------------------------
 
-export type ServiceHandler<F> = F extends (ctx: Context) => Promise<any>
-  ? F
-  : F extends (ctx: Context, input: any) => Promise<any>
-  ? F
-  : never;
-
 export type ServiceOpts<U> = {
   [K in keyof U]: U[K] extends ServiceHandler<any> ? U[K] : never;
-};
-
-export type Service<U> = {
-  [K in keyof U]: U[K] extends ServiceHandler<infer F>
-    ? WithoutRpcContext<F>
-    : never;
-};
-
-export type ServiceDefinition<P extends string, M> = {
-  name: P;
-  service?: Service<M>;
 };
 
 /**
@@ -104,25 +85,7 @@ export const service = <P extends string, M>(service: {
   };
 };
 
-// ----------- keyed handlers ----------------------------------------------
-
-export type ObjectSharedHandler<F> = F extends (
-  ctx: ObjectSharedContext,
-  param: any
-) => Promise<any>
-  ? F
-  : F extends (ctx: ObjectSharedContext) => Promise<any>
-  ? F
-  : never;
-
-export type ObjectHandler<F> = F extends (
-  ctx: ObjectContext,
-  param: any
-) => Promise<any>
-  ? F
-  : F extends (ctx: ObjectContext) => Promise<any>
-  ? F
-  : never;
+// ----------- object handlers ----------------------------------------------
 
 export type ObjectHandlerOpts = {
   accept?: string;
@@ -361,17 +324,6 @@ export namespace handlers {
 
 export type ObjectOpts<U> = {
   [K in keyof U]: U[K] extends ObjectHandler<U[K]> ? U[K] : never;
-};
-
-export type VirtualObject<U> = {
-  [K in keyof U]: U[K] extends ObjectHandler<infer F>
-    ? WithoutRpcContext<F>
-    : never;
-};
-
-export type VirtualObjectDefinition<P extends string, M> = {
-  name: P;
-  object?: VirtualObject<M>;
 };
 
 /**
