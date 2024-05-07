@@ -163,7 +163,7 @@ export type WorkflowRequest<T> = T & { workflowId: string };
  * The API signature of the workflow for use with RPC operations from Restate services.
  */
 export type WorkflowRestateRpcApi<R, T, U> = {
-  start: (param: WorkflowRequest<T>) => Promise<WorkflowStartResult>;
+  submit: (param: WorkflowRequest<T>) => Promise<WorkflowStartResult>;
   waitForResult: (request: WorkflowRequest<unknown>) => Promise<R>;
   status: (request: WorkflowRequest<unknown>) => Promise<LifecycleStatus>;
 } & {
