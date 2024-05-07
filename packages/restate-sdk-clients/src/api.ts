@@ -1,7 +1,7 @@
 import type {
   ServiceDefinition,
   VirtualObjectDefinition,
-} from "@restatedev/restate-sdk";
+} from "@restatedev/restate-sdk-core";
 
 export interface Ingress {
   /**

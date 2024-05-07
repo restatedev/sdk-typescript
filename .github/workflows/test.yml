@@ -29,6 +29,7 @@ jobs:
       - run: npm pack --workspaces true --include-workspace-root false
       - run: mv restatedev-restate-sdk-0*.tgz restatedev-restate-sdk.tgz
       - run: mv restatedev-restate-sdk-clients-0*.tgz restatedev-restate-sdk-clients.tgz
+      - run: mv restatedev-restate-sdk-core-0*.tgz restatedev-restate-sdk-core.tgz
       - uses: actions/upload-artifact@v4
         with:
           name: restatedev-restate-sdk
@@ -41,6 +42,13 @@ jobs:
           path: restatedev-restate-sdk-clients.tgz
           retention-days: 1
           if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: restatedev-restate-sdk-core
+          path: restatedev-restate-sdk-core.tgz
+          retention-days: 1
+          if-no-files-found: error
+
 
       - name: Publish snapshot
         if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}

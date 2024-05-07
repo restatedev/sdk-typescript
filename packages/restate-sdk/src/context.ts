@@ -9,12 +9,14 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import {
-  Client,
-  SendClient,
+import type { Client, SendClient } from "./types/rpc";
+import type {
+  RestateContext,
+  RestateObjectContext,
+  RestateObjectSharedContext,
   ServiceDefinition,
   VirtualObjectDefinition,
-} from "./types/rpc";
+} from "@restatedev/restate-sdk-core";
 import { ContextImpl } from "./context_impl";
 
 /**
@@ -152,7 +154,7 @@ export type RunAction<T> = (() => Promise<T>) | (() => T);
  * Virtual objects can also access their key-value store using the {@link ObjectContext}.
  *
  */
-export interface Context {
+export interface Context extends RestateContext {
   /**
    * Deterministic random methods; these are inherently predictable (seeded on the invocation ID, which is not secret)
    * and so should not be used for any cryptographic purposes. They are useful for identifiers, idempotency keys,
@@ -412,7 +414,10 @@ export interface Context {
  * This context can be used only within virtual objects.
  *
  */
-export interface ObjectContext extends Context, KeyValueStore {
+export interface ObjectContext
+  extends Context,
+    KeyValueStore,
+    RestateObjectContext {
   key: string;
 }
 
@@ -427,7 +432,9 @@ export interface ObjectContext extends Context, KeyValueStore {
  * This context can be used only within a shared virtual objects.
  *
  */
-export interface ObjectSharedContext extends Context {
+export interface ObjectSharedContext
+  extends Context,
+    RestateObjectSharedContext {
   key: string;
 
   /**

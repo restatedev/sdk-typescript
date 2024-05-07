@@ -9,18 +9,18 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import {
+import type {
   ServiceDefinition,
   VirtualObjectDefinition,
-} from "packages/restate-sdk/src/types/rpc";
-import {
+} from "@restatedev/restate-sdk-core";
+import type {
   ConnectionOpts,
   Ingress,
   IngressClient,
   IngressSendClient,
-  Opts,
-  SendOpts,
 } from "./api";
+
+import { Opts, SendOpts } from "./api";
 
 /**
  * Connect to the restate Ingress

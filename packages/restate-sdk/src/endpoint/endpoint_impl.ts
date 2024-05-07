@@ -13,13 +13,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { RestateEndpoint, ServiceBundle } from "../public_api";
-import {
-  HandlerWrapper,
+import type {
   Service,
   ServiceDefinition,
   VirtualObject,
   VirtualObjectDefinition,
-} from "../types/rpc";
+} from "@restatedev/restate-sdk-core";
+
+import { HandlerWrapper } from "../types/rpc";
 import { rlog } from "../logger";
 import http2, { Http2ServerRequest, Http2ServerResponse } from "http2";
 import { Http2Handler } from "./http2_handler";

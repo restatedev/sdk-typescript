@@ -9,9 +9,12 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { VirtualObjectDefinition, ServiceDefinition } from "./types/rpc";
 import { Http2ServerRequest, Http2ServerResponse } from "http2";
 import { endpointImpl } from "./endpoint/endpoint_impl";
+import type {
+  VirtualObjectDefinition,
+  ServiceDefinition,
+} from "@restatedev/restate-sdk-core";
 
 /**
  * Create a new {@link RestateEndpoint}.
