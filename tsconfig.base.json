@@ -15,6 +15,9 @@
 		"forceConsistentCasingInFileNames": true,
 		"allowSyntheticDefaultImports": true,
 		"paths": {
+			"@restatedev/restate-sdk-core": [
+				"./packages/restate-sdk-core/src/public_api.ts"
+			],
 			"@restatedev/restate-sdk": [
 				"./packages/restate-sdk/src/public_api.ts"
 			],
