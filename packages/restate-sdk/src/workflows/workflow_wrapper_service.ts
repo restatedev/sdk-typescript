@@ -215,7 +215,7 @@ export function createWrapperService<P extends string, R, T, M>(
         .objectClient(stateServiceApi, request.workflowId)
         .startWorkflow();
       if (started === wf.WorkflowStartResult.STARTED) {
-        ctx.serviceClient(api).run(request);
+        ctx.serviceSendClient(api).run(request);
       }
       return started;
     },

@@ -31,12 +31,13 @@ export function workflow<P extends string, R, T, U>(
   workflow: Workflow<R, T, U>
 ): WorkflowServices<P, R, T, U> {
   // the state service manages all state and promises for us
+  const stateServiceName = name + STATE_SERVICE_PATH_SUFFIX;
   const stateServiceRouter = restate.object({
-    name,
+    name: stateServiceName,
     handlers: wss.workflowStateService,
   });
   const stateServiceApi: wss.api<P> = {
-    name: (name + STATE_SERVICE_PATH_SUFFIX) as P,
+    name: stateServiceName as P,
   };
 
   // the wrapper service manages life cycle, contexts, delegation to the state service
@@ -162,7 +163,7 @@ export type WorkflowRequest<T> = T & { workflowId: string };
  * The API signature of the workflow for use with RPC operations from Restate services.
  */
 export type WorkflowRestateRpcApi<R, T, U> = {
-  start: (param: WorkflowRequest<T>) => Promise<WorkflowStartResult>;
+  submit: (param: WorkflowRequest<T>) => Promise<WorkflowStartResult>;
   waitForResult: (request: WorkflowRequest<unknown>) => Promise<R>;
   status: (request: WorkflowRequest<unknown>) => Promise<LifecycleStatus>;
 } & {

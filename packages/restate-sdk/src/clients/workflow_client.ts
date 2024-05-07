@@ -248,11 +248,9 @@ async function makeCall<R, T>(
 
   const url = `${restateUri}/${serviceName}/${method}`;
   const data = {
-    request: {
-      workflowId,
-      ...params,
-    } satisfies restate.workflow.WorkflowRequest<T>,
-  };
+    workflowId,
+    ...params,
+  } satisfies restate.workflow.WorkflowRequest<T>;
 
   let body: string;
   try {
@@ -276,23 +274,20 @@ async function makeCall<R, T>(
   if (!httpResponse.ok) {
     throw new Error(`Request failed: ${httpResponse.status}\n${responseText}`);
   }
-
+  if (responseText.length == 0) {
+    // It is a success status code, but an empty string
+    // this means that the response type was 'undefined',
+    // which is a valid return value for handlers of return type void.
+    return undefined as R;
+  }
   let response;
   try {
     response = JSON.parse(responseText);
   } catch (err) {
     throw new Error("Cannot parse response JSON: " + err, { cause: err });
   }
-
   if (response.error) {
     throw new Error(response.error);
   }
-  if (response.response) {
-    return response.response as R;
-  }
-  if (Object.keys(response).length === 0) {
-    return undefined as R;
-  }
-
-  throw new Error("Unrecognized response object: " + responseText);
+  return response as R;
 }
