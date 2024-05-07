@@ -48,7 +48,7 @@ export type ServiceDefinition<P extends string, M> = {
 // ----------- object -------------------------------------------------------
 
 export type ObjectSharedHandler<F> = F extends (
-  ctx: RestateObjectSharedContext,
+  ctx: infer _C extends RestateObjectSharedContext,
   param: any
 ) => Promise<any>
   ? F
