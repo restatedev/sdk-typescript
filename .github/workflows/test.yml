@@ -62,6 +62,7 @@ jobs:
           # see https://github.com/npm/cli/pull/4588
           VERSION="0.0.0-SNAPSHOT-$(date '+%Y%m%d%H%M%S')"
           npm --workspaces version $VERSION --no-git-tag-version --no-workspaces-update
+          npm --workspaces pkg set "dependencies.@restatedev/restate-sdk-core=$VERSION"
           npm --workspaces pkg set "dependencies.@restatedev/restate-sdk=$VERSION"
           npm --workspaces pkg set "dependencies.@restatedev/restate-sdk-clients=$VERSION"
           npm --workspaces update
