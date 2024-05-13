@@ -16,6 +16,7 @@ import { Message } from "../types/types";
 import { rlog } from "../logger";
 import { finished } from "node:stream/promises";
 import { BufferedConnection } from "./buffered_connection";
+import { Http2ServerRequest, IncomingHttpHeaders } from "node:http2";
 
 // utility promise, for cases where we want to save allocation of an extra promise
 const RESOLVED: Promise<void> = Promise.resolve();
@@ -46,8 +47,11 @@ export class RestateHttp2Connection implements Connection {
   /**
    * create a RestateDuplex stream from an http2 (duplex) stream.
    */
-  public static from(http2stream: stream.Duplex): RestateHttp2Connection {
-    return new RestateHttp2Connection(http2stream);
+  public static from(
+    request: Http2ServerRequest,
+    http2stream: stream.Duplex
+  ): RestateHttp2Connection {
+    return new RestateHttp2Connection(request.headers, http2stream);
   }
 
   // --------------------------------------------------------------------------
@@ -63,7 +67,10 @@ export class RestateHttp2Connection implements Connection {
 
   private outputBuffer: BufferedConnection;
 
-  constructor(private readonly rawStream: stream.Duplex) {
+  constructor(
+    private readonly attemptHeaders: IncomingHttpHeaders,
+    private readonly rawStream: stream.Duplex
+  ) {
     this.sdkInput = rawStream.pipe(streamDecoder());
 
     this.outputBuffer = new BufferedConnection((buffer) => {
@@ -136,6 +143,10 @@ export class RestateHttp2Connection implements Connection {
         errorHandler(new Error("stream was destroyed before end"));
       }
     });
+  }
+
+  headers(): ReadonlyMap<string, string | string[] | undefined> {
+    return new Map(Object.entries(this.attemptHeaders));
   }
 
   // --------------------------------------------------------------------------

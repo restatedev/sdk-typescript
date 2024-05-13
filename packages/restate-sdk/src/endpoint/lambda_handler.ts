@@ -80,7 +80,7 @@ export class LambdaHandler {
     if (!event.body) {
       throw new Error("The incoming message body was null");
     }
-    return this.handleInvoke(handler, event.body, context);
+    return this.handleInvoke(handler, event.body, event.headers, context);
   }
 
   private async validateConnectionSignature(
@@ -120,6 +120,7 @@ export class LambdaHandler {
   private async handleInvoke(
     handler: ComponentHandler,
     body: string,
+    headers: Record<string, string | string[] | undefined>,
     context: Context
   ): Promise<APIGatewayProxyResult | APIGatewayProxyResultV2> {
     try {
@@ -134,7 +135,7 @@ export class LambdaHandler {
       decodedEntries = null;
 
       // set up and invoke the state machine
-      const connection = new LambdaConnection(alreadyCompleted);
+      const connection = new LambdaConnection(headers, alreadyCompleted);
       const invocation = journalBuilder.build();
       const stateMachine = new StateMachine(
         connection,

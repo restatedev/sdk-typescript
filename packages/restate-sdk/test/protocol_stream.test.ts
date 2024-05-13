@@ -64,7 +64,7 @@ describe("Restate Streaming Connection", () => {
 
     // the following demonstrates how to use a stream_encoder/decoder to convert
     // a raw duplex stream to a high-level stream of Restate's protocol messages and headers.
-    const restateStream = RestateHttp2Connection.from(http2stream);
+    const restateStream = new RestateHttp2Connection({}, http2stream);
 
     // here we need to create a promise for the sake of this test.
     // this future will be resolved once something is emitted on the stream.
@@ -106,7 +106,7 @@ describe("Restate Streaming Connection", () => {
 
   it("should await sending of small data when closing", async () => {
     const { duplex, processBytes } = mockBackpressuredDuplex(8192);
-    const connection = RestateHttp2Connection.from(duplex);
+    const connection = new RestateHttp2Connection({}, duplex);
 
     // enqueue small data, below watermark, so that 'end' can immediately be written
     connection.send(newMessage(10));
@@ -123,7 +123,7 @@ describe("Restate Streaming Connection", () => {
 
   it("should await sending of larger data when closing", async () => {
     const { duplex, processBytes } = mockBackpressuredDuplex(128);
-    const connection = RestateHttp2Connection.from(duplex);
+    const connection = new RestateHttp2Connection({}, duplex);
 
     // enqueue quite some data, before allowing any bytes to flow any
     connection.send(newMessage(1024));
@@ -142,7 +142,7 @@ describe("Restate Streaming Connection", () => {
 
   it("should not trigger backpressure for small messages", async () => {
     const { duplex } = mockBackpressuredDuplex(1024);
-    const connection = RestateHttp2Connection.from(duplex);
+    const connection = new RestateHttp2Connection({}, duplex);
 
     // enqueue a message that is too large
     const promise1 = connection.send(newMessage(80));
@@ -154,7 +154,7 @@ describe("Restate Streaming Connection", () => {
 
   it("should trigger backpressure for large messages", async () => {
     const { duplex } = mockBackpressuredDuplex(1024);
-    const connection = RestateHttp2Connection.from(duplex);
+    const connection = new RestateHttp2Connection({}, duplex);
 
     // enqueue a message that is too large
     connection.send(newMessage(800));
@@ -165,7 +165,7 @@ describe("Restate Streaming Connection", () => {
 
   it("should resolve backpressure promises when the stream flows", async () => {
     const { duplex, processBytes } = mockBackpressuredDuplex(1024);
-    const connection = RestateHttp2Connection.from(duplex);
+    const connection = new RestateHttp2Connection({}, duplex);
 
     // enqueue a message that is too large
     connection.send(newMessage(800));

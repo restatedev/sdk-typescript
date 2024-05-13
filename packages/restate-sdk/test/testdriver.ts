@@ -168,6 +168,10 @@ export class TestDriver implements Connection {
     );
   }
 
+  headers(): ReadonlyMap<string, string | string[] | undefined> {
+    return new Map();
+  }
+
   async run(): Promise<Message[]> {
     const completed = this.stateMachine.invoke();
 

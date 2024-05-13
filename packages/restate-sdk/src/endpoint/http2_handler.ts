@@ -45,7 +45,7 @@ export class Http2Handler {
         if (!result) {
           return;
         } else {
-          return this.handleConnection(url, stream);
+          return this.handleConnection(request, url, stream);
         }
       })
       .catch((e) => {
@@ -94,6 +94,7 @@ export class Http2Handler {
   }
 
   private handleConnection(
+    request: http2.Http2ServerRequest,
     url: URL,
     stream: http2.ServerHttp2Stream
   ): Promise<void> {
@@ -124,7 +125,7 @@ export class Http2Handler {
       "x-restate-server": X_RESTATE_SERVER,
       ":status": 200,
     });
-    const restateStream = RestateHttp2Connection.from(stream);
+    const restateStream = RestateHttp2Connection.from(request, stream);
     return handleInvocation(handler, restateStream);
   }
 }

@@ -113,6 +113,7 @@ export class ContextImpl implements ObjectContext {
     public readonly keyedContextKey: string | undefined,
     invocationValue: Uint8Array,
     invocationHeaders: ReadonlyMap<string, string>,
+    attemptHeaders: ReadonlyMap<string, string | string[] | undefined>,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private readonly stateMachine: StateMachine,
     public readonly rand: Rand = new RandImpl(id)
@@ -120,6 +121,7 @@ export class ContextImpl implements ObjectContext {
     this.invocationRequest = {
       id,
       headers: invocationHeaders,
+      attemptHeaders,
       body: invocationValue,
     };
   }
