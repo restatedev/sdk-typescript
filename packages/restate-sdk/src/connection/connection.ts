@@ -19,6 +19,8 @@ export interface Connection {
   send(msg: Message): Promise<void>;
 
   end(): Promise<void>;
+
+  headers(): ReadonlyMap<string, string | string[] | undefined>;
 }
 
 /**

@@ -1,9 +1,8 @@
 import { encodeMessages } from "../io/encoder";
 import { Message } from "../types/types";
-import { Connection } from "./connection";
 import { Buffer } from "node:buffer";
 
-export class BufferedConnection implements Connection {
+export class BufferedConnection {
   private queue: Message[] = [];
   private flushing: Promise<void> = Promise.resolve();
 

@@ -101,6 +101,7 @@ export class StateMachine implements RestateStreamConsumer {
       invocation.userKey,
       invocation.invocationValue,
       invocation.invocationHeaders,
+      connection.headers(),
       this
     );
     this.journal = new Journal(this.invocation);

@@ -30,11 +30,21 @@ export class LambdaConnection implements Connection {
   private readonly completionPromise: Promise<Buffer>;
   private resolveOnCompleted!: (value: Buffer | PromiseLike<Buffer>) => void;
 
-  constructor(private suspendedOrCompleted = false) {
+  constructor(
+    private readonly attemptHeaders: Record<
+      string,
+      string | string[] | undefined
+    >,
+    private suspendedOrCompleted = false
+  ) {
     // Promise that signals when the invocation is over, to then flush the messages
     this.completionPromise = new Promise<Buffer>((resolve) => {
       this.resolveOnCompleted = resolve;
     });
+  }
+
+  headers(): ReadonlyMap<string, string | string[] | undefined> {
+    return new Map(Object.entries(this.attemptHeaders));
   }
 
   // Send a message back to the runtime
