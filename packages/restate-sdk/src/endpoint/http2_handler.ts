@@ -21,7 +21,6 @@ import { rlog } from "../logger";
 import {
   ComponentHandler,
   UrlPathComponents,
-  VirtualObjectHandler,
   parseUrlComponents,
 } from "../types/components";
 import { Endpoint, ProtocolMode } from "../types/discovery";
@@ -241,7 +240,7 @@ async function handleInvocation(
     connection,
     invocation,
     ProtocolMode.BIDI_STREAM,
-    handler instanceof VirtualObjectHandler,
+    handler.keyed(),
     invocation.inferLoggerContext()
   );
   connection.pipeToConsumer(stateMachine);

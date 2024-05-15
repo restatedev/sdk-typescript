@@ -25,6 +25,8 @@ export type {
   ServiceDefinition,
   VirtualObject,
   VirtualObjectDefinition,
+  Workflow,
+  WorkflowDefinition,
 } from "@restatedev/restate-sdk-core";
 
 export { endpoint, ServiceBundle, RestateEndpoint } from "./endpoint";

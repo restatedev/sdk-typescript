@@ -29,10 +29,12 @@ import {
   Component,
   ServiceComponent,
   VirtualObjectComponent,
+  WorkflowComponent,
 } from "../types/components";
 
 import * as discovery from "../types/discovery";
 import { KeySetV1, parseKeySetV1 } from "./request_signing/v1";
+import { Workflow, WorkflowDefinition } from "@restatedev/restate-sdk-core";
 
 function isServiceDefinition<P extends string, M>(
   m: any
@@ -44,6 +46,12 @@ function isObjectDefinition<P extends string, M>(
   m: any
 ): m is VirtualObjectDefinition<P, M> {
   return m && m.object;
+}
+
+function isWorkflowDefinition<P extends string, M>(
+  m: any
+): m is WorkflowDefinition<P, M> {
+  return m && m.workflow;
 }
 
 export const endpointImpl = (): RestateEndpoint => new EndpointImpl();
@@ -70,7 +78,10 @@ export class EndpointImpl implements RestateEndpoint {
   }
 
   public bind<P extends string, M>(
-    definition: ServiceDefinition<P, M> | VirtualObjectDefinition<P, M>
+    definition:
+      | ServiceDefinition<P, M>
+      | VirtualObjectDefinition<P, M>
+      | WorkflowDefinition<P, M>
   ): RestateEndpoint {
     if (isServiceDefinition(definition)) {
       const { name, service } = definition;
@@ -84,9 +95,15 @@ export class EndpointImpl implements RestateEndpoint {
         throw new TypeError(`no object implementation found.`);
       }
       this.bindVirtualObjectComponent(name, object);
+    } else if (isWorkflowDefinition(definition)) {
+      const { name, workflow } = definition;
+      if (!workflow) {
+        throw new TypeError(`no workflow implementation found.`);
+      }
+      this.bindWorkflowObjectComponent(name, workflow);
     } else {
       throw new TypeError(
-        "can only bind a service or a virtual object definition"
+        "can only bind a service or a virtual object or a workflow definition"
       );
     }
     return this;
@@ -214,6 +231,23 @@ export class EndpointImpl implements RestateEndpoint {
         throw new TypeError(`${route} is not a restate handler.`);
       }
       wrapper.bindInstance(router);
+      component.add(route, wrapper);
+    }
+    this.addComponent(component);
+  }
+
+  private bindWorkflowObjectComponent(name: string, workflow: Workflow<any>) {
+    if (name.indexOf("/") !== -1) {
+      throw new Error("service name must not contain any slash '/'");
+    }
+    const component = new WorkflowComponent(name);
+
+    for (const [route, handler] of Object.entries(workflow)) {
+      const wrapper = HandlerWrapper.fromHandler(handler);
+      if (!wrapper) {
+        throw new TypeError(`${route} is not a restate handler.`);
+      }
+      wrapper.bindInstance(workflow);
       component.add(route, wrapper);
     }
     this.addComponent(component);
