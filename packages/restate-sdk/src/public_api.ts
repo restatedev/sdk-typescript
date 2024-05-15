@@ -18,7 +18,7 @@ export {
 } from "./context";
 
 export type { Client, SendClient } from "./types/rpc";
-export { service, object, handlers } from "./types/rpc";
+export { service, object, workflow as wf, handlers } from "./types/rpc";
 
 export type {
   Service,

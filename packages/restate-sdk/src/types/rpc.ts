@@ -28,9 +28,12 @@ import {
   ObjectSharedHandler,
   VirtualObjectDefinition,
   VirtualObject,
+  WorkflowHandler,
+  WorkflowDefinition,
+  Workflow,
 } from "@restatedev/restate-sdk-core";
 
-// ----------- generics -------------------------------------------------------
+// ----------- rpc clients -------------------------------------------------------
 
 export type Client<M> = {
   [K in keyof M as M[K] extends never ? never : K]: M[K] extends (
@@ -48,51 +51,14 @@ export type SendClient<M> = {
     : never;
 };
 
-// ----------- unkeyed handlers ----------------------------------------------
+// ----------- handlers ----------------------------------------------
 
-export type ServiceOpts<U> = {
-  [K in keyof U]: U[K] extends ServiceHandler<any> ? U[K] : never;
-};
-
-/**
- * Define a Restate service.
- *
- * @param service
- */
-export const service = <P extends string, M>(service: {
-  name: P;
-  handlers: ServiceOpts<M>;
-}): ServiceDefinition<P, Service<M>> => {
-  if (!service.handlers) {
-    throw new Error("service must be defined");
-  }
-  const handlers = Object.entries(service.handlers).map(([name, handler]) => {
-    if (handler instanceof HandlerWrapper) {
-      return [name, handler.transpose()];
-    }
-    if (handler instanceof Function) {
-      return [
-        name,
-        HandlerWrapper.from(HandlerKind.SERVICE, handler).transpose(),
-      ];
-    }
-    throw new TypeError(`Unexpected handler type ${name}`);
-  });
-
-  return {
-    name: service.name,
-    service: Object.fromEntries(handlers) as Service<M>,
-  };
-};
-
-// ----------- object handlers ----------------------------------------------
-
-export type ObjectHandlerOpts = {
-  accept?: string;
-  contentType?: string;
-  inputDeserializer?: <T>(input: Uint8Array) => T | undefined;
-  outputSerializer?: <T>(output: T | undefined) => Uint8Array;
-};
+export enum HandlerKind {
+  SERVICE,
+  EXCLUSIVE,
+  SHARED,
+  WORKFLOW,
+}
 
 export type ServiceHandlerOpts = {
   accept?: string;
@@ -101,14 +67,22 @@ export type ServiceHandlerOpts = {
   outputSerializer?: <T>(output: T | undefined) => Uint8Array;
 };
 
-export enum HandlerKind {
-  EXCLUSIVE,
-  SHARED,
-  WORKFLOW,
-  SERVICE,
-}
+export type ObjectHandlerOpts = {
+  accept?: string;
+  contentType?: string;
+  inputDeserializer?: <T>(input: Uint8Array) => T | undefined;
+  outputSerializer?: <T>(output: T | undefined) => Uint8Array;
+};
+
+export type WorkflowHandlerOpts = {
+  accept?: string;
+  contentType?: string;
+  inputDeserializer?: <T>(input: Uint8Array) => T | undefined;
+  outputSerializer?: <T>(output: T | undefined) => Uint8Array;
+};
 
 const JSON_CONTENT_TYPE = "application/json";
+const HANDLER_SYMBOL = Symbol("Handler");
 
 export class HandlerWrapper {
   public static from(
@@ -149,11 +123,7 @@ export class HandlerWrapper {
   }
 
   public static fromHandler(handler: any): HandlerWrapper | undefined {
-    const wrapper = handler[HANDLER_SYMBOL];
-    if (wrapper instanceof HandlerWrapper) {
-      return wrapper;
-    }
-    return undefined;
+    return handler[HANDLER_SYMBOL];
   }
 
   private constructor(
@@ -184,20 +154,16 @@ export class HandlerWrapper {
    */
   transpose<F>(): F {
     const handler = this.handler;
-    defineProperty(handler, HANDLER_SYMBOL, this);
+    const existing = HandlerWrapper.fromHandler(handler);
+    if (existing !== undefined) {
+      return handler as F;
+    }
+    Object.defineProperty(handler, HANDLER_SYMBOL, { value: this });
     return handler as F;
   }
 }
 
-// wraps defineProperty such that it informs tsc of the correct type of its output
-function defineProperty<Obj extends object, Key extends PropertyKey, T>(
-  obj: Obj,
-  prop: Key,
-  value: T
-): asserts obj is Obj & Readonly<Record<Key, T>> {
-  Object.defineProperty(obj, prop, { value });
-}
-const HANDLER_SYMBOL = Symbol("Handler");
+// ----------- handler decorators ----------------------------------------------
 
 export namespace handlers {
   /**
@@ -211,6 +177,27 @@ export namespace handlers {
     fn: ServiceHandler<F>
   ): F {
     return HandlerWrapper.from(HandlerKind.SERVICE, fn, opts).transpose();
+  }
+
+  export function workflow<F>(
+    opts: WorkflowHandlerOpts,
+    fn: WorkflowHandler<F>
+  ): F;
+
+  export function workflow<F>(fn: WorkflowHandler<F>): F;
+
+  export function workflow<F>(
+    optsOrFn: WorkflowHandlerOpts | WorkflowHandler<F>,
+    fn?: WorkflowHandler<F>
+  ): F {
+    if (typeof optsOrFn == "function") {
+      return HandlerWrapper.from(HandlerKind.WORKFLOW, optsOrFn).transpose();
+    }
+    const opts = optsOrFn satisfies WorkflowHandlerOpts;
+    if (typeof fn !== "function") {
+      throw new TypeError("The second argument must be a function");
+    }
+    return HandlerWrapper.from(HandlerKind.WORKFLOW, fn, opts).transpose();
   }
 
   /**
@@ -322,6 +309,45 @@ export namespace handlers {
   }
 }
 
+// ----------- services ----------------------------------------------
+
+export type ServiceOpts<U> = {
+  [K in keyof U]: U[K] extends ServiceHandler<any> ? U[K] : never;
+};
+
+/**
+ * Define a Restate service.
+ *
+ * @param service
+ */
+export const service = <P extends string, M>(service: {
+  name: P;
+  handlers: ServiceOpts<M>;
+}): ServiceDefinition<P, Service<M>> => {
+  if (!service.handlers) {
+    throw new Error("service must be defined");
+  }
+  const handlers = Object.entries(service.handlers).map(([name, handler]) => {
+    if (handler instanceof HandlerWrapper) {
+      return [name, handler.transpose()];
+    }
+    if (handler instanceof Function) {
+      return [
+        name,
+        HandlerWrapper.from(HandlerKind.SERVICE, handler).transpose(),
+      ];
+    }
+    throw new TypeError(`Unexpected handler type ${name}`);
+  });
+
+  return {
+    name: service.name,
+    service: Object.fromEntries(handlers) as Service<M>,
+  };
+};
+
+// ----------- objects ----------------------------------------------
+
 export type ObjectOpts<U> = {
   [K in keyof U]: U[K] extends ObjectHandler<U[K]> ? U[K] : never;
 };
@@ -356,5 +382,57 @@ export const object = <P extends string, M>(object: {
   return {
     name: object.name,
     object: Object.fromEntries(handlers) as VirtualObject<M>,
+  };
+};
+
+// ----------- workflows ----------------------------------------------
+
+export type WorkflowOpts<U> = {
+  [K in keyof U]: U[K] extends WorkflowHandler<U[K]> ? U[K] : never;
+};
+
+/**
+ * Define a Restate virtual object.
+ *
+ * @param workflow
+ */
+export const workflow = <P extends string, M>(workflow: {
+  name: P;
+  handlers: WorkflowOpts<M>;
+}): WorkflowDefinition<P, Workflow<M>> => {
+  if (!workflow.handlers) {
+    throw new Error("workflow must contain handlers");
+  }
+  const handlers = [];
+  let mainHandlerFound = false;
+
+  for (const [name, handler] of Object.entries(workflow.handlers)) {
+    let wrapper: HandlerWrapper;
+
+    if (handler instanceof HandlerWrapper) {
+      wrapper = handler;
+    } else if (handler instanceof Function) {
+      wrapper =
+        HandlerWrapper.fromHandler(handler) ??
+        HandlerWrapper.from(HandlerKind.WORKFLOW, handler);
+    } else {
+      throw new TypeError(`Unexpected handler type ${name}`);
+    }
+    if (wrapper.kind == HandlerKind.WORKFLOW) {
+      if (mainHandlerFound) {
+        throw new TypeError(
+          `A workflow must contain exactly one handler annotated as workflow.
+          Please use a shared handler for any additional handlers`
+        );
+      } else {
+        mainHandlerFound = true;
+      }
+    }
+    handlers.push([name, wrapper.transpose()]);
+  }
+
+  return {
+    name: workflow.name,
+    workflow: Object.fromEntries(handlers) as Workflow<M>,
   };
 };
