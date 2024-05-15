@@ -20,6 +20,13 @@ export interface RestateContext {}
 export interface RestateObjectContext {}
 export interface RestateObjectSharedContext {}
 
+// workflow
+export interface RestateWorkflowSharedContext
+  extends RestateObjectSharedContext {}
+export interface RestateWorkflowContext
+  extends RestateObjectContext,
+    RestateWorkflowSharedContext {}
+
 // ----------- service -------------------------------------------------------
 
 export type ServiceHandler<F> = F extends (
@@ -74,4 +81,37 @@ export type VirtualObject<U> = {
 export type VirtualObjectDefinition<P extends string, M> = {
   name: P;
   object?: VirtualObject<M>;
+};
+
+// ----------- workflow -------------------------------------------------------
+
+export type WorkflowObjectSharedHandler<F> = F extends (
+  ctx: infer _C extends RestateWorkflowSharedContext,
+  param: any
+) => Promise<any>
+  ? F
+  : F extends (
+      ctx: infer _C extends RestateWorkflowSharedContext
+    ) => Promise<any>
+  ? F
+  : never;
+
+export type WorkflowHandler<F> = F extends (
+  ctx: infer _C extends RestateWorkflowContext,
+  param: any
+) => Promise<any>
+  ? F
+  : F extends (ctx: infer _C extends RestateWorkflowContext) => Promise<any>
+  ? F
+  : never;
+
+export type Workflow<U> = {
+  [K in keyof U]: U[K] extends WorkflowHandler<infer F>
+    ? WithoutRpcContext<F>
+    : never;
+};
+
+export type WorkflowDefinition<P extends string, M> = {
+  name: P;
+  workflow?: Workflow<M>;
 };
