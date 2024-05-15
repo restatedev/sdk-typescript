@@ -14,6 +14,8 @@ export {
   ObjectContext,
   ObjectSharedContext,
   CombineablePromise,
+  WorkflowContext,
+  WorkflowSharedContext,
   Rand,
 } from "./context";
 

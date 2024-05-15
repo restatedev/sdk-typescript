@@ -168,7 +168,7 @@ export class LambdaHandler {
         connection,
         invocation,
         ProtocolMode.REQUEST_RESPONSE,
-        handler.keyed(),
+        handler.kind(),
         invocation.inferLoggerContext({
           AWSRequestId: context.awsRequestId,
         })

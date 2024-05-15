@@ -29,6 +29,7 @@ import {
   VirtualObject,
 } from "../src/public_api";
 import { ProtocolMode } from "../src/types/discovery";
+import { HandlerKind } from "../src/types/rpc";
 
 export type TestRequest = {
   name: string;
@@ -162,7 +163,7 @@ export class TestDriver implements Connection {
       this,
       invocation,
       this.protocolMode,
-      true,
+      HandlerKind.EXCLUSIVE,
       invocation.inferLoggerContext()
     );
   }

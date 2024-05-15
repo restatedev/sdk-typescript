@@ -12,11 +12,13 @@
 import {
   CombineablePromise,
   ContextDate,
+  DurablePromise,
   ObjectContext,
   Rand,
   Request,
   RunAction,
   SendOptions,
+  WorkflowContext,
 } from "./context";
 import { StateMachine } from "./state_machine";
 import {
@@ -57,7 +59,7 @@ import {
 } from "./types/errors";
 import { jsonSerialize, jsonDeserialize } from "./utils/utils";
 import { PartialMessage, protoInt64 } from "@bufbuild/protobuf";
-import type { Client, SendClient } from "./types/rpc";
+import { Client, HandlerKind, SendClient } from "./types/rpc";
 import type {
   ServiceDefinition,
   VirtualObjectDefinition,
@@ -82,7 +84,7 @@ export type InternalCombineablePromise<T> = CombineablePromise<T> & {
   journalIndex: number;
 };
 
-export class ContextImpl implements ObjectContext {
+export class ContextImpl implements ObjectContext, WorkflowContext {
   // here, we capture the context information for actions on the Restate context that
   // are executed within other actions, such as
   // ctx.oneWayCall( () => client.foo(bar) );
@@ -109,7 +111,7 @@ export class ContextImpl implements ObjectContext {
   constructor(
     id: Buffer,
     public readonly console: Console,
-    public readonly keyedContext: boolean,
+    public readonly handlerKind: HandlerKind,
     public readonly keyedContextKey: string | undefined,
     invocationValue: Uint8Array,
     invocationHeaders: ReadonlyMap<string, string>,
@@ -126,11 +128,26 @@ export class ContextImpl implements ObjectContext {
     };
   }
 
+  public promise<T = void>(/*name: string*/): DurablePromise<T> {
+    // TODO: complete this
+    throw new Error("Method not implemented.");
+  }
+
   public get key(): string {
-    if (!this.keyedContextKey) {
-      throw new TerminalError("unexpected missing key");
+    switch (this.handlerKind) {
+      case HandlerKind.EXCLUSIVE:
+      case HandlerKind.SHARED:
+      case HandlerKind.WORKFLOW: {
+        if (this.keyedContextKey === undefined) {
+          throw new TerminalError("unexpected missing key");
+        }
+        return this.keyedContextKey;
+      }
+      case HandlerKind.SERVICE:
+        throw new TerminalError("unexpected missing key");
+      default:
+        throw new TerminalError("unknown handler type");
     }
-    return this.keyedContextKey;
   }
 
   public request(): Request {
@@ -141,7 +158,6 @@ export class ContextImpl implements ObjectContext {
   public get<T>(name: string): Promise<T | null> {
     // Check if this is a valid action
     this.checkState("get state");
-    this.checkStateOperation("get state");
 
     // Create the message and let the state machine process it
     const msg = new GetStateEntryMessage({ key: Buffer.from(name) });
@@ -200,7 +216,6 @@ export class ContextImpl implements ObjectContext {
 
   public set<T>(name: string, value: T): void {
     this.checkState("set state");
-    this.checkStateOperation("set state");
     const msg = this.stateMachine.localStateStore.set(name, value);
     this.stateMachine
       .handleUserCodeMessage(SET_STATE_ENTRY_MESSAGE_TYPE, msg)
@@ -209,7 +224,6 @@ export class ContextImpl implements ObjectContext {
 
   public clear(name: string): void {
     this.checkState("clear state");
-    this.checkStateOperation("clear state");
 
     const msg = this.stateMachine.localStateStore.clear(name);
     this.stateMachine
@@ -632,15 +646,6 @@ export class ContextImpl implements ObjectContext {
     if (context.type === CallContextType.Run) {
       throw new TerminalError(
         `You cannot do ${callType} calls from within a run.`,
-        { errorCode: INTERNAL_ERROR_CODE }
-      );
-    }
-  }
-
-  private checkStateOperation(callType: string): void {
-    if (!this.keyedContext) {
-      throw new TerminalError(
-        `You can do ${callType} calls only from a virtual object`,
         { errorCode: INTERNAL_ERROR_CODE }
       );
     }

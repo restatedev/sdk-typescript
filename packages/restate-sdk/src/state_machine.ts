@@ -54,6 +54,7 @@ import {
 import { CombinatorEntryMessage } from "./generated/proto/javascript_pb";
 import { ProtocolMode } from "./types/discovery";
 import { Buffer } from "node:buffer";
+import { HandlerKind } from "./types/rpc";
 
 export class StateMachine implements RestateStreamConsumer {
   private journal: Journal;
@@ -86,7 +87,7 @@ export class StateMachine implements RestateStreamConsumer {
     private readonly connection: Connection,
     private readonly invocation: Invocation,
     private readonly protocolMode: ProtocolMode,
-    keyedContext: boolean,
+    handlerKind: HandlerKind,
     loggerContext: LoggerContext,
     private readonly suspensionMillis: number = 30_000
   ) {
@@ -97,7 +98,7 @@ export class StateMachine implements RestateStreamConsumer {
       this.invocation.id,
       // The console exposed by RestateContext filters logs in replay, while the internal one is based on the ENV variables.
       createRestateConsole(loggerContext, () => !this.journal.isReplaying()),
-      keyedContext,
+      handlerKind,
       invocation.userKey,
       invocation.invocationValue,
       invocation.invocationHeaders,

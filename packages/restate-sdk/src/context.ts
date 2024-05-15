@@ -14,6 +14,8 @@ import type {
   RestateContext,
   RestateObjectContext,
   RestateObjectSharedContext,
+  RestateWorkflowContext,
+  RestateWorkflowSharedContext,
   ServiceDefinition,
   VirtualObjectDefinition,
 } from "@restatedev/restate-sdk-core";
@@ -581,3 +583,20 @@ export const CombineablePromise = {
     }>;
   },
 };
+
+export type DurablePromise<T> = CombineablePromise<T> & {
+  peek(): Promise<T | undefined>;
+  resolve(value?: T): void;
+  reject(errorMsg: string): void;
+};
+
+export interface WorkflowSharedContext
+  extends ObjectSharedContext,
+    RestateWorkflowSharedContext {
+  promise<T = void>(name: string): DurablePromise<T>;
+}
+
+export interface WorkflowContext
+  extends WorkflowSharedContext,
+    ObjectContext,
+    RestateWorkflowContext {}

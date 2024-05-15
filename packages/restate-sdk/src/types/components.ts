@@ -29,7 +29,7 @@ export interface ComponentHandler {
   name(): string;
   component(): Component;
   invoke(context: ContextImpl, input: Uint8Array): Promise<Uint8Array>;
-  keyed(): boolean;
+  kind(): HandlerKind;
 }
 
 //
@@ -96,8 +96,8 @@ export class ServiceHandler implements ComponentHandler {
     this.handlerWrapper = handlerWrapper;
   }
 
-  keyed(): boolean {
-    return false;
+  kind(): HandlerKind {
+    return this.handlerWrapper.kind;
   }
 
   invoke(context: ContextImpl, input: Uint8Array): Promise<Uint8Array> {
@@ -107,6 +107,7 @@ export class ServiceHandler implements ComponentHandler {
   name(): string {
     return this.handlerName;
   }
+
   component(): Component {
     return this.parent;
   }
@@ -180,8 +181,8 @@ export class VirtualObjectHandler implements ComponentHandler {
     return this.parent;
   }
 
-  keyed(): boolean {
-    return true;
+  kind(): HandlerKind {
+    return this.handlerWrapper.kind;
   }
 
   invoke(context: ContextImpl, input: Uint8Array): Promise<Uint8Array> {
@@ -255,8 +256,8 @@ export class WorkflowHandler implements ComponentHandler {
     return this.parent;
   }
 
-  keyed(): boolean {
-    return true;
+  kind(): HandlerKind {
+    return this.handlerWrapper.kind;
   }
 
   invoke(context: ContextImpl, input: Uint8Array): Promise<Uint8Array> {

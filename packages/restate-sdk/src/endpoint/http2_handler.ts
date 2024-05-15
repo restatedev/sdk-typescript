@@ -240,7 +240,7 @@ async function handleInvocation(
     connection,
     invocation,
     ProtocolMode.BIDI_STREAM,
-    handler.keyed(),
+    handler.kind(),
     invocation.inferLoggerContext()
   );
   connection.pipeToConsumer(stateMachine);
