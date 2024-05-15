@@ -24,7 +24,7 @@ import {
   VirtualObjectHandler,
   parseUrlComponents,
 } from "../types/components";
-import { Deployment, ProtocolMode } from "../types/discovery";
+import { Endpoint, ProtocolMode } from "../types/discovery";
 import { validateRequestSignature } from "./request_signing/validate";
 import { ServerHttp2Stream } from "node:http2";
 import { X_RESTATE_SERVER } from "../user_agent";
@@ -117,7 +117,7 @@ export class Http2Handler {
         selectSupportedServiceDiscoveryProtocolVersion(acceptVersionsString);
 
       if (
-        serviceDiscoveryProtocolVersion ===
+        serviceDiscoveryProtocolVersion ==
         ServiceDiscoveryProtocolVersion.SERVICE_DISCOVERY_PROTOCOL_VERSION_UNSPECIFIED
       ) {
         const errorMessage = `Unsupported service discovery protocol version '${acceptVersionsString}'`;
@@ -129,8 +129,8 @@ export class Http2Handler {
         ProtocolMode.BIDI_STREAM
       );
       return respondDiscovery(
-        discovery,
         serviceDiscoveryProtocolVersion,
+        discovery,
         stream
       );
     }
@@ -184,8 +184,8 @@ function respondUnsupportedProtocolVersion(
 }
 
 function respondDiscovery(
-  response: Deployment,
   serviceDiscoveryProtocolVersion: ServiceDiscoveryProtocolVersion,
+  response: Endpoint,
   http2Stream: http2.ServerHttp2Stream
 ) {
   let responseData;

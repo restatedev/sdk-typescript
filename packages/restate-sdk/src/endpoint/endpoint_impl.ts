@@ -171,17 +171,17 @@ export class EndpointImpl implements RestateEndpoint {
     });
   }
 
-  computeDiscovery(protocolMode: discovery.ProtocolMode): discovery.Deployment {
+  computeDiscovery(protocolMode: discovery.ProtocolMode): discovery.Endpoint {
     const services = [...this.services.values()].map((c) => c.discovery());
 
-    const deployment: discovery.Deployment = {
+    const endpoint: discovery.Endpoint = {
       protocolMode,
       minProtocolVersion: 1,
       maxProtocolVersion: 2,
       services,
     };
 
-    return deployment;
+    return endpoint;
   }
 
   private bindServiceComponent(name: string, router: Service<any>) {
