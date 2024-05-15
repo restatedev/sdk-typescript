@@ -31,6 +31,9 @@ import {
   StartMessage,
   SuspensionMessage,
   RunEntryMessage,
+  GetPromiseEntryMessage,
+  PeekPromiseEntryMessage,
+  CompletePromiseEntryMessage,
   ServiceProtocolVersion,
 } from "../generated/proto/protocol_pb";
 import { ServiceDiscoveryProtocolVersion } from "../generated/proto/discovery_pb";
@@ -55,6 +58,9 @@ export {
   StartMessage,
   SuspensionMessage,
   EntryAckMessage,
+  GetPromiseEntryMessage,
+  PeekPromiseEntryMessage,
+  CompletePromiseEntryMessage,
 } from "../generated/proto/protocol_pb";
 
 // Export the protocol message types as defined by the restate protocol.
@@ -85,7 +91,10 @@ export const SIDE_EFFECT_ENTRY_MESSAGE_TYPE = 0x0c00n + 5n;
 // Side effects are custom messages because the runtime does not need to inspect them
 export const COMBINATOR_ENTRY_MESSAGE = 0xfc02n;
 
-// Restate DuplexStream
+// Durable promise
+export const GET_PROMISE_MESSAGE_TYPE = 0x808n;
+export const PEEK_PROMISE_MESSAGE_TYPE = 0x809n;
+export const COMPLETE_PROMISE_MESSAGE_TYPE = 0x80an;
 
 // Message types in the protocol.
 // Custom message types (per SDK) such as side effect entry message should not be included here.
@@ -110,6 +119,9 @@ export const KNOWN_MESSAGE_TYPES = new Set([
   COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
   SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
   COMBINATOR_ENTRY_MESSAGE,
+  GET_PROMISE_MESSAGE_TYPE,
+  PEEK_PROMISE_MESSAGE_TYPE,
+  COMPLETE_PROMISE_MESSAGE_TYPE,
 ]);
 
 const PROTOBUF_MESSAGE_NAME_BY_TYPE = new Map<bigint, string>([
@@ -133,13 +145,16 @@ const PROTOBUF_MESSAGE_NAME_BY_TYPE = new Map<bigint, string>([
   [COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE, "CompleteAwakeableEntryMessage"],
   [SIDE_EFFECT_ENTRY_MESSAGE_TYPE, "RunEntryMessage"],
   [COMBINATOR_ENTRY_MESSAGE, "CombinatorEntryMessage"],
+  [GET_PROMISE_MESSAGE_TYPE, "GetPromiseEntryMessage"],
+  [PEEK_PROMISE_MESSAGE_TYPE, "PeekPromiseEntryMessage"],
+  [COMPLETE_PROMISE_MESSAGE_TYPE, "CompletePromiseEntryMessage"],
 ]);
 
-export function formatMessageType(messageType: bigint) {
+export const formatMessageType = (messageType: bigint) => {
   return (
-    PROTOBUF_MESSAGE_NAME_BY_TYPE.get(messageType) || messageType.toString()
+    PROTOBUF_MESSAGE_NAME_BY_TYPE.get(messageType) ?? messageType.toString()
   );
-}
+};
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const PROTOBUF_MESSAGES: Array<[bigint, typeof Message<any>]> = [
@@ -163,6 +178,9 @@ const PROTOBUF_MESSAGES: Array<[bigint, typeof Message<any>]> = [
   [COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE, CompleteAwakeableEntryMessage],
   [SIDE_EFFECT_ENTRY_MESSAGE_TYPE, RunEntryMessage],
   [COMBINATOR_ENTRY_MESSAGE, CombinatorEntryMessage],
+  [GET_PROMISE_MESSAGE_TYPE, GetPromiseEntryMessage],
+  [PEEK_PROMISE_MESSAGE_TYPE, PeekPromiseEntryMessage],
+  [COMPLETE_PROMISE_MESSAGE_TYPE, CompletePromiseEntryMessage],
 ];
 
 export const PROTOBUF_MESSAGE_BY_TYPE = new Map(PROTOBUF_MESSAGES);
@@ -187,7 +205,10 @@ export type ProtocolMessage =
   | AwakeableEntryMessage
   | CompleteAwakeableEntryMessage
   | RunEntryMessage
-  | CombinatorEntryMessage;
+  | CombinatorEntryMessage
+  | GetPromiseEntryMessage
+  | PeekPromiseEntryMessage
+  | CompletePromiseEntryMessage;
 
 // These message types will trigger sending a suspension message from the runtime
 // for each of the protocol modes
@@ -200,6 +221,10 @@ export const SUSPENSION_TRIGGERS: bigint[] = [
   COMBINATOR_ENTRY_MESSAGE,
   // We need it because of the ack
   SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
+  // promises need completion
+  GET_PROMISE_MESSAGE_TYPE,
+  PEEK_PROMISE_MESSAGE_TYPE,
+  COMPLETE_PROMISE_MESSAGE_TYPE,
 ];
 
 const MIN_SERVICE_PROTOCOL_VERSION: ServiceProtocolVersion =
