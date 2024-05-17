@@ -26,7 +26,11 @@ export type ValueOrError<T> = {
 
 export type api<P extends string> = restate.VirtualObjectDefinition<
   P,
-  restate.VirtualObject<typeof workflowStateService>
+  restate.VirtualObject<
+    typeof workflowStateService,
+    restate.ObjectContext,
+    restate.ObjectSharedContext
+  >
 >;
 
 export const workflowStateService = {

@@ -32,6 +32,8 @@ class SharedContextImpl<P extends string> implements wf.SharedWfContext {
   }
 
   get<T>(stateName: string): Promise<T | null> {
+    this.ctx.objectClient(this.stateServiceApi, "dsf");
+
     return this.ctx
       .objectClient(this.stateServiceApi, this.wfId)
       .getState(stateName) as Promise<T | null>;

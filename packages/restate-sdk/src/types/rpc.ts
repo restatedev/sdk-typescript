@@ -12,7 +12,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-namespace */
 /* eslint-disable @typescript-eslint/ban-types */
-import { CombineablePromise } from "../context";
+import {
+  CombineablePromise,
+  Context,
+  ObjectContext,
+  ObjectSharedContext,
+  WorkflowContext,
+  WorkflowSharedContext,
+} from "../context";
 import {
   deserializeJson,
   deserializeNoop,
@@ -31,6 +38,7 @@ import {
   WorkflowHandler,
   WorkflowDefinition,
   Workflow,
+  WorkflowSharedHandler,
 } from "@restatedev/restate-sdk-core";
 
 // ----------- rpc clients -------------------------------------------------------
@@ -174,145 +182,209 @@ export namespace handlers {
    */
   export function handler<F>(
     opts: ServiceHandlerOpts,
-    fn: ServiceHandler<F>
+    fn: ServiceHandler<F, Context>
   ): F {
     return HandlerWrapper.from(HandlerKind.SERVICE, fn, opts).transpose();
   }
 
-  export function workflow<F>(
-    opts: WorkflowHandlerOpts,
-    fn: WorkflowHandler<F>
-  ): F;
+  export namespace workflow {
+    export function workflow<F>(
+      opts: WorkflowHandlerOpts,
+      fn: WorkflowHandler<F, WorkflowContext>
+    ): F;
 
-  export function workflow<F>(fn: WorkflowHandler<F>): F;
+    export function workflow<F>(fn: WorkflowHandler<F, WorkflowContext>): F;
 
-  export function workflow<F>(
-    optsOrFn: WorkflowHandlerOpts | WorkflowHandler<F>,
-    fn?: WorkflowHandler<F>
-  ): F {
-    if (typeof optsOrFn == "function") {
-      return HandlerWrapper.from(HandlerKind.WORKFLOW, optsOrFn).transpose();
+    export function workflow<F>(
+      optsOrFn: WorkflowHandlerOpts | WorkflowHandler<F, WorkflowContext>,
+      fn?: WorkflowHandler<F, WorkflowContext>
+    ): F {
+      if (typeof optsOrFn == "function") {
+        return HandlerWrapper.from(HandlerKind.WORKFLOW, optsOrFn).transpose();
+      }
+      const opts = optsOrFn satisfies WorkflowHandlerOpts;
+      if (typeof fn !== "function") {
+        throw new TypeError("The second argument must be a function");
+      }
+      return HandlerWrapper.from(HandlerKind.WORKFLOW, fn, opts).transpose();
     }
-    const opts = optsOrFn satisfies WorkflowHandlerOpts;
-    if (typeof fn !== "function") {
-      throw new TypeError("The second argument must be a function");
+
+    /**
+     * Creates a shared handler for a workflow.
+     *
+     * A shared handler allows a read-only concurrent execution
+     * for a given key.
+     *
+     * note: This applies only to a virtual object.
+     *
+     * @param opts additional configurations
+     * @param fn the handler to execute
+     */
+    export function shared<F>(
+      opts: WorkflowHandlerOpts,
+      fn: WorkflowSharedHandler<F, WorkflowSharedContext>
+    ): F;
+
+    /**
+     * Creates a shared handler for a virtual Object.
+     *
+     * A shared handler allows a read-only concurrent execution
+     * for a given key.
+     *
+     * note: This applies only to a virtual object.
+     *
+     * @param opts additional configurations
+     * @param fn the handler to execute
+     */
+    export function shared<F>(
+      fn: WorkflowSharedHandler<F, WorkflowSharedContext>
+    ): F;
+
+    /**
+     * Creates a shared handler for a virtual Object.
+     *
+     * A shared handler allows a read-only concurrent execution
+     * for a given key.
+     *
+     * note: This applies only to a virtual object.
+     *
+     * @param opts additional configurations
+     * @param fn the handler to execute
+     */
+    export function shared<F>(
+      optsOrFn:
+        | WorkflowHandlerOpts
+        | WorkflowSharedHandler<F, WorkflowSharedContext>,
+      fn?: WorkflowSharedHandler<F, WorkflowSharedContext>
+    ): F {
+      if (typeof optsOrFn == "function") {
+        return HandlerWrapper.from(HandlerKind.SHARED, optsOrFn).transpose();
+      }
+      const opts = optsOrFn satisfies ObjectHandlerOpts;
+      if (typeof fn !== "function") {
+        throw new TypeError("The second argument must be a function");
+      }
+      return HandlerWrapper.from(HandlerKind.SHARED, fn, opts).transpose();
     }
-    return HandlerWrapper.from(HandlerKind.WORKFLOW, fn, opts).transpose();
   }
 
-  /**
-   * Creates an exclusive handler for a virtual Object.
-   *
-   * note : This applies only to a virtual object.
-   *
-   * @param opts additional configurations
-   * @param fn the handler to execute
-   */
-  export function exclusive<F>(
-    opts: ObjectHandlerOpts,
-    fn: ObjectHandler<F>
-  ): F;
+  export namespace object {
+    /**
+     * Creates an exclusive handler for a virtual Object.
+     *
+     * note : This applies only to a virtual object.
+     *
+     * @param opts additional configurations
+     * @param fn the handler to execute
+     */
+    export function exclusive<F>(
+      opts: ObjectHandlerOpts,
+      fn: ObjectHandler<F, ObjectContext>
+    ): F;
 
-  /**
-   * Creates an exclusive handler for a virtual Object.
-   *
-   *
-   * note 1: This applies only to a virtual object.
-   * note 2: This is the default for virtual objects, so if no
-   *         additional reconfiguration is needed, you can simply
-   *         use the handler directly (no need to use exclusive).
-   *         This variant here is only for symmetry/convenance.
-   *
-   * @param fn the handler to execute
-   */
-  export function exclusive<F>(fn: ObjectHandler<F>): F;
+    /**
+     * Creates an exclusive handler for a virtual Object.
+     *
+     *
+     * note 1: This applies only to a virtual object.
+     * note 2: This is the default for virtual objects, so if no
+     *         additional reconfiguration is needed, you can simply
+     *         use the handler directly (no need to use exclusive).
+     *         This variant here is only for symmetry/convenance.
+     *
+     * @param fn the handler to execute
+     */
+    export function exclusive<F>(fn: ObjectHandler<F, ObjectContext>): F;
 
-  /**
-   * Creates an exclusive handler for a virtual Object.
-   *
-   *
-   * note 1: This applies only to a virtual object.
-   * note 2: This is the default for virtual objects, so if no
-   *         additional reconfiguration is needed, you can simply
-   *         use the handler directly (no need to use exclusive).
-   *         This variant here is only for symmetry/convenance.
-   *
-   * @param opts additional configurations
-   * @param fn the handler to execute
-   */
-  export function exclusive<F>(
-    optsOrFn: ObjectHandlerOpts | ObjectHandler<F>,
-    fn?: ObjectHandler<F>
-  ): F {
-    if (typeof optsOrFn == "function") {
-      return HandlerWrapper.from(HandlerKind.EXCLUSIVE, optsOrFn).transpose();
+    /**
+     * Creates an exclusive handler for a virtual Object.
+     *
+     *
+     * note 1: This applies only to a virtual object.
+     * note 2: This is the default for virtual objects, so if no
+     *         additional reconfiguration is needed, you can simply
+     *         use the handler directly (no need to use exclusive).
+     *         This variant here is only for symmetry/convenance.
+     *
+     * @param opts additional configurations
+     * @param fn the handler to execute
+     */
+    export function exclusive<F>(
+      optsOrFn: ObjectHandlerOpts | ObjectHandler<F, ObjectContext>,
+      fn?: ObjectHandler<F, ObjectContext>
+    ): F {
+      if (typeof optsOrFn == "function") {
+        return HandlerWrapper.from(HandlerKind.EXCLUSIVE, optsOrFn).transpose();
+      }
+      const opts = optsOrFn satisfies ObjectHandlerOpts;
+      if (typeof fn !== "function") {
+        throw new TypeError("The second argument must be a function");
+      }
+      return HandlerWrapper.from(HandlerKind.EXCLUSIVE, fn, opts).transpose();
     }
-    const opts = optsOrFn satisfies ObjectHandlerOpts;
-    if (typeof fn !== "function") {
-      throw new TypeError("The second argument must be a function");
-    }
-    return HandlerWrapper.from(HandlerKind.EXCLUSIVE, fn, opts).transpose();
-  }
 
-  /**
-   * Creates a shared handler for a virtual Object.
-   *
-   * A shared handler allows a read-only concurrent execution
-   * for a given key.
-   *
-   * note: This applies only to a virtual object.
-   *
-   * @param opts additional configurations
-   * @param fn the handler to execute
-   */
-  export function shared<F>(
-    opts: ObjectHandlerOpts,
-    fn: ObjectSharedHandler<F>
-  ): F;
+    /**
+     * Creates a shared handler for a virtual Object.
+     *
+     * A shared handler allows a read-only concurrent execution
+     * for a given key.
+     *
+     * note: This applies only to a virtual object.
+     *
+     * @param opts additional configurations
+     * @param fn the handler to execute
+     */
+    export function shared<F>(
+      opts: ObjectHandlerOpts,
+      fn: ObjectSharedHandler<F, ObjectSharedContext>
+    ): F;
 
-  /**
-   * Creates a shared handler for a virtual Object.
-   *
-   * A shared handler allows a read-only concurrent execution
-   * for a given key.
-   *
-   * note: This applies only to a virtual object.
-   *
-   * @param opts additional configurations
-   * @param fn the handler to execute
-   */
-  export function shared<F>(fn: ObjectSharedHandler<F>): F;
+    /**
+     * Creates a shared handler for a virtual Object.
+     *
+     * A shared handler allows a read-only concurrent execution
+     * for a given key.
+     *
+     * note: This applies only to a virtual object.
+     *
+     * @param opts additional configurations
+     * @param fn the handler to execute
+     */
+    export function shared<F>(
+      fn: ObjectSharedHandler<F, ObjectSharedContext>
+    ): F;
 
-  /**
-   * Creates a shared handler for a virtual Object.
-   *
-   * A shared handler allows a read-only concurrent execution
-   * for a given key.
-   *
-   * note: This applies only to a virtual object.
-   *
-   * @param opts additional configurations
-   * @param fn the handler to execute
-   */
-  export function shared<F>(
-    optsOrFn: ObjectHandlerOpts | ObjectSharedHandler<F>,
-    fn?: ObjectSharedHandler<F>
-  ): F {
-    if (typeof optsOrFn == "function") {
-      return HandlerWrapper.from(HandlerKind.SHARED, optsOrFn).transpose();
+    /**
+     * Creates a shared handler for a virtual Object.
+     *
+     * A shared handler allows a read-only concurrent execution
+     * for a given key.
+     *
+     * note: This applies only to a virtual object.
+     *
+     * @param opts additional configurations
+     * @param fn the handler to execute
+     */
+    export function shared<F>(
+      optsOrFn: ObjectHandlerOpts | ObjectSharedHandler<F, ObjectSharedContext>,
+      fn?: ObjectSharedHandler<F, ObjectSharedContext>
+    ): F {
+      if (typeof optsOrFn == "function") {
+        return HandlerWrapper.from(HandlerKind.SHARED, optsOrFn).transpose();
+      }
+      const opts = optsOrFn satisfies ObjectHandlerOpts;
+      if (typeof fn !== "function") {
+        throw new TypeError("The second argument must be a function");
+      }
+      return HandlerWrapper.from(HandlerKind.SHARED, fn, opts).transpose();
     }
-    const opts = optsOrFn satisfies ObjectHandlerOpts;
-    if (typeof fn !== "function") {
-      throw new TypeError("The second argument must be a function");
-    }
-    return HandlerWrapper.from(HandlerKind.SHARED, fn, opts).transpose();
   }
 }
 
 // ----------- services ----------------------------------------------
 
 export type ServiceOpts<U> = {
-  [K in keyof U]: U[K] extends ServiceHandler<any> ? U[K] : never;
+  [K in keyof U]: U[K] extends ServiceHandler<any, Context> ? U[K] : never;
 };
 
 /**
@@ -323,7 +395,7 @@ export type ServiceOpts<U> = {
 export const service = <P extends string, M>(service: {
   name: P;
   handlers: ServiceOpts<M>;
-}): ServiceDefinition<P, Service<M>> => {
+}): ServiceDefinition<P, Service<M, Context>> => {
   if (!service.handlers) {
     throw new Error("service must be defined");
   }
@@ -349,7 +421,11 @@ export const service = <P extends string, M>(service: {
 // ----------- objects ----------------------------------------------
 
 export type ObjectOpts<U> = {
-  [K in keyof U]: U[K] extends ObjectHandler<U[K]> ? U[K] : never;
+  [K in keyof U]: U[K] extends ObjectHandler<U[K], ObjectContext>
+    ? U[K]
+    : U[K] extends ObjectHandler<U[K], ObjectSharedContext>
+    ? U[K]
+    : never;
 };
 
 /**
@@ -360,7 +436,10 @@ export type ObjectOpts<U> = {
 export const object = <P extends string, M>(object: {
   name: P;
   handlers: ObjectOpts<M>;
-}): VirtualObjectDefinition<P, VirtualObject<M>> => {
+}): VirtualObjectDefinition<
+  P,
+  VirtualObject<M, ObjectContext, ObjectSharedContext>
+> => {
   if (!object.handlers) {
     throw new Error("object options must be defined");
   }
@@ -388,7 +467,13 @@ export const object = <P extends string, M>(object: {
 // ----------- workflows ----------------------------------------------
 
 export type WorkflowOpts<U> = {
-  [K in keyof U]: U[K] extends WorkflowHandler<U[K]> ? U[K] : never;
+  [K in keyof U]: K extends "run"
+    ? U[K] extends WorkflowHandler<U[K], WorkflowContext>
+      ? U[K]
+      : never
+    : U[K] extends WorkflowSharedHandler<U[K], WorkflowSharedContext>
+    ? U[K]
+    : never;
 };
 
 /**
@@ -399,7 +484,10 @@ export type WorkflowOpts<U> = {
 export const workflow = <P extends string, M>(workflow: {
   name: P;
   handlers: WorkflowOpts<M>;
-}): WorkflowDefinition<P, Workflow<M>> => {
+}): WorkflowDefinition<
+  P,
+  Workflow<M, WorkflowContext, WorkflowSharedContext>
+> => {
   if (!workflow.handlers) {
     throw new Error("workflow must contain handlers");
   }
