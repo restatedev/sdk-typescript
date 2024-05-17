@@ -28,6 +28,12 @@ import { decodeLambdaBody } from "../src/io/decoder";
 import { TestGreeter, TestResponse } from "./testdriver";
 import { ServiceType, Deployment } from "../src/types/discovery";
 import { X_RESTATE_SERVER } from "../src/user_agent";
+import {
+  serviceDiscoveryProtocolVersionToHeaderValue,
+  serviceProtocolVersionToHeaderValue,
+} from "../src/types/protocol";
+import { ServiceProtocolVersion } from "../src/generated/proto/protocol_pb";
+import { ServiceDiscoveryProtocolVersion } from "../src/generated/proto/discovery_pb";
 
 class LambdaGreeter implements TestGreeter {
   async greet(
@@ -117,7 +123,7 @@ describe("LambdaGreeter", () => {
 
     const request = apiProxyGatewayEvent(
       "/invoke/greeter/greet",
-      "application/restate",
+      serviceProtocolVersionToHeaderValue(ServiceProtocolVersion.V1),
       serializeMessages([
         startMessage({ knownEntries: 2, key: "Pete" }),
         inputMessage(greetRequest("Pete")),
@@ -128,7 +134,9 @@ describe("LambdaGreeter", () => {
 
     expect(result.statusCode).toStrictEqual(200);
     expect(result.headers).toStrictEqual({
-      "content-type": "application/restate",
+      "content-type": serviceProtocolVersionToHeaderValue(
+        ServiceProtocolVersion.V1
+      ),
       "x-restate-server": X_RESTATE_SERVER,
     });
     expect(result.isBase64Encoded).toStrictEqual(true);
@@ -143,7 +151,7 @@ describe("LambdaGreeter", () => {
 
     const request = apiProxyGatewayEvent(
       "/invoke/greeter",
-      "application/restate",
+      serviceProtocolVersionToHeaderValue(ServiceProtocolVersion.V1),
       serializeMessages([
         startMessage({ knownEntries: 1 }),
         inputMessage(greetRequest("Pete")),
@@ -153,10 +161,30 @@ describe("LambdaGreeter", () => {
 
     expect(result.statusCode).toStrictEqual(404);
     expect(result.headers).toStrictEqual({
-      "content-type": "application/restate",
+      "content-type": "text/plain",
       "x-restate-server": X_RESTATE_SERVER,
     });
     expect(result.isBase64Encoded).toStrictEqual(true);
+  });
+
+  it("fails on unsupported service protocol", async () => {
+    const handler = getTestHandler();
+
+    const request = apiProxyGatewayEvent(
+      "/invoke/greeter/greet",
+      "unsupportedServiceProtocol",
+      serializeMessages([
+        startMessage({ knownEntries: 1 }),
+        inputMessage(greetRequest("Pete")),
+      ])
+    );
+    const result = await handler(request, {});
+
+    expect(result.statusCode).toStrictEqual(415);
+    expect(result.headers).toStrictEqual({
+      "content-type": "text/plain",
+      "x-restate-server": X_RESTATE_SERVER,
+    });
   });
 
   it("fails on invalid path no 'invoke' or 'discover'", async () => {
@@ -164,7 +192,7 @@ describe("LambdaGreeter", () => {
 
     const request = apiProxyGatewayEvent(
       "/something/greeter/greet",
-      "application/restate",
+      serviceProtocolVersionToHeaderValue(ServiceProtocolVersion.V1),
       serializeMessages([
         startMessage({ knownEntries: 1 }),
         inputMessage(greetRequest("Pete")),
@@ -174,7 +202,7 @@ describe("LambdaGreeter", () => {
 
     expect(result.statusCode).toStrictEqual(404);
     expect(result.headers).toStrictEqual({
-      "content-type": "application/restate",
+      "content-type": "text/plain",
       "x-restate-server": X_RESTATE_SERVER,
     });
   });
@@ -184,7 +212,7 @@ describe("LambdaGreeter", () => {
 
     const request = apiProxyGatewayEvent(
       "/invoke/greeter/greets",
-      "application/restate",
+      serviceProtocolVersionToHeaderValue(ServiceProtocolVersion.V1),
       serializeMessages([
         startMessage({ knownEntries: 1 }),
         inputMessage(greetRequest("Pete")),
@@ -194,7 +222,7 @@ describe("LambdaGreeter", () => {
 
     expect(result.statusCode).toStrictEqual(404);
     expect(result.headers).toStrictEqual({
-      "content-type": "application/restate",
+      "content-type": "text/plain",
       "x-restate-server": X_RESTATE_SERVER,
     });
   });
@@ -205,14 +233,19 @@ describe("LambdaGreeter", () => {
     const request: APIGatewayProxyEvent = apiProxyGatewayEvent(
       "/discover",
       "application/json",
-      Buffer.alloc(0).toString("base64")
+      Buffer.alloc(0).toString("base64"),
+      serviceDiscoveryProtocolVersionToHeaderValue(
+        ServiceDiscoveryProtocolVersion.V1
+      )
     );
 
     const result = await handler(request, {});
 
     expect(result.statusCode).toStrictEqual(200);
     expect(result.headers).toStrictEqual({
-      "content-type": "application/json",
+      "content-type": serviceDiscoveryProtocolVersionToHeaderValue(
+        ServiceDiscoveryProtocolVersion.V1
+      ),
       "x-restate-server": X_RESTATE_SERVER,
     });
     expect(result.isBase64Encoded).toStrictEqual(true);
@@ -222,6 +255,25 @@ describe("LambdaGreeter", () => {
     );
     expect(decodedResponse.services[0].name).toStrictEqual("greeter");
     expect(decodedResponse.services[0].ty).toEqual(ServiceType.VIRTUAL_OBJECT);
+  });
+
+  it("fails on wrong discovery protocol", async () => {
+    const handler = getTestHandler();
+
+    const request: APIGatewayProxyEvent = apiProxyGatewayEvent(
+      "/discover",
+      "application/json",
+      Buffer.alloc(0).toString("base64"),
+      "unsupportedDiscoveryProtocol"
+    );
+
+    const result = await handler(request, {});
+
+    expect(result.statusCode).toStrictEqual(415);
+    expect(result.headers).toStrictEqual({
+      "content-type": "text/plain",
+      "x-restate-server": X_RESTATE_SERVER,
+    });
   });
 });
 
@@ -244,14 +296,15 @@ function getTestHandler() {
 function apiProxyGatewayEvent(
   invokePath: string,
   contentType: string,
-  messagesBase64: string
+  messagesBase64: string,
+  accept?: string
 ): APIGatewayProxyEvent {
   return {
     resource: "",
     stageVariables: null,
     body: messagesBase64,
     httpMethod: "POST",
-    headers: { "content-type": contentType },
+    headers: { "content-type": contentType, accept: accept },
     queryStringParameters: {},
     pathParameters: {},
     requestContext: {} as never,

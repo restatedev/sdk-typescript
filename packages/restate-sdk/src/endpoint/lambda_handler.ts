@@ -24,7 +24,14 @@ import { decodeLambdaBody } from "../io/decoder";
 import { Message } from "../types/types";
 import { StateMachine } from "../state_machine";
 import { ensureError } from "../types/errors";
-import { OUTPUT_ENTRY_MESSAGE_TYPE } from "../types/protocol";
+import {
+  OUTPUT_ENTRY_MESSAGE_TYPE,
+  isServiceProtocolVersionSupported,
+  parseServiceProtocolVersion,
+  selectSupportedServiceDiscoveryProtocolVersion,
+  serviceDiscoveryProtocolVersionToHeaderValue,
+  serviceProtocolVersionToHeaderValue,
+} from "../types/protocol";
 import { ProtocolMode } from "../types/discovery";
 import {
   ComponentHandler,
@@ -35,6 +42,8 @@ import {
 import { validateRequestSignature } from "./request_signing/validate";
 import { X_RESTATE_SERVER } from "../user_agent";
 import { Buffer } from "node:buffer";
+import { ServiceDiscoveryProtocolVersion } from "../generated/proto/discovery_pb";
+import { ServiceProtocolVersion } from "../generated/proto/protocol_pb";
 
 export class LambdaHandler {
   constructor(private readonly endpoint: EndpointImpl) {}
@@ -62,8 +71,20 @@ export class LambdaHandler {
       return this.toErrorResponse(404, msg);
     }
     if (parsed === "discovery") {
-      return this.handleDiscovery();
+      return this.handleDiscovery(event.headers["accept"]);
     }
+
+    const serviceProtocolVersionString = event.headers["content-type"];
+    const serviceProtocolVersion = parseServiceProtocolVersion(
+      serviceProtocolVersionString
+    );
+
+    if (!isServiceProtocolVersionSupported(serviceProtocolVersion)) {
+      const errorMessage = `Unsupported service protocol version '${serviceProtocolVersionString}'`;
+      rlog.warn(errorMessage);
+      return this.toErrorResponse(415, errorMessage);
+    }
+
     const parsedUrl = parsed as UrlPathComponents;
     const method = this.endpoint.componentByName(parsedUrl.componentName);
     if (!method) {
@@ -80,7 +101,13 @@ export class LambdaHandler {
     if (!event.body) {
       throw new Error("The incoming message body was null");
     }
-    return this.handleInvoke(handler, event.body, event.headers, context);
+    return this.handleInvoke(
+      handler,
+      event.body,
+      event.headers,
+      context,
+      serviceProtocolVersion
+    );
   }
 
   private async validateConnectionSignature(
@@ -121,7 +148,8 @@ export class LambdaHandler {
     handler: ComponentHandler,
     body: string,
     headers: Record<string, string | string[] | undefined>,
-    context: Context
+    context: Context,
+    serviceProtocolVersion: ServiceProtocolVersion
   ): Promise<APIGatewayProxyResult | APIGatewayProxyResultV2> {
     try {
       // build the previous journal from the events
@@ -151,7 +179,9 @@ export class LambdaHandler {
 
       return {
         headers: {
-          "content-type": "application/restate",
+          "content-type": serviceProtocolVersionToHeaderValue(
+            serviceProtocolVersion
+          ),
           "x-restate-server": X_RESTATE_SERVER,
         },
         statusCode: 200,
@@ -166,16 +196,44 @@ export class LambdaHandler {
     }
   }
 
-  private handleDiscovery(): APIGatewayProxyResult | APIGatewayProxyResultV2 {
-    const disocvery = this.endpoint.computeDiscovery(
+  private handleDiscovery(
+    acceptVersionsString: string | undefined
+  ): APIGatewayProxyResult | APIGatewayProxyResultV2 {
+    const serviceDiscoveryProtocolVersion =
+      selectSupportedServiceDiscoveryProtocolVersion(acceptVersionsString);
+
+    if (
+      serviceDiscoveryProtocolVersion ===
+      ServiceDiscoveryProtocolVersion.SERVICE_DISCOVERY_PROTOCOL_VERSION_UNSPECIFIED
+    ) {
+      const errorMessage = `Unsupported service discovery protocol version '${acceptVersionsString}'`;
+      rlog.warn(errorMessage);
+      return this.toErrorResponse(415, errorMessage);
+    }
+
+    const discovery = this.endpoint.computeDiscovery(
       ProtocolMode.REQUEST_RESPONSE
     );
-    const discoveryJson = JSON.stringify(disocvery);
-    const body = Buffer.from(discoveryJson).toString("base64");
+
+    let body;
+
+    if (
+      serviceDiscoveryProtocolVersion === ServiceDiscoveryProtocolVersion.V1
+    ) {
+      const discoveryJson = JSON.stringify(discovery);
+      body = Buffer.from(discoveryJson).toString("base64");
+    } else {
+      // should not be reached since we check for compatibility before
+      throw new Error(
+        `Unsupported service discovery protocol version: ${serviceDiscoveryProtocolVersion}`
+      );
+    }
 
     return {
       headers: {
-        "content-type": "application/json",
+        "content-type": serviceDiscoveryProtocolVersionToHeaderValue(
+          serviceDiscoveryProtocolVersion
+        ),
         "x-restate-server": X_RESTATE_SERVER,
       },
       statusCode: 200,
@@ -187,7 +245,7 @@ export class LambdaHandler {
   private toErrorResponse(code: number, message: string) {
     return {
       headers: {
-        "content-type": "application/restate",
+        "content-type": "text/plain",
         "x-restate-server": X_RESTATE_SERVER,
       },
       statusCode: code,

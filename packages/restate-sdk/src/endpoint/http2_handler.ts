@@ -28,6 +28,14 @@ import { Deployment, ProtocolMode } from "../types/discovery";
 import { validateRequestSignature } from "./request_signing/validate";
 import { ServerHttp2Stream } from "node:http2";
 import { X_RESTATE_SERVER } from "../user_agent";
+import {
+  isServiceProtocolVersionSupported,
+  parseServiceProtocolVersion,
+  selectSupportedServiceDiscoveryProtocolVersion,
+  serviceDiscoveryProtocolVersionToHeaderValue,
+  serviceProtocolVersionToHeaderValue,
+} from "../types/protocol";
+import { ServiceDiscoveryProtocolVersion } from "../generated/proto/discovery_pb";
 
 export class Http2Handler {
   constructor(private readonly endpoint: EndpointImpl) {}
@@ -103,11 +111,41 @@ export class Http2Handler {
       return respondNotFound(stream);
     }
     if (route === "discovery") {
+      const acceptVersionsString = request.headers["accept"];
+
+      const serviceDiscoveryProtocolVersion =
+        selectSupportedServiceDiscoveryProtocolVersion(acceptVersionsString);
+
+      if (
+        serviceDiscoveryProtocolVersion ===
+        ServiceDiscoveryProtocolVersion.SERVICE_DISCOVERY_PROTOCOL_VERSION_UNSPECIFIED
+      ) {
+        const errorMessage = `Unsupported service discovery protocol version '${acceptVersionsString}'`;
+        rlog.warn(errorMessage);
+        return respondUnsupportedProtocolVersion(stream, errorMessage);
+      }
+
       const discovery = this.endpoint.computeDiscovery(
         ProtocolMode.BIDI_STREAM
       );
-      return respondDiscovery(discovery, stream);
+      return respondDiscovery(
+        discovery,
+        serviceDiscoveryProtocolVersion,
+        stream
+      );
     }
+
+    const serviceProtocolVersionString = request.headers["content-type"];
+    const serviceProtocolVersion = parseServiceProtocolVersion(
+      serviceProtocolVersionString
+    );
+
+    if (!isServiceProtocolVersionSupported(serviceProtocolVersion)) {
+      const errorMessage = `Unsupported service protocol version '${serviceProtocolVersionString}'`;
+      rlog.warn(errorMessage);
+      return respondUnsupportedProtocolVersion(stream, errorMessage);
+    }
+
     const urlComponents = route as UrlPathComponents;
     const component = this.endpoint.componentByName(
       urlComponents.componentName
@@ -121,7 +159,9 @@ export class Http2Handler {
     }
     // valid connection, let's dispatch the invocation
     stream.respond({
-      "content-type": "application/restate",
+      "content-type": serviceProtocolVersionToHeaderValue(
+        serviceProtocolVersion
+      ),
       "x-restate-server": X_RESTATE_SERVER,
       ":status": 200,
     });
@@ -130,15 +170,39 @@ export class Http2Handler {
   }
 }
 
+function respondUnsupportedProtocolVersion(
+  stream: http2.ServerHttp2Stream,
+  errorMessage: string
+) {
+  stream.respond({
+    ":status": 415,
+    "content-type": "text/plain",
+    "x-restate-server": X_RESTATE_SERVER,
+  });
+  stream.end(errorMessage);
+  return finished(stream);
+}
+
 function respondDiscovery(
   response: Deployment,
+  serviceDiscoveryProtocolVersion: ServiceDiscoveryProtocolVersion,
   http2Stream: http2.ServerHttp2Stream
 ) {
-  const responseData = JSON.stringify(response);
+  let responseData;
+  if (serviceDiscoveryProtocolVersion === ServiceDiscoveryProtocolVersion.V1) {
+    responseData = JSON.stringify(response);
+  } else {
+    // should not be reached since we check for compatibility before
+    throw new Error(
+      `Unsupported service discovery protocol version: ${serviceDiscoveryProtocolVersion}`
+    );
+  }
 
   http2Stream.respond({
     ":status": 200,
-    "content-type": "application/json",
+    "content-type": serviceDiscoveryProtocolVersionToHeaderValue(
+      serviceDiscoveryProtocolVersion
+    ),
     "x-restate-server": X_RESTATE_SERVER,
   });
 

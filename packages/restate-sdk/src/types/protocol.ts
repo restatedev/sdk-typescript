@@ -31,7 +31,9 @@ import {
   StartMessage,
   SuspensionMessage,
   RunEntryMessage,
+  ServiceProtocolVersion,
 } from "../generated/proto/protocol_pb";
+import { ServiceDiscoveryProtocolVersion } from "../generated/proto/discovery_pb";
 
 // Re-export the protobuf messages.
 export {
@@ -199,3 +201,116 @@ export const SUSPENSION_TRIGGERS: bigint[] = [
   // We need it because of the ack
   SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
 ];
+
+const MIN_SERVICE_PROTOCOL_VERSION: ServiceProtocolVersion =
+  ServiceProtocolVersion.V1;
+const MAX_SERVICE_PROTOCOL_VERSION: ServiceProtocolVersion =
+  ServiceProtocolVersion.V1;
+
+const MIN_SERVICE_DISCOVERY_PROTOCOL_VERSION: ServiceDiscoveryProtocolVersion =
+  ServiceDiscoveryProtocolVersion.V1;
+const MAX_SERVICE_DISCOVERY_PROTOCOL_VERSION: ServiceDiscoveryProtocolVersion =
+  ServiceDiscoveryProtocolVersion.V1;
+
+export function isServiceProtocolVersionSupported(
+  version: ServiceProtocolVersion
+) {
+  return (
+    version >= MIN_SERVICE_PROTOCOL_VERSION &&
+    version <= MAX_SERVICE_PROTOCOL_VERSION
+  );
+}
+
+function isServiceDiscoveryProtocolVersionSupported(
+  version: ServiceDiscoveryProtocolVersion
+) {
+  return (
+    version >= MIN_SERVICE_DISCOVERY_PROTOCOL_VERSION &&
+    version <= MAX_SERVICE_DISCOVERY_PROTOCOL_VERSION
+  );
+}
+
+export function parseServiceProtocolVersion(
+  versionString: string | undefined
+): ServiceProtocolVersion {
+  // if nothing is set, assume we are using V1
+  if (
+    versionString === undefined ||
+    versionString === null ||
+    versionString === ""
+  ) {
+    return ServiceProtocolVersion.V1;
+  }
+
+  versionString = versionString.trim();
+
+  if (versionString === "application/vnd.restate.invocation.v1") {
+    return ServiceProtocolVersion.V1;
+  }
+
+  return ServiceProtocolVersion.SERVICE_PROTOCOL_VERSION_UNSPECIFIED;
+}
+
+export function serviceProtocolVersionToHeaderValue(
+  serviceProtocolVersion: ServiceProtocolVersion
+): string {
+  switch (serviceProtocolVersion) {
+    case ServiceProtocolVersion.V1:
+      return "application/vnd.restate.invocation.v1";
+    default:
+      throw new Error(
+        `Unsupported service discovery protocol version: ${serviceProtocolVersion}`
+      );
+  }
+}
+
+function parseServiceDiscoveryProtocolVersion(
+  versionString: string
+): ServiceDiscoveryProtocolVersion {
+  versionString = versionString.trim();
+  if (versionString === "application/vnd.restate.endpointmanifest.v1+json") {
+    return ServiceDiscoveryProtocolVersion.V1;
+  }
+
+  return ServiceDiscoveryProtocolVersion.SERVICE_DISCOVERY_PROTOCOL_VERSION_UNSPECIFIED;
+}
+
+export function serviceDiscoveryProtocolVersionToHeaderValue(
+  serviceDiscoveryProtocolVersion: ServiceDiscoveryProtocolVersion
+): string {
+  switch (serviceDiscoveryProtocolVersion) {
+    case ServiceDiscoveryProtocolVersion.V1:
+      return "application/vnd.restate.endpointmanifest.v1+json";
+    default:
+      throw new Error(
+        `Unsupported service discovery protocol version: ${serviceDiscoveryProtocolVersion}`
+      );
+  }
+}
+
+export function selectSupportedServiceDiscoveryProtocolVersion(
+  acceptVersionsString: string | undefined
+): ServiceDiscoveryProtocolVersion {
+  if (
+    acceptVersionsString === undefined ||
+    acceptVersionsString === null ||
+    acceptVersionsString === ""
+  ) {
+    return ServiceDiscoveryProtocolVersion.V1;
+  }
+
+  let maxVersion =
+    ServiceDiscoveryProtocolVersion.SERVICE_DISCOVERY_PROTOCOL_VERSION_UNSPECIFIED;
+
+  acceptVersionsString.split(",").forEach((versionString) => {
+    const version = parseServiceDiscoveryProtocolVersion(versionString);
+    if (
+      isServiceDiscoveryProtocolVersionSupported(version) &&
+      version > maxVersion
+    ) {
+      maxVersion = version;
+    }
+  });
+
+  return maxVersion;
+}
