@@ -439,7 +439,6 @@ export class ContextImpl implements ObjectContext {
           SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
           sideEffectMsg,
           false,
-          undefined,
           true
         );
 
@@ -475,7 +474,6 @@ export class ContextImpl implements ObjectContext {
         SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
         sideEffectMsg,
         false,
-        undefined,
         true
       );
 

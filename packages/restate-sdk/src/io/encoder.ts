@@ -49,7 +49,6 @@ export function encodeMessages(messages: Message[]): Uint8Array {
       BigInt(message.messageType),
       buf.length,
       message.completed,
-      message.protocolVersion, // only set for incoming start message
       message.requiresAck
     );
     const header64 = header.toU64be();

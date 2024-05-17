@@ -155,7 +155,6 @@ export class StateMachine implements RestateStreamConsumer {
     messageType: bigint,
     message: p.ProtocolMessage,
     completedFlag?: boolean,
-    protocolVersion?: number,
     requiresAckFlag?: boolean
   ): WrappedPromise<T | void> {
     // if the state machine is already closed, return a promise that never
@@ -176,13 +175,7 @@ export class StateMachine implements RestateStreamConsumer {
       );
 
       this.send(
-        new Message(
-          messageType,
-          message,
-          completedFlag,
-          protocolVersion,
-          requiresAckFlag
-        )
+        new Message(messageType, message, completedFlag, requiresAckFlag)
       );
     } else {
       this.console.debugJournalMessage(
@@ -290,7 +283,6 @@ export class StateMachine implements RestateStreamConsumer {
         new Message(
           COMBINATOR_ENTRY_MESSAGE,
           combinatorMessage,
-          undefined,
           undefined,
           true
         )

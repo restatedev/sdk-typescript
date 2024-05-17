@@ -113,7 +113,6 @@ export class TestDriver implements Connection {
         key: startEntry.key,
       }),
       msg.completed,
-      msg.protocolVersion,
       msg.requiresAck
     );
 

@@ -23,7 +23,6 @@ import { Header, Message } from "../src/types/types";
 import stream from "stream";
 import { setTimeout } from "timers/promises";
 import { CompletablePromise } from "../src/utils/promises";
-import { SUPPORTED_PROTOCOL_VERSION } from "../src/io/decoder";
 
 // The following test suite is taken from headers.rs
 describe("Header", () => {
@@ -34,7 +33,7 @@ describe("Header", () => {
     expect(b).toStrictEqual(a);
   });
 
-  it("invoke_test", () => roundtripTest(newStart(1, 25)));
+  it("invoke_test", () => roundtripTest(newStart(25)));
 
   it("completion_test", () =>
     roundtripTest(newHeader(COMPLETION_MESSAGE_TYPE, 22)));
@@ -53,7 +52,7 @@ describe("Header", () => {
   it("custom_entry", () => roundtripTest(newHeader(0xfc00n, 10341)));
 
   it("custom_entry_with_requires_ack", () =>
-    roundtripTest(new Header(0xfc00n, 10341, undefined, undefined, true)));
+    roundtripTest(new Header(0xfc00n, 10341, undefined, true)));
 });
 
 describe("Restate Streaming Connection", () => {
@@ -91,8 +90,7 @@ describe("Restate Streaming Connection", () => {
           debugId: "abcd",
           knownEntries: 1337,
         }),
-        undefined,
-        SUPPORTED_PROTOCOL_VERSION
+        undefined
       )
     );
 
@@ -186,14 +184,8 @@ function newHeader(messageTypeId: bigint, length: number): Header {
   return new Header(messageTypeId, length);
 }
 
-function newStart(protocolVersion: number, length: number): Header {
-  return new Header(
-    START_MESSAGE_TYPE,
-    length,
-    undefined,
-    protocolVersion,
-    undefined
-  );
+function newStart(length: number): Header {
+  return new Header(START_MESSAGE_TYPE, length, undefined, undefined);
 }
 
 function newCompletableEntry(
@@ -248,7 +240,6 @@ function roundtripTest(a: Header) {
   const b = Header.fromU64be(a.toU64be());
   expect(b.messageType).toStrictEqual(a.messageType);
   expect(b.frameLength).toStrictEqual(a.frameLength);
-  expect(b.protocolVersion).toStrictEqual(a.protocolVersion);
   sameTruthness(a.completedFlag, b.completedFlag);
   sameTruthness(a.requiresAckFlag, b.requiresAckFlag);
   sameTruthness(a.partialStateFlag, b.partialStateFlag);

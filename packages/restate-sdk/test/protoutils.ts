@@ -68,7 +68,6 @@ import {
   RestateErrorCodes,
   UNKNOWN_ERROR_CODE,
 } from "../src/types/errors";
-import { SUPPORTED_PROTOCOL_VERSION } from "../src/io/decoder";
 
 export type StartMessageOpts = {
   knownEntries?: number;
@@ -97,7 +96,6 @@ export function startMessage({
       key: key ?? "Till",
     }),
     undefined,
-    SUPPORTED_PROTOCOL_VERSION,
     undefined
   );
 }
@@ -417,7 +415,6 @@ export function sideEffectMessage<T>(
         result: { case: "value", value: Buffer.from(JSON.stringify(value)) },
       }),
       false,
-      undefined,
       true
     );
   } else if (failure !== undefined) {
@@ -428,7 +425,6 @@ export function sideEffectMessage<T>(
         result: { case: "failure", value: failure },
       }),
       false,
-      undefined,
       true
     );
   } else {
@@ -436,7 +432,6 @@ export function sideEffectMessage<T>(
       SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
       new RunEntryMessage({ name }),
       false,
-      undefined,
       true
     );
   }
@@ -507,7 +502,6 @@ export function combinatorEntryMessage(
       combinatorId,
       journalEntriesOrder,
     }),
-    undefined,
     undefined,
     true
   );

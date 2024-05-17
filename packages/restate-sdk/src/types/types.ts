@@ -30,7 +30,6 @@ export class Message {
     readonly messageType: bigint,
     readonly message: ProtocolMessage,
     readonly completed?: boolean,
-    readonly protocolVersion?: number,
     readonly requiresAck?: boolean
   ) {}
 
@@ -85,7 +84,6 @@ class MessageType {
 
 const CUSTOM_MESSAGE_MASK = BigInt(0xfc00);
 const COMPLETED_MASK = BigInt(0x0001_0000_0000);
-const VERSION_MASK = BigInt(0x03ff_0000_0000);
 const REQUIRES_ACK_MASK = BigInt(0x8000_0000_0000);
 
 // The header is exported but only for tests.
@@ -94,7 +92,6 @@ export class Header {
     readonly messageType: bigint,
     readonly frameLength: number,
     readonly completedFlag?: boolean,
-    readonly protocolVersion?: number,
     readonly requiresAckFlag?: boolean,
     readonly partialStateFlag?: boolean
   ) {}
@@ -108,9 +105,6 @@ export class Header {
       (value & COMPLETED_MASK) !== 0n
         ? true
         : undefined;
-    const protocolVersion = MessageType.hasProtocolVersion(messageType)
-      ? Number(((value & VERSION_MASK) >> 32n) & 0xffffn)
-      : undefined;
     const requiresAckFlag =
       MessageType.hasRequiresAckFlag(messageType) &&
       (value & REQUIRES_ACK_MASK) !== 0n
@@ -118,22 +112,13 @@ export class Header {
         : undefined;
     const frameLength = Number(value & 0xffffffffn);
 
-    return new Header(
-      messageType,
-      frameLength,
-      completedFlag,
-      protocolVersion,
-      requiresAckFlag
-    );
+    return new Header(messageType, frameLength, completedFlag, requiresAckFlag);
   }
 
   public toU64be(): bigint {
     let res = (this.messageType << 48n) | BigInt(this.frameLength);
     if (this.completedFlag) {
       res = res | COMPLETED_MASK;
-    }
-    if (this.protocolVersion !== undefined) {
-      res = res | (BigInt(this.protocolVersion) << 32n);
     }
     if (this.requiresAckFlag) {
       res = res | REQUIRES_ACK_MASK;

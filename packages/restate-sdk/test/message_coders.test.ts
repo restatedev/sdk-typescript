@@ -10,15 +10,10 @@
  */
 
 import { describe, expect } from "@jest/globals";
-import {
-  decodeMessagesBuffer,
-  streamDecoder,
-  SUPPORTED_PROTOCOL_VERSION,
-} from "../src/io/decoder";
+import { streamDecoder } from "../src/io/decoder";
 import { Message } from "../src/types/types";
 import { backgroundInvokeMessage } from "./protoutils";
 import { encodeMessage } from "../src/io/encoder";
-import { START_MESSAGE_TYPE, StartMessage } from "../src/types/protocol";
 
 describe("The stream decoder", () => {
   it("should handle decoding of messages across chunks", () => {
@@ -48,27 +43,5 @@ describe("The stream decoder", () => {
     expect(result.length).toStrictEqual(1);
     expect(result[0]).toStrictEqual(largeMessage);
     expect(callbackCounter).toStrictEqual(2);
-  });
-
-  it("should fail when unsupported protocol version", () => {
-    const startMessage = encodeMessage(
-      new Message(
-        START_MESSAGE_TYPE,
-        new StartMessage({
-          id: Buffer.from(
-            "f311f1fdcb9863f0018bd3400ecd7d69b547204e776218b2",
-            "hex"
-          ),
-          debugId: "8xHx_cuYY_AAYvTQA7NfWm1RyBOd2IYsg",
-        }),
-        undefined,
-        SUPPORTED_PROTOCOL_VERSION + 1,
-        undefined
-      )
-    );
-
-    expect(() => decodeMessagesBuffer(Buffer.from(startMessage))).toThrow(
-      "Unsupported protocol version"
-    );
   });
 });
