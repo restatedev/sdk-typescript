@@ -21,6 +21,7 @@ export {
   ConnectionOpts,
   IngressClient,
   IngressSendClient,
+  IngressWorkflowClient,
   Opts,
   IngresCallOptions,
   SendOpts,

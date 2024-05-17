@@ -18,6 +18,7 @@ import type {
   RestateWorkflowSharedContext,
   ServiceDefinition,
   VirtualObjectDefinition,
+  WorkflowDefinition,
 } from "@restatedev/restate-sdk-core";
 import { ContextImpl } from "./context_impl";
 
@@ -343,6 +344,17 @@ export interface Context extends RestateContext {
    */
   objectClient<M, P extends string = string>(
     opts: VirtualObjectDefinition<P, M>,
+    key: string
+  ): Client<M>;
+
+  /**
+   * Same as {@link serviceClient} but for workflows.
+   *
+   * @param opts
+   * @param key the workflow key
+   */
+  workflowClient<M, P extends string = string>(
+    opts: WorkflowDefinition<P, M>,
     key: string
   ): Client<M>;
 

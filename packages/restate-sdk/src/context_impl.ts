@@ -63,6 +63,7 @@ import { Client, HandlerKind, SendClient } from "./types/rpc";
 import type {
   ServiceDefinition,
   VirtualObjectDefinition,
+  WorkflowDefinition,
 } from "@restatedev/restate-sdk-core";
 import { RandImpl } from "./utils/rand";
 import { newJournalEntryPromiseId } from "./promise_combinator_tracker";
@@ -126,6 +127,26 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       attemptHeaders,
       body: invocationValue,
     };
+  }
+  workflowClient<M, P extends string = string>(
+    opts: WorkflowDefinition<P, M>,
+    key: string
+  ): Client<M> {
+    const { name } = opts;
+    const clientProxy = new Proxy(
+      {},
+      {
+        get: (_target, prop) => {
+          const route = prop as string;
+          return (...args: unknown[]) => {
+            const requestBytes = serializeJson(args.shift());
+            return this.invoke(name, route, requestBytes, key);
+          };
+        },
+      }
+    );
+
+    return clientProxy as Client<M>;
   }
 
   public promise<T = void>(/*name: string*/): DurablePromise<T> {
@@ -255,7 +276,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     const msg = new CallEntryMessage({
       serviceName: service,
       handlerName: method,
-      parameter: Buffer.from(data),
+      parameter: data,
       key,
     });
     return this.markCombineablePromise(
@@ -278,7 +299,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     const msg = new OneWayCallEntryMessage({
       serviceName: service,
       handlerName: method,
-      parameter: Buffer.from(data),
+      parameter: data,
       invokeTime: protoInt64.parse(invokeTime),
       key,
     });

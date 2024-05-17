@@ -1,6 +1,7 @@
 import type {
   ServiceDefinition,
   VirtualObjectDefinition,
+  WorkflowDefinition,
 } from "@restatedev/restate-sdk-core";
 
 export interface Ingress {
@@ -10,6 +11,14 @@ export interface Ingress {
   serviceClient<M, P extends string = string>(
     opts: ServiceDefinition<P, M>
   ): IngressClient<M>;
+
+  /**
+   * Create a client from a {@link WorkflowDefinition}.
+   */
+  workflowClient<M, P extends string = string>(
+    opts: WorkflowDefinition<P, M>,
+    key: string
+  ): IngressWorkflowClient<M>;
 
   /**
    * Create a client from a {@link VirtualObjectDefinition}.
@@ -87,6 +96,14 @@ export class SendOpts {
 }
 
 export type IngressClient<M> = {
+  [K in keyof M as M[K] extends never ? never : K]: M[K] extends (
+    ...args: infer P
+  ) => PromiseLike<infer O>
+    ? (...args: [...P, ...[opts?: Opts]]) => PromiseLike<O>
+    : never;
+};
+
+export type IngressWorkflowClient<M> = {
   [K in keyof M as M[K] extends never ? never : K]: M[K] extends (
     ...args: infer P
   ) => PromiseLike<infer O>

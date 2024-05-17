@@ -61,7 +61,7 @@ export class ServiceComponent implements Component {
               serviceHandler.handlerWrapper.accept ?? "application/json",
           },
           output: {
-            setContentTypeIfEmpty: true,
+            setContentTypeIfEmpty: false,
             contentType:
               serviceHandler.handlerWrapper.contentType ?? "application/json",
           },
@@ -140,7 +140,7 @@ export class VirtualObjectComponent implements Component {
             contentType: opts.accept ?? "application/json",
           },
           output: {
-            setContentTypeIfEmpty: true,
+            setContentTypeIfEmpty: false,
             contentType: opts.contentType ?? "application/json",
           },
           ty:
@@ -215,7 +215,7 @@ export class WorkflowComponent implements Component {
             contentType: handler.accept ?? "application/json",
           },
           output: {
-            setContentTypeIfEmpty: true,
+            setContentTypeIfEmpty: false,
             contentType: handler.contentType ?? "application/json",
           },
           ty:

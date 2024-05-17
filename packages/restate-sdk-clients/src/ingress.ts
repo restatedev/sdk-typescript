@@ -12,12 +12,14 @@
 import type {
   ServiceDefinition,
   VirtualObjectDefinition,
+  WorkflowDefinition,
 } from "@restatedev/restate-sdk-core";
 import type {
   ConnectionOpts,
   Ingress,
   IngressClient,
   IngressSendClient,
+  IngressWorkflowClient,
 } from "./api";
 
 import { Opts, SendOpts } from "./api";
@@ -169,6 +171,13 @@ class HttpIngress implements Ingress {
     key: string
   ): IngressClient<M> {
     return this.proxy(opts.name, key) as IngressClient<M>;
+  }
+
+  workflowClient<M, P extends string = string>(
+    opts: WorkflowDefinition<P, M>,
+    key: string
+  ): IngressWorkflowClient<M> {
+    return this.proxy(opts.name, key) as IngressWorkflowClient<M>;
   }
 
   objectSendClient<P extends string, M>(

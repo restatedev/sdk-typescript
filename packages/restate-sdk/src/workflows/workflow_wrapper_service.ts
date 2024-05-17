@@ -111,6 +111,12 @@ class ExclusiveContextImpl<P extends string>
     this.console = ctx.console;
     this.date = ctx.date;
   }
+  workflowClient<M, P extends string = string>(
+    opts: restate.WorkflowDefinition<P, M>,
+    key: string
+  ): restate.Client<M> {
+    throw new Error("Method not implemented.");
+  }
 
   request(): Request {
     return this.ctx.request();

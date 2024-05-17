@@ -12,7 +12,7 @@ export type {
   Workflow,
   WorkflowDefinition,
   WorkflowHandler,
-  WorkflowObjectSharedHandler,
+  WorkflowSharedHandler,
   RestateWorkflowContext,
   RestateWorkflowSharedContext,
 } from "./core";

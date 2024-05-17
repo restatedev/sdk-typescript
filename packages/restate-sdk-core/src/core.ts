@@ -75,6 +75,8 @@ export type ObjectHandler<F> = F extends (
 export type VirtualObject<U> = {
   [K in keyof U]: U[K] extends ObjectHandler<infer F>
     ? WithoutRpcContext<F>
+    : U[K] extends ObjectSharedHandler<infer F>
+    ? WithoutRpcContext<F>
     : never;
 };
 
@@ -85,7 +87,7 @@ export type VirtualObjectDefinition<P extends string, M> = {
 
 // ----------- workflow -------------------------------------------------------
 
-export type WorkflowObjectSharedHandler<F> = F extends (
+export type WorkflowSharedHandler<F> = F extends (
   ctx: infer _C extends RestateWorkflowSharedContext,
   param: any
 ) => Promise<any>
@@ -107,6 +109,8 @@ export type WorkflowHandler<F> = F extends (
 
 export type Workflow<U> = {
   [K in keyof U]: U[K] extends WorkflowHandler<infer F>
+    ? WithoutRpcContext<F>
+    : U[K] extends WorkflowSharedHandler<infer F>
     ? WithoutRpcContext<F>
     : never;
 };
