@@ -103,12 +103,24 @@ export type IngressClient<M> = {
     : never;
 };
 
+type RunType<M> = M extends Record<string | symbol, Function>
+  ? M["run"] extends (arg: infer I) => Promise<any>
+    ? I
+    : never
+  : never;
+
+export type WorkflowInvocation = {
+  invocation_id: string;
+};
+
 export type IngressWorkflowClient<M> = {
-  [K in keyof M as M[K] extends never ? never : K]: M[K] extends (
+  [K in keyof M as Omit<M[K], "run"> extends never ? never : K]: M[K] extends (
     ...args: infer P
   ) => PromiseLike<infer O>
     ? (...args: [...P, ...[opts?: Opts]]) => PromiseLike<O>
     : never;
+} & {
+  submit: (argument: RunType<M>) => Promise<WorkflowInvocation>;
 };
 
 export type IngressSendClient<M> = {
