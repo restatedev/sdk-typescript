@@ -13,7 +13,7 @@
 
 import * as restate from "@restatedev/restate-sdk-clients";
 
-import type { CounterObject, GreeterService } from "./example";
+import type { CounterObject, GreeterService, MyWorkflow } from "./example";
 
 const Greeter: GreeterService = { name: "greeter" };
 const Counter: CounterObject = { name: "counter" };
@@ -101,6 +101,17 @@ const customInterface = async (name: string) => {
   console.log(greeting);
 };
 
+const workflow = async (name: string) => {
+  const MyWf: MyWorkflow = { name: "hello" };
+
+  const svc = ingress.workflowClient(MyWf, name);
+
+  const submission = await svc.submit("boby");
+
+  console.log(await submission.output());
+  console.log(await submission.attach());
+};
+
 // Before running this example, make sure
 // to run and register `greeter` and `counter` services.
 //
@@ -111,6 +122,7 @@ const customInterface = async (name: string) => {
 // 3. restate deployment add localhost:9080
 
 Promise.resolve()
+  .then(() => workflow("bob"))
   .then(() => simpleCall("bob"))
   .then(() => objectCall("bob"))
   .then(() => objectCall("mop"))
