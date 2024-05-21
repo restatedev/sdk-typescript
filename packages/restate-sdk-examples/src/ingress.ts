@@ -106,9 +106,15 @@ const workflow = async (name: string) => {
 
   const svc = ingress.workflowClient(MyWf, name);
 
-  const submission = await svc.submit("boby");
+  const submission = await svc.submit(name);
+  const output = await submission.output();
 
-  console.log(await submission.output());
+  if (output.ready) {
+    console.log(`ready: ${output.result}`);
+  } else {
+    console.log("not yet ready");
+  }
+
   console.log(await submission.attach());
 };
 
@@ -122,7 +128,7 @@ const workflow = async (name: string) => {
 // 3. restate deployment add localhost:9080
 
 Promise.resolve()
-  .then(() => workflow("bob"))
+  .then(() => workflow("boby"))
   .then(() => simpleCall("bob"))
   .then(() => objectCall("bob"))
   .then(() => objectCall("mop"))

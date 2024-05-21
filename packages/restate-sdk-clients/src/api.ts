@@ -109,33 +109,43 @@ type RunArgumentType<M> = M extends Record<string | symbol, unknown>
     : never
   : never;
 
+export interface Output<O> {
+  ready: boolean;
+  result: O;
+}
+
 export type WorkflowInvocation<R> = {
-  readonly invocation_id: string;
+  readonly invocationId: string;
   readonly key: string;
 
-  output(): Promise<R | undefined>;
+  output(): Promise<Output<R>>;
   attach(): Promise<R>;
 };
 
-export type IngressWorkflowClient<M> = {
-  [K in keyof M as Omit<M[K], "run"> extends never ? never : K]: M[K] extends (
-    ...args: infer P
-  ) => PromiseLike<infer O>
-    ? (...args: [...P, ...[opts?: Opts]]) => PromiseLike<O>
-    : never;
-} & {
-  submit: (
-    argument: RunArgumentType<M>
-  ) => Promise<WorkflowInvocation<RunArgumentType<M>>>;
+export type IngressWorkflowClient<M> = Omit<
+  {
+    [K in keyof M as Omit<M[K], "run"> extends never
+      ? never
+      : K]: M[K] extends (...args: infer P) => PromiseLike<infer O>
+      ? (...args: [...P, ...[opts?: Opts]]) => PromiseLike<O>
+      : never;
+  } & {
+    submit: (
+      argument: RunArgumentType<M>
+    ) => Promise<WorkflowInvocation<RunArgumentType<M>>>;
+  },
+  "run"
+>;
+
+export type SendResponse = {
+  invocationId: string;
 };
 
 export type IngressSendClient<M> = {
   [K in keyof M as M[K] extends never ? never : K]: M[K] extends (
     ...args: infer P
   ) => unknown
-    ? (
-        ...args: [...P, ...[opts?: SendOpts]]
-      ) => Promise<{ invocationId: string }>
+    ? (...args: [...P, ...[opts?: SendOpts]]) => Promise<SendResponse>
     : never;
 };
 

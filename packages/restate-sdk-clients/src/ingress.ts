@@ -20,6 +20,8 @@ import type {
   IngressClient,
   IngressSendClient,
   IngressWorkflowClient,
+  Output,
+  SendResponse,
   WorkflowInvocation,
 } from "./api";
 
@@ -33,6 +35,16 @@ import { Opts, SendOpts } from "./api";
  */
 export function connect(opts: ConnectionOpts): Ingress {
   return new HttpIngress(opts);
+}
+
+export class HttpCallError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly responseText: string,
+    public readonly message: string
+  ) {
+    super(message);
+  }
 }
 
 type InvocationParameters<I> = {
@@ -153,7 +165,11 @@ const doComponentInvocation = async <I, O>(
   });
   if (!httpResponse.ok) {
     const body = await httpResponse.text();
-    throw new Error(`Request failed: ${httpResponse.status}\n${body}`);
+    throw new HttpCallError(
+      httpResponse.status,
+      body,
+      `Request failed: ${httpResponse.status}\n${body}`
+    );
   }
   const responseBuf = await httpResponse.arrayBuffer();
   return deserializeJson(new Uint8Array(responseBuf));
@@ -181,12 +197,16 @@ const doWorkflowHandleCall = async <O>(
     method: "GET",
     headers,
   });
-  if (!httpResponse.ok) {
-    const body = await httpResponse.text();
-    throw new Error(`Request failed: ${httpResponse.status}\n${body}`);
+  if (httpResponse.ok) {
+    const responseBuf = await httpResponse.arrayBuffer();
+    return deserializeJson(new Uint8Array(responseBuf));
   }
-  const responseBuf = await httpResponse.arrayBuffer();
-  return deserializeJson(new Uint8Array(responseBuf));
+  const body = await httpResponse.text();
+  throw new HttpCallError(
+    httpResponse.status,
+    body,
+    `Request failed: ${httpResponse.status}\n${body}`
+  );
 };
 
 class HttpIngress implements Ingress {
@@ -235,7 +255,7 @@ class HttpIngress implements Ingress {
     const conn = this.opts;
 
     const submit = async (parameter?: unknown) => {
-      const res: { invocation_id: string } = await doComponentInvocation(conn, {
+      const res: SendResponse = await doComponentInvocation(conn, {
         component,
         handler: "run",
         key,
@@ -244,15 +264,39 @@ class HttpIngress implements Ingress {
       });
 
       return {
-        invocation_id: res.invocation_id,
+        invocationId: res.invocationId,
         key,
+
+        async output() {
+          try {
+            const result = await doWorkflowHandleCall(
+              conn,
+              component,
+              key,
+              "output"
+            );
+            return {
+              ready: true,
+              result,
+            } satisfies Output<unknown>;
+          } catch (e) {
+            if (!(e instanceof HttpCallError)) {
+              throw e;
+            }
+            if (e.status != 470) {
+              throw e;
+            }
+            return {
+              ready: false,
+              get result() {
+                throw new Error("Calling result() on a non ready workflow");
+              },
+            } satisfies Output<unknown>;
+          }
+        },
 
         attach() {
           return doWorkflowHandleCall(conn, component, key, "attach");
-        },
-
-        output() {
-          return doWorkflowHandleCall(conn, component, key, "output");
         },
       } satisfies WorkflowInvocation<unknown>;
     };
@@ -311,7 +355,11 @@ class HttpIngress implements Ingress {
     });
     if (!httpResponse.ok) {
       const body = await httpResponse.text();
-      throw new Error(`Request failed: ${httpResponse.status}\n${body}`);
+      throw new HttpCallError(
+        httpResponse.status,
+        body,
+        `Request failed: ${httpResponse.status}\n${body}`
+      );
     }
   }
 
@@ -328,7 +376,11 @@ class HttpIngress implements Ingress {
     });
     if (!httpResponse.ok) {
       const body = await httpResponse.text();
-      throw new Error(`Request failed: ${httpResponse.status}\n${body}`);
+      throw new HttpCallError(
+        httpResponse.status,
+        body,
+        `Request failed: ${httpResponse.status}\n${body}`
+      );
     }
   }
 }

@@ -53,7 +53,7 @@ const counter = restate.object({
         //ctx.set("seen", seen + 1);
 
         const ans = await ctx.workflowClient(WF, "bob").run("sdf");
-        //ctx.console.log(ans);
+        ctx.console.log(ans);
 
         return seen;
       }
@@ -79,7 +79,7 @@ const myWorkflow = restate.wf({
     },
 
     webhook: async (ctx: restate.WorkflowSharedContext, arg: string) => {
-      // fsdfsdf
+      return arg;
     },
   },
 });
@@ -92,5 +92,4 @@ export type CounterObject = typeof counter;
 const Counter: CounterObject = { name: "counter" };
 // restate server
 
-//restate.endpoint().bind(counter).bind(greeter).bind(myWorkflow).listen(9080);
-restate.endpoint().bind(myWorkflow).bind(counter).listen(9080);
+restate.endpoint().bind(counter).bind(greeter).bind(myWorkflow).listen(9080);
