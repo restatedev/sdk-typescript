@@ -20,6 +20,7 @@ import type {
   IngressClient,
   IngressSendClient,
   IngressWorkflowClient,
+  WorkflowInvocation,
 } from "./api";
 
 import { Opts, SendOpts } from "./api";
@@ -41,6 +42,7 @@ type InvocationParameters<I> = {
   send?: boolean;
   opts?: Opts | SendOpts;
   parameter?: I;
+  method?: string;
 };
 
 function optsFromArgs(args: unknown[]): {
@@ -88,8 +90,107 @@ function optsFromArgs(args: unknown[]): {
 
 const IDEMPOTENCY_KEY_HEADER = "idempotency-key";
 
+const doComponentInvocation = async <I, O>(
+  opts: ConnectionOpts,
+  params: InvocationParameters<I>
+): Promise<O> => {
+  const fragments = [];
+  //
+  // ingress URL
+  //
+  fragments.push(opts.url);
+  //
+  // component
+  //
+  fragments.push(params.component);
+  //
+  // has key?
+  //
+  if (params.key) {
+    const key = encodeURIComponent(params.key);
+    fragments.push(key);
+  }
+  //
+  // handler
+  //
+  fragments.push(params.handler);
+  if (params.send ?? false) {
+    if (params.opts instanceof SendOpts) {
+      const sendString = computeDelayAsIso(params.opts);
+      fragments.push(sendString);
+    } else {
+      fragments.push("send");
+    }
+  }
+  //
+  // headers
+  //
+  const headers = {
+    "Content-Type": "application/json",
+    ...(opts.headers ?? {}),
+    ...(params.opts?.opts?.headers ?? {}),
+  };
+  //
+  //idempotency
+  //
+  const idempotencyKey = params.opts?.opts.idempotencyKey;
+  if (idempotencyKey) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (headers as any)[IDEMPOTENCY_KEY_HEADER] = idempotencyKey;
+  }
+  //
+  // request body
+  //
+  const body = serializeJson(params.parameter);
+  //
+  // make the call
+  //
+  const url = fragments.join("/");
+  const httpResponse = await fetch(url, {
+    method: params.method ?? "POST",
+    headers,
+    body,
+  });
+  if (!httpResponse.ok) {
+    const body = await httpResponse.text();
+    throw new Error(`Request failed: ${httpResponse.status}\n${body}`);
+  }
+  const responseBuf = await httpResponse.arrayBuffer();
+  return deserializeJson(new Uint8Array(responseBuf));
+};
+
+const doWorkflowHandleCall = async <O>(
+  opts: ConnectionOpts,
+  wfName: string,
+  wfKey: string,
+  op: "output" | "attach"
+): Promise<O> => {
+  //
+  // headers
+  //
+  const headers = {
+    "Content-Type": "application/json",
+    ...(opts.headers ?? {}),
+  };
+  //
+  // make the call
+  //
+  const url = `${opts.url}/restate/workflow/${wfName}/${wfKey}/${op}`;
+
+  const httpResponse = await fetch(url, {
+    method: "GET",
+    headers,
+  });
+  if (!httpResponse.ok) {
+    const body = await httpResponse.text();
+    throw new Error(`Request failed: ${httpResponse.status}\n${body}`);
+  }
+  const responseBuf = await httpResponse.arrayBuffer();
+  return deserializeJson(new Uint8Array(responseBuf));
+};
+
 class HttpIngress implements Ingress {
-  constructor(readonly opts: ConnectionOpts) {}
+  constructor(private readonly opts: ConnectionOpts) {}
 
   private proxy(component: string, key?: string, send?: boolean) {
     return new Proxy(
@@ -99,7 +200,7 @@ class HttpIngress implements Ingress {
           const handler = prop as string;
           return (...args: unknown[]) => {
             const { parameter, opts } = optsFromArgs(args);
-            return this.invoke({
+            return doComponentInvocation(this.opts, {
               component,
               handler,
               key,
@@ -111,53 +212,6 @@ class HttpIngress implements Ingress {
         },
       }
     );
-  }
-
-  async invoke<I, O>(params: InvocationParameters<I>): Promise<O> {
-    const fragments = [];
-    // ingress URL
-    fragments.push(this.opts.url);
-    // component
-    fragments.push(params.component);
-    // has key?
-    if (params.key) {
-      const key = encodeURIComponent(params.key);
-      fragments.push(key);
-    }
-    // handler
-    fragments.push(params.handler);
-    if (params.send ?? false) {
-      if (params.opts instanceof SendOpts) {
-        const sendString = computeDelayAsIso(params.opts);
-        fragments.push(sendString);
-      } else {
-        fragments.push("send");
-      }
-    }
-    const url = fragments.join("/");
-    const headers = {
-      "Content-Type": "application/json",
-      ...(this.opts.headers ?? {}),
-      ...(params.opts?.opts?.headers ?? {}),
-    };
-
-    const idempotencyKey = params.opts?.opts.idempotencyKey;
-    if (idempotencyKey) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (headers as any)[IDEMPOTENCY_KEY_HEADER] = idempotencyKey;
-    }
-    const body = serializeJson(params.parameter);
-    const httpResponse = await fetch(url, {
-      method: "POST",
-      headers,
-      body,
-    });
-    if (!httpResponse.ok) {
-      const body = await httpResponse.text();
-      throw new Error(`Request failed: ${httpResponse.status}\n${body}`);
-    }
-    const responseBuf = await httpResponse.arrayBuffer();
-    return deserializeJson(new Uint8Array(responseBuf));
   }
 
   serviceClient<P extends string, M>(
@@ -177,7 +231,54 @@ class HttpIngress implements Ingress {
     opts: WorkflowDefinition<P, M>,
     key: string
   ): IngressWorkflowClient<M> {
-    return this.proxy(opts.name, key) as IngressWorkflowClient<M>;
+    const component = opts.name;
+    const conn = this.opts;
+
+    const submit = async (parameter?: unknown) => {
+      const res: { invocation_id: string } = await doComponentInvocation(conn, {
+        component,
+        handler: "run",
+        key,
+        send: true,
+        parameter,
+      });
+
+      return {
+        invocation_id: res.invocation_id,
+        key,
+
+        attach() {
+          return doWorkflowHandleCall(conn, component, key, "attach");
+        },
+
+        output() {
+          return doWorkflowHandleCall(conn, component, key, "output");
+        },
+      } satisfies WorkflowInvocation<unknown>;
+    };
+
+    return new Proxy(
+      {},
+      {
+        get: (_target, prop) => {
+          const handler = prop as string;
+          if (handler == "submit") {
+            return submit;
+          }
+          // shared handlers
+          return (...args: unknown[]) => {
+            const { parameter, opts } = optsFromArgs(args);
+            return doComponentInvocation(conn, {
+              component,
+              handler,
+              key,
+              parameter,
+              opts,
+            });
+          };
+        },
+      }
+    ) as IngressWorkflowClient<M>;
   }
 
   objectSendClient<P extends string, M>(
