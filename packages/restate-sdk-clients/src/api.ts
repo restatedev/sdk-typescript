@@ -4,6 +4,8 @@ import type {
   WorkflowDefinition,
 } from "@restatedev/restate-sdk-core";
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 export interface Ingress {
   /**
    * Create a client from a {@link ServiceDefinition}.
@@ -108,12 +110,8 @@ export interface Output<O> {
   result: O;
 }
 
-export type WorkflowInvocation<R> = {
-  readonly invocationId: string;
-  readonly key: string;
-
-  output(): Promise<Output<R>>;
-  attach(): Promise<R>;
+export type WorkflowSubmission = {
+  invocationId: string;
 };
 
 export type IngressWorkflowClient<M> = Omit<
@@ -131,15 +129,21 @@ export type IngressWorkflowClient<M> = Omit<
      *
      * @param argument the same argument type as defined by the 'run' handler.
      */
-    submitWorkflow: M extends Record<string, unknown>
-      ? M["run"] extends (...args: infer I) => Promise<infer O>
-        ? (...args: I) => Promise<WorkflowInvocation<O>>
+    workflowSubmit: M extends Record<string, unknown>
+      ? M["run"] extends (...args: infer I) => Promise<unknown>
+        ? (...args: I) => Promise<WorkflowSubmission>
         : never
       : never;
 
-    workflowInvocation: M extends Record<string, unknown>
-      ? M["run"] extends (...args: unknown[]) => Promise<infer O>
-        ? () => Promise<WorkflowInvocation<O>>
+    workflowAttach: M extends Record<string, unknown>
+      ? M["run"] extends (...args: any) => Promise<infer O>
+        ? () => Promise<O>
+        : never
+      : never;
+
+    workflowOutput: M extends Record<string, unknown>
+      ? M["run"] extends (...args: any) => Promise<infer O>
+        ? () => Promise<Output<O>>
         : never
       : never;
   },

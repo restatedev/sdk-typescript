@@ -22,7 +22,7 @@ import type {
   IngressWorkflowClient,
   Output,
   SendResponse,
-  WorkflowInvocation,
+  WorkflowSubmission,
 } from "./api";
 
 import { Opts, SendOpts } from "./api";
@@ -254,7 +254,9 @@ class HttpIngress implements Ingress {
     const component = opts.name;
     const conn = this.opts;
 
-    const submitWorkflow = async (parameter?: unknown) => {
+    const workflowSubmit = async (
+      parameter?: unknown
+    ): Promise<WorkflowSubmission> => {
       const res: SendResponse = await doComponentInvocation(conn, {
         component,
         handler: "run",
@@ -265,40 +267,36 @@ class HttpIngress implements Ingress {
 
       return {
         invocationId: res.invocationId,
-        key,
+      };
+    };
 
-        async output() {
-          try {
-            const result = await doWorkflowHandleCall(
-              conn,
-              component,
-              key,
-              "output"
-            );
-            return {
-              ready: true,
-              result,
-            } satisfies Output<unknown>;
-          } catch (e) {
-            if (!(e instanceof HttpCallError)) {
-              throw e;
-            }
-            if (e.status != 470) {
-              throw e;
-            }
-            return {
-              ready: false,
-              get result() {
-                throw new Error("Calling result() on a non ready workflow");
-              },
-            } satisfies Output<unknown>;
-          }
-        },
+    const workflowAttach = () =>
+      doWorkflowHandleCall(conn, component, key, "attach");
 
-        attach() {
-          return doWorkflowHandleCall(conn, component, key, "attach");
-        },
-      } satisfies WorkflowInvocation<unknown>;
+    const workflowOutput = async (): Promise<Output<unknown>> => {
+      try {
+        const result = await doWorkflowHandleCall(
+          conn,
+          component,
+          key,
+          "output"
+        );
+
+        return {
+          ready: true,
+          result,
+        };
+      } catch (e) {
+        if (!(e instanceof HttpCallError) || e.status != 470) {
+          throw e;
+        }
+        return {
+          ready: false,
+          get result() {
+            throw new Error("Calling result() on a non ready workflow");
+          },
+        };
+      }
     };
 
     return new Proxy(
@@ -306,13 +304,15 @@ class HttpIngress implements Ingress {
       {
         get: (_target, prop) => {
           const handler = prop as string;
-          if (handler == "submitWorkflow") {
-            return submitWorkflow;
+          if (handler == "workflowSubmit") {
+            return workflowSubmit;
+          } else if (handler == "workflowAttach") {
+            return workflowAttach;
+          } else if (handler == "workflowOutput") {
+            return workflowOutput;
           }
-          if (handler == "workflowResult") {
-            return submitWorkflow;
-          }
-          // shared handlers
+          // shared handlers pass trough via the ingress's normal invocation form
+          // i.e. POST /<svc>/<key>/<handler>
           return (...args: unknown[]) => {
             const { parameter, opts } = optsFromArgs(args);
             return doComponentInvocation(conn, {

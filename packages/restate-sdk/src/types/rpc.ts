@@ -465,16 +465,22 @@ export const object = <P extends string, M>(object: {
 };
 
 // ----------- workflows ----------------------------------------------
+
 export type WorkflowOpts<U> = {
   run: (ctx: WorkflowContext, argument: any) => Promise<any>;
 } & {
-  [K in keyof U]: K extends "run"
+  [K in keyof U]: K extends
+    | "workflowSubmit"
+    | "workflowAttach"
+    | "workflowOutput"
+    ? `${K} is a reserved keyword`
+    : K extends "run"
     ? U[K] extends WorkflowHandler<U[K], WorkflowContext>
       ? U[K]
-      : never
+      : "An handler named 'run' must take as a first argument a WorkflowContext, and must return a Promise"
     : U[K] extends WorkflowSharedHandler<U[K], WorkflowSharedContext>
     ? U[K]
-    : never;
+    : "An handler other than 'run' must accept as a first argument a WorkflowSharedContext";
 };
 
 /**

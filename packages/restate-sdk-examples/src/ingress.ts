@@ -103,11 +103,14 @@ const customInterface = async (name: string) => {
 };
 
 const workflow = async (name: string) => {
-  const wf = ingress.workflowClient(Workflow, name);
+  const client = ingress.workflowClient(Workflow, name);
 
-  const submission = await wf.submitWorkflow("fsd");
+  const submission = await client.workflowSubmit(
+    `This is a workflow argument for ${name}`
+  );
+  console.log(submission.invocationId);
 
-  const output = await submission.output();
+  const output = await client.workflowOutput();
 
   if (output.ready) {
     console.log(`ready: ${output.result}`);
@@ -115,11 +118,11 @@ const workflow = async (name: string) => {
     console.log("not yet ready");
   }
 
-  console.log(await submission.attach());
+  console.log(await client.workflowAttach());
 };
 
 // Before running this example, make sure
-// to run and register `greeter` and `counter` services.
+// to run and register `greeter`, `counter` and `workflow` services.
 //
 // to run them, run:
 //
@@ -128,10 +131,10 @@ const workflow = async (name: string) => {
 // 3. restate deployment add localhost:9080
 
 Promise.resolve()
-  .then(() => workflow("boby"))
   .then(() => simpleCall("bob"))
   .then(() => objectCall("bob"))
   .then(() => objectCall("mop"))
+  .then(() => workflow("boby"))
   .then(() => idempotentCall("joe", "idemp-1"))
   .then(() => idempotentCall("joe", "idemp-1"))
   .then(() => customHeadersCall("bob"))
