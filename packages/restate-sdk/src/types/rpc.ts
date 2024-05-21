@@ -465,8 +465,9 @@ export const object = <P extends string, M>(object: {
 };
 
 // ----------- workflows ----------------------------------------------
-
 export type WorkflowOpts<U> = {
+  run: (ctx: WorkflowContext, argument: any) => Promise<any>;
+} & {
   [K in keyof U]: K extends "run"
     ? U[K] extends WorkflowHandler<U[K], WorkflowContext>
       ? U[K]
@@ -491,10 +492,38 @@ export const workflow = <P extends string, M>(workflow: {
   if (!workflow.handlers) {
     throw new Error("workflow must contain handlers");
   }
-  const handlers = [];
-  let mainHandlerFound = false;
+
+  //
+  // Add the main 'run' handler
+  //
+  const runHandler = workflow.handlers["run"];
+  let runWrapper: HandlerWrapper;
+
+  if (runHandler instanceof HandlerWrapper) {
+    runWrapper = runHandler;
+  } else if (runHandler instanceof Function) {
+    runWrapper =
+      HandlerWrapper.fromHandler(runHandler) ??
+      HandlerWrapper.from(HandlerKind.WORKFLOW, runHandler);
+  } else {
+    throw new TypeError(`Missing main workflow handler, named 'run'`);
+  }
+  if (runWrapper.kind != HandlerKind.WORKFLOW) {
+    throw new TypeError(
+      `Workflow's main handler handler run, must be of type workflow'`
+    );
+  }
+
+  const handlers = [["run", runWrapper.transpose()]];
+
+  //
+  // Add all the shared handlers now
+  //
 
   for (const [name, handler] of Object.entries(workflow.handlers)) {
+    if (name == "run") {
+      continue;
+    }
     let wrapper: HandlerWrapper;
 
     if (handler instanceof HandlerWrapper) {
@@ -502,19 +531,14 @@ export const workflow = <P extends string, M>(workflow: {
     } else if (handler instanceof Function) {
       wrapper =
         HandlerWrapper.fromHandler(handler) ??
-        HandlerWrapper.from(HandlerKind.WORKFLOW, handler);
+        HandlerWrapper.from(HandlerKind.SHARED, handler);
     } else {
       throw new TypeError(`Unexpected handler type ${name}`);
     }
     if (wrapper.kind == HandlerKind.WORKFLOW) {
-      if (mainHandlerFound) {
-        throw new TypeError(
-          `A workflow must contain exactly one handler annotated as workflow.
-          Please use a shared handler for any additional handlers`
-        );
-      } else {
-        mainHandlerFound = true;
-      }
+      throw new TypeError(
+        `A workflow must contain exactly one handler annotated as workflow, named 'run'. Please use a shared handler for any additional handlers`
+      );
     }
     handlers.push([name, wrapper.transpose()]);
   }

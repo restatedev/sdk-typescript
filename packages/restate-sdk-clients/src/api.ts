@@ -103,7 +103,7 @@ export type IngressClient<M> = {
     : never;
 };
 
-type RunType<M> = M extends Record<string | symbol, Function>
+type RunType<M> = M extends Record<string | symbol, any>
   ? M["run"] extends (arg: infer I) => Promise<any>
     ? I
     : never
