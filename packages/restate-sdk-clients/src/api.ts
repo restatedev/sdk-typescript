@@ -103,12 +103,6 @@ export type IngressClient<M> = {
     : never;
 };
 
-type RunArgumentType<M> = M extends Record<string | symbol, unknown>
-  ? M["run"] extends (arg: infer I) => Promise<unknown>
-    ? I
-    : never
-  : never;
-
 export interface Output<O> {
   ready: boolean;
   result: O;
@@ -124,15 +118,30 @@ export type WorkflowInvocation<R> = {
 
 export type IngressWorkflowClient<M> = Omit<
   {
-    [K in keyof M as Omit<M[K], "run"> extends never
-      ? never
-      : K]: M[K] extends (...args: infer P) => PromiseLike<infer O>
-      ? (...args: [...P, ...[opts?: Opts]]) => PromiseLike<O>
+    [K in keyof M as M[K] extends never ? never : K]: M[K] extends (
+      ...args: unknown[]
+    ) => PromiseLike<unknown>
+      ? M[K]
       : never;
   } & {
-    submit: (
-      argument: RunArgumentType<M>
-    ) => Promise<WorkflowInvocation<RunArgumentType<M>>>;
+    /**
+     * Submit this workflow.
+     *
+     * This instructs restate to execute the 'run' handler.
+     *
+     * @param argument the same argument type as defined by the 'run' handler.
+     */
+    submitWorkflow: M extends Record<string, unknown>
+      ? M["run"] extends (...args: infer I) => Promise<infer O>
+        ? (...args: I) => Promise<WorkflowInvocation<O>>
+        : never
+      : never;
+
+    workflowInvocation: M extends Record<string, unknown>
+      ? M["run"] extends (...args: unknown[]) => Promise<infer O>
+        ? () => Promise<WorkflowInvocation<O>>
+        : never
+      : never;
   },
   "run"
 >;

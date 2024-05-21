@@ -254,7 +254,7 @@ class HttpIngress implements Ingress {
     const component = opts.name;
     const conn = this.opts;
 
-    const submit = async (parameter?: unknown) => {
+    const submitWorkflow = async (parameter?: unknown) => {
       const res: SendResponse = await doComponentInvocation(conn, {
         component,
         handler: "run",
@@ -306,8 +306,11 @@ class HttpIngress implements Ingress {
       {
         get: (_target, prop) => {
           const handler = prop as string;
-          if (handler == "submit") {
-            return submit;
+          if (handler == "submitWorkflow") {
+            return submitWorkflow;
+          }
+          if (handler == "workflowResult") {
+            return submitWorkflow;
           }
           // shared handlers
           return (...args: unknown[]) => {

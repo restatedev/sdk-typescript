@@ -17,6 +17,7 @@ import type { CounterObject, GreeterService, MyWorkflow } from "./example";
 
 const Greeter: GreeterService = { name: "greeter" };
 const Counter: CounterObject = { name: "counter" };
+const Workflow: MyWorkflow = { name: "hello" };
 
 const ingress = restate.connect({ url: "http://localhost:8080" });
 
@@ -102,11 +103,10 @@ const customInterface = async (name: string) => {
 };
 
 const workflow = async (name: string) => {
-  const MyWf: MyWorkflow = { name: "hello" };
+  const wf = ingress.workflowClient(Workflow, name);
 
-  const svc = ingress.workflowClient(MyWf, name);
+  const submission = await wf.submitWorkflow("fsd");
 
-  const submission = await svc.submit(name);
   const output = await submission.output();
 
   if (output.ready) {

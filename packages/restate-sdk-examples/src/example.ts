@@ -70,7 +70,6 @@ const counter = restate.object({
 const myWorkflow = restate.wf({
   name: "hello",
   handlers: {
-    //run: async (ctx: restate.WorkflowContext, arg: string) => {
     run: async (ctx: restate.WorkflowContext, arg: string) => {
       let n = (await ctx.get<number>("n")) ?? 0;
       n += 1;
