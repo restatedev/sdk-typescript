@@ -480,7 +480,7 @@ export type WorkflowOpts<U> = {
       : "An handler named 'run' must take as a first argument a WorkflowContext, and must return a Promise"
     : U[K] extends WorkflowSharedHandler<U[K], WorkflowSharedContext>
     ? U[K]
-    : "An handler other than 'run' must accept as a first argument a WorkflowSharedContext";
+    : "An handler other then 'run' must accept as a first argument a WorkflowSharedContext";
 };
 
 /**

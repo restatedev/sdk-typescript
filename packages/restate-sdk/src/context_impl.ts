@@ -9,6 +9,8 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import {
   CombineablePromise,
   ContextDate,
@@ -32,6 +34,9 @@ import {
   CallEntryMessage,
   RunEntryMessage,
   SleepEntryMessage,
+  GetPromiseEntryMessage,
+  PeekPromiseEntryMessage,
+  CompletePromiseEntryMessage,
 } from "./generated/proto/protocol_pb";
 import {
   AWAKEABLE_ENTRY_MESSAGE_TYPE,
@@ -46,6 +51,9 @@ import {
   SET_STATE_ENTRY_MESSAGE_TYPE,
   SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
   SLEEP_ENTRY_MESSAGE_TYPE,
+  GET_PROMISE_MESSAGE_TYPE,
+  PEEK_PROMISE_MESSAGE_TYPE,
+  COMPLETE_PROMISE_MESSAGE_TYPE,
 } from "./types/protocol";
 import { AsyncLocalStorage } from "node:async_hooks";
 import {
@@ -118,7 +126,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     invocationHeaders: ReadonlyMap<string, string>,
     attemptHeaders: ReadonlyMap<string, string | string[] | undefined>,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    private readonly stateMachine: StateMachine,
+    readonly stateMachine: StateMachine,
     public readonly rand: Rand = new RandImpl(id)
   ) {
     this.invocationRequest = {
@@ -149,9 +157,8 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     return clientProxy as Client<M>;
   }
 
-  public promise<T = void>(/*name: string*/): DurablePromise<T> {
-    // TODO: complete this
-    throw new Error("Method not implemented.");
+  public promise<T = void>(name: string): DurablePromise<T> {
+    return new DurablePromiseImpl(this, name);
   }
 
   public get key(): string {
@@ -672,7 +679,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     }
   }
 
-  private markCombineablePromise<T>(
+  markCombineablePromise<T>(
     p: WrappedPromise<T>
   ): InternalCombineablePromise<T> {
     const journalIndex = this.stateMachine.getUserCodeJournalIndex();
@@ -737,4 +744,93 @@ const RESTATE_CTX_SYMBOL = Symbol("restateContext");
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function extractContext(n: any): ContextImpl | undefined {
   return n[RESTATE_CTX_SYMBOL];
+}
+
+class DurablePromiseImpl<T> implements DurablePromise<T> {
+  constructor(
+    private readonly ctx: ContextImpl,
+    private readonly name: string
+  ) {}
+
+  then<TResult1 = T, TResult2 = never>(
+    onfulfilled?:
+      | ((value: T) => TResult1 | PromiseLike<TResult1>)
+      | null
+      | undefined,
+    onrejected?:
+      | ((reason: any) => TResult2 | PromiseLike<TResult2>)
+      | null
+      | undefined
+  ): Promise<TResult1 | TResult2> {
+    return this.get().then(onfulfilled, onrejected);
+  }
+
+  catch<TResult = never>(
+    onrejected?:
+      | ((reason: any) => TResult | PromiseLike<TResult>)
+      | null
+      | undefined
+  ): Promise<T | TResult> {
+    return this.get().catch(onrejected);
+  }
+
+  finally(onfinally?: (() => void) | null | undefined): Promise<T> {
+    return this.get().finally(onfinally);
+  }
+
+  [Symbol.toStringTag] = "DurablePromise";
+
+  get(): InternalCombineablePromise<T> {
+    const msg = new GetPromiseEntryMessage({
+      key: this.name,
+    });
+
+    return this.ctx.markCombineablePromise(
+      this.ctx.stateMachine
+        .handleUserCodeMessage(GET_PROMISE_MESSAGE_TYPE, msg)
+        .transform((v) => deserializeJson(v as Uint8Array))
+    );
+  }
+
+  peek(): InternalCombineablePromise<T | undefined> {
+    const msg = new PeekPromiseEntryMessage({
+      key: this.name,
+    });
+
+    return this.ctx.markCombineablePromise(
+      this.ctx.stateMachine
+        .handleUserCodeMessage(PEEK_PROMISE_MESSAGE_TYPE, msg)
+        .transform((v) =>
+          v instanceof Empty ? undefined : deserializeJson(v as Uint8Array)
+        )
+    );
+  }
+
+  resolve(value?: T | undefined): void {
+    const msg = new CompletePromiseEntryMessage({
+      key: this.name,
+      completion: {
+        case: "completionValue",
+        value: serializeJson(value),
+      },
+    });
+    this.ctx.stateMachine
+      .handleUserCodeMessage(COMPLETE_PROMISE_MESSAGE_TYPE, msg)
+      .catch((e) => this.ctx.stateMachine.handleDanglingPromiseError(e));
+  }
+
+  reject(errorMsg: string): void {
+    const msg = new CompletePromiseEntryMessage({
+      key: this.name,
+      completion: {
+        case: "completionFailure",
+        value: {
+          message: errorMsg,
+        },
+      },
+    });
+    this.ctx.stateMachine
+      .handleUserCodeMessage(COMPLETE_PROMISE_MESSAGE_TYPE, msg)
+      .catch((e) => this.ctx.stateMachine.handleDanglingPromiseError(e));
+  }
 }

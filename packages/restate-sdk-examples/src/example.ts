@@ -74,10 +74,14 @@ const myWorkflow = restate.workflow({
       let n = (await ctx.get<number>("n")) ?? 0;
       n += 1;
       ctx.set("n", n);
-      return "hi " + arg + " " + n;
+
+      const res = await ctx.promise<string>("d");
+
+      return "hi " + res + " " + arg + " " + n;
     },
 
     webhook: async (ctx: restate.WorkflowSharedContext, arg: string) => {
+      ctx.promise<string>("d").resolve("fdsfs");
       return arg;
     },
   },

@@ -596,8 +596,9 @@ export const CombineablePromise = {
   },
 };
 
-export type DurablePromise<T> = CombineablePromise<T> & {
-  peek(): Promise<T | undefined>;
+export type DurablePromise<T> = Promise<T | undefined> & {
+  get(): CombineablePromise<T | undefined>;
+  peek(): CombineablePromise<T | undefined>;
   resolve(value?: T): void;
   reject(errorMsg: string): void;
 };
