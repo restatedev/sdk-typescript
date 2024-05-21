@@ -67,7 +67,7 @@ const counter = restate.object({
   },
 });
 
-const myWorkflow = restate.wf({
+const myWorkflow = restate.workflow({
   name: "hello",
   handlers: {
     run: async (ctx: restate.WorkflowContext, arg: string) => {

@@ -20,7 +20,7 @@ export {
 } from "./context";
 
 export type { Client, SendClient } from "./types/rpc";
-export { service, object, workflow as wf, handlers } from "./types/rpc";
+export { service, object, workflow, handlers } from "./types/rpc";
 
 export type {
   Service,
@@ -33,5 +33,3 @@ export type {
 
 export { endpoint, ServiceBundle, RestateEndpoint } from "./endpoint";
 export { RestateError, TerminalError, TimeoutError } from "./types/errors";
-export * as workflow from "./workflows/workflow";
-export * as clients from "./clients/workflow_client";

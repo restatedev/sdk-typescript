@@ -22,7 +22,7 @@ import { rlog } from "../src/logger";
 import { StateMachine } from "../src/state_machine";
 import { InvocationBuilder } from "../src/invocation";
 import { EndpointImpl } from "../src/endpoint/endpoint_impl";
-import { ObjectContext } from "../src/context";
+import { ObjectContext, ObjectSharedContext } from "../src/context";
 import {
   object,
   VirtualObjectDefinition,
@@ -45,7 +45,7 @@ export const TestResponse = {
 
 export const GreeterApi: VirtualObjectDefinition<
   "greeter",
-  VirtualObject<TestGreeter>
+  VirtualObject<TestGreeter, ObjectContext, ObjectSharedContext>
 > = {
   name: "greeter",
 };
