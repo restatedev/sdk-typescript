@@ -28,8 +28,11 @@
     "test": "jest --silent --maxWorkers=1",
     "verify": "npm run format-check && npm run lint && npm run build",
     "release": "",
-    "example": "RESTATE_JOURNAL_LOGGING=OFF ts-node-dev --transpile-only ./src/example.ts",
-    "ingress": "RESTATE_JOURNAL_LOGGING=OFF ts-node-dev --transpile-only ./src/ingress.ts"
+    "object": "RESTATE_JOURNAL_LOGGING=OFF ts-node-dev --transpile-only ./src/object.ts",
+    "greeter": "RESTATE_JOURNAL_LOGGING=OFF ts-node-dev --transpile-only ./src/greeter.ts",
+    "workflow": "RESTATE_JOURNAL_LOGGING=OFF ts-node-dev --transpile-only ./src/workflow.ts",
+    "workflow_client": "RESTATE_JOURNAL_LOGGING=OFF ts-node-dev --transpile-only ./src/workflow_client.ts",
+    "ingress": "RESTATE_JOURNAL_LOGGING=OFF ts-node-dev --transpile-only ./src/ingress_client.ts"
   },
   "dependencies": {
     "@restatedev/restate-sdk": "^0.9.2",

@@ -117,7 +117,7 @@ export type WorkflowSubmission = {
 export type IngressWorkflowClient<M> = Omit<
   {
     [K in keyof M as M[K] extends never ? never : K]: M[K] extends (
-      ...args: unknown[]
+      ...args: any
     ) => PromiseLike<unknown>
       ? M[K]
       : never;
