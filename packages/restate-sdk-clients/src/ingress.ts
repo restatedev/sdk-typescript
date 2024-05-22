@@ -12,12 +12,17 @@
 import type {
   ServiceDefinition,
   VirtualObjectDefinition,
+  WorkflowDefinition,
 } from "@restatedev/restate-sdk-core";
 import type {
   ConnectionOpts,
   Ingress,
   IngressClient,
   IngressSendClient,
+  IngressWorkflowClient,
+  Output,
+  SendResponse,
+  WorkflowSubmission,
 } from "./api";
 
 import { Opts, SendOpts } from "./api";
@@ -32,6 +37,16 @@ export function connect(opts: ConnectionOpts): Ingress {
   return new HttpIngress(opts);
 }
 
+export class HttpCallError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly responseText: string,
+    public readonly message: string
+  ) {
+    super(message);
+  }
+}
+
 type InvocationParameters<I> = {
   component: string;
   handler: string;
@@ -39,6 +54,7 @@ type InvocationParameters<I> = {
   send?: boolean;
   opts?: Opts | SendOpts;
   parameter?: I;
+  method?: string;
 };
 
 function optsFromArgs(args: unknown[]): {
@@ -86,8 +102,115 @@ function optsFromArgs(args: unknown[]): {
 
 const IDEMPOTENCY_KEY_HEADER = "idempotency-key";
 
+const doComponentInvocation = async <I, O>(
+  opts: ConnectionOpts,
+  params: InvocationParameters<I>
+): Promise<O> => {
+  const fragments = [];
+  //
+  // ingress URL
+  //
+  fragments.push(opts.url);
+  //
+  // component
+  //
+  fragments.push(params.component);
+  //
+  // has key?
+  //
+  if (params.key) {
+    const key = encodeURIComponent(params.key);
+    fragments.push(key);
+  }
+  //
+  // handler
+  //
+  fragments.push(params.handler);
+  if (params.send ?? false) {
+    if (params.opts instanceof SendOpts) {
+      const sendString = computeDelayAsIso(params.opts);
+      fragments.push(sendString);
+    } else {
+      fragments.push("send");
+    }
+  }
+  //
+  // headers
+  //
+  const headers = {
+    "Content-Type": "application/json",
+    ...(opts.headers ?? {}),
+    ...(params.opts?.opts?.headers ?? {}),
+  };
+  //
+  //idempotency
+  //
+  const idempotencyKey = params.opts?.opts.idempotencyKey;
+  if (idempotencyKey) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (headers as any)[IDEMPOTENCY_KEY_HEADER] = idempotencyKey;
+  }
+  //
+  // request body
+  //
+  const body = serializeJson(params.parameter);
+  //
+  // make the call
+  //
+  const url = fragments.join("/");
+  const httpResponse = await fetch(url, {
+    method: params.method ?? "POST",
+    headers,
+    body,
+  });
+  if (!httpResponse.ok) {
+    const body = await httpResponse.text();
+    throw new HttpCallError(
+      httpResponse.status,
+      body,
+      `Request failed: ${httpResponse.status}\n${body}`
+    );
+  }
+  const responseBuf = await httpResponse.arrayBuffer();
+  return deserializeJson(new Uint8Array(responseBuf));
+};
+
+const doWorkflowHandleCall = async <O>(
+  opts: ConnectionOpts,
+  wfName: string,
+  wfKey: string,
+  op: "output" | "attach"
+): Promise<O> => {
+  //
+  // headers
+  //
+  const headers = {
+    "Content-Type": "application/json",
+    ...(opts.headers ?? {}),
+  };
+  //
+  // make the call
+  //
+  const url = `${opts.url}/restate/workflow/${wfName}/${wfKey}/${op}`;
+
+  const httpResponse = await fetch(url, {
+    method: "GET",
+    headers,
+  });
+  if (httpResponse.ok) {
+    const responseBuf = await httpResponse.arrayBuffer();
+    return deserializeJson(new Uint8Array(responseBuf));
+  }
+  const body = await httpResponse.text();
+  throw new HttpCallError(
+    httpResponse.status,
+    body,
+    `Request failed: ${httpResponse.status}\n${body}`
+  );
+};
+
 class HttpIngress implements Ingress {
-  constructor(readonly opts: ConnectionOpts) {}
+  constructor(private readonly opts: ConnectionOpts) {}
 
   private proxy(component: string, key?: string, send?: boolean) {
     return new Proxy(
@@ -97,7 +220,7 @@ class HttpIngress implements Ingress {
           const handler = prop as string;
           return (...args: unknown[]) => {
             const { parameter, opts } = optsFromArgs(args);
-            return this.invoke({
+            return doComponentInvocation(this.opts, {
               component,
               handler,
               key,
@@ -111,53 +234,6 @@ class HttpIngress implements Ingress {
     );
   }
 
-  async invoke<I, O>(params: InvocationParameters<I>): Promise<O> {
-    const fragments = [];
-    // ingress URL
-    fragments.push(this.opts.url);
-    // component
-    fragments.push(params.component);
-    // has key?
-    if (params.key) {
-      const key = encodeURIComponent(params.key);
-      fragments.push(key);
-    }
-    // handler
-    fragments.push(params.handler);
-    if (params.send ?? false) {
-      if (params.opts instanceof SendOpts) {
-        const sendString = computeDelayAsIso(params.opts);
-        fragments.push(sendString);
-      } else {
-        fragments.push("send");
-      }
-    }
-    const url = fragments.join("/");
-    const headers = {
-      "Content-Type": "application/json",
-      ...(this.opts.headers ?? {}),
-      ...(params.opts?.opts?.headers ?? {}),
-    };
-
-    const idempotencyKey = params.opts?.opts.idempotencyKey;
-    if (idempotencyKey) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (headers as any)[IDEMPOTENCY_KEY_HEADER] = idempotencyKey;
-    }
-    const body = serializeJson(params.parameter);
-    const httpResponse = await fetch(url, {
-      method: "POST",
-      headers,
-      body,
-    });
-    if (!httpResponse.ok) {
-      const body = await httpResponse.text();
-      throw new Error(`Request failed: ${httpResponse.status}\n${body}`);
-    }
-    const responseBuf = await httpResponse.arrayBuffer();
-    return deserializeJson(new Uint8Array(responseBuf));
-  }
-
   serviceClient<P extends string, M>(
     opts: ServiceDefinition<P, M>
   ): IngressClient<M> {
@@ -169,6 +245,87 @@ class HttpIngress implements Ingress {
     key: string
   ): IngressClient<M> {
     return this.proxy(opts.name, key) as IngressClient<M>;
+  }
+
+  workflowClient<M, P extends string = string>(
+    opts: WorkflowDefinition<P, M>,
+    key: string
+  ): IngressWorkflowClient<M> {
+    const component = opts.name;
+    const conn = this.opts;
+
+    const workflowSubmit = async (
+      parameter?: unknown
+    ): Promise<WorkflowSubmission> => {
+      const res: SendResponse = await doComponentInvocation(conn, {
+        component,
+        handler: "run",
+        key,
+        send: true,
+        parameter,
+      });
+
+      return {
+        invocationId: res.invocationId,
+      };
+    };
+
+    const workflowAttach = () =>
+      doWorkflowHandleCall(conn, component, key, "attach");
+
+    const workflowOutput = async (): Promise<Output<unknown>> => {
+      try {
+        const result = await doWorkflowHandleCall(
+          conn,
+          component,
+          key,
+          "output"
+        );
+
+        return {
+          ready: true,
+          result,
+        };
+      } catch (e) {
+        if (!(e instanceof HttpCallError) || e.status != 470) {
+          throw e;
+        }
+        return {
+          ready: false,
+          get result() {
+            throw new Error("Calling result() on a non ready workflow");
+          },
+        };
+      }
+    };
+
+    return new Proxy(
+      {},
+      {
+        get: (_target, prop) => {
+          const handler = prop as string;
+          if (handler == "workflowSubmit") {
+            return workflowSubmit;
+          } else if (handler == "workflowAttach") {
+            return workflowAttach;
+          } else if (handler == "workflowOutput") {
+            return workflowOutput;
+          }
+          // shared handlers pass trough via the ingress's normal invocation form
+          // i.e. POST /<svc>/<key>/<handler>
+          return (...args: unknown[]) => {
+            const { parameter, opts } = optsFromArgs(args);
+            return doComponentInvocation(conn, {
+              component,
+              handler,
+              key,
+              parameter,
+              opts,
+            });
+          };
+        },
+      }
+    ) as IngressWorkflowClient<M>;
   }
 
   objectSendClient<P extends string, M>(
@@ -201,7 +358,11 @@ class HttpIngress implements Ingress {
     });
     if (!httpResponse.ok) {
       const body = await httpResponse.text();
-      throw new Error(`Request failed: ${httpResponse.status}\n${body}`);
+      throw new HttpCallError(
+        httpResponse.status,
+        body,
+        `Request failed: ${httpResponse.status}\n${body}`
+      );
     }
   }
 
@@ -218,7 +379,11 @@ class HttpIngress implements Ingress {
     });
     if (!httpResponse.ok) {
       const body = await httpResponse.text();
-      throw new Error(`Request failed: ${httpResponse.status}\n${body}`);
+      throw new HttpCallError(
+        httpResponse.status,
+        body,
+        `Request failed: ${httpResponse.status}\n${body}`
+      );
     }
   }
 }

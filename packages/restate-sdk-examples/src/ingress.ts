@@ -13,10 +13,11 @@
 
 import * as restate from "@restatedev/restate-sdk-clients";
 
-import type { CounterObject, GreeterService } from "./example";
+import type { CounterObject, GreeterService, MyWorkflow } from "./example";
 
 const Greeter: GreeterService = { name: "greeter" };
 const Counter: CounterObject = { name: "counter" };
+const Workflow: MyWorkflow = { name: "hello" };
 
 const ingress = restate.connect({ url: "http://localhost:8080" });
 
@@ -101,8 +102,27 @@ const customInterface = async (name: string) => {
   console.log(greeting);
 };
 
+const workflow = async (name: string) => {
+  const client = ingress.workflowClient(Workflow, name);
+
+  const submission = await client.workflowSubmit(
+    `This is a workflow argument for ${name}`
+  );
+  console.log(submission.invocationId);
+
+  const output = await client.workflowOutput();
+
+  if (output.ready) {
+    console.log(`ready: ${output.result}`);
+  } else {
+    console.log("not yet ready");
+  }
+
+  console.log(await client.workflowAttach());
+};
+
 // Before running this example, make sure
-// to run and register `greeter` and `counter` services.
+// to run and register `greeter`, `counter` and `workflow` services.
 //
 // to run them, run:
 //
@@ -114,6 +134,7 @@ Promise.resolve()
   .then(() => simpleCall("bob"))
   .then(() => objectCall("bob"))
   .then(() => objectCall("mop"))
+  .then(() => workflow("boby"))
   .then(() => idempotentCall("joe", "idemp-1"))
   .then(() => idempotentCall("joe", "idemp-1"))
   .then(() => customHeadersCall("bob"))

@@ -14,8 +14,11 @@ import type {
   RestateContext,
   RestateObjectContext,
   RestateObjectSharedContext,
+  RestateWorkflowContext,
+  RestateWorkflowSharedContext,
   ServiceDefinition,
   VirtualObjectDefinition,
+  WorkflowDefinition,
 } from "@restatedev/restate-sdk-core";
 import { ContextImpl } from "./context_impl";
 
@@ -345,6 +348,17 @@ export interface Context extends RestateContext {
   ): Client<M>;
 
   /**
+   * Same as {@link serviceClient} but for workflows.
+   *
+   * @param opts
+   * @param key the workflow key
+   */
+  workflowClient<M, P extends string = string>(
+    opts: WorkflowDefinition<P, M>,
+    key: string
+  ): Client<M>;
+
+  /**
    * Makes a type-safe one-way RPC to the specified target service. This method effectively behaves
    * like enqueuing the message in a message queue.
    *
@@ -581,3 +595,21 @@ export const CombineablePromise = {
     }>;
   },
 };
+
+export type DurablePromise<T> = Promise<T | undefined> & {
+  get(): CombineablePromise<T | undefined>;
+  peek(): CombineablePromise<T | undefined>;
+  resolve(value?: T): void;
+  reject(errorMsg: string): void;
+};
+
+export interface WorkflowSharedContext
+  extends ObjectSharedContext,
+    RestateWorkflowSharedContext {
+  promise<T = void>(name: string): DurablePromise<T>;
+}
+
+export interface WorkflowContext
+  extends WorkflowSharedContext,
+    ObjectContext,
+    RestateWorkflowContext {}

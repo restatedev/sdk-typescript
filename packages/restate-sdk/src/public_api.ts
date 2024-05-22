@@ -14,20 +14,22 @@ export {
   ObjectContext,
   ObjectSharedContext,
   CombineablePromise,
+  WorkflowContext,
+  WorkflowSharedContext,
   Rand,
 } from "./context";
 
 export type { Client, SendClient } from "./types/rpc";
-export { service, object, handlers } from "./types/rpc";
+export { service, object, workflow, handlers } from "./types/rpc";
 
 export type {
   Service,
   ServiceDefinition,
   VirtualObject,
   VirtualObjectDefinition,
+  Workflow,
+  WorkflowDefinition,
 } from "@restatedev/restate-sdk-core";
 
 export { endpoint, ServiceBundle, RestateEndpoint } from "./endpoint";
 export { RestateError, TerminalError, TimeoutError } from "./types/errors";
-export * as workflow from "./workflows/workflow";
-export * as clients from "./clients/workflow_client";

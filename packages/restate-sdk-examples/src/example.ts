@@ -47,13 +47,19 @@ const Greeter: GreeterService = { name: "greeter" };
 const counter = restate.object({
   name: "counter",
   handlers: {
-    count: async (ctx: restate.ObjectContext) => {
-      const seen = (await ctx.get<number>("seen")) ?? 0;
-      ctx.set("seen", seen + 1);
-      return seen;
-    },
+    count: restate.handlers.object.exclusive(
+      async (ctx: restate.ObjectContext) => {
+        const seen = (await ctx.get<number>("seen")) ?? 0;
+        //ctx.set("seen", seen + 1);
 
-    get: restate.handlers.shared(
+        const ans = await ctx.workflowClient(WF, "bob").run("sdf");
+        ctx.console.log(ans);
+
+        return seen;
+      }
+    ),
+
+    get: restate.handlers.object.shared(
       async (ctx: restate.ObjectSharedContext): Promise<number> => {
         return (await ctx.get("count")) ?? 0;
       }
@@ -61,8 +67,32 @@ const counter = restate.object({
   },
 });
 
+const myWorkflow = restate.workflow({
+  name: "hello",
+  handlers: {
+    run: async (ctx: restate.WorkflowContext, arg: string) => {
+      let n = (await ctx.get<number>("n")) ?? 0;
+      n += 1;
+      ctx.set("n", n);
+
+      const res = await ctx.promise<string>("d");
+
+      return "hi " + res + " " + arg + " " + n;
+    },
+
+    webhook: async (ctx: restate.WorkflowSharedContext, arg: string) => {
+      ctx.promise<string>("d").resolve("fdsfs");
+      return arg;
+    },
+  },
+});
+
+export type MyWorkflow = typeof myWorkflow;
+
+const WF: MyWorkflow = { name: "hello" };
+
 export type CounterObject = typeof counter;
 const Counter: CounterObject = { name: "counter" };
 // restate server
 
-restate.endpoint().bind(counter).bind(greeter).listen(9080);
+restate.endpoint().bind(counter).bind(greeter).bind(myWorkflow).listen(9080);

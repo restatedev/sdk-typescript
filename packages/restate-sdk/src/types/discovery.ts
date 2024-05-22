@@ -17,17 +17,18 @@ export enum ProtocolMode {
 export enum ServiceType {
   VIRTUAL_OBJECT = "VIRTUAL_OBJECT",
   SERVICE = "SERVICE",
+  WORKFLOW = "WORKFLOW",
 }
 
 export enum ServiceHandlerType {
+  WORKFLOW = "WORKFLOW",
   EXCLUSIVE = "EXCLUSIVE",
   SHARED = "SHARED",
 }
 
 type InputPayload = {
-  contentType: string;
   required: boolean;
-
+  contentType: string;
   /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
   jsonSchema?: any; // You should specify the type of jsonSchema if known
 };
@@ -35,6 +36,8 @@ type InputPayload = {
 type OutputPayload = {
   contentType: string;
   setContentTypeIfEmpty: boolean;
+  /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+  jsonSchema?: any; // You should specify the type of jsonSchema if known
 };
 
 export interface Handler {
@@ -51,7 +54,7 @@ export interface Service {
   handlers: Handler[];
 }
 
-export interface Deployment {
+export interface Endpoint {
   protocolMode: ProtocolMode;
   minProtocolVersion: number;
   maxProtocolVersion: number;

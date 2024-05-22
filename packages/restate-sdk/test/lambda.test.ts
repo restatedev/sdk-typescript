@@ -26,7 +26,7 @@ import {
 } from "./protoutils";
 import { decodeLambdaBody } from "../src/io/decoder";
 import { TestGreeter, TestResponse } from "./testdriver";
-import { ServiceType, Deployment } from "../src/types/discovery";
+import { ServiceType, Endpoint } from "../src/types/discovery";
 import { X_RESTATE_SERVER } from "../src/user_agent";
 import {
   serviceDiscoveryProtocolVersionToHeaderValue,
@@ -250,7 +250,7 @@ describe("LambdaGreeter", () => {
     });
     expect(result.isBase64Encoded).toStrictEqual(true);
 
-    const decodedResponse: Deployment = JSON.parse(
+    const decodedResponse: Endpoint = JSON.parse(
       Buffer.from(result.body, "base64").toString("utf8")
     );
     expect(decodedResponse.services[0].name).toStrictEqual("greeter");

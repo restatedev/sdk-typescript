@@ -14,6 +14,7 @@ import { endpointImpl } from "./endpoint/endpoint_impl";
 import type {
   VirtualObjectDefinition,
   ServiceDefinition,
+  WorkflowDefinition,
 } from "@restatedev/restate-sdk-core";
 
 /**
@@ -63,10 +64,13 @@ export interface ServiceBundle {
  */
 export interface RestateEndpoint {
   /**
-   * Binds a new durable RPC service / virtual object.
+   * Binds a new durable service / virtual object / workflow.
    **/
   bind<P extends string, M>(
-    service: ServiceDefinition<P, M> | VirtualObjectDefinition<P, M>
+    service:
+      | ServiceDefinition<P, M>
+      | VirtualObjectDefinition<P, M>
+      | WorkflowDefinition<P, M>
   ): RestateEndpoint;
 
   /**

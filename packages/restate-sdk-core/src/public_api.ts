@@ -9,4 +9,10 @@ export type {
   ObjectSharedHandler,
   VirtualObject,
   VirtualObjectDefinition,
+  Workflow,
+  WorkflowDefinition,
+  WorkflowHandler,
+  WorkflowSharedHandler,
+  RestateWorkflowContext,
+  RestateWorkflowSharedContext,
 } from "./core";

@@ -36,7 +36,6 @@ import { ProtocolMode } from "../types/discovery";
 import {
   ComponentHandler,
   UrlPathComponents,
-  VirtualObjectHandler,
   parseUrlComponents,
 } from "../types/components";
 import { validateRequestSignature } from "./request_signing/validate";
@@ -169,7 +168,7 @@ export class LambdaHandler {
         connection,
         invocation,
         ProtocolMode.REQUEST_RESPONSE,
-        handler instanceof VirtualObjectHandler,
+        handler.kind(),
         invocation.inferLoggerContext({
           AWSRequestId: context.awsRequestId,
         })

@@ -29,6 +29,7 @@ export interface ComponentHandler {
   name(): string;
   component(): Component;
   invoke(context: ContextImpl, input: Uint8Array): Promise<Uint8Array>;
+  kind(): HandlerKind;
 }
 
 //
@@ -60,7 +61,7 @@ export class ServiceComponent implements Component {
               serviceHandler.handlerWrapper.accept ?? "application/json",
           },
           output: {
-            setContentTypeIfEmpty: true,
+            setContentTypeIfEmpty: false,
             contentType:
               serviceHandler.handlerWrapper.contentType ?? "application/json",
           },
@@ -95,6 +96,10 @@ export class ServiceHandler implements ComponentHandler {
     this.handlerWrapper = handlerWrapper;
   }
 
+  kind(): HandlerKind {
+    return this.handlerWrapper.kind;
+  }
+
   invoke(context: ContextImpl, input: Uint8Array): Promise<Uint8Array> {
     return this.handlerWrapper.invoke(context, input);
   }
@@ -102,6 +107,7 @@ export class ServiceHandler implements ComponentHandler {
   name(): string {
     return this.handlerName;
   }
+
   component(): Component {
     return this.parent;
   }
@@ -134,7 +140,7 @@ export class VirtualObjectComponent implements Component {
             contentType: opts.accept ?? "application/json",
           },
           output: {
-            setContentTypeIfEmpty: true,
+            setContentTypeIfEmpty: false,
             contentType: opts.contentType ?? "application/json",
           },
           ty:
@@ -173,6 +179,85 @@ export class VirtualObjectHandler implements ComponentHandler {
   }
   component(): Component {
     return this.parent;
+  }
+
+  kind(): HandlerKind {
+    return this.handlerWrapper.kind;
+  }
+
+  invoke(context: ContextImpl, input: Uint8Array): Promise<Uint8Array> {
+    return this.handlerWrapper.invoke(context, input);
+  }
+}
+
+// Workflow
+
+export class WorkflowComponent implements Component {
+  private readonly handlers: Map<string, HandlerWrapper> = new Map();
+
+  constructor(public readonly componentName: string) {}
+
+  name(): string {
+    return this.componentName;
+  }
+
+  add(name: string, wrapper: HandlerWrapper) {
+    this.handlers.set(name, wrapper);
+  }
+
+  discovery(): d.Service {
+    const handlers: d.Handler[] = [...this.handlers.entries()].map(
+      ([name, handler]) => {
+        return {
+          name,
+          input: {
+            required: false,
+            contentType: handler.accept ?? "application/json",
+          },
+          output: {
+            setContentTypeIfEmpty: false,
+            contentType: handler.contentType ?? "application/json",
+          },
+          ty:
+            handler.kind == HandlerKind.WORKFLOW
+              ? d.ServiceHandlerType.WORKFLOW
+              : d.ServiceHandlerType.SHARED,
+        };
+      }
+    );
+
+    return {
+      name: this.componentName,
+      ty: d.ServiceType.WORKFLOW,
+      handlers,
+    };
+  }
+
+  handlerMatching(url: UrlPathComponents): ComponentHandler | undefined {
+    const wrapper = this.handlers.get(url.handlerName);
+    if (!wrapper) {
+      return undefined;
+    }
+    return new WorkflowHandler(url.handlerName, this, wrapper);
+  }
+}
+
+export class WorkflowHandler implements ComponentHandler {
+  constructor(
+    private readonly componentName: string,
+    private readonly parent: WorkflowComponent,
+    private readonly handlerWrapper: HandlerWrapper
+  ) {}
+
+  name(): string {
+    return this.componentName;
+  }
+  component(): Component {
+    return this.parent;
+  }
+
+  kind(): HandlerKind {
+    return this.handlerWrapper.kind;
   }
 
   invoke(context: ContextImpl, input: Uint8Array): Promise<Uint8Array> {

@@ -9,14 +9,18 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import {
   CombineablePromise,
   ContextDate,
+  DurablePromise,
   ObjectContext,
   Rand,
   Request,
   RunAction,
   SendOptions,
+  WorkflowContext,
 } from "./context";
 import { StateMachine } from "./state_machine";
 import {
@@ -30,6 +34,9 @@ import {
   CallEntryMessage,
   RunEntryMessage,
   SleepEntryMessage,
+  GetPromiseEntryMessage,
+  PeekPromiseEntryMessage,
+  CompletePromiseEntryMessage,
 } from "./generated/proto/protocol_pb";
 import {
   AWAKEABLE_ENTRY_MESSAGE_TYPE,
@@ -44,6 +51,9 @@ import {
   SET_STATE_ENTRY_MESSAGE_TYPE,
   SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
   SLEEP_ENTRY_MESSAGE_TYPE,
+  GET_PROMISE_MESSAGE_TYPE,
+  PEEK_PROMISE_MESSAGE_TYPE,
+  COMPLETE_PROMISE_MESSAGE_TYPE,
 } from "./types/protocol";
 import { AsyncLocalStorage } from "node:async_hooks";
 import {
@@ -57,10 +67,11 @@ import {
 } from "./types/errors";
 import { jsonSerialize, jsonDeserialize } from "./utils/utils";
 import { PartialMessage, protoInt64 } from "@bufbuild/protobuf";
-import type { Client, SendClient } from "./types/rpc";
+import { Client, HandlerKind, SendClient } from "./types/rpc";
 import type {
   ServiceDefinition,
   VirtualObjectDefinition,
+  WorkflowDefinition,
 } from "@restatedev/restate-sdk-core";
 import { RandImpl } from "./utils/rand";
 import { newJournalEntryPromiseId } from "./promise_combinator_tracker";
@@ -82,7 +93,7 @@ export type InternalCombineablePromise<T> = CombineablePromise<T> & {
   journalIndex: number;
 };
 
-export class ContextImpl implements ObjectContext {
+export class ContextImpl implements ObjectContext, WorkflowContext {
   // here, we capture the context information for actions on the Restate context that
   // are executed within other actions, such as
   // ctx.oneWayCall( () => client.foo(bar) );
@@ -109,13 +120,13 @@ export class ContextImpl implements ObjectContext {
   constructor(
     id: Buffer,
     public readonly console: Console,
-    public readonly keyedContext: boolean,
+    public readonly handlerKind: HandlerKind,
     public readonly keyedContextKey: string | undefined,
     invocationValue: Uint8Array,
     invocationHeaders: ReadonlyMap<string, string>,
     attemptHeaders: ReadonlyMap<string, string | string[] | undefined>,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    private readonly stateMachine: StateMachine,
+    readonly stateMachine: StateMachine,
     public readonly rand: Rand = new RandImpl(id)
   ) {
     this.invocationRequest = {
@@ -125,12 +136,46 @@ export class ContextImpl implements ObjectContext {
       body: invocationValue,
     };
   }
+  workflowClient<M, P extends string = string>(
+    opts: WorkflowDefinition<P, M>,
+    key: string
+  ): Client<M> {
+    const { name } = opts;
+    const clientProxy = new Proxy(
+      {},
+      {
+        get: (_target, prop) => {
+          const route = prop as string;
+          return (...args: unknown[]) => {
+            const requestBytes = serializeJson(args.shift());
+            return this.invoke(name, route, requestBytes, key);
+          };
+        },
+      }
+    );
+
+    return clientProxy as Client<M>;
+  }
+
+  public promise<T = void>(name: string): DurablePromise<T> {
+    return new DurablePromiseImpl(this, name);
+  }
 
   public get key(): string {
-    if (!this.keyedContextKey) {
-      throw new TerminalError("unexpected missing key");
+    switch (this.handlerKind) {
+      case HandlerKind.EXCLUSIVE:
+      case HandlerKind.SHARED:
+      case HandlerKind.WORKFLOW: {
+        if (this.keyedContextKey === undefined) {
+          throw new TerminalError("unexpected missing key");
+        }
+        return this.keyedContextKey;
+      }
+      case HandlerKind.SERVICE:
+        throw new TerminalError("unexpected missing key");
+      default:
+        throw new TerminalError("unknown handler type");
     }
-    return this.keyedContextKey;
   }
 
   public request(): Request {
@@ -141,7 +186,6 @@ export class ContextImpl implements ObjectContext {
   public get<T>(name: string): Promise<T | null> {
     // Check if this is a valid action
     this.checkState("get state");
-    this.checkStateOperation("get state");
 
     // Create the message and let the state machine process it
     const msg = new GetStateEntryMessage({ key: Buffer.from(name) });
@@ -200,7 +244,6 @@ export class ContextImpl implements ObjectContext {
 
   public set<T>(name: string, value: T): void {
     this.checkState("set state");
-    this.checkStateOperation("set state");
     const msg = this.stateMachine.localStateStore.set(name, value);
     this.stateMachine
       .handleUserCodeMessage(SET_STATE_ENTRY_MESSAGE_TYPE, msg)
@@ -209,7 +252,6 @@ export class ContextImpl implements ObjectContext {
 
   public clear(name: string): void {
     this.checkState("clear state");
-    this.checkStateOperation("clear state");
 
     const msg = this.stateMachine.localStateStore.clear(name);
     this.stateMachine
@@ -241,7 +283,7 @@ export class ContextImpl implements ObjectContext {
     const msg = new CallEntryMessage({
       serviceName: service,
       handlerName: method,
-      parameter: Buffer.from(data),
+      parameter: data,
       key,
     });
     return this.markCombineablePromise(
@@ -264,7 +306,7 @@ export class ContextImpl implements ObjectContext {
     const msg = new OneWayCallEntryMessage({
       serviceName: service,
       handlerName: method,
-      parameter: Buffer.from(data),
+      parameter: data,
       invokeTime: protoInt64.parse(invokeTime),
       key,
     });
@@ -637,16 +679,7 @@ export class ContextImpl implements ObjectContext {
     }
   }
 
-  private checkStateOperation(callType: string): void {
-    if (!this.keyedContext) {
-      throw new TerminalError(
-        `You can do ${callType} calls only from a virtual object`,
-        { errorCode: INTERNAL_ERROR_CODE }
-      );
-    }
-  }
-
-  private markCombineablePromise<T>(
+  markCombineablePromise<T>(
     p: WrappedPromise<T>
   ): InternalCombineablePromise<T> {
     const journalIndex = this.stateMachine.getUserCodeJournalIndex();
@@ -711,4 +744,93 @@ const RESTATE_CTX_SYMBOL = Symbol("restateContext");
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function extractContext(n: any): ContextImpl | undefined {
   return n[RESTATE_CTX_SYMBOL];
+}
+
+class DurablePromiseImpl<T> implements DurablePromise<T> {
+  constructor(
+    private readonly ctx: ContextImpl,
+    private readonly name: string
+  ) {}
+
+  then<TResult1 = T, TResult2 = never>(
+    onfulfilled?:
+      | ((value: T) => TResult1 | PromiseLike<TResult1>)
+      | null
+      | undefined,
+    onrejected?:
+      | ((reason: any) => TResult2 | PromiseLike<TResult2>)
+      | null
+      | undefined
+  ): Promise<TResult1 | TResult2> {
+    return this.get().then(onfulfilled, onrejected);
+  }
+
+  catch<TResult = never>(
+    onrejected?:
+      | ((reason: any) => TResult | PromiseLike<TResult>)
+      | null
+      | undefined
+  ): Promise<T | TResult> {
+    return this.get().catch(onrejected);
+  }
+
+  finally(onfinally?: (() => void) | null | undefined): Promise<T> {
+    return this.get().finally(onfinally);
+  }
+
+  [Symbol.toStringTag] = "DurablePromise";
+
+  get(): InternalCombineablePromise<T> {
+    const msg = new GetPromiseEntryMessage({
+      key: this.name,
+    });
+
+    return this.ctx.markCombineablePromise(
+      this.ctx.stateMachine
+        .handleUserCodeMessage(GET_PROMISE_MESSAGE_TYPE, msg)
+        .transform((v) => deserializeJson(v as Uint8Array))
+    );
+  }
+
+  peek(): InternalCombineablePromise<T | undefined> {
+    const msg = new PeekPromiseEntryMessage({
+      key: this.name,
+    });
+
+    return this.ctx.markCombineablePromise(
+      this.ctx.stateMachine
+        .handleUserCodeMessage(PEEK_PROMISE_MESSAGE_TYPE, msg)
+        .transform((v) =>
+          v instanceof Empty ? undefined : deserializeJson(v as Uint8Array)
+        )
+    );
+  }
+
+  resolve(value?: T | undefined): void {
+    const msg = new CompletePromiseEntryMessage({
+      key: this.name,
+      completion: {
+        case: "completionValue",
+        value: serializeJson(value),
+      },
+    });
+    this.ctx.stateMachine
+      .handleUserCodeMessage(COMPLETE_PROMISE_MESSAGE_TYPE, msg)
+      .catch((e) => this.ctx.stateMachine.handleDanglingPromiseError(e));
+  }
+
+  reject(errorMsg: string): void {
+    const msg = new CompletePromiseEntryMessage({
+      key: this.name,
+      completion: {
+        case: "completionFailure",
+        value: {
+          message: errorMsg,
+        },
+      },
+    });
+    this.ctx.stateMachine
+      .handleUserCodeMessage(COMPLETE_PROMISE_MESSAGE_TYPE, msg)
+      .catch((e) => this.ctx.stateMachine.handleDanglingPromiseError(e));
+  }
 }

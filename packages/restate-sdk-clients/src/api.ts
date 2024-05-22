@@ -1,7 +1,10 @@
 import type {
   ServiceDefinition,
   VirtualObjectDefinition,
+  WorkflowDefinition,
 } from "@restatedev/restate-sdk-core";
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 export interface Ingress {
   /**
@@ -10,6 +13,14 @@ export interface Ingress {
   serviceClient<M, P extends string = string>(
     opts: ServiceDefinition<P, M>
   ): IngressClient<M>;
+
+  /**
+   * Create a client from a {@link WorkflowDefinition}.
+   */
+  workflowClient<M, P extends string = string>(
+    opts: WorkflowDefinition<P, M>,
+    key: string
+  ): IngressWorkflowClient<M>;
 
   /**
    * Create a client from a {@link VirtualObjectDefinition}.
@@ -94,13 +105,60 @@ export type IngressClient<M> = {
     : never;
 };
 
+export interface Output<O> {
+  ready: boolean;
+  result: O;
+}
+
+export type WorkflowSubmission = {
+  invocationId: string;
+};
+
+export type IngressWorkflowClient<M> = Omit<
+  {
+    [K in keyof M as M[K] extends never ? never : K]: M[K] extends (
+      ...args: unknown[]
+    ) => PromiseLike<unknown>
+      ? M[K]
+      : never;
+  } & {
+    /**
+     * Submit this workflow.
+     *
+     * This instructs restate to execute the 'run' handler.
+     *
+     * @param argument the same argument type as defined by the 'run' handler.
+     */
+    workflowSubmit: M extends Record<string, unknown>
+      ? M["run"] extends (...args: infer I) => Promise<unknown>
+        ? (...args: I) => Promise<WorkflowSubmission>
+        : never
+      : never;
+
+    workflowAttach: M extends Record<string, unknown>
+      ? M["run"] extends (...args: any) => Promise<infer O>
+        ? () => Promise<O>
+        : never
+      : never;
+
+    workflowOutput: M extends Record<string, unknown>
+      ? M["run"] extends (...args: any) => Promise<infer O>
+        ? () => Promise<Output<O>>
+        : never
+      : never;
+  },
+  "run"
+>;
+
+export type SendResponse = {
+  invocationId: string;
+};
+
 export type IngressSendClient<M> = {
   [K in keyof M as M[K] extends never ? never : K]: M[K] extends (
     ...args: infer P
   ) => unknown
-    ? (
-        ...args: [...P, ...[opts?: SendOpts]]
-      ) => Promise<{ invocationId: string }>
+    ? (...args: [...P, ...[opts?: SendOpts]]) => Promise<SendResponse>
     : never;
 };
 
