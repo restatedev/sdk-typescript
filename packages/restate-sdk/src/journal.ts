@@ -296,6 +296,38 @@ export class Journal {
         );
         break;
       }
+      case p.PEEK_PROMISE_MESSAGE_TYPE: {
+        const peek = replayMessage.message as p.PeekPromiseEntryMessage;
+        this.resolveResult(
+          journalIndex,
+          journalEntry,
+          peek.result.case === "value" || peek.result.case === "empty"
+            ? peek.result.value
+            : undefined,
+          peek.result.case === "failure" ? peek.result.value : undefined
+        );
+        break;
+      }
+      case p.GET_PROMISE_MESSAGE_TYPE: {
+        const get = replayMessage.message as p.GetPromiseEntryMessage;
+        this.resolveResult(
+          journalIndex,
+          journalEntry,
+          get.result.case === "value" ? get.result.value : undefined,
+          get.result.case === "failure" ? get.result.value : undefined
+        );
+        break;
+      }
+      case p.COMPLETE_PROMISE_MESSAGE_TYPE: {
+        const complete = replayMessage.message as p.CompletePromiseEntryMessage;
+        this.resolveResult(
+          journalIndex,
+          journalEntry,
+          undefined,
+          complete.result.case === "failure" ? complete.result.value : undefined
+        );
+        break;
+      }
       case INVOKE_ENTRY_MESSAGE_TYPE: {
         const invokeMsg = replayMessage.message as CallEntryMessage;
         this.resolveResult(

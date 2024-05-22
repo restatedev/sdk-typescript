@@ -191,7 +191,9 @@ const doWorkflowHandleCall = async <O>(
   //
   // make the call
   //
-  const url = `${opts.url}/restate/workflow/${wfName}/${wfKey}/${op}`;
+  const url = `${opts.url}/restate/workflow/${wfName}/${encodeURIComponent(
+    wfKey
+  )}/${op}`;
 
   const httpResponse = await fetch(url, {
     method: "GET",

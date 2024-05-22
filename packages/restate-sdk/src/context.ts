@@ -599,8 +599,8 @@ export const CombineablePromise = {
 export type DurablePromise<T> = Promise<T | undefined> & {
   get(): CombineablePromise<T | undefined>;
   peek(): CombineablePromise<T | undefined>;
-  resolve(value?: T): void;
-  reject(errorMsg: string): void;
+  resolve(value?: T): CombineablePromise<void>;
+  reject(errorMsg: string): CombineablePromise<void>;
 };
 
 export interface WorkflowSharedContext

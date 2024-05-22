@@ -81,7 +81,7 @@ const myWorkflow = restate.workflow({
     },
 
     webhook: async (ctx: restate.WorkflowSharedContext, arg: string) => {
-      ctx.promise<string>("d").resolve("fdsfs");
+      await ctx.promise<string>("d").resolve("fdsfs");
       return arg;
     },
   },

@@ -806,7 +806,7 @@ class DurablePromiseImpl<T> implements DurablePromise<T> {
     );
   }
 
-  resolve(value?: T | undefined): void {
+  resolve(value?: T | undefined): InternalCombineablePromise<void> {
     const msg = new CompletePromiseEntryMessage({
       key: this.name,
       completion: {
@@ -814,12 +814,16 @@ class DurablePromiseImpl<T> implements DurablePromise<T> {
         value: serializeJson(value),
       },
     });
-    this.ctx.stateMachine
-      .handleUserCodeMessage(COMPLETE_PROMISE_MESSAGE_TYPE, msg)
-      .catch((e) => this.ctx.stateMachine.handleDanglingPromiseError(e));
+
+    return this.ctx.markCombineablePromise(
+      this.ctx.stateMachine.handleUserCodeMessage(
+        COMPLETE_PROMISE_MESSAGE_TYPE,
+        msg
+      )
+    );
   }
 
-  reject(errorMsg: string): void {
+  reject(errorMsg: string): InternalCombineablePromise<void> {
     const msg = new CompletePromiseEntryMessage({
       key: this.name,
       completion: {
@@ -829,8 +833,12 @@ class DurablePromiseImpl<T> implements DurablePromise<T> {
         },
       },
     });
-    this.ctx.stateMachine
-      .handleUserCodeMessage(COMPLETE_PROMISE_MESSAGE_TYPE, msg)
-      .catch((e) => this.ctx.stateMachine.handleDanglingPromiseError(e));
+
+    return this.ctx.markCombineablePromise(
+      this.ctx.stateMachine.handleUserCodeMessage(
+        COMPLETE_PROMISE_MESSAGE_TYPE,
+        msg
+      )
+    );
   }
 }
