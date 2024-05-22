@@ -13,11 +13,13 @@
 
 import * as restate from "@restatedev/restate-sdk-clients";
 
-import type { CounterObject, GreeterService, MyWorkflow } from "./example";
+import type { Greeter } from "./greeter";
+import type { PaymentWorkflow } from "./workflow";
+import type { Counter } from "./object";
 
-const Greeter: GreeterService = { name: "greeter" };
-const Counter: CounterObject = { name: "counter" };
-const Workflow: MyWorkflow = { name: "hello" };
+const Greeter: Greeter = { name: "greeter" };
+const Counter: Counter = { name: "counter" };
+const Workflow: PaymentWorkflow = { name: "payment" };
 
 const ingress = restate.connect({ url: "http://localhost:8080" });
 
@@ -30,7 +32,7 @@ const simpleCall = async (name: string) => {
 
 const objectCall = async (name: string) => {
   const counter = ingress.objectClient(Counter, name);
-  const count = await counter.count();
+  const count = await counter.current();
 
   console.log(`The count for ${name} is ${count}`);
 };
@@ -105,9 +107,11 @@ const customInterface = async (name: string) => {
 const workflow = async (name: string) => {
   const client = ingress.workflowClient(Workflow, name);
 
-  const submission = await client.workflowSubmit(
-    `This is a workflow argument for ${name}`
-  );
+  const submission = await client.workflowSubmit({
+    account: "foo",
+    amount: 1234,
+  });
+
   console.log(submission.invocationId);
 
   const output = await client.workflowOutput();
@@ -117,6 +121,8 @@ const workflow = async (name: string) => {
   } else {
     console.log("not yet ready");
   }
+
+  await client.paymentWebhook("hi there!");
 
   console.log(await client.workflowAttach());
 };
