@@ -395,12 +395,7 @@ function computeDelayAsIso(opts: SendOpts): string {
   if (!delay) {
     return "send";
   }
-  if (delay >= 1000) {
-    const delaySec = delay / 1000;
-    return `send?delaySec=${delaySec}`;
-  }
-  const delayStr = String(delay).padStart(3);
-  return `send?delay=PT0.${delayStr}0S`;
+  return `send?delay=${delay}ms`;
 }
 
 function serializeJson(what: unknown): Uint8Array {
