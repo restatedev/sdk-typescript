@@ -37,19 +37,9 @@ export type ServiceHandler<F, C = RestateContext> = F extends (
   ? F
   : never;
 
-type WithoutRpcContext<F> = F extends (ctx: any, ...args: infer P) => infer R
-  ? (...args: P) => R
-  : never;
-
-export type Service<U, C = RestateContext> = {
-  [K in keyof U]: U[K] extends ServiceHandler<infer F, C>
-    ? WithoutRpcContext<F>
-    : never;
-};
-
 export type ServiceDefinition<P extends string, M> = {
   name: P;
-  service?: Service<M>;
+  service?: M;
 };
 
 // ----------- object -------------------------------------------------------
@@ -72,21 +62,9 @@ export type ObjectHandler<F, C = RestateObjectContext> = F extends (
   ? F
   : never;
 
-export type VirtualObject<
-  U,
-  C = RestateObjectContext,
-  SC = RestateObjectSharedContext
-> = {
-  [K in keyof U]: U[K] extends ObjectHandler<infer F, C>
-    ? WithoutRpcContext<F>
-    : U[K] extends ObjectSharedHandler<infer F, SC>
-    ? WithoutRpcContext<F>
-    : never;
-};
-
 export type VirtualObjectDefinition<P extends string, M> = {
   name: P;
-  object?: VirtualObject<M>;
+  object?: M;
 };
 
 // ----------- workflow -------------------------------------------------------
@@ -109,19 +87,7 @@ export type WorkflowHandler<F, C = RestateWorkflowContext> = F extends (
   ? F
   : never;
 
-export type Workflow<
-  U,
-  C = RestateWorkflowContext,
-  SC = RestateWorkflowSharedContext
-> = {
-  [K in keyof U]: U[K] extends WorkflowHandler<infer F, C>
-    ? WithoutRpcContext<F>
-    : U[K] extends WorkflowSharedHandler<infer F, SC>
-    ? WithoutRpcContext<F>
-    : never;
-};
-
 export type WorkflowDefinition<P extends string, M> = {
   name: P;
-  workflow?: Workflow<M>;
+  workflow?: M;
 };

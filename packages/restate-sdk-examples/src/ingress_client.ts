@@ -92,7 +92,7 @@ const customInterface = async (name: string) => {
   // To call that service, simply write down the interface
   // and pass it trough
   interface SomeService {
-    greet(name: string): Promise<string>;
+    greet(ctx: unknown, name: string): Promise<string>;
   }
 
   const svc = ingress.serviceClient<SomeService>({

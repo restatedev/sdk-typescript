@@ -14,9 +14,7 @@
 
 import { RestateEndpoint, ServiceBundle } from "../public_api";
 import type {
-  Service,
   ServiceDefinition,
-  VirtualObject,
   VirtualObjectDefinition,
 } from "@restatedev/restate-sdk-core";
 
@@ -34,7 +32,7 @@ import {
 
 import * as discovery from "../types/discovery";
 import { KeySetV1, parseKeySetV1 } from "./request_signing/v1";
-import { Workflow, WorkflowDefinition } from "@restatedev/restate-sdk-core";
+import { WorkflowDefinition } from "@restatedev/restate-sdk-core";
 
 function isServiceDefinition<P extends string, M>(
   m: any
@@ -201,7 +199,7 @@ export class EndpointImpl implements RestateEndpoint {
     return endpoint;
   }
 
-  private bindServiceComponent(name: string, router: Service<any>) {
+  private bindServiceComponent(name: string, router: any) {
     if (name.indexOf("/") !== -1) {
       throw new Error("service name must not contain any slash '/'");
     }
@@ -219,7 +217,7 @@ export class EndpointImpl implements RestateEndpoint {
     this.addComponent(component);
   }
 
-  private bindVirtualObjectComponent(name: string, router: VirtualObject<any>) {
+  private bindVirtualObjectComponent(name: string, router: any) {
     if (name.indexOf("/") !== -1) {
       throw new Error("service name must not contain any slash '/'");
     }
@@ -236,7 +234,7 @@ export class EndpointImpl implements RestateEndpoint {
     this.addComponent(component);
   }
 
-  private bindWorkflowObjectComponent(name: string, workflow: Workflow<any>) {
+  private bindWorkflowObjectComponent(name: string, workflow: any) {
     if (name.indexOf("/") !== -1) {
       throw new Error("service name must not contain any slash '/'");
     }

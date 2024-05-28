@@ -10,9 +10,7 @@
  */
 
 export type {
-  Service,
   ServiceDefinition,
-  VirtualObject,
   VirtualObjectDefinition,
 } from "@restatedev/restate-sdk-core";
 
