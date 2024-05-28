@@ -112,6 +112,7 @@ export interface Output<O> {
 
 export type WorkflowSubmission = {
   invocationId: string;
+  status: "Accepted" | "PreviouslyAccepted";
 };
 
 export type IngressWorkflowClient<M> = Omit<
@@ -152,6 +153,7 @@ export type IngressWorkflowClient<M> = Omit<
 
 export type SendResponse = {
   invocationId: string;
+  status: "Accepted" | "PreviouslyAccepted";
 };
 
 export type IngressSendClient<M> = {

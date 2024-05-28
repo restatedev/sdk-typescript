@@ -269,6 +269,7 @@ class HttpIngress implements Ingress {
 
       return {
         invocationId: res.invocationId,
+        status: res.status,
       };
     };
 
