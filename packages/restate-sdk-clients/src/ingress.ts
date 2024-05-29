@@ -125,7 +125,6 @@ const doComponentInvocation = async <I, O>(
   if (params.key) {
     const key = encodeURIComponent(params.key);
     fragments.push(key);
-    attachable = true;
   }
   //
   // handler
