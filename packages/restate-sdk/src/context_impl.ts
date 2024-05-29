@@ -69,9 +69,12 @@ import { jsonSerialize, jsonDeserialize } from "./utils/utils";
 import { PartialMessage, protoInt64 } from "@bufbuild/protobuf";
 import { Client, HandlerKind, SendClient } from "./types/rpc";
 import type {
-  ServiceDefinition,
-  VirtualObjectDefinition,
-  WorkflowDefinition,
+  Service,
+  ServiceDefinitionFrom,
+  VirtualObjectDefinitionFrom,
+  VirtualObject,
+  WorkflowDefinitionFrom,
+  Workflow,
 } from "@restatedev/restate-sdk-core";
 import { RandImpl } from "./utils/rand";
 import { newJournalEntryPromiseId } from "./promise_combinator_tracker";
@@ -136,10 +139,10 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       body: invocationValue,
     };
   }
-  workflowClient<M, P extends string = string>(
-    opts: WorkflowDefinition<P, M>,
+  workflowClient<D>(
+    opts: WorkflowDefinitionFrom<D>,
     key: string
-  ): Client<M> {
+  ): Client<Workflow<D>> {
     const { name } = opts;
     const clientProxy = new Proxy(
       {},
@@ -154,7 +157,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       }
     );
 
-    return clientProxy as Client<M>;
+    return clientProxy as Client<Workflow<D>>;
   }
 
   public promise<T = void>(name: string): DurablePromise<T> {
@@ -318,9 +321,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     return new Uint8Array();
   }
 
-  serviceClient<M, P extends string = string>({
-    name,
-  }: ServiceDefinition<P, M>): Client<M> {
+  serviceClient<D>({ name }: ServiceDefinitionFrom<D>): Client<Service<D>> {
     const clientProxy = new Proxy(
       {},
       {
@@ -334,13 +335,13 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       }
     );
 
-    return clientProxy as Client<M>;
+    return clientProxy as Client<Service<D>>;
   }
 
-  objectClient<M, P extends string = string>(
-    { name }: VirtualObjectDefinition<P, M>,
+  objectClient<D>(
+    { name }: VirtualObjectDefinitionFrom<D>,
     key: string
-  ): Client<M> {
+  ): Client<VirtualObject<D>> {
     const clientProxy = new Proxy(
       {},
       {
@@ -354,13 +355,13 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       }
     );
 
-    return clientProxy as Client<M>;
+    return clientProxy as Client<VirtualObject<D>>;
   }
 
-  public serviceSendClient<M, P extends string = string>(
-    service: ServiceDefinition<P, M>,
+  public serviceSendClient<D>(
+    service: ServiceDefinitionFrom<D>,
     opts?: SendOptions
-  ): SendClient<M> {
+  ): SendClient<Service<D>> {
     const clientProxy = new Proxy(
       {},
       {
@@ -381,14 +382,14 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       }
     );
 
-    return clientProxy as SendClient<M>;
+    return clientProxy as SendClient<Service<D>>;
   }
 
-  public objectSendClient<M, P extends string = string>(
-    obj: VirtualObjectDefinition<P, M>,
+  public objectSendClient<D>(
+    obj: VirtualObjectDefinitionFrom<D>,
     key: string,
     opts?: SendOptions
-  ): SendClient<M> {
+  ): SendClient<VirtualObject<D>> {
     const clientProxy = new Proxy(
       {},
       {
@@ -410,7 +411,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       }
     );
 
-    return clientProxy as SendClient<M>;
+    return clientProxy as SendClient<VirtualObject<D>>;
   }
 
   // DON'T make this function async!!!

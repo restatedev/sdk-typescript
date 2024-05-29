@@ -413,8 +413,8 @@ export const service = <P extends string, M>(service: {
 
   return {
     name: service.name,
-    service: Object.fromEntries(handlers) as M,
-  };
+    service: Object.fromEntries(handlers),
+  } as any;
 };
 
 // ----------- objects ----------------------------------------------
@@ -456,8 +456,8 @@ export const object = <P extends string, M>(object: {
 
   return {
     name: object.name,
-    object: Object.fromEntries(handlers) as M,
-  };
+    object: Object.fromEntries(handlers),
+  } as any;
 };
 
 // ----------- workflows ----------------------------------------------
@@ -544,6 +544,6 @@ export const workflow = <P extends string, M>(workflow: {
 
   return {
     name: workflow.name,
-    workflow: Object.fromEntries(handlers) as M,
-  };
+    workflow: Object.fromEntries(handlers),
+  } as any;
 };

@@ -24,7 +24,8 @@ const Workflow: PaymentWorkflow = { name: "payment" };
 const ingress = restate.connect({ url: "http://localhost:8080" });
 
 const simpleCall = async (name: string) => {
-  const greeter = ingress.serviceClient(Greeter);
+  const greeter = ingress.serviceClient<Greeter>({ name: "greeter" });
+
   const greeting = await greeter.greet(name);
 
   console.log(greeting);

@@ -36,19 +36,19 @@ import { WorkflowDefinition } from "@restatedev/restate-sdk-core";
 
 function isServiceDefinition<P extends string, M>(
   m: any
-): m is ServiceDefinition<P, M> {
+): m is ServiceDefinition<P, M> & { service: M } {
   return m && m.service;
 }
 
 function isObjectDefinition<P extends string, M>(
   m: any
-): m is VirtualObjectDefinition<P, M> {
+): m is VirtualObjectDefinition<P, M> & { object: M } {
   return m && m.object;
 }
 
 function isWorkflowDefinition<P extends string, M>(
   m: any
-): m is WorkflowDefinition<P, M> {
+): m is WorkflowDefinition<P, M> & { workflow: M } {
   return m && m.workflow;
 }
 

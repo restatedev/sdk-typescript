@@ -37,10 +37,18 @@ export type ServiceHandler<F, C = RestateContext> = F extends (
   ? F
   : never;
 
+/* eslint-disable-next-line @typescript-eslint/no-unused-vars */
 export type ServiceDefinition<P extends string, M> = {
   name: P;
-  service?: M;
 };
+
+export type Service<M> = M extends ServiceDefinition<string, infer S> ? S : M;
+export type ServiceDefinitionFrom<M> = M extends ServiceDefinition<
+  string,
+  unknown
+>
+  ? M
+  : ServiceDefinition<string, M>;
 
 // ----------- object -------------------------------------------------------
 
@@ -62,10 +70,24 @@ export type ObjectHandler<F, C = RestateObjectContext> = F extends (
   ? F
   : never;
 
+/* eslint-disable-next-line @typescript-eslint/no-unused-vars */
 export type VirtualObjectDefinition<P extends string, M> = {
   name: P;
-  object?: M;
 };
+
+export type VirtualObject<M> = M extends VirtualObjectDefinition<
+  string,
+  infer O
+>
+  ? O
+  : never;
+
+export type VirtualObjectDefinitionFrom<M> = M extends VirtualObjectDefinition<
+  string,
+  unknown
+>
+  ? M
+  : VirtualObjectDefinition<string, M>;
 
 // ----------- workflow -------------------------------------------------------
 
@@ -87,7 +109,18 @@ export type WorkflowHandler<F, C = RestateWorkflowContext> = F extends (
   ? F
   : never;
 
+/* eslint-disable-next-line @typescript-eslint/no-unused-vars */
 export type WorkflowDefinition<P extends string, M> = {
   name: P;
-  workflow?: M;
 };
+
+export type Workflow<M> = M extends WorkflowDefinition<string, infer W>
+  ? W
+  : never;
+
+export type WorkflowDefinitionFrom<M> = M extends WorkflowDefinition<
+  string,
+  unknown
+>
+  ? M
+  : WorkflowDefinition<string, M>;
