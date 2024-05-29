@@ -85,6 +85,22 @@ const delayedCall = async (name: string) => {
   console.log(greeting);
 };
 
+const sendAndCollectResultLater = async (name: string) => {
+  const ingress = restate.connect({
+    url: "http://localhost:8080",
+  });
+
+  const send = await ingress
+    .serviceSendClient(Greeter)
+    .greet(name, restate.SendOpts.from({ idempotencyKey: "abcde" }));
+
+  // Few MinUtEs LaTeR ...
+
+  const greeting = await ingress.result(send);
+
+  console.log(greeting);
+};
+
 const customInterface = async (name: string) => {
   // This example demonstrates how to invoke a service
   // potentially written in a different language / or we can't
@@ -125,6 +141,8 @@ const workflow = async (name: string) => {
 
   await client.paymentWebhook("hi there!");
 
+  ingress.result(submission);
+
   console.log(await client.workflowAttach());
 };
 
@@ -138,6 +156,7 @@ const workflow = async (name: string) => {
 // 3. restate deployment add localhost:9080
 
 Promise.resolve()
+  .then(() => sendAndCollectResultLater("boby"))
   .then(() => simpleCall("bob"))
   .then(() => objectCall("bob"))
   .then(() => objectCall("mop"))

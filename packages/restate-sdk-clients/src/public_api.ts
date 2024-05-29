@@ -23,6 +23,7 @@ export {
   Opts,
   IngresCallOptions,
   SendOpts,
+  Send,
   IngresSendOptions,
 } from "./api";
 
