@@ -793,21 +793,19 @@ class DurablePromiseImpl<T> implements DurablePromise<T> {
     );
   }
 
-  peek(): InternalCombineablePromise<T | undefined> {
+  peek(): Promise<T | undefined> {
     const msg = new PeekPromiseEntryMessage({
       key: this.name,
     });
 
-    return this.ctx.markCombineablePromise(
-      this.ctx.stateMachine
-        .handleUserCodeMessage(PEEK_PROMISE_MESSAGE_TYPE, msg)
-        .transform((v) =>
-          v instanceof Empty ? undefined : deserializeJson(v as Uint8Array)
-        )
-    );
+    return this.ctx.stateMachine
+      .handleUserCodeMessage(PEEK_PROMISE_MESSAGE_TYPE, msg)
+      .transform((v) =>
+        v instanceof Empty ? undefined : deserializeJson(v as Uint8Array)
+      );
   }
 
-  resolve(value?: T | undefined): InternalCombineablePromise<void> {
+  resolve(value?: T | undefined): Promise<void> {
     const msg = new CompletePromiseEntryMessage({
       key: this.name,
       completion: {
@@ -816,15 +814,13 @@ class DurablePromiseImpl<T> implements DurablePromise<T> {
       },
     });
 
-    return this.ctx.markCombineablePromise(
-      this.ctx.stateMachine.handleUserCodeMessage(
-        COMPLETE_PROMISE_MESSAGE_TYPE,
-        msg
-      )
+    return this.ctx.stateMachine.handleUserCodeMessage(
+      COMPLETE_PROMISE_MESSAGE_TYPE,
+      msg
     );
   }
 
-  reject(errorMsg: string): InternalCombineablePromise<void> {
+  reject(errorMsg: string): Promise<void> {
     const msg = new CompletePromiseEntryMessage({
       key: this.name,
       completion: {
@@ -835,11 +831,9 @@ class DurablePromiseImpl<T> implements DurablePromise<T> {
       },
     });
 
-    return this.ctx.markCombineablePromise(
-      this.ctx.stateMachine.handleUserCodeMessage(
-        COMPLETE_PROMISE_MESSAGE_TYPE,
-        msg
-      )
+    return this.ctx.stateMachine.handleUserCodeMessage(
+      COMPLETE_PROMISE_MESSAGE_TYPE,
+      msg
     );
   }
 }
