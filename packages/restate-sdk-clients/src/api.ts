@@ -55,6 +55,8 @@ export interface Ingress {
    * Reject an awakeable from the ingress client.
    */
   rejectAwakeable(id: string, reason: string): Promise<void>;
+
+  result<T>(send: Send<T> | WorkflowSubmission<T>): Promise<T>;
 }
 
 export interface IngresCallOptions {
@@ -112,9 +114,11 @@ export interface Output<O> {
   result: O;
 }
 
-export type WorkflowSubmission = {
-  invocationId: string;
-  status: "Accepted" | "PreviouslyAccepted";
+/* eslint-disable-next-line @typescript-eslint/no-unused-vars */
+export type WorkflowSubmission<T> = {
+  readonly invocationId: string;
+  readonly status: "Accepted" | "PreviouslyAccepted";
+  readonly attachable: true;
 };
 
 export type IngressWorkflowClient<M> = Omit<
@@ -134,8 +138,8 @@ export type IngressWorkflowClient<M> = Omit<
      * @param argument the same argument type as defined by the 'run' handler.
      */
     workflowSubmit: M extends Record<string, unknown>
-      ? M["run"] extends (arg: any, ...args: infer I) => Promise<unknown>
-        ? (...args: I) => Promise<WorkflowSubmission>
+      ? M["run"] extends (arg: any, ...args: infer I) => Promise<infer O>
+        ? (...args: I) => Promise<WorkflowSubmission<O>>
         : never
       : never;
 
@@ -154,17 +158,19 @@ export type IngressWorkflowClient<M> = Omit<
   "run"
 >;
 
-export type SendResponse = {
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export type Send<T = unknown> = {
   invocationId: string;
   status: "Accepted" | "PreviouslyAccepted";
+  attachable: boolean;
 };
 
 export type IngressSendClient<M> = {
   [K in keyof M as M[K] extends never ? never : K]: M[K] extends (
     arg: any,
     ...args: infer P
-  ) => unknown
-    ? (...args: [...P, ...[opts?: SendOpts]]) => Promise<SendResponse>
+  ) => infer O
+    ? (...args: [...P, ...[opts?: SendOpts]]) => Promise<Send<O>>
     : never;
 };
 

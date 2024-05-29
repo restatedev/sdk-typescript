@@ -24,7 +24,7 @@ import type {
   IngressSendClient,
   IngressWorkflowClient,
   Output,
-  SendResponse,
+  Send,
   WorkflowSubmission,
 } from "./api";
 
@@ -109,6 +109,7 @@ const doComponentInvocation = async <I, O>(
   opts: ConnectionOpts,
   params: InvocationParameters<I>
 ): Promise<O> => {
+  let attachable = false;
   const fragments = [];
   //
   // ingress URL
@@ -124,6 +125,7 @@ const doComponentInvocation = async <I, O>(
   if (params.key) {
     const key = encodeURIComponent(params.key);
     fragments.push(key);
+    attachable = true;
   }
   //
   // handler
@@ -152,6 +154,7 @@ const doComponentInvocation = async <I, O>(
   if (idempotencyKey) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (headers as any)[IDEMPOTENCY_KEY_HEADER] = idempotencyKey;
+    attachable = true;
   }
   //
   // request body
@@ -175,7 +178,11 @@ const doComponentInvocation = async <I, O>(
     );
   }
   const responseBuf = await httpResponse.arrayBuffer();
-  return deserializeJson(new Uint8Array(responseBuf));
+  const json = deserializeJson(new Uint8Array(responseBuf));
+  if (!params.send) {
+    return json;
+  }
+  return { ...json, attachable };
 };
 
 const doWorkflowHandleCall = async <O>(
@@ -259,8 +266,8 @@ class HttpIngress implements Ingress {
 
     const workflowSubmit = async (
       parameter?: unknown
-    ): Promise<WorkflowSubmission> => {
-      const res: SendResponse = await doComponentInvocation(conn, {
+    ): Promise<WorkflowSubmission<unknown>> => {
+      const res: Send = await doComponentInvocation(conn, {
         component,
         handler: "run",
         key,
@@ -271,6 +278,7 @@ class HttpIngress implements Ingress {
       return {
         invocationId: res.invocationId,
         status: res.status,
+        attachable: true,
       };
     };
 
@@ -393,6 +401,40 @@ class HttpIngress implements Ingress {
         `Request failed: ${httpResponse.status}\n${body}`
       );
     }
+  }
+
+  async result<T>(send: Send<T> | WorkflowSubmission<T>): Promise<T> {
+    if (!send.attachable) {
+      throw new Error(
+        `Unable to fetch the result for ${send.invocationId}.
+        A service's result is stored only with an idempotencyKey is supplied when invocating the service.`
+      );
+    }
+    //
+    // headers
+    //
+    const headers = {
+      "Content-Type": "application/json",
+      ...(this.opts.headers ?? {}),
+    };
+    //
+    // make the call
+    const url = `${this.opts.url}/restate/invocation/${send.invocationId}/attach`;
+
+    const httpResponse = await fetch(url, {
+      method: "GET",
+      headers,
+    });
+    if (httpResponse.ok) {
+      const responseBuf = await httpResponse.arrayBuffer();
+      return deserializeJson(new Uint8Array(responseBuf));
+    }
+    const body = await httpResponse.text();
+    throw new HttpCallError(
+      httpResponse.status,
+      body,
+      `Request failed: ${httpResponse.status}\n${body}`
+    );
   }
 }
 
