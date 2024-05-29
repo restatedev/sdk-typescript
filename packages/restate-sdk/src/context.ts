@@ -16,9 +16,12 @@ import type {
   RestateObjectSharedContext,
   RestateWorkflowContext,
   RestateWorkflowSharedContext,
-  ServiceDefinition,
-  VirtualObjectDefinition,
-  WorkflowDefinition,
+  Service,
+  ServiceDefinitionFrom,
+  VirtualObject,
+  VirtualObjectDefinitionFrom,
+  Workflow,
+  WorkflowDefinitionFrom,
 } from "@restatedev/restate-sdk-core";
 import { ContextImpl } from "./context_impl";
 
@@ -332,9 +335,7 @@ export interface Context extends RestateContext {
    * const result2 = await ctx.serviceClient(MyService).anotherAction(1337);
    * ```
    */
-  serviceClient<M, P extends string = string>(
-    opts: ServiceDefinition<P, M>
-  ): Client<M>;
+  serviceClient<D>(opts: ServiceDefinitionFrom<D>): Client<Service<D>>;
 
   /**
    * Same as {@link serviceClient} but for virtual objects.
@@ -342,10 +343,10 @@ export interface Context extends RestateContext {
    * @param opts
    * @param key the virtual object key
    */
-  objectClient<M, P extends string = string>(
-    opts: VirtualObjectDefinition<P, M>,
+  objectClient<D>(
+    opts: VirtualObjectDefinitionFrom<D>,
     key: string
-  ): Client<M>;
+  ): Client<VirtualObject<D>>;
 
   /**
    * Same as {@link serviceClient} but for workflows.
@@ -353,10 +354,10 @@ export interface Context extends RestateContext {
    * @param opts
    * @param key the workflow key
    */
-  workflowClient<M, P extends string = string>(
-    opts: WorkflowDefinition<P, M>,
+  workflowClient<D>(
+    opts: WorkflowDefinitionFrom<D>,
     key: string
-  ): Client<M>;
+  ): Client<Workflow<D>>;
 
   /**
    * Makes a type-safe one-way RPC to the specified target service. This method effectively behaves
@@ -399,10 +400,10 @@ export interface Context extends RestateContext {
    * ctx.serviceSendClient(MyService).anotherAction(1337);
    * ```
    */
-  serviceSendClient<M, P extends string = string>(
-    service: ServiceDefinition<P, M>,
+  serviceSendClient<D>(
+    service: ServiceDefinitionFrom<D>,
     opts?: SendOptions
-  ): SendClient<M>;
+  ): SendClient<Service<D>>;
 
   /**
    * Same as {@link serviceSendClient} but for virtual objects.
@@ -411,11 +412,11 @@ export interface Context extends RestateContext {
    * @param key the virtual object key
    * @param opts Send options
    */
-  objectSendClient<M, P extends string = string>(
-    obj: VirtualObjectDefinition<P, M>,
+  objectSendClient<D>(
+    obj: VirtualObjectDefinitionFrom<D>,
     key: string,
     opts?: SendOptions
-  ): SendClient<M>;
+  ): SendClient<VirtualObject<D>>;
 
   /**
    * Returns the raw request that triggered that handler.

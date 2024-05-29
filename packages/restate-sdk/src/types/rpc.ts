@@ -29,15 +29,12 @@ import {
 
 import {
   ServiceHandler,
-  Service,
   ServiceDefinition,
   ObjectHandler,
   ObjectSharedHandler,
   VirtualObjectDefinition,
-  VirtualObject,
   WorkflowHandler,
   WorkflowDefinition,
-  Workflow,
   WorkflowSharedHandler,
 } from "@restatedev/restate-sdk-core";
 
@@ -45,6 +42,7 @@ import {
 
 export type Client<M> = {
   [K in keyof M as M[K] extends never ? never : K]: M[K] extends (
+    arg: any,
     ...args: infer P
   ) => PromiseLike<infer O>
     ? (...args: P) => CombineablePromise<O>
@@ -53,6 +51,7 @@ export type Client<M> = {
 
 export type SendClient<M> = {
   [K in keyof M as M[K] extends never ? never : K]: M[K] extends (
+    arg: any,
     ...args: infer P
   ) => any
     ? (...args: P) => void
@@ -395,7 +394,7 @@ export type ServiceOpts<U> = {
 export const service = <P extends string, M>(service: {
   name: P;
   handlers: ServiceOpts<M>;
-}): ServiceDefinition<P, Service<M, Context>> => {
+}): ServiceDefinition<P, M> => {
   if (!service.handlers) {
     throw new Error("service must be defined");
   }
@@ -414,8 +413,8 @@ export const service = <P extends string, M>(service: {
 
   return {
     name: service.name,
-    service: Object.fromEntries(handlers) as Service<M>,
-  };
+    service: Object.fromEntries(handlers),
+  } as any;
 };
 
 // ----------- objects ----------------------------------------------
@@ -436,10 +435,7 @@ export type ObjectOpts<U> = {
 export const object = <P extends string, M>(object: {
   name: P;
   handlers: ObjectOpts<M>;
-}): VirtualObjectDefinition<
-  P,
-  VirtualObject<M, ObjectContext, ObjectSharedContext>
-> => {
+}): VirtualObjectDefinition<P, M> => {
   if (!object.handlers) {
     throw new Error("object options must be defined");
   }
@@ -460,8 +456,8 @@ export const object = <P extends string, M>(object: {
 
   return {
     name: object.name,
-    object: Object.fromEntries(handlers) as VirtualObject<M>,
-  };
+    object: Object.fromEntries(handlers),
+  } as any;
 };
 
 // ----------- workflows ----------------------------------------------
@@ -491,10 +487,7 @@ export type WorkflowOpts<U> = {
 export const workflow = <P extends string, M>(workflow: {
   name: P;
   handlers: WorkflowOpts<M>;
-}): WorkflowDefinition<
-  P,
-  Workflow<M, WorkflowContext, WorkflowSharedContext>
-> => {
+}): WorkflowDefinition<P, M> => {
   if (!workflow.handlers) {
     throw new Error("workflow must contain handlers");
   }
@@ -551,6 +544,6 @@ export const workflow = <P extends string, M>(workflow: {
 
   return {
     name: workflow.name,
-    workflow: Object.fromEntries(handlers) as Workflow<M>,
-  };
+    workflow: Object.fromEntries(handlers),
+  } as any;
 };

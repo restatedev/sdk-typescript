@@ -1,7 +1,10 @@
 import type {
-  ServiceDefinition,
-  VirtualObjectDefinition,
-  WorkflowDefinition,
+  Service,
+  VirtualObjectDefinitionFrom,
+  Workflow,
+  VirtualObject,
+  ServiceDefinitionFrom,
+  WorkflowDefinitionFrom,
 } from "@restatedev/restate-sdk-core";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -10,40 +13,38 @@ export interface Ingress {
   /**
    * Create a client from a {@link ServiceDefinition}.
    */
-  serviceClient<M, P extends string = string>(
-    opts: ServiceDefinition<P, M>
-  ): IngressClient<M>;
+  serviceClient<D>(opts: ServiceDefinitionFrom<D>): IngressClient<Service<D>>;
 
   /**
    * Create a client from a {@link WorkflowDefinition}.
    */
-  workflowClient<M, P extends string = string>(
-    opts: WorkflowDefinition<P, M>,
+  workflowClient<D>(
+    opts: WorkflowDefinitionFrom<D>,
     key: string
-  ): IngressWorkflowClient<M>;
+  ): IngressWorkflowClient<Workflow<D>>;
 
   /**
    * Create a client from a {@link VirtualObjectDefinition}.
    */
-  objectClient<M, P extends string = string>(
-    opts: VirtualObjectDefinition<P, M>,
+  objectClient<D>(
+    opts: VirtualObjectDefinitionFrom<D>,
     key: string
-  ): IngressClient<M>;
+  ): IngressClient<VirtualObject<D>>;
 
   /**
    * Create a client from a {@link ServiceDefinition}.
    */
-  serviceSendClient<M, P extends string = string>(
-    opts: ServiceDefinition<P, M>
-  ): IngressSendClient<M>;
+  serviceSendClient<D>(
+    opts: ServiceDefinitionFrom<D>
+  ): IngressSendClient<Service<D>>;
 
   /**
    * Create a client from a {@link VirtualObjectDefinition}.
    */
-  objectSendClient<M, P extends string = string>(
-    opts: VirtualObjectDefinition<P, M>,
+  objectSendClient<D>(
+    opts: VirtualObjectDefinitionFrom<D>,
     key: string
-  ): IngressSendClient<M>;
+  ): IngressSendClient<VirtualObject<D>>;
 
   /**
    * Resolve an awakeable from the ingress client.
@@ -99,6 +100,7 @@ export class SendOpts {
 
 export type IngressClient<M> = {
   [K in keyof M as M[K] extends never ? never : K]: M[K] extends (
+    arg: any,
     ...args: infer P
   ) => PromiseLike<infer O>
     ? (...args: [...P, ...[opts?: Opts]]) => PromiseLike<O>
@@ -118,9 +120,10 @@ export type WorkflowSubmission = {
 export type IngressWorkflowClient<M> = Omit<
   {
     [K in keyof M as M[K] extends never ? never : K]: M[K] extends (
-      ...args: any
-    ) => PromiseLike<unknown>
-      ? M[K]
+      arg: any,
+      ...args: infer P
+    ) => PromiseLike<infer O>
+      ? (...args: P) => PromiseLike<O>
       : never;
   } & {
     /**
@@ -131,7 +134,7 @@ export type IngressWorkflowClient<M> = Omit<
      * @param argument the same argument type as defined by the 'run' handler.
      */
     workflowSubmit: M extends Record<string, unknown>
-      ? M["run"] extends (...args: infer I) => Promise<unknown>
+      ? M["run"] extends (arg: any, ...args: infer I) => Promise<unknown>
         ? (...args: I) => Promise<WorkflowSubmission>
         : never
       : never;
@@ -158,6 +161,7 @@ export type SendResponse = {
 
 export type IngressSendClient<M> = {
   [K in keyof M as M[K] extends never ? never : K]: M[K] extends (
+    arg: any,
     ...args: infer P
   ) => unknown
     ? (...args: [...P, ...[opts?: SendOpts]]) => Promise<SendResponse>

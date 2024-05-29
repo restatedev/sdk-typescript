@@ -10,9 +10,12 @@
  */
 
 import type {
-  ServiceDefinition,
-  VirtualObjectDefinition,
-  WorkflowDefinition,
+  Service,
+  ServiceDefinitionFrom,
+  VirtualObject,
+  WorkflowDefinitionFrom,
+  Workflow,
+  VirtualObjectDefinitionFrom,
 } from "@restatedev/restate-sdk-core";
 import type {
   ConnectionOpts,
@@ -236,23 +239,21 @@ class HttpIngress implements Ingress {
     );
   }
 
-  serviceClient<P extends string, M>(
-    opts: ServiceDefinition<P, M>
-  ): IngressClient<M> {
-    return this.proxy(opts.name) as IngressClient<M>;
+  serviceClient<D>(opts: ServiceDefinitionFrom<D>): IngressClient<Service<D>> {
+    return this.proxy(opts.name) as IngressClient<Service<D>>;
   }
 
-  objectClient<P extends string, M>(
-    opts: VirtualObjectDefinition<P, M>,
+  objectClient<D>(
+    opts: VirtualObjectDefinitionFrom<D>,
     key: string
-  ): IngressClient<M> {
-    return this.proxy(opts.name, key) as IngressClient<M>;
+  ): IngressClient<VirtualObject<D>> {
+    return this.proxy(opts.name, key) as IngressClient<VirtualObject<D>>;
   }
 
-  workflowClient<M, P extends string = string>(
-    opts: WorkflowDefinition<P, M>,
+  workflowClient<D>(
+    opts: WorkflowDefinitionFrom<D>,
     key: string
-  ): IngressWorkflowClient<M> {
+  ): IngressWorkflowClient<Workflow<D>> {
     const component = opts.name;
     const conn = this.opts;
 
@@ -328,20 +329,24 @@ class HttpIngress implements Ingress {
           };
         },
       }
-    ) as IngressWorkflowClient<M>;
+    ) as IngressWorkflowClient<Workflow<D>>;
   }
 
-  objectSendClient<P extends string, M>(
-    opts: VirtualObjectDefinition<P, M>,
+  objectSendClient<D>(
+    opts: VirtualObjectDefinitionFrom<D>,
     key: string
-  ): IngressSendClient<M> {
-    return this.proxy(opts.name, key, true) as IngressSendClient<M>;
+  ): IngressSendClient<VirtualObject<D>> {
+    return this.proxy(opts.name, key, true) as IngressSendClient<
+      VirtualObject<D>
+    >;
   }
 
-  serviceSendClient<P extends string, M>(
-    opts: ServiceDefinition<P, M>
-  ): IngressSendClient<M> {
-    return this.proxy(opts.name, undefined, true) as IngressSendClient<M>;
+  serviceSendClient<D>(
+    opts: ServiceDefinitionFrom<D>
+  ): IngressSendClient<Service<D>> {
+    return this.proxy(opts.name, undefined, true) as IngressSendClient<
+      Service<D>
+    >;
   }
 
   async resolveAwakeable<T>(

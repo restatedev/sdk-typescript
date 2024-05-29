@@ -24,7 +24,8 @@ const Workflow: PaymentWorkflow = { name: "payment" };
 const ingress = restate.connect({ url: "http://localhost:8080" });
 
 const simpleCall = async (name: string) => {
-  const greeter = ingress.serviceClient(Greeter);
+  const greeter = ingress.serviceClient<Greeter>({ name: "greeter" });
+
   const greeting = await greeter.greet(name);
 
   console.log(greeting);
@@ -92,7 +93,7 @@ const customInterface = async (name: string) => {
   // To call that service, simply write down the interface
   // and pass it trough
   interface SomeService {
-    greet(name: string): Promise<string>;
+    greet(ctx: unknown, name: string): Promise<string>;
   }
 
   const svc = ingress.serviceClient<SomeService>({

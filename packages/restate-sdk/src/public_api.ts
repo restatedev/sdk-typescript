@@ -23,11 +23,8 @@ export type { Client, SendClient } from "./types/rpc";
 export { service, object, workflow, handlers } from "./types/rpc";
 
 export type {
-  Service,
   ServiceDefinition,
-  VirtualObject,
   VirtualObjectDefinition,
-  Workflow,
   WorkflowDefinition,
 } from "@restatedev/restate-sdk-core";
 
