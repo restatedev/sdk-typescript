@@ -414,6 +414,35 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     return clientProxy as SendClient<VirtualObject<D>>;
   }
 
+  workflowSendClient<D>(
+    def: WorkflowDefinitionFrom<D>,
+    key: string,
+    opts?: SendOptions
+  ): SendClient<Workflow<D>> {
+    const clientProxy = new Proxy(
+      {},
+      {
+        get: (_target, prop) => {
+          const route = prop as string;
+          return (...args: unknown[]) => {
+            const requestBytes = serializeJson(args.shift());
+            this.invokeOneWay(
+              def.name,
+              route,
+              requestBytes,
+              opts?.delay,
+              key
+            ).catch((e) => {
+              this.stateMachine.handleDanglingPromiseError(e);
+            });
+          };
+        },
+      }
+    );
+
+    return clientProxy as SendClient<Workflow<D>>;
+  }
+
   // DON'T make this function async!!!
   // The reason is that we want the errors thrown by the initial checks to be propagated in the caller context,
   // and not in the promise context. To understand the semantic difference, make this function async and run the
