@@ -139,13 +139,19 @@ const doComponentInvocation = async <I, O>(
     }
   }
   //
+  // request body
+  //
+  const { body, contentType } = serializeBodyWithContentType(params.parameter);
+  //
   // headers
   //
   const headers = {
-    "Content-Type": "application/json",
     ...(opts.headers ?? {}),
     ...(params.opts?.opts?.headers ?? {}),
   };
+  if (contentType) {
+    headers["Content-Type"] = contentType;
+  }
   //
   //idempotency
   //
@@ -155,10 +161,6 @@ const doComponentInvocation = async <I, O>(
     (headers as any)[IDEMPOTENCY_KEY_HEADER] = idempotencyKey;
     attachable = true;
   }
-  //
-  // request body
-  //
-  const body = serializeJson(params.parameter);
   //
   // make the call
   //
@@ -194,7 +196,6 @@ const doWorkflowHandleCall = async <O>(
   // headers
   //
   const headers = {
-    "Content-Type": "application/json",
     ...(opts.headers ?? {}),
   };
   //
@@ -361,11 +362,13 @@ class HttpIngress implements Ingress {
     payload?: T | undefined
   ): Promise<void> {
     const url = `${this.opts.url}/restate/a/${id}/resolve`;
+    const { body, contentType } = serializeBodyWithContentType(payload);
     const headers = {
-      "Content-Type": "application/json",
       ...(this.opts.headers ?? {}),
     };
-    const body = serializeJson(payload);
+    if (contentType) {
+      headers["Content-Type"] = contentType;
+    }
     const httpResponse = await fetch(url, {
       method: "POST",
       headers,
@@ -413,7 +416,6 @@ class HttpIngress implements Ingress {
     // headers
     //
     const headers = {
-      "Content-Type": "application/json",
       ...(this.opts.headers ?? {}),
     };
     //
@@ -445,14 +447,6 @@ function computeDelayAsIso(opts: SendOpts): string {
   return `send?delay=${delay}ms`;
 }
 
-function serializeJson(what: unknown): Uint8Array {
-  if (what === undefined) {
-    return new Uint8Array();
-  }
-  const json = JSON.stringify(what);
-  return new TextEncoder().encode(json);
-}
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function deserializeJson(what: Uint8Array): any | undefined {
   if (what === undefined || what.length == 0) {
@@ -460,4 +454,20 @@ function deserializeJson(what: Uint8Array): any | undefined {
   }
   const json = new TextDecoder().decode(what);
   return JSON.parse(json);
+}
+
+function serializeBodyWithContentType(body: unknown): {
+  body?: Uint8Array;
+  contentType?: string;
+} {
+  if (body === undefined) {
+    return {};
+  }
+  const json = JSON.stringify(body);
+  const buffer = new TextEncoder().encode(json);
+
+  return {
+    body: buffer,
+    contentType: "application/json",
+  };
 }
