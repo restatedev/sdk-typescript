@@ -360,6 +360,17 @@ export interface Context extends RestateContext {
   ): Client<Workflow<D>>;
 
   /**
+   * Same as {@link objectSendClient} but for workflows.
+   *
+   * @param opts
+   * @param key the workflow key
+   */
+  workflowSendClient<D>(
+    opts: WorkflowDefinitionFrom<D>,
+    key: string
+  ): SendClient<Workflow<D>>;
+
+  /**
    * Makes a type-safe one-way RPC to the specified target service. This method effectively behaves
    * like enqueuing the message in a message queue.
    *
