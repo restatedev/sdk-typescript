@@ -327,9 +327,9 @@ export class StateMachine implements RestateStreamConsumer {
     }
 
     if (this.journal.nextEntryWillBeReplayed()) {
-      this.console.debug("Resuming (replaying) function.");
+      this.console.info("Resuming (replaying) function.");
     } else {
-      this.console.debug("Invoking function.");
+      this.console.info("Invoking function.");
     }
 
     this.invocation.handler
@@ -380,7 +380,7 @@ export class StateMachine implements RestateStreamConsumer {
             );
           }
 
-          this.console.debug("Function completed successfully.");
+          this.console.info("Function completed successfully.");
 
           // Mark the end of the invocation
           this.send(new Message(END_MESSAGE_TYPE, new EndMessage()));
@@ -557,7 +557,7 @@ export class StateMachine implements RestateStreamConsumer {
       this.send(msg);
     }
 
-    this.console.debug("Suspending function.");
+    this.console.info("Suspending function.");
 
     await this.finish();
   }
