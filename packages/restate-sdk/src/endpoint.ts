@@ -65,6 +65,8 @@ export interface ServiceBundle {
 export interface RestateEndpoint {
   /**
    * Binds a new durable service / virtual object / workflow.
+   *
+   * see restate.service, restate.object, and restate.workflow for more details.
    **/
   bind<P extends string, M>(
     service:
