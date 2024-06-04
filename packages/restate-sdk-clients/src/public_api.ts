@@ -12,6 +12,10 @@
 export type {
   ServiceDefinition,
   VirtualObjectDefinition,
+  WorkflowDefinition,
+  ServiceDefinitionFrom,
+  VirtualObjectDefinitionFrom,
+  WorkflowDefinitionFrom,
 } from "@restatedev/restate-sdk-core";
 
 export {

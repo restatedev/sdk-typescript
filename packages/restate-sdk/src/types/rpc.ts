@@ -214,8 +214,6 @@ export namespace handlers {
      * A shared handler allows a read-only concurrent execution
      * for a given key.
      *
-     * note: This applies only to a virtual object.
-     *
      * @param opts additional configurations
      * @param fn the handler to execute
      */
@@ -225,12 +223,10 @@ export namespace handlers {
     ): F;
 
     /**
-     * Creates a shared handler for a virtual Object.
+     * Creates a shared handler for a workflow.
      *
      * A shared handler allows a read-only concurrent execution
      * for a given key.
-     *
-     * note: This applies only to a virtual object.
      *
      * @param opts additional configurations
      * @param fn the handler to execute
@@ -240,12 +236,10 @@ export namespace handlers {
     ): F;
 
     /**
-     * Creates a shared handler for a virtual Object.
+     * Creates a shared handler for a workflow
      *
      * A shared handler allows a read-only concurrent execution
      * for a given key.
-     *
-     * note: This applies only to a virtual object.
      *
      * @param opts additional configurations
      * @param fn the handler to execute
@@ -389,7 +383,47 @@ export type ServiceOpts<U> = {
 /**
  * Define a Restate service.
  *
- * @param service
+ * @example Here is an example of how to define a service:
+ *
+ * ```ts
+ *  const greeter = service({
+ *    name: "greeter",
+ *      handlers: {
+ *        greet: async (ctx: Context, name: string) => {
+ *          return `Hello ${name}`;
+ *        }
+ *      }
+ * });
+ * ```
+ *
+ * To use the service, you can bind it to an endpoint:
+ * ```
+ * ...
+ * endpoint.bind(greeter)
+ * ```
+ * @example To use a service, you can export its type to be used in a client:
+ * ```
+ * export type Greeter = typeof greeter;
+ * ...
+ * ...
+ * import type { Greeter } from "./greeter";
+ * const client = ctx.serviceClient<Greeter>({ name : "greeter"});
+ * client.greet("World").then(console.log);
+ * ```
+ *
+ * @example Alternatively to avoid repeating the service name, you can:
+ * ```
+ *  import type {Greeter} from "./greeter";
+ *  const Greeter: Greeter = { name : "greeter"};
+ *
+ *  // now you can reference the service like this:
+ *  const client = ctx.serviceClient(Greeter);
+ * ```
+ *
+ * @param name the service name
+ * @param handlers the handlers for the service
+ * @type P the name of the service
+ * @type M the handlers for the service
  */
 export const service = <P extends string, M>(service: {
   name: P;
@@ -430,7 +464,52 @@ export type ObjectOpts<U> = {
 /**
  * Define a Restate virtual object.
  *
- * @param object
+ * @example Here is an example of how to define a virtual object:
+ * ```ts
+ *        const counter = object({
+ *            name: "counter",
+ *            handlers: {
+ *                  add: async (ctx: ObjectContext, amount: number) => {},
+ *                  get: async (ctx: ObjectContext) => {}
+ *            }
+ *        })
+ *  ```
+ *
+ * @example To use the object, you can bind it to an endpoint:
+ * ```ts
+ * ...
+ * endpoint.bind(counter)
+ * ```
+ *
+ *  @see to interact with the object, you can use the object client:
+ * ```ts
+ * ...
+ * const client = ctx.objectClient<typeof counter>({ name: "counter"});
+ * const res = await client.add(1)
+ * ```
+ *
+ * ### Shared handlers
+ *
+ * Shared handlers are used to allow concurrent read-only access to the object.
+ * This is useful when you want to allow multiple clients to read the object's state at the same time.
+ * To define a shared handler, you can use the `shared` decorator as shown below:
+ *
+ * ```ts
+ *      const counter = object({
+ *          name: "counter",
+ *          handlers: {
+ *
+ *            add: async (ctx: ObjectContext, amount: number) => { .. },
+ *
+ *            get: handlers.object.shared(async (ctx: ObjectSharedContext) => {
+ *                  return ctx.get<number>("count");
+ *            })
+ *       }
+ *     });
+ * ```
+ *
+ * @param name the name of the object
+ * @param handlers the handlers for the object
  */
 export const object = <P extends string, M>(object: {
   name: P;
@@ -462,6 +541,13 @@ export const object = <P extends string, M>(object: {
 
 // ----------- workflows ----------------------------------------------
 
+/**
+ * A workflow handlers is a type that describes the handlers for a workflow.
+ * The handlers must contain exactly one handler named 'run', and this handler must accept as a first argument a WorkflowContext.
+ * It can contain any number of additional handlers, which must accept as a first argument a WorkflowSharedContext.
+ * The handlers can not be named 'workflowSubmit', 'workflowAttach', 'workflowOutput' - as these are reserved.
+ * @see {@link workflow} for an example.
+ */
 export type WorkflowOpts<U> = {
   run: (ctx: WorkflowContext, argument: any) => Promise<any>;
 } & {
@@ -480,9 +566,44 @@ export type WorkflowOpts<U> = {
 };
 
 /**
- * Define a Restate virtual object.
+ * Define a Restate workflow.
  *
- * @param workflow
+ *
+ * @example Here is an example of how to define a workflow:
+ * ```ts
+ *      const mywf = workflow({
+ *            name: "mywf",
+ *            handlers: {
+ *                run: async (ctx: WorkflowContext, argument: any) => {
+ *                  return "Hello World";
+ *                }
+ *            }
+ *      });
+ * ```
+ *
+ * ### Note:
+ * * That a workflow must contain exactly one handler named 'run', and this handler must accept as a first argument a WorkflowContext.
+ * * The workflow handlers other than 'run' must accept as a first argument a WorkflowSharedContext.
+ * * The workflow handlers can not be named 'workflowSubmit', 'workflowAttach', 'workflowOutput' - as these are reserved keywords.
+ *
+ * @example To use the workflow, you can bind it to an endpoint:
+ * ```ts
+ * endpoint.bind(mywf)
+ * ```
+ *
+ * @example To interact with the workflow, you can use the workflow client:
+ * ```ts
+ * const client = ctx.workflowClient<typeof mywf>({ name: "mywf"});
+ * const res = await client.run("Hello");
+ * ```
+ *
+ * To use the workflow client from any other environment (like a browser), please refer to the documentation.
+ * https://docs.restate.dev
+ *
+ *
+ *
+ * @param name the workflow name
+ * @param handlers the handlers for the workflow.
  */
 export const workflow = <P extends string, M>(workflow: {
   name: P;
