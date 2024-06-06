@@ -114,7 +114,7 @@ const payment = restate.workflow({
      * As with the handler above, this is a shared handler. It has a readonly access to state,
      * and it can run concurrently to the main handler.
      */
-    status: (ctx: restate.WorkflowSharedContext) => ctx.get("status"),
+    status: (ctx: restate.WorkflowSharedContext) => ctx.get<string>("status"),
   },
 });
 

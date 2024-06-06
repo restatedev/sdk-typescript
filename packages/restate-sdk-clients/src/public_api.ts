@@ -19,16 +19,18 @@ export type {
 } from "@restatedev/restate-sdk-core";
 
 export {
-  Ingress,
+  RestateConnection,
   ConnectionOpts,
-  IngressClient,
-  IngressSendClient,
-  IngressWorkflowClient,
+  Client,
+  SendClient,
+  WorkflowClient,
   Opts,
-  IngresCallOptions,
+  CallOptions,
   SendOpts,
   Send,
-  IngresSendOptions,
+  SendOptions,
+  opts,
+  sendOpts,
 } from "./api";
 
 export { connect } from "./ingress";

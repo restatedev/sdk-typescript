@@ -11,7 +11,7 @@
 
 /* eslint-disable no-console */
 
-import * as restate from "@restatedev/restate-sdk-clients";
+import { connect, opts, sendOpts } from "@restatedev/restate-sdk-clients";
 
 import type { Greeter } from "./greeter";
 import type { PaymentWorkflow } from "./workflow";
@@ -21,10 +21,10 @@ const Greeter: Greeter = { name: "greeter" };
 const Counter: Counter = { name: "counter" };
 const Workflow: PaymentWorkflow = { name: "payment" };
 
-const ingress = restate.connect({ url: "http://localhost:8080" });
+const restate = connect({ url: "http://localhost:8080" });
 
 const simpleCall = async (name: string) => {
-  const greeter = ingress.serviceClient<Greeter>({ name: "greeter" });
+  const greeter = restate.serviceClient<Greeter>({ name: "greeter" });
 
   const greeting = await greeter.greet(name);
 
@@ -32,71 +32,68 @@ const simpleCall = async (name: string) => {
 };
 
 const objectCall = async (name: string) => {
-  const counter = ingress.objectClient(Counter, name);
+  const counter = restate.objectClient(Counter, name);
   const count = await counter.current();
 
   console.log(`The count for ${name} is ${count}`);
 };
 
 const idempotentCall = async (name: string, idempotencyKey: string) => {
-  const greeter = ingress.serviceClient(Greeter);
+  const greeter = restate.serviceClient(Greeter);
 
   // send the request with the idempotent key, and ask restate
   // to remember that key for 3 seconds.
-  const greeting = await greeter.greet(
-    name,
-    restate.Opts.from({ idempotencyKey })
-  );
+  const greeting = await greeter.greet(name, opts({ idempotencyKey }));
 
   console.log(greeting);
 };
 
 const customHeadersCall = async (name: string) => {
-  const greeter = ingress.serviceClient(Greeter);
+  const greeter = restate.serviceClient(Greeter);
 
   const greeting = await greeter.greet(
     name,
-    restate.Opts.from({ headers: { "x-bob": "1234" } })
+    opts({ headers: { "x-bob": "1234" } })
   );
 
   console.log(greeting);
 };
 
 const globalCustomHeaders = async (name: string) => {
-  const ingress = restate.connect({
+  const restate = connect({
     url: "http://localhost:8080",
     headers: { Authorization: "Bearer mytoken123" },
   });
 
-  const greeting = await ingress.serviceClient(Greeter).greet(name);
+  const greeting = await restate.serviceClient(Greeter).greet(name);
 
   console.log(greeting);
 };
 
 const delayedCall = async (name: string) => {
-  const ingress = restate.connect({
+  const restate = connect({
     url: "http://localhost:8080",
   });
 
-  const greeting = await ingress
+  const greeting = await restate
     .serviceSendClient(Greeter)
-    .greet(name, restate.SendOpts.from({ delay: 1000 }));
+    .greet(name, sendOpts({ delay: 1000 }));
 
   console.log(greeting);
 };
 
 const sendAndCollectResultLater = async (name: string) => {
-  const ingress = restate.connect({
+  const restate = connect({
     url: "http://localhost:8080",
   });
 
-  const send = await ingress
+  const send = await restate
     .serviceSendClient(Greeter)
-    .greet(name, restate.SendOpts.from({ idempotencyKey: "abcde" }));
+    .greet(name, sendOpts({ idempotencyKey: "abcde" }));
 
   // Few MinUtEs LaTeR ...
 
-  const greeting = await ingress.result(send);
+  const greeting = await restate.result(send);
 
   console.log(greeting);
 };
@@ -112,7 +109,7 @@ const customInterface = async (name: string) => {
     greet(ctx: unknown, name: string): Promise<string>;
   }
 
-  const svc = ingress.serviceClient<SomeService>({
+  const svc = restate.serviceClient<SomeService>({
     name: "greeter",
   });
 
@@ -122,7 +119,7 @@ const customInterface = async (name: string) => {
 };
 
 const workflow = async (name: string) => {
-  const client = ingress.workflowClient(Workflow, name);
+  const client = restate.workflowClient(Workflow, name);
 
   const submission = await client.workflowSubmit({
     account: "foo",
@@ -141,7 +138,7 @@ const workflow = async (name: string) => {
 
   await client.paymentWebhook("hi there!");
 
-  ingress.result(submission);
+  restate.result(submission);
 
   console.log(await client.workflowAttach());
 };

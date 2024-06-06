@@ -18,11 +18,11 @@ import type {
  * - `objectClient` to create a client for a virtual object.
  *
  */
-export interface Ingress {
+export interface RestateConnection {
   /**
    * Create a client from a {@link ServiceDefinition}.
    */
-  serviceClient<D>(opts: ServiceDefinitionFrom<D>): IngressClient<Service<D>>;
+  serviceClient<D>(opts: ServiceDefinitionFrom<D>): Client<Service<D>>;
 
   /**
    * Create a client from a {@link WorkflowDefinition}.
@@ -32,7 +32,7 @@ export interface Ingress {
   workflowClient<D>(
     opts: WorkflowDefinitionFrom<D>,
     key: string
-  ): IngressWorkflowClient<Workflow<D>>;
+  ): WorkflowClient<Workflow<D>>;
 
   /**
    * Create a client from a {@link VirtualObjectDefinition}.
@@ -41,14 +41,12 @@ export interface Ingress {
   objectClient<D>(
     opts: VirtualObjectDefinitionFrom<D>,
     key: string
-  ): IngressClient<VirtualObject<D>>;
+  ): Client<VirtualObject<D>>;
 
   /**
    * Create a client from a {@link ServiceDefinition}.
    */
-  serviceSendClient<D>(
-    opts: ServiceDefinitionFrom<D>
-  ): IngressSendClient<Service<D>>;
+  serviceSendClient<D>(opts: ServiceDefinitionFrom<D>): SendClient<Service<D>>;
 
   /**
    * Create a client from a {@link VirtualObjectDefinition}.
@@ -56,7 +54,7 @@ export interface Ingress {
   objectSendClient<D>(
     opts: VirtualObjectDefinitionFrom<D>,
     key: string
-  ): IngressSendClient<VirtualObject<D>>;
+  ): SendClient<VirtualObject<D>>;
 
   /**
    * Resolve an awakeable from the ingress client.
@@ -76,7 +74,7 @@ export interface Ingress {
   result<T>(send: Send<T> | WorkflowSubmission<T>): Promise<T>;
 }
 
-export interface IngresCallOptions {
+export interface CallOptions {
   /**
    * Key to use for idempotency key.
    *
@@ -90,12 +88,15 @@ export interface IngresCallOptions {
   headers?: Record<string, string>;
 }
 
-export interface IngresSendOptions extends IngresCallOptions {
+export interface SendOptions extends CallOptions {
   /**
    * If set, the invocation will be executed after the provided delay. In milliseconds.
    */
   delay?: number;
 }
+
+export const opts = (opts: CallOptions): Opts => Opts.from(opts);
+export const sendOpts = (opts: SendOptions): SendOpts => SendOpts.from(opts);
 
 export class Opts {
   /**
@@ -103,18 +104,18 @@ export class Opts {
    *
    * @param opts the call configuration
    */
-  public static from(opts: IngresCallOptions): Opts {
+  public static from(opts: CallOptions): Opts {
     return new Opts(opts);
   }
 
-  constructor(readonly opts: IngresCallOptions) {}
+  constructor(readonly opts: CallOptions) {}
 }
 
 export class SendOpts {
   /**
    * @param opts Create send options
    */
-  public static from(opts: IngresSendOptions): SendOpts {
+  public static from(opts: SendOptions): SendOpts {
     return new SendOpts(opts);
   }
 
@@ -122,10 +123,10 @@ export class SendOpts {
     return this.opts.delay;
   }
 
-  constructor(readonly opts: IngresSendOptions) {}
+  constructor(readonly opts: SendOptions) {}
 }
 
-export type IngressClient<M> = {
+export type Client<M> = {
   [K in keyof M as M[K] extends never ? never : K]: M[K] extends (
     arg: any,
     ...args: infer P
@@ -177,7 +178,7 @@ export type WorkflowSubmission<T> = {
  *
  * @typeParam M the type of the workflow.
  */
-export type IngressWorkflowClient<M> = Omit<
+export type WorkflowClient<M> = Omit<
   {
     [K in keyof M as M[K] extends never ? never : K]: M[K] extends (
       arg: any,
@@ -258,7 +259,7 @@ export type Send<T = unknown> = {
   attachable: boolean;
 };
 
-export type IngressSendClient<M> = {
+export type SendClient<M> = {
   [K in keyof M as M[K] extends never ? never : K]: M[K] extends (
     arg: any,
     ...args: infer P

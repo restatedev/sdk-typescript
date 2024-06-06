@@ -11,16 +11,18 @@
 
 /* eslint-disable no-console */
 
-import * as restate from "@restatedev/restate-sdk-clients";
+import { connect } from "@restatedev/restate-sdk-clients";
 
 import type { PaymentWorkflow } from "./workflow";
 
 const WF: PaymentWorkflow = { name: "payment" };
 
-const ingress = restate.connect({ url: "http://localhost:8080" });
+const restate = connect({ url: "http://localhost:8080" });
 
 async function basicUsageExample() {
-  const paymentClient = ingress.workflowClient(WF, "my-workflow-key1");
+  const paymentClient = restate.workflowClient(WF, "my-workflow-key1");
+
+  paymentClient.status();
 
   const submission = await paymentClient.workflowSubmit({
     account: "abc",
@@ -49,7 +51,7 @@ async function basicUsageExample() {
   // executing workflow, and 'attach' to it.
   // i.e. Wait for the workflow to finish with a result.
 
-  const anotherPaymentClient = ingress.workflowClient(WF, "my-workflow-key1");
+  const anotherPaymentClient = restate.workflowClient(WF, "my-workflow-key1");
   const result = await anotherPaymentClient.workflowAttach();
 
   console.log(`success! ${result}`);

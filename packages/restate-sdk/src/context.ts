@@ -74,6 +74,9 @@ export interface KeyValueStore {
    */
   get<T>(name: string): Promise<T | null>;
 
+  /**
+   * Retrieve all the state keys for this object.
+   */
   stateKeys(): Promise<Array<string>>;
 
   /**
@@ -340,7 +343,7 @@ export interface Context extends RestateContext {
   /**
    * Same as {@link serviceClient} but for virtual objects.
    *
-   * @param opts
+   * @param opts the virtual object definition
    * @param key the virtual object key
    */
   objectClient<D>(
@@ -351,7 +354,7 @@ export interface Context extends RestateContext {
   /**
    * Same as {@link serviceClient} but for workflows.
    *
-   * @param opts
+   * @param opts the workflow definition
    * @param key the workflow key
    */
   workflowClient<D>(
@@ -362,7 +365,7 @@ export interface Context extends RestateContext {
   /**
    * Same as {@link objectSendClient} but for workflows.
    *
-   * @param opts
+   * @param opts the workflow definition
    * @param key the workflow key
    */
   workflowSendClient<D>(
@@ -452,6 +455,11 @@ export interface ObjectContext
   extends Context,
     KeyValueStore,
     RestateObjectContext {
+  /**
+   * The key of this virtual object.
+   * This key is unique within the service and is used to identify the object.
+   * @see {@link objectClient}
+   */
   key: string;
 }
 
@@ -469,6 +477,11 @@ export interface ObjectContext
 export interface ObjectSharedContext
   extends Context,
     RestateObjectSharedContext {
+  /**
+   * The key of this virtual object.
+   * This key is unique within the service and is used to identify the object.
+   * @see {@link objectClient}
+   */
   key: string;
 
   /**

@@ -19,10 +19,10 @@ import type {
 } from "@restatedev/restate-sdk-core";
 import type {
   ConnectionOpts,
-  Ingress,
-  IngressClient,
-  IngressSendClient,
-  IngressWorkflowClient,
+  RestateConnection,
+  Client,
+  SendClient,
+  WorkflowClient,
   Output,
   Send,
   WorkflowSubmission,
@@ -31,13 +31,13 @@ import type {
 import { Opts, SendOpts } from "./api";
 
 /**
- * Connect to the restate Ingress
+ * Connect to the restate cluster
  *
  * @param opts connection options
- * @returns a connection the the restate ingress
+ * @returns a connection that can be used to interact with restate services
  */
-export function connect(opts: ConnectionOpts): Ingress {
-  return new HttpIngress(opts);
+export function connect(opts: ConnectionOpts): RestateConnection {
+  return new IngressConnection(opts);
 }
 
 export class HttpCallError extends Error {
@@ -221,7 +221,7 @@ const doWorkflowHandleCall = async <O>(
   );
 };
 
-class HttpIngress implements Ingress {
+class IngressConnection implements RestateConnection {
   constructor(private readonly opts: ConnectionOpts) {}
 
   private proxy(component: string, key?: string, send?: boolean) {
@@ -246,21 +246,21 @@ class HttpIngress implements Ingress {
     );
   }
 
-  serviceClient<D>(opts: ServiceDefinitionFrom<D>): IngressClient<Service<D>> {
-    return this.proxy(opts.name) as IngressClient<Service<D>>;
+  serviceClient<D>(opts: ServiceDefinitionFrom<D>): Client<Service<D>> {
+    return this.proxy(opts.name) as Client<Service<D>>;
   }
 
   objectClient<D>(
     opts: VirtualObjectDefinitionFrom<D>,
     key: string
-  ): IngressClient<VirtualObject<D>> {
-    return this.proxy(opts.name, key) as IngressClient<VirtualObject<D>>;
+  ): Client<VirtualObject<D>> {
+    return this.proxy(opts.name, key) as Client<VirtualObject<D>>;
   }
 
   workflowClient<D>(
     opts: WorkflowDefinitionFrom<D>,
     key: string
-  ): IngressWorkflowClient<Workflow<D>> {
+  ): WorkflowClient<Workflow<D>> {
     const component = opts.name;
     const conn = this.opts;
 
@@ -337,24 +337,18 @@ class HttpIngress implements Ingress {
           };
         },
       }
-    ) as IngressWorkflowClient<Workflow<D>>;
+    ) as WorkflowClient<Workflow<D>>;
   }
 
   objectSendClient<D>(
     opts: VirtualObjectDefinitionFrom<D>,
     key: string
-  ): IngressSendClient<VirtualObject<D>> {
-    return this.proxy(opts.name, key, true) as IngressSendClient<
-      VirtualObject<D>
-    >;
+  ): SendClient<VirtualObject<D>> {
+    return this.proxy(opts.name, key, true) as SendClient<VirtualObject<D>>;
   }
 
-  serviceSendClient<D>(
-    opts: ServiceDefinitionFrom<D>
-  ): IngressSendClient<Service<D>> {
-    return this.proxy(opts.name, undefined, true) as IngressSendClient<
-      Service<D>
-    >;
+  serviceSendClient<D>(opts: ServiceDefinitionFrom<D>): SendClient<Service<D>> {
+    return this.proxy(opts.name, undefined, true) as SendClient<Service<D>>;
   }
 
   async resolveAwakeable<T>(
