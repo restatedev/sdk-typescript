@@ -46,3 +46,13 @@ For brand-new projects, we recommend using the [Restate Node Template](https://g
 ```shell
 npx -y @restatedev/create-app@latest
 ```
+
+## Versions
+
+This library follows [Semantic Versioning](https://semver.org/).
+
+The compatibility with Restate is described in the following table:
+
+| Restate Server\sdk-typescript | 1.0 |
+|-------------------------------|-----|
+| 1.0                           | ✅   |

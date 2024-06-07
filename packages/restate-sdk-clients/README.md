@@ -9,6 +9,23 @@
 
 This package contains the clients to interact with your Restate services, using `fetch`. 
 
+```typescript
+import * as restate from "@restatedev/restate-sdk-clients";
+
+// Import the type of the service to call
+import type { Greeter } from "./greeter-service";
+const Greeter: Greeter = { name: "greeter" };
+
+// Instantiate the Restate client
+const rs = restate.connect({ url: "http://localhost:8080" });
+
+// Get a typed client for Greeter
+const greeter = rs.serviceClient(Greeter);
+
+// Send a request to greet
+const greeting = await greeter.greet(name);
+```
+
 ## Community
 
 * 🤗️ [Join our online community](https://discord.gg/skW3AZ6uGd) for help, sharing feedback and talking to the community.
@@ -16,3 +33,15 @@ This package contains the clients to interact with your Restate services, using 
 * 📣 [Follow us on Twitter](https://twitter.com/restatedev) for staying up to date.
 * 🙋 [Create a GitHub issue](https://github.com/restatedev/sdk-typescript/issues) for requesting a new feature or reporting a problem.
 * 🏠 [Visit our GitHub org](https://github.com/restatedev) for exploring other repositories.
+
+## Using the SDK
+
+To use this client, add the dependency to your project:
+
+```shell
+npm install @restatedev/restate-sdk-clients
+```
+
+## Versions
+
+This library follows [Semantic Versioning](https://semver.org/).
