@@ -95,21 +95,11 @@ Launch a sample program (requires no build)
 npm run example
 ```
 
-### Update the proto descriptors
-
-```shell
-npm run proto
-```
-
 ### Testing end-to-end with Restate Server
 
 See https://github.com/restatedev/e2e/ for more details.
 
 ## Releasing the package
-
-### Pre-release
-
-Before release, make sure the `buf.lock` of the proto descriptors is updated. See [Update the proto descriptors](#update-the-proto-descriptors).
 
 ### Releasing via release-it
 
