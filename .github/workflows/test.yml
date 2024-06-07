@@ -27,9 +27,9 @@ jobs:
       - run: npm run proto
       - run: npm run verify
       - run: npm pack --workspaces true --include-workspace-root false
-      - run: mv restatedev-restate-sdk-*.tgz restatedev-restate-sdk.tgz
-      - run: mv restatedev-restate-sdk-clients-*.tgz restatedev-restate-sdk-clients.tgz
-      - run: mv restatedev-restate-sdk-core-*.tgz restatedev-restate-sdk-core.tgz
+      - run: find -type f -name "restatedev-restate-sdk-[0-9.]*\.tgz" | xargs -I {} mv {} restatedev-restate-sdk.tgz
+      - run: find -type f -name "restatedev-restate-sdk-clients-[0-9.]*\.tgz" | xargs -I {} mv {} restatedev-restate-sdk-clients.tgz
+      - run: find -type f -name "restatedev-restate-sdk-core-[0-9.]*\.tgz" | xargs -I {} mv {} restatedev-restate-sdk-core.tgz
       - uses: actions/upload-artifact@v4
         with:
           name: restatedev-restate-sdk
