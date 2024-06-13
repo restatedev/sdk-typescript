@@ -33,7 +33,7 @@ type DecoderState = { state: number; header: Header | undefined; buf: Buffer };
 const WAITING_FOR_HEADER = 0;
 const WAITING_FOR_BODY = 1;
 
-function initalDecoderState(buf: Buffer): DecoderState {
+function initialDecoderState(buf: Buffer): DecoderState {
   return {
     state: WAITING_FOR_HEADER,
     header: undefined,
@@ -56,7 +56,7 @@ function decodeMessages(decoderState: DecoderState, out: Output): DecoderState {
           decoderState.buf = buf;
           return decoderState;
         }
-        const h = buf.readBigUInt64BE();
+        const h = readBigUInt64BE(buf);
         buf = buf.subarray(8);
         const materializedHeader = Header.fromU64be(h);
         decoderState.header = materializedHeader;
@@ -102,7 +102,7 @@ function decodeMessages(decoderState: DecoderState, out: Output): DecoderState {
 }
 
 export function streamDecoder(): stream.Transform {
-  let decoderState = initalDecoderState(Buffer.alloc(0));
+  let decoderState = initialDecoderState(Buffer.alloc(0));
 
   return new stream.Transform({
     writableObjectMode: true,
@@ -139,7 +139,7 @@ export function decodeMessagesBuffer(buffer: Buffer): Message[] {
   const decodedEntries: Message[] = [];
   let finalState;
   try {
-    finalState = decodeMessages(initalDecoderState(buffer), decodedEntries);
+    finalState = decodeMessages(initialDecoderState(buffer), decodedEntries);
   } catch (e) {
     const err = ensureError(e);
     throw new Error(
@@ -157,4 +157,17 @@ export function decodeMessagesBuffer(buffer: Buffer): Message[] {
   }
 
   return decodedEntries;
+}
+
+function readBigUInt64BE(buf: Buffer): bigint {
+  return (
+    (BigInt(buf.readUInt8(0)) << 56n) |
+    (BigInt(buf.readUInt8(1)) << 48n) |
+    (BigInt(buf.readUInt8(2)) << 40n) |
+    (BigInt(buf.readUInt8(3)) << 32n) |
+    (BigInt(buf.readUInt8(4)) << 24n) |
+    (BigInt(buf.readUInt8(5)) << 16n) |
+    (BigInt(buf.readUInt8(6)) << 8n) |
+    BigInt(buf.readUInt8(7))
+  );
 }

@@ -9,20 +9,12 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { Http2ServerRequest, Http2ServerResponse } from "http2";
-import { endpointImpl } from "./endpoint/endpoint_impl";
+import type { Http2ServerRequest, Http2ServerResponse } from "http2";
 import type {
   VirtualObjectDefinition,
   ServiceDefinition,
   WorkflowDefinition,
 } from "@restatedev/restate-sdk-core";
-
-/**
- * Create a new {@link RestateEndpoint}.
- */
-export function endpoint(): RestateEndpoint {
-  return endpointImpl();
-}
 
 /**
  * Utility interface for a bundle of one or more services belonging together

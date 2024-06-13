@@ -14,8 +14,13 @@
     "url": "https://github.com/restatedev/sdk-typescript/issues"
   },
   "type": "commonjs",
-  "main": "./dist/src/public_api.js",
-  "types": "./dist/src/public_api.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/src/public_api.js",
+      "require": "./dist/src/public_api.js",
+      "types": "./dist/src/public_api.d.ts"
+    }
+  },
   "files": [
     "dist"
   ],
