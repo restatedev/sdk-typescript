@@ -34,8 +34,9 @@ export function encodeMessage(msg: Message): Uint8Array {
 
 export function encodeMessages(messages: Message[]): Uint8Array {
   const chunks = [];
+
   for (const message of messages) {
-    const pbType = PROTOBUF_MESSAGE_BY_TYPE.get(BigInt(message.messageType));
+    const pbType = PROTOBUF_MESSAGE_BY_TYPE.get(message.messageType);
     if (pbType === undefined) {
       throw new Error(
         "Trying to encode a message with unknown message type " +
@@ -53,9 +54,20 @@ export function encodeMessages(messages: Message[]): Uint8Array {
     );
     const header64 = header.toU64be();
     const headerBuf = Buffer.alloc(8);
-    headerBuf.writeBigUInt64BE(header64);
+    writeBigUInt64BE(header64, headerBuf);
     chunks.push(headerBuf);
     chunks.push(buf);
   }
   return Buffer.concat(chunks);
+}
+
+function writeBigUInt64BE(value: bigint, buf: Buffer): void {
+  buf.writeUInt8(Number((value >> 56n) & 0xffn), 0);
+  buf.writeUInt8(Number((value >> 48n) & 0xffn), 1);
+  buf.writeUInt8(Number((value >> 40n) & 0xffn), 2);
+  buf.writeUInt8(Number((value >> 32n) & 0xffn), 3);
+  buf.writeUInt8(Number((value >> 24n) & 0xffn), 4);
+  buf.writeUInt8(Number((value >> 16n) & 0xffn), 5);
+  buf.writeUInt8(Number((value >> 8n) & 0xffn), 6);
+  buf.writeUInt8(Number(value & 0xffn), 7);
 }
