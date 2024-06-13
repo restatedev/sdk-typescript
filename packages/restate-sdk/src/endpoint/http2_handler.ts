@@ -35,9 +35,10 @@ import {
   serviceProtocolVersionToHeaderValue,
 } from "../types/protocol";
 import { ServiceDiscoveryProtocolVersion } from "../generated/proto/discovery_pb";
+import { EndpointBuilder } from "./endpoint_builder";
 
 export class Http2Handler {
-  constructor(private readonly endpoint: EndpointImpl) {}
+  constructor(private readonly endpoint: EndpointBuilder) {}
 
   acceptConnection(
     request: Http2ServerRequest,

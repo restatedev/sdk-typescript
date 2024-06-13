@@ -43,9 +43,10 @@ import { X_RESTATE_SERVER } from "../user_agent";
 import { Buffer } from "node:buffer";
 import { ServiceDiscoveryProtocolVersion } from "../generated/proto/discovery_pb";
 import { ServiceProtocolVersion } from "../generated/proto/protocol_pb";
+import { EndpointBuilder } from "./endpoint_builder";
 
 export class LambdaHandler {
-  constructor(private readonly endpoint: EndpointImpl) {}
+  constructor(private readonly endpoint: EndpointBuilder) {}
 
   // --------------------------------------------------------------------------
 
