@@ -20,7 +20,8 @@ import type {
 
 import { HandlerWrapper } from "../types/rpc";
 import { rlog } from "../logger";
-import http2, { Http2ServerRequest, Http2ServerResponse } from "http2";
+import type { Http2ServerRequest, Http2ServerResponse } from "http2";
+import * as http2 from "http2";
 import { Http2Handler } from "./http2_handler";
 import { LambdaHandler } from "./lambda_handler";
 import {

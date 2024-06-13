@@ -9,6 +9,9 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
+import { RestateEndpoint } from "./endpoint";
+import { endpointImpl } from "./endpoint/endpoint_impl";
+
 export {
   Context,
   ObjectContext,
@@ -28,5 +31,12 @@ export type {
   WorkflowDefinition,
 } from "@restatedev/restate-sdk-core";
 
-export { endpoint, ServiceBundle, RestateEndpoint } from "./endpoint";
+export { ServiceBundle, RestateEndpoint } from "./endpoint";
 export { RestateError, TerminalError, TimeoutError } from "./types/errors";
+
+/**
+ * Create a new {@link RestateEndpoint}.
+ */
+export function endpoint(): RestateEndpoint {
+  return endpointImpl();
+}
