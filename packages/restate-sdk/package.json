@@ -17,10 +17,10 @@
   "exports": {
     ".": {
       "import": "./dist/src/public_api.js",
-      "require": "./dist/src/public_api.js"
+      "require": "./dist/src/public_api.js",
+      "types": "./dist/src/public_api.d.ts"
     }
   },
-  "types": "./dist/src/public_api.d.ts",
   "files": [
     "dist"
   ],
