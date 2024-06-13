@@ -12,11 +12,10 @@
 export * from "./common_api";
 
 import type { RestateEndpoint } from "./endpoint";
-import { endpointImpl } from "./endpoint/endpoint_impl";
 
 /**
  * Create a new {@link RestateEndpoint}.
  */
 export function endpoint(): RestateEndpoint {
-  return endpointImpl();
+  throw new Error("Not implemented");
 }

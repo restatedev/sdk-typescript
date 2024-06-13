@@ -12,7 +12,6 @@
 import stream from "node:stream";
 import { pipeline, finished } from "node:stream/promises";
 import http2, { Http2ServerRequest, Http2ServerResponse } from "http2";
-import { EndpointImpl } from "./endpoint_impl";
 import { RestateHttp2Connection } from "../connection/http_connection";
 import { ensureError } from "../types/errors";
 import { InvocationBuilder } from "../invocation";

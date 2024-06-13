@@ -29,9 +29,7 @@ import type { KeySetV1 } from "./request_signing/v1";
 import type { WorkflowDefinition } from "@restatedev/restate-sdk-core";
 import { EndpointBuilder } from "./endpoint_builder";
 
-export const endpointImpl = (): RestateEndpoint => new EndpointImpl();
-
-export class EndpointImpl implements RestateEndpoint {
+export class NodeEndpoint implements RestateEndpoint {
   private builder: EndpointBuilder = new EndpointBuilder();
 
   public get keySet(): KeySetV1 | undefined {

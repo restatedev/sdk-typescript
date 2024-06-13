@@ -21,11 +21,11 @@ import { Message } from "../src/types/types";
 import { rlog } from "../src/logger";
 import { StateMachine } from "../src/state_machine";
 import { InvocationBuilder } from "../src/invocation";
-import { EndpointImpl } from "../src/endpoint/endpoint_impl";
 import { ObjectContext } from "../src/context";
 import { object, VirtualObjectDefinition } from "../src/public_api";
 import { ProtocolMode } from "../src/types/discovery";
 import { HandlerKind } from "../src/types/rpc";
+import { NodeEndpoint } from "../src/endpoint/node_endpoint";
 
 export type TestRequest = {
   name: string;
@@ -218,4 +218,4 @@ export class TestDriver implements Connection {
  * make it simpler for users to understand what methods are relevant for them,
  * and which ones are not.
  */
-class TestRestateServer extends EndpointImpl {}
+class TestRestateServer extends NodeEndpoint {}

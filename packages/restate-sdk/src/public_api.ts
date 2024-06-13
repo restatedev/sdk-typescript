@@ -12,11 +12,11 @@
 export * from "./common_api";
 
 import type { RestateEndpoint } from "./endpoint";
-import { endpointImpl } from "./endpoint/endpoint_impl";
+import { NodeEndpoint } from "./endpoint/node_endpoint";
 
 /**
  * Create a new {@link RestateEndpoint}.
  */
 export function endpoint(): RestateEndpoint {
-  return endpointImpl();
+  return new NodeEndpoint();
 }

@@ -17,7 +17,6 @@ import type {
   APIGatewayProxyResultV2,
   Context,
 } from "aws-lambda";
-import { EndpointImpl } from "./endpoint_impl";
 import { LambdaConnection } from "../connection/lambda_connection";
 import { InvocationBuilder } from "../invocation";
 import { decodeLambdaBody } from "../io/decoder";
