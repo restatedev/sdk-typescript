@@ -27,6 +27,37 @@ export interface ServiceBundle {
   registerServices(endpoint: RestateEndpoint): void;
 }
 
+export interface RestateEndpointBase<E> {
+  /**
+   * Binds a new durable service / virtual object / workflow.
+   *
+   * see restate.service, restate.object, and restate.workflow for more details.
+   **/
+  bind<P extends string, M>(
+    service:
+      | ServiceDefinition<P, M>
+      | VirtualObjectDefinition<P, M>
+      | WorkflowDefinition<P, M>
+  ): E;
+
+  /**
+   * Adds one or more services to this endpoint. This will call the
+   * {@link ServiceBundle.registerServices} function to register all services at this endpoint.
+   */
+  bindBundle(services: ServiceBundle): E;
+
+  /**
+   * Provide a list of v1 request identity public keys eg `publickeyv1_2G8dCQhArfvGpzPw5Vx2ALciR4xCLHfS5YaT93XjNxX9` to validate
+   * incoming requests against, limiting requests to Restate clusters with the corresponding private keys. This public key format is
+   * logged by the Restate process at startup if a request identity private key is provided.
+   *
+   * If this function is called, all incoming requests irrelevant of endpoint type will be expected to have
+   * `x-restate-signature-scheme: v1` and `x-restate-jwt-v1: <valid jwt signed with one of these keys>`. If not called,
+   *
+   */
+  withIdentityV1(...keys: string[]): E;
+}
+
 /**
  * RestateEndpoint encapsulates all the Restate services served by this endpoint.
  *
@@ -54,36 +85,7 @@ export interface ServiceBundle {
  *   .lambdaHandler();
  * ```
  */
-export interface RestateEndpoint {
-  /**
-   * Binds a new durable service / virtual object / workflow.
-   *
-   * see restate.service, restate.object, and restate.workflow for more details.
-   **/
-  bind<P extends string, M>(
-    service:
-      | ServiceDefinition<P, M>
-      | VirtualObjectDefinition<P, M>
-      | WorkflowDefinition<P, M>
-  ): RestateEndpoint;
-
-  /**
-   * Adds one or more services to this endpoint. This will call the
-   * {@link ServiceBundle.registerServices} function to register all services at this endpoint.
-   */
-  bindBundle(services: ServiceBundle): RestateEndpoint;
-
-  /**
-   * Provide a list of v1 request identity public keys eg `publickeyv1_2G8dCQhArfvGpzPw5Vx2ALciR4xCLHfS5YaT93XjNxX9` to validate
-   * incoming requests against, limiting requests to Restate clusters with the corresponding private keys. This public key format is
-   * logged by the Restate process at startup if a request identity private key is provided.
-   *
-   * If this function is called, all incoming requests irrelevant of endpoint type will be expected to have
-   * `x-restate-signature-scheme: v1` and `x-restate-jwt-v1: <valid jwt signed with one of these keys>`. If not called,
-   *
-   */
-  withIdentityV1(...keys: string[]): RestateEndpoint;
-
+export interface RestateEndpoint extends RestateEndpointBase<RestateEndpoint> {
   /**
    * Creates the invocation handler function to be called by AWS Lambda.
    *
