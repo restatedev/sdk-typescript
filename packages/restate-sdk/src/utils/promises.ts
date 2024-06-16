@@ -42,7 +42,7 @@ export function wrapDeeply<T>(
       | null
       | undefined
   ) => WrappedPromise<TResult1 | TResult2>;
-  if (Object.hasOwn(promise, "transform")) {
+  if (Object.prototype.hasOwnProperty.call(promise, "transform")) {
     const wrappedPromise = promise as WrappedPromise<T>;
     transform = (onfulfilled, onrejected) =>
       wrapDeeply(wrappedPromise.transform(onfulfilled, onrejected), onThen);

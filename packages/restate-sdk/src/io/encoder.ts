@@ -61,13 +61,22 @@ export function encodeMessages(messages: Message[]): Uint8Array {
   return Buffer.concat(chunks);
 }
 
-function writeBigUInt64BE(value: bigint, buf: Buffer): void {
-  buf.writeUInt8(Number((value >> 56n) & 0xffn), 0);
-  buf.writeUInt8(Number((value >> 48n) & 0xffn), 1);
-  buf.writeUInt8(Number((value >> 40n) & 0xffn), 2);
-  buf.writeUInt8(Number((value >> 32n) & 0xffn), 3);
-  buf.writeUInt8(Number((value >> 24n) & 0xffn), 4);
-  buf.writeUInt8(Number((value >> 16n) & 0xffn), 5);
-  buf.writeUInt8(Number((value >> 8n) & 0xffn), 6);
-  buf.writeUInt8(Number(value & 0xffn), 7);
+function writeBigUInt64BE(value: bigint, buf: Buffer, offset = 0): number {
+  let lo = Number(value & 0xffffffffn);
+  buf[offset + 7] = lo;
+  lo = lo >> 8;
+  buf[offset + 6] = lo;
+  lo = lo >> 8;
+  buf[offset + 5] = lo;
+  lo = lo >> 8;
+  buf[offset + 4] = lo;
+  let hi = Number((value >> 32n) & 0xffffffffn);
+  buf[offset + 3] = hi;
+  hi = hi >> 8;
+  buf[offset + 2] = hi;
+  hi = hi >> 8;
+  buf[offset + 1] = hi;
+  hi = hi >> 8;
+  buf[offset] = hi;
+  return offset + 8;
 }

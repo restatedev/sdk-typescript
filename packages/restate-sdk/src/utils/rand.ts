@@ -14,23 +14,26 @@
 
 import { Rand } from "../context";
 import { INTERNAL_ERROR_CODE, TerminalError } from "../types/errors";
-import { CallContextType, ContextImpl } from "../context_impl";
+import { ContextImpl } from "../context_impl";
 import { createHash } from "node:crypto";
 import { Buffer } from "node:buffer";
 
 export class RandImpl implements Rand {
   private randstate256: [bigint, bigint, bigint, bigint];
 
-  constructor(id: Buffer | [bigint, bigint, bigint, bigint]) {
+  constructor(
+    private readonly ctx: ContextImpl,
+    id: Buffer | [bigint, bigint, bigint, bigint]
+  ) {
     if (id instanceof Buffer) {
       // hash the invocation ID, which is known to contain 74 bits of entropy
       const hash = createHash("sha256").update(id).digest();
 
       this.randstate256 = [
-        hash.readBigUInt64LE(0),
-        hash.readBigUInt64LE(8),
-        hash.readBigUInt64LE(16),
-        hash.readBigUInt64LE(24),
+        readBigUInt64LE(hash, 0),
+        readBigUInt64LE(hash, 8),
+        readBigUInt64LE(hash, 16),
+        readBigUInt64LE(hash, 24),
       ];
     } else {
       this.randstate256 = id;
@@ -69,8 +72,7 @@ export class RandImpl implements Rand {
   }
 
   checkContext() {
-    const context = ContextImpl.callContext.getStore();
-    if (context && context.type === CallContextType.Run) {
+    if (this.ctx.executingRun) {
       throw new TerminalError(
         `You may not call methods on Rand from within a run().`,
         { errorCode: INTERNAL_ERROR_CODE }
@@ -140,4 +142,25 @@ function uuidStringify(arr: Buffer, offset = 0) {
     byteToHex[arr[offset + 14]] +
     byteToHex[arr[offset + 15]]
   ).toLowerCase();
+}
+
+export function readBigUInt64LE(buf: Buffer, offset = 0): bigint {
+  const first = buf[offset];
+  const last = buf[offset + 7];
+  if (first === undefined || last === undefined)
+    throw new Error("out of bounds");
+
+  const lo =
+    first +
+    buf[++offset] * 2 ** 8 +
+    buf[++offset] * 2 ** 16 +
+    buf[++offset] * 2 ** 24;
+
+  const hi =
+    buf[++offset] +
+    buf[++offset] * 2 ** 8 +
+    buf[++offset] * 2 ** 16 +
+    last * 2 ** 24;
+
+  return BigInt(lo) + (BigInt(hi) << 32n);
 }

@@ -22,8 +22,8 @@
 
 import stream from "node:stream";
 import { PROTOBUF_MESSAGE_BY_TYPE } from "../types/protocol";
+import { BinaryReader, type Message as ProtoMessage } from "@bufbuild/protobuf";
 import { Header, Message } from "../types/types";
-import assert from "node:assert";
 import { ensureError } from "../types/errors";
 import { Buffer } from "node:buffer";
 
@@ -159,15 +159,24 @@ export function decodeMessagesBuffer(buffer: Buffer): Message[] {
   return decodedEntries;
 }
 
-function readBigUInt64BE(buf: Buffer): bigint {
-  return (
-    (BigInt(buf.readUInt8(0)) << 56n) |
-    (BigInt(buf.readUInt8(1)) << 48n) |
-    (BigInt(buf.readUInt8(2)) << 40n) |
-    (BigInt(buf.readUInt8(3)) << 32n) |
-    (BigInt(buf.readUInt8(4)) << 24n) |
-    (BigInt(buf.readUInt8(5)) << 16n) |
-    (BigInt(buf.readUInt8(6)) << 8n) |
-    BigInt(buf.readUInt8(7))
-  );
+export function readBigUInt64BE(buf: Uint8Array, offset = 0): bigint {
+  const first = buf[offset];
+  const last = buf[offset + 7];
+  if (first === undefined || last === undefined)
+    throw new Error("out of bounds");
+  const hi =
+    first * 2 ** 24 +
+    buf[++offset] * 2 ** 16 +
+    buf[++offset] * 2 ** 8 +
+    buf[++offset];
+  const lo =
+    buf[++offset] * 2 ** 24 +
+    buf[++offset] * 2 ** 16 +
+    buf[++offset] * 2 ** 8 +
+    last;
+  return (BigInt(hi) << 32n) + BigInt(lo);
+}
+
+function assert(value: boolean, msg?: string): asserts value {
+  if (!value) throw new Error(msg || "assertion error");
 }

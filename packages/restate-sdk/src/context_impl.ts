@@ -55,7 +55,6 @@ import {
   PEEK_PROMISE_MESSAGE_TYPE,
   COMPLETE_PROMISE_MESSAGE_TYPE,
 } from "./types/protocol";
-import { AsyncLocalStorage } from "node:async_hooks";
 import {
   RetryableError,
   TerminalError,
@@ -82,33 +81,16 @@ import { WrappedPromise } from "./utils/promises";
 import { Buffer } from "node:buffer";
 import { deserializeJson, serializeJson } from "./utils/serde";
 
-export enum CallContextType {
-  None,
-  Run,
-}
-
-export interface CallContext {
-  type: CallContextType;
-  delay?: number;
-}
-
 export type InternalCombineablePromise<T> = CombineablePromise<T> & {
   journalIndex: number;
 };
 
 export class ContextImpl implements ObjectContext, WorkflowContext {
-  // here, we capture the context information for actions on the Restate context that
-  // are executed within other actions, such as
-  // ctx.oneWayCall( () => client.foo(bar) );
-  // we also use this information to ensure we check that only allowed operations are
-  // used. Within side-effects, no operations are allowed on the RestateContext.
-  // For example, this is illegal: 'ctx.sideEffect(() => {await ctx.get("my-state")})'
-  static callContext = new AsyncLocalStorage<CallContext>();
-
   // This is used to guard users against calling ctx.sideEffect without awaiting it.
   // See https://github.com/restatedev/sdk-typescript/issues/197 for more details.
-  private executingRun = false;
+  public executingRun = false;
   private readonly invocationRequest: Request;
+  public readonly rand: Rand;
 
   public readonly date: ContextDate = {
     now: (): Promise<number> => {
@@ -129,8 +111,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     invocationHeaders: ReadonlyMap<string, string>,
     attemptHeaders: ReadonlyMap<string, string | string[] | undefined>,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    readonly stateMachine: StateMachine,
-    public readonly rand: Rand = new RandImpl(id)
+    readonly stateMachine: StateMachine
   ) {
     this.invocationRequest = {
       id,
@@ -138,6 +119,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       attemptHeaders,
       body: invocationValue,
     };
+    this.rand = new RandImpl(this, id);
   }
   workflowClient<D>(
     opts: WorkflowDefinitionFrom<D>,
@@ -452,12 +434,11 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     actionSecondParameter?: RunAction<T>
   ): Promise<T> {
     const { name, action } = unpack(nameOrAction, actionSecondParameter);
-    if (this.isInRun()) {
+    if (this.executingRun) {
       throw new TerminalError("Not possible to nest runs.", {
         errorCode: INTERNAL_ERROR_CODE,
       });
     }
-    this.checkNotExecutingRun();
     this.executingRun = true;
 
     const executeRun = async () => {
@@ -472,10 +453,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
 
       let sideEffectResult: T;
       try {
-        sideEffectResult = await ContextImpl.callContext.run(
-          { type: CallContextType.Run },
-          () => action()
-        );
+        sideEffectResult = await action();
       } catch (e) {
         if (!(e instanceof TerminalError)) {
           ///non terminal errors are retirable.
@@ -678,12 +656,6 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
   }
 
   // -- Various private methods
-
-  private isInRun(): boolean {
-    const context = ContextImpl.callContext.getStore();
-    return context?.type === CallContextType.Run;
-  }
-
   private checkNotExecutingRun() {
     if (this.executingRun) {
       throw new TerminalError(
@@ -694,19 +666,9 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     }
   }
 
-  private checkState(callType: string): void {
-    const context = ContextImpl.callContext.getStore();
-    if (!context) {
-      this.checkNotExecutingRun();
-      return;
-    }
-
-    if (context.type === CallContextType.Run) {
-      throw new TerminalError(
-        `You cannot do ${callType} calls from within a run.`,
-        { errorCode: INTERNAL_ERROR_CODE }
-      );
-    }
+  private checkState(_callType: string): void {
+    this.checkNotExecutingRun();
+    return;
   }
 
   markCombineablePromise<T>(
