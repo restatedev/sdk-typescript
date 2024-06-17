@@ -13,38 +13,60 @@
   "bugs": {
     "url": "https://github.com/restatedev/sdk-typescript/issues"
   },
-  "type": "commonjs",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/cjs/src/public_api.js",
+  "module": "./dist/esm/src/public_api.js",
   "exports": {
     ".": {
-      "import": "./dist/src/public_api.js",
-      "require": "./dist/src/public_api.js",
-      "types": "./dist/src/public_api.d.ts"
+      "import": {
+        "types": "./dist/esm/src/public_api.d.ts",
+        "default": "./dist/esm/src/public_api.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/public_api.d.ts",
+        "default": "./dist/cjs/src/public_api.js"
+      }
     },
     "./cloudflare": {
-      "import": "./dist/src/cloudflare.js",
-      "require": "./dist/src/cloudflare.js",
-      "types": "./dist/src/cloudflare.d.ts"
+      "import": {
+        "types": "./dist/esm/src/cloudflare.d.ts",
+        "default": "./dist/esm/src/cloudflare.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/cloudflare.d.ts",
+        "default": "./dist/cjs/src/cloudflare.js"
+      }
     },
     "./lambda": {
-      "import": "./dist/src/lambda.js",
-      "require": "./dist/src/lambda.js",
-      "types": "./dist/src/lambda.d.ts"
+      "import": {
+        "types": "./dist/esm/src/lambda.d.ts",
+        "default": "./dist/esm/src/lambda.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/lambda.d.ts",
+        "default": "./dist/cjs/src/lambda.js"
+      }
     }
   },
+  "types": "./dist/cjs/src/public_api.d.ts",
   "files": [
     "dist"
   ],
   "scripts": {
-    "gen:version": "node ./scripts/version.js",
+    "gen:version": "node ./scripts/version.mjs",
     "proto": "npx buf mod update && npx buf generate",
     "prebuild": "npm run gen:version",
-    "build": "tsc -b",
+    "build": "npm run build:cjs && npm run build:esm",
+    "build:cjs": "tsc --module commonjs --verbatimModuleSyntax false --moduleResolution node10 --outDir ./dist/cjs --declaration --declarationDir ./dist/cjs && echo >./dist/cjs/package.json '{\"type\":\"commonjs\"}'",
+    "build:esm": "tsc --outDir ./dist/esm --declaration --declarationDir ./dist/esm",
     "pretest": "npm run gen:version",
     "test": "vitest run --silent",
     "lint": "eslint --ignore-path .eslintignore --max-warnings=0 --ext .ts .",
     "format": "prettier --ignore-path .eslintignore --write \"**/*.+(js|ts|json)\"",
     "format-check": "prettier --ignore-path .eslintignore --check \"**/*.+(js|ts|json)\"",
     "verify": "npm run format-check && npm run gen:version && npm run lint && npm run test && npm run build",
+    "attw": "attw --pack",
     "release": "release-it"
   },
   "dependencies": {

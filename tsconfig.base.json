@@ -3,7 +3,7 @@
     "composite": true,
     "baseUrl": ".",
     "target": "esnext",
-    "module": "commonjs",
+    "module": "nodenext",
     "lib": ["esnext"],
     "declaration": true,
     "declarationMap": true,
