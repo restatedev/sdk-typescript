@@ -6,7 +6,8 @@
   },
   "extends": [
     "eslint:recommended",
-    "plugin:@typescript-eslint/recommended-type-checked"
+    "plugin:@typescript-eslint/recommended-type-checked",
+    "plugin:require-extensions/recommended"
   ],
   "overrides": [
     {
@@ -22,7 +23,7 @@
     "ecmaVersion": "latest",
     "project": ["./tsconfig.eslint.json"]
   },
-  "plugins": ["@typescript-eslint"],
+  "plugins": ["@typescript-eslint", "require-extensions"],
   "rules": {
     "no-console": "error",
     "@typescript-eslint/consistent-type-imports": "error",

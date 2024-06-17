@@ -29,6 +29,6 @@ export {
   SendOpts,
   Send,
   IngresSendOptions,
-} from "./api";
+} from "./api.js";
 
-export { connect } from "./ingress";
+export { connect } from "./ingress.js";

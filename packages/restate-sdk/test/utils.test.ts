@@ -13,8 +13,8 @@ import {
   jsonDeserialize,
   jsonSerialize,
   formatMessageAsJson,
-} from "../src/utils/utils";
-import { RandImpl } from "../src/utils/rand";
+} from "../src/utils/utils.js";
+import { RandImpl } from "../src/utils/rand.js";
 import { describe, expect, it } from "vitest";
 
 describe("JSON de-/serialization", () => {

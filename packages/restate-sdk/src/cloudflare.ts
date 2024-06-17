@@ -9,12 +9,12 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-export * from "./common_api";
+export * from "./common_api.js";
 
 import {
   CloudflareWorkerEndpointImpl,
   type CloudflareWorkerEndpoint,
-} from "./endpoint/cloudflare_endpoint";
+} from "./endpoint/cloudflare_endpoint.js";
 
 /**
  * Create a new {@link RestateEndpoint}.

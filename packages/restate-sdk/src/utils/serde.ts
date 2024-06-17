@@ -1,5 +1,5 @@
 import { Buffer } from "node:buffer";
-import { TerminalError } from "../types/errors";
+import { TerminalError } from "../types/errors.js";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export function serializeJson(item: any): Uint8Array {

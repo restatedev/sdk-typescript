@@ -9,7 +9,7 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import type { Client, SendClient } from "./types/rpc";
+import type { Client, SendClient } from "./types/rpc.js";
 import type {
   RestateContext,
   RestateObjectContext,
@@ -23,7 +23,7 @@ import type {
   Workflow,
   WorkflowDefinitionFrom,
 } from "@restatedev/restate-sdk-core";
-import { ContextImpl } from "./context_impl";
+import { ContextImpl } from "./context_impl.js";
 
 /**
  * Represents the original request as sent to this handler.

@@ -12,10 +12,10 @@
 //! Some parts copied from https://github.com/uuidjs/uuid/blob/main/src/stringify.js
 //! License MIT
 
-import type { Rand } from "../context";
+import type { Rand } from "../context.js";
 import { createHash } from "node:crypto";
 import { Buffer } from "node:buffer";
-import { readBigUInt64LE } from "./buffer";
+import { readBigUInt64LE } from "./buffer.js";
 
 export class RandImpl implements Rand {
   private randstate256: [bigint, bigint, bigint, bigint];

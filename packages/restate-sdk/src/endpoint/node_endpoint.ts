@@ -12,23 +12,23 @@
 /* eslint-disable @typescript-eslint/ban-types */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import type { RestateEndpoint, ServiceBundle } from "../public_api";
+import type { RestateEndpoint, ServiceBundle } from "../public_api.js";
 import type {
   ServiceDefinition,
   VirtualObjectDefinition,
 } from "@restatedev/restate-sdk-core";
 
-import { rlog } from "../logger";
+import { rlog } from "../logger.js";
 import type { Http2ServerRequest, Http2ServerResponse } from "http2";
 import * as http2 from "http2";
-import { Http2Handler } from "./handlers/node";
-import { LambdaHandler } from "./handlers/lambda";
-import type { Component } from "../types/components";
+import { Http2Handler } from "./handlers/node.js";
+import { LambdaHandler } from "./handlers/lambda.js";
+import type { Component } from "../types/components.js";
 
-import type { KeySetV1 } from "./request_signing/v1";
+import type { KeySetV1 } from "./request_signing/v1.js";
 import type { WorkflowDefinition } from "@restatedev/restate-sdk-core";
-import { EndpointBuilder } from "./endpoint_builder";
-import { GenericHandler } from "./handlers/generic";
+import { EndpointBuilder } from "./endpoint_builder.js";
+import { GenericHandler } from "./handlers/generic.js";
 
 export class NodeEndpoint implements RestateEndpoint {
   private builder: EndpointBuilder = new EndpointBuilder();

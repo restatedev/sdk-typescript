@@ -9,15 +9,15 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import type { Connection } from "./connection";
-import { encodeMessage } from "../io/encoder";
+import type { Connection } from "./connection.js";
+import { encodeMessage } from "../io/encoder.js";
 import {
   ERROR_MESSAGE_TYPE,
   OUTPUT_ENTRY_MESSAGE_TYPE,
   SUSPENSION_MESSAGE_TYPE,
-} from "../types/protocol";
-import type { Message } from "../types/types";
-import { rlog } from "../logger";
+} from "../types/protocol.js";
+import type { Message } from "../types/types.js";
+import { rlog } from "../logger.js";
 import { Buffer } from "node:buffer";
 
 const RESOLVED: Promise<void> = Promise.resolve();

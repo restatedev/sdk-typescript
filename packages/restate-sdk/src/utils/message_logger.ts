@@ -12,14 +12,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable no-console */
 
-import { formatMessageType } from "../types/protocol";
-import { formatMessageAsJson } from "./utils";
-import type { LoggerContext } from "../logger";
+import { formatMessageType } from "../types/protocol.js";
+import { formatMessageAsJson } from "./utils.js";
+import type { LoggerContext } from "../logger.js";
 import {
   createRestateConsole,
   RESTATE_LOG_LEVEL,
   RestateLogLevel,
-} from "../logger";
+} from "../logger.js";
 
 /**
  * The environment variable which is read to determine the debug log settings.

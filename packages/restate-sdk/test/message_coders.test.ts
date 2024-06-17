@@ -9,10 +9,10 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { streamDecoder } from "../src/io/decoder";
-import type { Message } from "../src/types/types";
-import { backgroundInvokeMessage } from "./protoutils";
-import { encodeMessage } from "../src/io/encoder";
+import { streamDecoder } from "../src/io/decoder.js";
+import type { Message } from "../src/types/types.js";
+import { backgroundInvokeMessage } from "./protoutils.js";
+import { encodeMessage } from "../src/io/encoder.js";
 import { describe, expect, it } from "vitest";
 
 describe("The stream decoder", () => {

@@ -16,12 +16,12 @@ import {
   GET_STATE_ENTRY_MESSAGE_TYPE,
   SetStateEntryMessage,
   SET_STATE_ENTRY_MESSAGE_TYPE,
-} from "../src/types/protocol";
-import { RestateHttp2Connection } from "../src/connection/http_connection";
-import { Header, Message } from "../src/types/types";
+} from "../src/types/protocol.js";
+import { RestateHttp2Connection } from "../src/connection/http_connection.js";
+import { Header, Message } from "../src/types/types.js";
 import * as stream from "stream";
 import { setTimeout } from "timers/promises";
-import { CompletablePromise } from "../src/utils/promises";
+import { CompletablePromise } from "../src/utils/promises.js";
 import { describe, expect, it } from "vitest";
 
 // The following test suite is taken from headers.rs

@@ -13,7 +13,7 @@
 
 import * as restate from "@restatedev/restate-sdk-clients";
 
-import type { PaymentWorkflow } from "./workflow";
+import type { PaymentWorkflow } from "./workflow.js";
 
 const WF: PaymentWorkflow = { name: "payment" };
 
