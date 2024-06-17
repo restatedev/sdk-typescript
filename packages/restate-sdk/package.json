@@ -14,21 +14,24 @@
     "url": "https://github.com/restatedev/sdk-typescript/issues"
   },
   "type": "module",
+  "sideEffects": false,
+  "main": "./dist/cjs/index.js",
+  "types": "./dist/cjs/public_api.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/src/public_api.js",
-      "require": "./dist/src/public_api.js",
-      "types": "./dist/src/public_api.d.ts"
+      "import": "./dist/esm/src/public_api.js",
+      "require": "./dist/cjs/src/public_api.js",
+      "types": "./dist/esm/src/public_api.d.ts"
     },
     "./cloudflare": {
-      "import": "./dist/src/cloudflare.js",
-      "require": "./dist/src/cloudflare.js",
-      "types": "./dist/src/cloudflare.d.ts"
+      "import": "./dist/esm/src/cloudflare.js",
+      "require": "./dist/cjs/src/cloudflare.js",
+      "types": "./dist/esm/src/cloudflare.d.ts"
     },
     "./lambda": {
-      "import": "./dist/src/lambda.js",
-      "require": "./dist/src/lambda.js",
-      "types": "./dist/src/lambda.d.ts"
+      "import": "./dist/esm/src/lambda.js",
+      "require": "./dist/cjs/src/lambda.js",
+      "types": "./dist/esm/src/lambda.d.ts"
     }
   },
   "files": [
@@ -38,7 +41,9 @@
     "gen:version": "node ./scripts/version.js",
     "proto": "npx buf mod update && npx buf generate",
     "prebuild": "npm run gen:version",
-    "build": "tsc -b",
+    "build": "npm run build:cjs && npm run build:esm",
+    "build:cjs": "tsc --module commonjs --verbatimModuleSyntax false --moduleResolution node10 --outDir ./dist/cjs --declaration --declarationDir ./dist/cjs && echo >./dist/cjs/package.json '{\"type\":\"commonjs\"}'",
+    "build:esm": "tsc --outDir ./dist/esm --declaration --declarationDir ./dist/esm",
     "pretest": "npm run gen:version",
     "test": "jest --silent --maxWorkers=1",
     "lint": "eslint --ignore-path .eslintignore --max-warnings=0 --ext .ts .",

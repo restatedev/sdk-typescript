@@ -14,13 +14,23 @@
     "url": "https://github.com/restatedev/sdk-typescript/issues"
   },
   "type": "module",
-  "main": "./dist/src/public_api.js",
-  "types": "./dist/src/public_api.d.ts",
+  "sideEffects": false,
+  "main": "./dist/cjs/src/public_api.js",
+  "types": "./dist/cjs/src/public_api.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/esm/src/public_api.js",
+      "require": "./dist/cjs/src/public_api.js",
+      "types": "./dist/esm/src/public_api.d.ts"
+    }
+  },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsc -b",
+    "build": "npm run build:cjs && npm run build:esm",
+    "build:cjs": "tsc --module commonjs --verbatimModuleSyntax false --moduleResolution node10 --outDir ./dist/cjs --declaration --declarationDir ./dist/cjs && echo >./dist/cjs/package.json '{\"type\":\"commonjs\"}'",
+    "build:esm": "tsc --outDir ./dist/esm --declaration --declarationDir ./dist/esm",
     "test": "jest --silent --maxWorkers=1 --passWithNoTests",
     "lint": "eslint --ignore-path .eslintignore --max-warnings=0 --ext .ts .",
     "format": "prettier --ignore-path .eslintignore --write \"**/*.+(js|ts|json)\"",
