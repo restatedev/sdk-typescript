@@ -9,17 +9,17 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import * as p from "./types/protocol";
-import { ContextImpl } from "./context_impl";
+import * as p from "./types/protocol.js";
+import { ContextImpl } from "./context_impl.js";
 import type {
   Connection,
   RestateStreamConsumer,
-} from "./connection/connection";
-import { Message } from "./types/types";
+} from "./connection/connection.js";
+import { Message } from "./types/types.js";
 import {
   createStateMachineConsole,
   type StateMachineConsole,
-} from "./utils/message_logger";
+} from "./utils/message_logger.js";
 import {
   COMBINATOR_ENTRY_MESSAGE,
   COMPLETION_MESSAGE_TYPE,
@@ -31,34 +31,34 @@ import {
   OutputEntryMessage,
   SUSPENSION_MESSAGE_TYPE,
   SuspensionMessage,
-} from "./types/protocol";
-import { Journal } from "./journal";
-import type { Invocation } from "./invocation";
+} from "./types/protocol.js";
+import { Journal } from "./journal.js";
+import type { Invocation } from "./invocation.js";
 import {
   ensureError,
   TerminalError,
   RetryableError,
   errorToErrorMessage,
   type JournalErrorContext,
-} from "./types/errors";
-import type { LocalStateStore } from "./local_state_store";
-import type { LoggerContext } from "./logger";
-import { createRestateConsole } from "./logger";
+} from "./types/errors.js";
+import type { LocalStateStore } from "./local_state_store.js";
+import type { LoggerContext } from "./logger.js";
+import { createRestateConsole } from "./logger.js";
 import {
   CompletablePromise,
   wrapDeeply,
   WRAPPED_PROMISE_PENDING,
   type WrappedPromise,
-} from "./utils/promises";
+} from "./utils/promises.js";
 import {
   PromiseCombinatorTracker,
   type PromiseId,
   PromiseType,
-} from "./promise_combinator_tracker";
-import { CombinatorEntryMessage } from "./generated/proto/javascript_pb";
-import { ProtocolMode } from "./types/discovery";
+} from "./promise_combinator_tracker.js";
+import { CombinatorEntryMessage } from "./generated/proto/javascript_pb.js";
+import { ProtocolMode } from "./types/discovery.js";
 import { Buffer } from "node:buffer";
-import type { HandlerKind } from "./types/rpc";
+import type { HandlerKind } from "./types/rpc.js";
 
 export class StateMachine implements RestateStreamConsumer {
   private journal: Journal;

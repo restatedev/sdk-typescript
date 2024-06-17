@@ -19,7 +19,7 @@ import type {
   CallEntryMessage,
   OutputEntryMessage,
   SetStateEntryMessage,
-} from "../generated/proto/protocol_pb";
+} from "../generated/proto/protocol_pb.js";
 import {
   AWAKEABLE_ENTRY_MESSAGE_TYPE,
   BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
@@ -31,7 +31,7 @@ import {
   SET_STATE_ENTRY_MESSAGE_TYPE,
   SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
   SLEEP_ENTRY_MESSAGE_TYPE,
-} from "../types/protocol";
+} from "../types/protocol.js";
 import { Buffer } from "node:buffer";
 
 export function jsonSerialize(obj: any): string {

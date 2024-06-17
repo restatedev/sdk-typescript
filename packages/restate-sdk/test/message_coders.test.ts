@@ -10,10 +10,10 @@
  */
 
 import { describe, expect } from "@jest/globals";
-import { streamDecoder } from "../src/io/decoder";
-import type { Message } from "../src/types/types";
-import { backgroundInvokeMessage } from "./protoutils";
-import { encodeMessage } from "../src/io/encoder";
+import { streamDecoder } from "../src/io/decoder.js";
+import type { Message } from "../src/types/types.js";
+import { backgroundInvokeMessage } from "./protoutils.js";
+import { encodeMessage } from "../src/io/encoder.js";
 
 describe("The stream decoder", () => {
   it("should handle decoding of messages across chunks", () => {

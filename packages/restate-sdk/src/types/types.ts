@@ -23,7 +23,7 @@ import {
   SLEEP_ENTRY_MESSAGE_TYPE,
   START_MESSAGE_TYPE,
   SUSPENSION_MESSAGE_TYPE,
-} from "./protocol";
+} from "./protocol.js";
 
 export class Message {
   constructor(

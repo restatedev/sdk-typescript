@@ -10,7 +10,7 @@
  */
 
 import { describe, expect } from "@jest/globals";
-import type * as restate from "../src/public_api";
+import type * as restate from "../src/public_api.js";
 import {
   awakeableMessage,
   checkJournalMismatchError,
@@ -26,12 +26,12 @@ import {
   sleepMessage,
   startMessage,
   suspensionMessage,
-} from "./protoutils";
-import { SLEEP_ENTRY_MESSAGE_TYPE } from "../src/types/protocol";
+} from "./protoutils.js";
+import { SLEEP_ENTRY_MESSAGE_TYPE } from "../src/types/protocol.js";
 import { Empty } from "@bufbuild/protobuf";
-import type { TestGreeter } from "./testdriver";
-import { TestDriver, TestResponse } from "./testdriver";
-import { ProtocolMode } from "../src/types/discovery";
+import type { TestGreeter } from "./testdriver.js";
+import { TestDriver, TestResponse } from "./testdriver.js";
+import { ProtocolMode } from "../src/types/discovery.js";
 
 const wakeupTime = 1835661783000;
 

@@ -51,23 +51,23 @@ import {
   ClearAllStateEntryMessage,
   GET_STATE_KEYS_ENTRY_MESSAGE_TYPE,
   GetStateKeysEntryMessage,
-} from "../src/types/protocol";
-import { Message } from "../src/types/types";
-import { CombinatorEntryMessage } from "../src/generated/proto/javascript_pb";
+} from "../src/types/protocol.js";
+import { Message } from "../src/types/types.js";
+import { CombinatorEntryMessage } from "../src/generated/proto/javascript_pb.js";
 import {
   Failure,
   RunEntryMessage,
   StartMessage_StateEntry,
-} from "../src/generated/proto/protocol_pb";
+} from "../src/generated/proto/protocol_pb.js";
 import { expect } from "@jest/globals";
-import { jsonSerialize, formatMessageAsJson } from "../src/utils/utils";
-import { rlog } from "../src/logger";
-import type { JournalErrorContext } from "../src/types/errors";
+import { jsonSerialize, formatMessageAsJson } from "../src/utils/utils.js";
+import { rlog } from "../src/logger.js";
+import type { JournalErrorContext } from "../src/types/errors.js";
 import {
   INTERNAL_ERROR_CODE,
   RestateErrorCodes,
   UNKNOWN_ERROR_CODE,
-} from "../src/types/errors";
+} from "../src/types/errors.js";
 
 export type StartMessageOpts = {
   knownEntries?: number;

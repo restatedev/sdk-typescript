@@ -19,13 +19,13 @@ import type {
   ObjectSharedContext,
   WorkflowContext,
   WorkflowSharedContext,
-} from "../context";
+} from "../context.js";
 import {
   deserializeJson,
   deserializeNoop,
   serializeJson,
   serializeNoop,
-} from "../utils/serde";
+} from "../utils/serde.js";
 
 import type {
   ServiceHandler,

@@ -14,9 +14,9 @@ import {
   headerValue,
   type ValidateResponse,
   type ValidateSuccess,
-} from "./validate";
-import { importKey, type Key, verify } from "./ed25519";
-import base from "./basex";
+} from "./validate.js";
+import { importKey, type Key, verify } from "./ed25519.js";
+import base from "./basex.js";
 
 const JWT_HEADER = "x-restate-jwt-v1";
 export const SCHEME_V1 = "v1";

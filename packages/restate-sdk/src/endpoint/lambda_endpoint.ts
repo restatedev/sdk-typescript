@@ -17,15 +17,15 @@ import type {
   VirtualObjectDefinition,
 } from "@restatedev/restate-sdk-core";
 
-import { rlog } from "../logger";
-import type { Component } from "../types/components";
+import { rlog } from "../logger.js";
+import type { Component } from "../types/components.js";
 
-import type { KeySetV1 } from "./request_signing/v1";
+import type { KeySetV1 } from "./request_signing/v1.js";
 import type { WorkflowDefinition } from "@restatedev/restate-sdk-core";
-import { EndpointBuilder } from "./endpoint_builder";
-import type { RestateEndpointBase, ServiceBundle } from "../endpoint";
-import { GenericHandler } from "./handlers/generic";
-import { LambdaHandler } from "./handlers/lambda";
+import { EndpointBuilder } from "./endpoint_builder.js";
+import type { RestateEndpointBase, ServiceBundle } from "../endpoint.js";
+import { GenericHandler } from "./handlers/generic.js";
+import { LambdaHandler } from "./handlers/lambda.js";
 
 /**
  * LambdaEndpoint encapsulates all the Restate services served by this endpoint.

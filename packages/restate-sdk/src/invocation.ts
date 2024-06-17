@@ -11,19 +11,22 @@
 
 /*eslint-disable @typescript-eslint/no-non-null-assertion*/
 
-import type { Message } from "./types/types";
+import type { Message } from "./types/types.js";
 import type {
   InputEntryMessage,
   StartMessage,
-} from "./generated/proto/protocol_pb";
-import { formatMessageAsJson } from "./utils/utils";
-import { INPUT_ENTRY_MESSAGE_TYPE, START_MESSAGE_TYPE } from "./types/protocol";
-import type { RestateStreamConsumer } from "./connection/connection";
-import { LocalStateStore } from "./local_state_store";
-import { ensureError } from "./types/errors";
-import { LoggerContext } from "./logger";
-import { CompletablePromise } from "./utils/promises";
-import type { ComponentHandler } from "./types/components";
+} from "./generated/proto/protocol_pb.js";
+import { formatMessageAsJson } from "./utils/utils.js";
+import {
+  INPUT_ENTRY_MESSAGE_TYPE,
+  START_MESSAGE_TYPE,
+} from "./types/protocol.js";
+import type { RestateStreamConsumer } from "./connection/connection.js";
+import { LocalStateStore } from "./local_state_store.js";
+import { ensureError } from "./types/errors.js";
+import { LoggerContext } from "./logger.js";
+import { CompletablePromise } from "./utils/promises.js";
+import type { ComponentHandler } from "./types/components.js";
 import { Buffer } from "node:buffer";
 
 enum State {

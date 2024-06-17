@@ -10,8 +10,8 @@
  */
 
 import { describe, expect } from "@jest/globals";
-import type { WrappedPromise } from "../src/utils/promises";
-import { CompletablePromise, wrapDeeply } from "../src/utils/promises";
+import type { WrappedPromise } from "../src/utils/promises.js";
+import { CompletablePromise, wrapDeeply } from "../src/utils/promises.js";
 
 describe("promises.wrapDeeply", () => {
   it("should support nested wrapping", async () => {

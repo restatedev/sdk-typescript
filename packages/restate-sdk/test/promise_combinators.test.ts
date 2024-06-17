@@ -10,9 +10,9 @@
  */
 
 import { describe, expect } from "@jest/globals";
-import type * as restate from "../src/public_api";
-import type { TestGreeter } from "./testdriver";
-import { GreeterApi, TestDriver, TestResponse } from "./testdriver";
+import type * as restate from "../src/public_api.js";
+import type { TestGreeter } from "./testdriver.js";
+import { GreeterApi, TestDriver, TestResponse } from "./testdriver.js";
 import {
   awakeableMessage,
   completionMessage,
@@ -29,14 +29,14 @@ import {
   sideEffectMessage,
   ackMessage,
   invokeMessage,
-} from "./protoutils";
+} from "./protoutils.js";
 import {
   COMBINATOR_ENTRY_MESSAGE,
   SLEEP_ENTRY_MESSAGE_TYPE,
-} from "../src/types/protocol";
-import { TimeoutError } from "../src/types/errors";
-import { CombineablePromise } from "../src/context";
-import { Empty } from "../src/generated/proto/protocol_pb";
+} from "../src/types/protocol.js";
+import { TimeoutError } from "../src/types/errors.js";
+import { CombineablePromise } from "../src/context.js";
+import { Empty } from "../src/generated/proto/protocol_pb.js";
 import { Buffer } from "node:buffer";
 
 class AwakeableSleepRaceGreeter implements TestGreeter {

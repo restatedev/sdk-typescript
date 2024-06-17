@@ -10,7 +10,7 @@
  */
 
 import type { Message } from "@bufbuild/protobuf";
-import { CombinatorEntryMessage } from "../generated/proto/javascript_pb";
+import { CombinatorEntryMessage } from "../generated/proto/javascript_pb.js";
 import {
   AwakeableEntryMessage,
   OneWayCallEntryMessage,
@@ -35,8 +35,8 @@ import {
   PeekPromiseEntryMessage,
   CompletePromiseEntryMessage,
   ServiceProtocolVersion,
-} from "../generated/proto/protocol_pb";
-import { ServiceDiscoveryProtocolVersion } from "../generated/proto/discovery_pb";
+} from "../generated/proto/protocol_pb.js";
+import { ServiceDiscoveryProtocolVersion } from "../generated/proto/discovery_pb.js";
 
 // Re-export the protobuf messages.
 export {
@@ -61,7 +61,7 @@ export {
   GetPromiseEntryMessage,
   PeekPromiseEntryMessage,
   CompletePromiseEntryMessage,
-} from "../generated/proto/protocol_pb";
+} from "../generated/proto/protocol_pb.js";
 
 // Export the protocol message types as defined by the restate protocol.
 export const START_MESSAGE_TYPE = 0x0000n;

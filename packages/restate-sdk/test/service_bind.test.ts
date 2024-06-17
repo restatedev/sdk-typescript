@@ -9,11 +9,11 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import type { TestGreeter, TestRequest } from "./testdriver";
-import { TestDriver, TestResponse } from "./testdriver";
-import type * as restate from "../src/public_api";
+import type { TestGreeter, TestRequest } from "./testdriver.js";
+import { TestDriver, TestResponse } from "./testdriver.js";
+import type * as restate from "../src/public_api.js";
 import { describe } from "@jest/globals";
-import { greetRequest, inputMessage, startMessage } from "./protoutils";
+import { greetRequest, inputMessage, startMessage } from "./protoutils.js";
 
 const greeter: TestGreeter = {
   /* eslint-disable @typescript-eslint/no-unused-vars */

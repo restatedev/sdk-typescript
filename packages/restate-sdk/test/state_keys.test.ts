@@ -10,9 +10,9 @@
  */
 
 import { describe, expect } from "@jest/globals";
-import type * as restate from "../src/public_api";
-import type { TestGreeter, TestResponse } from "./testdriver";
-import { TestDriver } from "./testdriver";
+import type * as restate from "../src/public_api.js";
+import type { TestGreeter, TestResponse } from "./testdriver.js";
+import { TestDriver } from "./testdriver.js";
 import {
   completionMessage,
   END_MESSAGE,
@@ -24,8 +24,8 @@ import {
   outputMessage,
   startMessage,
   suspensionMessage,
-} from "./protoutils";
-import { GetStateKeysEntryMessage_StateKeys } from "../src/generated/proto/protocol_pb";
+} from "./protoutils.js";
+import { GetStateKeysEntryMessage_StateKeys } from "../src/generated/proto/protocol_pb.js";
 
 const INPUT_MESSAGE = inputMessage(greetRequest("bob"));
 

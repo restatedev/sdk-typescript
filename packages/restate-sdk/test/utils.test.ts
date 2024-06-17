@@ -14,8 +14,8 @@ import {
   jsonDeserialize,
   jsonSerialize,
   formatMessageAsJson,
-} from "../src/utils/utils";
-import { RandImpl } from "../src/utils/rand";
+} from "../src/utils/utils.js";
+import { RandImpl } from "../src/utils/rand.js";
 
 describe("JSON de-/serialization", () => {
   it("should be able to handle bigint", () => {

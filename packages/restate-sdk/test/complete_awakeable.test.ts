@@ -9,7 +9,7 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import type * as restate from "../src/public_api";
+import type * as restate from "../src/public_api.js";
 import {
   checkJournalMismatchError,
   resolveAwakeableMessage,
@@ -22,10 +22,10 @@ import {
   startMessage,
   rejectAwakeableMessage,
   END_MESSAGE,
-} from "./protoutils";
+} from "./protoutils.js";
 import { describe, expect } from "@jest/globals";
-import type { TestGreeter, TestResponse } from "./testdriver";
-import { TestDriver } from "./testdriver";
+import type { TestGreeter, TestResponse } from "./testdriver.js";
+import { TestDriver } from "./testdriver.js";
 
 class ResolveAwakeableGreeter implements TestGreeter {
   constructor(readonly payload: string | undefined) {}

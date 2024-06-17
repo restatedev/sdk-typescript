@@ -9,9 +9,12 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import * as p from "./types/protocol";
-import type { Failure, RunEntryMessage } from "./generated/proto/protocol_pb";
-import { GetStateKeysEntryMessage_StateKeys } from "./generated/proto/protocol_pb";
+import * as p from "./types/protocol.js";
+import type {
+  Failure,
+  RunEntryMessage,
+} from "./generated/proto/protocol_pb.js";
+import { GetStateKeysEntryMessage_StateKeys } from "./generated/proto/protocol_pb.js";
 import type {
   AwakeableEntryMessage,
   CompletionMessage,
@@ -23,7 +26,7 @@ import type {
   InputEntryMessage,
   SleepEntryMessage,
   SuspensionMessage,
-} from "./types/protocol";
+} from "./types/protocol.js";
 import {
   AWAKEABLE_ENTRY_MESSAGE_TYPE,
   BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
@@ -40,12 +43,12 @@ import {
   SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
   SLEEP_ENTRY_MESSAGE_TYPE,
   SUSPENSION_MESSAGE_TYPE,
-} from "./types/protocol";
-import { equalityCheckers, jsonDeserialize } from "./utils/utils";
-import { Message } from "./types/types";
-import type { Invocation } from "./invocation";
-import { failureToError, RetryableError } from "./types/errors";
-import { CompletablePromise } from "./utils/promises";
+} from "./types/protocol.js";
+import { equalityCheckers, jsonDeserialize } from "./utils/utils.js";
+import { Message } from "./types/types.js";
+import type { Invocation } from "./invocation.js";
+import { failureToError, RetryableError } from "./types/errors.js";
+import { CompletablePromise } from "./utils/promises.js";
 import { Buffer } from "node:buffer";
 
 const RESOLVED = Promise.resolve(undefined);

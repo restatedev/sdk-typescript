@@ -10,12 +10,12 @@
  */
 
 import { describe, expect } from "@jest/globals";
-import { CompletablePromise } from "../src/utils/promises";
-import type { PromiseId } from "../src/promise_combinator_tracker";
+import { CompletablePromise } from "../src/utils/promises.js";
+import type { PromiseId } from "../src/promise_combinator_tracker.js";
 import {
   newJournalEntryPromiseId,
   PromiseCombinatorTracker,
-} from "../src/promise_combinator_tracker";
+} from "../src/promise_combinator_tracker.js";
 
 describe("PromiseCombinatorTracker with Promise.any", () => {
   it("should provide order in processing mode", async () => {

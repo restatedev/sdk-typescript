@@ -17,16 +17,16 @@ import type {
   VirtualObjectDefinition,
 } from "@restatedev/restate-sdk-core";
 
-import { HandlerWrapper } from "../types/rpc";
+import { HandlerWrapper } from "../types/rpc.js";
 import {
   type Component,
   ServiceComponent,
   VirtualObjectComponent,
   WorkflowComponent,
-} from "../types/components";
+} from "../types/components.js";
 
-import type * as discovery from "../types/discovery";
-import { type KeySetV1, parseKeySetV1 } from "./request_signing/v1";
+import type * as discovery from "../types/discovery.js";
+import { type KeySetV1, parseKeySetV1 } from "./request_signing/v1.js";
 import type { WorkflowDefinition } from "@restatedev/restate-sdk-core";
 
 function isServiceDefinition<P extends string, M>(

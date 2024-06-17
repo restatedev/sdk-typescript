@@ -17,10 +17,10 @@ export type {
   WorkflowContext,
   WorkflowSharedContext,
   Rand,
-} from "./context";
+} from "./context.js";
 
-export type { Client, SendClient } from "./types/rpc";
-export { service, object, workflow, handlers } from "./types/rpc";
+export type { Client, SendClient } from "./types/rpc.js";
+export { service, object, workflow, handlers } from "./types/rpc.js";
 
 export type {
   ServiceDefinition,
@@ -28,5 +28,5 @@ export type {
   WorkflowDefinition,
 } from "@restatedev/restate-sdk-core";
 
-export type { ServiceBundle, RestateEndpoint } from "./endpoint";
-export { RestateError, TerminalError, TimeoutError } from "./types/errors";
+export type { ServiceBundle, RestateEndpoint } from "./endpoint.js";
+export { RestateError, TerminalError, TimeoutError } from "./types/errors.js";

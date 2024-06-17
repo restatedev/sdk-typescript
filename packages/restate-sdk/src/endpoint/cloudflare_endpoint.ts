@@ -17,16 +17,16 @@ import type {
   VirtualObjectDefinition,
 } from "@restatedev/restate-sdk-core";
 
-import { rlog } from "../logger";
-import type { Component } from "../types/components";
+import { rlog } from "../logger.js";
+import type { Component } from "../types/components.js";
 
-import type { KeySetV1 } from "./request_signing/v1";
+import type { KeySetV1 } from "./request_signing/v1.js";
 import type { WorkflowDefinition } from "@restatedev/restate-sdk-core";
-import { EndpointBuilder } from "./endpoint_builder";
+import { EndpointBuilder } from "./endpoint_builder.js";
 import type { ExportedHandler } from "@cloudflare/workers-types";
-import type { RestateEndpointBase, ServiceBundle } from "../endpoint";
-import { CloudflareHandler } from "./handlers/cloudflare";
-import { GenericHandler } from "./handlers/generic";
+import type { RestateEndpointBase, ServiceBundle } from "../endpoint.js";
+import { CloudflareHandler } from "./handlers/cloudflare.js";
+import { GenericHandler } from "./handlers/generic.js";
 
 /**
  * CloudflareWorkerEndpoint encapsulates all the Restate services served by this endpoint.

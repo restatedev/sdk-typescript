@@ -26,9 +26,9 @@ import type {
   Output,
   Send,
   WorkflowSubmission,
-} from "./api";
+} from "./api.js";
 
-import { Opts, SendOpts } from "./api";
+import { Opts, SendOpts } from "./api.js";
 
 /**
  * Connect to the restate Ingress

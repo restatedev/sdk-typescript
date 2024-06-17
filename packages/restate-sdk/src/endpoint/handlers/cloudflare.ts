@@ -14,7 +14,7 @@ import {
   type Request,
   Response,
 } from "@cloudflare/workers-types";
-import type { GenericHandler, RestateRequest } from "./generic";
+import type { GenericHandler, RestateRequest } from "./generic.js";
 
 export class CloudflareHandler implements ExportedHandler {
   constructor(private readonly handler: GenericHandler) {}

@@ -27,8 +27,8 @@ export type {
   IngresCallOptions,
   Send,
   IngresSendOptions,
-} from "./api";
+} from "./api.js";
 
-export { Opts, SendOpts } from "./api";
+export { Opts, SendOpts } from "./api.js";
 
-export { connect } from "./ingress";
+export { connect } from "./ingress.js";

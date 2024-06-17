@@ -21,11 +21,11 @@
 // at this point the decodedStream is a high level stream of objects {header, message}
 
 import * as stream from "node:stream";
-import { PROTOBUF_MESSAGE_BY_TYPE } from "../types/protocol";
-import { Header, Message } from "../types/types";
-import { ensureError } from "../types/errors";
+import { PROTOBUF_MESSAGE_BY_TYPE } from "../types/protocol.js";
+import { Header, Message } from "../types/types.js";
+import { ensureError } from "../types/errors.js";
 import { Buffer } from "node:buffer";
-import { readBigUInt64BE } from "../utils/buffer";
+import { readBigUInt64BE } from "../utils/buffer.js";
 
 type Output = { push(msg: Message): void };
 type DecoderState = { state: number; header: Header | undefined; buf: Buffer };

@@ -1,5 +1,5 @@
-import { encodeMessages } from "../io/encoder";
-import type { Message } from "../types/types";
+import { encodeMessages } from "../io/encoder.js";
+import type { Message } from "../types/types.js";
 import type { Buffer } from "node:buffer";
 
 export class BufferedConnection {

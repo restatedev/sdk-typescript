@@ -10,8 +10,8 @@
  */
 
 import { describe, expect } from "@jest/globals";
-import type { TestGreeter } from "./testdriver";
-import { TestDriver, TestResponse } from "./testdriver";
+import type { TestGreeter } from "./testdriver.js";
+import { TestDriver, TestResponse } from "./testdriver.js";
 import {
   END_MESSAGE,
   greetRequest,
@@ -19,7 +19,7 @@ import {
   inputMessage,
   outputMessage,
   startMessage,
-} from "./protoutils";
+} from "./protoutils.js";
 
 class Greeter implements TestGreeter {
   async greet(): Promise<TestResponse> {

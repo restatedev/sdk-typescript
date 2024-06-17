@@ -2,7 +2,7 @@ import {
   CompletablePromise,
   wrapDeeply,
   type WrappedPromise,
-} from "./utils/promises";
+} from "./utils/promises.js";
 
 export enum PromiseType {
   JournalEntry,

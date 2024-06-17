@@ -10,12 +10,12 @@
  */
 
 import type * as stream from "node:stream";
-import { streamDecoder } from "../io/decoder";
-import type { Connection, RestateStreamConsumer } from "./connection";
-import type { Message } from "../types/types";
-import { rlog } from "../logger";
+import { streamDecoder } from "../io/decoder.js";
+import type { Connection, RestateStreamConsumer } from "./connection.js";
+import type { Message } from "../types/types.js";
+import { rlog } from "../logger.js";
 import { finished } from "node:stream/promises";
-import { BufferedConnection } from "./buffered_connection";
+import { BufferedConnection } from "./buffered_connection.js";
 import type { Http2ServerRequest } from "node:http2";
 import { type IncomingHttpHeaders } from "node:http2";
 

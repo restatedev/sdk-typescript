@@ -10,7 +10,7 @@
  */
 
 import { describe, expect } from "@jest/globals";
-import type * as restate from "../src/public_api";
+import type * as restate from "../src/public_api.js";
 import {
   awakeableMessage,
   checkJournalMismatchError,
@@ -26,11 +26,11 @@ import {
   startMessage,
   suspensionMessage,
   END_MESSAGE,
-} from "./protoutils";
+} from "./protoutils.js";
 
-import type { TestGreeter } from "./testdriver";
-import { TestDriver, TestResponse } from "./testdriver";
-import { ProtocolMode } from "../src/types/discovery";
+import type { TestGreeter } from "./testdriver.js";
+import { TestDriver, TestResponse } from "./testdriver.js";
+import { ProtocolMode } from "../src/types/discovery.js";
 
 class AwakeableGreeter implements TestGreeter {
   async greet(ctx: restate.ObjectContext): Promise<TestResponse> {
