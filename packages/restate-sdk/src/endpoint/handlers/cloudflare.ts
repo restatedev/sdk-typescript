@@ -9,8 +9,9 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { ExportedHandler, Request, Response } from "@cloudflare/workers-types";
-import { GenericHandler, RestateRequest } from "./generic";
+import type { ExportedHandler, Request } from "@cloudflare/workers-types";
+import { Response } from "@cloudflare/workers-types";
+import type { GenericHandler, RestateRequest } from "./generic";
 
 export class CloudflareHandler implements ExportedHandler {
   constructor(private readonly handler: GenericHandler) {}

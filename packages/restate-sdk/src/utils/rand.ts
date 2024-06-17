@@ -12,7 +12,7 @@
 //! Some parts copied from https://github.com/uuidjs/uuid/blob/main/src/stringify.js
 //! License MIT
 
-import { Rand } from "../context";
+import type { Rand } from "../context";
 import { createHash } from "node:crypto";
 import { Buffer } from "node:buffer";
 import { readBigUInt64LE } from "./buffer";

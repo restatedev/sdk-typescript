@@ -12,7 +12,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-namespace */
 /* eslint-disable @typescript-eslint/ban-types */
-import {
+import type {
   CombineablePromise,
   Context,
   ObjectContext,
@@ -27,7 +27,7 @@ import {
   serializeNoop,
 } from "../utils/serde";
 
-import {
+import type {
   ServiceHandler,
   ServiceDefinition,
   ObjectHandler,

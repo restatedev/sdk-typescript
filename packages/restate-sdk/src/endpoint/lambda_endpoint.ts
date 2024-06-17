@@ -15,12 +15,12 @@ import type {
 } from "@restatedev/restate-sdk-core";
 
 import { rlog } from "../logger";
-import { Component } from "../types/components";
+import type { Component } from "../types/components";
 
 import type { KeySetV1 } from "./request_signing/v1";
 import type { WorkflowDefinition } from "@restatedev/restate-sdk-core";
 import { EndpointBuilder } from "./endpoint_builder";
-import {
+import type {
   RestateEndpoint,
   RestateEndpointBase,
   ServiceBundle,

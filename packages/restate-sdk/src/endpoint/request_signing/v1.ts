@@ -10,8 +10,10 @@
  */
 
 import { Buffer } from "node:buffer";
-import { headerValue, ValidateResponse, ValidateSuccess } from "./validate";
-import { importKey, Key, verify } from "./ed25519";
+import type { ValidateResponse, ValidateSuccess } from "./validate";
+import { headerValue } from "./validate";
+import type { Key } from "./ed25519";
+import { importKey, verify } from "./ed25519";
 import base from "./basex";
 
 const JWT_HEADER = "x-restate-jwt-v1";

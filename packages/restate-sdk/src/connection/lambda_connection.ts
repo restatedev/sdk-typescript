@@ -9,14 +9,14 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { Connection } from "./connection";
+import type { Connection } from "./connection";
 import { encodeMessage } from "../io/encoder";
 import {
   ERROR_MESSAGE_TYPE,
   OUTPUT_ENTRY_MESSAGE_TYPE,
   SUSPENSION_MESSAGE_TYPE,
 } from "../types/protocol";
-import { Message } from "../types/types";
+import type { Message } from "../types/types";
 import { rlog } from "../logger";
 import { Buffer } from "node:buffer";
 

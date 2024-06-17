@@ -9,7 +9,7 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { Message } from "../types/types";
+import type { Message } from "../types/types";
 
 /**
  * A connection from the service/SDK to Restate.
