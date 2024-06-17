@@ -9,22 +9,19 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-/* eslint-disable @typescript-eslint/ban-types */
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import type {
   ServiceDefinition,
   VirtualObjectDefinition,
 } from "@restatedev/restate-sdk-core";
 
 import { rlog } from "../logger";
-import type { Component } from "../types/components";
+import { Component } from "../types/components";
 
 import type { KeySetV1 } from "./request_signing/v1";
 import type { WorkflowDefinition } from "@restatedev/restate-sdk-core";
 import { EndpointBuilder } from "./endpoint_builder";
-import type { ExportedHandler } from "@cloudflare/workers-types";
-import type { RestateEndpointBase, ServiceBundle } from "../endpoint";
+import { ExportedHandler } from "@cloudflare/workers-types";
+import { RestateEndpointBase, ServiceBundle } from "../endpoint";
 import { CloudflareHandler } from "./handlers/cloudflare";
 import { GenericHandler } from "./handlers/generic";
 
@@ -63,6 +60,7 @@ export class CloudflareWorkerEndpointImpl implements CloudflareWorkerEndpoint {
   }
 
   bindBundle(services: ServiceBundle): CloudflareWorkerEndpoint {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     services.registerServices(this as any);
     return this;
   }

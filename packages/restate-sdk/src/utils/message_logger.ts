@@ -14,9 +14,9 @@
 
 import { formatMessageType } from "../types/protocol";
 import { formatMessageAsJson } from "./utils";
-import type { LoggerContext } from "../logger";
 import {
   createRestateConsole,
+  LoggerContext,
   RESTATE_LOG_LEVEL,
   RestateLogLevel,
 } from "../logger";

@@ -15,15 +15,14 @@ import {
   START_MESSAGE_TYPE,
   StartMessage,
 } from "../src/types/protocol";
-import type { Connection } from "../src/connection/connection";
+import { Connection } from "../src/connection/connection";
 import { formatMessageAsJson } from "../src/utils/utils";
 import { Message } from "../src/types/types";
 import { rlog } from "../src/logger";
 import { StateMachine } from "../src/state_machine";
 import { InvocationBuilder } from "../src/invocation";
-import type { ObjectContext } from "../src/context";
-import type { VirtualObjectDefinition } from "../src/public_api";
-import { object } from "../src/public_api";
+import { ObjectContext } from "../src/context";
+import { object, VirtualObjectDefinition } from "../src/public_api";
 import { ProtocolMode } from "../src/types/discovery";
 import { HandlerKind } from "../src/types/rpc";
 import { NodeEndpoint } from "../src/endpoint/node_endpoint";

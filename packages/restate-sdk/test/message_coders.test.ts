@@ -10,7 +10,7 @@
  */
 
 import { streamDecoder } from "../src/io/decoder";
-import type { Message } from "../src/types/types";
+import { Message } from "../src/types/types";
 import { backgroundInvokeMessage } from "./protoutils";
 import { encodeMessage } from "../src/io/encoder";
 import { describe, expect, it } from "vitest";

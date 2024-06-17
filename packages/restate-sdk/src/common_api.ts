@@ -9,7 +9,7 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-export type {
+export {
   Context,
   ObjectContext,
   ObjectSharedContext,
@@ -28,5 +28,5 @@ export type {
   WorkflowDefinition,
 } from "@restatedev/restate-sdk-core";
 
-export type { ServiceBundle, RestateEndpoint } from "./endpoint";
+export { ServiceBundle, RestateEndpoint } from "./endpoint";
 export { RestateError, TerminalError, TimeoutError } from "./types/errors";

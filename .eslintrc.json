@@ -12,7 +12,6 @@
   },
   "plugins": ["@typescript-eslint"],
   "rules": {
-    "no-console": "error",
-    "@typescript-eslint/consistent-type-imports": "error"
+    "no-console": "error"
   }
 }

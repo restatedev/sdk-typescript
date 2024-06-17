@@ -11,8 +11,7 @@
 
 import stream from "node:stream";
 import { PROTOBUF_MESSAGE_BY_TYPE } from "../types/protocol";
-import type { Message } from "../types/types";
-import { Header } from "../types/types";
+import { Header, Message } from "../types/types";
 import { Buffer } from "node:buffer";
 import { writeBigUInt64BE } from "../utils/buffer";
 

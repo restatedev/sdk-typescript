@@ -11,7 +11,7 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import type {
+import {
   OneWayCallEntryMessage,
   ClearStateEntryMessage,
   CompleteAwakeableEntryMessage,

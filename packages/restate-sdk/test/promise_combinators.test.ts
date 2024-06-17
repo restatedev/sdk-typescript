@@ -9,9 +9,13 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import type * as restate from "../src/public_api";
-import type { TestGreeter } from "./testdriver";
-import { GreeterApi, TestDriver, TestResponse } from "./testdriver";
+import * as restate from "../src/public_api";
+import {
+  GreeterApi,
+  TestDriver,
+  TestGreeter,
+  TestResponse,
+} from "./testdriver";
 import {
   awakeableMessage,
   completionMessage,

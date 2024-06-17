@@ -1,6 +1,6 @@
 import { encodeMessages } from "../io/encoder";
-import type { Message } from "../types/types";
-import type { Buffer } from "node:buffer";
+import { Message } from "../types/types";
+import { Buffer } from "node:buffer";
 
 export class BufferedConnection {
   private queue: Message[] = [];
