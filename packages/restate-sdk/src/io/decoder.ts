@@ -26,6 +26,7 @@ import { Header, Message } from "../types/types";
 import assert from "node:assert";
 import { ensureError } from "../types/errors";
 import { Buffer } from "node:buffer";
+import { readBigUInt64BE } from "../utils/buffer";
 
 type Output = { push(msg: Message): void };
 type DecoderState = { state: number; header: Header | undefined; buf: Buffer };
@@ -157,17 +158,4 @@ export function decodeMessagesBuffer(buffer: Buffer): Message[] {
   }
 
   return decodedEntries;
-}
-
-function readBigUInt64BE(buf: Buffer): bigint {
-  return (
-    (BigInt(buf.readUInt8(0)) << 56n) |
-    (BigInt(buf.readUInt8(1)) << 48n) |
-    (BigInt(buf.readUInt8(2)) << 40n) |
-    (BigInt(buf.readUInt8(3)) << 32n) |
-    (BigInt(buf.readUInt8(4)) << 24n) |
-    (BigInt(buf.readUInt8(5)) << 16n) |
-    (BigInt(buf.readUInt8(6)) << 8n) |
-    BigInt(buf.readUInt8(7))
-  );
 }

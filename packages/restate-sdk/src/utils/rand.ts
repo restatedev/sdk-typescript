@@ -17,6 +17,7 @@ import { INTERNAL_ERROR_CODE, TerminalError } from "../types/errors";
 import { CallContextType, ContextImpl } from "../context_impl";
 import { createHash } from "node:crypto";
 import { Buffer } from "node:buffer";
+import { readBigUInt64LE } from "./buffer";
 
 export class RandImpl implements Rand {
   private randstate256: [bigint, bigint, bigint, bigint];
@@ -27,10 +28,10 @@ export class RandImpl implements Rand {
       const hash = createHash("sha256").update(id).digest();
 
       this.randstate256 = [
-        hash.readBigUInt64LE(0),
-        hash.readBigUInt64LE(8),
-        hash.readBigUInt64LE(16),
-        hash.readBigUInt64LE(24),
+        readBigUInt64LE(hash, 0),
+        readBigUInt64LE(hash, 8),
+        readBigUInt64LE(hash, 16),
+        readBigUInt64LE(hash, 24),
       ];
     } else {
       this.randstate256 = id;
