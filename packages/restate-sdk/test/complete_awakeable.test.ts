@@ -29,6 +29,7 @@ import { describe, expect, it } from "vitest";
 class ResolveAwakeableGreeter implements TestGreeter {
   constructor(readonly payload: string | undefined) {}
 
+  // eslint-disable-next-line @typescript-eslint/require-await
   async greet(ctx: restate.ObjectContext): Promise<TestResponse> {
     const awakeableIdentifier = getAwakeableId(1);
     ctx.resolveAwakeable(awakeableIdentifier, this.payload);
@@ -137,6 +138,7 @@ describe("ResolveAwakeableGreeter", () => {
 class RejectAwakeableGreeter implements TestGreeter {
   constructor(readonly reason: string) {}
 
+  // eslint-disable-next-line @typescript-eslint/require-await
   async greet(ctx: restate.ObjectContext): Promise<TestResponse> {
     const awakeableIdentifier = getAwakeableId(1);
     ctx.rejectAwakeable(awakeableIdentifier, this.reason);

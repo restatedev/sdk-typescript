@@ -60,7 +60,8 @@ function preparePromiseCombinator(
   const combinator = combinatorConstructor(
     promisesWithProxyPromise.map((v) => v.proxyPromise.promise)
   ).finally(
-    async () =>
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
+    async (): Promise<void> =>
       // Once the combinator is resolved, notify back.
       await onCombinatorResolved(combinatorIndex)
   );

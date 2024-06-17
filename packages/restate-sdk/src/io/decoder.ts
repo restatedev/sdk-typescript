@@ -23,6 +23,7 @@
 import stream from "node:stream";
 import { PROTOBUF_MESSAGE_BY_TYPE } from "../types/protocol";
 import { Header, Message } from "../types/types";
+import { AnyMessage } from "@bufbuild/protobuf";
 import { ensureError } from "../types/errors";
 import { Buffer } from "node:buffer";
 import { readBigUInt64BE } from "../utils/buffer";
@@ -41,7 +42,7 @@ function initialDecoderState(buf: Buffer): DecoderState {
   };
 }
 
-function appendBufferToDecoder(state: DecoderState, chunk: Buffer) {
+function appendBufferToDecoder(state: DecoderState, chunk: Uint8Array) {
   state.buf = Buffer.concat([state.buf, chunk]);
 }
 
@@ -81,8 +82,7 @@ function decodeMessages(decoderState: DecoderState, out: Output): DecoderState {
         if (pbType === undefined) {
           throw new Error("Got unknown message type " + header.messageType);
         } else {
-          //eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const message = (pbType as any).fromBinary(frame);
+          const message = (pbType as unknown as AnyMessage).fromBinary(frame);
           out.push(
             new Message(
               header.messageType,
@@ -110,7 +110,7 @@ export function streamDecoder(): stream.Transform {
 
     transform(chunk, _encoding, cb) {
       try {
-        appendBufferToDecoder(decoderState, chunk);
+        appendBufferToDecoder(decoderState, chunk as Uint8Array);
         decoderState = decodeMessages(decoderState, this);
         cb();
       } catch (e) {

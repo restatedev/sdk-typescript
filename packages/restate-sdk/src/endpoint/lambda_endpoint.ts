@@ -20,7 +20,11 @@ import { Component } from "../types/components";
 import type { KeySetV1 } from "./request_signing/v1";
 import type { WorkflowDefinition } from "@restatedev/restate-sdk-core";
 import { EndpointBuilder } from "./endpoint_builder";
-import { RestateEndpointBase, ServiceBundle } from "../endpoint";
+import {
+  RestateEndpoint,
+  RestateEndpointBase,
+  ServiceBundle,
+} from "../endpoint";
 import { GenericHandler } from "./handlers/generic";
 import { LambdaHandler } from "./handlers/lambda";
 
@@ -59,8 +63,7 @@ export class LambdaEndpointImpl implements LambdaEndpoint {
   }
 
   bindBundle(services: ServiceBundle): LambdaEndpoint {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    services.registerServices(this as any);
+    services.registerServices(this as unknown as RestateEndpoint);
     return this;
   }
 

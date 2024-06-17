@@ -59,9 +59,9 @@ class GreeterThrowsRecoverable implements TestGreeter {
 class GreeterTriesToCatchNonTerminal implements TestGreeter {
   async greet(ctx: ObjectContext): Promise<TestResponse> {
     try {
-      const result = await ctx.run("greet", async () => {
-        throw new TypeError("oh no");
-      });
+      const result = await ctx.run("greet", () =>
+        Promise.reject(new TypeError("oh no"))
+      );
       return result;
     } catch (e) {
       ctx.set("foo", "bar");

@@ -13,7 +13,7 @@ import * as restate from "@restatedev/restate-sdk";
 import { describe, it } from "vitest";
 
 describe("HelloGreeter", () => {
-  it("Demonstrates how to write a simple services", async () => {
+  it("Demonstrates how to write a simple services", () => {
     const myservice = restate.service({
       name: "myservice",
       handlers: {

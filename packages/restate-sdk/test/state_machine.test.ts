@@ -21,6 +21,7 @@ import {
 import { describe, expect, it } from "vitest";
 
 class Greeter implements TestGreeter {
+  // eslint-disable-next-line @typescript-eslint/require-await
   async greet(): Promise<TestResponse> {
     return TestResponse.create({ greeting: `Hello` });
   }

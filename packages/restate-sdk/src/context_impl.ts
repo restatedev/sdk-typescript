@@ -233,7 +233,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     const msg = this.stateMachine.localStateStore.set(name, value);
     this.stateMachine
       .handleUserCodeMessage(SET_STATE_ENTRY_MESSAGE_TYPE, msg)
-      .catch((e) => this.stateMachine.handleDanglingPromiseError(e));
+      .catch((e) => this.stateMachine.handleDanglingPromiseError(e as Error));
   }
 
   public clear(name: string): void {
@@ -242,7 +242,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     const msg = this.stateMachine.localStateStore.clear(name);
     this.stateMachine
       .handleUserCodeMessage(CLEAR_STATE_ENTRY_MESSAGE_TYPE, msg)
-      .catch((e) => this.stateMachine.handleDanglingPromiseError(e));
+      .catch((e) => this.stateMachine.handleDanglingPromiseError(e as Error));
   }
 
   public clearAll(): void {
@@ -251,7 +251,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     const msg = this.stateMachine.localStateStore.clearAll();
     this.stateMachine
       .handleUserCodeMessage(CLEAR_ALL_STATE_ENTRY_MESSAGE_TYPE, msg)
-      .catch((e) => this.stateMachine.handleDanglingPromiseError(e));
+      .catch((e) => this.stateMachine.handleDanglingPromiseError(e as Error));
   }
 
   // --- Calls, background calls, etc
@@ -275,7 +275,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     return this.markCombineablePromise(
       this.stateMachine
         .handleUserCodeMessage(INVOKE_ENTRY_MESSAGE_TYPE, msg)
-        .transform((v) => deserializeJson(v as Uint8Array))
+        .transform((v): any => deserializeJson(v as Uint8Array))
     );
   }
 
@@ -358,7 +358,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
               requestBytes,
               opts?.delay
             ).catch((e) => {
-              this.stateMachine.handleDanglingPromiseError(e);
+              this.stateMachine.handleDanglingPromiseError(e as Error);
             });
           };
         },
@@ -387,7 +387,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
               opts?.delay,
               key
             ).catch((e) => {
-              this.stateMachine.handleDanglingPromiseError(e);
+              this.stateMachine.handleDanglingPromiseError(e as Error);
             });
           };
         },
@@ -416,7 +416,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
               opts?.delay,
               key
             ).catch((e) => {
-              this.stateMachine.handleDanglingPromiseError(e);
+              this.stateMachine.handleDanglingPromiseError(e as Error);
             });
           };
         },
@@ -616,7 +616,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
         COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
         new CompleteAwakeableEntryMessage(base)
       )
-      .catch((e) => this.stateMachine.handleDanglingPromiseError(e));
+      .catch((e) => this.stateMachine.handleDanglingPromiseError(e as Error));
   }
 
   // Used by static methods of CombineablePromise
@@ -733,7 +733,8 @@ const RESTATE_CTX_SYMBOL = Symbol("restateContext");
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function extractContext(n: any): ContextImpl | undefined {
-  return n[RESTATE_CTX_SYMBOL];
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+  return n[RESTATE_CTX_SYMBOL] as ContextImpl | undefined;
 }
 
 class DurablePromiseImpl<T> implements DurablePromise<T> {
@@ -778,7 +779,7 @@ class DurablePromiseImpl<T> implements DurablePromise<T> {
     return this.ctx.markCombineablePromise(
       this.ctx.stateMachine
         .handleUserCodeMessage(GET_PROMISE_MESSAGE_TYPE, msg)
-        .transform((v) => deserializeJson(v as Uint8Array))
+        .transform((v): any => deserializeJson(v as Uint8Array))
     );
   }
 
@@ -789,7 +790,7 @@ class DurablePromiseImpl<T> implements DurablePromise<T> {
 
     return this.ctx.stateMachine
       .handleUserCodeMessage(PEEK_PROMISE_MESSAGE_TYPE, msg)
-      .transform((v) =>
+      .transform((v): any =>
         v instanceof Empty ? undefined : deserializeJson(v as Uint8Array)
       );
   }

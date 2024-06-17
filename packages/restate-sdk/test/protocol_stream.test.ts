@@ -19,7 +19,7 @@ import {
 } from "../src/types/protocol";
 import { RestateHttp2Connection } from "../src/connection/http_connection";
 import { Header, Message } from "../src/types/types";
-import stream from "stream";
+import * as stream from "stream";
 import { setTimeout } from "timers/promises";
 import { CompletablePromise } from "../src/utils/promises";
 import { describe, expect, it } from "vitest";
@@ -82,7 +82,7 @@ describe("Restate Streaming Connection", () => {
     });
 
     // now, let's simulate sending a message
-    restateStream.send(
+    void restateStream.send(
       new Message(
         START_MESSAGE_TYPE,
         new StartMessage({
@@ -107,7 +107,7 @@ describe("Restate Streaming Connection", () => {
     const connection = new RestateHttp2Connection({}, duplex);
 
     // enqueue small data, below watermark, so that 'end' can immediately be written
-    connection.send(newMessage(10));
+    void connection.send(newMessage(10));
     const done = connection.end();
 
     await verifyPromisePending(done);
@@ -124,9 +124,9 @@ describe("Restate Streaming Connection", () => {
     const connection = new RestateHttp2Connection({}, duplex);
 
     // enqueue quite some data, before allowing any bytes to flow any
-    connection.send(newMessage(1024));
-    connection.send(newMessage(1024));
-    connection.send(newMessage(1024));
+    void connection.send(newMessage(1024));
+    void connection.send(newMessage(1024));
+    void connection.send(newMessage(1024));
     const done = connection.end();
 
     await verifyPromisePending(done);
@@ -155,7 +155,7 @@ describe("Restate Streaming Connection", () => {
     const connection = new RestateHttp2Connection({}, duplex);
 
     // enqueue a message that is too large
-    connection.send(newMessage(800));
+    void connection.send(newMessage(800));
     const promise2 = connection.send(newMessage(800));
 
     await verifyPromisePending(promise2);
@@ -166,7 +166,7 @@ describe("Restate Streaming Connection", () => {
     const connection = new RestateHttp2Connection({}, duplex);
 
     // enqueue a message that is too large
-    connection.send(newMessage(800));
+    void connection.send(newMessage(800));
     const promise2 = connection.send(newMessage(800));
 
     await verifyPromisePending(promise2);
@@ -216,7 +216,7 @@ function sameTruthness<A, B>(a: A, b: B) {
 
 async function verifyPromisePending(promise: Promise<unknown>) {
   let complete = false;
-  promise.finally(() => {
+  void promise.finally(() => {
     complete = true;
   });
 
@@ -227,7 +227,7 @@ async function verifyPromisePending(promise: Promise<unknown>) {
 
 async function verifyPromiseResolved(promise: Promise<unknown>) {
   let complete = false;
-  promise.finally(() => {
+  void promise.finally(() => {
     complete = true;
   });
 
@@ -272,7 +272,7 @@ function mockBackpressuredDuplex(highWaterMark = 128) {
 
   const duplex = new stream.Duplex({
     highWaterMark,
-    write(chunk, _encoding, callback) {
+    write(chunk: Uint8Array, _encoding, callback) {
       if (permittedBytes >= chunk.length) {
         permittedBytes -= chunk.length;
         process.nextTick(callback);

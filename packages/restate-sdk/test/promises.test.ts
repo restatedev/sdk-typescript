@@ -28,7 +28,7 @@ describe("promises.wrapDeeply", () => {
     p = wrapDeeply(p, () => {
       callbackInvokeOrder.push(1);
     });
-    p = (p as WrappedPromise<unknown>).transform((v) => v + " transformed");
+    p = (p as WrappedPromise<string>).transform((v) => v + " transformed");
 
     completablePromise.resolve("my value");
 

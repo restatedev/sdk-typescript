@@ -159,7 +159,7 @@ export function createRestateConsole(
     info: loggerForLevel(RestateLogLevel.INFO, shouldLog, prefix),
     warn: loggerForLevel(RestateLogLevel.WARN, shouldLog, prefix),
     error: loggerForLevel(RestateLogLevel.ERROR, shouldLog, prefix),
-  });
+  }) as Console;
 }
 
 /**

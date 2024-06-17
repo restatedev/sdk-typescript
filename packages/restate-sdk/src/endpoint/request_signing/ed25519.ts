@@ -60,6 +60,7 @@ export async function verify(
       webKey = await key.key;
     } catch (e) {
       throw new Error(
+        // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
         `key ${key.kid} failed to parse on startup, this will affect all requests signed with it: ${e}`
       );
     }

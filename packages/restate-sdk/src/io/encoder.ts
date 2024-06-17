@@ -23,7 +23,7 @@ export function streamEncoder(): stream.Transform {
     transform(msg, _encoding, cb) {
       // We do not catch errors here because we want them to be handled at the Connection level,
       // so we can close the state machine.
-      const result = encodeMessage(msg);
+      const result = encodeMessage(msg as Message);
       cb(null, result);
     },
   });

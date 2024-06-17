@@ -115,7 +115,7 @@ export class HandlerWrapper {
     // we must create here a copy of the handler
     // to be able to reuse the original handler in other places.
     // like for example the same logic but under different routes.
-    const handlerCopy = function (this: any, ...args: any[]) {
+    const handlerCopy = function (this: any, ...args: any[]): any {
       return handler.apply(this, args);
     };
 
@@ -130,7 +130,8 @@ export class HandlerWrapper {
   }
 
   public static fromHandler(handler: any): HandlerWrapper | undefined {
-    return handler[HANDLER_SYMBOL];
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    return handler[HANDLER_SYMBOL] as HandlerWrapper | undefined;
   }
 
   private constructor(
@@ -143,12 +144,12 @@ export class HandlerWrapper {
   ) {}
 
   bindInstance(t: unknown) {
-    this.handler = this.handler.bind(t);
+    this.handler = this.handler.bind(t) as Function;
   }
 
   async invoke(context: unknown, input: Uint8Array) {
     const req = this.deserializer(input);
-    const res = await this.handler(context, req);
+    const res: unknown = await this.handler(context, req);
     return this.serializer(res);
   }
 
@@ -447,8 +448,8 @@ export const service = <P extends string, M>(service: {
 
   return {
     name: service.name,
-    service: Object.fromEntries(handlers),
-  } as any;
+    service: Object.fromEntries(handlers) as object,
+  } as ServiceDefinition<P, M>;
 };
 
 // ----------- objects ----------------------------------------------
@@ -535,8 +536,8 @@ export const object = <P extends string, M>(object: {
 
   return {
     name: object.name,
-    object: Object.fromEntries(handlers),
-  } as any;
+    object: Object.fromEntries(handlers) as object,
+  } as VirtualObjectDefinition<P, M>;
 };
 
 // ----------- workflows ----------------------------------------------
@@ -665,6 +666,6 @@ export const workflow = <P extends string, M>(workflow: {
 
   return {
     name: workflow.name,
-    workflow: Object.fromEntries(handlers),
-  } as any;
+    workflow: Object.fromEntries(handlers) as object,
+  } as WorkflowDefinition<P, M>;
 };

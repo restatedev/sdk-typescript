@@ -34,9 +34,9 @@
   "devDependencies": {
     "@release-it-plugins/workspaces": "^4.2.0",
     "@types/node": "^20.10.4",
-    "@typescript-eslint/eslint-plugin": "^5.53.0",
-    "@typescript-eslint/parser": "^5.53.0",
-    "eslint": "^8.35.0",
+    "@typescript-eslint/eslint-plugin": "^7.13.0",
+    "@typescript-eslint/parser": "^7.13.0",
+    "eslint": "^8.57.0",
     "prettier": "^2.8.4",
     "release-it": "^17.2.1",
     "ts-node-dev": "^2.0.0",

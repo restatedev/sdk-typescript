@@ -30,21 +30,21 @@ import { KeySetV1, parseKeySetV1 } from "./request_signing/v1";
 import { WorkflowDefinition } from "@restatedev/restate-sdk-core";
 
 function isServiceDefinition<P extends string, M>(
-  m: any
+  m: Record<string, any>
 ): m is ServiceDefinition<P, M> & { service: M } {
-  return m && m.service;
+  return m && m.service !== undefined;
 }
 
 function isObjectDefinition<P extends string, M>(
-  m: any
+  m: Record<string, any>
 ): m is VirtualObjectDefinition<P, M> & { object: M } {
-  return m && m.object;
+  return m && m.object !== undefined;
 }
 
 function isWorkflowDefinition<P extends string, M>(
-  m: any
+  m: Record<string, any>
 ): m is WorkflowDefinition<P, M> & { workflow: M } {
-  return m && m.workflow;
+  return m && m.workflow !== undefined;
 }
 
 export class EndpointBuilder {
@@ -125,7 +125,9 @@ export class EndpointBuilder {
     }
     const component = new ServiceComponent(name);
 
-    for (const [route, handler] of Object.entries(router)) {
+    for (const [route, handler] of Object.entries(
+      router as { [s: string]: any }
+    )) {
       const wrapper = HandlerWrapper.fromHandler(handler);
       if (!wrapper) {
         throw new TypeError(`${route} is not a restate handler.`);
@@ -143,7 +145,9 @@ export class EndpointBuilder {
     }
     const component = new VirtualObjectComponent(name);
 
-    for (const [route, handler] of Object.entries(router)) {
+    for (const [route, handler] of Object.entries(
+      router as { [s: string]: any }
+    )) {
       const wrapper = HandlerWrapper.fromHandler(handler);
       if (!wrapper) {
         throw new TypeError(`${route} is not a restate handler.`);
@@ -160,7 +164,9 @@ export class EndpointBuilder {
     }
     const component = new WorkflowComponent(name);
 
-    for (const [route, handler] of Object.entries(workflow)) {
+    for (const [route, handler] of Object.entries(
+      workflow as { [s: string]: any }
+    )) {
       const wrapper = HandlerWrapper.fromHandler(handler);
       if (!wrapper) {
         throw new TypeError(`${route} is not a restate handler.`);
