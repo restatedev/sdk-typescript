@@ -9,7 +9,7 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import type stream from "node:stream";
+import type * as stream from "node:stream";
 import { streamDecoder } from "../io/decoder.js";
 import type { Connection, RestateStreamConsumer } from "./connection.js";
 import type { Message } from "../types/types.js";

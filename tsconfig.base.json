@@ -13,7 +13,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "allowSyntheticDefaultImports": true,
+    "allowSyntheticDefaultImports": false,
     "paths": {
       "@restatedev/restate-sdk-core": [
         "./packages/restate-sdk-core/src/public_api.ts"

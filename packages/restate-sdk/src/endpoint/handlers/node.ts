@@ -9,10 +9,10 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import stream from "node:stream";
+import * as stream from "node:stream";
 import { pipeline, finished } from "node:stream/promises";
 import type { Http2ServerRequest, Http2ServerResponse } from "http2";
-import type http2 from "http2";
+import type * as http2 from "http2";
 import { RestateHttp2Connection } from "../../connection/http_connection.js";
 import { ensureError } from "../../types/errors.js";
 import { InvocationBuilder } from "../../invocation.js";

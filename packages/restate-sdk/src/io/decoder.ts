@@ -20,7 +20,7 @@
 //
 // at this point the decodedStream is a high level stream of objects {header, message}
 
-import stream from "node:stream";
+import * as stream from "node:stream";
 import { PROTOBUF_MESSAGE_BY_TYPE } from "../types/protocol.js";
 import { Header, Message } from "../types/types.js";
 import type { AnyMessage } from "@bufbuild/protobuf";
