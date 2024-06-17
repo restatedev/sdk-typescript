@@ -21,14 +21,14 @@ import type {
 import { rlog } from "../logger";
 import type { Http2ServerRequest, Http2ServerResponse } from "http2";
 import * as http2 from "http2";
-import { Http2Handler } from "./http2_handler";
-import { LambdaHandler } from "./lambda_handler";
+import { Http2Handler } from "./handlers/node";
+import { LambdaHandler } from "./handlers/lambda";
 import { Component } from "../types/components";
 
 import type { KeySetV1 } from "./request_signing/v1";
 import type { WorkflowDefinition } from "@restatedev/restate-sdk-core";
 import { EndpointBuilder } from "./endpoint_builder";
-import { GenericHandler } from "./generic_handler";
+import { GenericHandler } from "./handlers/generic";
 
 export class NodeEndpoint implements RestateEndpoint {
   private builder: EndpointBuilder = new EndpointBuilder();

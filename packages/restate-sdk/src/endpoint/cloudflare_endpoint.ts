@@ -25,8 +25,8 @@ import type { WorkflowDefinition } from "@restatedev/restate-sdk-core";
 import { EndpointBuilder } from "./endpoint_builder";
 import { ExportedHandler } from "@cloudflare/workers-types";
 import { RestateEndpointBase, ServiceBundle } from "../endpoint";
-import { CloudflareHandler } from "./cloudflare_handler";
-import { GenericHandler } from "./generic_handler";
+import { CloudflareHandler } from "./handlers/cloudflare";
+import { GenericHandler } from "./handlers/generic";
 
 /**
  * CloudflareWorkerEndpoint encapsulates all the Restate services served by this endpoint.

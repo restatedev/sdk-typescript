@@ -10,7 +10,7 @@
  */
 
 import { ExportedHandler, Request, Response } from "@cloudflare/workers-types";
-import { GenericHandler, RestateRequest } from "./generic_handler";
+import { GenericHandler, RestateRequest } from "./generic";
 
 export class CloudflareHandler implements ExportedHandler {
   constructor(private readonly handler: GenericHandler) {}
