@@ -13,24 +13,26 @@
 //! License MIT
 
 import { Rand } from "../context";
-import { INTERNAL_ERROR_CODE, TerminalError } from "../types/errors";
-import { CallContextType, ContextImpl } from "../context_impl";
 import { createHash } from "node:crypto";
 import { Buffer } from "node:buffer";
+import { readBigUInt64LE } from "./buffer";
 
 export class RandImpl implements Rand {
   private randstate256: [bigint, bigint, bigint, bigint];
 
-  constructor(id: Buffer | [bigint, bigint, bigint, bigint]) {
+  constructor(
+    id: Buffer | [bigint, bigint, bigint, bigint],
+    private readonly checkState: (state: string) => void = () => undefined
+  ) {
     if (id instanceof Buffer) {
       // hash the invocation ID, which is known to contain 74 bits of entropy
       const hash = createHash("sha256").update(id).digest();
 
       this.randstate256 = [
-        hash.readBigUInt64LE(0),
-        hash.readBigUInt64LE(8),
-        hash.readBigUInt64LE(16),
-        hash.readBigUInt64LE(24),
+        readBigUInt64LE(hash, 0),
+        readBigUInt64LE(hash, 8),
+        readBigUInt64LE(hash, 16),
+        readBigUInt64LE(hash, 24),
       ];
     } else {
       this.randstate256 = id;
@@ -68,20 +70,10 @@ export class RandImpl implements Rand {
     return ((x << k) & RandImpl.U64_MASK) | (x >> (64n - k));
   }
 
-  checkContext() {
-    const context = ContextImpl.callContext.getStore();
-    if (context && context.type === CallContextType.Run) {
-      throw new TerminalError(
-        `You may not call methods on Rand from within a run().`,
-        { errorCode: INTERNAL_ERROR_CODE }
-      );
-    }
-  }
-
   static U53_MASK = (1n << 53n) - 1n;
 
   public random(): number {
-    this.checkContext();
+    this.checkState("rand.random");
 
     // first generate a uint in range [0,2^53), which can be mapped 1:1 to a float64 in [0,1)
     const u53 = this.u64() & RandImpl.U53_MASK;
@@ -90,7 +82,7 @@ export class RandImpl implements Rand {
   }
 
   public uuidv4(): string {
-    this.checkContext();
+    this.checkState("rand.uuidv4");
 
     const buf = Buffer.alloc(16);
     buf.writeBigUInt64LE(this.u64(), 0);

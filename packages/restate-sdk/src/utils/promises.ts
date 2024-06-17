@@ -42,7 +42,8 @@ export function wrapDeeply<T>(
       | null
       | undefined
   ) => WrappedPromise<TResult1 | TResult2>;
-  if (Object.hasOwn(promise, "transform")) {
+  // Object.hasOwn doesn't have great support yet, but this has the same effect
+  if (Object.prototype.hasOwnProperty.call(promise, "transform")) {
     const wrappedPromise = promise as WrappedPromise<T>;
     transform = (onfulfilled, onrejected) =>
       wrapDeeply(wrappedPromise.transform(onfulfilled, onrejected), onThen);
