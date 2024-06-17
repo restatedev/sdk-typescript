@@ -59,7 +59,6 @@ import {
   RunEntryMessage,
   StartMessage_StateEntry,
 } from "../src/generated/proto/protocol_pb.js";
-import { expect } from "@jest/globals";
 import { jsonSerialize, formatMessageAsJson } from "../src/utils/utils.js";
 import { rlog } from "../src/logger.js";
 import type { JournalErrorContext } from "../src/types/errors.js";

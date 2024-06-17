@@ -9,7 +9,6 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { describe, expect } from "@jest/globals";
 import type { WrappedPromise } from "../src/utils/promises.js";
 import { CompletablePromise, wrapDeeply } from "../src/utils/promises.js";
 

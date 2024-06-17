@@ -9,7 +9,6 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { describe, expect } from "@jest/globals";
 import { streamDecoder } from "../src/io/decoder.js";
 import type { Message } from "../src/types/types.js";
 import { backgroundInvokeMessage } from "./protoutils.js";

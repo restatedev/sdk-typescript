@@ -23,7 +23,6 @@ import {
   rejectAwakeableMessage,
   END_MESSAGE,
 } from "./protoutils.js";
-import { describe, expect } from "@jest/globals";
 import type { TestGreeter, TestResponse } from "./testdriver.js";
 import { TestDriver } from "./testdriver.js";
 

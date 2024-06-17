@@ -12,7 +12,6 @@
 import type { TestGreeter, TestRequest } from "./testdriver.js";
 import { TestDriver, TestResponse } from "./testdriver.js";
 import type * as restate from "../src/public_api.js";
-import { describe } from "@jest/globals";
 import { greetRequest, inputMessage, startMessage } from "./protoutils.js";
 
 const greeter: TestGreeter = {

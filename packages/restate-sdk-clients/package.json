@@ -31,7 +31,7 @@
     "build": "npm run build:cjs && npm run build:esm",
     "build:cjs": "tsc --module commonjs --verbatimModuleSyntax false --moduleResolution node10 --outDir ./dist/cjs --declaration --declarationDir ./dist/cjs && echo >./dist/cjs/package.json '{\"type\":\"commonjs\"}'",
     "build:esm": "tsc --outDir ./dist/esm --declaration --declarationDir ./dist/esm",
-    "test": "jest --silent --maxWorkers=1 --passWithNoTests",
+    "test": "vitest run --silent --passWithNoTests",
     "lint": "eslint --ignore-path .eslintignore --max-warnings=0 --ext .ts .",
     "format": "prettier --ignore-path .eslintignore --write \"**/*.+(js|ts|json)\"",
     "format-check": "prettier --ignore-path .eslintignore --check \"**/*.+(js|ts|json)\"",
@@ -42,13 +42,11 @@
     "@restatedev/restate-sdk-core": "^1.0.0"
   },
   "devDependencies": {
-    "@types/jest": "^29.4.0",
     "@types/node": "^20.10.4",
     "@typescript-eslint/eslint-plugin": "^7.13.0",
     "@typescript-eslint/parser": "^7.13.0",
     "eslint": "^8.35.0",
     "prettier": "^2.8.4",
-    "ts-jest": "^29.0.5",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.4.5"
   },

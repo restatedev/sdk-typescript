@@ -9,7 +9,6 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { describe, expect } from "@jest/globals";
 import type { TestGreeter } from "./testdriver.js";
 import { TestDriver, TestResponse } from "./testdriver.js";
 import {

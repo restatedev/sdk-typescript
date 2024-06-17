@@ -9,7 +9,6 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { describe, expect } from "@jest/globals";
 import { CompletablePromise } from "../src/utils/promises.js";
 import type { PromiseId } from "../src/promise_combinator_tracker.js";
 import {
