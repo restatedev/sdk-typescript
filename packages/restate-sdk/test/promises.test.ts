@@ -9,11 +9,8 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import {
-  CompletablePromise,
-  wrapDeeply,
-  WrappedPromise,
-} from "../src/utils/promises";
+import type { WrappedPromise } from "../src/utils/promises";
+import { CompletablePromise, wrapDeeply } from "../src/utils/promises";
 import { describe, expect, it } from "vitest";
 
 describe("promises.wrapDeeply", () => {

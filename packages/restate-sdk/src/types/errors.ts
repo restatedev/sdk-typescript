@@ -13,7 +13,7 @@
 
 import { ErrorMessage, Failure } from "../generated/proto/protocol_pb";
 import { formatMessageAsJson } from "../utils/utils";
-import * as p from "./protocol";
+import type * as p from "./protocol";
 
 export const INTERNAL_ERROR_CODE = 500;
 export const TIMEOUT_ERROR_CODE = 408;

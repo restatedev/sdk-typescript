@@ -9,15 +9,17 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
+import type {
+  GetStateEntryMessage,
+  GetStateKeysEntryMessage,
+  StartMessage_StateEntry,
+} from "./generated/proto/protocol_pb";
 import {
   ClearAllStateEntryMessage,
   ClearStateEntryMessage,
   Empty,
-  GetStateEntryMessage,
-  GetStateKeysEntryMessage,
   GetStateKeysEntryMessage_StateKeys,
   SetStateEntryMessage,
-  StartMessage_StateEntry,
 } from "./generated/proto/protocol_pb";
 import { jsonSerialize } from "./utils/utils";
 import { Buffer } from "node:buffer";
