@@ -28,6 +28,7 @@ import { Component } from "../types/components";
 import type { KeySetV1 } from "./request_signing/v1";
 import type { WorkflowDefinition } from "@restatedev/restate-sdk-core";
 import { EndpointBuilder } from "./endpoint_builder";
+import { GenericHandler } from "./generic_handler";
 
 export class NodeEndpoint implements RestateEndpoint {
   private builder: EndpointBuilder = new EndpointBuilder();
@@ -98,7 +99,8 @@ export class NodeEndpoint implements RestateEndpoint {
         )}]`
       );
     }
-    const handler = new LambdaHandler(this.builder);
+    const genericHandler = new GenericHandler(this.builder);
+    const handler = new LambdaHandler(genericHandler);
     return handler.handleRequest.bind(handler);
   }
 

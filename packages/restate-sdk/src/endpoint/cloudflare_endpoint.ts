@@ -18,7 +18,6 @@ import type {
 } from "@restatedev/restate-sdk-core";
 
 import { rlog } from "../logger";
-import { LambdaHandler } from "./lambda_handler";
 import { Component } from "../types/components";
 
 import type { KeySetV1 } from "./request_signing/v1";
@@ -26,6 +25,8 @@ import type { WorkflowDefinition } from "@restatedev/restate-sdk-core";
 import { EndpointBuilder } from "./endpoint_builder";
 import { ExportedHandler } from "@cloudflare/workers-types";
 import { RestateEndpointBase, ServiceBundle } from "../endpoint";
+import { CloudflareHandler } from "./cloudflare_handler";
+import { GenericHandler } from "./generic_handler";
 
 /**
  * CloudflareWorkerEndpoint encapsulates all the Restate services served by this endpoint.
@@ -94,7 +95,7 @@ export class CloudflareWorkerEndpointImpl implements CloudflareWorkerEndpoint {
         )}]`
       );
     }
-    const handler = new LambdaHandler(this.builder);
-    return {};
+    const genericHandler = new GenericHandler(this.builder);
+    return new CloudflareHandler(genericHandler);
   }
 }
