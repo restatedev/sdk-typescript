@@ -13,8 +13,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import * as d from "./discovery";
-import { ContextImpl } from "../context_impl";
-import { HandlerKind, HandlerWrapper } from "./rpc";
+import type { ContextImpl } from "../context_impl";
+import type { HandlerWrapper } from "./rpc";
+import { HandlerKind } from "./rpc";
 
 //
 // Interfaces

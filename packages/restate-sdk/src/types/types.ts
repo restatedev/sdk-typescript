@@ -9,6 +9,7 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
+import type { ProtocolMessage } from "./protocol";
 import {
   AWAKEABLE_ENTRY_MESSAGE_TYPE,
   COMPLETION_MESSAGE_TYPE,
@@ -19,7 +20,6 @@ import {
   GET_STATE_KEYS_ENTRY_MESSAGE_TYPE,
   KNOWN_MESSAGE_TYPES,
   PROTOBUF_MESSAGE_BY_TYPE,
-  ProtocolMessage,
   SLEEP_ENTRY_MESSAGE_TYPE,
   START_MESSAGE_TYPE,
   SUSPENSION_MESSAGE_TYPE,

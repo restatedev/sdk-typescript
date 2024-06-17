@@ -23,7 +23,7 @@
 import stream from "node:stream";
 import { PROTOBUF_MESSAGE_BY_TYPE } from "../types/protocol";
 import { Header, Message } from "../types/types";
-import { AnyMessage } from "@bufbuild/protobuf";
+import type { AnyMessage } from "@bufbuild/protobuf";
 import { ensureError } from "../types/errors";
 import { Buffer } from "node:buffer";
 import { readBigUInt64BE } from "../utils/buffer";

@@ -11,7 +11,7 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import {
+import type {
   CombineablePromise,
   ContextDate,
   DurablePromise,
@@ -22,7 +22,8 @@ import {
   SendOptions,
   WorkflowContext,
 } from "./context";
-import { StateMachine } from "./state_machine";
+import type { StateMachine } from "./state_machine";
+import type { GetStateKeysEntryMessage_StateKeys } from "./generated/proto/protocol_pb";
 import {
   AwakeableEntryMessage,
   OneWayCallEntryMessage,
@@ -30,7 +31,6 @@ import {
   Empty,
   GetStateEntryMessage,
   GetStateKeysEntryMessage,
-  GetStateKeysEntryMessage_StateKeys,
   CallEntryMessage,
   RunEntryMessage,
   SleepEntryMessage,
@@ -65,8 +65,10 @@ import {
   errorToFailure,
 } from "./types/errors";
 import { jsonSerialize, jsonDeserialize } from "./utils/utils";
-import { PartialMessage, protoInt64 } from "@bufbuild/protobuf";
-import { Client, HandlerKind, SendClient } from "./types/rpc";
+import type { PartialMessage } from "@bufbuild/protobuf";
+import { protoInt64 } from "@bufbuild/protobuf";
+import type { Client, SendClient } from "./types/rpc";
+import { HandlerKind } from "./types/rpc";
 import type {
   Service,
   ServiceDefinitionFrom,
@@ -77,7 +79,7 @@ import type {
 } from "@restatedev/restate-sdk-core";
 import { RandImpl } from "./utils/rand";
 import { newJournalEntryPromiseId } from "./promise_combinator_tracker";
-import { WrappedPromise } from "./utils/promises";
+import type { WrappedPromise } from "./utils/promises";
 import { Buffer } from "node:buffer";
 import { deserializeJson, serializeJson } from "./utils/serde";
 
