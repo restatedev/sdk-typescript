@@ -23,7 +23,6 @@
 import stream from "node:stream";
 import { PROTOBUF_MESSAGE_BY_TYPE } from "../types/protocol";
 import { Header, Message } from "../types/types";
-import assert from "node:assert";
 import { ensureError } from "../types/errors";
 import { Buffer } from "node:buffer";
 import { readBigUInt64BE } from "../utils/buffer";
@@ -158,4 +157,8 @@ export function decodeMessagesBuffer(buffer: Buffer): Message[] {
   }
 
   return decodedEntries;
+}
+
+function assert(value: boolean, msg?: string): asserts value {
+  if (!value) throw new Error(msg || "assertion error");
 }
