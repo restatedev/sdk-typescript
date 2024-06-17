@@ -13,15 +13,15 @@ import type {
   GetStateEntryMessage,
   GetStateKeysEntryMessage,
   StartMessage_StateEntry,
-} from "./generated/proto/protocol_pb";
+} from "./generated/proto/protocol_pb.js";
 import {
   ClearAllStateEntryMessage,
   ClearStateEntryMessage,
   Empty,
   GetStateKeysEntryMessage_StateKeys,
   SetStateEntryMessage,
-} from "./generated/proto/protocol_pb";
-import { jsonSerialize } from "./utils/utils";
+} from "./generated/proto/protocol_pb.js";
+import { jsonSerialize } from "./utils/utils.js";
 import { Buffer } from "node:buffer";
 
 export class LocalStateStore {

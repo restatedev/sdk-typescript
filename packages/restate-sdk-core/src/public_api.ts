@@ -18,4 +18,4 @@ export type {
   RestateWorkflowSharedContext,
   Workflow,
   WorkflowDefinitionFrom,
-} from "./core";
+} from "./core.js";

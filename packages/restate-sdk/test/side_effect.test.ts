@@ -9,8 +9,8 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import type { TestGreeter } from "./testdriver";
-import { TestDriver, TestResponse } from "./testdriver";
+import type { TestGreeter } from "./testdriver.js";
+import { TestDriver, TestResponse } from "./testdriver.js";
 import {
   END_MESSAGE,
   errorMessage,
@@ -22,10 +22,10 @@ import {
   suspensionMessage,
   greetResponse,
   failure,
-} from "./protoutils";
-import type { ObjectContext } from "../src/context";
-import { TerminalError } from "../src/public_api";
-import { SIDE_EFFECT_ENTRY_MESSAGE_TYPE } from "../src/types/protocol";
+} from "./protoutils.js";
+import type { ObjectContext } from "../src/context.js";
+import { TerminalError } from "../src/public_api.js";
+import { SIDE_EFFECT_ENTRY_MESSAGE_TYPE } from "../src/types/protocol.js";
 import { describe, expect, it } from "vitest";
 
 class GreeterWithName implements TestGreeter {

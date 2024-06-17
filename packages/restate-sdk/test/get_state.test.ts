@@ -9,7 +9,7 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import type * as restate from "../src/public_api";
+import type * as restate from "../src/public_api.js";
 import {
   checkJournalMismatchError,
   checkTerminalError,
@@ -24,10 +24,10 @@ import {
   setStateMessage,
   startMessage,
   suspensionMessage,
-} from "./protoutils";
-import type { TestGreeter } from "./testdriver";
-import { TestDriver, TestResponse } from "./testdriver";
-import { ProtocolMode } from "../src/types/discovery";
+} from "./protoutils.js";
+import type { TestGreeter } from "./testdriver.js";
+import { TestDriver, TestResponse } from "./testdriver.js";
+import { ProtocolMode } from "../src/types/discovery.js";
 import { describe, expect, it } from "vitest";
 
 class GetStringStateGreeter implements TestGreeter {

@@ -11,9 +11,9 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { ErrorMessage, Failure } from "../generated/proto/protocol_pb";
-import { formatMessageAsJson } from "../utils/utils";
-import type * as p from "./protocol";
+import { ErrorMessage, Failure } from "../generated/proto/protocol_pb.js";
+import { formatMessageAsJson } from "../utils/utils.js";
+import type * as p from "./protocol.js";
 
 export const INTERNAL_ERROR_CODE = 500;
 export const TIMEOUT_ERROR_CODE = 408;

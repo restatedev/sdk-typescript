@@ -9,13 +9,13 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { rlog } from "../../logger";
-import { LambdaConnection } from "../../connection/lambda_connection";
-import { InvocationBuilder } from "../../invocation";
-import { decodeMessagesBuffer } from "../../io/decoder";
-import type { Message } from "../../types/types";
-import { StateMachine } from "../../state_machine";
-import { ensureError } from "../../types/errors";
+import { rlog } from "../../logger.js";
+import { LambdaConnection } from "../../connection/lambda_connection.js";
+import { InvocationBuilder } from "../../invocation.js";
+import { decodeMessagesBuffer } from "../../io/decoder.js";
+import type { Message } from "../../types/types.js";
+import { StateMachine } from "../../state_machine.js";
+import { ensureError } from "../../types/errors.js";
 import {
   OUTPUT_ENTRY_MESSAGE_TYPE,
   isServiceProtocolVersionSupported,
@@ -23,16 +23,16 @@ import {
   selectSupportedServiceDiscoveryProtocolVersion,
   serviceDiscoveryProtocolVersionToHeaderValue,
   serviceProtocolVersionToHeaderValue,
-} from "../../types/protocol";
-import { ProtocolMode } from "../../types/discovery";
-import type { ComponentHandler } from "../../types/components";
-import { parseUrlComponents } from "../../types/components";
-import { validateRequestSignature } from "../request_signing/validate";
-import { X_RESTATE_SERVER } from "../../user_agent";
+} from "../../types/protocol.js";
+import { ProtocolMode } from "../../types/discovery.js";
+import type { ComponentHandler } from "../../types/components.js";
+import { parseUrlComponents } from "../../types/components.js";
+import { validateRequestSignature } from "../request_signing/validate.js";
+import { X_RESTATE_SERVER } from "../../user_agent.js";
 import { Buffer } from "node:buffer";
-import { ServiceDiscoveryProtocolVersion } from "../../generated/proto/discovery_pb";
-import type { ServiceProtocolVersion } from "../../generated/proto/protocol_pb";
-import type { EndpointBuilder } from "../endpoint_builder";
+import { ServiceDiscoveryProtocolVersion } from "../../generated/proto/discovery_pb.js";
+import type { ServiceProtocolVersion } from "../../generated/proto/protocol_pb.js";
+import type { EndpointBuilder } from "../endpoint_builder.js";
 
 export interface Headers {
   [name: string]: string | string[] | undefined;

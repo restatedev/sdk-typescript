@@ -10,11 +10,11 @@
  */
 
 import { Buffer } from "node:buffer";
-import type { ValidateResponse, ValidateSuccess } from "./validate";
-import { headerValue } from "./validate";
-import type { Key } from "./ed25519";
-import { importKey, verify } from "./ed25519";
-import base from "./basex";
+import type { ValidateResponse, ValidateSuccess } from "./validate.js";
+import { headerValue } from "./validate.js";
+import type { Key } from "./ed25519.js";
+import { importKey, verify } from "./ed25519.js";
+import base from "./basex.js";
 
 const JWT_HEADER = "x-restate-jwt-v1";
 export const SCHEME_V1 = "v1";

@@ -9,9 +9,9 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import type * as restate from "../src/public_api";
-import type { TestGreeter, TestResponse } from "./testdriver";
-import { TestDriver } from "./testdriver";
+import type * as restate from "../src/public_api.js";
+import type { TestGreeter, TestResponse } from "./testdriver.js";
+import { TestDriver } from "./testdriver.js";
 import {
   completionMessage,
   END_MESSAGE,
@@ -23,8 +23,8 @@ import {
   outputMessage,
   startMessage,
   suspensionMessage,
-} from "./protoutils";
-import { GetStateKeysEntryMessage_StateKeys } from "../src/generated/proto/protocol_pb";
+} from "./protoutils.js";
+import { GetStateKeysEntryMessage_StateKeys } from "../src/generated/proto/protocol_pb.js";
 import { describe, expect, it } from "vitest";
 
 const INPUT_MESSAGE = inputMessage(greetRequest("bob"));

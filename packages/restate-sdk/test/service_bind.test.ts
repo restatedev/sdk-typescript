@@ -9,10 +9,10 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import type { TestGreeter, TestRequest } from "./testdriver";
-import { TestDriver, TestResponse } from "./testdriver";
-import type * as restate from "../src/public_api";
-import { greetRequest, inputMessage, startMessage } from "./protoutils";
+import type { TestGreeter, TestRequest } from "./testdriver.js";
+import { TestDriver, TestResponse } from "./testdriver.js";
+import type * as restate from "../src/public_api.js";
+import { greetRequest, inputMessage, startMessage } from "./protoutils.js";
 import { describe, it } from "vitest";
 
 const greeter: TestGreeter = {

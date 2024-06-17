@@ -9,12 +9,12 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { CompletablePromise } from "../src/utils/promises";
-import type { PromiseId } from "../src/promise_combinator_tracker";
+import { CompletablePromise } from "../src/utils/promises.js";
+import type { PromiseId } from "../src/promise_combinator_tracker.js";
 import {
   newJournalEntryPromiseId,
   PromiseCombinatorTracker,
-} from "../src/promise_combinator_tracker";
+} from "../src/promise_combinator_tracker.js";
 import { describe, expect, it } from "vitest";
 
 describe("PromiseCombinatorTracker with Promise.any", () => {

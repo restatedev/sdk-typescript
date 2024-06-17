@@ -21,9 +21,9 @@ import type {
   RunAction,
   SendOptions,
   WorkflowContext,
-} from "./context";
-import type { StateMachine } from "./state_machine";
-import type { GetStateKeysEntryMessage_StateKeys } from "./generated/proto/protocol_pb";
+} from "./context.js";
+import type { StateMachine } from "./state_machine.js";
+import type { GetStateKeysEntryMessage_StateKeys } from "./generated/proto/protocol_pb.js";
 import {
   AwakeableEntryMessage,
   OneWayCallEntryMessage,
@@ -37,7 +37,7 @@ import {
   GetPromiseEntryMessage,
   PeekPromiseEntryMessage,
   CompletePromiseEntryMessage,
-} from "./generated/proto/protocol_pb";
+} from "./generated/proto/protocol_pb.js";
 import {
   AWAKEABLE_ENTRY_MESSAGE_TYPE,
   AWAKEABLE_IDENTIFIER_PREFIX,
@@ -54,7 +54,7 @@ import {
   GET_PROMISE_MESSAGE_TYPE,
   PEEK_PROMISE_MESSAGE_TYPE,
   COMPLETE_PROMISE_MESSAGE_TYPE,
-} from "./types/protocol";
+} from "./types/protocol.js";
 import {
   RetryableError,
   TerminalError,
@@ -63,12 +63,12 @@ import {
   INTERNAL_ERROR_CODE,
   UNKNOWN_ERROR_CODE,
   errorToFailure,
-} from "./types/errors";
-import { jsonSerialize, jsonDeserialize } from "./utils/utils";
+} from "./types/errors.js";
+import { jsonSerialize, jsonDeserialize } from "./utils/utils.js";
 import type { PartialMessage } from "@bufbuild/protobuf";
 import { protoInt64 } from "@bufbuild/protobuf";
-import type { Client, SendClient } from "./types/rpc";
-import { HandlerKind } from "./types/rpc";
+import type { Client, SendClient } from "./types/rpc.js";
+import { HandlerKind } from "./types/rpc.js";
 import type {
   Service,
   ServiceDefinitionFrom,
@@ -77,11 +77,11 @@ import type {
   WorkflowDefinitionFrom,
   Workflow,
 } from "@restatedev/restate-sdk-core";
-import { RandImpl } from "./utils/rand";
-import { newJournalEntryPromiseId } from "./promise_combinator_tracker";
-import type { WrappedPromise } from "./utils/promises";
+import { RandImpl } from "./utils/rand.js";
+import { newJournalEntryPromiseId } from "./promise_combinator_tracker.js";
+import type { WrappedPromise } from "./utils/promises.js";
 import { Buffer } from "node:buffer";
-import { deserializeJson, serializeJson } from "./utils/serde";
+import { deserializeJson, serializeJson } from "./utils/serde.js";
 
 export type InternalCombineablePromise<T> = CombineablePromise<T> & {
   journalIndex: number;

@@ -9,11 +9,11 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import * as restate from "../src/public_api";
+import * as restate from "../src/public_api.js";
 import type { APIGatewayProxyEvent } from "aws-lambda";
 import { type APIGatewayProxyResult } from "aws-lambda";
-import { encodeMessage } from "../src/io/encoder";
-import type { Message } from "../src/types/types";
+import { encodeMessage } from "../src/io/encoder.js";
+import type { Message } from "../src/types/types.js";
 import {
   awakeableMessage,
   END_MESSAGE,
@@ -23,19 +23,19 @@ import {
   inputMessage,
   outputMessage,
   startMessage,
-} from "./protoutils";
-import { decodeLambdaBody } from "../src/io/decoder";
-import type { TestGreeter } from "./testdriver";
-import { TestResponse } from "./testdriver";
-import type { Endpoint } from "../src/types/discovery";
-import { ServiceType } from "../src/types/discovery";
-import { X_RESTATE_SERVER } from "../src/user_agent";
+} from "./protoutils.js";
+import { decodeLambdaBody } from "../src/io/decoder.js";
+import type { TestGreeter } from "./testdriver.js";
+import { TestResponse } from "./testdriver.js";
+import type { Endpoint } from "../src/types/discovery.js";
+import { ServiceType } from "../src/types/discovery.js";
+import { X_RESTATE_SERVER } from "../src/user_agent.js";
 import {
   serviceDiscoveryProtocolVersionToHeaderValue,
   serviceProtocolVersionToHeaderValue,
-} from "../src/types/protocol";
-import { ServiceProtocolVersion } from "../src/generated/proto/protocol_pb";
-import { ServiceDiscoveryProtocolVersion } from "../src/generated/proto/discovery_pb";
+} from "../src/types/protocol.js";
+import { ServiceProtocolVersion } from "../src/generated/proto/protocol_pb.js";
+import { ServiceDiscoveryProtocolVersion } from "../src/generated/proto/discovery_pb.js";
 import { describe, expect, it } from "vitest";
 
 class LambdaGreeter implements TestGreeter {

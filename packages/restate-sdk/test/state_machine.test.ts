@@ -9,8 +9,8 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import type { TestGreeter } from "./testdriver";
-import { TestDriver, TestResponse } from "./testdriver";
+import type { TestGreeter } from "./testdriver.js";
+import { TestDriver, TestResponse } from "./testdriver.js";
 import {
   END_MESSAGE,
   greetRequest,
@@ -18,7 +18,7 @@ import {
   inputMessage,
   outputMessage,
   startMessage,
-} from "./protoutils";
+} from "./protoutils.js";
 import { describe, expect, it } from "vitest";
 
 class Greeter implements TestGreeter {

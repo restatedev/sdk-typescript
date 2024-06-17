@@ -14,19 +14,19 @@ import {
   ENTRY_ACK_MESSAGE_TYPE,
   START_MESSAGE_TYPE,
   StartMessage,
-} from "../src/types/protocol";
-import type { Connection } from "../src/connection/connection";
-import { formatMessageAsJson } from "../src/utils/utils";
-import { Message } from "../src/types/types";
-import { rlog } from "../src/logger";
-import { StateMachine } from "../src/state_machine";
-import { InvocationBuilder } from "../src/invocation";
-import type { ObjectContext } from "../src/context";
-import type { VirtualObjectDefinition } from "../src/public_api";
-import { object } from "../src/public_api";
-import { ProtocolMode } from "../src/types/discovery";
-import { HandlerKind } from "../src/types/rpc";
-import { NodeEndpoint } from "../src/endpoint/node_endpoint";
+} from "../src/types/protocol.js";
+import type { Connection } from "../src/connection/connection.js";
+import { formatMessageAsJson } from "../src/utils/utils.js";
+import { Message } from "../src/types/types.js";
+import { rlog } from "../src/logger.js";
+import { StateMachine } from "../src/state_machine.js";
+import { InvocationBuilder } from "../src/invocation.js";
+import type { ObjectContext } from "../src/context.js";
+import type { VirtualObjectDefinition } from "../src/public_api.js";
+import { object } from "../src/public_api.js";
+import { ProtocolMode } from "../src/types/discovery.js";
+import { HandlerKind } from "../src/types/rpc.js";
+import { NodeEndpoint } from "../src/endpoint/node_endpoint.js";
 
 export type TestRequest = {
   name: string;

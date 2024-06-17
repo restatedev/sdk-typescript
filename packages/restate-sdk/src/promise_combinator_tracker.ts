@@ -1,5 +1,5 @@
-import type { WrappedPromise } from "./utils/promises";
-import { CompletablePromise, wrapDeeply } from "./utils/promises";
+import type { WrappedPromise } from "./utils/promises.js";
+import { CompletablePromise, wrapDeeply } from "./utils/promises.js";
 
 export enum PromiseType {
   JournalEntry,

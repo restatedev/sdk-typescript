@@ -13,27 +13,27 @@ import stream from "node:stream";
 import { pipeline, finished } from "node:stream/promises";
 import type { Http2ServerRequest, Http2ServerResponse } from "http2";
 import type http2 from "http2";
-import { RestateHttp2Connection } from "../../connection/http_connection";
-import { ensureError } from "../../types/errors";
-import { InvocationBuilder } from "../../invocation";
-import { StateMachine } from "../../state_machine";
-import { rlog } from "../../logger";
-import type { ComponentHandler } from "../../types/components";
-import { parseUrlComponents } from "../../types/components";
-import type { Endpoint } from "../../types/discovery";
-import { ProtocolMode } from "../../types/discovery";
-import { validateRequestSignature } from "../request_signing/validate";
+import { RestateHttp2Connection } from "../../connection/http_connection.js";
+import { ensureError } from "../../types/errors.js";
+import { InvocationBuilder } from "../../invocation.js";
+import { StateMachine } from "../../state_machine.js";
+import { rlog } from "../../logger.js";
+import type { ComponentHandler } from "../../types/components.js";
+import { parseUrlComponents } from "../../types/components.js";
+import type { Endpoint } from "../../types/discovery.js";
+import { ProtocolMode } from "../../types/discovery.js";
+import { validateRequestSignature } from "../request_signing/validate.js";
 import type { ServerHttp2Stream } from "node:http2";
-import { X_RESTATE_SERVER } from "../../user_agent";
+import { X_RESTATE_SERVER } from "../../user_agent.js";
 import {
   isServiceProtocolVersionSupported,
   parseServiceProtocolVersion,
   selectSupportedServiceDiscoveryProtocolVersion,
   serviceDiscoveryProtocolVersionToHeaderValue,
   serviceProtocolVersionToHeaderValue,
-} from "../../types/protocol";
-import { ServiceDiscoveryProtocolVersion } from "../../generated/proto/discovery_pb";
-import type { EndpointBuilder } from "../endpoint_builder";
+} from "../../types/protocol.js";
+import { ServiceDiscoveryProtocolVersion } from "../../generated/proto/discovery_pb.js";
+import type { EndpointBuilder } from "../endpoint_builder.js";
 
 export class Http2Handler {
   constructor(private readonly endpoint: EndpointBuilder) {}

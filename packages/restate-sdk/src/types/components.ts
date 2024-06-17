@@ -12,10 +12,10 @@
 /* eslint-disable @typescript-eslint/ban-types */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import * as d from "./discovery";
-import type { ContextImpl } from "../context_impl";
-import type { HandlerWrapper } from "./rpc";
-import { HandlerKind } from "./rpc";
+import * as d from "./discovery.js";
+import type { ContextImpl } from "../context_impl.js";
+import type { HandlerWrapper } from "./rpc.js";
+import { HandlerKind } from "./rpc.js";
 
 //
 // Interfaces
