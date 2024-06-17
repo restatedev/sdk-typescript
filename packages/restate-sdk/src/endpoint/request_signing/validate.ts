@@ -9,7 +9,7 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { KeySetV1, SCHEME_V1, validateV1 } from "./v1";
+import { type KeySetV1, SCHEME_V1, validateV1 } from "./v1";
 
 const SIGNATURE_SCHEME_HEADER = "x-restate-signature-scheme";
 

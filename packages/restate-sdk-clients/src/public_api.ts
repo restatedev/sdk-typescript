@@ -18,17 +18,17 @@ export type {
   WorkflowDefinitionFrom,
 } from "@restatedev/restate-sdk-core";
 
-export {
+export type {
   Ingress,
   ConnectionOpts,
   IngressClient,
   IngressSendClient,
   IngressWorkflowClient,
-  Opts,
   IngresCallOptions,
-  SendOpts,
   Send,
   IngresSendOptions,
 } from "./api";
+
+export { Opts, SendOpts } from "./api";
 
 export { connect } from "./ingress";

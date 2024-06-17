@@ -9,7 +9,8 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { TestDriver, TestGreeter, TestResponse } from "./testdriver";
+import type { TestGreeter } from "./testdriver";
+import { TestDriver, TestResponse } from "./testdriver";
 import {
   END_MESSAGE,
   greetRequest,

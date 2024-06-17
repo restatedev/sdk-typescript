@@ -1,7 +1,7 @@
 import {
   CompletablePromise,
   wrapDeeply,
-  WrappedPromise,
+  type WrappedPromise,
 } from "./utils/promises";
 
 export enum PromiseType {

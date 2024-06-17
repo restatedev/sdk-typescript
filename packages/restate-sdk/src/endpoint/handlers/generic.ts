@@ -13,7 +13,7 @@ import { rlog } from "../../logger";
 import { LambdaConnection } from "../../connection/lambda_connection";
 import { InvocationBuilder } from "../../invocation";
 import { decodeMessagesBuffer } from "../../io/decoder";
-import { Message } from "../../types/types";
+import type { Message } from "../../types/types";
 import { StateMachine } from "../../state_machine";
 import { ensureError } from "../../types/errors";
 import {
@@ -25,13 +25,16 @@ import {
   serviceProtocolVersionToHeaderValue,
 } from "../../types/protocol";
 import { ProtocolMode } from "../../types/discovery";
-import { ComponentHandler, parseUrlComponents } from "../../types/components";
+import {
+  type ComponentHandler,
+  parseUrlComponents,
+} from "../../types/components";
 import { validateRequestSignature } from "../request_signing/validate";
 import { X_RESTATE_SERVER } from "../../user_agent";
 import { Buffer } from "node:buffer";
 import { ServiceDiscoveryProtocolVersion } from "../../generated/proto/discovery_pb";
-import { ServiceProtocolVersion } from "../../generated/proto/protocol_pb";
-import { EndpointBuilder } from "../endpoint_builder";
+import type { ServiceProtocolVersion } from "../../generated/proto/protocol_pb";
+import type { EndpointBuilder } from "../endpoint_builder";
 
 export interface Headers {
   [name: string]: string | string[] | undefined;
