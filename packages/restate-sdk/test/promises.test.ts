@@ -9,12 +9,12 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { describe, expect } from "@jest/globals";
 import {
   CompletablePromise,
   wrapDeeply,
   WrappedPromise,
 } from "../src/utils/promises";
+import { describe, expect, it } from "vitest";
 
 describe("promises.wrapDeeply", () => {
   it("should support nested wrapping", async () => {

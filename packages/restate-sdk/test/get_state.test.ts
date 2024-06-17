@@ -9,7 +9,6 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { describe, expect } from "@jest/globals";
 import * as restate from "../src/public_api";
 import {
   checkJournalMismatchError,
@@ -28,6 +27,7 @@ import {
 } from "./protoutils";
 import { TestDriver, TestGreeter, TestResponse } from "./testdriver";
 import { ProtocolMode } from "../src/types/discovery";
+import { describe, expect, it } from "vitest";
 
 class GetStringStateGreeter implements TestGreeter {
   async greet(ctx: restate.ObjectContext): Promise<TestResponse> {

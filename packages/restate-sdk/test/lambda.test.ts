@@ -9,7 +9,6 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { describe, expect } from "@jest/globals";
 import * as restate from "../src/public_api";
 import { APIGatewayProxyEvent } from "aws-lambda";
 import { encodeMessage } from "../src/io/encoder";
@@ -34,6 +33,7 @@ import {
 } from "../src/types/protocol";
 import { ServiceProtocolVersion } from "../src/generated/proto/protocol_pb";
 import { ServiceDiscoveryProtocolVersion } from "../src/generated/proto/discovery_pb";
+import { describe, expect, it } from "vitest";
 
 class LambdaGreeter implements TestGreeter {
   async greet(

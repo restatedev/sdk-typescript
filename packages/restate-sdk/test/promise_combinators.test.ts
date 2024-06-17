@@ -9,7 +9,6 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { describe, expect } from "@jest/globals";
 import * as restate from "../src/public_api";
 import {
   GreeterApi,
@@ -42,6 +41,7 @@ import { TimeoutError } from "../src/types/errors";
 import { CombineablePromise } from "../src/context";
 import { Empty } from "../src/generated/proto/protocol_pb";
 import { Buffer } from "node:buffer";
+import { describe, expect, it } from "vitest";
 
 class AwakeableSleepRaceGreeter implements TestGreeter {
   async greet(ctx: restate.ObjectContext): Promise<TestResponse> {

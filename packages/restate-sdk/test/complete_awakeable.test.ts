@@ -23,8 +23,8 @@ import {
   rejectAwakeableMessage,
   END_MESSAGE,
 } from "./protoutils";
-import { describe, expect } from "@jest/globals";
 import { TestDriver, TestGreeter, TestResponse } from "./testdriver";
+import { describe, expect, it } from "vitest";
 
 class ResolveAwakeableGreeter implements TestGreeter {
   constructor(readonly payload: string | undefined) {}

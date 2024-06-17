@@ -16,8 +16,8 @@ import {
   TestResponse,
 } from "./testdriver";
 import * as restate from "../src/public_api";
-import { describe } from "@jest/globals";
 import { greetRequest, inputMessage, startMessage } from "./protoutils";
+import { describe, it } from "vitest";
 
 const greeter: TestGreeter = {
   /* eslint-disable @typescript-eslint/no-unused-vars */

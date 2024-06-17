@@ -34,6 +34,7 @@ import {
   suspensionMessage,
 } from "./protoutils";
 import { ProtocolMode } from "../src/types/discovery";
+import { describe, expect, it } from "vitest";
 
 const input = inputMessage(greetRequest("Two"));
 const COMPLETE_STATE = false;

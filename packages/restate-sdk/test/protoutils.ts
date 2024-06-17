@@ -59,7 +59,6 @@ import {
   RunEntryMessage,
   StartMessage_StateEntry,
 } from "../src/generated/proto/protocol_pb";
-import { expect } from "@jest/globals";
 import { jsonSerialize, formatMessageAsJson } from "../src/utils/utils";
 import { rlog } from "../src/logger";
 import {
@@ -68,6 +67,7 @@ import {
   RestateErrorCodes,
   UNKNOWN_ERROR_CODE,
 } from "../src/types/errors";
+import { expect } from "vitest";
 
 export type StartMessageOpts = {
   knownEntries?: number;
