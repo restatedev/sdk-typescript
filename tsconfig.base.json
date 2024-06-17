@@ -1,29 +1,27 @@
 {
-	"compilerOptions": {
-		"composite": true,
-		"baseUrl": ".",
-		"target": "esnext",
-		"module": "commonjs",
-		"lib": ["esnext"],
-		"declaration": true,
-		"declarationMap": true,
-		"sourceMap": true,
-		"strict": true,
-		"allowJs": true,
-		"esModuleInterop": true,
-		"skipLibCheck": true,
-		"forceConsistentCasingInFileNames": true,
-		"allowSyntheticDefaultImports": true,
-		"paths": {
-			"@restatedev/restate-sdk-core": [
-				"./packages/restate-sdk-core/src/public_api.ts"
-			],
-			"@restatedev/restate-sdk": [
-				"./packages/restate-sdk/src/public_api.ts"
-			],
-			"@restatedev/restate-sdk-clients": [
-				"./packages/restate-sdk-clients/src/public_api.ts"
-			]
-		}
-	}
+  "compilerOptions": {
+    "composite": true,
+    "baseUrl": ".",
+    "target": "esnext",
+    "module": "commonjs",
+    "lib": ["esnext"],
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "strict": true,
+    "allowJs": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "allowSyntheticDefaultImports": true,
+    "paths": {
+      "@restatedev/restate-sdk-core": [
+        "./packages/restate-sdk-core/src/public_api.ts"
+      ],
+      "@restatedev/restate-sdk": ["./packages/restate-sdk/src/public_api.ts"],
+      "@restatedev/restate-sdk-clients": [
+        "./packages/restate-sdk-clients/src/public_api.ts"
+      ]
+    }
+  }
 }
