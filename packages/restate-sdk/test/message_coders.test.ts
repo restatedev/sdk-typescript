@@ -11,7 +11,7 @@
 
 import { describe, expect } from "@jest/globals";
 import { streamDecoder } from "../src/io/decoder";
-import { Message } from "../src/types/types";
+import type { Message } from "../src/types/types";
 import { backgroundInvokeMessage } from "./protoutils";
 import { encodeMessage } from "../src/io/encoder";
 

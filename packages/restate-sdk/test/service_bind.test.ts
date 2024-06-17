@@ -9,13 +9,9 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import {
-  TestDriver,
-  TestGreeter,
-  TestRequest,
-  TestResponse,
-} from "./testdriver";
-import * as restate from "../src/public_api";
+import type { TestGreeter, TestRequest } from "./testdriver";
+import { TestDriver, TestResponse } from "./testdriver";
+import type * as restate from "../src/public_api";
 import { describe } from "@jest/globals";
 import { greetRequest, inputMessage, startMessage } from "./protoutils";
 

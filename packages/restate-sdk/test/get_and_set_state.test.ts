@@ -10,14 +10,10 @@
  */
 
 import { describe, expect } from "@jest/globals";
-import * as restate from "../src/public_api";
+import type * as restate from "../src/public_api";
 
-import {
-  TestDriver,
-  TestGreeter,
-  TestRequest,
-  TestResponse,
-} from "./testdriver";
+import type { TestGreeter, TestRequest } from "./testdriver";
+import { TestDriver, TestResponse } from "./testdriver";
 import {
   checkJournalMismatchError,
   clearStateMessage,

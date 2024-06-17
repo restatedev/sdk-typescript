@@ -9,13 +9,9 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import * as restate from "../src/public_api";
-import {
-  TestDriver,
-  TestResponse,
-  TestGreeter,
-  TestRequest,
-} from "./testdriver";
+import type * as restate from "../src/public_api";
+import type { TestGreeter, TestRequest } from "./testdriver";
+import { TestDriver, TestResponse } from "./testdriver";
 import {
   CLEAR_ALL_STATE_ENTRY_MESSAGE,
   clearStateMessage,

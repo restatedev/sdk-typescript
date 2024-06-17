@@ -12,6 +12,7 @@
     "strict": true,
     "allowJs": true,
     "skipLibCheck": true,
+    "verbatimModuleSyntax": true,
     "forceConsistentCasingInFileNames": true,
     "allowSyntheticDefaultImports": true,
     "paths": {

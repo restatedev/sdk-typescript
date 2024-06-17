@@ -10,7 +10,7 @@
  */
 
 import { describe, expect } from "@jest/globals";
-import * as restate from "../src/public_api";
+import type * as restate from "../src/public_api";
 import {
   checkJournalMismatchError,
   checkTerminalError,
@@ -26,7 +26,8 @@ import {
   startMessage,
   suspensionMessage,
 } from "./protoutils";
-import { TestDriver, TestGreeter, TestResponse } from "./testdriver";
+import type { TestGreeter } from "./testdriver";
+import { TestDriver, TestResponse } from "./testdriver";
 import { ProtocolMode } from "../src/types/discovery";
 
 class GetStringStateGreeter implements TestGreeter {

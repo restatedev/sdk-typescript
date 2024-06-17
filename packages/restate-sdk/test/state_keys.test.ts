@@ -10,8 +10,9 @@
  */
 
 import { describe, expect } from "@jest/globals";
-import * as restate from "../src/public_api";
-import { TestDriver, TestGreeter, TestResponse } from "./testdriver";
+import type * as restate from "../src/public_api";
+import type { TestGreeter, TestResponse } from "./testdriver";
+import { TestDriver } from "./testdriver";
 import {
   completionMessage,
   END_MESSAGE,

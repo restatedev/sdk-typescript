@@ -11,11 +11,14 @@
 
 import * as p from "./types/protocol";
 import { ContextImpl } from "./context_impl";
-import { Connection, RestateStreamConsumer } from "./connection/connection";
+import type {
+  Connection,
+  RestateStreamConsumer,
+} from "./connection/connection";
 import { Message } from "./types/types";
 import {
   createStateMachineConsole,
-  StateMachineConsole,
+  type StateMachineConsole,
 } from "./utils/message_logger";
 import {
   COMBINATOR_ENTRY_MESSAGE,
@@ -30,31 +33,32 @@ import {
   SuspensionMessage,
 } from "./types/protocol";
 import { Journal } from "./journal";
-import { Invocation } from "./invocation";
+import type { Invocation } from "./invocation";
 import {
   ensureError,
   TerminalError,
   RetryableError,
   errorToErrorMessage,
-  JournalErrorContext,
+  type JournalErrorContext,
 } from "./types/errors";
-import { LocalStateStore } from "./local_state_store";
-import { createRestateConsole, LoggerContext } from "./logger";
+import type { LocalStateStore } from "./local_state_store";
+import type { LoggerContext } from "./logger";
+import { createRestateConsole } from "./logger";
 import {
   CompletablePromise,
   wrapDeeply,
   WRAPPED_PROMISE_PENDING,
-  WrappedPromise,
+  type WrappedPromise,
 } from "./utils/promises";
 import {
   PromiseCombinatorTracker,
-  PromiseId,
+  type PromiseId,
   PromiseType,
 } from "./promise_combinator_tracker";
 import { CombinatorEntryMessage } from "./generated/proto/javascript_pb";
 import { ProtocolMode } from "./types/discovery";
 import { Buffer } from "node:buffer";
-import { HandlerKind } from "./types/rpc";
+import type { HandlerKind } from "./types/rpc";
 
 export class StateMachine implements RestateStreamConsumer {
   private journal: Journal;

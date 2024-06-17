@@ -62,9 +62,9 @@ import {
 import { expect } from "@jest/globals";
 import { jsonSerialize, formatMessageAsJson } from "../src/utils/utils";
 import { rlog } from "../src/logger";
+import type { JournalErrorContext } from "../src/types/errors";
 import {
   INTERNAL_ERROR_CODE,
-  JournalErrorContext,
   RestateErrorCodes,
   UNKNOWN_ERROR_CODE,
 } from "../src/types/errors";

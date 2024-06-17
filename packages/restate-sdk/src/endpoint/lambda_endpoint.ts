@@ -9,18 +9,21 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
+/* eslint-disable @typescript-eslint/ban-types */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import type {
   ServiceDefinition,
   VirtualObjectDefinition,
 } from "@restatedev/restate-sdk-core";
 
 import { rlog } from "../logger";
-import { Component } from "../types/components";
+import type { Component } from "../types/components";
 
 import type { KeySetV1 } from "./request_signing/v1";
 import type { WorkflowDefinition } from "@restatedev/restate-sdk-core";
 import { EndpointBuilder } from "./endpoint_builder";
-import { RestateEndpointBase, ServiceBundle } from "../endpoint";
+import type { RestateEndpointBase, ServiceBundle } from "../endpoint";
 import { GenericHandler } from "./handlers/generic";
 import { LambdaHandler } from "./handlers/lambda";
 
@@ -39,7 +42,6 @@ import { LambdaHandler } from "./handlers/lambda";
  *   .handler();
  */
 export interface LambdaEndpoint extends RestateEndpointBase<LambdaEndpoint> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   handler(): (event: any, ctx: any) => Promise<any>;
 }
 
@@ -59,7 +61,6 @@ export class LambdaEndpointImpl implements LambdaEndpoint {
   }
 
   bindBundle(services: ServiceBundle): LambdaEndpoint {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     services.registerServices(this as any);
     return this;
   }

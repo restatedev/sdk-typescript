@@ -11,20 +11,21 @@
 
 import stream from "node:stream";
 import { pipeline, finished } from "node:stream/promises";
-import http2, { Http2ServerRequest, Http2ServerResponse } from "http2";
+import type { Http2ServerRequest, Http2ServerResponse } from "http2";
+import type http2 from "http2";
 import { RestateHttp2Connection } from "../../connection/http_connection";
 import { ensureError } from "../../types/errors";
 import { InvocationBuilder } from "../../invocation";
 import { StateMachine } from "../../state_machine";
 import { rlog } from "../../logger";
 import {
-  ComponentHandler,
-  UrlPathComponents,
+  type ComponentHandler,
+  type UrlPathComponents,
   parseUrlComponents,
 } from "../../types/components";
-import { Endpoint, ProtocolMode } from "../../types/discovery";
+import { type Endpoint, ProtocolMode } from "../../types/discovery";
 import { validateRequestSignature } from "../request_signing/validate";
-import { ServerHttp2Stream } from "node:http2";
+import type { ServerHttp2Stream } from "node:http2";
 import { X_RESTATE_SERVER } from "../../user_agent";
 import {
   isServiceProtocolVersionSupported,
@@ -34,7 +35,7 @@ import {
   serviceProtocolVersionToHeaderValue,
 } from "../../types/protocol";
 import { ServiceDiscoveryProtocolVersion } from "../../generated/proto/discovery_pb";
-import { EndpointBuilder } from "../endpoint_builder";
+import type { EndpointBuilder } from "../endpoint_builder";
 
 export class Http2Handler {
   constructor(private readonly endpoint: EndpointBuilder) {}

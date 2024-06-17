@@ -10,7 +10,7 @@
  */
 
 import { describe, expect } from "@jest/globals";
-import * as restate from "../src/public_api";
+import type * as restate from "../src/public_api";
 import {
   awakeableMessage,
   checkJournalMismatchError,
@@ -28,7 +28,8 @@ import {
   END_MESSAGE,
 } from "./protoutils";
 
-import { TestDriver, TestResponse, TestGreeter } from "./testdriver";
+import type { TestGreeter } from "./testdriver";
+import { TestDriver, TestResponse } from "./testdriver";
 import { ProtocolMode } from "../src/types/discovery";
 
 class AwakeableGreeter implements TestGreeter {

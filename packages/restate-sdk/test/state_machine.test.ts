@@ -10,7 +10,8 @@
  */
 
 import { describe, expect } from "@jest/globals";
-import { TestDriver, TestGreeter, TestResponse } from "./testdriver";
+import type { TestGreeter } from "./testdriver";
+import { TestDriver, TestResponse } from "./testdriver";
 import {
   END_MESSAGE,
   greetRequest,
