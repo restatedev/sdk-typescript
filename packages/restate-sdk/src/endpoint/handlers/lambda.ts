@@ -13,7 +13,7 @@ import type {
   APIGatewayProxyEvent,
   APIGatewayProxyEventV2,
   APIGatewayProxyResult,
-  APIGatewayProxyResultV2,
+  APIGatewayProxyStructuredResultV2,
   Context,
 } from "aws-lambda";
 import { Buffer } from "node:buffer";
@@ -25,7 +25,7 @@ export class LambdaHandler {
   async handleRequest(
     event: APIGatewayProxyEvent | APIGatewayProxyEventV2,
     context: Context
-  ): Promise<APIGatewayProxyResult | APIGatewayProxyResultV2> {
+  ): Promise<APIGatewayProxyResult | APIGatewayProxyStructuredResultV2> {
     //
     // Request path
     //
