@@ -12,18 +12,12 @@
 /* eslint-disable @typescript-eslint/ban-types */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { RestateEndpoint, ServiceBundle } from "../public_api";
 import type {
   ServiceDefinition,
   VirtualObjectDefinition,
 } from "@restatedev/restate-sdk-core";
 
 import { HandlerWrapper } from "../types/rpc";
-import { rlog } from "../logger";
-import type { Http2ServerRequest, Http2ServerResponse } from "http2";
-import * as http2 from "http2";
-import { Http2Handler } from "./http2_handler";
-import { LambdaHandler } from "./lambda_handler";
 import {
   Component,
   ServiceComponent,
@@ -53,9 +47,7 @@ function isWorkflowDefinition<P extends string, M>(
   return m && m.workflow;
 }
 
-export const endpointImpl = (): RestateEndpoint => new EndpointImpl();
-
-export class EndpointImpl implements RestateEndpoint {
+export class EndpointBuilder {
   private readonly services: Map<string, Component> = new Map();
   private _keySet?: KeySetV1;
 
@@ -71,17 +63,12 @@ export class EndpointImpl implements RestateEndpoint {
     this.services.set(component.name(), component);
   }
 
-  public bindBundle(services: ServiceBundle): RestateEndpoint {
-    services.registerServices(this);
-    return this;
-  }
-
   public bind<P extends string, M>(
     definition:
       | ServiceDefinition<P, M>
       | VirtualObjectDefinition<P, M>
       | WorkflowDefinition<P, M>
-  ): RestateEndpoint {
+  ) {
     if (isServiceDefinition(definition)) {
       const { name, service } = definition;
       if (!service) {
@@ -108,7 +95,7 @@ export class EndpointImpl implements RestateEndpoint {
     return this;
   }
 
-  public withIdentityV1(...keys: string[]): RestateEndpoint {
+  public withIdentityV1(...keys: string[]) {
     if (!this._keySet) {
       this._keySet = parseKeySetV1(keys);
       return this;
@@ -117,74 +104,6 @@ export class EndpointImpl implements RestateEndpoint {
       this._keySet?.set(key, buffer)
     );
     return this;
-  }
-
-  http2Handler(): (
-    request: Http2ServerRequest,
-    response: Http2ServerResponse
-  ) => void {
-    if (!this._keySet) {
-      if (globalThis.process.env.NODE_ENV == "production") {
-        rlog.warn(
-          `Accepting HTTP requests without validating request signatures; endpoint access must be restricted`
-        );
-      }
-    } else {
-      rlog.info(
-        `Validating HTTP requests using signing keys [${Array.from(
-          this._keySet.keys()
-        )}]`
-      );
-    }
-    const handler = new Http2Handler(this);
-    return handler.acceptConnection.bind(handler);
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  lambdaHandler(): (event: any, ctx: any) => Promise<any> {
-    if (!this._keySet) {
-      rlog.warn(
-        `Accepting Lambda requests without validating request signatures; Invoke permissions must be restricted`
-      );
-    } else {
-      rlog.info(
-        `Validating Lambda requests using signing keys [${Array.from(
-          this._keySet.keys()
-        )}]`
-      );
-    }
-    const handler = new LambdaHandler(this);
-    return handler.handleRequest.bind(handler);
-  }
-
-  listen(port?: number): Promise<number> {
-    const actualPort = port ?? parseInt(process.env.PORT ?? "9080");
-    rlog.info(`Listening on ${actualPort}...`);
-
-    const server = http2.createServer(this.http2Handler());
-
-    return new Promise((resolve, reject) => {
-      let failed = false;
-      server.once("error", (e) => {
-        failed = true;
-        reject(e);
-      });
-      server.listen(actualPort, () => {
-        if (failed) {
-          return;
-        }
-        const address = server.address();
-        if (address === null || typeof address === "string") {
-          reject(
-            new TypeError(
-              "endpoint.listen() currently supports only binding to a PORT"
-            )
-          );
-        } else {
-          resolve(address.port);
-        }
-      });
-    });
   }
 
   computeDiscovery(protocolMode: discovery.ProtocolMode): discovery.Endpoint {

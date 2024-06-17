@@ -9,21 +9,13 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { rlog } from "../logger";
-import type {
-  APIGatewayProxyEvent,
-  APIGatewayProxyEventV2,
-  APIGatewayProxyResult,
-  APIGatewayProxyResultV2,
-  Context,
-} from "aws-lambda";
-import { EndpointImpl } from "./endpoint_impl";
-import { LambdaConnection } from "../connection/lambda_connection";
-import { InvocationBuilder } from "../invocation";
-import { decodeLambdaBody } from "../io/decoder";
-import { Message } from "../types/types";
-import { StateMachine } from "../state_machine";
-import { ensureError } from "../types/errors";
+import { rlog } from "../../logger";
+import { LambdaConnection } from "../../connection/lambda_connection";
+import { InvocationBuilder } from "../../invocation";
+import { decodeMessagesBuffer } from "../../io/decoder";
+import { Message } from "../../types/types";
+import { StateMachine } from "../../state_machine";
+import { ensureError } from "../../types/errors";
 import {
   OUTPUT_ENTRY_MESSAGE_TYPE,
   isServiceProtocolVersionSupported,
@@ -31,34 +23,59 @@ import {
   selectSupportedServiceDiscoveryProtocolVersion,
   serviceDiscoveryProtocolVersionToHeaderValue,
   serviceProtocolVersionToHeaderValue,
-} from "../types/protocol";
-import { ProtocolMode } from "../types/discovery";
-import {
-  ComponentHandler,
-  UrlPathComponents,
-  parseUrlComponents,
-} from "../types/components";
-import { validateRequestSignature } from "./request_signing/validate";
-import { X_RESTATE_SERVER } from "../user_agent";
+} from "../../types/protocol";
+import { ProtocolMode } from "../../types/discovery";
+import { ComponentHandler, parseUrlComponents } from "../../types/components";
+import { validateRequestSignature } from "../request_signing/validate";
+import { X_RESTATE_SERVER } from "../../user_agent";
 import { Buffer } from "node:buffer";
-import { ServiceDiscoveryProtocolVersion } from "../generated/proto/discovery_pb";
-import { ServiceProtocolVersion } from "../generated/proto/protocol_pb";
+import { ServiceDiscoveryProtocolVersion } from "../../generated/proto/discovery_pb";
+import { ServiceProtocolVersion } from "../../generated/proto/protocol_pb";
+import { EndpointBuilder } from "../endpoint_builder";
 
-export class LambdaHandler {
-  constructor(private readonly endpoint: EndpointImpl) {}
+export interface Headers {
+  [name: string]: string | string[] | undefined;
+}
+
+export interface ResponseHeaders {
+  [name: string]: string;
+}
+
+export interface AdditionalContext {
+  [name: string]: string;
+}
+
+export interface RestateRequest {
+  readonly url: string;
+  readonly headers: Headers;
+  readonly body: Uint8Array;
+}
+
+export interface RestateResponse {
+  readonly headers: ResponseHeaders;
+  readonly statusCode: number;
+  readonly body: Uint8Array;
+}
+
+export interface RestateHandler {
+  handle(
+    request: RestateRequest,
+    context?: AdditionalContext
+  ): Promise<RestateResponse>;
+}
+
+export class GenericHandler implements RestateHandler {
+  constructor(private readonly endpoint: EndpointBuilder) {}
 
   // --------------------------------------------------------------------------
 
-  /**
-   * This is the main request handling method, effectively a typed variant of `create()`.
-   */
-  async handleRequest(
-    event: APIGatewayProxyEvent | APIGatewayProxyEventV2,
-    context: Context
-  ): Promise<APIGatewayProxyResult | APIGatewayProxyResultV2> {
-    const path = "path" in event ? event.path : event.rawPath;
+  public async handle(
+    request: RestateRequest,
+    context?: AdditionalContext
+  ): Promise<RestateResponse> {
+    const path = request.url;
 
-    const error = await this.validateConnectionSignature(path, event.headers);
+    const error = await this.validateConnectionSignature(path, request.headers);
     if (error !== null) {
       return error;
     }
@@ -70,49 +87,52 @@ export class LambdaHandler {
       return this.toErrorResponse(404, msg);
     }
     if (parsed === "discovery") {
-      return this.handleDiscovery(event.headers["accept"]);
+      return this.handleDiscovery(request.headers["accept"]);
     }
-
-    const serviceProtocolVersionString = event.headers["content-type"];
+    const serviceProtocolVersionString = request.headers["content-type"];
+    if (typeof serviceProtocolVersionString !== "string") {
+      const errorMessage = "Missing content-type header";
+      rlog.warn(errorMessage);
+      return this.toErrorResponse(415, errorMessage);
+    }
     const serviceProtocolVersion = parseServiceProtocolVersion(
       serviceProtocolVersionString
     );
-
     if (!isServiceProtocolVersionSupported(serviceProtocolVersion)) {
       const errorMessage = `Unsupported service protocol version '${serviceProtocolVersionString}'`;
       rlog.warn(errorMessage);
       return this.toErrorResponse(415, errorMessage);
     }
-
-    const parsedUrl = parsed as UrlPathComponents;
-    const method = this.endpoint.componentByName(parsedUrl.componentName);
+    const method = this.endpoint.componentByName(parsed.componentName);
     if (!method) {
-      const msg = `No service found for URL: ${parsedUrl}`;
+      const msg = `No service found for URL: ${parsed}`;
       rlog.error(msg);
       return this.toErrorResponse(404, msg);
     }
-    const handler = method?.handlerMatching(parsedUrl);
+    const handler = method?.handlerMatching(parsed);
     if (!handler) {
-      const msg = `No service found for URL: ${parsedUrl}`;
+      const msg = `No service found for URL: ${parsed}`;
       rlog.error(msg);
       return this.toErrorResponse(404, msg);
     }
-    if (!event.body) {
-      throw new Error("The incoming message body was null");
+    if (!request.body) {
+      const msg = "The incoming message body was null";
+      rlog.error(msg);
+      return this.toErrorResponse(400, msg);
     }
     return this.handleInvoke(
       handler,
-      event.body,
-      event.headers,
-      context,
-      serviceProtocolVersion
+      request.body,
+      request.headers,
+      serviceProtocolVersion,
+      context ?? {}
     );
   }
 
   private async validateConnectionSignature(
     path: string,
-    headers: { [name: string]: string | string[] | undefined }
-  ): Promise<APIGatewayProxyResult | APIGatewayProxyResultV2 | null> {
+    headers: Headers
+  ): Promise<RestateResponse | null> {
     if (!this.endpoint.keySet) {
       // not validating
       return null;
@@ -145,14 +165,16 @@ export class LambdaHandler {
 
   private async handleInvoke(
     handler: ComponentHandler,
-    body: string,
+    body: Uint8Array,
     headers: Record<string, string | string[] | undefined>,
-    context: Context,
-    serviceProtocolVersion: ServiceProtocolVersion
-  ): Promise<APIGatewayProxyResult | APIGatewayProxyResultV2> {
+    serviceProtocolVersion: ServiceProtocolVersion,
+    context: AdditionalContext
+  ): Promise<RestateResponse> {
     try {
       // build the previous journal from the events
-      let decodedEntries: Message[] | null = decodeLambdaBody(body);
+      let decodedEntries: Message[] | null = decodeMessagesBuffer(
+        Buffer.from(body)
+      );
       const journalBuilder = new InvocationBuilder(handler);
       decodedEntries.forEach((e: Message) => journalBuilder.handleMessage(e));
       const alreadyCompleted =
@@ -169,9 +191,7 @@ export class LambdaHandler {
         invocation,
         ProtocolMode.REQUEST_RESPONSE,
         handler.kind(),
-        invocation.inferLoggerContext({
-          AWSRequestId: context.awsRequestId,
-        })
+        invocation.inferLoggerContext(context)
       );
       await stateMachine.invoke();
       const result = await connection.getResult();
@@ -184,8 +204,7 @@ export class LambdaHandler {
           "x-restate-server": X_RESTATE_SERVER,
         },
         statusCode: 200,
-        isBase64Encoded: true,
-        body: encodeResponse(result),
+        body: result,
       };
     } catch (e) {
       const error = ensureError(e);
@@ -196,8 +215,14 @@ export class LambdaHandler {
   }
 
   private handleDiscovery(
-    acceptVersionsString: string | undefined
-  ): APIGatewayProxyResult | APIGatewayProxyResultV2 {
+    acceptVersionsString: string | string[] | undefined
+  ): RestateResponse {
+    if (typeof acceptVersionsString !== "string") {
+      const errorMessage = "Missing accept header";
+      rlog.warn(errorMessage);
+      return this.toErrorResponse(415, errorMessage);
+    }
+
     const serviceDiscoveryProtocolVersion =
       selectSupportedServiceDiscoveryProtocolVersion(acceptVersionsString);
 
@@ -220,7 +245,7 @@ export class LambdaHandler {
       serviceDiscoveryProtocolVersion === ServiceDiscoveryProtocolVersion.V1
     ) {
       const discoveryJson = JSON.stringify(discovery);
-      body = Buffer.from(discoveryJson).toString("base64");
+      body = Buffer.from(discoveryJson);
     } else {
       // should not be reached since we check for compatibility before
       throw new Error(
@@ -236,25 +261,18 @@ export class LambdaHandler {
         "x-restate-server": X_RESTATE_SERVER,
       },
       statusCode: 200,
-      isBase64Encoded: true,
       body,
     };
   }
 
-  private toErrorResponse(code: number, message: string) {
+  private toErrorResponse(code: number, message: string): RestateResponse {
     return {
       headers: {
         "content-type": "text/plain",
         "x-restate-server": X_RESTATE_SERVER,
       },
       statusCode: code,
-      isBase64Encoded: true,
-      body: encodeResponse(Buffer.from(JSON.stringify({ message }))),
+      body: Buffer.from(JSON.stringify({ message })),
     };
   }
-}
-
-function encodeResponse(data: Uint8Array): string {
-  const buffer = data instanceof Buffer ? data : Buffer.from(data);
-  return buffer.toString("base64");
 }

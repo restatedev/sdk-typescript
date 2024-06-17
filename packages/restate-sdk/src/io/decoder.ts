@@ -120,7 +120,6 @@ export function streamDecoder(): stream.Transform {
   });
 }
 
-// Decodes messages from Lambda requests to an array of headers + protocol messages
 const base64regex =
   /^([0-9a-zA-Z+/]{4})*(([0-9a-zA-Z+/]{2}==)|([0-9a-zA-Z+/]{3}=))?$/;
 

@@ -19,6 +19,11 @@
       "import": "./dist/src/public_api.js",
       "require": "./dist/src/public_api.js",
       "types": "./dist/src/public_api.d.ts"
+    },
+    "./cloudflare": {
+      "import": "./dist/src/cloudflare.js",
+      "require": "./dist/src/cloudflare.js",
+      "types": "./dist/src/cloudflare.d.ts"
     }
   },
   "files": [
@@ -45,6 +50,7 @@
     "@bufbuild/buf": "^1.15.0",
     "@bufbuild/protoc-gen-es": "^1.8.0",
     "@types/aws-lambda": "^8.10.115",
+    "@cloudflare/workers-types": "^4.20231016.0",
     "@types/jest": "^29.4.0",
     "@types/node": "^20.10.4",
     "@typescript-eslint/eslint-plugin": "^5.53.0",

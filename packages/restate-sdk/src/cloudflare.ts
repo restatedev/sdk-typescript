@@ -11,12 +11,14 @@
 
 export * from "./common_api";
 
-import type { RestateEndpoint } from "./endpoint";
-import { NodeEndpoint } from "./endpoint/node_endpoint";
+import {
+  CloudflareWorkerEndpointImpl,
+  type CloudflareWorkerEndpoint,
+} from "./endpoint/cloudflare_endpoint";
 
 /**
  * Create a new {@link RestateEndpoint}.
  */
-export function endpoint(): RestateEndpoint {
-  return new NodeEndpoint();
+export function endpoint(): CloudflareWorkerEndpoint {
+  return new CloudflareWorkerEndpointImpl();
 }
