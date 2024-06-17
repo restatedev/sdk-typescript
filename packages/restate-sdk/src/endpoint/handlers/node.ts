@@ -9,10 +9,9 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import stream from "node:stream";
+import * as stream from "node:stream";
 import { pipeline, finished } from "node:stream/promises";
-import type { Http2ServerRequest, Http2ServerResponse } from "http2";
-import type http2 from "http2";
+import type * as http2 from "http2";
 import { RestateHttp2Connection } from "../../connection/http_connection";
 import { ensureError } from "../../types/errors";
 import { InvocationBuilder } from "../../invocation";
@@ -41,9 +40,9 @@ export class Http2Handler {
   constructor(private readonly endpoint: EndpointBuilder) {}
 
   acceptConnection(
-    request: Http2ServerRequest,
+    request: http2.Http2ServerRequest,
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _response: Http2ServerResponse
+    _response: http2.Http2ServerResponse
   ) {
     const stream = request.stream;
     const url: URL = new URL(request.url ?? "/", "https://restate.dev"); // use a dummy base; we only care about path
@@ -67,7 +66,7 @@ export class Http2Handler {
   }
 
   private async validateConnectionSignature(
-    request: Http2ServerRequest,
+    request: http2.Http2ServerRequest,
     url: URL,
     stream: ServerHttp2Stream
   ): Promise<boolean> {

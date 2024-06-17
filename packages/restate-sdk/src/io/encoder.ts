@@ -9,7 +9,7 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import stream from "node:stream";
+import * as stream from "node:stream";
 import { PROTOBUF_MESSAGE_BY_TYPE } from "../types/protocol";
 import type { Message } from "../types/types";
 import { Header } from "../types/types";
