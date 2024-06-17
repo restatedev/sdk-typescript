@@ -9,7 +9,6 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { describe, expect } from "@jest/globals";
 import * as restate from "../src/public_api";
 import {
   awakeableMessage,
@@ -31,6 +30,7 @@ import { SLEEP_ENTRY_MESSAGE_TYPE } from "../src/types/protocol";
 import { Empty } from "@bufbuild/protobuf";
 import { TestDriver, TestGreeter, TestResponse } from "./testdriver";
 import { ProtocolMode } from "../src/types/discovery";
+import { describe, expect, it } from "vitest";
 
 const wakeupTime = 1835661783000;
 

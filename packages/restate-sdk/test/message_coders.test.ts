@@ -9,11 +9,11 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { describe, expect } from "@jest/globals";
 import { streamDecoder } from "../src/io/decoder";
 import { Message } from "../src/types/types";
 import { backgroundInvokeMessage } from "./protoutils";
 import { encodeMessage } from "../src/io/encoder";
+import { describe, expect, it } from "vitest";
 
 describe("The stream decoder", () => {
   it("should handle decoding of messages across chunks", () => {

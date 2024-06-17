@@ -9,7 +9,6 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { describe, expect } from "@jest/globals";
 import { TestDriver, TestGreeter, TestResponse } from "./testdriver";
 import {
   END_MESSAGE,
@@ -19,6 +18,7 @@ import {
   outputMessage,
   startMessage,
 } from "./protoutils";
+import { describe, expect, it } from "vitest";
 
 class Greeter implements TestGreeter {
   async greet(): Promise<TestResponse> {

@@ -9,7 +9,6 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { describe, expect } from "@jest/globals";
 import * as restate from "../src/public_api";
 import { TestDriver, TestGreeter, TestResponse } from "./testdriver";
 import {
@@ -25,6 +24,7 @@ import {
   suspensionMessage,
 } from "./protoutils";
 import { GetStateKeysEntryMessage_StateKeys } from "../src/generated/proto/protocol_pb";
+import { describe, expect, it } from "vitest";
 
 const INPUT_MESSAGE = inputMessage(greetRequest("bob"));
 

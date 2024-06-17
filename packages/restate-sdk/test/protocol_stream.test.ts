@@ -9,7 +9,6 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { describe, expect } from "@jest/globals";
 import {
   START_MESSAGE_TYPE,
   StartMessage,
@@ -23,6 +22,7 @@ import { Header, Message } from "../src/types/types";
 import stream from "stream";
 import { setTimeout } from "timers/promises";
 import { CompletablePromise } from "../src/utils/promises";
+import { describe, expect, it } from "vitest";
 
 // The following test suite is taken from headers.rs
 describe("Header", () => {

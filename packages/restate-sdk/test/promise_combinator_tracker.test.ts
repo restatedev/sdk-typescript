@@ -9,13 +9,13 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { describe, expect } from "@jest/globals";
 import { CompletablePromise } from "../src/utils/promises";
 import {
   newJournalEntryPromiseId,
   PromiseCombinatorTracker,
   PromiseId,
 } from "../src/promise_combinator_tracker";
+import { describe, expect, it } from "vitest";
 
 describe("PromiseCombinatorTracker with Promise.any", () => {
   it("should provide order in processing mode", async () => {

@@ -9,13 +9,13 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { describe, expect } from "@jest/globals";
 import {
   jsonDeserialize,
   jsonSerialize,
   formatMessageAsJson,
 } from "../src/utils/utils";
 import { RandImpl } from "../src/utils/rand";
+import { describe, expect, it } from "vitest";
 
 describe("JSON de-/serialization", () => {
   it("should be able to handle bigint", () => {

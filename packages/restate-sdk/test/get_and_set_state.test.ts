@@ -9,7 +9,6 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { describe, expect } from "@jest/globals";
 import * as restate from "../src/public_api";
 
 import {
@@ -33,6 +32,7 @@ import {
   suspensionMessage,
 } from "./protoutils";
 import { ProtocolMode } from "../src/types/discovery";
+import { describe, expect, it } from "vitest";
 
 class GetAndSetGreeter implements TestGreeter {
   async greet(
