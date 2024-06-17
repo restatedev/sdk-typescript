@@ -9,8 +9,7 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import type { TestGreeter } from "./testdriver";
-import { TestDriver, TestResponse } from "./testdriver";
+import { TestDriver, TestGreeter, TestResponse } from "./testdriver";
 import {
   END_MESSAGE,
   errorMessage,
@@ -23,7 +22,7 @@ import {
   greetResponse,
   failure,
 } from "./protoutils";
-import type { ObjectContext } from "../src/context";
+import { ObjectContext } from "../src/context";
 import { TerminalError } from "../src/public_api";
 import { SIDE_EFFECT_ENTRY_MESSAGE_TYPE } from "../src/types/protocol";
 import { describe, expect, it } from "vitest";

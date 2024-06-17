@@ -10,10 +10,10 @@
  */
 
 import { CompletablePromise } from "../src/utils/promises";
-import type { PromiseId } from "../src/promise_combinator_tracker";
 import {
   newJournalEntryPromiseId,
   PromiseCombinatorTracker,
+  PromiseId,
 } from "../src/promise_combinator_tracker";
 import { describe, expect, it } from "vitest";
 

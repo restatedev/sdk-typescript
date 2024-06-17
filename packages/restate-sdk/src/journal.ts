@@ -10,40 +10,41 @@
  */
 
 import * as p from "./types/protocol";
-import type { Failure, RunEntryMessage } from "./generated/proto/protocol_pb";
-import { GetStateKeysEntryMessage_StateKeys } from "./generated/proto/protocol_pb";
-import type {
-  AwakeableEntryMessage,
-  CompletionMessage,
-  EntryAckMessage,
-  GetStateEntryMessage,
-  GetStateKeysEntryMessage,
-  CallEntryMessage,
-  OutputEntryMessage,
-  InputEntryMessage,
-  SleepEntryMessage,
-  SuspensionMessage,
-} from "./types/protocol";
+import {
+  Failure,
+  GetStateKeysEntryMessage_StateKeys,
+  RunEntryMessage,
+} from "./generated/proto/protocol_pb";
 import {
   AWAKEABLE_ENTRY_MESSAGE_TYPE,
+  AwakeableEntryMessage,
   BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
   CLEAR_ALL_STATE_ENTRY_MESSAGE_TYPE,
   CLEAR_STATE_ENTRY_MESSAGE_TYPE,
   COMBINATOR_ENTRY_MESSAGE,
   COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
+  CompletionMessage,
+  EntryAckMessage,
   GET_STATE_ENTRY_MESSAGE_TYPE,
   GET_STATE_KEYS_ENTRY_MESSAGE_TYPE,
+  GetStateEntryMessage,
+  GetStateKeysEntryMessage,
   INVOKE_ENTRY_MESSAGE_TYPE,
+  CallEntryMessage,
   OUTPUT_ENTRY_MESSAGE_TYPE,
+  OutputEntryMessage,
   INPUT_ENTRY_MESSAGE_TYPE,
+  InputEntryMessage,
   SET_STATE_ENTRY_MESSAGE_TYPE,
   SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
   SLEEP_ENTRY_MESSAGE_TYPE,
+  SleepEntryMessage,
   SUSPENSION_MESSAGE_TYPE,
+  SuspensionMessage,
 } from "./types/protocol";
 import { equalityCheckers, jsonDeserialize } from "./utils/utils";
 import { Message } from "./types/types";
-import type { Invocation } from "./invocation";
+import { Invocation } from "./invocation";
 import { failureToError, RetryableError } from "./types/errors";
 import { CompletablePromise } from "./utils/promises";
 import { Buffer } from "node:buffer";

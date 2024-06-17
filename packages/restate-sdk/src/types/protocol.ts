@@ -9,7 +9,7 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import type { Message } from "@bufbuild/protobuf";
+import { Message } from "@bufbuild/protobuf";
 import { CombinatorEntryMessage } from "../generated/proto/javascript_pb";
 import {
   AwakeableEntryMessage,

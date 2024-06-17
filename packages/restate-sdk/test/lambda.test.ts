@@ -10,9 +10,9 @@
  */
 
 import * as restate from "../src/public_api";
-import type { APIGatewayProxyEvent } from "aws-lambda";
+import { APIGatewayProxyEvent } from "aws-lambda";
 import { encodeMessage } from "../src/io/encoder";
-import type { Message } from "../src/types/types";
+import { Message } from "../src/types/types";
 import {
   awakeableMessage,
   END_MESSAGE,
@@ -24,10 +24,8 @@ import {
   startMessage,
 } from "./protoutils";
 import { decodeLambdaBody } from "../src/io/decoder";
-import type { TestGreeter } from "./testdriver";
-import { TestResponse } from "./testdriver";
-import type { Endpoint } from "../src/types/discovery";
-import { ServiceType } from "../src/types/discovery";
+import { TestGreeter, TestResponse } from "./testdriver";
+import { ServiceType, Endpoint } from "../src/types/discovery";
 import { X_RESTATE_SERVER } from "../src/user_agent";
 import {
   serviceDiscoveryProtocolVersionToHeaderValue,

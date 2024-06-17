@@ -19,15 +19,15 @@ import type {
 
 import { HandlerWrapper } from "../types/rpc";
 import {
-  type Component,
+  Component,
   ServiceComponent,
   VirtualObjectComponent,
   WorkflowComponent,
 } from "../types/components";
 
-import type * as discovery from "../types/discovery";
-import { type KeySetV1, parseKeySetV1 } from "./request_signing/v1";
-import type { WorkflowDefinition } from "@restatedev/restate-sdk-core";
+import * as discovery from "../types/discovery";
+import { KeySetV1, parseKeySetV1 } from "./request_signing/v1";
+import { WorkflowDefinition } from "@restatedev/restate-sdk-core";
 
 function isServiceDefinition<P extends string, M>(
   m: any

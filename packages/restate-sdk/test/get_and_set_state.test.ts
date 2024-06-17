@@ -9,10 +9,14 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import type * as restate from "../src/public_api";
+import * as restate from "../src/public_api";
 
-import type { TestGreeter, TestRequest } from "./testdriver";
-import { TestDriver, TestResponse } from "./testdriver";
+import {
+  TestDriver,
+  TestGreeter,
+  TestRequest,
+  TestResponse,
+} from "./testdriver";
 import {
   checkJournalMismatchError,
   clearStateMessage,

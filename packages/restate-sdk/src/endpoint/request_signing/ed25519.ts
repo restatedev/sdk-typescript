@@ -9,7 +9,7 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import type { Buffer } from "node:buffer";
+import { Buffer } from "node:buffer";
 import { webcrypto } from "node:crypto";
 import * as crypto from "node:crypto";
 

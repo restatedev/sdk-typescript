@@ -13,9 +13,9 @@
 
 import * as restate from "@restatedev/restate-sdk-clients";
 
-import { Greeter } from "./greeter";
+import type { Greeter } from "./greeter";
 import type { PaymentWorkflow } from "./workflow";
-import { Counter } from "./object";
+import type { Counter } from "./object";
 
 const Greeter: Greeter = { name: "greeter" };
 const Counter: Counter = { name: "counter" };

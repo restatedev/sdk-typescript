@@ -17,7 +17,7 @@ import type {
   Context,
 } from "aws-lambda";
 import { Buffer } from "node:buffer";
-import type { GenericHandler, RestateRequest } from "./generic";
+import { GenericHandler, RestateRequest } from "./generic";
 
 export class LambdaHandler {
   constructor(private readonly handler: GenericHandler) {}

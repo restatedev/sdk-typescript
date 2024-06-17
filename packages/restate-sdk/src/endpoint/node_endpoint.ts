@@ -12,7 +12,7 @@
 /* eslint-disable @typescript-eslint/ban-types */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import type { RestateEndpoint, ServiceBundle } from "../public_api";
+import { RestateEndpoint, ServiceBundle } from "../public_api";
 import type {
   ServiceDefinition,
   VirtualObjectDefinition,
@@ -23,7 +23,7 @@ import type { Http2ServerRequest, Http2ServerResponse } from "http2";
 import * as http2 from "http2";
 import { Http2Handler } from "./handlers/node";
 import { LambdaHandler } from "./handlers/lambda";
-import type { Component } from "../types/components";
+import { Component } from "../types/components";
 
 import type { KeySetV1 } from "./request_signing/v1";
 import type { WorkflowDefinition } from "@restatedev/restate-sdk-core";

@@ -9,15 +9,14 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import type stream from "node:stream";
+import stream from "node:stream";
 import { streamDecoder } from "../io/decoder";
-import type { Connection, RestateStreamConsumer } from "./connection";
-import type { Message } from "../types/types";
+import { Connection, RestateStreamConsumer } from "./connection";
+import { Message } from "../types/types";
 import { rlog } from "../logger";
 import { finished } from "node:stream/promises";
 import { BufferedConnection } from "./buffered_connection";
-import type { Http2ServerRequest } from "node:http2";
-import { type IncomingHttpHeaders } from "node:http2";
+import { Http2ServerRequest, IncomingHttpHeaders } from "node:http2";
 
 // utility promise, for cases where we want to save allocation of an extra promise
 const RESOLVED: Promise<void> = Promise.resolve();
