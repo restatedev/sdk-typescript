@@ -24,6 +24,11 @@
       "import": "./dist/src/cloudflare.js",
       "require": "./dist/src/cloudflare.js",
       "types": "./dist/src/cloudflare.d.ts"
+    },
+    "./lambda": {
+      "import": "./dist/src/lambda.js",
+      "require": "./dist/src/lambda.js",
+      "types": "./dist/src/lambda.d.ts"
     }
   },
   "files": [

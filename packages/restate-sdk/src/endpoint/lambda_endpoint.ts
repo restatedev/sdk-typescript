@@ -20,31 +20,30 @@ import { Component } from "../types/components";
 import type { KeySetV1 } from "./request_signing/v1";
 import type { WorkflowDefinition } from "@restatedev/restate-sdk-core";
 import { EndpointBuilder } from "./endpoint_builder";
-import { ExportedHandler } from "@cloudflare/workers-types";
 import { RestateEndpointBase, ServiceBundle } from "../endpoint";
-import { CloudflareHandler } from "./handlers/cloudflare";
 import { GenericHandler } from "./handlers/generic";
+import { LambdaHandler } from "./handlers/lambda";
 
 /**
- * CloudflareWorkerEndpoint encapsulates all the Restate services served by this endpoint.
+ * LambdaEndpoint encapsulates all the Restate services served by this endpoint.
  *
  *
  * @example
- * A typical endpoint served as CF worker would look like this:
+ * A typical endpoint served as Lambda would look like this:
  * ```
- * import * as restate from "@restatedev/restate-sdk/cloudflare";
+ * import * as restate from "@restatedev/restate-sdk/lambda";
  *
- * export default restate
+ * export const handler = restate
  *   .endpoint()
  *   .bind(myService)
  *   .handler();
  */
-export interface CloudflareWorkerEndpoint
-  extends RestateEndpointBase<CloudflareWorkerEndpoint> {
-  handler(): ExportedHandler;
+export interface LambdaEndpoint extends RestateEndpointBase<LambdaEndpoint> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  handler(): (event: any, ctx: any) => Promise<any>;
 }
 
-export class CloudflareWorkerEndpointImpl implements CloudflareWorkerEndpoint {
+export class LambdaEndpointImpl implements LambdaEndpoint {
   private builder: EndpointBuilder = new EndpointBuilder();
 
   public get keySet(): KeySetV1 | undefined {
@@ -59,7 +58,7 @@ export class CloudflareWorkerEndpointImpl implements CloudflareWorkerEndpoint {
     this.builder.addComponent(component);
   }
 
-  bindBundle(services: ServiceBundle): CloudflareWorkerEndpoint {
+  bindBundle(services: ServiceBundle): LambdaEndpoint {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     services.registerServices(this as any);
     return this;
@@ -70,21 +69,21 @@ export class CloudflareWorkerEndpointImpl implements CloudflareWorkerEndpoint {
       | ServiceDefinition<P, M>
       | VirtualObjectDefinition<P, M>
       | WorkflowDefinition<P, M>
-  ): CloudflareWorkerEndpoint {
+  ): LambdaEndpoint {
     this.builder.bind(definition);
     return this;
   }
 
-  public withIdentityV1(...keys: string[]): CloudflareWorkerEndpoint {
+  public withIdentityV1(...keys: string[]): LambdaEndpoint {
     this.builder.withIdentityV1(...keys);
     return this;
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  handler(): ExportedHandler {
+  handler(): (event: any, ctx: any) => Promise<any> {
     if (!this.builder.keySet) {
       rlog.warn(
-        `Accepting requests without validating request signatures; worker access must be restricted`
+        `Accepting requests without validating request signatures; Invoke permissions must be restricted`
       );
     } else {
       rlog.info(
@@ -94,6 +93,7 @@ export class CloudflareWorkerEndpointImpl implements CloudflareWorkerEndpoint {
       );
     }
     const genericHandler = new GenericHandler(this.builder);
-    return new CloudflareHandler(genericHandler);
+    const lambdaHandler = new LambdaHandler(genericHandler);
+    return lambdaHandler.handleRequest.bind(lambdaHandler);
   }
 }

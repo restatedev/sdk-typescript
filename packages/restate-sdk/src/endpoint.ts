@@ -93,6 +93,7 @@ export interface RestateEndpoint extends RestateEndpointBase<RestateEndpoint> {
    * We use `any` types here to avoid a dependency on the `@types/aws-lambda` dependency for consumers of this API.
    *
    * @returns The invocation handler function for to be called by AWS Lambda.
+   * @deprecated import "@restatedev/restate-sdk/lambda" instead
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   lambdaHandler(): (event: any, ctx: any) => Promise<any>;
