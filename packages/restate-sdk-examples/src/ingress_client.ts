@@ -141,7 +141,7 @@ const workflow = async (name: string) => {
 
   await client.paymentWebhook("hi there!");
 
-  ingress.result(submission);
+  await ingress.result(submission);
 
   console.log(await client.workflowAttach());
 };

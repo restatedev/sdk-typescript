@@ -153,7 +153,7 @@ export class InvocationBuilder implements RestateStreamConsumer {
       this.id!,
       this.debugId!,
       this.nbEntriesToReplay!,
-      this.replayEntries!,
+      this.replayEntries,
       this.invocationValue!,
       this.invocationHeaders ?? new Map(),
       this.localStateStore!,

@@ -105,13 +105,13 @@ export class GenericHandler implements RestateHandler {
     }
     const method = this.endpoint.componentByName(parsed.componentName);
     if (!method) {
-      const msg = `No service found for URL: ${parsed}`;
+      const msg = `No service found for URL: ${JSON.stringify(parsed)}`;
       rlog.error(msg);
       return this.toErrorResponse(404, msg);
     }
     const handler = method?.handlerMatching(parsed);
     if (!handler) {
-      const msg = `No service found for URL: ${parsed}`;
+      const msg = `No service found for URL: ${JSON.stringify(parsed)}`;
       rlog.error(msg);
       return this.toErrorResponse(404, msg);
     }
@@ -147,7 +147,10 @@ export class GenericHandler implements RestateHandler {
 
       if (!validateResponse.valid) {
         rlog.error(
-          `Rejecting request as its JWT did not validate: ${validateResponse.error}`
+          `Rejecting request as its JWT did not validate: ${
+            // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
+            validateResponse.error
+          }`
         );
         return this.toErrorResponse(401, "Unauthorized");
       } else {

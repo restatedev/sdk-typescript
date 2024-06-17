@@ -362,7 +362,7 @@ export class StateMachine implements RestateStreamConsumer {
             })
           );
 
-          this.journal.handleUserSideMessage(msg.messageType, msg.message);
+          void this.journal.handleUserSideMessage(msg.messageType, msg.message);
 
           if (!this.journal.outputMsgWasReplayed()) {
             this.send(msg);
@@ -385,7 +385,7 @@ export class StateMachine implements RestateStreamConsumer {
           // Mark the end of the invocation
           this.send(new Message(END_MESSAGE_TYPE, new EndMessage()));
 
-          this.finish(value);
+          void this.finish(value);
         } catch (e) {
           this.unhandledError(ensureError(e));
         }
@@ -400,7 +400,7 @@ export class StateMachine implements RestateStreamConsumer {
             return;
           }
 
-          this.sendErrorAndFinish(ensureError(e));
+          void this.sendErrorAndFinish(ensureError(e));
         } catch (ee) {
           this.unhandledError(ensureError(ee));
         }
@@ -446,7 +446,7 @@ export class StateMachine implements RestateStreamConsumer {
       msg.message
     );
 
-    this.journal.handleUserSideMessage(msg.messageType, msg.message);
+    void this.journal.handleUserSideMessage(msg.messageType, msg.message);
     if (!this.journal.outputMsgWasReplayed()) {
       this.send(msg);
     }
@@ -457,7 +457,7 @@ export class StateMachine implements RestateStreamConsumer {
 
   private send(message: Message) {
     this.connection.send(message).catch((err) => {
-      this.handleStreamError(err);
+      this.handleStreamError(err as Error);
     });
   }
 
@@ -510,7 +510,7 @@ export class StateMachine implements RestateStreamConsumer {
       // In case the delay is 0 we still schedule a timeout in order to process the suspension on the next process tick,
       // without interrupting the current work.
       this.suspensionTimeout = setTimeout(() => {
-        this.suspend();
+        void this.suspend();
       }, delay);
     }
   }
@@ -552,7 +552,7 @@ export class StateMachine implements RestateStreamConsumer {
       msg.message
     );
 
-    this.journal.handleUserSideMessage(msg.messageType, msg.message);
+    void this.journal.handleUserSideMessage(msg.messageType, msg.message);
     if (!this.journal.outputMsgWasReplayed()) {
       this.send(msg);
     }

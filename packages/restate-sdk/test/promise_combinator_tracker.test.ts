@@ -32,6 +32,7 @@ describe("PromiseCombinatorTracker with Promise.any", () => {
       completers[2].resolve("my value");
     });
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const { order, result } = await testResultPromise;
     expect(result).toStrictEqual("my value");
     expect(order).toStrictEqual(createOrder(0, 2));
@@ -51,6 +52,7 @@ describe("PromiseCombinatorTracker with Promise.any", () => {
       completers[2].resolve("my value");
     });
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const { order, result } = await testResultPromise;
     expect(result).toStrictEqual("my value");
     expect(order).toStrictEqual(createOrder(0, 2));
@@ -67,6 +69,7 @@ describe("PromiseCombinatorTracker with Promise.any", () => {
       promises
     );
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const { order, result } = await testResultPromise;
     expect(result).toStrictEqual("my value");
     expect(order).toStrictEqual(createOrder(0, 2));
@@ -79,11 +82,11 @@ describe("PromiseCombinatorTracker with Promise.any", () => {
     completers[2].resolve("my value");
     completers[0].reject("bla");
 
-    const result = await testCombinatorInReplayMode(
+    const result = (await testCombinatorInReplayMode(
       Promise.any.bind(Promise),
       promises,
       createOrder(0, 2)
-    );
+    )) as string;
 
     expect(result).toStrictEqual("my value");
   });
@@ -103,6 +106,7 @@ describe("PromiseCombinatorTracker with Promise.all", () => {
       completers[0].reject("my error");
     });
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const { order, result } = await testResultPromise;
     expect(result).toStrictEqual("my error");
     expect(order).toStrictEqual(createOrder(2, 0));
@@ -122,6 +126,7 @@ describe("PromiseCombinatorTracker with Promise.all", () => {
       completers[1].resolve("my value 1");
     });
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const { order, result } = await testResultPromise;
     expect(result).toStrictEqual(["my value 0", "my value 1", "my value 2"]);
     expect(order).toStrictEqual(createOrder(2, 0, 1));
@@ -134,11 +139,11 @@ describe("PromiseCombinatorTracker with Promise.all", () => {
     completers[2].resolve("my value");
     completers[0].reject("my error");
 
-    const result = await testCombinatorInReplayMode(
+    const result = (await testCombinatorInReplayMode(
       Promise.all.bind(Promise),
       promises,
       createOrder(2, 0)
-    );
+    )) as string;
 
     expect(result).toStrictEqual("my error");
   });
@@ -149,11 +154,11 @@ describe("PromiseCombinatorTracker with Promise.all", () => {
     completers[0].resolve("my value 0");
     completers[1].resolve("my value 1");
 
-    const result = await testCombinatorInReplayMode(
+    const result = (await testCombinatorInReplayMode(
       Promise.all.bind(Promise),
       promises,
       createOrder(2, 0, 1)
-    );
+    )) as string[];
 
     expect(result).toStrictEqual(["my value 0", "my value 1", "my value 2"]);
   });
@@ -206,6 +211,7 @@ async function testCombinatorInProcessingMode(
     }),
     (result) => ({
       order: resultMap.get(0),
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       result,
     })
   );
@@ -232,6 +238,7 @@ async function testCombinatorInReplayMode(
       // To make sure it behaves like testCombinatorInProcessingMode and always succeeds
       .transform(
         (v) => v,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-return
         (e) => e
       )
   );

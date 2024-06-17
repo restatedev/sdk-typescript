@@ -10,7 +10,7 @@
  */
 
 import * as restate from "../src/public_api";
-import { APIGatewayProxyEvent } from "aws-lambda";
+import { APIGatewayProxyEvent, type APIGatewayProxyResult } from "aws-lambda";
 import { encodeMessage } from "../src/io/encoder";
 import { Message } from "../src/types/types";
 import {
@@ -48,7 +48,7 @@ class LambdaGreeter implements TestGreeter {
 }
 
 describe("Lambda: decodeMessage", () => {
-  it("returns a list of decoded messages", async () => {
+  it("returns a list of decoded messages", () => {
     const messages: Message[] = [
       startMessage({ knownEntries: 2 }),
       inputMessage(greetRequest("Pete")),
@@ -61,7 +61,7 @@ describe("Lambda: decodeMessage", () => {
     expect(decodedMessages).toStrictEqual(messages);
   });
 
-  it("returns a list of decoded messages when last message body is empty", async () => {
+  it("returns a list of decoded messages when last message body is empty", () => {
     const messages: Message[] = [
       startMessage({ knownEntries: 2 }),
       inputMessage(new Uint8Array()),
@@ -73,7 +73,7 @@ describe("Lambda: decodeMessage", () => {
     expect(decodedMessages).toStrictEqual(messages);
   });
 
-  it("should returns a list of decoded messages when last message body is empty", async () => {
+  it("should returns a list of decoded messages when last message body is empty", () => {
     const messages: Message[] = [
       startMessage({ knownEntries: 2 }),
       inputMessage(greetRequest("Pete")),
@@ -86,7 +86,7 @@ describe("Lambda: decodeMessage", () => {
     expect(decodedMessages).toStrictEqual(messages);
   });
 
-  it("fails on an invalid input message with random signs at end of message", async () => {
+  it("fails on an invalid input message with random signs at end of message", () => {
     const messages: Message[] = [
       startMessage({ knownEntries: 2 }),
       inputMessage(greetRequest("Pete")),
@@ -101,7 +101,7 @@ describe("Lambda: decodeMessage", () => {
     expect(decodedMessages).toThrow();
   });
 
-  it("fails on an invalid input message with random signs in front of message", async () => {
+  it("fails on an invalid input message with random signs in front of message", () => {
     const messages: Message[] = [
       startMessage({ knownEntries: 2 }),
       inputMessage(greetRequest("Pete")),
@@ -252,7 +252,7 @@ describe("LambdaGreeter", () => {
 
     const decodedResponse: Endpoint = JSON.parse(
       Buffer.from(result.body, "base64").toString("utf8")
-    );
+    ) as Endpoint;
     expect(decodedResponse.services[0].name).toStrictEqual("greeter");
     expect(decodedResponse.services[0].ty).toEqual(ServiceType.VIRTUAL_OBJECT);
   });
@@ -290,7 +290,10 @@ function getTestHandler() {
         },
       })
     )
-    .lambdaHandler();
+    .lambdaHandler() as (
+    event: object,
+    ctx: object
+  ) => Promise<APIGatewayProxyResult>;
 }
 
 function apiProxyGatewayEvent(

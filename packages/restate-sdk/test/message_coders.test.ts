@@ -27,7 +27,7 @@ describe("The stream decoder", () => {
     const result: Message[] = [];
 
     const decoder = streamDecoder();
-    decoder.push = (chunk) => {
+    decoder.push = (chunk: Message) => {
       result.push(chunk);
       return true;
     };

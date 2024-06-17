@@ -87,7 +87,7 @@ export class Journal {
     messageType: bigint,
     message: p.ProtocolMessage | Uint8Array
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ): Promise<any | undefined> {
+  ): Promise<any> {
     this.incrementUserCodeIndex();
 
     switch (this.state) {

@@ -187,7 +187,7 @@ class AwakeableSleepRaceInterleavedWithSideEffectGreeter
       sleep,
     ]);
 
-    await ctx.run(async () => "sideEffect");
+    await ctx.run(() => Promise.resolve("sideEffect"));
 
     // Because the combinatorPromise generates the message when awaited, the entries order here should be:
     // * AwakeableEntry
@@ -263,7 +263,7 @@ class CombineablePromiseThenSideEffect implements TestGreeter {
       a2.promise,
     ]);
 
-    const sideEffectResult = await ctx.run(async () => "sideEffect");
+    const sideEffectResult = await ctx.run(() => Promise.resolve("sideEffect"));
 
     return TestResponse.create({
       greeting: combinatorResult + "-" + sideEffectResult,

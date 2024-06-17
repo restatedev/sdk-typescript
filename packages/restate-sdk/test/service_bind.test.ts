@@ -20,9 +20,11 @@ import { greetRequest, inputMessage, startMessage } from "./protoutils";
 import { describe, it } from "vitest";
 
 const greeter: TestGreeter = {
-  /* eslint-disable @typescript-eslint/no-unused-vars */
+  // eslint-disable-next-line @typescript-eslint/require-await
   greet: async (
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     ctx: restate.ObjectContext,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     req: TestRequest
   ): Promise<TestResponse> => {
     return TestResponse.create({ greeting: `Hello` });
@@ -35,6 +37,7 @@ const greeterFoo = {
     return this.foo(ctx, req);
   },
 
+  // eslint-disable-next-line @typescript-eslint/require-await
   async foo(
     ctx: restate.ObjectContext,
     req: TestRequest

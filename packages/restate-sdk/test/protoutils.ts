@@ -283,6 +283,7 @@ export function completionMessage(
       COMPLETION_MESSAGE_TYPE,
       new CompletionMessage({
         entryIndex: index,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
         result: { case: "value", value: Buffer.from(value) },
       })
     );

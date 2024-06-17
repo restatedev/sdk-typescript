@@ -64,7 +64,7 @@ function optsFromArgs(args: unknown[]): {
   parameter?: unknown;
   opts?: Opts | SendOpts;
 } {
-  let parameter: unknown | undefined;
+  let parameter: unknown;
   let opts: Opts | SendOpts | undefined;
   switch (args.length) {
     case 0: {
@@ -72,9 +72,9 @@ function optsFromArgs(args: unknown[]): {
     }
     case 1: {
       if (args[0] instanceof Opts) {
-        opts = args[0] as Opts;
+        opts = args[0];
       } else if (args[0] instanceof SendOpts) {
-        opts = args[0] as SendOpts;
+        opts = args[0];
       } else {
         parameter = args[0];
       }
@@ -83,9 +83,9 @@ function optsFromArgs(args: unknown[]): {
     case 2: {
       parameter = args[0];
       if (args[1] instanceof Opts) {
-        opts = args[1] as Opts;
+        opts = args[1];
       } else if (args[1] instanceof SendOpts) {
-        opts = args[1] as SendOpts;
+        opts = args[1];
       } else {
         throw new TypeError(
           "The second argument must be either Opts or SendOpts"
@@ -157,8 +157,7 @@ const doComponentInvocation = async <I, O>(
   //
   const idempotencyKey = params.opts?.opts.idempotencyKey;
   if (idempotencyKey) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (headers as any)[IDEMPOTENCY_KEY_HEADER] = idempotencyKey;
+    headers[IDEMPOTENCY_KEY_HEADER] = idempotencyKey;
     attachable = true;
   }
   //
@@ -179,7 +178,7 @@ const doComponentInvocation = async <I, O>(
     );
   }
   const responseBuf = await httpResponse.arrayBuffer();
-  const json = deserializeJson(new Uint8Array(responseBuf));
+  const json = deserializeJson(new Uint8Array(responseBuf)) as O;
   if (!params.send) {
     return json;
   }
@@ -211,7 +210,7 @@ const doWorkflowHandleCall = async <O>(
   });
   if (httpResponse.ok) {
     const responseBuf = await httpResponse.arrayBuffer();
-    return deserializeJson(new Uint8Array(responseBuf));
+    return deserializeJson(new Uint8Array(responseBuf)) as O;
   }
   const body = await httpResponse.text();
   throw new HttpCallError(
@@ -428,7 +427,7 @@ class HttpIngress implements Ingress {
     });
     if (httpResponse.ok) {
       const responseBuf = await httpResponse.arrayBuffer();
-      return deserializeJson(new Uint8Array(responseBuf));
+      return deserializeJson(new Uint8Array(responseBuf)) as T;
     }
     const body = await httpResponse.text();
     throw new HttpCallError(
@@ -448,7 +447,7 @@ function computeDelayAsIso(opts: SendOpts): string {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function deserializeJson(what: Uint8Array): any | undefined {
+function deserializeJson(what: Uint8Array): any {
   if (what === undefined || what.length == 0) {
     return undefined;
   }

@@ -4,14 +4,33 @@
     "commonjs": true,
     "es2021": true
   },
-  "extends": ["eslint:recommended", "plugin:@typescript-eslint/recommended"],
-  "overrides": [],
+  "extends": [
+    "eslint:recommended",
+    "plugin:@typescript-eslint/recommended-type-checked"
+  ],
+  "overrides": [
+    {
+      "files": ["packages/restate-sdk-examples/**/*.ts"],
+      "rules": {
+        "@typescript-eslint/require-await": "off",
+        "@typescript-eslint/no-floating-promises": "off"
+      }
+    }
+  ],
   "parser": "@typescript-eslint/parser",
   "parserOptions": {
-    "ecmaVersion": "latest"
+    "ecmaVersion": "latest",
+    "project": ["./tsconfig.eslint.json"]
   },
   "plugins": ["@typescript-eslint"],
   "rules": {
-    "no-console": "error"
+    "no-console": "error",
+    "@typescript-eslint/restrict-template-expressions": [
+      "error",
+      {
+        "allowNever": true,
+        "allowArray": true
+      }
+    ]
   }
 }

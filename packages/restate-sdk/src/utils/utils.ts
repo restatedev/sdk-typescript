@@ -35,13 +35,13 @@ import {
 import { Buffer } from "node:buffer";
 
 export function jsonSerialize(obj: any): string {
-  return JSON.stringify(obj, (_, v) =>
+  return JSON.stringify(obj, (_, v): any =>
     typeof v === "bigint" ? "BIGINT::" + v.toString() : v
   );
 }
 
 export function jsonDeserialize<T>(json: string): T {
-  return JSON.parse(json, (_, v) =>
+  return JSON.parse(json, (_, v): any =>
     typeof v === "string" && v.startsWith("BIGINT::")
       ? BigInt(v.substring(8))
       : v
@@ -56,7 +56,7 @@ export function formatMessageAsJson(obj: any): string {
     }
   }
   // Stringify object. Replace bigintToString serializer to prevent "BigInt not serializable" errors
-  return JSON.stringify(obj, (_, v) =>
+  return JSON.stringify(obj, (_, v): any =>
     typeof v === "bigint" ? v.toString() + "n" : v
   );
 }

@@ -17,11 +17,7 @@ import { ensureError } from "../../types/errors";
 import { InvocationBuilder } from "../../invocation";
 import { StateMachine } from "../../state_machine";
 import { rlog } from "../../logger";
-import {
-  ComponentHandler,
-  UrlPathComponents,
-  parseUrlComponents,
-} from "../../types/components";
+import { ComponentHandler, parseUrlComponents } from "../../types/components";
 import { Endpoint, ProtocolMode } from "../../types/discovery";
 import { validateRequestSignature } from "../request_signing/validate";
 import { ServerHttp2Stream } from "node:http2";
@@ -85,6 +81,7 @@ export class Http2Handler {
 
     if (!validateResponse.valid) {
       rlog.error(
+        // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
         `Rejecting request as its JWT did not validate: ${validateResponse.error}`
       );
       stream.respond({
@@ -145,7 +142,7 @@ export class Http2Handler {
       return respondUnsupportedProtocolVersion(stream, errorMessage);
     }
 
-    const urlComponents = route as UrlPathComponents;
+    const urlComponents = route;
     const component = this.endpoint.componentByName(
       urlComponents.componentName
     );

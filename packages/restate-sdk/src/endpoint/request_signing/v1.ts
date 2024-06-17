@@ -100,7 +100,9 @@ async function jwtVerify(
 
   let header: Record<string, string | undefined> = {};
   try {
-    header = JSON.parse(Buffer.from(protectedHeader, "base64url").toString());
+    header = JSON.parse(
+      Buffer.from(protectedHeader, "base64url").toString()
+    ) as Record<string, string | undefined>;
   } catch (e) {
     throw new Error("JWT header is invalid");
   }
@@ -119,18 +121,9 @@ async function jwtVerify(
     throw new Error('JWT must have "kid" header, which must be a string');
   }
 
-  const keyPromise = keySet.get(kid);
-  if (!keyPromise) {
+  const key = keySet.get(kid);
+  if (!key) {
     throw new Error(`kid ${header.kid} is not present in keySet`);
-  }
-
-  let key: Key;
-  try {
-    key = await keyPromise;
-  } catch (e) {
-    throw new Error(
-      `key ${header.kid} failed to parse on startup, this will affect all requests: ${e}`
-    );
   }
 
   let signatureBuf: Buffer;
@@ -151,7 +144,9 @@ async function jwtVerify(
 
   let payloadData: Record<string, string | undefined>;
   try {
-    payloadData = JSON.parse(Buffer.from(payload, "base64url").toString());
+    payloadData = JSON.parse(
+      Buffer.from(payload, "base64url").toString()
+    ) as Record<string, string | undefined>;
   } catch (e) {
     throw new Error("JWT payload is invalid");
   }
