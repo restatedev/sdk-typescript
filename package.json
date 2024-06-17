@@ -20,7 +20,7 @@
     "packages/restate-sdk-clients",
     "packages/restate-sdk-examples"
   ],
-  "type": "commonjs",
+  "type": "module",
   "scripts": {
     "build": "npm run build -ws --if-present",
     "proto": "npm run proto -ws --if-present",

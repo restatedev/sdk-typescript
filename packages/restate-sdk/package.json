@@ -13,7 +13,7 @@
   "bugs": {
     "url": "https://github.com/restatedev/sdk-typescript/issues"
   },
-  "type": "commonjs",
+  "type": "module",
   "exports": {
     ".": {
       "import": "./dist/src/public_api.js",

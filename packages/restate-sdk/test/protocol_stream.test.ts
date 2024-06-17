@@ -20,7 +20,7 @@ import {
 } from "../src/types/protocol";
 import { RestateHttp2Connection } from "../src/connection/http_connection";
 import { Header, Message } from "../src/types/types";
-import stream from "stream";
+import * as stream from "node:stream";
 import { setTimeout } from "timers/promises";
 import { CompletablePromise } from "../src/utils/promises";
 

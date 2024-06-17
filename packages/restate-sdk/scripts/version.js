@@ -13,13 +13,13 @@
 // taken from package.json into a src/generated/version.ts
 // file.
 
-const fs = require("node:fs");
-const path = require("node:path");
+import fs from "node:fs";
+import path from "node:path";
 
 //
 // figure out where we are
 //
-const cwd = path.dirname(__filename);
+const cwd = path.dirname(import.meta.filename);
 
 //
 // compute the relative paths to this script
