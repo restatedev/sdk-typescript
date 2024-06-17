@@ -9,9 +9,6 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-/* eslint-disable @typescript-eslint/ban-types */
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import type {
   ServiceDefinition,
   VirtualObjectDefinition,
@@ -63,6 +60,7 @@ export class CloudflareWorkerEndpointImpl implements CloudflareWorkerEndpoint {
   }
 
   bindBundle(services: ServiceBundle): CloudflareWorkerEndpoint {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     services.registerServices(this as any);
     return this;
   }
@@ -86,7 +84,7 @@ export class CloudflareWorkerEndpointImpl implements CloudflareWorkerEndpoint {
   handler(): ExportedHandler {
     if (!this.builder.keySet) {
       rlog.warn(
-        `Accepting requests without validating request signatures; Invoke permissions must be restricted`
+        `Accepting requests without validating request signatures; worker access must be restricted`
       );
     } else {
       rlog.info(
