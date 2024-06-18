@@ -20,7 +20,6 @@ import type { Component } from "../types/components.js";
 
 import type { KeySetV1 } from "./request_signing/v1.js";
 import { EndpointBuilder } from "./endpoint_builder.js";
-import type { ExportedHandler } from "@cloudflare/workers-types";
 import type {
   RestateEndpoint,
   RestateEndpointBase,
@@ -45,7 +44,8 @@ import { GenericHandler } from "./handlers/generic.js";
  */
 export interface CloudflareWorkerEndpoint
   extends RestateEndpointBase<CloudflareWorkerEndpoint> {
-  handler(): ExportedHandler;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  handler(): { fetch: (request: any) => Promise<any> };
 }
 
 export class CloudflareWorkerEndpointImpl implements CloudflareWorkerEndpoint {
@@ -84,7 +84,7 @@ export class CloudflareWorkerEndpointImpl implements CloudflareWorkerEndpoint {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  handler(): ExportedHandler {
+  handler(): { fetch: (request: any) => Promise<any> } {
     if (!this.builder.keySet) {
       rlog.warn(
         `Accepting requests without validating request signatures; worker access must be restricted`
@@ -97,6 +97,9 @@ export class CloudflareWorkerEndpointImpl implements CloudflareWorkerEndpoint {
       );
     }
     const genericHandler = new GenericHandler(this.builder);
-    return new CloudflareHandler(genericHandler);
+    const cloudflareHandler = new CloudflareHandler(genericHandler);
+    return {
+      fetch: cloudflareHandler.fetch.bind(cloudflareHandler),
+    };
   }
 }
