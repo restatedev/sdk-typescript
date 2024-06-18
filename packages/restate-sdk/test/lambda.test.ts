@@ -10,8 +10,7 @@
  */
 
 import * as restate from "../src/public_api.js";
-import type { APIGatewayProxyEvent } from "aws-lambda";
-import { type APIGatewayProxyResult } from "aws-lambda";
+import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { encodeMessage } from "../src/io/encoder.js";
 import type { Message } from "../src/types/types.js";
 import {
