@@ -40,7 +40,8 @@
     "lint": "eslint --ignore-path .eslintignore --max-warnings=0 --ext .ts .",
     "format": "prettier --ignore-path .eslintignore --write \"**/*.+(js|ts|json)\"",
     "format-check": "prettier --ignore-path .eslintignore --check \"**/*.+(js|ts|json)\"",
-    "verify": "npm run format-check && npm run lint && npm run build",
+    "attw": "attw --pack",
+    "verify": "npm run format-check && npm run lint && npm run build && npm run attw",
     "release": "release-it"
   },
   "engines": {
