@@ -9,14 +9,20 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import type { ExportedHandler, Request } from "@cloudflare/workers-types";
-import { Response } from "@cloudflare/workers-types";
+import type {
+  Request,
+  ExportedHandler,
+  ServiceWorkerGlobalScope,
+  Response as WorkerResponse,
+} from "@cloudflare/workers-types";
 import type { GenericHandler, RestateRequest } from "./generic.js";
+declare const self: ServiceWorkerGlobalScope;
+const { Response } = self;
 
 export class CloudflareHandler implements ExportedHandler {
   constructor(private readonly handler: GenericHandler) {}
 
-  async fetch(event: Request): Promise<Response> {
+  async fetch(event: Request): Promise<WorkerResponse> {
     const url = event.url;
     const requestBody: Uint8Array = new Uint8Array(await event.arrayBuffer());
     const headers = Object.fromEntries(event.headers.entries());
