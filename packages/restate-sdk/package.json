@@ -49,6 +49,16 @@
       }
     }
   },
+  "typesVersions": {
+    "*": {
+      "cloudflare": [
+        "dist/cjs/src/cloudflare.d.ts"
+      ],
+      "lambda": [
+        "dist/cjs/src/lambda.d.ts"
+      ]
+    }
+  },
   "types": "./dist/cjs/src/public_api.d.ts",
   "files": [
     "dist"
@@ -65,8 +75,8 @@
     "lint": "eslint --ignore-path .eslintignore --max-warnings=0 --ext .ts .",
     "format": "prettier --ignore-path .eslintignore --write \"**/*.+(js|ts|json)\"",
     "format-check": "prettier --ignore-path .eslintignore --check \"**/*.+(js|ts|json)\"",
-    "verify": "npm run format-check && npm run gen:version && npm run lint && npm run test && npm run build",
     "attw": "attw --pack",
+    "verify": "npm run format-check && npm run gen:version && npm run lint && npm run test && npm run build && npm run attw",
     "release": "release-it"
   },
   "dependencies": {
