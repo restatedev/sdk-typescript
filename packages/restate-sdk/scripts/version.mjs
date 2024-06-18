@@ -13,19 +13,13 @@
 // taken from package.json into a src/generated/version.ts
 // file.
 
-const fs = require("node:fs");
-const path = require("node:path");
+import * as fs from "node:fs";
 
 //
-// figure out where we are
+// compute the relative paths to the package root, which `npm run` always executes fro
 //
-const cwd = path.dirname(__filename);
-
-//
-// compute the relative paths to this script
-//
-const packageJsonPath = `${cwd}/../package.json`;
-const targetDir = `${cwd}/../src/generated`;
+const packageJsonPath = `./package.json`;
+const targetDir = `./src/generated`;
 const targetFile = `${targetDir}/version.ts`;
 
 //
