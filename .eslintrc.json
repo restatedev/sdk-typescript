@@ -7,8 +7,16 @@
   "extends": [
     "eslint:recommended",
     "plugin:@typescript-eslint/recommended-type-checked",
-    "plugin:require-extensions/recommended"
+    "plugin:require-extensions/recommended",
+    "plugin:import/recommended",
+    "plugin:import/typescript"
   ],
+  "settings": {
+    "import/resolver": {
+      "typescript": true,
+      "node": true
+    }
+  },
   "overrides": [
     {
       "files": ["packages/restate-sdk-examples/**/*.ts"],

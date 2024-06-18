@@ -16,6 +16,7 @@ import type { RestateEndpoint, ServiceBundle } from "../public_api.js";
 import type {
   ServiceDefinition,
   VirtualObjectDefinition,
+  WorkflowDefinition,
 } from "@restatedev/restate-sdk-core";
 
 import { rlog } from "../logger.js";
@@ -26,7 +27,6 @@ import { LambdaHandler } from "./handlers/lambda.js";
 import type { Component } from "../types/components.js";
 
 import type { KeySetV1 } from "./request_signing/v1.js";
-import type { WorkflowDefinition } from "@restatedev/restate-sdk-core";
 import { EndpointBuilder } from "./endpoint_builder.js";
 import { GenericHandler } from "./handlers/generic.js";
 

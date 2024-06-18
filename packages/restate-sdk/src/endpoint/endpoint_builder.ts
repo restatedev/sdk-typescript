@@ -15,6 +15,7 @@
 import type {
   ServiceDefinition,
   VirtualObjectDefinition,
+  WorkflowDefinition,
 } from "@restatedev/restate-sdk-core";
 
 import { HandlerWrapper } from "../types/rpc.js";
@@ -28,7 +29,6 @@ import {
 import type * as discovery from "../types/discovery.js";
 import type { KeySetV1 } from "./request_signing/v1.js";
 import { parseKeySetV1 } from "./request_signing/v1.js";
-import type { WorkflowDefinition } from "@restatedev/restate-sdk-core";
 
 function isServiceDefinition<P extends string, M>(
   m: Record<string, any>
