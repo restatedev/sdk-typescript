@@ -65,10 +65,31 @@ export interface RestateHandler {
   ): Promise<RestateResponse>;
 }
 
+/**
+ * This is an internal API to support 'fetch' like handlers.
+ * This is for now supports only request-reply style of invocations
+ * which are suitable for platforms like AWS Lambda, Cloudflare works,
+ * and runtimes that only support HTTP/1.1 like Bun.
+ *
+ * An individual handler will have to convert the shape of the incoming request
+ * to a RestateRequest, and then pass it to this handler, and eventually convert back
+ * the response.
+ * Different runtimes have slightly different shapes of the incoming request, and responses.
+ */
 export class GenericHandler implements RestateHandler {
-  constructor(private readonly endpoint: EndpointBuilder) {}
-
-  // --------------------------------------------------------------------------
+  constructor(private readonly endpoint: EndpointBuilder) {
+    if (!this.endpoint.keySet) {
+      rlog.warn(
+        `Accepting requests without validating request signatures; worker access must be restricted`
+      );
+    } else {
+      rlog.info(
+        `Validating requests using signing keys [${Array.from(
+          this.endpoint.keySet.keys()
+        )}]`
+      );
+    }
+  }
 
   public async handle(
     request: RestateRequest,
