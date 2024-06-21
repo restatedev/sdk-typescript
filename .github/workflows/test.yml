@@ -49,7 +49,6 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
-
       - name: Publish snapshot
         if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
         env:
@@ -62,9 +61,14 @@ jobs:
           # see https://github.com/npm/cli/pull/4588
           VERSION="0.0.0-SNAPSHOT-$(date '+%Y%m%d%H%M%S')"
           npm --workspaces version $VERSION --no-git-tag-version --no-workspaces-update
-          npm --workspaces pkg set "dependencies.@restatedev/restate-sdk-core=$VERSION"
-          npm --workspaces pkg set "dependencies.@restatedev/restate-sdk=$VERSION"
-          npm --workspaces pkg set "dependencies.@restatedev/restate-sdk-clients=$VERSION"
+          set() {
+            npm --workspaces pkg get "dependencies.$1" |
+              jq -r 'with_entries(select(.value != {})) | keys[]' |
+              xargs -I% npm --workspace % pkg set "dependencies.$1=$VERSION"
+          }
+          set "@restatedev/restate-sdk-core"
+          set "@restatedev/restate-sdk"
+          set "@restatedev/restate-sdk-clients"
           npm --workspaces update
           # We use dist-tag dev for the snapshot releases, see https://docs.npmjs.com/cli/v9/commands/npm-dist-tag for more info
           # A snapshot MUST not be published with latest tag (omitting --tag defaults to latest) to avoid users to install snapshot releases
