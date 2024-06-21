@@ -325,7 +325,7 @@ export class Journal {
         this.resolveResult(
           journalIndex,
           journalEntry,
-          undefined,
+          complete.result.case === "empty" ? complete.result.value : undefined,
           complete.result.case === "failure" ? complete.result.value : undefined
         );
         break;
