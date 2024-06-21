@@ -1,6 +1,6 @@
 {
   "name": "@restatedev/restate-sdk-examples",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Typescript SDK examples",
   "private": true,
   "author": "Restate Developers",
@@ -35,8 +35,8 @@
     "ingress": "RESTATE_JOURNAL_LOGGING=OFF ts-node-dev --transpile-only ./src/ingress_client.ts"
   },
   "dependencies": {
-    "@restatedev/restate-sdk": "^1.0.0",
-    "@restatedev/restate-sdk-clients": "^1.0.0"
+    "@restatedev/restate-sdk": "^1.0.1",
+    "@restatedev/restate-sdk-clients": "^1.0.1"
   },
   "devDependencies": {
     "ts-node-dev": "^2.0.0"
