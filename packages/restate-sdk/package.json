@@ -28,14 +28,14 @@
         "default": "./dist/cjs/src/public_api.js"
       }
     },
-    "./cloudflare": {
+    "./fetch": {
       "import": {
-        "types": "./dist/esm/src/cloudflare.d.ts",
-        "default": "./dist/esm/src/cloudflare.js"
+        "types": "./dist/esm/src/fetch.d.ts",
+        "default": "./dist/esm/src/fetch.js"
       },
       "require": {
-        "types": "./dist/cjs/src/cloudflare.d.ts",
-        "default": "./dist/cjs/src/cloudflare.js"
+        "types": "./dist/cjs/src/fetch.d.ts",
+        "default": "./dist/cjs/src/fetch.js"
       }
     },
     "./lambda": {
@@ -51,8 +51,8 @@
   },
   "typesVersions": {
     "*": {
-      "cloudflare": [
-        "dist/cjs/src/cloudflare.d.ts"
+      "fetch": [
+        "dist/cjs/src/fetch.d.ts"
       ],
       "lambda": [
         "dist/cjs/src/lambda.d.ts"
@@ -86,8 +86,7 @@
   "devDependencies": {
     "@bufbuild/buf": "^1.15.0",
     "@bufbuild/protoc-gen-es": "^1.8.0",
-    "@types/aws-lambda": "^8.10.115",
-    "@cloudflare/workers-types": "^4.20231016.0"
+    "@types/aws-lambda": "^8.10.115"
   },
   "engines": {
     "node": ">= 18"

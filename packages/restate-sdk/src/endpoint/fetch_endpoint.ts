@@ -15,7 +15,6 @@ import type {
   WorkflowDefinition,
 } from "@restatedev/restate-sdk-core";
 
-import { rlog } from "../logger.js";
 import type { Component } from "../types/components.js";
 
 import type { KeySetV1 } from "./request_signing/v1.js";
@@ -25,30 +24,28 @@ import type {
   RestateEndpointBase,
   ServiceBundle,
 } from "../endpoint.js";
-import { CloudflareHandler } from "./handlers/cloudflare.js";
 import { GenericHandler } from "./handlers/generic.js";
+import { fetcher } from "./handlers/fetch.js";
 
 /**
- * CloudflareWorkerEndpoint encapsulates all the Restate services served by this endpoint.
+ * Generic Fetch encapsulates all the Restate services served by this endpoint.
  *
  *
  * @example
- * A typical endpoint served as CF worker would look like this:
+ * A typical endpoint served would look like this:
  * ```
- * import * as restate from "@restatedev/restate-sdk/cloudflare";
+ * import * as restate from "@restatedev/restate-sdk/fetch";
  *
  * export default restate
  *   .endpoint()
  *   .bind(myService)
  *   .handler();
  */
-export interface CloudflareWorkerEndpoint
-  extends RestateEndpointBase<CloudflareWorkerEndpoint> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  handler(): { fetch: (request: any) => Promise<any> };
+export interface FetchEndpoint extends RestateEndpointBase<FetchEndpoint> {
+  handler(): { fetch: (request: Request) => Promise<Response> };
 }
 
-export class CloudflareWorkerEndpointImpl implements CloudflareWorkerEndpoint {
+export class FetchEndpointImpl implements FetchEndpoint {
   private builder: EndpointBuilder = new EndpointBuilder();
 
   public get keySet(): KeySetV1 | undefined {
@@ -63,7 +60,7 @@ export class CloudflareWorkerEndpointImpl implements CloudflareWorkerEndpoint {
     this.builder.addComponent(component);
   }
 
-  bindBundle(services: ServiceBundle): CloudflareWorkerEndpoint {
+  bindBundle(services: ServiceBundle): FetchEndpoint {
     services.registerServices(this as unknown as RestateEndpoint);
     return this;
   }
@@ -73,33 +70,20 @@ export class CloudflareWorkerEndpointImpl implements CloudflareWorkerEndpoint {
       | ServiceDefinition<P, M>
       | VirtualObjectDefinition<P, M>
       | WorkflowDefinition<P, M>
-  ): CloudflareWorkerEndpoint {
+  ): FetchEndpoint {
     this.builder.bind(definition);
     return this;
   }
 
-  public withIdentityV1(...keys: string[]): CloudflareWorkerEndpoint {
+  public withIdentityV1(...keys: string[]): FetchEndpoint {
     this.builder.withIdentityV1(...keys);
     return this;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  handler(): { fetch: (request: any) => Promise<any> } {
-    if (!this.builder.keySet) {
-      rlog.warn(
-        `Accepting requests without validating request signatures; worker access must be restricted`
-      );
-    } else {
-      rlog.info(
-        `Validating requests using signing keys [${Array.from(
-          this.builder.keySet.keys()
-        )}]`
-      );
-    }
+  handler(): {
+    fetch: (request: Request) => Promise<Response>;
+  } {
     const genericHandler = new GenericHandler(this.builder);
-    const cloudflareHandler = new CloudflareHandler(genericHandler);
-    return {
-      fetch: cloudflareHandler.fetch.bind(cloudflareHandler),
-    };
+    return fetcher(genericHandler);
   }
 }

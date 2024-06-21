@@ -12,13 +12,13 @@
 export * from "./common_api.js";
 
 import {
-  CloudflareWorkerEndpointImpl,
-  type CloudflareWorkerEndpoint,
-} from "./endpoint/cloudflare_endpoint.js";
+  type FetchEndpoint,
+  FetchEndpointImpl,
+} from "./endpoint/fetch_endpoint.js";
 
 /**
  * Create a new {@link RestateEndpoint}.
  */
-export function endpoint(): CloudflareWorkerEndpoint {
-  return new CloudflareWorkerEndpointImpl();
+export function endpoint(): FetchEndpoint {
+  return new FetchEndpointImpl();
 }
