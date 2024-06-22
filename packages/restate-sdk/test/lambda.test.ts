@@ -9,7 +9,7 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import * as restate from "../src/public_api.js";
+import * as restate from "../src/lambda.js";
 import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { encodeMessage } from "../src/io/encoder.js";
 import type { Message } from "../src/types/types.js";
@@ -292,7 +292,7 @@ function getTestHandler() {
         },
       })
     )
-    .lambdaHandler() as (
+    .handler() as (
     event: object,
     ctx: object
   ) => Promise<APIGatewayProxyResult>;

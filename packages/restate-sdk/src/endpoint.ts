@@ -77,12 +77,12 @@ export interface RestateEndpointBase<E> {
  * @example
  * A typical endpoint served as AWS Lambda would look like this:
  * ```
- * import * as restate from "@restatedev/restate-sdk";
+ * import * as restate from "@restatedev/restate-sdk/lambda";
  *
  * export const handler = restate
  *   .endpoint()
  *   .bind(myService)
- *   .lambdaHandler();
+ *   .handler();
  * ```
  */
 export interface RestateEndpoint extends RestateEndpointBase<RestateEndpoint> {
