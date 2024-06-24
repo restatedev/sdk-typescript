@@ -88,17 +88,6 @@ export class NodeEndpoint implements RestateEndpoint {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   lambdaHandler(): (event: any, ctx: any) => Promise<any> {
-    if (!this.builder.keySet) {
-      rlog.warn(
-        `Accepting Lambda requests without validating request signatures; Invoke permissions must be restricted`
-      );
-    } else {
-      rlog.info(
-        `Validating Lambda requests using signing keys [${Array.from(
-          this.builder.keySet.keys()
-        )}]`
-      );
-    }
     const genericHandler = new GenericHandler(this.builder);
     const handler = new LambdaHandler(genericHandler);
     return handler.handleRequest.bind(handler);

@@ -80,7 +80,7 @@ export class GenericHandler implements RestateHandler {
   constructor(private readonly endpoint: EndpointBuilder) {
     if (!this.endpoint.keySet) {
       rlog.warn(
-        `Accepting requests without validating request signatures; worker access must be restricted`
+        `Accepting requests without validating request signatures; handler access must be restricted`
       );
     } else {
       rlog.info(

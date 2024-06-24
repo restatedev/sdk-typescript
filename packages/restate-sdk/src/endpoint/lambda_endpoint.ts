@@ -14,10 +14,7 @@ import type {
   VirtualObjectDefinition,
   WorkflowDefinition,
 } from "@restatedev/restate-sdk-core";
-
-import { rlog } from "../logger.js";
 import type { Component } from "../types/components.js";
-
 import type { KeySetV1 } from "./request_signing/v1.js";
 import { EndpointBuilder } from "./endpoint_builder.js";
 import type {
@@ -84,17 +81,6 @@ export class LambdaEndpointImpl implements LambdaEndpoint {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   handler(): (event: any, ctx: any) => Promise<any> {
-    if (!this.builder.keySet) {
-      rlog.warn(
-        `Accepting requests without validating request signatures; Invoke permissions must be restricted`
-      );
-    } else {
-      rlog.info(
-        `Validating requests using signing keys [${Array.from(
-          this.builder.keySet.keys()
-        )}]`
-      );
-    }
     const genericHandler = new GenericHandler(this.builder);
     const lambdaHandler = new LambdaHandler(genericHandler);
     return lambdaHandler.handleRequest.bind(lambdaHandler);
