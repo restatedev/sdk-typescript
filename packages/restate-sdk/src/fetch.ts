@@ -15,10 +15,13 @@ import {
   type FetchEndpoint,
   FetchEndpointImpl,
 } from "./endpoint/fetch_endpoint.js";
+import { ProtocolMode } from "./types/discovery.js";
 
 /**
  * Create a new {@link RestateEndpoint}.
  */
-export function endpoint(): FetchEndpoint {
-  return new FetchEndpointImpl();
+export function endpoint(
+  protocolMode: ProtocolMode = ProtocolMode.REQUEST_RESPONSE
+): FetchEndpoint {
+  return new FetchEndpointImpl(protocolMode);
 }

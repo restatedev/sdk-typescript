@@ -9,17 +9,12 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import type stream from "node:stream";
+import type stream from "node:stream/web";
 import { streamDecoder } from "../io/decoder.js";
 import type { Connection, RestateStreamConsumer } from "./connection.js";
 import type { Message } from "../types/types.js";
 import { rlog } from "../logger.js";
-import { finished } from "node:stream/promises";
-import { BufferedConnection } from "./buffered_connection.js";
-import type { Http2ServerRequest, IncomingHttpHeaders } from "node:http2";
-
-// utility promise, for cases where we want to save allocation of an extra promise
-const RESOLVED: Promise<void> = Promise.resolve();
+import { encodeMessage } from "../io/encoder.js";
 
 /**
  * A duplex stream with Restate Messages over HTTP2.
@@ -43,21 +38,21 @@ const RESOLVED: Promise<void> = Promise.resolve();
  * (4) Handling the relevant stream events for errors and consolidating them to one error handler, plus
  *     notifications for cleanly closed input (to trigger suspension).
  */
-export class RestateHttp2Connection implements Connection {
+export class RestateBidiConnection implements Connection {
   /**
-   * create a RestateDuplex stream from an http2 (duplex) stream.
+   * create a RestateBidiConnection stream from a duplex stream
    */
   public static from(
-    request: Http2ServerRequest,
-    http2stream: stream.Duplex
-  ): RestateHttp2Connection {
-    return new RestateHttp2Connection(request.headers, http2stream);
+    headers: Record<string, string | string[] | undefined>,
+    rawStream: stream.ReadableWritablePair<Uint8Array, Uint8Array>
+  ): RestateBidiConnection {
+    return new RestateBidiConnection(headers, rawStream);
   }
 
   // --------------------------------------------------------------------------
 
   // input as decoded messages
-  private readonly sdkInput: stream.Readable;
+  private readonly sdkInput: stream.ReadableStream<Message>;
 
   // consumer handling
   private currentConsumer: RestateStreamConsumer | null = null;
@@ -65,42 +60,21 @@ export class RestateHttp2Connection implements Connection {
   private consumerError?: Error;
   private consumerInputClosed = false;
 
-  private outputBuffer: BufferedConnection;
+  private readonly sdkOutput: stream.WritableStreamDefaultWriter<Uint8Array>;
 
   constructor(
-    private readonly attemptHeaders: IncomingHttpHeaders,
-    private readonly rawStream: stream.Duplex
+    private readonly attemptHeaders: Record<
+      string,
+      string | string[] | undefined
+    >,
+    rawStream: stream.ReadableWritablePair<Uint8Array, Uint8Array>
   ) {
-    this.sdkInput = rawStream.pipe(streamDecoder());
+    this.sdkInput = rawStream.readable.pipeThrough<Message>(streamDecoder());
 
-    this.outputBuffer = new BufferedConnection((buffer) => {
-      const hasMoreCapacity = rawStream.write(buffer);
-      if (hasMoreCapacity) {
-        return RESOLVED;
-      } else {
-        return new Promise((resolve) => rawStream.once("drain", resolve));
-      }
-    });
+    this.sdkOutput = rawStream.writable.getWriter();
 
     // remember and forward messages
-    this.sdkInput.on("data", (m: Message) => {
-      // deliver message, if we have a consumer. otherwise buffer the message.
-      if (this.currentConsumer) {
-        if (this.currentConsumer.handleMessage(m)) {
-          this.removeCurrentConsumer();
-        }
-      } else {
-        this.inputBuffer.push(m);
-      }
-    });
-
-    // remember and forward close events
-    this.sdkInput.on("end", () => {
-      this.consumerInputClosed = true;
-      if (this.currentConsumer) {
-        this.currentConsumer.handleInputClosed();
-      }
-    });
+    const messageIterator = this.messageIterator();
 
     // --------- error handling --------
     // - a.k.a. node event wrangling...
@@ -117,31 +91,20 @@ export class RestateHttp2Connection implements Connection {
       }
     };
 
-    // those two event types should cover all types of connection losses
-    rawStream.on("aborted", () => {
-      rlog.error("Connection to Restate was lost");
-      errorHandler(new Error("Connection to Restate was lost"));
-    });
-
-    // this is both the raw http2 stream and the output SDK->Restate
-    rawStream.on("error", (e: Error) => {
-      rlog.error("Error in http2 stream to Restate: " + (e.stack ?? e.message));
-      errorHandler(e);
-    });
-
-    // these events notify of errors in the decoding pipeline
-    this.sdkInput.on("error", (e: Error) => {
+    // this notifies of errors in the outgoing response stream
+    this.sdkOutput.closed.catch((e: Error) => {
       rlog.error(
-        "Error in input stream (Restate to Service): " + (e.stack ?? e.message)
+        "Error in response stream to Restate: " + (e.stack ?? e.message)
       );
       errorHandler(e);
     });
 
-    // see if streams get torn down before they end cleanly
-    this.sdkInput.on("close", () => {
-      if (!this.consumerInputClosed) {
-        errorHandler(new Error("stream was destroyed before end"));
-      }
+    // this notifies of errors in the decoding pipeline as well as the incoming body stream
+    messageIterator.catch((e: Error) => {
+      rlog.error(
+        "Error in request stream from Restate: " + (e.stack ?? e.message)
+      );
+      errorHandler(e);
     });
   }
 
@@ -152,6 +115,24 @@ export class RestateHttp2Connection implements Connection {
   // --------------------------------------------------------------------------
   //  input stream handling
   // --------------------------------------------------------------------------
+
+  private async messageIterator() {
+    for await (const m of this.sdkInput) {
+      // deliver message, if we have a consumer. otherwise buffer the message.
+      if (this.currentConsumer) {
+        if (this.currentConsumer.handleMessage(m)) {
+          this.removeCurrentConsumer();
+        }
+      } else {
+        this.inputBuffer.push(m);
+      }
+    }
+    // remember and forward close events
+    this.consumerInputClosed = true;
+    if (this.currentConsumer) {
+      this.currentConsumer.handleInputClosed();
+    }
+  }
 
   /**
    * Pipes the messages from this connection to the given consumer. The consumer
@@ -217,23 +198,20 @@ export class RestateHttp2Connection implements Connection {
    * As a pragmatic solution, we always accept messages, but return a promise for when the output has
    * capacity again, so that at least the operations that await results will respect backpressure.
    */
-  public send(msg: Message): Promise<void> {
-    return this.outputBuffer.send(msg);
+  public async send(msg: Message): Promise<void> {
+    const bytes = encodeMessage(msg);
+    // don't await the write as it will not complete until data is completely flushed
+    this.sdkOutput.write(bytes).catch(() => {});
+    // however, do await until there is capacity for more, so there's backpressure
+    await this.sdkOutput.ready;
   }
 
   /**
    * Ends the stream, awaiting pending writes.
    */
   public async end(): Promise<void> {
-    await this.outputBuffer.end();
-
-    this.rawStream.end();
-
-    const options = {
-      error: true,
-      cleanup: true,
-    };
-
-    await finished(this.rawStream, options);
+    // we don't care if the stream had any errors at this point
+    await this.sdkInput.cancel().catch(() => {});
+    await this.sdkOutput.close().catch(() => {});
   }
 }

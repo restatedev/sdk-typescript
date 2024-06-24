@@ -10,10 +10,9 @@
  */
 
 import { rlog } from "../../logger.js";
-import { LambdaConnection } from "../../connection/lambda_connection.js";
+import { RequestResponseConnection } from "../../connection/request_response_connection.js";
 import { InvocationBuilder } from "../../invocation.js";
-import { decodeMessagesBuffer } from "../../io/decoder.js";
-import type { Message } from "../../types/types.js";
+import { streamDecoder } from "../../io/decoder.js";
 import { StateMachine } from "../../state_machine.js";
 import { ensureError } from "../../types/errors.js";
 import {
@@ -29,10 +28,15 @@ import type { ComponentHandler } from "../../types/components.js";
 import { parseUrlComponents } from "../../types/components.js";
 import { validateRequestSignature } from "../request_signing/validate.js";
 import { X_RESTATE_SERVER } from "../../user_agent.js";
-import { Buffer } from "node:buffer";
 import { ServiceDiscoveryProtocolVersion } from "../../generated/proto/discovery_pb.js";
 import type { ServiceProtocolVersion } from "../../generated/proto/protocol_pb.js";
 import type { EndpointBuilder } from "../endpoint_builder.js";
+import {
+  type ReadableStream,
+  TransformStream,
+  type TransformStreamDefaultController,
+} from "node:stream/web";
+import { RestateBidiConnection } from "../../connection/bidi_connection.js";
 
 export interface Headers {
   [name: string]: string | string[] | undefined;
@@ -49,13 +53,13 @@ export interface AdditionalContext {
 export interface RestateRequest {
   readonly url: string;
   readonly headers: Headers;
-  readonly body: Uint8Array;
+  readonly body: ReadableStream<Uint8Array> | null;
 }
 
 export interface RestateResponse {
   readonly headers: ResponseHeaders;
   readonly statusCode: number;
-  readonly body: Uint8Array;
+  readonly body: ReadableStream<Uint8Array> | Uint8Array;
 }
 
 export interface RestateHandler {
@@ -77,7 +81,10 @@ export interface RestateHandler {
  * Different runtimes have slightly different shapes of the incoming request, and responses.
  */
 export class GenericHandler implements RestateHandler {
-  constructor(private readonly endpoint: EndpointBuilder) {
+  constructor(
+    private readonly endpoint: EndpointBuilder,
+    private readonly protocolMode: ProtocolMode
+  ) {
     if (!this.endpoint.keySet) {
       rlog.warn(
         `Accepting requests without validating request signatures; handler access must be restricted`
@@ -142,13 +149,24 @@ export class GenericHandler implements RestateHandler {
       rlog.error(msg);
       return this.toErrorResponse(400, msg);
     }
-    return this.handleInvoke(
-      handler,
-      request.body,
-      request.headers,
-      serviceProtocolVersion,
-      context ?? {}
-    );
+    switch (this.protocolMode) {
+      case ProtocolMode.REQUEST_RESPONSE:
+        return this.handleInvoke(
+          handler,
+          request.body,
+          request.headers,
+          serviceProtocolVersion,
+          context ?? {}
+        );
+      case ProtocolMode.BIDI_STREAM:
+        return this.handleInvokeBidi(
+          handler,
+          request.body,
+          request.headers,
+          serviceProtocolVersion,
+          context ?? {}
+        );
+    }
   }
 
   private async validateConnectionSignature(
@@ -190,31 +208,36 @@ export class GenericHandler implements RestateHandler {
 
   private async handleInvoke(
     handler: ComponentHandler,
-    body: Uint8Array,
+    body: ReadableStream<Uint8Array>,
     headers: Record<string, string | string[] | undefined>,
     serviceProtocolVersion: ServiceProtocolVersion,
     context: AdditionalContext
   ): Promise<RestateResponse> {
     try {
       // build the previous journal from the events
-      let decodedEntries: Message[] | null = decodeMessagesBuffer(
-        Buffer.from(body)
-      );
       const journalBuilder = new InvocationBuilder(handler);
-      decodedEntries.forEach((e: Message) => journalBuilder.handleMessage(e));
-      const alreadyCompleted =
-        decodedEntries.find(
-          (e: Message) => e.messageType === OUTPUT_ENTRY_MESSAGE_TYPE
-        ) !== undefined;
-      decodedEntries = null;
+
+      let alreadyCompleted = false;
+      for await (const msg of body.pipeThrough(streamDecoder())) {
+        if (
+          !alreadyCompleted &&
+          msg.messageType === OUTPUT_ENTRY_MESSAGE_TYPE
+        ) {
+          alreadyCompleted = true;
+        }
+        journalBuilder.handleMessage(msg);
+      }
 
       // set up and invoke the state machine
-      const connection = new LambdaConnection(headers, alreadyCompleted);
+      const connection = new RequestResponseConnection(
+        headers,
+        alreadyCompleted
+      );
       const invocation = journalBuilder.build();
       const stateMachine = new StateMachine(
         connection,
         invocation,
-        ProtocolMode.REQUEST_RESPONSE,
+        this.protocolMode,
         handler.kind(),
         invocation.inferLoggerContext(context)
       );
@@ -239,6 +262,69 @@ export class GenericHandler implements RestateHandler {
     }
   }
 
+  private async handleInvokeBidi(
+    handler: ComponentHandler,
+    body: ReadableStream<Uint8Array>,
+    headers: Record<string, string | string[] | undefined>,
+    serviceProtocolVersion: ServiceProtocolVersion,
+    context: AdditionalContext
+  ): Promise<RestateResponse> {
+    let responseController: TransformStreamDefaultController<Uint8Array>;
+    const responseBody = new TransformStream<Uint8Array>({
+      start: (ctrl) => {
+        responseController =
+          ctrl as TransformStreamDefaultController<Uint8Array>;
+      },
+    });
+    const connection = RestateBidiConnection.from(headers, {
+      readable: body,
+      writable: responseBody.writable,
+    });
+
+    // step 1: collect all journal events
+    const journalBuilder = new InvocationBuilder(handler);
+    connection.pipeToConsumer(journalBuilder);
+    try {
+      await journalBuilder.completion();
+    } finally {
+      // ensure GC friendliness, also in case of errors
+      connection.removeCurrentConsumer();
+    }
+
+    // step 2: create the state machine
+    const invocation = journalBuilder.build();
+    const stateMachine = new StateMachine(
+      connection,
+      invocation,
+      this.protocolMode,
+      handler.kind(),
+      invocation.inferLoggerContext(context)
+    );
+    connection.pipeToConsumer(stateMachine);
+
+    // step 3: invoke the function
+
+    // This call would propagate errors in the state machine logic, but not errors
+    // in the application function code. Ending a function with an error as well
+    // as failign an invocation and being retried are perfectly valid actions from the
+    // SDK's perspective.
+    stateMachine
+      .invoke()
+      .catch((e) => responseController.error(e)) // in bidi case the best we can do is abort the connection
+      .finally(() => connection.removeCurrentConsumer());
+
+    return {
+      headers: {
+        "content-type": serviceProtocolVersionToHeaderValue(
+          serviceProtocolVersion
+        ),
+        "x-restate-server": X_RESTATE_SERVER,
+      },
+      statusCode: 200,
+      body: responseBody.readable as ReadableStream<Uint8Array>,
+    };
+  }
+
   private handleDiscovery(
     acceptVersionsString: string | string[] | undefined
   ): RestateResponse {
@@ -260,17 +346,14 @@ export class GenericHandler implements RestateHandler {
       return this.toErrorResponse(415, errorMessage);
     }
 
-    const discovery = this.endpoint.computeDiscovery(
-      ProtocolMode.REQUEST_RESPONSE
-    );
+    const discovery = this.endpoint.computeDiscovery(this.protocolMode);
 
     let body;
 
     if (
       serviceDiscoveryProtocolVersion === ServiceDiscoveryProtocolVersion.V1
     ) {
-      const discoveryJson = JSON.stringify(discovery);
-      body = Buffer.from(discoveryJson);
+      body = JSON.stringify(discovery);
     } else {
       // should not be reached since we check for compatibility before
       throw new Error(
@@ -286,7 +369,7 @@ export class GenericHandler implements RestateHandler {
         "x-restate-server": X_RESTATE_SERVER,
       },
       statusCode: 200,
-      body,
+      body: new TextEncoder().encode(body),
     };
   }
 
@@ -297,7 +380,7 @@ export class GenericHandler implements RestateHandler {
         "x-restate-server": X_RESTATE_SERVER,
       },
       statusCode: code,
-      body: Buffer.from(JSON.stringify({ message })),
+      body: new TextEncoder().encode(JSON.stringify({ message })),
     };
   }
 }

@@ -20,7 +20,7 @@
 //
 // at this point the decodedStream is a high level stream of objects {header, message}
 
-import stream from "node:stream";
+import stream from "node:stream/web";
 import { PROTOBUF_MESSAGE_BY_TYPE } from "../types/protocol.js";
 import { Header, Message } from "../types/types.js";
 import type { AnyMessage } from "@bufbuild/protobuf";
@@ -101,20 +101,18 @@ function decodeMessages(decoderState: DecoderState, out: Output): DecoderState {
   return decoderState;
 }
 
-export function streamDecoder(): stream.Transform {
+export function streamDecoder(): stream.TransformStream<Uint8Array, Message> {
   let decoderState = initialDecoderState(Buffer.alloc(0));
 
-  return new stream.Transform({
-    writableObjectMode: true,
-    objectMode: true,
-
-    transform(chunk, _encoding, cb) {
+  return new stream.TransformStream<Uint8Array, Message>({
+    transform(chunk, controller) {
       try {
-        appendBufferToDecoder(decoderState, chunk as Uint8Array);
-        decoderState = decodeMessages(decoderState, this);
-        cb();
+        appendBufferToDecoder(decoderState, chunk);
+        decoderState = decodeMessages(decoderState, {
+          push: (msg) => controller.enqueue(msg),
+        });
       } catch (e) {
-        cb(ensureError(e), null);
+        controller.error(ensureError(e));
       }
     },
   });

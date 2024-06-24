@@ -9,26 +9,11 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import stream from "node:stream";
 import { PROTOBUF_MESSAGE_BY_TYPE } from "../types/protocol.js";
 import type { Message } from "../types/types.js";
 import { Header } from "../types/types.js";
 import { Buffer } from "node:buffer";
 import { writeBigUInt64BE } from "../utils/buffer.js";
-
-export function streamEncoder(): stream.Transform {
-  return new stream.Transform({
-    writableObjectMode: true,
-    objectMode: true,
-
-    transform(msg, _encoding, cb) {
-      // We do not catch errors here because we want them to be handled at the Connection level,
-      // so we can close the state machine.
-      const result = encodeMessage(msg as Message);
-      cb(null, result);
-    },
-  });
-}
 
 export function encodeMessage(msg: Message): Uint8Array {
   return encodeMessages([msg]);

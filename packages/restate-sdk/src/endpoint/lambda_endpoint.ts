@@ -24,6 +24,7 @@ import type {
 } from "../endpoint.js";
 import { GenericHandler } from "./handlers/generic.js";
 import { LambdaHandler } from "./handlers/lambda.js";
+import { ProtocolMode } from "../types/discovery.js";
 
 /**
  * LambdaEndpoint encapsulates all the Restate services served by this endpoint.
@@ -81,7 +82,10 @@ export class LambdaEndpointImpl implements LambdaEndpoint {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   handler(): (event: any, ctx: any) => Promise<any> {
-    const genericHandler = new GenericHandler(this.builder);
+    const genericHandler = new GenericHandler(
+      this.builder,
+      ProtocolMode.REQUEST_RESPONSE
+    );
     const lambdaHandler = new LambdaHandler(genericHandler);
     return lambdaHandler.handleRequest.bind(lambdaHandler);
   }

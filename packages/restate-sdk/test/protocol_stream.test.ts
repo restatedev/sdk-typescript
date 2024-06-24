@@ -17,9 +17,9 @@ import {
   SetStateEntryMessage,
   SET_STATE_ENTRY_MESSAGE_TYPE,
 } from "../src/types/protocol.js";
-import { RestateHttp2Connection } from "../src/connection/http_connection.js";
+import { RestateBidiConnection } from "../src/connection/bidi_connection.js";
 import { Header, Message } from "../src/types/types.js";
-import * as stream from "stream";
+import * as stream from "node:stream/web";
 import { setTimeout } from "timers/promises";
 import { CompletablePromise } from "../src/utils/promises.js";
 import { describe, expect, it } from "vitest";
@@ -63,7 +63,7 @@ describe("Restate Streaming Connection", () => {
 
     // the following demonstrates how to use a stream_encoder/decoder to convert
     // a raw duplex stream to a high-level stream of Restate's protocol messages and headers.
-    const restateStream = new RestateHttp2Connection({}, http2stream);
+    const restateStream = new RestateBidiConnection({}, http2stream);
 
     // here we need to create a promise for the sake of this test.
     // this future will be resolved once something is emitted on the stream.
@@ -103,8 +103,8 @@ describe("Restate Streaming Connection", () => {
   });
 
   it("should await sending of small data when closing", async () => {
-    const { duplex, processBytes } = mockBackpressuredDuplex(8192);
-    const connection = new RestateHttp2Connection({}, duplex);
+    const { duplex, processBytes } = mockBackpressuredDuplex(128);
+    const connection = new RestateBidiConnection({}, duplex);
 
     // enqueue small data, below watermark, so that 'end' can immediately be written
     void connection.send(newMessage(10));
@@ -121,7 +121,7 @@ describe("Restate Streaming Connection", () => {
 
   it("should await sending of larger data when closing", async () => {
     const { duplex, processBytes } = mockBackpressuredDuplex(128);
-    const connection = new RestateHttp2Connection({}, duplex);
+    const connection = new RestateBidiConnection({}, duplex);
 
     // enqueue quite some data, before allowing any bytes to flow any
     void connection.send(newMessage(1024));
@@ -140,9 +140,9 @@ describe("Restate Streaming Connection", () => {
 
   it("should not trigger backpressure for small messages", async () => {
     const { duplex } = mockBackpressuredDuplex(1024);
-    const connection = new RestateHttp2Connection({}, duplex);
+    const connection = new RestateBidiConnection({}, duplex);
 
-    // enqueue a message that is too large
+    // enqueue a message that is not too large
     const promise1 = connection.send(newMessage(80));
     const promise2 = connection.send(newMessage(80));
 
@@ -152,23 +152,26 @@ describe("Restate Streaming Connection", () => {
 
   it("should trigger backpressure for large messages", async () => {
     const { duplex } = mockBackpressuredDuplex(1024);
-    const connection = new RestateHttp2Connection({}, duplex);
+    const connection = new RestateBidiConnection({}, duplex);
 
-    // enqueue a message that is too large
-    void connection.send(newMessage(800));
+    // this message should get sent immediately because its smaller than 1024
+    const promise1 = connection.send(newMessage(800));
+    await verifyPromiseResolved(promise1);
+
+    // this one should hang because it takes us over 1024
     const promise2 = connection.send(newMessage(800));
-
     await verifyPromisePending(promise2);
   });
 
   it("should resolve backpressure promises when the stream flows", async () => {
-    const { duplex, processBytes } = mockBackpressuredDuplex(1024);
-    const connection = new RestateHttp2Connection({}, duplex);
+    const { duplex, processBytes } = mockBackpressuredDuplex(1024, "flow");
+    const connection = new RestateBidiConnection({}, duplex);
 
-    // enqueue a message that is too large
-    void connection.send(newMessage(800));
+    // this message should get sent immediately because its smaller than 1024
+    const promise1 = connection.send(newMessage(800));
+    await verifyPromiseResolved(promise1);
+    // this one should hang until we let it flow because it takes us over 1024
     const promise2 = connection.send(newMessage(800));
-
     await verifyPromisePending(promise2);
 
     // now let the stream flow
@@ -216,7 +219,7 @@ function sameTruthness<A, B>(a: A, b: B) {
 
 async function verifyPromisePending(promise: Promise<unknown>) {
   let complete = false;
-  void promise.finally(() => {
+  void promise.then(() => {
     complete = true;
   });
 
@@ -227,7 +230,7 @@ async function verifyPromisePending(promise: Promise<unknown>) {
 
 async function verifyPromiseResolved(promise: Promise<unknown>) {
   let complete = false;
-  void promise.finally(() => {
+  void promise.then(() => {
     complete = true;
   });
 
@@ -245,53 +248,36 @@ function roundtripTest(a: Header) {
   sameTruthness(a.partialStateFlag, b.partialStateFlag);
 }
 
-function mockHttp2DuplexStream() {
-  const duplex = new stream.Duplex({
-    write(chunk, _encoding, next) {
-      this.push(chunk);
-      next();
-    },
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    read(_encoding) {
-      // don't care.
-    },
-  });
-
-  // make sure we circuit back the closing of the write side to the read side
-  duplex.on("finish", () => {
-    duplex.emit("end");
-    duplex.emit("close");
-  });
-
-  return duplex;
+function mockHttp2DuplexStream(): stream.ReadableWritablePair<
+  Uint8Array,
+  Uint8Array
+> {
+  // pipe output into input
+  return new stream.TransformStream();
 }
 
-function mockBackpressuredDuplex(highWaterMark = 128) {
+function mockBackpressuredDuplex(highWaterMark: number): {
+  duplex: stream.ReadableWritablePair<Uint8Array, Uint8Array>;
+  processBytes: (numBytes: number) => void;
+} {
   let permittedBytes = 0;
-  const queue: { bytes: number; cb: () => void }[] = [];
+  const queue: { bytes: number; cb: (value: unknown) => void }[] = [];
 
-  const duplex = new stream.Duplex({
-    highWaterMark,
-    write(chunk: Uint8Array, _encoding, callback) {
-      if (permittedBytes >= chunk.length) {
-        permittedBytes -= chunk.length;
-        process.nextTick(callback);
-      } else {
-        queue.push({ bytes: chunk.length - permittedBytes, cb: callback });
-        permittedBytes = 0;
-      }
+  const writable = new stream.WritableStream<Uint8Array>(
+    {
+      write: async (chunk) => {
+        if (permittedBytes >= chunk.length) {
+          permittedBytes -= chunk.length;
+        } else {
+          permittedBytes = 0;
+          await new Promise((resolve) => {
+            queue.push({ bytes: chunk.length - permittedBytes, cb: resolve });
+          });
+        }
+      },
     },
-
-    read() {
-      // don't care.
-    },
-  });
-
-  // make sure we circuit back the closing of the write side to the read side
-  duplex.on("finish", () => {
-    duplex.emit("end");
-    duplex.emit("close");
-  });
+    new stream.ByteLengthQueuingStrategy({ highWaterMark })
+  );
 
   function processBytes(numBytes: number) {
     while (queue.length > 0 && numBytes > 0) {
@@ -309,5 +295,11 @@ function mockBackpressuredDuplex(highWaterMark = 128) {
     permittedBytes += numBytes;
   }
 
-  return { duplex, processBytes };
+  return {
+    duplex: {
+      readable: new stream.ReadableStream(),
+      writable,
+    },
+    processBytes,
+  };
 }

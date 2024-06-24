@@ -15,13 +15,12 @@ export function fetcher(handler: GenericHandler) {
   return {
     fetch: async (event: Request): Promise<Response> => {
       const url = event.url;
-      const body: Uint8Array = new Uint8Array(await event.arrayBuffer());
       const headers = Object.fromEntries(event.headers.entries());
 
       const request: RestateRequest = {
         url,
         headers,
-        body,
+        body: event.body,
       };
 
       const resp = await handler.handle(request);

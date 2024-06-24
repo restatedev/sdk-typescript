@@ -16,7 +16,7 @@ import { encodeMessage } from "../src/io/encoder.js";
 import { describe, expect, it } from "vitest";
 
 describe("The stream decoder", () => {
-  it("should handle decoding of messages across chunks", () => {
+  it("should handle decoding of messages across chunks", async () => {
     const largeMessage = backgroundInvokeMessage(
       "test",
       "test",
@@ -27,21 +27,20 @@ describe("The stream decoder", () => {
     const result: Message[] = [];
 
     const decoder = streamDecoder();
-    decoder.push = (chunk: Message) => {
-      result.push(chunk);
-      return true;
-    };
 
-    let callbackCounter = 0;
-    const cb = () => {
-      callbackCounter++;
-    };
+    const resultPromise = (async () => {
+      for await (const chunk of decoder.readable) {
+        result.push(chunk);
+      }
+    })();
 
-    decoder._transform(largeMessageBytes.slice(0, 122), "binary", cb);
-    decoder._transform(largeMessageBytes.slice(122), "binary", cb);
+    const writer = decoder.writable.getWriter();
+    await writer.write(largeMessageBytes.slice(0, 122));
+    await writer.write(largeMessageBytes.slice(122));
+    await writer.close();
+    await resultPromise;
 
     expect(result.length).toStrictEqual(1);
     expect(result[0]).toStrictEqual(largeMessage);
-    expect(callbackCounter).toStrictEqual(2);
   });
 });

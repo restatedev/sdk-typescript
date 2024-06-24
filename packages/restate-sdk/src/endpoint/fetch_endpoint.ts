@@ -24,6 +24,7 @@ import type {
 } from "../endpoint.js";
 import { GenericHandler } from "./handlers/generic.js";
 import { fetcher } from "./handlers/fetch.js";
+import type { ProtocolMode } from "../types/discovery.js";
 
 /**
  * Generic Fetch encapsulates all the Restate services served by this endpoint.
@@ -44,6 +45,7 @@ export interface FetchEndpoint extends RestateEndpointBase<FetchEndpoint> {
 }
 
 export class FetchEndpointImpl implements FetchEndpoint {
+  constructor(private readonly protocolMode: ProtocolMode) {}
   private builder: EndpointBuilder = new EndpointBuilder();
 
   public get keySet(): KeySetV1 | undefined {
@@ -81,7 +83,7 @@ export class FetchEndpointImpl implements FetchEndpoint {
   handler(): {
     fetch: (request: Request) => Promise<Response>;
   } {
-    const genericHandler = new GenericHandler(this.builder);
+    const genericHandler = new GenericHandler(this.builder, this.protocolMode);
     return fetcher(genericHandler);
   }
 }
