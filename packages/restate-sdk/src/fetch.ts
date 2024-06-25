@@ -18,10 +18,8 @@ import {
 import { ProtocolMode } from "./types/discovery.js";
 
 /**
- * Create a new {@link RestateEndpoint}.
+ * Create a new {@link RestateEndpoint} in request response protocol mode.
  */
-export function endpoint(
-  protocolMode: ProtocolMode = ProtocolMode.REQUEST_RESPONSE
-): FetchEndpoint {
-  return new FetchEndpointImpl(protocolMode);
+export function endpoint(): FetchEndpoint {
+  return new FetchEndpointImpl(ProtocolMode.REQUEST_RESPONSE);
 }

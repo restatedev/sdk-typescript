@@ -31,7 +31,7 @@ import type { ProtocolMode } from "../types/discovery.js";
  *
  *
  * @example
- * A typical endpoint served would look like this:
+ * A typical request-response handler would look like this:
  * ```
  * import * as restate from "@restatedev/restate-sdk/fetch";
  *

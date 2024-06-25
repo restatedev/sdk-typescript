@@ -71,9 +71,7 @@ export interface RestateHandler {
 
 /**
  * This is an internal API to support 'fetch' like handlers.
- * This is for now supports only request-reply style of invocations
- * which are suitable for platforms like AWS Lambda, Cloudflare works,
- * and runtimes that only support HTTP/1.1 like Bun.
+ * It supports both request-reply mode and bidirectional streaming mode.
  *
  * An individual handler will have to convert the shape of the incoming request
  * to a RestateRequest, and then pass it to this handler, and eventually convert back
