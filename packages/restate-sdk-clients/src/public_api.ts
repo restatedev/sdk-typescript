@@ -31,7 +31,4 @@ export {
   IngresSendOptions,
 } from "./api.js";
 
-export {
-  connect,
-  HttpCallError,
-} from "./ingress.js";
+export { connect, HttpCallError } from "./ingress.js";
