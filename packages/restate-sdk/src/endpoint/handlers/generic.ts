@@ -10,20 +10,17 @@
  */
 
 import { rlog } from "../../logger.js";
-import { RequestResponseConnection } from "../../connection/request_response_connection.js";
 import { InvocationBuilder } from "../../invocation.js";
-import { streamDecoder } from "../../io/decoder.js";
 import { StateMachine } from "../../state_machine.js";
 import { ensureError } from "../../types/errors.js";
 import {
-  OUTPUT_ENTRY_MESSAGE_TYPE,
   isServiceProtocolVersionSupported,
   parseServiceProtocolVersion,
   selectSupportedServiceDiscoveryProtocolVersion,
   serviceDiscoveryProtocolVersionToHeaderValue,
   serviceProtocolVersionToHeaderValue,
 } from "../../types/protocol.js";
-import { ProtocolMode } from "../../types/discovery.js";
+import type { ProtocolMode } from "../../types/discovery.js";
 import type { ComponentHandler } from "../../types/components.js";
 import { parseUrlComponents } from "../../types/components.js";
 import { validateRequestSignature } from "../request_signing/validate.js";
@@ -36,7 +33,7 @@ import {
   TransformStream,
   type TransformStreamDefaultController,
 } from "node:stream/web";
-import { RestateBidiConnection } from "../../connection/bidi_connection.js";
+import { RestateConnection } from "../../connection/connection.js";
 import { OnceStream } from "../../utils/streams.js";
 
 export interface Headers {
@@ -97,7 +94,23 @@ export class GenericHandler implements RestateHandler {
     }
   }
 
+  // handle does not throw.
   public async handle(
+    request: RestateRequest,
+    context?: AdditionalContext
+  ): Promise<RestateResponse> {
+    try {
+      return await this._handle(request, context);
+    } catch (e) {
+      const error = ensureError(e);
+      rlog.error(
+        "Error while handling invocation: " + (error.stack ?? error.message)
+      );
+      return this.toErrorResponse(500, error.message);
+    }
+  }
+
+  private async _handle(
     request: RestateRequest,
     context?: AdditionalContext
   ): Promise<RestateResponse> {
@@ -148,24 +161,13 @@ export class GenericHandler implements RestateHandler {
       rlog.error(msg);
       return this.toErrorResponse(400, msg);
     }
-    switch (this.protocolMode) {
-      case ProtocolMode.REQUEST_RESPONSE:
-        return this.handleInvoke(
-          handler,
-          request.body,
-          request.headers,
-          serviceProtocolVersion,
-          context ?? {}
-        );
-      case ProtocolMode.BIDI_STREAM:
-        return this.handleInvokeBidi(
-          handler,
-          request.body,
-          request.headers,
-          serviceProtocolVersion,
-          context ?? {}
-        );
-    }
+    return this.handleInvoke(
+      handler,
+      request.body,
+      request.headers,
+      serviceProtocolVersion,
+      context ?? {}
+    );
   }
 
   private async validateConnectionSignature(
@@ -212,62 +214,6 @@ export class GenericHandler implements RestateHandler {
     serviceProtocolVersion: ServiceProtocolVersion,
     context: AdditionalContext
   ): Promise<RestateResponse> {
-    try {
-      // build the previous journal from the events
-      const journalBuilder = new InvocationBuilder(handler);
-
-      let alreadyCompleted = false;
-      for await (const msg of body.pipeThrough(streamDecoder())) {
-        if (
-          !alreadyCompleted &&
-          msg.messageType === OUTPUT_ENTRY_MESSAGE_TYPE
-        ) {
-          alreadyCompleted = true;
-        }
-        journalBuilder.handleMessage(msg);
-      }
-
-      // set up and invoke the state machine
-      const connection = new RequestResponseConnection(
-        headers,
-        alreadyCompleted
-      );
-      const invocation = journalBuilder.build();
-      const stateMachine = new StateMachine(
-        connection,
-        invocation,
-        this.protocolMode,
-        handler.kind(),
-        invocation.inferLoggerContext(context)
-      );
-      await stateMachine.invoke();
-      const result = await connection.getResult();
-
-      return {
-        headers: {
-          "content-type": serviceProtocolVersionToHeaderValue(
-            serviceProtocolVersion
-          ),
-          "x-restate-server": X_RESTATE_SERVER,
-        },
-        statusCode: 200,
-        body: OnceStream(result),
-      };
-    } catch (e) {
-      const error = ensureError(e);
-      rlog.error(error.message);
-      rlog.error(error.stack);
-      return this.toErrorResponse(500, error.message);
-    }
-  }
-
-  private async handleInvokeBidi(
-    handler: ComponentHandler,
-    body: ReadableStream<Uint8Array>,
-    headers: Record<string, string | string[] | undefined>,
-    serviceProtocolVersion: ServiceProtocolVersion,
-    context: AdditionalContext
-  ): Promise<RestateResponse> {
     let responseController: TransformStreamDefaultController<Uint8Array>;
     const responseBody = new TransformStream<Uint8Array>({
       start: (ctrl) => {
@@ -275,7 +221,7 @@ export class GenericHandler implements RestateHandler {
           ctrl as TransformStreamDefaultController<Uint8Array>;
       },
     });
-    const connection = RestateBidiConnection.from(headers, {
+    const connection = RestateConnection.from(headers, {
       readable: body,
       writable: responseBody.writable,
     });
@@ -295,7 +241,6 @@ export class GenericHandler implements RestateHandler {
     const stateMachine = new StateMachine(
       connection,
       invocation,
-      this.protocolMode,
       handler.kind(),
       invocation.inferLoggerContext(context)
     );
@@ -375,7 +320,7 @@ export class GenericHandler implements RestateHandler {
   private toErrorResponse(code: number, message: string): RestateResponse {
     return {
       headers: {
-        "content-type": "text/plain",
+        "content-type": "application/json",
         "x-restate-server": X_RESTATE_SERVER,
       },
       statusCode: code,

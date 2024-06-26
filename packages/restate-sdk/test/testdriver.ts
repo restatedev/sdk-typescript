@@ -24,7 +24,6 @@ import { InvocationBuilder } from "../src/invocation.js";
 import type { ObjectContext } from "../src/context.js";
 import type { VirtualObjectDefinition } from "../src/public_api.js";
 import { object } from "../src/public_api.js";
-import { ProtocolMode } from "../src/types/discovery.js";
 import { HandlerKind } from "../src/types/rpc.js";
 import { NodeEndpoint } from "../src/endpoint/node_endpoint.js";
 
@@ -55,11 +54,7 @@ export class TestDriver implements Connection {
   private stateMachine: StateMachine;
   private completionMessages: Message[];
 
-  constructor(
-    instance: TestGreeter,
-    entries: Message[],
-    private readonly protocolMode: ProtocolMode = ProtocolMode.BIDI_STREAM
-  ) {
+  constructor(instance: TestGreeter, entries: Message[]) {
     this.restateServer = new TestRestateServer();
 
     const svc = object({
@@ -156,7 +151,6 @@ export class TestDriver implements Connection {
     this.stateMachine = new StateMachine(
       this,
       invocation,
-      this.protocolMode,
       HandlerKind.EXCLUSIVE,
       invocation.inferLoggerContext()
     );

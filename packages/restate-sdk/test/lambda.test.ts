@@ -163,7 +163,7 @@ describe("LambdaGreeter", () => {
 
     expect(result.statusCode).toStrictEqual(404);
     expect(result.headers).toStrictEqual({
-      "content-type": "text/plain",
+      "content-type": "application/json",
       "x-restate-server": X_RESTATE_SERVER,
     });
     expect(result.isBase64Encoded).toStrictEqual(true);
@@ -184,7 +184,7 @@ describe("LambdaGreeter", () => {
 
     expect(result.statusCode).toStrictEqual(415);
     expect(result.headers).toStrictEqual({
-      "content-type": "text/plain",
+      "content-type": "application/json",
       "x-restate-server": X_RESTATE_SERVER,
     });
   });
@@ -204,7 +204,7 @@ describe("LambdaGreeter", () => {
 
     expect(result.statusCode).toStrictEqual(404);
     expect(result.headers).toStrictEqual({
-      "content-type": "text/plain",
+      "content-type": "application/json",
       "x-restate-server": X_RESTATE_SERVER,
     });
   });
@@ -224,7 +224,7 @@ describe("LambdaGreeter", () => {
 
     expect(result.statusCode).toStrictEqual(404);
     expect(result.headers).toStrictEqual({
-      "content-type": "text/plain",
+      "content-type": "application/json",
       "x-restate-server": X_RESTATE_SERVER,
     });
   });
@@ -273,7 +273,7 @@ describe("LambdaGreeter", () => {
 
     expect(result.statusCode).toStrictEqual(415);
     expect(result.headers).toStrictEqual({
-      "content-type": "text/plain",
+      "content-type": "application/json",
       "x-restate-server": X_RESTATE_SERVER,
     });
   });

@@ -27,7 +27,6 @@ import {
   startMessage,
   suspensionMessage,
 } from "./protoutils.js";
-import { ProtocolMode } from "../src/types/discovery.js";
 import { describe, expect, it } from "vitest";
 
 class GetAndSetGreeter implements TestGreeter {
@@ -61,11 +60,10 @@ describe("GetAndSetGreeter", () => {
   });
 
   it("send message to runtime for request-response mode", async () => {
-    const result = await new TestDriver(
-      new GetAndSetGreeter(),
-      [startMessage(), inputMessage(greetRequest("Till"))],
-      ProtocolMode.REQUEST_RESPONSE
-    ).run();
+    const result = await new TestDriver(new GetAndSetGreeter(), [
+      startMessage(),
+      inputMessage(greetRequest("Till")),
+    ]).run();
 
     expect(result).toStrictEqual([
       getStateMessage("STATE"),
