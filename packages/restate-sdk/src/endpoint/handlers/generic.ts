@@ -37,6 +37,7 @@ import {
   type TransformStreamDefaultController,
 } from "node:stream/web";
 import { RestateBidiConnection } from "../../connection/bidi_connection.js";
+import { OnceStream } from "../../utils/streams.js";
 
 export interface Headers {
   [name: string]: string | string[] | undefined;
@@ -59,7 +60,7 @@ export interface RestateRequest {
 export interface RestateResponse {
   readonly headers: ResponseHeaders;
   readonly statusCode: number;
-  readonly body: ReadableStream<Uint8Array> | Uint8Array;
+  readonly body: ReadableStream<Uint8Array>;
 }
 
 export interface RestateHandler {
@@ -250,7 +251,7 @@ export class GenericHandler implements RestateHandler {
           "x-restate-server": X_RESTATE_SERVER,
         },
         statusCode: 200,
-        body: result,
+        body: OnceStream(result),
       };
     } catch (e) {
       const error = ensureError(e);
@@ -367,7 +368,7 @@ export class GenericHandler implements RestateHandler {
         "x-restate-server": X_RESTATE_SERVER,
       },
       statusCode: 200,
-      body: new TextEncoder().encode(body),
+      body: OnceStream(new TextEncoder().encode(body)),
     };
   }
 
@@ -378,7 +379,7 @@ export class GenericHandler implements RestateHandler {
         "x-restate-server": X_RESTATE_SERVER,
       },
       statusCode: code,
-      body: new TextEncoder().encode(JSON.stringify({ message })),
+      body: OnceStream(new TextEncoder().encode(JSON.stringify({ message }))),
     };
   }
 }

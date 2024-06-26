@@ -18,7 +18,8 @@ import type {
 } from "aws-lambda";
 import { Buffer } from "node:buffer";
 import type { GenericHandler, RestateRequest } from "./generic.js";
-import { ReadableStream } from "node:stream/web";
+import type { ReadableStream } from "node:stream/web";
+import { OnceStream } from "../../utils/streams.js";
 
 export class LambdaHandler {
   constructor(private readonly handler: GenericHandler) {}
@@ -33,7 +34,7 @@ export class LambdaHandler {
     const path = "path" in event ? event.path : event.rawPath;
 
     //
-    // Convert the request body to a Uint8Array
+    // Convert the request body to a Uint8Array stream
     // Lambda functions receive the body as base64 encoded string
     //
     let body: ReadableStream<Uint8Array> | null;
@@ -73,13 +74,4 @@ export class LambdaHandler {
       body: responseBody,
     };
   }
-}
-
-export function OnceStream<T>(once: T): ReadableStream<T> {
-  return new ReadableStream<T>({
-    pull: (controller) => {
-      controller.enqueue(once);
-      controller.close();
-    },
-  });
 }

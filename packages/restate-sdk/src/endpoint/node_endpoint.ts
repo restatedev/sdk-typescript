@@ -26,7 +26,7 @@ import { LambdaHandler } from "./handlers/lambda.js";
 import type { Component } from "../types/components.js";
 import type { KeySetV1 } from "./request_signing/v1.js";
 import { EndpointBuilder } from "./endpoint_builder.js";
-import { GenericHandler, type RestateResponse } from "./handlers/generic.js";
+import { GenericHandler } from "./handlers/generic.js";
 import { Readable, Writable } from "node:stream";
 import type { WritableStream } from "node:stream/web";
 import { ProtocolMode } from "../types/discovery.js";
@@ -74,43 +74,29 @@ export class NodeEndpoint implements RestateEndpoint {
     const handler = new GenericHandler(this.builder, ProtocolMode.BIDI_STREAM);
 
     return (request, response) => {
-      const url = request.url;
+      (async () => {
+        try {
+          const url = request.url;
+          const resp = await handler.handle({
+            url,
+            headers: request.headers,
+            body: Readable.toWeb(request),
+          });
 
-      handler
-        .handle({
-          url,
-          headers: request.headers,
-          body: Readable.toWeb(request),
-        })
-        .then(async (resp: RestateResponse) => {
           response.writeHead(resp.statusCode, resp.headers);
-          if (resp.body instanceof Uint8Array) {
-            await new Promise((resolve, reject) =>
-              response.write(resp.body as Uint8Array, (err) => {
-                if (err) {
-                  reject(err);
-                } else {
-                  resolve(undefined);
-                }
-              })
-            );
-            await new Promise<void>((resolve) => response.end(resolve));
-          } else {
-            const responseWeb = Writable.toWeb(
-              response
-            ) as WritableStream<Uint8Array>;
-            await resp.body.pipeTo(responseWeb);
-            await new Promise<void>((resolve) => response.end(resolve));
-          }
-        })
-        .catch((e) => {
+          const responseWeb = Writable.toWeb(
+            response
+          ) as WritableStream<Uint8Array>;
+          await resp.body.pipeTo(responseWeb);
+          await new Promise<void>((resolve) => response.end(resolve));
+        } catch (e) {
           const error = ensureError(e);
           rlog.error(
             "Error while handling connection: " + (error.stack ?? error.message)
           );
-          response.end();
-          response.destroy();
-        });
+          response.destroy(error);
+        }
+      })().catch(() => {});
     };
   }
 
