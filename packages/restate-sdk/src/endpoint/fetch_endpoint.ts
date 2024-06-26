@@ -24,13 +24,14 @@ import type {
 } from "../endpoint.js";
 import { GenericHandler } from "./handlers/generic.js";
 import { fetcher } from "./handlers/fetch.js";
+import { ProtocolMode } from "../types/discovery.js";
 
 /**
  * Generic Fetch encapsulates all the Restate services served by this endpoint.
  *
  *
  * @example
- * A typical endpoint served would look like this:
+ * A typical request-response handler would look like this:
  * ```
  * import * as restate from "@restatedev/restate-sdk/fetch";
  *
@@ -38,12 +39,23 @@ import { fetcher } from "./handlers/fetch.js";
  *   .endpoint()
  *   .bind(myService)
  *   .handler();
+ * @example
+ * A typical bidirectional handler (must be served over http2) would look like this:
+ * ```
+ * import * as restate from "@restatedev/restate-sdk/fetch";
+ *
+ * export default restate
+ *   .endpoint()
+ *   .bind(myService)
+ *   .enableHttp2()
+ *   .handler();
  */
 export interface FetchEndpoint extends RestateEndpointBase<FetchEndpoint> {
   handler(): { fetch: (request: Request) => Promise<Response> };
 }
 
 export class FetchEndpointImpl implements FetchEndpoint {
+  constructor(private protocolMode: ProtocolMode) {}
   private builder: EndpointBuilder = new EndpointBuilder();
 
   public get keySet(): KeySetV1 | undefined {
@@ -78,10 +90,15 @@ export class FetchEndpointImpl implements FetchEndpoint {
     return this;
   }
 
+  public enableHttp2(): FetchEndpoint {
+    this.protocolMode = ProtocolMode.BIDI_STREAM;
+    return this;
+  }
+
   handler(): {
     fetch: (request: Request) => Promise<Response>;
   } {
-    const genericHandler = new GenericHandler(this.builder);
+    const genericHandler = new GenericHandler(this.builder, this.protocolMode);
     return fetcher(genericHandler);
   }
 }

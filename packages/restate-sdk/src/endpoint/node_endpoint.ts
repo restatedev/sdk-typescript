@@ -22,13 +22,15 @@ import type {
 import { rlog } from "../logger.js";
 import type { Http2ServerRequest, Http2ServerResponse } from "http2";
 import * as http2 from "http2";
-import { Http2Handler } from "./handlers/node.js";
 import { LambdaHandler } from "./handlers/lambda.js";
 import type { Component } from "../types/components.js";
-
 import type { KeySetV1 } from "./request_signing/v1.js";
 import { EndpointBuilder } from "./endpoint_builder.js";
 import { GenericHandler } from "./handlers/generic.js";
+import { Readable, Writable } from "node:stream";
+import type { WritableStream } from "node:stream/web";
+import { ProtocolMode } from "../types/discovery.js";
+import { ensureError } from "../types/errors.js";
 
 export class NodeEndpoint implements RestateEndpoint {
   private builder: EndpointBuilder = new EndpointBuilder();
@@ -69,26 +71,41 @@ export class NodeEndpoint implements RestateEndpoint {
     request: Http2ServerRequest,
     response: Http2ServerResponse
   ) => void {
-    if (!this.builder.keySet) {
-      if (globalThis.process.env.NODE_ENV == "production") {
-        rlog.warn(
-          `Accepting HTTP requests without validating request signatures; endpoint access must be restricted`
-        );
-      }
-    } else {
-      rlog.info(
-        `Validating HTTP requests using signing keys [${Array.from(
-          this.builder.keySet.keys()
-        )}]`
-      );
-    }
-    const handler = new Http2Handler(this.builder);
-    return handler.acceptConnection.bind(handler);
+    const handler = new GenericHandler(this.builder, ProtocolMode.BIDI_STREAM);
+
+    return (request, response) => {
+      (async () => {
+        try {
+          const url = request.url;
+          const resp = await handler.handle({
+            url,
+            headers: request.headers,
+            body: Readable.toWeb(request),
+          });
+
+          response.writeHead(resp.statusCode, resp.headers);
+          const responseWeb = Writable.toWeb(
+            response
+          ) as WritableStream<Uint8Array>;
+          await resp.body.pipeTo(responseWeb);
+          await new Promise<void>((resolve) => response.end(resolve));
+        } catch (e) {
+          const error = ensureError(e);
+          rlog.error(
+            "Error while handling connection: " + (error.stack ?? error.message)
+          );
+          response.destroy(error);
+        }
+      })().catch(() => {});
+    };
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   lambdaHandler(): (event: any, ctx: any) => Promise<any> {
-    const genericHandler = new GenericHandler(this.builder);
+    const genericHandler = new GenericHandler(
+      this.builder,
+      ProtocolMode.REQUEST_RESPONSE
+    );
     const handler = new LambdaHandler(genericHandler);
     return handler.handleRequest.bind(handler);
   }

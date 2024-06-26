@@ -18,6 +18,8 @@ import type {
 } from "aws-lambda";
 import { Buffer } from "node:buffer";
 import type { GenericHandler, RestateRequest } from "./generic.js";
+import type { ReadableStream } from "node:stream/web";
+import { OnceStream } from "../../utils/streams.js";
 
 export class LambdaHandler {
   constructor(private readonly handler: GenericHandler) {}
@@ -32,20 +34,20 @@ export class LambdaHandler {
     const path = "path" in event ? event.path : event.rawPath;
 
     //
-    // Convert the request body to a Uint8Array
+    // Convert the request body to a Uint8Array stream
     // Lambda functions receive the body as base64 encoded string
     //
-    let requestBody: Uint8Array;
+    let body: ReadableStream<Uint8Array> | null;
     if (!event.body) {
-      requestBody = new Uint8Array(0);
+      body = null;
     } else if (event.isBase64Encoded) {
-      requestBody = Buffer.from(event.body, "base64");
+      body = OnceStream(Buffer.from(event.body, "base64"));
     } else {
-      requestBody = Buffer.from(event.body);
+      body = OnceStream(new TextEncoder().encode(event.body));
     }
 
     const request: RestateRequest = {
-      body: requestBody,
+      body,
       headers: event.headers,
       url: path,
     };
@@ -54,19 +56,21 @@ export class LambdaHandler {
       AWSRequestId: context.awsRequestId,
     });
 
-    let responseBody;
-    if (!resp.body) {
-      responseBody = "";
-    } else if (event.isBase64Encoded) {
+    let responseBody = "";
+    if (resp.body instanceof Uint8Array) {
       responseBody = Buffer.from(resp.body).toString("base64");
     } else {
-      responseBody = Buffer.from(resp.body).toString("utf8");
+      const chunks: Uint8Array[] = [];
+      for await (const chunk of resp.body) {
+        chunks.push(chunk);
+      }
+      responseBody = Buffer.concat(chunks).toString("base64");
     }
 
     return {
       headers: resp.headers,
       statusCode: resp.statusCode,
-      isBase64Encoded: event.isBase64Encoded,
+      isBase64Encoded: true,
       body: responseBody,
     };
   }

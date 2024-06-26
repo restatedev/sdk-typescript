@@ -22,7 +22,7 @@ import { Buffer } from "node:buffer";
 
 const RESOLVED: Promise<void> = Promise.resolve();
 
-export class LambdaConnection implements Connection {
+export class RequestResponseConnection implements Connection {
   // Empty buffer to store journal output messages
   private outputBuffer: Buffer = Buffer.alloc(0);
 
