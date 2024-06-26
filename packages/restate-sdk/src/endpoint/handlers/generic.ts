@@ -268,60 +268,67 @@ export class GenericHandler implements RestateHandler {
     serviceProtocolVersion: ServiceProtocolVersion,
     context: AdditionalContext
   ): Promise<RestateResponse> {
-    let responseController: TransformStreamDefaultController<Uint8Array>;
-    const responseBody = new TransformStream<Uint8Array>({
-      start: (ctrl) => {
-        responseController =
-          ctrl as TransformStreamDefaultController<Uint8Array>;
-      },
-    });
-    const connection = RestateBidiConnection.from(headers, {
-      readable: body,
-      writable: responseBody.writable,
-    });
-
-    // step 1: collect all journal events
-    const journalBuilder = new InvocationBuilder(handler);
-    connection.pipeToConsumer(journalBuilder);
     try {
-      await journalBuilder.completion();
-    } finally {
-      // ensure GC friendliness, also in case of errors
-      connection.removeCurrentConsumer();
+      let responseController: TransformStreamDefaultController<Uint8Array>;
+      const responseBody = new TransformStream<Uint8Array>({
+        start: (ctrl) => {
+          responseController =
+            ctrl as TransformStreamDefaultController<Uint8Array>;
+        },
+      });
+      const connection = RestateBidiConnection.from(headers, {
+        readable: body,
+        writable: responseBody.writable,
+      });
+
+      // step 1: collect all journal events
+      const journalBuilder = new InvocationBuilder(handler);
+      connection.pipeToConsumer(journalBuilder);
+      try {
+        await journalBuilder.completion();
+      } finally {
+        // ensure GC friendliness, also in case of errors
+        connection.removeCurrentConsumer();
+      }
+
+      // step 2: create the state machine
+      const invocation = journalBuilder.build();
+      const stateMachine = new StateMachine(
+        connection,
+        invocation,
+        this.protocolMode,
+        handler.kind(),
+        invocation.inferLoggerContext(context)
+      );
+      connection.pipeToConsumer(stateMachine);
+
+      // step 3: invoke the function
+
+      // This call would propagate errors in the state machine logic, but not errors
+      // in the application function code. Ending a function with an error as well
+      // as failign an invocation and being retried are perfectly valid actions from the
+      // SDK's perspective.
+      stateMachine
+        .invoke()
+        .catch((e) => responseController.error(e)) // in bidi case the best we can do is abort the connection
+        .finally(() => connection.removeCurrentConsumer());
+
+      return {
+        headers: {
+          "content-type": serviceProtocolVersionToHeaderValue(
+            serviceProtocolVersion
+          ),
+          "x-restate-server": X_RESTATE_SERVER,
+        },
+        statusCode: 200,
+        body: responseBody.readable as ReadableStream<Uint8Array>,
+      };
+    } catch (e) {
+      const error = ensureError(e);
+      rlog.error(error.message);
+      rlog.error(error.stack);
+      return this.toErrorResponse(500, error.message);
     }
-
-    // step 2: create the state machine
-    const invocation = journalBuilder.build();
-    const stateMachine = new StateMachine(
-      connection,
-      invocation,
-      this.protocolMode,
-      handler.kind(),
-      invocation.inferLoggerContext(context)
-    );
-    connection.pipeToConsumer(stateMachine);
-
-    // step 3: invoke the function
-
-    // This call would propagate errors in the state machine logic, but not errors
-    // in the application function code. Ending a function with an error as well
-    // as failign an invocation and being retried are perfectly valid actions from the
-    // SDK's perspective.
-    stateMachine
-      .invoke()
-      .catch((e) => responseController.error(e)) // in bidi case the best we can do is abort the connection
-      .finally(() => connection.removeCurrentConsumer());
-
-    return {
-      headers: {
-        "content-type": serviceProtocolVersionToHeaderValue(
-          serviceProtocolVersion
-        ),
-        "x-restate-server": X_RESTATE_SERVER,
-      },
-      statusCode: 200,
-      body: responseBody.readable as ReadableStream<Uint8Array>,
-    };
   }
 
   private handleDiscovery(
