@@ -27,7 +27,6 @@ import {
 } from "./protoutils.js";
 import type { TestGreeter } from "./testdriver.js";
 import { TestDriver, TestResponse } from "./testdriver.js";
-import { ProtocolMode } from "../src/types/discovery.js";
 import { describe, expect, it } from "vitest";
 
 class GetStringStateGreeter implements TestGreeter {
@@ -56,11 +55,10 @@ describe("GetStringStateGreeter", () => {
   });
 
   it("sends message to runtime for request-response mode", async () => {
-    const result = await new TestDriver(
-      new GetStringStateGreeter(),
-      [startMessage({ knownEntries: 1 }), inputMessage(greetRequest("Till"))],
-      ProtocolMode.REQUEST_RESPONSE
-    ).run();
+    const result = await new TestDriver(new GetStringStateGreeter(), [
+      startMessage({ knownEntries: 1 }),
+      inputMessage(greetRequest("Till")),
+    ]).run();
 
     expect(result).toStrictEqual([
       getStateMessage("STATE"),

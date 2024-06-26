@@ -18,8 +18,11 @@ import type {
 } from "aws-lambda";
 import { Buffer } from "node:buffer";
 import type { GenericHandler, RestateRequest } from "./generic.js";
-import type { ReadableStream } from "node:stream/web";
+import { WritableStream, type ReadableStream } from "node:stream/web";
 import { OnceStream } from "../../utils/streams.js";
+import { X_RESTATE_SERVER } from "../../user_agent.js";
+import { rlog } from "../../logger.js";
+import { ensureError } from "../../types/errors.js";
 
 export class LambdaHandler {
   constructor(private readonly handler: GenericHandler) {}
@@ -56,22 +59,39 @@ export class LambdaHandler {
       AWSRequestId: context.awsRequestId,
     });
 
-    let responseBody = "";
-    if (resp.body instanceof Uint8Array) {
-      responseBody = Buffer.from(resp.body).toString("base64");
-    } else {
-      const chunks: Uint8Array[] = [];
-      for await (const chunk of resp.body) {
-        chunks.push(chunk);
-      }
-      responseBody = Buffer.concat(chunks).toString("base64");
+    const chunks: Uint8Array[] = [];
+
+    try {
+      await resp.body.pipeTo(
+        new WritableStream<Uint8Array>({
+          write: (chunk) => {
+            chunks.push(chunk);
+          },
+        })
+      );
+    } catch (e) {
+      // unlike in the streaming case, we can actually catch errors in the response body and form a nicer error
+      const error = ensureError(e);
+      rlog.error(
+        "Error while collecting invocation response: " +
+          (error.stack ?? error.message)
+      );
+      return {
+        headers: {
+          "content-type": "application/json",
+          "x-restate-server": X_RESTATE_SERVER,
+        },
+        statusCode: 500,
+        isBase64Encoded: false,
+        body: JSON.stringify({ message: error.message }),
+      };
     }
 
     return {
       headers: resp.headers,
       statusCode: resp.statusCode,
       isBase64Encoded: true,
-      body: responseBody,
+      body: Buffer.concat(chunks).toString("base64"),
     };
   }
 }

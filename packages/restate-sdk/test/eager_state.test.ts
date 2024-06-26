@@ -29,7 +29,6 @@ import {
   startMessage,
   suspensionMessage,
 } from "./protoutils.js";
-import { ProtocolMode } from "../src/types/discovery.js";
 import { describe, expect, it } from "vitest";
 
 const input = inputMessage(greetRequest("Two"));
@@ -45,11 +44,10 @@ class GetEmpty implements TestGreeter {
 
 describe("GetEmpty", () => {
   it("handles complete state without key present", async () => {
-    const result = await new TestDriver(
-      new GetEmpty(),
-      [startMessage({ knownEntries: 1, partialState: COMPLETE_STATE }), input],
-      ProtocolMode.BIDI_STREAM
-    ).run();
+    const result = await new TestDriver(new GetEmpty(), [
+      startMessage({ knownEntries: 1, partialState: COMPLETE_STATE }),
+      input,
+    ]).run();
 
     expect(result).toStrictEqual([
       getStateMessage("STATE", undefined, true),
@@ -59,11 +57,10 @@ describe("GetEmpty", () => {
   });
 
   it("handles partial state without key present ", async () => {
-    const result = await new TestDriver(
-      new GetEmpty(),
-      [startMessage({ knownEntries: 1 }), input],
-      ProtocolMode.BIDI_STREAM
-    ).run();
+    const result = await new TestDriver(new GetEmpty(), [
+      startMessage({ knownEntries: 1 }),
+      input,
+    ]).run();
 
     expect(result).toStrictEqual([
       getStateMessage("STATE"),
@@ -72,15 +69,11 @@ describe("GetEmpty", () => {
   });
 
   it("handles replay of partial state", async () => {
-    const result = await new TestDriver(
-      new GetEmpty(),
-      [
-        startMessage({ knownEntries: 2 }),
-        input,
-        getStateMessage("STATE", undefined, true),
-      ],
-      ProtocolMode.BIDI_STREAM
-    ).run();
+    const result = await new TestDriver(new GetEmpty(), [
+      startMessage({ knownEntries: 2 }),
+      input,
+      getStateMessage("STATE", undefined, true),
+    ]).run();
 
     expect(result).toStrictEqual([
       outputMessage(greetResponse("true")),
@@ -99,18 +92,14 @@ class Get implements TestGreeter {
 
 describe("Get", () => {
   it("handles complete state with key present", async () => {
-    const result = await new TestDriver(
-      new Get(),
-      [
-        startMessage({
-          knownEntries: 1,
-          partialState: COMPLETE_STATE,
-          state: [keyVal("STATE", "One")],
-        }),
-        input,
-      ],
-      ProtocolMode.BIDI_STREAM
-    ).run();
+    const result = await new TestDriver(new Get(), [
+      startMessage({
+        knownEntries: 1,
+        partialState: COMPLETE_STATE,
+        state: [keyVal("STATE", "One")],
+      }),
+      input,
+    ]).run();
 
     expect(result).toStrictEqual([
       getStateMessage("STATE", "One"),
@@ -120,14 +109,10 @@ describe("Get", () => {
   });
 
   it("handles partial state with key present ", async () => {
-    const result = await new TestDriver(
-      new Get(),
-      [
-        startMessage({ knownEntries: 1, state: [keyVal("STATE", "One")] }),
-        input,
-      ],
-      ProtocolMode.BIDI_STREAM
-    ).run();
+    const result = await new TestDriver(new Get(), [
+      startMessage({ knownEntries: 1, state: [keyVal("STATE", "One")] }),
+      input,
+    ]).run();
 
     expect(result).toStrictEqual([
       getStateMessage("STATE", "One"),
@@ -137,11 +122,10 @@ describe("Get", () => {
   });
 
   it("handles partial state without key present", async () => {
-    const result = await new TestDriver(
-      new Get(),
-      [startMessage({ knownEntries: 2 }), input],
-      ProtocolMode.BIDI_STREAM
-    ).run();
+    const result = await new TestDriver(new Get(), [
+      startMessage({ knownEntries: 2 }),
+      input,
+    ]).run();
 
     expect(result).toStrictEqual([
       getStateMessage("STATE"),
@@ -165,18 +149,14 @@ class GetAppendAndGet implements TestGreeter {
 
 describe("GetAppendAndGet", () => {
   it("handles complete state with key present", async () => {
-    const result = await new TestDriver(
-      new GetAppendAndGet(),
-      [
-        startMessage({
-          knownEntries: 1,
-          partialState: COMPLETE_STATE,
-          state: [keyVal("STATE", "One")],
-        }),
-        input,
-      ],
-      ProtocolMode.BIDI_STREAM
-    ).run();
+    const result = await new TestDriver(new GetAppendAndGet(), [
+      startMessage({
+        knownEntries: 1,
+        partialState: COMPLETE_STATE,
+        state: [keyVal("STATE", "One")],
+      }),
+      input,
+    ]).run();
 
     expect(result).toStrictEqual([
       getStateMessage("STATE", "One"),
@@ -188,15 +168,11 @@ describe("GetAppendAndGet", () => {
   });
 
   it("handles partial state with key not present ", async () => {
-    const result = await new TestDriver(
-      new GetAppendAndGet(),
-      [
-        startMessage({ knownEntries: 1 }),
-        input,
-        completionMessage(1, JSON.stringify("One")),
-      ],
-      ProtocolMode.BIDI_STREAM
-    ).run();
+    const result = await new TestDriver(new GetAppendAndGet(), [
+      startMessage({ knownEntries: 1 }),
+      input,
+      completionMessage(1, JSON.stringify("One")),
+    ]).run();
 
     expect(result).toStrictEqual([
       getStateMessage("STATE"),
@@ -220,18 +196,14 @@ class GetClearAndGet implements TestGreeter {
 
 describe("GetClearAndGet", () => {
   it("handles complete state with key present", async () => {
-    const result = await new TestDriver(
-      new GetClearAndGet(),
-      [
-        startMessage({
-          knownEntries: 1,
-          partialState: COMPLETE_STATE,
-          state: [keyVal("STATE", "One")],
-        }),
-        input,
-      ],
-      ProtocolMode.BIDI_STREAM
-    ).run();
+    const result = await new TestDriver(new GetClearAndGet(), [
+      startMessage({
+        knownEntries: 1,
+        partialState: COMPLETE_STATE,
+        state: [keyVal("STATE", "One")],
+      }),
+      input,
+    ]).run();
 
     expect(result).toStrictEqual([
       getStateMessage("STATE", "One"),
@@ -243,15 +215,11 @@ describe("GetClearAndGet", () => {
   });
 
   it("handles partial state with key not present ", async () => {
-    const result = await new TestDriver(
-      new GetClearAndGet(),
-      [
-        startMessage({ knownEntries: 1 }),
-        input,
-        completionMessage(1, JSON.stringify("One")),
-      ],
-      ProtocolMode.BIDI_STREAM
-    ).run();
+    const result = await new TestDriver(new GetClearAndGet(), [
+      startMessage({ knownEntries: 1 }),
+      input,
+      completionMessage(1, JSON.stringify("One")),
+    ]).run();
 
     expect(result).toStrictEqual([
       getStateMessage("STATE"),
@@ -277,11 +245,11 @@ class MultipleGet implements TestGreeter {
 
 describe("MultipleGet", () => {
   it("handles multiple gets with partial state not present with completion", async () => {
-    const result = await new TestDriver(
-      new MultipleGet(),
-      [startMessage({}), input, completionMessage(1, JSON.stringify("One"))],
-      ProtocolMode.BIDI_STREAM
-    ).run();
+    const result = await new TestDriver(new MultipleGet(), [
+      startMessage({}),
+      input,
+      completionMessage(1, JSON.stringify("One")),
+    ]).run();
 
     // First get goes to the runtime, the others get completed with local state
     expect(result).toStrictEqual([
@@ -294,11 +262,11 @@ describe("MultipleGet", () => {
   });
 
   it("handles multiple gets with partial state not present with replay", async () => {
-    const result = await new TestDriver(
-      new MultipleGet(),
-      [startMessage({}), input, getStateMessage("STATE", "One")],
-      ProtocolMode.BIDI_STREAM
-    ).run();
+    const result = await new TestDriver(new MultipleGet(), [
+      startMessage({}),
+      input,
+      getStateMessage("STATE", "One"),
+    ]).run();
 
     // First get goes to the runtime, the others get completed with local state
     expect(result).toStrictEqual([
@@ -328,18 +296,14 @@ class GetClearAllThenGet implements TestGreeter {
 
 describe("GetClearAllThenGet", () => {
   it("with complete state in the eager state map", async () => {
-    const result = await new TestDriver(
-      new GetClearAllThenGet(),
-      [
-        startMessage({
-          knownEntries: 1,
-          partialState: false,
-          state: [keyVal("STATE", "One")],
-        }),
-        inputMessage(greetRequest("bob")),
-      ],
-      ProtocolMode.REQUEST_RESPONSE
-    ).run();
+    const result = await new TestDriver(new GetClearAllThenGet(), [
+      startMessage({
+        knownEntries: 1,
+        partialState: false,
+        state: [keyVal("STATE", "One")],
+      }),
+      inputMessage(greetRequest("bob")),
+    ]).run();
 
     // First get goes to the runtime, the others get completed with local state
     expect(result).toStrictEqual([

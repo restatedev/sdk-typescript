@@ -54,7 +54,6 @@ import {
   PromiseType,
 } from "./promise_combinator_tracker.js";
 import { CombinatorEntryMessage } from "./generated/proto/javascript_pb.js";
-import { ProtocolMode } from "./types/discovery.js";
 import { Buffer } from "node:buffer";
 import type { HandlerKind } from "./types/rpc.js";
 
@@ -88,7 +87,6 @@ export class StateMachine implements RestateStreamConsumer {
   constructor(
     private readonly connection: Connection,
     private readonly invocation: Invocation,
-    private readonly protocolMode: ProtocolMode,
     handlerKind: HandlerKind,
     loggerContext: LoggerContext,
     private readonly suspensionMillis: number = 30_000
@@ -518,15 +516,10 @@ export class StateMachine implements RestateStreamConsumer {
   }
 
   // Suspension timeouts:
-  // Lambda case: suspend immediately when control is back in the user code
-  // Bidi streaming case:
-  // - suspend after 1 seconds if input channel is still open (can still get completions)
+  // - suspend after 30 seconds if input channel is still open (can still get completions)
   // - suspend immediately if input channel is closed (cannot get completions)
   private getSuspensionMillis(): number {
-    return this.protocolMode === ProtocolMode.REQUEST_RESPONSE ||
-      this.inputChannelClosed
-      ? 0
-      : this.suspensionMillis;
+    return this.inputChannelClosed ? 0 : this.suspensionMillis;
   }
 
   private async suspend() {

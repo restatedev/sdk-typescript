@@ -30,7 +30,6 @@ import { SLEEP_ENTRY_MESSAGE_TYPE } from "../src/types/protocol.js";
 import { Empty } from "@bufbuild/protobuf";
 import type { TestGreeter } from "./testdriver.js";
 import { TestDriver, TestResponse } from "./testdriver.js";
-import { ProtocolMode } from "../src/types/discovery.js";
 import { describe, expect, it } from "vitest";
 
 const wakeupTime = 1835661783000;
@@ -60,11 +59,10 @@ describe("SleepGreeter", () => {
   });
 
   it("sends message to runtime for request-response mode", async () => {
-    const result = await new TestDriver(
-      new SleepGreeter(),
-      [startMessage({ knownEntries: 1 }), inputMessage(greetRequest("Till"))],
-      ProtocolMode.REQUEST_RESPONSE
-    ).run();
+    const result = await new TestDriver(new SleepGreeter(), [
+      startMessage({ knownEntries: 1 }),
+      inputMessage(greetRequest("Till")),
+    ]).run();
 
     expect(result[0].messageType).toStrictEqual(SLEEP_ENTRY_MESSAGE_TYPE);
     expect(result[1]).toStrictEqual(suspensionMessage([1]));

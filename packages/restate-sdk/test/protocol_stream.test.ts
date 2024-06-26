@@ -17,7 +17,7 @@ import {
   SetStateEntryMessage,
   SET_STATE_ENTRY_MESSAGE_TYPE,
 } from "../src/types/protocol.js";
-import { RestateBidiConnection } from "../src/connection/bidi_connection.js";
+import { RestateConnection } from "../src/connection/connection.js";
 import { Header, Message } from "../src/types/types.js";
 import * as stream from "node:stream/web";
 import { setTimeout } from "timers/promises";
@@ -63,7 +63,7 @@ describe("Restate Streaming Connection", () => {
 
     // the following demonstrates how to use a stream_encoder/decoder to convert
     // a raw duplex stream to a high-level stream of Restate's protocol messages and headers.
-    const restateStream = new RestateBidiConnection({}, http2stream);
+    const restateStream = new RestateConnection({}, http2stream);
 
     // here we need to create a promise for the sake of this test.
     // this future will be resolved once something is emitted on the stream.
@@ -104,7 +104,7 @@ describe("Restate Streaming Connection", () => {
 
   it("should await sending of small data when closing", async () => {
     const { duplex, processBytes } = mockBackpressuredDuplex(128);
-    const connection = new RestateBidiConnection({}, duplex);
+    const connection = new RestateConnection({}, duplex);
 
     // enqueue small data, below watermark, so that 'end' can immediately be written
     void connection.send(newMessage(10));
@@ -121,7 +121,7 @@ describe("Restate Streaming Connection", () => {
 
   it("should await sending of larger data when closing", async () => {
     const { duplex, processBytes } = mockBackpressuredDuplex(128);
-    const connection = new RestateBidiConnection({}, duplex);
+    const connection = new RestateConnection({}, duplex);
 
     // enqueue quite some data, before allowing any bytes to flow any
     void connection.send(newMessage(1024));
@@ -140,7 +140,7 @@ describe("Restate Streaming Connection", () => {
 
   it("should not trigger backpressure for small messages", async () => {
     const { duplex } = mockBackpressuredDuplex(1024);
-    const connection = new RestateBidiConnection({}, duplex);
+    const connection = new RestateConnection({}, duplex);
 
     // enqueue a message that is not too large
     const promise1 = connection.send(newMessage(80));
@@ -152,7 +152,7 @@ describe("Restate Streaming Connection", () => {
 
   it("should trigger backpressure for large messages", async () => {
     const { duplex } = mockBackpressuredDuplex(1024);
-    const connection = new RestateBidiConnection({}, duplex);
+    const connection = new RestateConnection({}, duplex);
 
     // this message should get sent immediately because its smaller than 1024
     const promise1 = connection.send(newMessage(800));
@@ -165,7 +165,7 @@ describe("Restate Streaming Connection", () => {
 
   it("should resolve backpressure promises when the stream flows", async () => {
     const { duplex, processBytes } = mockBackpressuredDuplex(1024, "flow");
-    const connection = new RestateBidiConnection({}, duplex);
+    const connection = new RestateConnection({}, duplex);
 
     // this message should get sent immediately because its smaller than 1024
     const promise1 = connection.send(newMessage(800));

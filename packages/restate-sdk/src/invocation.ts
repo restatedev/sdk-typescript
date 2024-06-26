@@ -21,13 +21,13 @@ import {
   INPUT_ENTRY_MESSAGE_TYPE,
   START_MESSAGE_TYPE,
 } from "./types/protocol.js";
-import type { RestateStreamConsumer } from "./connection/connection.js";
 import { LocalStateStore } from "./local_state_store.js";
 import { ensureError } from "./types/errors.js";
 import { LoggerContext } from "./logger.js";
 import { CompletablePromise } from "./utils/promises.js";
 import type { ComponentHandler } from "./types/components.js";
 import { Buffer } from "node:buffer";
+import type { RestateStreamConsumer } from "./connection/connection.js";
 
 enum State {
   ExpectingStart = 0,

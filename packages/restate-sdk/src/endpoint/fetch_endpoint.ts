@@ -40,18 +40,19 @@ import { ProtocolMode } from "../types/discovery.js";
  *   .bind(myService)
  *   .handler();
  * @example
- * A typical bidirectional handler (must be served over http2) would look like this:
+ * A typical bidirectional handler (works with http2 and some http1.1 servers) would look like this:
  * ```
  * import * as restate from "@restatedev/restate-sdk/fetch";
  *
  * export default restate
  *   .endpoint()
+ *   .bidirectional()
  *   .bind(myService)
- *   .enableHttp2()
  *   .handler();
  */
 export interface FetchEndpoint extends RestateEndpointBase<FetchEndpoint> {
   handler(): { fetch: (request: Request) => Promise<Response> };
+  bidirectional(set?: boolean): FetchEndpoint;
 }
 
 export class FetchEndpointImpl implements FetchEndpoint {
@@ -90,8 +91,10 @@ export class FetchEndpointImpl implements FetchEndpoint {
     return this;
   }
 
-  public enableHttp2(): FetchEndpoint {
-    this.protocolMode = ProtocolMode.BIDI_STREAM;
+  public bidirectional(set: boolean = true): FetchEndpoint {
+    this.protocolMode = set
+      ? ProtocolMode.BIDI_STREAM
+      : ProtocolMode.REQUEST_RESPONSE;
     return this;
   }
 
