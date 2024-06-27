@@ -9,15 +9,15 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-export {
+export type {
   Context,
   ObjectContext,
   ObjectSharedContext,
-  CombineablePromise,
   WorkflowContext,
   WorkflowSharedContext,
   Rand,
 } from "./context.js";
+export { CombineablePromise } from "./context.js";
 
 export type { Client, SendClient } from "./types/rpc.js";
 export { service, object, workflow, handlers } from "./types/rpc.js";
@@ -28,5 +28,5 @@ export type {
   WorkflowDefinition,
 } from "@restatedev/restate-sdk-core";
 
-export { ServiceBundle, RestateEndpoint } from "./endpoint.js";
+export type { ServiceBundle, RestateEndpoint } from "./endpoint.js";
 export { RestateError, TerminalError, TimeoutError } from "./types/errors.js";
