@@ -492,7 +492,7 @@ export class StateMachine implements RestateStreamConsumer {
   /**
    * This method is invoked when we hit a suspension point. A suspension point is everytime the user "await"s a Promise returned by RestateContext that might be completed at a later point in time by a CompletionMessage/AckMessage.
    *
-   * Depending on the state of the read channel, and on the protocol mode, it might either immediately suspend, or schedule a suspension to happen at a later point in time.
+   * Depending on the state of the read channel, it might either immediately suspend, or schedule a suspension to happen at a later point in time.
    */
   private hitSuspensionPoint() {
     // If there was already a timeout set, we want to reset the time to postpone suspension as long as we make progress.
