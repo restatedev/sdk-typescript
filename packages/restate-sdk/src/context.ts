@@ -57,10 +57,13 @@ export interface Request {
   readonly body: Uint8Array;
 }
 
+type TypedState = Record<string, unknown>;
+type UntypedState = { _: never };
+
 /**
  * Key value store operations. Only keyed services have an attached key-value store.
  */
-export interface KeyValueStore {
+export interface KeyValueStore<TState extends TypedState> {
   /**
    * Get/retrieve state from the Restate runtime.
    * Note that state objects are serialized with `Buffer.from(JSON.stringify(theObject))`
@@ -72,7 +75,9 @@ export interface KeyValueStore {
    * @example
    * const state = await ctx.get<string>("STATE");
    */
-  get<T>(name: string): Promise<T | null>;
+  get<TValue, TKey extends keyof TState = string>(
+    name: TState extends UntypedState ? string : TKey
+  ): Promise<(TState extends UntypedState ? TValue : TState[TKey]) | null>;
 
   stateKeys(): Promise<Array<string>>;
 
@@ -87,7 +92,10 @@ export interface KeyValueStore {
    * @example
    * ctx.set("STATE", "Hello");
    */
-  set<T>(name: string, value: T): void;
+  set<TValue, TKey extends keyof TState = string>(
+    name: TState extends UntypedState ? string : TKey,
+    value: TState extends UntypedState ? TValue : TState[TKey]
+  ): void;
 
   /**
    * Clear/delete state in the Restate runtime.
@@ -96,7 +104,9 @@ export interface KeyValueStore {
    * @example
    * ctx.clear("STATE");
    */
-  clear(name: string): void;
+  clear<TKey extends keyof TState>(
+    name: TState extends UntypedState ? string : TKey
+  ): void;
 
   /**
    * Clear/delete all the state entries in the Restate runtime.
@@ -448,9 +458,9 @@ export interface Context extends RestateContext {
  * This context can be used only within virtual objects.
  *
  */
-export interface ObjectContext
+export interface ObjectContext<TState extends TypedState = UntypedState>
   extends Context,
-    KeyValueStore,
+    KeyValueStore<TState>,
     RestateObjectContext {
   key: string;
 }
@@ -466,7 +476,7 @@ export interface ObjectContext
  * This context can be used only within a shared virtual objects.
  *
  */
-export interface ObjectSharedContext
+export interface ObjectSharedContext<TState extends TypedState = UntypedState>
   extends Context,
     RestateObjectSharedContext {
   key: string;
@@ -482,7 +492,9 @@ export interface ObjectSharedContext
    * @example
    * const state = await ctx.get<string>("STATE");
    */
-  get<T>(name: string): Promise<T | null>;
+  get<TValue, TKey extends keyof TState = string>(
+    name: TState extends UntypedState ? string : TKey
+  ): Promise<(TState extends UntypedState ? TValue : TState[TKey]) | null>;
 
   /**
    * Retrieve all the state keys for this object.
