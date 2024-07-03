@@ -20,7 +20,7 @@ const counter = restate.object({
     add: async (ctx: restate.ObjectContext, amount: number) => {
       const current = await ctx.get<number>("count");
       const updated = (current ?? 0) + amount;
-      ctx.set("seen", updated);
+      ctx.set("count", updated);
       return updated;
     },
 
