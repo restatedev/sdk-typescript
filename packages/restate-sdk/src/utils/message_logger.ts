@@ -17,6 +17,7 @@ import { formatMessageAsJson } from "./utils.js";
 import type { LoggerContext } from "../logger.js";
 import {
   createRestateConsole,
+  LogSource,
   RESTATE_LOG_LEVEL,
   RestateLogLevel,
 } from "../logger.js";
@@ -81,7 +82,7 @@ export type StateMachineConsole = Console & {
 export function createStateMachineConsole(
   context: LoggerContext
 ): StateMachineConsole {
-  const console = createRestateConsole(context);
+  const console = createRestateConsole(LogSource.JOURNAL, context);
 
   Object.defineProperties(console, {
     debugJournalMessage: {

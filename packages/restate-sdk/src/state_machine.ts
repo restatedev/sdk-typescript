@@ -41,7 +41,7 @@ import {
 } from "./types/errors.js";
 import type { LocalStateStore } from "./local_state_store.js";
 import type { LoggerContext } from "./logger.js";
-import { createRestateConsole } from "./logger.js";
+import { LogSource, createRestateConsole } from "./logger.js";
 import type { WrappedPromise } from "./utils/promises.js";
 import {
   CompletablePromise,
@@ -97,7 +97,11 @@ export class StateMachine implements RestateStreamConsumer {
     this.restateContext = new ContextImpl(
       this.invocation.id,
       // The console exposed by RestateContext filters logs in replay, while the internal one is based on the ENV variables.
-      createRestateConsole(loggerContext, () => !this.journal.isReplaying()),
+      createRestateConsole(
+        LogSource.USER,
+        loggerContext,
+        () => !this.journal.isReplaying()
+      ),
       handlerKind,
       invocation.userKey,
       invocation.invocationValue,
