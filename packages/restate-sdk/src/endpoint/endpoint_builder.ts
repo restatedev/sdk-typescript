@@ -29,6 +29,12 @@ import {
 import type * as discovery from "../types/discovery.js";
 import type { KeySetV1 } from "./request_signing/v1.js";
 import { parseKeySetV1 } from "./request_signing/v1.js";
+import {
+  LogSource,
+  type Logger,
+  createRestateConsole,
+  defaultLogger,
+} from "../logger.js";
 
 function isServiceDefinition<P extends string, M>(
   m: Record<string, any>
@@ -50,6 +56,15 @@ function isWorkflowDefinition<P extends string, M>(
 
 export class EndpointBuilder {
   private readonly services: Map<string, Component> = new Map();
+  public logger: Logger = defaultLogger;
+
+  /**
+   * This is a simple console without contextual info.
+   *
+   * This should be used only in cases where no contextual info is available.
+   */
+  public rlog = createRestateConsole(this.logger, LogSource.SYSTEM);
+
   private _keySet?: KeySetV1;
 
   public get keySet(): KeySetV1 | undefined {
@@ -104,6 +119,12 @@ export class EndpointBuilder {
     parseKeySetV1(keys).forEach((buffer, key) =>
       this._keySet?.set(key, buffer)
     );
+    return this;
+  }
+
+  public setLogger(newLogger: Logger) {
+    this.logger = newLogger;
+    this.rlog = createRestateConsole(this.logger, LogSource.SYSTEM);
     return this;
   }
 

@@ -14,11 +14,12 @@
 
 import { formatMessageType } from "../types/protocol.js";
 import { formatMessageAsJson } from "./utils.js";
-import type { LoggerContext } from "../logger.js";
+import type { Logger, LoggerContext } from "../logger.js";
 import {
   createRestateConsole,
+  logLevel,
   LogSource,
-  RESTATE_LOG_LEVEL,
+  DEFAULT_LOGGER_LOG_LEVEL,
   RestateLogLevel,
 } from "../logger.js";
 
@@ -46,7 +47,7 @@ enum JournalLoggingLogLevel {
 
 const DEFAULT_DEBUG_LOG_LEVEL =
   globalThis?.process?.env["NODE_ENV"]?.toUpperCase() === "PRODUCTION" ||
-  RESTATE_LOG_LEVEL > RestateLogLevel.DEBUG
+  logLevel(DEFAULT_LOGGER_LOG_LEVEL) > logLevel(RestateLogLevel.DEBUG)
     ? JournalLoggingLogLevel.OFF
     : JournalLoggingLogLevel.DEBUG;
 
@@ -80,9 +81,10 @@ export type StateMachineConsole = Console & {
 };
 
 export function createStateMachineConsole(
+  logger: Logger,
   context: LoggerContext
 ): StateMachineConsole {
-  const console = createRestateConsole(LogSource.JOURNAL, context);
+  const console = createRestateConsole(logger, LogSource.JOURNAL, context);
 
   Object.defineProperties(console, {
     debugJournalMessage: {

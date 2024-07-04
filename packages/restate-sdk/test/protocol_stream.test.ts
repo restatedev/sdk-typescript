@@ -23,6 +23,11 @@ import * as stream from "node:stream/web";
 import { setTimeout } from "timers/promises";
 import { CompletablePromise } from "../src/utils/promises.js";
 import { describe, expect, it } from "vitest";
+import {
+  LogSource,
+  createRestateConsole,
+  defaultLogger,
+} from "../src/logger.js";
 
 // The following test suite is taken from headers.rs
 describe("Header", () => {
@@ -55,6 +60,8 @@ describe("Header", () => {
     roundtripTest(new Header(0xfc00n, 10341, undefined, true)));
 });
 
+const rlog = createRestateConsole(defaultLogger, LogSource.SYSTEM);
+
 describe("Restate Streaming Connection", () => {
   it("should demonstrate how to write messages and read messages.", async () => {
     // imagine that the HTTP2 request handler hands to you a bidirectional (duplex in node's lingo)
@@ -63,7 +70,7 @@ describe("Restate Streaming Connection", () => {
 
     // the following demonstrates how to use a stream_encoder/decoder to convert
     // a raw duplex stream to a high-level stream of Restate's protocol messages and headers.
-    const restateStream = new RestateConnection({}, http2stream);
+    const restateStream = new RestateConnection(rlog, {}, http2stream);
 
     // here we need to create a promise for the sake of this test.
     // this future will be resolved once something is emitted on the stream.
@@ -104,7 +111,7 @@ describe("Restate Streaming Connection", () => {
 
   it("should await sending of small data when closing", async () => {
     const { duplex, processBytes } = mockBackpressuredDuplex(128);
-    const connection = new RestateConnection({}, duplex);
+    const connection = new RestateConnection(rlog, {}, duplex);
 
     // enqueue small data, below watermark, so that 'end' can immediately be written
     void connection.send(newMessage(10));
@@ -121,7 +128,7 @@ describe("Restate Streaming Connection", () => {
 
   it("should await sending of larger data when closing", async () => {
     const { duplex, processBytes } = mockBackpressuredDuplex(128);
-    const connection = new RestateConnection({}, duplex);
+    const connection = new RestateConnection(rlog, {}, duplex);
 
     // enqueue quite some data, before allowing any bytes to flow any
     void connection.send(newMessage(1024));
@@ -140,7 +147,7 @@ describe("Restate Streaming Connection", () => {
 
   it("should not trigger backpressure for small messages", async () => {
     const { duplex } = mockBackpressuredDuplex(1024);
-    const connection = new RestateConnection({}, duplex);
+    const connection = new RestateConnection(rlog, {}, duplex);
 
     // enqueue a message that is not too large
     const promise1 = connection.send(newMessage(80));
@@ -152,7 +159,7 @@ describe("Restate Streaming Connection", () => {
 
   it("should trigger backpressure for large messages", async () => {
     const { duplex } = mockBackpressuredDuplex(1024);
-    const connection = new RestateConnection({}, duplex);
+    const connection = new RestateConnection(rlog, {}, duplex);
 
     // this message should get sent immediately because its smaller than 1024
     const promise1 = connection.send(newMessage(800));
@@ -164,8 +171,8 @@ describe("Restate Streaming Connection", () => {
   });
 
   it("should resolve backpressure promises when the stream flows", async () => {
-    const { duplex, processBytes } = mockBackpressuredDuplex(1024, "flow");
-    const connection = new RestateConnection({}, duplex);
+    const { duplex, processBytes } = mockBackpressuredDuplex(1024);
+    const connection = new RestateConnection(rlog, {}, duplex);
 
     // this message should get sent immediately because its smaller than 1024
     const promise1 = connection.send(newMessage(800));

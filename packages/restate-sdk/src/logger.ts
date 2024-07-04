@@ -14,25 +14,25 @@
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 
 export enum RestateLogLevel {
-  TRACE = 1,
-  DEBUG = 2,
-  INFO = 3,
-  WARN = 4,
-  ERROR = 5,
+  TRACE = "trace",
+  DEBUG = "debug",
+  INFO = "info",
+  WARN = "warn",
+  ERROR = "error",
 }
 
-function logLevelName(level: RestateLogLevel) {
+export function logLevel(level: RestateLogLevel): number {
   switch (level) {
     case RestateLogLevel.TRACE:
-      return "TRACE";
+      return 1;
     case RestateLogLevel.DEBUG:
-      return "DEBUG";
+      return 2;
     case RestateLogLevel.INFO:
-      return "INFO";
+      return 3;
     case RestateLogLevel.WARN:
-      return "WARN";
+      return 4;
     case RestateLogLevel.ERROR:
-      return "ERROR";
+      return 5;
   }
 }
 
@@ -69,17 +69,22 @@ export type Logger = (
   ...optionalParams: any[]
 ) => void;
 
-const defaultLogger: Logger = (
+// this is the log level as provided by the environment variable RESTATE_LOG_LEVEL,
+// but it only affects the default logger - custom loggers get all log events and
+// should use their own filtering mechanism
+export const DEFAULT_LOGGER_LOG_LEVEL = readRestateLogLevel();
+
+export const defaultLogger: Logger = (
   params: LogParams,
   message?: any,
   ...optionalParams: any[]
 ) => {
-  if (params.level < RESTATE_LOG_LEVEL) {
+  if (logLevel(params.level) < logLevel(DEFAULT_LOGGER_LOG_LEVEL)) {
     return;
   }
   const p = `${formatLogPrefix(
     params.context
-  )}[${new Date().toISOString()}] ${logLevelName(params.level)}: `;
+  )}[${new Date().toISOString()}] ${params.level.toUpperCase()}: `;
   switch (params.level) {
     case RestateLogLevel.TRACE:
       return console.trace(p, message, ...optionalParams);
@@ -96,20 +101,6 @@ const defaultLogger: Logger = (
   }
 };
 
-let logger: Logger = defaultLogger;
-
-/**
- * Replace the default console-based {@link Logger}
- * @param newLogger
- * @example
- * ```ts
- *     restate.setLogger((params, message, ...o) => {console.log(`${params.level}: `, message, ...o)})
- *  ```
- */
-export function setLogger(newLogger: Logger) {
-  logger = newLogger;
-}
-
 function readRestateLogLevel(): RestateLogLevel {
   const env = globalThis.process?.env?.RESTATE_LOGGING;
   const level = logLevelFromName(env);
@@ -118,8 +109,6 @@ function readRestateLogLevel(): RestateLogLevel {
   }
   return RestateLogLevel.INFO;
 }
-
-export const RESTATE_LOG_LEVEL = readRestateLogLevel();
 
 export class LoggerContext {
   readonly fqMethodName: string;
@@ -151,6 +140,7 @@ function formatLogPrefix(context?: LoggerContext): string {
 }
 
 function loggerForLevel(
+  logger: Logger,
   source: LogSource,
   level: RestateLogLevel,
   shouldLog: () => boolean,
@@ -175,22 +165,46 @@ export enum LogSource {
 }
 
 export function createRestateConsole(
+  logger: Logger,
   source: LogSource,
   context?: LoggerContext,
   shouldLog: () => boolean = () => true
 ): Console {
   return Object.create(console, {
-    trace: loggerForLevel(source, RestateLogLevel.TRACE, shouldLog, context),
-    debug: loggerForLevel(source, RestateLogLevel.DEBUG, shouldLog, context),
-    info: loggerForLevel(source, RestateLogLevel.INFO, shouldLog, context),
-    warn: loggerForLevel(source, RestateLogLevel.WARN, shouldLog, context),
-    error: loggerForLevel(source, RestateLogLevel.ERROR, shouldLog, context),
+    trace: loggerForLevel(
+      logger,
+      source,
+      RestateLogLevel.TRACE,
+      shouldLog,
+      context
+    ),
+    debug: loggerForLevel(
+      logger,
+      source,
+      RestateLogLevel.DEBUG,
+      shouldLog,
+      context
+    ),
+    info: loggerForLevel(
+      logger,
+      source,
+      RestateLogLevel.INFO,
+      shouldLog,
+      context
+    ),
+    warn: loggerForLevel(
+      logger,
+      source,
+      RestateLogLevel.WARN,
+      shouldLog,
+      context
+    ),
+    error: loggerForLevel(
+      logger,
+      source,
+      RestateLogLevel.ERROR,
+      shouldLog,
+      context
+    ),
   }) as Console;
 }
-
-/**
- * This is a simple console without contextual info.
- *
- * This should be used only in cases where no contextual info is available.
- */
-export const rlog = createRestateConsole(LogSource.SYSTEM);

@@ -12,7 +12,6 @@
 import type stream from "node:stream/web";
 import { streamDecoder } from "../io/decoder.js";
 import type { Message } from "../types/types.js";
-import { rlog } from "../logger.js";
 import { encodeMessage } from "../io/encoder.js";
 import { WritableStream } from "node:stream/web";
 
@@ -59,10 +58,11 @@ export class RestateConnection implements Connection {
    * create a RestateBidiConnection stream from a duplex stream
    */
   public static from(
+    rlog: Console,
     headers: Record<string, string | string[] | undefined>,
     rawStream: stream.ReadableWritablePair<Uint8Array, Uint8Array>
   ): RestateConnection {
-    return new RestateConnection(headers, rawStream);
+    return new RestateConnection(rlog, headers, rawStream);
   }
 
   // --------------------------------------------------------------------------
@@ -78,6 +78,7 @@ export class RestateConnection implements Connection {
   private readonly sdkOutput: stream.WritableStreamDefaultWriter<Uint8Array>;
 
   constructor(
+    rlog: Console,
     private readonly attemptHeaders: Record<
       string,
       string | string[] | undefined

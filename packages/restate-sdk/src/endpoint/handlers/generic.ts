@@ -9,7 +9,6 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { rlog } from "../../logger.js";
 import { InvocationBuilder } from "../../invocation.js";
 import { StateMachine } from "../../state_machine.js";
 import { ensureError } from "../../types/errors.js";
@@ -78,15 +77,15 @@ export interface RestateHandler {
  */
 export class GenericHandler implements RestateHandler {
   constructor(
-    private readonly endpoint: EndpointBuilder,
+    readonly endpoint: EndpointBuilder,
     private readonly protocolMode: ProtocolMode
   ) {
     if (!this.endpoint.keySet) {
-      rlog.warn(
+      this.endpoint.rlog.warn(
         `Accepting requests without validating request signatures; handler access must be restricted`
       );
     } else {
-      rlog.info(
+      this.endpoint.rlog.info(
         `Validating requests using signing keys [${Array.from(
           this.endpoint.keySet.keys()
         )}]`
@@ -103,7 +102,7 @@ export class GenericHandler implements RestateHandler {
       return await this._handle(request, context);
     } catch (e) {
       const error = ensureError(e);
-      rlog.error(
+      this.endpoint.rlog.error(
         "Error while handling invocation: " + (error.stack ?? error.message)
       );
       return this.toErrorResponse(500, error.message);
@@ -124,7 +123,7 @@ export class GenericHandler implements RestateHandler {
     const parsed = parseUrlComponents(path);
     if (!parsed) {
       const msg = `Invalid path: path doesn't end in /invoke/SvcName/handlerName and also not in /discover: ${path}`;
-      rlog.trace(msg);
+      this.endpoint.rlog.trace(msg);
       return this.toErrorResponse(404, msg);
     }
     if (parsed === "discovery") {
@@ -133,7 +132,7 @@ export class GenericHandler implements RestateHandler {
     const serviceProtocolVersionString = request.headers["content-type"];
     if (typeof serviceProtocolVersionString !== "string") {
       const errorMessage = "Missing content-type header";
-      rlog.warn(errorMessage);
+      this.endpoint.rlog.warn(errorMessage);
       return this.toErrorResponse(415, errorMessage);
     }
     const serviceProtocolVersion = parseServiceProtocolVersion(
@@ -141,24 +140,24 @@ export class GenericHandler implements RestateHandler {
     );
     if (!isServiceProtocolVersionSupported(serviceProtocolVersion)) {
       const errorMessage = `Unsupported service protocol version '${serviceProtocolVersionString}'`;
-      rlog.warn(errorMessage);
+      this.endpoint.rlog.warn(errorMessage);
       return this.toErrorResponse(415, errorMessage);
     }
     const method = this.endpoint.componentByName(parsed.componentName);
     if (!method) {
       const msg = `No service found for URL: ${JSON.stringify(parsed)}`;
-      rlog.error(msg);
+      this.endpoint.rlog.error(msg);
       return this.toErrorResponse(404, msg);
     }
     const handler = method?.handlerMatching(parsed);
     if (!handler) {
       const msg = `No service found for URL: ${JSON.stringify(parsed)}`;
-      rlog.error(msg);
+      this.endpoint.rlog.error(msg);
       return this.toErrorResponse(404, msg);
     }
     if (!request.body) {
       const msg = "The incoming message body was null";
-      rlog.error(msg);
+      this.endpoint.rlog.error(msg);
       return this.toErrorResponse(400, msg);
     }
     return this.handleInvoke(
@@ -187,7 +186,7 @@ export class GenericHandler implements RestateHandler {
       );
 
       if (!validateResponse.valid) {
-        rlog.error(
+        this.endpoint.rlog.error(
           `Rejecting request as its JWT did not validate: ${
             // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
             validateResponse.error
@@ -199,7 +198,7 @@ export class GenericHandler implements RestateHandler {
       }
     } catch (e) {
       const error = ensureError(e);
-      rlog.error(
+      this.endpoint.rlog.error(
         "Error while attempting to validate request signature: " +
           (error.stack ?? error.message)
       );
@@ -221,7 +220,7 @@ export class GenericHandler implements RestateHandler {
           ctrl as TransformStreamDefaultController<Uint8Array>;
       },
     });
-    const connection = RestateConnection.from(headers, {
+    const connection = RestateConnection.from(this.endpoint.rlog, headers, {
       readable: body,
       writable: responseBody.writable,
     });
@@ -242,6 +241,7 @@ export class GenericHandler implements RestateHandler {
       connection,
       invocation,
       handler.kind(),
+      this.endpoint.logger,
       invocation.inferLoggerContext(context)
     );
     connection.pipeToConsumer(stateMachine);
@@ -274,7 +274,7 @@ export class GenericHandler implements RestateHandler {
   ): RestateResponse {
     if (typeof acceptVersionsString !== "string") {
       const errorMessage = "Missing accept header";
-      rlog.warn(errorMessage);
+      this.endpoint.rlog.warn(errorMessage);
       return this.toErrorResponse(415, errorMessage);
     }
 
@@ -286,7 +286,7 @@ export class GenericHandler implements RestateHandler {
       ServiceDiscoveryProtocolVersion.SERVICE_DISCOVERY_PROTOCOL_VERSION_UNSPECIFIED
     ) {
       const errorMessage = `Unsupported service discovery protocol version '${acceptVersionsString}'`;
-      rlog.warn(errorMessage);
+      this.endpoint.rlog.warn(errorMessage);
       return this.toErrorResponse(415, errorMessage);
     }
 

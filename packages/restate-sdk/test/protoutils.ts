@@ -59,8 +59,7 @@ import {
   RunEntryMessage,
   StartMessage_StateEntry,
 } from "../src/generated/proto/protocol_pb.js";
-import { jsonSerialize, formatMessageAsJson } from "../src/utils/utils.js";
-import { rlog } from "../src/logger.js";
+import { jsonSerialize } from "../src/utils/utils.js";
 import type { JournalErrorContext } from "../src/types/errors.js";
 import {
   INTERNAL_ERROR_CODE,
@@ -590,12 +589,3 @@ export const CLEAR_ALL_STATE_ENTRY_MESSAGE = new Message(
   CLEAR_ALL_STATE_ENTRY_MESSAGE_TYPE,
   new ClearAllStateEntryMessage()
 );
-
-// a utility function to print the results of a test
-export function printResults(results: Message[]) {
-  rlog.info(
-    results.map(
-      (el) => el.messageType + " - " + formatMessageAsJson(el.message) + "\n"
-    )
-  );
-}

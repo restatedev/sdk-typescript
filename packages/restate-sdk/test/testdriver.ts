@@ -18,7 +18,6 @@ import {
 import type { Connection } from "../src/connection/connection.js";
 import { formatMessageAsJson } from "../src/utils/utils.js";
 import { Message } from "../src/types/types.js";
-import { rlog } from "../src/logger.js";
 import { StateMachine } from "../src/state_machine.js";
 import { InvocationBuilder } from "../src/invocation.js";
 import type { ObjectContext } from "../src/context.js";
@@ -26,6 +25,7 @@ import type { VirtualObjectDefinition } from "../src/public_api.js";
 import { object } from "../src/public_api.js";
 import { HandlerKind } from "../src/types/rpc.js";
 import { NodeEndpoint } from "../src/endpoint/node_endpoint.js";
+import type { EndpointBuilder } from "../src/endpoint/endpoint_builder.js";
 
 export type TestRequest = {
   name: string;
@@ -152,6 +152,10 @@ export class TestDriver implements Connection {
       this,
       invocation,
       HandlerKind.EXCLUSIVE,
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+      (
+        this.restateServer as unknown as { builder: EndpointBuilder }
+      ).builder.logger,
       invocation.inferLoggerContext()
     );
   }
@@ -180,7 +184,9 @@ export class TestDriver implements Connection {
 
   send(msg: Message): Promise<void> {
     this.result.push(msg);
-    rlog.debug(
+    (
+      this.restateServer as unknown as { builder: EndpointBuilder }
+    ).builder.rlog.debug(
       `Adding result to the result array. Message type: ${
         msg.messageType
       }, message:

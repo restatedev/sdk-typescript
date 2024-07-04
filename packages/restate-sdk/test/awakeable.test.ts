@@ -29,7 +29,6 @@ import {
 
 import type { TestGreeter } from "./testdriver.js";
 import { TestDriver, TestResponse } from "./testdriver.js";
-import { ProtocolMode } from "../src/types/discovery.js";
 import { describe, expect, it } from "vitest";
 
 class AwakeableGreeter implements TestGreeter {
@@ -55,14 +54,10 @@ describe("AwakeableGreeter", () => {
   });
 
   it("sends message to runtime for request-response case", async () => {
-    const result = await new TestDriver(
-      new AwakeableGreeter(),
-      [
-        startMessage({ knownEntries: 1, key: "Till" }),
-        inputMessage(greetRequest("Till")),
-      ],
-      ProtocolMode.REQUEST_RESPONSE
-    ).run();
+    const result = await new TestDriver(new AwakeableGreeter(), [
+      startMessage({ knownEntries: 1, key: "Till" }),
+      inputMessage(greetRequest("Till")),
+    ]).run();
 
     expect(result).toStrictEqual([awakeableMessage(), suspensionMessage([1])]);
   });
