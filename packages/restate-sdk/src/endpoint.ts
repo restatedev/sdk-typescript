@@ -79,7 +79,7 @@ export interface RestateEndpointBase<E> {
    *     restate.setLogger((params, message, ...o) => {logger[params.level]({invocationId: params.context?.invocationId}, [message, ...o].join(' '))})
    *  ```
    */
-  setLogger(logger: Logger): void;
+  setLogger(logger: Logger): E;
 }
 
 /**
