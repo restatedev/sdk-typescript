@@ -60,6 +60,7 @@ function logLevelFromName(name?: string): RestateLogLevel | null {
 export type LogParams = {
   source: LogSource;
   level: RestateLogLevel;
+  replaying: boolean;
   context?: LoggerContext;
 };
 
@@ -143,17 +144,17 @@ function loggerForLevel(
   logger: Logger,
   source: LogSource,
   level: RestateLogLevel,
-  shouldLog: () => boolean,
+  isReplaying: () => boolean,
   context?: LoggerContext
 ): PropertyDescriptor {
   return {
     get: (): Logger => {
-      if (!shouldLog()) {
-        return () => {
-          // empty logger
-        };
-      }
-      return logger.bind(null, { source, level, context });
+      return logger.bind(null, {
+        source,
+        level,
+        replaying: isReplaying(),
+        context,
+      });
     },
   };
 }
@@ -168,42 +169,42 @@ export function createRestateConsole(
   logger: Logger,
   source: LogSource,
   context?: LoggerContext,
-  shouldLog: () => boolean = () => true
+  isReplaying: () => boolean = () => false
 ): Console {
   return Object.create(console, {
     trace: loggerForLevel(
       logger,
       source,
       RestateLogLevel.TRACE,
-      shouldLog,
+      isReplaying,
       context
     ),
     debug: loggerForLevel(
       logger,
       source,
       RestateLogLevel.DEBUG,
-      shouldLog,
+      isReplaying,
       context
     ),
     info: loggerForLevel(
       logger,
       source,
       RestateLogLevel.INFO,
-      shouldLog,
+      isReplaying,
       context
     ),
     warn: loggerForLevel(
       logger,
       source,
       RestateLogLevel.WARN,
-      shouldLog,
+      isReplaying,
       context
     ),
     error: loggerForLevel(
       logger,
       source,
       RestateLogLevel.ERROR,
-      shouldLog,
+      isReplaying,
       context
     ),
   }) as Console;
