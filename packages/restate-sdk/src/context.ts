@@ -57,8 +57,8 @@ export interface Request {
   readonly body: Uint8Array;
 }
 
-type TypedState = Record<string, unknown>;
-type UntypedState = { _: never };
+export type TypedState = Record<string, any>;
+export type UntypedState = { _: never };
 
 /**
  * Key value store operations. Only keyed services have an attached key-value store.
