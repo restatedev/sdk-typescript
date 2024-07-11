@@ -57,6 +57,7 @@ export interface Request {
   readonly body: Uint8Array;
 }
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 export type TypedState = Record<string, any>;
 export type UntypedState = { _: never };
 

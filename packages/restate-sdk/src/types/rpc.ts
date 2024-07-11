@@ -273,7 +273,7 @@ export namespace handlers {
      */
     export function exclusive<F>(
       opts: ObjectHandlerOpts,
-      fn: ObjectHandler<F, ObjectContext>
+      fn: ObjectHandler<F, ObjectContext<any>>
     ): F;
 
     /**
@@ -288,7 +288,7 @@ export namespace handlers {
      *
      * @param fn the handler to execute
      */
-    export function exclusive<F>(fn: ObjectHandler<F, ObjectContext>): F;
+    export function exclusive<F>(fn: ObjectHandler<F, ObjectContext<any>>): F;
 
     /**
      * Creates an exclusive handler for a virtual Object.
@@ -304,8 +304,8 @@ export namespace handlers {
      * @param fn the handler to execute
      */
     export function exclusive<F>(
-      optsOrFn: ObjectHandlerOpts | ObjectHandler<F, ObjectContext>,
-      fn?: ObjectHandler<F, ObjectContext>
+      optsOrFn: ObjectHandlerOpts | ObjectHandler<F, ObjectContext<any>>,
+      fn?: ObjectHandler<F, ObjectContext<any>>
     ): F {
       if (typeof optsOrFn == "function") {
         return HandlerWrapper.from(HandlerKind.EXCLUSIVE, optsOrFn).transpose();
@@ -330,7 +330,7 @@ export namespace handlers {
      */
     export function shared<F>(
       opts: ObjectHandlerOpts,
-      fn: ObjectSharedHandler<F, ObjectSharedContext>
+      fn: ObjectSharedHandler<F, ObjectSharedContext<any>>
     ): F;
 
     /**
@@ -345,7 +345,7 @@ export namespace handlers {
      * @param fn the handler to execute
      */
     export function shared<F>(
-      fn: ObjectSharedHandler<F, ObjectSharedContext>
+      fn: ObjectSharedHandler<F, ObjectSharedContext<any>>
     ): F;
 
     /**
@@ -360,8 +360,10 @@ export namespace handlers {
      * @param fn the handler to execute
      */
     export function shared<F>(
-      optsOrFn: ObjectHandlerOpts | ObjectSharedHandler<F, ObjectSharedContext>,
-      fn?: ObjectSharedHandler<F, ObjectSharedContext>
+      optsOrFn:
+        | ObjectHandlerOpts
+        | ObjectSharedHandler<F, ObjectSharedContext<any>>,
+      fn?: ObjectSharedHandler<F, ObjectSharedContext<any>>
     ): F {
       if (typeof optsOrFn == "function") {
         return HandlerWrapper.from(HandlerKind.SHARED, optsOrFn).transpose();
@@ -455,9 +457,9 @@ export const service = <P extends string, M>(service: {
 // ----------- objects ----------------------------------------------
 
 export type ObjectOpts<U> = {
-  [K in keyof U]: U[K] extends ObjectHandler<U[K], ObjectContext>
+  [K in keyof U]: U[K] extends ObjectHandler<U[K], ObjectContext<any>>
     ? U[K]
-    : U[K] extends ObjectHandler<U[K], ObjectSharedContext>
+    : U[K] extends ObjectHandler<U[K], ObjectSharedContext<any>>
     ? U[K]
     : never;
 };
