@@ -190,14 +190,16 @@ export namespace handlers {
   export namespace workflow {
     export function workflow<F>(
       opts: WorkflowHandlerOpts,
-      fn: WorkflowHandler<F, WorkflowContext>
+      fn: WorkflowHandler<F, WorkflowContext<any>>
     ): F;
 
-    export function workflow<F>(fn: WorkflowHandler<F, WorkflowContext>): F;
+    export function workflow<F>(
+      fn: WorkflowHandler<F, WorkflowContext<any>>
+    ): F;
 
     export function workflow<F>(
-      optsOrFn: WorkflowHandlerOpts | WorkflowHandler<F, WorkflowContext>,
-      fn?: WorkflowHandler<F, WorkflowContext>
+      optsOrFn: WorkflowHandlerOpts | WorkflowHandler<F, WorkflowContext<any>>,
+      fn?: WorkflowHandler<F, WorkflowContext<any>>
     ): F {
       if (typeof optsOrFn == "function") {
         return HandlerWrapper.from(HandlerKind.WORKFLOW, optsOrFn).transpose();
@@ -220,7 +222,7 @@ export namespace handlers {
      */
     export function shared<F>(
       opts: WorkflowHandlerOpts,
-      fn: WorkflowSharedHandler<F, WorkflowSharedContext>
+      fn: WorkflowSharedHandler<F, WorkflowSharedContext<any>>
     ): F;
 
     /**
@@ -233,7 +235,7 @@ export namespace handlers {
      * @param fn the handler to execute
      */
     export function shared<F>(
-      fn: WorkflowSharedHandler<F, WorkflowSharedContext>
+      fn: WorkflowSharedHandler<F, WorkflowSharedContext<any>>
     ): F;
 
     /**
@@ -248,8 +250,8 @@ export namespace handlers {
     export function shared<F>(
       optsOrFn:
         | WorkflowHandlerOpts
-        | WorkflowSharedHandler<F, WorkflowSharedContext>,
-      fn?: WorkflowSharedHandler<F, WorkflowSharedContext>
+        | WorkflowSharedHandler<F, WorkflowSharedContext<any>>,
+      fn?: WorkflowSharedHandler<F, WorkflowSharedContext<any>>
     ): F {
       if (typeof optsOrFn == "function") {
         return HandlerWrapper.from(HandlerKind.SHARED, optsOrFn).transpose();
@@ -273,7 +275,7 @@ export namespace handlers {
      */
     export function exclusive<F>(
       opts: ObjectHandlerOpts,
-      fn: ObjectHandler<F, ObjectContext>
+      fn: ObjectHandler<F, ObjectContext<any>>
     ): F;
 
     /**
@@ -288,7 +290,7 @@ export namespace handlers {
      *
      * @param fn the handler to execute
      */
-    export function exclusive<F>(fn: ObjectHandler<F, ObjectContext>): F;
+    export function exclusive<F>(fn: ObjectHandler<F, ObjectContext<any>>): F;
 
     /**
      * Creates an exclusive handler for a virtual Object.
@@ -304,8 +306,8 @@ export namespace handlers {
      * @param fn the handler to execute
      */
     export function exclusive<F>(
-      optsOrFn: ObjectHandlerOpts | ObjectHandler<F, ObjectContext>,
-      fn?: ObjectHandler<F, ObjectContext>
+      optsOrFn: ObjectHandlerOpts | ObjectHandler<F, ObjectContext<any>>,
+      fn?: ObjectHandler<F, ObjectContext<any>>
     ): F {
       if (typeof optsOrFn == "function") {
         return HandlerWrapper.from(HandlerKind.EXCLUSIVE, optsOrFn).transpose();
@@ -330,7 +332,7 @@ export namespace handlers {
      */
     export function shared<F>(
       opts: ObjectHandlerOpts,
-      fn: ObjectSharedHandler<F, ObjectSharedContext>
+      fn: ObjectSharedHandler<F, ObjectSharedContext<any>>
     ): F;
 
     /**
@@ -345,7 +347,7 @@ export namespace handlers {
      * @param fn the handler to execute
      */
     export function shared<F>(
-      fn: ObjectSharedHandler<F, ObjectSharedContext>
+      fn: ObjectSharedHandler<F, ObjectSharedContext<any>>
     ): F;
 
     /**
@@ -360,8 +362,10 @@ export namespace handlers {
      * @param fn the handler to execute
      */
     export function shared<F>(
-      optsOrFn: ObjectHandlerOpts | ObjectSharedHandler<F, ObjectSharedContext>,
-      fn?: ObjectSharedHandler<F, ObjectSharedContext>
+      optsOrFn:
+        | ObjectHandlerOpts
+        | ObjectSharedHandler<F, ObjectSharedContext<any>>,
+      fn?: ObjectSharedHandler<F, ObjectSharedContext<any>>
     ): F {
       if (typeof optsOrFn == "function") {
         return HandlerWrapper.from(HandlerKind.SHARED, optsOrFn).transpose();
@@ -455,9 +459,9 @@ export const service = <P extends string, M>(service: {
 // ----------- objects ----------------------------------------------
 
 export type ObjectOpts<U> = {
-  [K in keyof U]: U[K] extends ObjectHandler<U[K], ObjectContext>
+  [K in keyof U]: U[K] extends ObjectHandler<U[K], ObjectContext<any>>
     ? U[K]
-    : U[K] extends ObjectHandler<U[K], ObjectSharedContext>
+    : U[K] extends ObjectHandler<U[K], ObjectSharedContext<any>>
     ? U[K]
     : never;
 };
@@ -550,7 +554,7 @@ export const object = <P extends string, M>(object: {
  * @see {@link workflow} for an example.
  */
 export type WorkflowOpts<U> = {
-  run: (ctx: WorkflowContext, argument: any) => Promise<any>;
+  run: (ctx: WorkflowContext<any>, argument: any) => Promise<any>;
 } & {
   [K in keyof U]: K extends
     | "workflowSubmit"
@@ -558,10 +562,10 @@ export type WorkflowOpts<U> = {
     | "workflowOutput"
     ? `${K} is a reserved keyword`
     : K extends "run"
-    ? U[K] extends WorkflowHandler<U[K], WorkflowContext>
+    ? U[K] extends WorkflowHandler<U[K], WorkflowContext<any>>
       ? U[K]
       : "An handler named 'run' must take as a first argument a WorkflowContext, and must return a Promise"
-    : U[K] extends WorkflowSharedHandler<U[K], WorkflowSharedContext>
+    : U[K] extends WorkflowSharedHandler<U[K], WorkflowSharedContext<any>>
     ? U[K]
     : "An handler other then 'run' must accept as a first argument a WorkflowSharedContext";
 };
