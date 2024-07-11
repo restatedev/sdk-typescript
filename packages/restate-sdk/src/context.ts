@@ -653,8 +653,8 @@ export type DurablePromise<T> = Promise<T> & {
   get(): CombineablePromise<T>;
 };
 
-export interface WorkflowSharedContext
-  extends ObjectSharedContext,
+export interface WorkflowSharedContext<TState extends TypedState = UntypedState>
+  extends ObjectSharedContext<TState>,
     RestateWorkflowSharedContext {
   /**
    * Create a durable promise that can be resolved or rejected during the workflow execution.
@@ -683,7 +683,7 @@ export interface WorkflowSharedContext
   promise<T = void>(name: string): DurablePromise<T>;
 }
 
-export interface WorkflowContext
-  extends WorkflowSharedContext,
-    ObjectContext,
+export interface WorkflowContext<TState extends TypedState = UntypedState>
+  extends WorkflowSharedContext<TState>,
+    ObjectContext<TState>,
     RestateWorkflowContext {}
