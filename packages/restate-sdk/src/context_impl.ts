@@ -259,42 +259,53 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
   // --- Calls, background calls, etc
 
   // DON'T make this function async!!! see sideEffect comment for details.
-  private invoke(
+  private invoke<REQ = Uint8Array, RES = Uint8Array>(
     service: string,
     method: string,
-    data: Uint8Array,
-    key?: string
-    /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
-  ): InternalCombineablePromise<any> {
+    data: REQ,
+    key?: string,
+    serializer?: (req: REQ) => Uint8Array,
+    deserializer?: (res: Uint8Array) => RES
+  ): InternalCombineablePromise<RES> {
     this.checkState("invoke");
 
     const msg = new CallEntryMessage({
       serviceName: service,
       handlerName: method,
-      parameter: data,
+      parameter: serializer ? serializer(data) : (data as Uint8Array),
       key,
     });
+
     return this.markCombineablePromise(
-      this.stateMachine
-        .handleUserCodeMessage(INVOKE_ENTRY_MESSAGE_TYPE, msg)
-        .transform((v): any => deserializeJson(v as Uint8Array))
+      (
+        this.stateMachine.handleUserCodeMessage(
+          INVOKE_ENTRY_MESSAGE_TYPE,
+          msg
+        ) as WrappedPromise<Uint8Array>
+      ).transform((res) => {
+        if (deserializer) {
+          return deserializer(res);
+        }
+        return res;
+      }) as WrappedPromise<RES>
     );
   }
 
-  private async invokeOneWay(
+  private async invokeOneWay<REQ = Uint8Array>(
     service: string,
     method: string,
-    data: Uint8Array,
+    data: REQ,
+    serializer?: (req: REQ) => Uint8Array,
     delay?: number,
     key?: string
-  ): Promise<Uint8Array> {
+  ): Promise<void> {
     const actualDelay = delay || 0;
     const invokeTime =
       actualDelay > 0 ? Date.now() + actualDelay : protoInt64.zero;
     const msg = new OneWayCallEntryMessage({
       serviceName: service,
       handlerName: method,
-      parameter: data,
+      parameter: serializer ? serializer(data) : (data as Uint8Array),
       invokeTime: protoInt64.parse(invokeTime),
       key,
     });
@@ -303,7 +314,6 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
       msg
     );
-    return new Uint8Array();
   }
 
   serviceClient<D>({ name }: ServiceDefinitionFrom<D>): Client<Service<D>> {
@@ -313,8 +323,14 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
         get: (_target, prop) => {
           const route = prop as string;
           return (...args: unknown[]) => {
-            const requestBytes = serializeJson(args.shift());
-            return this.invoke(name, route, requestBytes);
+            return this.invoke(
+              name,
+              route,
+              args.shift(),
+              undefined,
+              serializeJson,
+              deserializeJson
+            );
           };
         },
       }
@@ -333,8 +349,14 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
         get: (_target, prop) => {
           const route = prop as string;
           return (...args: unknown[]) => {
-            const requestBytes = serializeJson(args.shift());
-            return this.invoke(name, route, requestBytes, key);
+            return this.invoke(
+              name,
+              route,
+              args.shift(),
+              key,
+              serializeJson,
+              deserializeJson
+            );
           };
         },
       }
@@ -353,11 +375,11 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
         get: (_target, prop) => {
           const route = prop as string;
           return (...args: unknown[]) => {
-            const requestBytes = serializeJson(args.shift());
             this.invokeOneWay(
               service.name,
               route,
-              requestBytes,
+              args.shift(),
+              serializeJson,
               opts?.delay
             ).catch((e) => {
               this.stateMachine.handleDanglingPromiseError(e as Error);
@@ -381,11 +403,11 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
         get: (_target, prop) => {
           const route = prop as string;
           return (...args: unknown[]) => {
-            const requestBytes = serializeJson(args.shift());
             this.invokeOneWay(
               obj.name,
               route,
-              requestBytes,
+              args.shift(),
+              serializeJson,
               opts?.delay,
               key
             ).catch((e) => {
@@ -410,11 +432,11 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
         get: (_target, prop) => {
           const route = prop as string;
           return (...args: unknown[]) => {
-            const requestBytes = serializeJson(args.shift());
             this.invokeOneWay(
               def.name,
               route,
-              requestBytes,
+              args.shift(),
+              serializeJson,
               opts?.delay,
               key
             ).catch((e) => {
