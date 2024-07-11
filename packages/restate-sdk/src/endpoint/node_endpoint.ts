@@ -19,7 +19,6 @@ import type {
   WorkflowDefinition,
 } from "@restatedev/restate-sdk-core";
 
-import { rlog } from "../logger.js";
 import type { Http2ServerRequest, Http2ServerResponse } from "http2";
 import * as http2 from "http2";
 import { LambdaHandler } from "./handlers/lambda.js";
@@ -31,6 +30,7 @@ import { Readable, Writable } from "node:stream";
 import type { WritableStream } from "node:stream/web";
 import { ProtocolMode } from "../types/discovery.js";
 import { ensureError } from "../types/errors.js";
+import type { Logger } from "../logger.js";
 
 export class NodeEndpoint implements RestateEndpoint {
   private builder: EndpointBuilder = new EndpointBuilder();
@@ -67,6 +67,11 @@ export class NodeEndpoint implements RestateEndpoint {
     return this;
   }
 
+  public setLogger(logger: Logger): RestateEndpoint {
+    this.builder.setLogger(logger);
+    return this;
+  }
+
   http2Handler(): (
     request: Http2ServerRequest,
     response: Http2ServerResponse
@@ -91,7 +96,7 @@ export class NodeEndpoint implements RestateEndpoint {
           await new Promise<void>((resolve) => response.end(resolve));
         } catch (e) {
           const error = ensureError(e);
-          rlog.error(
+          this.builder.rlog.error(
             "Error while handling connection: " + (error.stack ?? error.message)
           );
           response.destroy(error);
@@ -112,7 +117,7 @@ export class NodeEndpoint implements RestateEndpoint {
 
   listen(port?: number): Promise<number> {
     const actualPort = port ?? parseInt(process.env.PORT ?? "9080");
-    rlog.info(`Listening on ${actualPort}...`);
+    this.builder.rlog.info(`Listening on ${actualPort}...`);
 
     const server = http2.createServer(this.http2Handler());
 

@@ -15,6 +15,7 @@ import type {
   ServiceDefinition,
   WorkflowDefinition,
 } from "@restatedev/restate-sdk-core";
+import type { Logger } from "./logger.js";
 
 /**
  * Utility interface for a bundle of one or more services belonging together
@@ -56,6 +57,29 @@ export interface RestateEndpointBase<E> {
    *
    */
   withIdentityV1(...keys: string[]): E;
+
+  /**
+   * Replace the default console-based {@link Logger}
+   * @param logger
+   * @example
+   * Using console:
+   * ```ts
+   *     restate.setLogger((params, message, ...o) => {console.log(`${params.level}: `, message, ...o)})
+   *  ```
+   * @example
+   * Using winston:
+   * ```ts
+   *     const logger = createLogger({ ... })
+   *     restate.setLogger((params, message, ...o) => {logger.log(params.level, {invocationId: params.context?.invocationId}, [message, ...o].join(' '))})
+   *  ```
+   * @example
+   * Using pino:
+   * ```ts
+   *     const logger = pino()
+   *     restate.setLogger((params, message, ...o) => {logger[params.level]({invocationId: params.context?.invocationId}, [message, ...o].join(' '))})
+   *  ```
+   */
+  setLogger(logger: Logger): E;
 }
 
 /**

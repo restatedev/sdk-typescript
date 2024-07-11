@@ -11,27 +11,28 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable no-console */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 
 export enum RestateLogLevel {
-  TRACE = 1,
-  DEBUG = 2,
-  INFO = 3,
-  WARN = 4,
-  ERROR = 5,
+  TRACE = "trace",
+  DEBUG = "debug",
+  INFO = "info",
+  WARN = "warn",
+  ERROR = "error",
 }
 
-function logLevelName(level: RestateLogLevel) {
+export function logLevel(level: RestateLogLevel): number {
   switch (level) {
     case RestateLogLevel.TRACE:
-      return "TRACE";
+      return 1;
     case RestateLogLevel.DEBUG:
-      return "DEBUG";
+      return 2;
     case RestateLogLevel.INFO:
-      return "INFO";
+      return 3;
     case RestateLogLevel.WARN:
-      return "WARN";
+      return 4;
     case RestateLogLevel.ERROR:
-      return "ERROR";
+      return 5;
   }
 }
 
@@ -56,22 +57,50 @@ function logLevelFromName(name?: string): RestateLogLevel | null {
   }
 }
 
-function logFunction(level: RestateLogLevel) {
-  switch (level) {
-    case RestateLogLevel.TRACE:
-      return console.trace;
-    case RestateLogLevel.DEBUG:
-      return console.debug;
-    case RestateLogLevel.INFO:
-      return console.info;
-    case RestateLogLevel.WARN:
-      return console.warn;
-    case RestateLogLevel.ERROR:
-      return console.error;
-    default:
-      throw new TypeError(`unset or unknown log level ${level}`);
+export type LogParams = {
+  source: LogSource;
+  level: RestateLogLevel;
+  replaying: boolean;
+  context?: LoggerContext;
+};
+
+export type Logger = (
+  params: LogParams,
+  message?: any,
+  ...optionalParams: any[]
+) => void;
+
+// this is the log level as provided by the environment variable RESTATE_LOG_LEVEL,
+// but it only affects the default logger - custom loggers get all log events and
+// should use their own filtering mechanism
+export const DEFAULT_LOGGER_LOG_LEVEL = readRestateLogLevel();
+
+export const defaultLogger: Logger = (
+  params: LogParams,
+  message?: any,
+  ...optionalParams: any[]
+) => {
+  if (logLevel(params.level) < logLevel(DEFAULT_LOGGER_LOG_LEVEL)) {
+    return;
   }
-}
+  const p = `${formatLogPrefix(
+    params.context
+  )}[${new Date().toISOString()}] ${params.level.toUpperCase()}: `;
+  switch (params.level) {
+    case RestateLogLevel.TRACE:
+      return console.trace(p, message, ...optionalParams);
+    case RestateLogLevel.DEBUG:
+      return console.debug(p, message, ...optionalParams);
+    case RestateLogLevel.INFO:
+      return console.info(p, message, ...optionalParams);
+    case RestateLogLevel.WARN:
+      return console.warn(p, message, ...optionalParams);
+    case RestateLogLevel.ERROR:
+      return console.error(p, message, ...optionalParams);
+    default:
+      throw new TypeError(`unset or unknown log level ${params.level}`);
+  }
+};
 
 function readRestateLogLevel(): RestateLogLevel {
   const env = globalThis.process?.env?.RESTATE_LOGGING;
@@ -81,8 +110,6 @@ function readRestateLogLevel(): RestateLogLevel {
   }
   return RestateLogLevel.INFO;
 }
-
-export const RESTATE_LOG_LEVEL = readRestateLogLevel();
 
 export class LoggerContext {
   readonly fqMethodName: string;
@@ -113,58 +140,72 @@ function formatLogPrefix(context?: LoggerContext): string {
   return prefix;
 }
 
-const NOOP_DESCRIPTOR = {
-  get() {
-    return () => {
-      // a no-op function
-    };
-  },
-};
-
 function loggerForLevel(
+  logger: Logger,
+  source: LogSource,
   level: RestateLogLevel,
-  shouldLog: () => boolean,
-  prefix: string
+  isReplaying: () => boolean,
+  context?: LoggerContext
 ): PropertyDescriptor {
-  if (level < RESTATE_LOG_LEVEL) {
-    return NOOP_DESCRIPTOR;
-  }
-
-  const name = logLevelName(level);
-  const fn = logFunction(level);
-
   return {
-    get: () => {
-      if (!shouldLog()) {
-        return () => {
-          // empty logger
-        };
-      }
-      const p = `${prefix}[${new Date().toISOString()}] ${name}: `;
-      return fn.bind(console, p);
+    get: (): Logger => {
+      return logger.bind(null, {
+        source,
+        level,
+        replaying: isReplaying(),
+        context,
+      });
     },
   };
 }
 
-export function createRestateConsole(
-  context?: LoggerContext,
-  filter?: () => boolean
-): Console {
-  const prefix = formatLogPrefix(context);
-  const shouldLog: () => boolean = filter ?? (() => true);
-
-  return Object.create(console, {
-    trace: loggerForLevel(RestateLogLevel.TRACE, shouldLog, prefix),
-    debug: loggerForLevel(RestateLogLevel.DEBUG, shouldLog, prefix),
-    info: loggerForLevel(RestateLogLevel.INFO, shouldLog, prefix),
-    warn: loggerForLevel(RestateLogLevel.WARN, shouldLog, prefix),
-    error: loggerForLevel(RestateLogLevel.ERROR, shouldLog, prefix),
-  }) as Console;
+export enum LogSource {
+  SYSTEM = "SYSTEM",
+  JOURNAL = "JOURNAL",
+  USER = "USER",
 }
 
-/**
- * This is a simple console without contextual info.
- *
- * This should be used only in cases where no contextual info is available.
- */
-export const rlog = createRestateConsole();
+export function createRestateConsole(
+  logger: Logger,
+  source: LogSource,
+  context?: LoggerContext,
+  isReplaying: () => boolean = () => false
+): Console {
+  return Object.create(console, {
+    trace: loggerForLevel(
+      logger,
+      source,
+      RestateLogLevel.TRACE,
+      isReplaying,
+      context
+    ),
+    debug: loggerForLevel(
+      logger,
+      source,
+      RestateLogLevel.DEBUG,
+      isReplaying,
+      context
+    ),
+    info: loggerForLevel(
+      logger,
+      source,
+      RestateLogLevel.INFO,
+      isReplaying,
+      context
+    ),
+    warn: loggerForLevel(
+      logger,
+      source,
+      RestateLogLevel.WARN,
+      isReplaying,
+      context
+    ),
+    error: loggerForLevel(
+      logger,
+      source,
+      RestateLogLevel.ERROR,
+      isReplaying,
+      context
+    ),
+  }) as Console;
+}

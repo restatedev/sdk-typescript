@@ -30,3 +30,10 @@ export type {
 
 export type { ServiceBundle, RestateEndpoint } from "./endpoint.js";
 export { RestateError, TerminalError, TimeoutError } from "./types/errors.js";
+export type {
+  Logger,
+  LogParams,
+  RestateLogLevel,
+  LoggerContext,
+  LogSource,
+} from "./logger.js";

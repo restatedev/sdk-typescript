@@ -21,7 +21,6 @@ import type { GenericHandler, RestateRequest } from "./generic.js";
 import { WritableStream, type ReadableStream } from "node:stream/web";
 import { OnceStream } from "../../utils/streams.js";
 import { X_RESTATE_SERVER } from "../../user_agent.js";
-import { rlog } from "../../logger.js";
 import { ensureError } from "../../types/errors.js";
 
 export class LambdaHandler {
@@ -72,7 +71,7 @@ export class LambdaHandler {
     } catch (e) {
       // unlike in the streaming case, we can actually catch errors in the response body and form a nicer error
       const error = ensureError(e);
-      rlog.error(
+      this.handler.endpoint.rlog.error(
         "Error while collecting invocation response: " +
           (error.stack ?? error.message)
       );
