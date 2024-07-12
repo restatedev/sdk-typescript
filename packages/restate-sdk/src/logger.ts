@@ -80,6 +80,9 @@ export const defaultLogger: Logger = (
   message?: any,
   ...optionalParams: any[]
 ) => {
+  if (params.replaying) {
+    return;
+  }
   if (logLevel(params.level) < logLevel(DEFAULT_LOGGER_LOG_LEVEL)) {
     return;
   }
@@ -171,6 +174,13 @@ export function createRestateConsole(
   context?: LoggerContext,
   isReplaying: () => boolean = () => false
 ): Console {
+  const info = loggerForLevel(
+    logger,
+    source,
+    RestateLogLevel.INFO,
+    isReplaying,
+    context
+  );
   return Object.create(console, {
     trace: loggerForLevel(
       logger,
@@ -186,13 +196,8 @@ export function createRestateConsole(
       isReplaying,
       context
     ),
-    info: loggerForLevel(
-      logger,
-      source,
-      RestateLogLevel.INFO,
-      isReplaying,
-      context
-    ),
+    info,
+    log: info,
     warn: loggerForLevel(
       logger,
       source,

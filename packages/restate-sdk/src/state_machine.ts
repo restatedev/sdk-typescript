@@ -95,11 +95,15 @@ export class StateMachine implements RestateStreamConsumer {
     this.localStateStore = invocation.localStateStore;
     this.console = createStateMachineConsole(logger, loggerContext);
 
+    this.journal = new Journal(this.invocation);
     this.restateContext = new ContextImpl(
       this.invocation.id,
       // The console exposed by RestateContext filters logs in replay, while the internal one is based on the ENV variables.
-      createRestateConsole(logger, LogSource.USER, loggerContext, () =>
-        this.journal.isReplaying()
+      createRestateConsole(
+        logger,
+        LogSource.USER,
+        loggerContext,
+        this.journal.isReplaying.bind(this.journal)
       ),
       handlerKind,
       invocation.userKey,
@@ -108,7 +112,6 @@ export class StateMachine implements RestateStreamConsumer {
       connection.headers(),
       this
     );
-    this.journal = new Journal(this.invocation);
     this.promiseCombinatorTracker = new PromiseCombinatorTracker(
       this.readCombinatorOrderEntry.bind(this),
       this.writeCombinatorOrderEntry.bind(this)
