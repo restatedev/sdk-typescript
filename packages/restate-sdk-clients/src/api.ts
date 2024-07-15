@@ -88,6 +88,13 @@ export interface IngresCallOptions {
    * Headers to attach to the request.
    */
   headers?: Record<string, string>;
+
+  /**
+   * Do not auto serialize the input and output of the handler.
+   * Setting this to true, would allow you to send binary data to the handler,
+   * and not assuming that the payload is JSON.
+   */
+  raw?: boolean;
 }
 
 export interface IngresSendOptions extends IngresCallOptions {

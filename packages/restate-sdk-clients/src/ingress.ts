@@ -138,10 +138,14 @@ const doComponentInvocation = async <I, O>(
       fragments.push("send");
     }
   }
+  const raw = params.opts?.opts.raw ?? false;
   //
   // request body
   //
-  const { body, contentType } = serializeBodyWithContentType(params.parameter);
+  const { body, contentType } = serializeBodyWithContentType(
+    params.parameter,
+    raw
+  );
   //
   // headers
   //
@@ -178,7 +182,7 @@ const doComponentInvocation = async <I, O>(
     );
   }
   const responseBuf = await httpResponse.arrayBuffer();
-  const json = deserializeJson(new Uint8Array(responseBuf)) as O;
+  const json = deserializeJson(new Uint8Array(responseBuf), raw) as O;
   if (!params.send) {
     return json;
   }
@@ -210,7 +214,7 @@ const doWorkflowHandleCall = async <O>(
   });
   if (httpResponse.ok) {
     const responseBuf = await httpResponse.arrayBuffer();
-    return deserializeJson(new Uint8Array(responseBuf)) as O;
+    return deserializeJson(new Uint8Array(responseBuf), false) as O;
   }
   const body = await httpResponse.text();
   throw new HttpCallError(
@@ -361,7 +365,7 @@ class HttpIngress implements Ingress {
     payload?: T | undefined
   ): Promise<void> {
     const url = `${this.opts.url}/restate/a/${id}/resolve`;
-    const { body, contentType } = serializeBodyWithContentType(payload);
+    const { body, contentType } = serializeBodyWithContentType(payload, false);
     const headers = {
       ...(this.opts.headers ?? {}),
     };
@@ -427,7 +431,7 @@ class HttpIngress implements Ingress {
     });
     if (httpResponse.ok) {
       const responseBuf = await httpResponse.arrayBuffer();
-      return deserializeJson(new Uint8Array(responseBuf)) as T;
+      return deserializeJson(new Uint8Array(responseBuf), false) as T;
     }
     const body = await httpResponse.text();
     throw new HttpCallError(
@@ -447,20 +451,32 @@ function computeDelayAsIso(opts: SendOpts): string {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function deserializeJson(what: Uint8Array): any {
-  if (what === undefined || what.length == 0) {
+function deserializeJson(what: Uint8Array, raw: boolean): any {
+  if (what === undefined) {
+    return undefined;
+  }
+  if (raw) {
+    return what;
+  }
+  if (what.length == 0) {
     return undefined;
   }
   const json = new TextDecoder().decode(what);
   return JSON.parse(json);
 }
 
-function serializeBodyWithContentType(body: unknown): {
+function serializeBodyWithContentType(
+  body: unknown,
+  raw: boolean
+): {
   body?: Uint8Array;
   contentType?: string;
 } {
   if (body === undefined) {
     return {};
+  }
+  if (raw) {
+    return { body: body as Uint8Array };
   }
   const json = JSON.stringify(body);
   const buffer = new TextEncoder().encode(json);

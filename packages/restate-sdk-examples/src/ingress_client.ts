@@ -146,6 +146,24 @@ const workflow = async (name: string) => {
   console.log(await client.workflowAttach());
 };
 
+const binaryRawCall = async (name: string) => {
+  const counter = ingress.objectClient(Counter, name);
+
+  const buffer = new TextEncoder().encode("hello!");
+
+  const outBuffer = await counter.binary(
+    buffer,
+    restate.Opts.from({
+      raw: true, // <-- tell the client to avoid JSON encoding/decoding
+      headers: { "content-type": "application/octet-stream" },
+    })
+  );
+
+  const str = new TextDecoder().decode(outBuffer);
+
+  console.log(`We got a buffer for ${name} : ${str}`);
+};
+
 // Before running this example, make sure
 // to run and register `greeter`, `counter` and `workflow` services.
 //
@@ -156,10 +174,10 @@ const workflow = async (name: string) => {
 // 3. restate deployment add localhost:9080
 
 Promise.resolve()
-  .then(() => sendAndCollectResultLater("boby"))
-  .then(() => simpleCall("bob"))
   .then(() => objectCall("bob"))
   .then(() => objectCall("mop"))
+  .then(() => simpleCall("bob"))
+  .then(() => sendAndCollectResultLater("boby"))
   .then(() => workflow("boby"))
   .then(() => idempotentCall("joe", "idemp-1"))
   .then(() => idempotentCall("joe", "idemp-1"))
@@ -167,4 +185,5 @@ Promise.resolve()
   .then(() => globalCustomHeaders("bob"))
   .then(() => customInterface("bob"))
   .then(() => delayedCall("bob"))
+  .then(() => binaryRawCall("bob"))
   .catch((e) => console.error(e));

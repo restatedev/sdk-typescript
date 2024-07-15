@@ -36,6 +36,24 @@ const counter = restate.object({
         return (await ctx.get("count")) ?? 0;
       }
     ),
+
+    /**
+     * Handlers (shared or exclusive) can be configured to bypass JSON serialization,
+     * by specifying the input (accept) and output (contentType) content types.
+     *
+     * to call that handler with binary data, you can use the following curl command:
+     * curl -X POST -H "Content-Type: application/octet-stream" --data-binary 'hello' ${RESTATE_INGRESS_URL}/counter/mykey/binary
+     */
+    binary: restate.handlers.object.exclusive(
+      {
+        accept: "application/octet-stream",
+        contentType: "application/octet-stream",
+      },
+      async (ctx: restate.ObjectContext, data: Uint8Array) => {
+        // console.log("Received binary data", data);
+        return data;
+      }
+    ),
   },
 });
 
