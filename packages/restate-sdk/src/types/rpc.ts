@@ -438,10 +438,10 @@ export const service = <P extends string, M>(service: {
     throw new Error("service must be defined");
   }
   const handlers = Object.entries(service.handlers).map(([name, handler]) => {
-    if (handler instanceof HandlerWrapper) {
-      return [name, handler.transpose()];
-    }
     if (handler instanceof Function) {
+      if (HandlerWrapper.fromHandler(handler) !== undefined) {
+        return [name, handler];
+      }
       return [
         name,
         HandlerWrapper.from(HandlerKind.SERVICE, handler).transpose(),

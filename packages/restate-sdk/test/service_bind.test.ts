@@ -10,10 +10,16 @@
  */
 
 import type { TestGreeter, TestRequest } from "./testdriver.js";
-import { TestDriver, TestResponse } from "./testdriver.js";
-import type * as restate from "../src/public_api.js";
-import { greetRequest, inputMessage, startMessage } from "./protoutils.js";
-import { describe, it } from "vitest";
+import { TestDriver, TestResponse, testService } from "./testdriver.js";
+import * as restate from "../src/public_api.js";
+import {
+  END_MESSAGE,
+  greetRequest,
+  inputMessage,
+  outputMessage,
+  startMessage,
+} from "./protoutils.js";
+import { describe, expect, it } from "vitest";
 
 const greeter: TestGreeter = {
   // eslint-disable-next-line @typescript-eslint/require-await
@@ -55,5 +61,34 @@ describe("BindService", () => {
       startMessage({ knownEntries: 1 }),
       inputMessage(greetRequest("Pete")),
     ]).run();
+  });
+});
+
+const acceptBytes = restate.service({
+  name: "acceptBytes",
+  handlers: {
+    greeter: restate.handlers.handler(
+      {
+        accept: "application/octet-stream",
+        contentType: "application/json",
+      },
+      // eslint-disable-next-line @typescript-eslint/require-await
+      async (_ctx: restate.Context, audio: Uint8Array) => {
+        return { length: audio.length };
+      }
+    ),
+  },
+});
+
+describe("AcceptBytes", () => {
+  it("should accept bytes", async () => {
+    const result = await testService(acceptBytes).run({
+      input: [startMessage(), inputMessage(new Uint8Array([0, 1, 2, 3, 4]))],
+    });
+
+    expect(result).toStrictEqual([
+      outputMessage(Buffer.from(JSON.stringify({ length: 5 }))),
+      END_MESSAGE,
+    ]);
   });
 });
