@@ -135,8 +135,14 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
         get: (_target, prop) => {
           const route = prop as string;
           return (...args: unknown[]) => {
-            const requestBytes = serializeJson(args.shift());
-            return this.invoke(name, route, requestBytes, key);
+            return this.invoke(
+              name,
+              route,
+              args.shift(),
+              key,
+              serializeJson,
+              deserializeJson
+            );
           };
         },
       }
