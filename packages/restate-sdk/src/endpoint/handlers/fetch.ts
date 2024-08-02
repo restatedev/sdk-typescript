@@ -13,7 +13,10 @@ import type { GenericHandler, RestateRequest } from "./generic.js";
 
 export function fetcher(handler: GenericHandler) {
   return {
-    fetch: async (event: Request): Promise<Response> => {
+    fetch: async (
+      event: Request,
+      ...extraArgs: object[]
+    ): Promise<Response> => {
       const url = event.url;
       const headers = Object.fromEntries(event.headers.entries());
 
@@ -21,6 +24,7 @@ export function fetcher(handler: GenericHandler) {
         url,
         headers,
         body: event.body,
+        extraArgs,
       };
 
       const resp = await handler.handle(request);

@@ -51,6 +51,7 @@ export interface RestateRequest {
   readonly url: string;
   readonly headers: Headers;
   readonly body: ReadableStream<Uint8Array> | null;
+  readonly extraArgs: object[];
 }
 
 export interface RestateResponse {
@@ -165,6 +166,7 @@ export class GenericHandler implements RestateHandler {
       request.body,
       request.headers,
       serviceProtocolVersion,
+      request.extraArgs,
       context ?? {}
     );
   }
@@ -211,6 +213,7 @@ export class GenericHandler implements RestateHandler {
     body: ReadableStream<Uint8Array>,
     headers: Record<string, string | string[] | undefined>,
     serviceProtocolVersion: ServiceProtocolVersion,
+    extraArgs: object[],
     context: AdditionalContext
   ): Promise<RestateResponse> {
     let responseController: TransformStreamDefaultController<Uint8Array>;
@@ -242,7 +245,8 @@ export class GenericHandler implements RestateHandler {
       invocation,
       handler.kind(),
       this.endpoint.logger,
-      invocation.inferLoggerContext(context)
+      invocation.inferLoggerContext(context),
+      extraArgs
     );
     connection.pipeToConsumer(stateMachine);
 

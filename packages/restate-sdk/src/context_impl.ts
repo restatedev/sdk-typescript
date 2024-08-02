@@ -112,6 +112,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     invocationValue: Uint8Array,
     invocationHeaders: ReadonlyMap<string, string>,
     attemptHeaders: ReadonlyMap<string, string | string[] | undefined>,
+    extraArgs: object[],
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     readonly stateMachine: StateMachine
   ) {
@@ -120,6 +121,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       headers: invocationHeaders,
       attemptHeaders,
       body: invocationValue,
+      extraArgs,
     };
     this.rand = new RandImpl(id, this.checkState.bind(this));
   }

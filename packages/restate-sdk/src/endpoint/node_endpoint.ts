@@ -86,6 +86,7 @@ export class NodeEndpoint implements RestateEndpoint {
             url,
             headers: request.headers,
             body: Readable.toWeb(request),
+            extraArgs: [],
           });
 
           response.writeHead(resp.statusCode, resp.headers);
