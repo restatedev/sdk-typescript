@@ -90,7 +90,7 @@ export class StateMachine implements RestateStreamConsumer {
     handlerKind: HandlerKind,
     logger: Logger,
     loggerContext: LoggerContext,
-    extraArgs: object[],
+    extraArgs: unknown[],
     private readonly suspensionMillis: number = 30_000
   ) {
     this.localStateStore = invocation.localStateStore;

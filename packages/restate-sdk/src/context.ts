@@ -63,7 +63,7 @@ export interface Request {
    * Deno: [ConnInfo]
    * Bun: [Server]
    */
-  readonly extraArgs: object[];
+  readonly extraArgs: unknown[];
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */

@@ -112,7 +112,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     invocationValue: Uint8Array,
     invocationHeaders: ReadonlyMap<string, string>,
     attemptHeaders: ReadonlyMap<string, string | string[] | undefined>,
-    extraArgs: object[],
+    extraArgs: unknown[],
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     readonly stateMachine: StateMachine
   ) {

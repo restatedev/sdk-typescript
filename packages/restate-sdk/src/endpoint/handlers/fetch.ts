@@ -15,7 +15,7 @@ export function fetcher(handler: GenericHandler) {
   return {
     fetch: async (
       event: Request,
-      ...extraArgs: object[]
+      ...extraArgs: unknown[]
     ): Promise<Response> => {
       const url = event.url;
       const headers = Object.fromEntries(event.headers.entries());

@@ -51,7 +51,7 @@ export interface RestateRequest {
   readonly url: string;
   readonly headers: Headers;
   readonly body: ReadableStream<Uint8Array> | null;
-  readonly extraArgs: object[];
+  readonly extraArgs: unknown[];
 }
 
 export interface RestateResponse {
@@ -213,7 +213,7 @@ export class GenericHandler implements RestateHandler {
     body: ReadableStream<Uint8Array>,
     headers: Record<string, string | string[] | undefined>,
     serviceProtocolVersion: ServiceProtocolVersion,
-    extraArgs: object[],
+    extraArgs: unknown[],
     context: AdditionalContext
   ): Promise<RestateResponse> {
     let responseController: TransformStreamDefaultController<Uint8Array>;
