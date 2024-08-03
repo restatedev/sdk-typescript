@@ -62,6 +62,8 @@ export interface Request {
    * Cloudflare workers: [Env, ExecutionContext]
    * Deno: [ConnInfo]
    * Bun: [Server]
+   * These arguments can contain request-specific values that could change after a suspension.
+   * Care should be taken to use them deterministically.
    */
   readonly extraArgs: unknown[];
 }
