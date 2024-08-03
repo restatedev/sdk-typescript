@@ -90,6 +90,7 @@ export class StateMachine implements RestateStreamConsumer {
     handlerKind: HandlerKind,
     logger: Logger,
     loggerContext: LoggerContext,
+    extraArgs: unknown[],
     private readonly suspensionMillis: number = 30_000
   ) {
     this.localStateStore = invocation.localStateStore;
@@ -110,6 +111,7 @@ export class StateMachine implements RestateStreamConsumer {
       invocation.invocationValue,
       invocation.invocationHeaders,
       connection.headers(),
+      extraArgs,
       this
     );
     this.promiseCombinatorTracker = new PromiseCombinatorTracker(

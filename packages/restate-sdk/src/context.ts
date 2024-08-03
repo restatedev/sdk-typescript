@@ -55,6 +55,17 @@ export interface Request {
    * Raw unparsed request body
    */
   readonly body: Uint8Array;
+
+  /**
+   * Extra arguments provided to the request handler:
+   * Lambda: [Context]
+   * Cloudflare workers: [Env, ExecutionContext]
+   * Deno: [ConnInfo]
+   * Bun: [Server]
+   * These arguments can contain request-specific values that could change after a suspension.
+   * Care should be taken to use them deterministically.
+   */
+  readonly extraArgs: unknown[];
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -228,15 +239,15 @@ export interface Context extends RestateContext {
    *            // this action will not be retried anymore
    *            throw new TerminalError("Payment failed");
    *        } else if (result.paymentGatewayBusy) {
-   *            // restate will retry automatically 
+   *            // restate will retry automatically
    *            throw new Exception("Payment gateway busy");
    *        } else {
    *            // success!
    *        }
    *   });
-   * 
+   *
    * ```
-   * 
+   *
    * @param action The function to run.
    */
   run<T>(action: RunAction<T>): Promise<T>;

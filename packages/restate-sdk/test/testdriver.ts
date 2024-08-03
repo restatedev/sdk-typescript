@@ -222,7 +222,8 @@ export class UUT<N extends string, T> {
       method.kind(),
       // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       (restateServer as unknown as { builder: EndpointBuilder }).builder.logger,
-      invocation.inferLoggerContext()
+      invocation.inferLoggerContext(),
+      []
     );
 
     const completed = stateMachine.invoke();

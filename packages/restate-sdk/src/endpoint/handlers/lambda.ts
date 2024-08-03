@@ -52,6 +52,7 @@ export class LambdaHandler {
       body,
       headers: event.headers,
       url: path,
+      extraArgs: [context],
     };
 
     const resp = await this.handler.handle(request, {
