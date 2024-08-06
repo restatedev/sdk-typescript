@@ -104,7 +104,7 @@ export class StateMachine implements RestateStreamConsumer {
         logger,
         LogSource.USER,
         loggerContext,
-        this.journal.isReplaying.bind(this.journal)
+        this.journal.nextEntryWillBeReplayed.bind(this.journal)
       ),
       handlerKind,
       invocation.userKey,
