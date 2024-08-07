@@ -19,6 +19,8 @@ import "./non_determinism.js";
 import "./failing.js";
 import "./side_effect.js";
 import "./workflow.js";
+import "./proxy.js";
+import "./test_utils.js";
 
 import { REGISTRY } from "./services.js";
 
