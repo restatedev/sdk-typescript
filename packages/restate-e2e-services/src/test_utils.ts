@@ -22,6 +22,7 @@ const o = restate.service({
     },
 
     uppercaseEcho(ctx: restate.Context, input: string): Promise<string> {
+      ctx.console.log("uppercaseEcho called with", input);
       return Promise.resolve(input.toUpperCase());
     },
 

@@ -11,7 +11,7 @@ import * as restate from "@restatedev/restate-sdk";
 import { REGISTRY } from "./services.js";
 
 const wf = restate.workflow({
-  name: "WorkflowBlockAndWait",
+  name: "BlockAndWaitWorkflow",
   handlers: {
     run: async (ctx: restate.WorkflowContext, input: string) => {
       ctx.set("input", input);

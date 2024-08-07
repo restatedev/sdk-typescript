@@ -14,10 +14,20 @@ export const MapServiceFQN = "MapObject";
 const o = restate.object({
   name: MapServiceFQN,
   handlers: {
-    async clearAll(ctx: restate.ObjectContext): Promise<string[]> {
+    async clearAll(
+      ctx: restate.ObjectContext
+    ): Promise<Array<{ key: string; value: string }>> {
       const keys = await ctx.stateKeys();
+      const entries = [];
+      for (const key of keys) {
+        const value = await ctx.get<string>(key);
+        if (!value) {
+          continue;
+        }
+        entries.push({ key, value });
+      }
       ctx.clearAll();
-      return keys;
+      return entries;
     },
 
     async get(ctx: restate.ObjectContext, request: string): Promise<string> {

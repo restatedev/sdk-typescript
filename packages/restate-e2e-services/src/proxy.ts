@@ -25,32 +25,63 @@ type ManyCallRequest = {
   awaitAtTheEnd: boolean;
 };
 
+async function rawCall(
+  ctx: restate.Context,
+  serviceName: string,
+  handlerName: string,
+  message: Array<number>,
+  key?: string
+) {
+  const input = new Uint8Array(message);
+  const response: Uint8Array = await (ctx as any).invoke(
+    serviceName,
+    handlerName,
+    input,
+    key
+  );
+
+  return Array.from(response);
+}
+
+async function rawSend(
+  ctx: restate.Context,
+  serviceName: string,
+  handlerName: string,
+  message: Array<number>,
+  key?: string
+) {
+  const input = new Uint8Array(message);
+  await (ctx as any).invokeOneWay(
+    serviceName,
+    handlerName,
+    input,
+    undefined,
+    undefined,
+    key
+  );
+}
+
 const o = restate.service({
   name: "Proxy",
   handlers: {
     async call(ctx: restate.Context, request: ProxyRequest) {
-      if (request.virtualObjectKey) {
-        const cli = ctx.objectClient(
-          { name: request.serviceName },
-          request.virtualObjectKey
-        );
-        return await (cli as any)[request.handlerName](request.message);
-      }
-      const cli = ctx.serviceClient({ name: request.serviceName });
-      return await (cli as any)[request.handlerName](request.message);
+      return await rawCall(
+        ctx,
+        request.serviceName,
+        request.handlerName,
+        request.message,
+        request.virtualObjectKey
+      );
     },
 
     async oneWayCall(ctx: restate.Context, request: ProxyRequest) {
-      if (request.virtualObjectKey) {
-        const cli = ctx.objectSendClient(
-          { name: request.serviceName },
-          request.virtualObjectKey
-        );
-        (cli as any)[request.handlerName](request.message);
-        return;
-      }
-      const cli = ctx.serviceSendClient({ name: request.serviceName });
-      (cli as any)[request.handlerName](request.message);
+      return await rawSend(
+        ctx,
+        request.serviceName,
+        request.handlerName,
+        request.message,
+        request.virtualObjectKey
+      );
     },
 
     async manyCalls(ctx: restate.Context, request: ManyCallRequest[]) {
