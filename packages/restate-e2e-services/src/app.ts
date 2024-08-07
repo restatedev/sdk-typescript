@@ -11,12 +11,9 @@ import * as restate from "@restatedev/restate-sdk";
 
 import "./awakeable_holder.js";
 import "./counter.js";
-import "./coordinator.js";
-import "./receiver.js";
 import "./event_handler.js";
 import "./list.js";
 import "./map.js";
-import "./proxy_counter.js";
 import "./cancel_test.js";
 import "./non_determinism.js";
 import "./failing.js";
@@ -36,7 +33,10 @@ if (process.env.E2E_REQUEST_SIGNING) {
   endpoint.withIdentityV1(...process.env.E2E_REQUEST_SIGNING.split(","));
 }
 if (!process.env.AWS_LAMBDA_FUNCTION_NAME) {
-  endpoint.listen();
+  endpoint.listen().catch((e) => {
+    // eslint-disable-next-line no-console
+    console.error(e);
+  });
 }
 
 export const handler = endpoint.lambdaHandler();

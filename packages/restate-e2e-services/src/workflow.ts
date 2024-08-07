@@ -26,11 +26,11 @@ const wf = restate.workflow({
     },
 
     unblock: async (ctx: restate.WorkflowSharedContext, input: string) => {
-      ctx.promise<string>("p").resolve(input);
+      await ctx.promise<string>("p").resolve(input);
     },
 
     getState: async (ctx: restate.WorkflowSharedContext) => {
-      const input = ctx.get("input");
+      const input = await ctx.get("input");
       if (!input) {
         return undefined;
       } else {

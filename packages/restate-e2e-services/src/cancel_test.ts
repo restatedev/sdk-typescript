@@ -33,10 +33,7 @@ const cancelService = restate.object({
       try {
         await ctx.objectClient(BlockingService, ctx.key).block(request);
       } catch (e) {
-        if (
-          e instanceof restate.TerminalError &&
-          (e as restate.TerminalError).code === 409
-        ) {
+        if (e instanceof restate.TerminalError && e.code === 409) {
           ctx.set("canceled", true);
         } else {
           throw e;
@@ -52,6 +49,7 @@ const blockingService = restate.object({
     async block(ctx: restate.ObjectContext, request: BlockingOperation) {
       const { id, promise } = ctx.awakeable();
       // DO NOT await the next CALL otherwise the test deadlocks.
+      // eslint-disable-next-line @typescript-eslint/no-floating-promises
       ctx.objectClient(AwakeableHolder, "cancel").hold(id);
       await promise;
 

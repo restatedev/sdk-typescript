@@ -18,8 +18,9 @@ const AwakeableHolder: AwakeableHolder = { name: "AwakeableHolder" };
 const service = restate.object({
   name: "Counter",
   handlers: {
-    async reset(ctx: restate.ObjectContext) {
+    reset(ctx: restate.ObjectContext) {
       ctx.clear(COUNTER_KEY);
+      return Promise.resolve();
     },
 
     async add(ctx: restate.ObjectContext, value: number) {

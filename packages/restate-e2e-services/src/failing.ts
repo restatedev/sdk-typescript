@@ -16,7 +16,7 @@ let eventualSuccessSideEffectCalls = 0;
 const service = restate.object({
   name: "Failing",
   handlers: {
-    terminallyFailingCall: async (
+    terminallyFailingCall: (
       _ctx: restate.Context,
       message: string
     ): Promise<void> => {
@@ -34,13 +34,13 @@ const service = restate.object({
       throw new Error("This should be unreachable");
     },
 
-    failingCallWithEventualSuccess: async (): Promise<number> => {
+    failingCallWithEventualSuccess: (): Promise<number> => {
       eventualSuccessCalls += 1;
       const currentAttempt = eventualSuccessCalls;
 
       if (currentAttempt >= 4) {
         eventualSuccessCalls = 0;
-        return currentAttempt;
+        return Promise.resolve(currentAttempt);
       } else {
         throw new Error("Failed at attempt: " + currentAttempt);
       }

@@ -9,7 +9,7 @@
 
 import * as restate from "@restatedev/restate-sdk";
 import { v4 as uuidv4 } from "uuid";
-import { CounterApi } from "./counter.js";
+import type { CounterApi } from "./counter.js";
 import { REGISTRY } from "./services.js";
 
 export const NonDeterministicServiceFQN = "NonDeterministic";

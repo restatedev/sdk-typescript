@@ -7,7 +7,7 @@
 // directory of this repository or package, or at
 // https://github.com/restatedev/e2e/blob/main/LICENSE
 
-import {
+import type {
   RestateEndpoint,
   ServiceDefinition,
   VirtualObjectDefinition,
