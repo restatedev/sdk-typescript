@@ -1,43 +1,10 @@
-# node-services
-
-## Install and build
-
-To get all the dependencies required to develop the node services:
+## Build Docker image from the project root
 
 ```shell
-$ npm install
+docker build . -f packages/restate-e2e-services/Dockerfile -t restatedev/node-test-services
 ```
 
-To build:
-
-```shell
-$ npm run build
-```
-
-## Build and push the docker image:
-A node services Docker image is used by the verification tests in Kubernetes.
-
-```shell
-$ docker build --platform linux/arm64,linux/amd64 -t ghcr.io/restatedev/e2e-node-services --push .
-```
-
-## Run proto code generation
-
-To re-gen the `generated` directory:
-
-```shell
-$ npm run proto
-```
-
-## Lint and format
-
-Linting is run together with `gradle check`, you can format using:
-
-```shell
-$ npm run format
-```
-
-## Running the services
+## Running the services locally
 
 The Node services can be run via:
 
