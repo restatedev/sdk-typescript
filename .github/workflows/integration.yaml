@@ -7,41 +7,40 @@ on:
     branches:
       - main
   schedule:
-    - cron: '0 */6 * * *' # Every 6 hours
+    - cron: "0 */6 * * *" # Every 6 hours
   workflow_dispatch:
     inputs:
       restateCommit:
-        description: 'restate commit'
+        description: "restate commit"
         required: false
-        default: ''
+        default: ""
         type: string
       restateImage:
-        description: 'restate image, superseded by restate commit'
+        description: "restate image, superseded by restate commit"
         required: false
-        default: 'ghcr.io/restatedev/restate:main'
+        default: "ghcr.io/restatedev/restate:main"
         type: string
   workflow_call:
     inputs:
       restateCommit:
-        description: 'restate commit'
+        description: "restate commit"
         required: false
-        default: ''
+        default: ""
         type: string
       restateImage:
-        description: 'restate image, superseded by restate commit'
+        description: "restate image, superseded by restate commit"
         required: false
-        default: 'ghcr.io/restatedev/restate:main'
+        default: "ghcr.io/restatedev/restate:main"
         type: string
 
 jobs:
-
   sdk-test-suite:
     if: github.repository_owner == 'restatedev'
     runs-on: ubuntu-latest
     name: "Features integration test (sdk-test-suite version ${{ matrix.sdk-test-suite }})"
     strategy:
       matrix:
-        sdk-test-suite: [ "1.4" ]
+        sdk-test-suite: ["1.5"]
     permissions:
       contents: read
       issues: read
@@ -82,8 +81,8 @@ jobs:
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '17'
+          distribution: "temurin"
+          java-version: "17"
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
