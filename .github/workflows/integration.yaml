@@ -1,0 +1,123 @@
+name: Integration
+
+# Controls when the workflow will run
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: '0 */6 * * *' # Every 6 hours
+  workflow_dispatch:
+    inputs:
+      restateCommit:
+        description: 'restate commit'
+        required: false
+        default: ''
+        type: string
+      restateImage:
+        description: 'restate image, superseded by restate commit'
+        required: false
+        default: 'ghcr.io/restatedev/restate:main'
+        type: string
+  workflow_call:
+    inputs:
+      restateCommit:
+        description: 'restate commit'
+        required: false
+        default: ''
+        type: string
+      restateImage:
+        description: 'restate image, superseded by restate commit'
+        required: false
+        default: 'ghcr.io/restatedev/restate:main'
+        type: string
+
+jobs:
+
+  sdk-test-suite:
+    if: github.repository_owner == 'restatedev'
+    runs-on: ubuntu-latest
+    name: "Features integration test (sdk-test-suite version ${{ matrix.sdk-test-suite }})"
+    strategy:
+      matrix:
+        sdk-test-suite: [ "1.4" ]
+    permissions:
+      contents: read
+      issues: read
+      checks: write
+      pull-requests: write
+      actions: read
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: restatedev/sdk-typescript
+
+      ### Download the Restate container image, if needed
+      # Setup restate snapshot if necessary
+      # Due to https://github.com/actions/upload-artifact/issues/53
+      # We must use download-artifact to get artifacts created during *this* workflow run, ie by workflow call
+      - name: Download restate snapshot from in-progress workflow
+        if: ${{ inputs.restateCommit != '' && github.event_name != 'workflow_dispatch' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: restate.tar
+      # In the workflow dispatch case where the artifact was created in a previous run, we can download as normal
+      - name: Download restate snapshot from completed workflow
+        if: ${{ inputs.restateCommit != '' && github.event_name == 'workflow_dispatch' }}
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          repo: restatedev/restate
+          workflow: ci.yml
+          commit: ${{ inputs.restateCommit }}
+          name: restate.tar
+      - name: Install restate snapshot
+        if: ${{ inputs.restateCommit != '' }}
+        run: |
+          output=$(docker load --input restate.tar)
+          docker tag "${output#*: }" "localhost/restatedev/restate-commit-download:latest"
+          docker image ls -a
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Setup sdk-test-suite
+        run: wget --no-verbose https://github.com/restatedev/sdk-test-suite/releases/download/v${{ matrix.sdk-test-suite }}/restate-sdk-test-suite.jar
+
+      - name: Build Typescript test-services image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: "packages/restate-e2e-services/Dockerfile"
+          push: false
+          load: true
+          tags: localhost/restatedev/test-services:latest
+          cache-from: type=gha,scope=${{ github.workflow }}
+          cache-to: type=gha,mode=max,scope=${{ github.workflow }}
+
+      # Run test suite
+      - name: Run test suite
+        env:
+          RESTATE_CONTAINER_IMAGE: ${{ inputs.restateCommit != '' && 'localhost/restatedev/restate-commit-download:latest' || (inputs.restateImage != '' && inputs.restateImage || 'ghcr.io/restatedev/restate:main') }}
+        run: java -jar restate-sdk-test-suite.jar run --report-dir=test-report --exclusions-file test-services/exclusions.yaml localhost/restatedev/test-services:latest
+
+      # Upload logs and publish test result
+      - uses: actions/upload-artifact@v4
+        if: always() # Make sure this is run even when test fails
+        with:
+          name: sdk-typescript-integration-test-report
+          path: test-report
+      - name: Publish Test Results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always()
+        with:
+          files: |
+            test-report/*/*.xml
