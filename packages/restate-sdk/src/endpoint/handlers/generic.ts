@@ -114,7 +114,8 @@ export class GenericHandler implements RestateHandler {
     request: RestateRequest,
     context?: AdditionalContext
   ): Promise<RestateResponse> {
-    const path = request.url;
+    // this is the recommended way to get the relative path from a url that may be relative or absolute
+    const path = new URL(request.url, "https://example.com").pathname;
 
     const error = await this.validateConnectionSignature(path, request.headers);
     if (error !== null) {
