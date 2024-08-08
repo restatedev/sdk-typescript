@@ -107,7 +107,7 @@ jobs:
       - name: Run test suite
         env:
           RESTATE_CONTAINER_IMAGE: ${{ inputs.restateCommit != '' && 'localhost/restatedev/restate-commit-download:latest' || (inputs.restateImage != '' && inputs.restateImage || 'ghcr.io/restatedev/restate:main') }}
-        run: java -jar restate-sdk-test-suite.jar run --report-dir=test-report --exclusions-file test-services/exclusions.yaml localhost/restatedev/test-services:latest
+        run: java -jar restate-sdk-test-suite.jar run --report-dir=test-report --exclusions-file packages/restate-e2e-services/exclusions.yaml localhost/restatedev/test-services:latest
 
       # Upload logs and publish test result
       - uses: actions/upload-artifact@v4
