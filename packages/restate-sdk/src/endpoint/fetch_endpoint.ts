@@ -52,7 +52,9 @@ import type { Logger } from "../logger.js";
  *   .handler();
  */
 export interface FetchEndpoint extends RestateEndpointBase<FetchEndpoint> {
-  handler(): { fetch: (request: Request) => Promise<Response> };
+  handler(): {
+    fetch: (request: Request, ...extraArgs: unknown[]) => Promise<Response>;
+  };
   bidirectional(set?: boolean): FetchEndpoint;
 }
 
@@ -105,7 +107,7 @@ export class FetchEndpointImpl implements FetchEndpoint {
   }
 
   handler(): {
-    fetch: (request: Request) => Promise<Response>;
+    fetch: (request: Request, ...extraArgs: unknown[]) => Promise<Response>;
   } {
     const genericHandler = new GenericHandler(this.builder, this.protocolMode);
     return fetcher(genericHandler);
