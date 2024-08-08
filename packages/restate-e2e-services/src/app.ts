@@ -21,6 +21,7 @@ import "./side_effect.js";
 import "./workflow.js";
 import "./proxy.js";
 import "./test_utils.js";
+import "./kill.js";
 
 import { REGISTRY } from "./services.js";
 
