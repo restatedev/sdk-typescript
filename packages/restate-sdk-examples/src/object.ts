@@ -46,8 +46,8 @@ const counter = restate.object({
      */
     binary: restate.handlers.object.exclusive(
       {
-        accept: "application/octet-stream",
-        contentType: "application/octet-stream",
+        input: restate.serde.binary,
+        output: restate.serde.binary,
       },
       async (ctx: restate.ObjectContext, data: Uint8Array) => {
         // console.log("Received binary data", data);

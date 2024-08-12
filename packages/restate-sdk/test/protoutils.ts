@@ -59,7 +59,6 @@ import {
   RunEntryMessage,
   StartMessage_StateEntry,
 } from "../src/generated/proto/protocol_pb.js";
-import { jsonSerialize } from "../src/utils/utils.js";
 import type { JournalErrorContext } from "../src/types/errors.js";
 import {
   INTERNAL_ERROR_CODE,
@@ -67,11 +66,13 @@ import {
   UNKNOWN_ERROR_CODE,
 } from "../src/types/errors.js";
 import { expect } from "vitest";
+import { type Serde } from "@restatedev/restate-sdk-core";
+import { defaultSerde } from "../src/types/rpc.js";
 
 export type StartMessageOpts = {
   knownEntries?: number;
   partialState?: boolean;
-  state?: Buffer[][];
+  state?: Uint8Array[][];
   key?: string;
 };
 
@@ -99,7 +100,7 @@ export function startMessage({
   );
 }
 
-export function toStateEntries(entries: Buffer[][]) {
+export function toStateEntries(entries: Uint8Array[][]) {
   return (
     entries.map(
       (el) => new StartMessage_StateEntry({ key: el[0], value: el[1] })
@@ -112,7 +113,7 @@ export function inputMessage(value: Uint8Array): Message {
     return new Message(
       INPUT_ENTRY_MESSAGE_TYPE,
       new InputEntryMessage({
-        value,
+        value: value,
       })
     );
   } else {
@@ -155,13 +156,14 @@ export function getStateMessage<T>(
   key: string,
   value?: T,
   empty?: boolean,
-  failure?: Failure
+  failure?: Failure,
+  serde?: Serde<T>
 ): Message {
   if (empty === true) {
     return new Message(
       GET_STATE_ENTRY_MESSAGE_TYPE,
       new GetStateEntryMessage({
-        key: Buffer.from(key),
+        key: new TextEncoder().encode(key),
         result: { case: "empty", value: new Empty() },
       }),
       true
@@ -170,8 +172,11 @@ export function getStateMessage<T>(
     return new Message(
       GET_STATE_ENTRY_MESSAGE_TYPE,
       new GetStateEntryMessage({
-        key: Buffer.from(key),
-        result: { case: "value", value: Buffer.from(jsonSerialize(value)) },
+        key: new TextEncoder().encode(key),
+        result: {
+          case: "value",
+          value: (serde ?? defaultSerde()).serialize(value),
+        },
       }),
       true
     );
@@ -179,7 +184,7 @@ export function getStateMessage<T>(
     return new Message(
       GET_STATE_ENTRY_MESSAGE_TYPE,
       new GetStateEntryMessage({
-        key: Buffer.from(key),
+        key: new TextEncoder().encode(key),
         result: { case: "failure", value: failure },
       }),
       true
@@ -188,7 +193,7 @@ export function getStateMessage<T>(
     return new Message(
       GET_STATE_ENTRY_MESSAGE_TYPE,
       new GetStateEntryMessage({
-        key: Buffer.from(key),
+        key: new TextEncoder().encode(key),
       }),
       false
     );
@@ -212,7 +217,7 @@ export function getStateKeysMessage(value?: Array<string>): Message {
       new GetStateKeysEntryMessage({
         result: {
           case: "value",
-          value: { keys: value.map((b) => Buffer.from(b)) },
+          value: { keys: value.map((b) => new TextEncoder().encode(b)) },
         },
       }),
       true
@@ -224,8 +229,8 @@ export function setStateMessage<T>(key: string, value: T): Message {
   return new Message(
     SET_STATE_ENTRY_MESSAGE_TYPE,
     new SetStateEntryMessage({
-      key: Buffer.from(key),
-      value: Buffer.from(jsonSerialize(value)),
+      key: new TextEncoder().encode(key),
+      value: defaultSerde().serialize(value),
     })
   );
 }
@@ -234,7 +239,7 @@ export function clearStateMessage(key: string): Message {
   return new Message(
     CLEAR_STATE_ENTRY_MESSAGE_TYPE,
     new ClearStateEntryMessage({
-      key: Buffer.from(key),
+      key: new TextEncoder().encode(key),
     })
   );
 }
@@ -283,7 +288,13 @@ export function completionMessage(
       new CompletionMessage({
         entryIndex: index,
         // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-        result: { case: "value", value: Buffer.from(value) },
+        result: {
+          case: "value",
+          value:
+            value instanceof Uint8Array
+              ? value
+              : new TextEncoder().encode(value as string),
+        },
       })
     );
   } else if (empty) {
@@ -345,7 +356,7 @@ export function invokeMessage(
       new CallEntryMessage({
         serviceName: serviceName,
         handlerName: handlerName,
-        parameter: Buffer.from(parameter),
+        parameter,
         result: { case: "value", value: value },
         key,
       })
@@ -356,7 +367,7 @@ export function invokeMessage(
       new CallEntryMessage({
         serviceName: serviceName,
         handlerName: handlerName,
-        parameter: Buffer.from(parameter),
+        parameter: parameter,
         result: { case: "failure", value: failure },
         key,
       })
@@ -367,7 +378,7 @@ export function invokeMessage(
       new CallEntryMessage({
         serviceName: serviceName,
         handlerName: handlerName,
-        parameter: Buffer.from(parameter),
+        parameter: parameter,
         key,
       })
     );
@@ -387,7 +398,7 @@ export function backgroundInvokeMessage(
         new OneWayCallEntryMessage({
           serviceName: serviceName,
           handlerName: handlerName,
-          parameter: Buffer.from(parameter),
+          parameter,
           invokeTime: protoInt64.parse(invokeTime),
           key,
         })
@@ -397,7 +408,7 @@ export function backgroundInvokeMessage(
         new OneWayCallEntryMessage({
           serviceName: serviceName,
           handlerName: handlerName,
-          parameter: Buffer.from(parameter),
+          parameter: parameter,
         })
       );
 }
@@ -412,7 +423,7 @@ export function sideEffectMessage<T>(
       SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
       new RunEntryMessage({
         name,
-        result: { case: "value", value: Buffer.from(JSON.stringify(value)) },
+        result: { case: "value", value: defaultSerde().serialize(value) },
       }),
       false,
       true
@@ -442,7 +453,7 @@ export function awakeableMessage<T>(payload?: T, failure?: Failure): Message {
     return new Message(
       AWAKEABLE_ENTRY_MESSAGE_TYPE,
       new AwakeableEntryMessage({
-        result: { case: "value", value: Buffer.from(JSON.stringify(payload)) },
+        result: { case: "value", value: defaultSerde().serialize(payload) },
       })
     );
   } else if (failure) {
@@ -465,7 +476,10 @@ export function resolveAwakeableMessage<T>(id: string, payload: T): Message {
     COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
     new CompleteAwakeableEntryMessage({
       id: id,
-      result: { case: "value", value: Buffer.from(JSON.stringify(payload)) },
+      result: {
+        case: "value",
+        value: defaultSerde().serialize(payload),
+      },
     })
   );
 }
@@ -515,13 +529,11 @@ export function failure(
 }
 
 export function greetRequest(myName: string): Uint8Array {
-  const str = JSON.stringify({ name: myName });
-  return Buffer.from(str);
+  return defaultSerde().serialize({ name: myName });
 }
 
 export function greetResponse(myGreeting: string): Uint8Array {
-  const str = JSON.stringify({ greeting: myGreeting });
-  return Buffer.from(str);
+  return defaultSerde().serialize({ greeting: myGreeting });
 }
 
 export function errorMessage(
@@ -580,8 +592,8 @@ export function getAwakeableId(entryIndex: number): string {
   );
 }
 
-export function keyVal(key: string, value: any): Buffer[] {
-  return [Buffer.from(key), Buffer.from(JSON.stringify(value))];
+export function keyVal(key: string, value: any): Uint8Array[] {
+  return [new TextEncoder().encode(key), defaultSerde().serialize(value)];
 }
 
 export const END_MESSAGE = new Message(END_MESSAGE_TYPE, new EndMessage());

@@ -34,20 +34,6 @@ import {
 } from "../types/protocol.js";
 import { Buffer } from "node:buffer";
 
-export function jsonSerialize(obj: any): string {
-  return JSON.stringify(obj, (_, v): any =>
-    typeof v === "bigint" ? "BIGINT::" + v.toString() : v
-  );
-}
-
-export function jsonDeserialize<T>(json: string): T {
-  return JSON.parse(json, (_, v): any =>
-    typeof v === "string" && v.startsWith("BIGINT::")
-      ? BigInt(v.substring(8))
-      : v
-  ) as T;
-}
-
 export function formatMessageAsJson(obj: any): string {
   const newObj = { ...(obj as Record<string, unknown>) };
   for (const [key, value] of Object.entries(newObj)) {

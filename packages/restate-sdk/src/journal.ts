@@ -44,12 +44,11 @@ import {
   SLEEP_ENTRY_MESSAGE_TYPE,
   SUSPENSION_MESSAGE_TYPE,
 } from "./types/protocol.js";
-import { equalityCheckers, jsonDeserialize } from "./utils/utils.js";
+import { equalityCheckers } from "./utils/utils.js";
 import { Message } from "./types/types.js";
 import type { Invocation } from "./invocation.js";
 import { failureToError, RetryableError } from "./types/errors.js";
 import { CompletablePromise } from "./utils/promises.js";
-import { Buffer } from "node:buffer";
 
 const RESOLVED = Promise.resolve(undefined);
 
@@ -371,8 +370,11 @@ export class Journal {
       case SIDE_EFFECT_ENTRY_MESSAGE_TYPE: {
         const sideEffectMsg = replayMessage.message as RunEntryMessage;
         if (sideEffectMsg.result.case === "value") {
-          const text = Buffer.from(sideEffectMsg.result.value).toString();
-          this.resolveResult(journalIndex, journalEntry, jsonDeserialize(text));
+          this.resolveResult(
+            journalIndex,
+            journalEntry,
+            sideEffectMsg.result.value
+          );
         } else if (sideEffectMsg.result.case === "failure") {
           this.resolveResult(
             journalIndex,

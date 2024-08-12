@@ -46,7 +46,7 @@ describe("ResolveAwakeableGreeter", () => {
       inputMessage(greetRequest("Till")),
     ]).run();
 
-    expect(result).toStrictEqual([
+    expect(result).toEqual([
       resolveAwakeableMessage(getAwakeableId(1), "hello"),
       outputMessage(greetResponse("Hello")),
       END_MESSAGE,

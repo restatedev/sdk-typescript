@@ -419,7 +419,7 @@ describe("InvokeRaceGreeter", () => {
   const jackInvoke = invokeMessage(
     "greeter",
     "greet",
-    Buffer.from(JSON.stringify({ name: "Jack" })),
+    new TextEncoder().encode(JSON.stringify({ name: "Jack" })),
     undefined,
     undefined,
     "Jack"
@@ -427,7 +427,7 @@ describe("InvokeRaceGreeter", () => {
   const jillInvoke = invokeMessage(
     "greeter",
     "greet",
-    Buffer.from(JSON.stringify({ name: "Jill" })),
+    new TextEncoder().encode(JSON.stringify({ name: "Jill" })),
     undefined,
     undefined,
     "Jill"

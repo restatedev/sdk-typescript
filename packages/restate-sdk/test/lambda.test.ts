@@ -36,6 +36,7 @@ import {
 import { ServiceProtocolVersion } from "../src/generated/proto/protocol_pb.js";
 import { ServiceDiscoveryProtocolVersion } from "../src/generated/proto/discovery_pb.js";
 import { describe, expect, it } from "vitest";
+import type { Serde } from "@restatedev/restate-sdk-core";
 
 class LambdaGreeter implements TestGreeter {
   async greet(
@@ -49,33 +50,53 @@ class LambdaGreeter implements TestGreeter {
   }
 }
 
+class NodeBufferJsonSerde<T> implements Serde<T> {
+  contentType = "application/json";
+
+  serialize(value: T): Uint8Array {
+    return Buffer.from(JSON.stringify(value));
+  }
+
+  deserialize(data: Uint8Array): T {
+    return JSON.parse(data.toString()) as T;
+  }
+}
+
 describe("Lambda: decodeMessage", () => {
   it("returns a list of decoded messages", () => {
     const messages: Message[] = [
       startMessage({ knownEntries: 2 }),
-      inputMessage(greetRequest("Pete")),
-      getStateMessage("STATE", "Foo"),
+      inputMessage(Buffer.from(greetRequest("Pete"))),
+      getStateMessage(
+        "STATE",
+        "Foo",
+        undefined,
+        undefined,
+        new NodeBufferJsonSerde()
+      ),
     ];
     const serializedMsgs = serializeMessages(messages);
 
     const decodedMessages = decodeLambdaBody(serializedMsgs);
+    const serializedAgain = serializeMessages(decodedMessages);
 
-    expect(decodedMessages).toStrictEqual(messages);
+    expect(serializedMsgs).toStrictEqual(serializedAgain);
   });
 
   it("returns a list of decoded messages when last message body is empty", () => {
     const messages: Message[] = [
       startMessage({ knownEntries: 2 }),
-      inputMessage(new Uint8Array()),
+      inputMessage(Buffer.alloc(0)),
     ];
     const serializedMsgs = serializeMessages(messages);
 
     const decodedMessages = decodeLambdaBody(serializedMsgs);
+    const serializedAgain = serializeMessages(decodedMessages);
 
-    expect(decodedMessages).toStrictEqual(messages);
+    expect(serializedMsgs).toStrictEqual(serializedAgain);
   });
 
-  it("should returns a list of decoded messages when last message body is empty", () => {
+  it("should returns a list of decoded messages when last message body is empty (2)", () => {
     const messages: Message[] = [
       startMessage({ knownEntries: 2 }),
       inputMessage(greetRequest("Pete")),
@@ -84,8 +105,9 @@ describe("Lambda: decodeMessage", () => {
     const serializedMsgs = serializeMessages(messages);
 
     const decodedMessages = decodeLambdaBody(serializedMsgs);
+    const serializedAgain = serializeMessages(decodedMessages);
 
-    expect(decodedMessages).toStrictEqual(messages);
+    expect(serializedMsgs).toStrictEqual(serializedAgain);
   });
 
   it("fails on an invalid input message with random signs at end of message", () => {

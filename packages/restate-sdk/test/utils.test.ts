@@ -9,27 +9,9 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import {
-  jsonDeserialize,
-  jsonSerialize,
-  formatMessageAsJson,
-} from "../src/utils/utils.js";
+import { formatMessageAsJson } from "../src/utils/utils.js";
 import { RandImpl } from "../src/utils/rand.js";
 import { describe, expect, it } from "vitest";
-
-describe("JSON de-/serialization", () => {
-  it("should be able to handle bigint", () => {
-    const myType = {
-      a: "Hello!",
-      b: 42n,
-    };
-
-    const json = jsonSerialize(myType);
-    const obj = jsonDeserialize(json);
-
-    expect(obj).toStrictEqual(myType);
-  });
-});
 
 describe("JSON printing", () => {
   it("should be able to handle bigInt", () => {

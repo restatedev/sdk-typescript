@@ -16,7 +16,10 @@ export type {
   ServiceDefinitionFrom,
   VirtualObjectDefinitionFrom,
   WorkflowDefinitionFrom,
+  Serde,
 } from "@restatedev/restate-sdk-core";
+
+export { serde } from "@restatedev/restate-sdk-core";
 
 export type {
   Ingress,
@@ -29,5 +32,7 @@ export type {
   IngresSendOptions,
 } from "./api.js";
 export { Opts, SendOpts } from "./api.js";
+
+export { rpc } from "./api.js";
 
 export { connect, HttpCallError } from "./ingress.js";

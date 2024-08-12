@@ -16,11 +16,30 @@ export type {
   WorkflowContext,
   WorkflowSharedContext,
   Rand,
+  GenericCall,
+  GenericSend,
 } from "./context.js";
 export { CombineablePromise } from "./context.js";
 
-export type { Client, SendClient } from "./types/rpc.js";
-export { service, object, workflow, handlers } from "./types/rpc.js";
+export type { Serde } from "@restatedev/restate-sdk-core";
+export { serde } from "@restatedev/restate-sdk-core";
+
+export type {
+  Client,
+  SendClient,
+  ClientCallOptions,
+  ClientSendOptions,
+} from "./types/rpc.js";
+export {
+  service,
+  object,
+  workflow,
+  handlers,
+  Opts,
+  SendOpts,
+} from "./types/rpc.js";
+
+export { rpc } from "./types/rpc.js";
 
 export type {
   ServiceDefinition,
