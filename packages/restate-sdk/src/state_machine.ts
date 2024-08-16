@@ -56,6 +56,7 @@ import {
 import { CombinatorEntryMessage } from "./generated/proto/javascript_pb.js";
 import { Buffer } from "node:buffer";
 import type { HandlerKind } from "./types/rpc.js";
+import type { Empty } from "./generated/proto/protocol_pb.js";
 
 export class StateMachine implements RestateStreamConsumer {
   private journal: Journal;
@@ -160,16 +161,16 @@ export class StateMachine implements RestateStreamConsumer {
     return false; // we are never complete
   }
 
-  public handleUserCodeMessage<T>(
+  public handleUserCodeMessage(
     messageType: bigint,
     message: p.ProtocolMessage,
     completedFlag?: boolean,
     requiresAckFlag?: boolean
-  ): WrappedPromise<T | void> {
+  ): WrappedPromise<Uint8Array | Empty | void> {
     // if the state machine is already closed, return a promise that never
     // completes, so that the user code does not resume
     if (this.stateMachineClosed) {
-      return WRAPPED_PROMISE_PENDING as WrappedPromise<T | void>;
+      return WRAPPED_PROMISE_PENDING as WrappedPromise<Uint8Array | void>;
     }
 
     const promise = this.journal.handleUserSideMessage(messageType, message);

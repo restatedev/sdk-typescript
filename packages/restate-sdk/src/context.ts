@@ -22,6 +22,7 @@ import type {
   VirtualObjectDefinitionFrom,
   Workflow,
   WorkflowDefinitionFrom,
+  Serde,
 } from "@restatedev/restate-sdk-core";
 import { ContextImpl } from "./context_impl.js";
 
@@ -88,7 +89,8 @@ export interface KeyValueStore<TState extends TypedState> {
    * const state = await ctx.get<string>("STATE");
    */
   get<TValue, TKey extends keyof TState = string>(
-    name: TState extends UntypedState ? string : TKey
+    name: TState extends UntypedState ? string : TKey,
+    serde?: Serde<TState extends UntypedState ? TValue : TState[TKey]>
   ): Promise<(TState extends UntypedState ? TValue : TState[TKey]) | null>;
 
   stateKeys(): Promise<Array<string>>;
@@ -106,7 +108,8 @@ export interface KeyValueStore<TState extends TypedState> {
    */
   set<TValue, TKey extends keyof TState = string>(
     name: TState extends UntypedState ? string : TKey,
-    value: TState extends UntypedState ? TValue : TState[TKey]
+    value: TState extends UntypedState ? TValue : TState[TKey],
+    serde?: Serde<TState extends UntypedState ? TValue : TState[TKey]>
   ): void;
 
   /**
@@ -173,6 +176,38 @@ export interface ContextDate {
  * A function that can be run and its result durably persisted by Restate.
  */
 export type RunAction<T> = (() => Promise<T>) | (() => T);
+
+export type RunOptions<T> = {
+  serde?: Serde<T>;
+};
+
+/**
+ * Call a handler directly avoiding restate's type safety checks.
+ * This is a generic machnisim to invoke handlers directly by only knowing
+ * the service and handler name, (or key in the case of objects or workflows)
+ */
+export type GenericCall<REQ, RES> = {
+  service: string;
+  method: string;
+  parameter: REQ;
+  key?: string;
+  inputSerde?: Serde<REQ>;
+  outputSerde?: Serde<RES>;
+};
+
+/**
+ * Send a message to an handler directly avoiding restate's type safety checks.
+ * This is a generic machnisim to invoke handlers directly by only knowing
+ * the service and handler name, (or key in the case of objects or workflows)
+ */
+export type GenericSend<REQ> = {
+  service: string;
+  method: string;
+  parameter: REQ;
+  key?: string;
+  inputSerde?: Serde<REQ>;
+  delay?: number;
+};
 
 /**
  * The context that gives access to all Restate-backed operations, for example
@@ -261,6 +296,12 @@ export interface Context extends RestateContext {
    */
   run<T>(name: string, action: RunAction<T>): Promise<T>;
 
+  run<T>(
+    name: string,
+    action: RunAction<T>,
+    options: RunOptions<T>
+  ): Promise<T>;
+
   /**
    * Register an awakeable and pause the processing until the awakeable ID (and optional payload) have been returned to the service
    * (via ctx.completeAwakeable(...)). The SDK deserializes the payload with `JSON.parse(result.toString()) as T`.
@@ -280,7 +321,10 @@ export interface Context extends RestateContext {
    * // Wait for the external service to wake this service back up
    * const result = await awakeable.promise;
    */
-  awakeable<T>(): { id: string; promise: CombineablePromise<T> };
+  awakeable<T>(serde?: Serde<T>): {
+    id: string;
+    promise: CombineablePromise<T>;
+  };
 
   /**
    * Resolve an awakeable.
@@ -294,7 +338,7 @@ export interface Context extends RestateContext {
    * // The sleeping service should have sent the awakeableIdentifier string to this service.
    * ctx.resolveAwakeable(awakeableIdentifier, "hello");
    */
-  resolveAwakeable<T>(id: string, payload?: T): void;
+  resolveAwakeable<T>(id: string, payload?: T, serde?: Serde<T>): void;
 
   /**
    * Reject an awakeable. When rejecting, the service waiting on this awakeable will be woken up with a terminal error with the provided reason.
@@ -451,6 +495,12 @@ export interface Context extends RestateContext {
     opts?: SendOptions
   ): SendClient<VirtualObject<D>>;
 
+  genericCall<REQ = Uint8Array, RES = Uint8Array>(
+    call: GenericCall<REQ, RES>
+  ): Promise<RES>;
+
+  genericSend<REQ = Uint8Array>(call: GenericSend<REQ>): void;
+
   /**
    * Returns the raw request that triggered that handler.
    * Use that object to inspect the original request headers
@@ -505,7 +555,8 @@ export interface ObjectSharedContext<TState extends TypedState = UntypedState>
    * const state = await ctx.get<string>("STATE");
    */
   get<TValue, TKey extends keyof TState = string>(
-    name: TState extends UntypedState ? string : TKey
+    name: TState extends UntypedState ? string : TKey,
+    serde?: Serde<TState extends UntypedState ? TValue : TState[TKey]>
   ): Promise<(TState extends UntypedState ? TValue : TState[TKey]) | null>;
 
   /**

@@ -1,5 +1,4 @@
 {
   "extends": "./tsconfig.json",
-  "include": ["src/**/*.ts", "test/**/*.ts"],
-  "references": [{ "path": "../restate-sdk-core" }]
+  "include": ["src/**/*.ts", "test/**/*.ts"]
 }

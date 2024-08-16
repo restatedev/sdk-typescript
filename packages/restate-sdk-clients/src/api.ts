@@ -5,6 +5,7 @@ import type {
   VirtualObject,
   ServiceDefinitionFrom,
   WorkflowDefinitionFrom,
+  Serde,
 } from "@restatedev/restate-sdk-core";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -76,7 +77,7 @@ export interface Ingress {
   result<T>(send: Send<T> | WorkflowSubmission<T>): Promise<T>;
 }
 
-export interface IngresCallOptions {
+export interface IngresCallOptions<I = unknown, O = unknown> {
   /**
    * Key to use for idempotency key.
    *
@@ -93,35 +94,42 @@ export interface IngresCallOptions {
    * Do not auto serialize the input and output of the handler.
    * Setting this to true, would allow you to send binary data to the handler,
    * and not assuming that the payload is JSON.
+   * @deprecated please use inputSerde and outputSerde instead, and provide `restate.serde.binary` as an argument.
    */
   raw?: boolean;
+
+  inputSerde?: Serde<I>;
+
+  outputSerde?: Serde<O>;
 }
 
-export interface IngresSendOptions extends IngresCallOptions {
+export interface IngresSendOptions<I> extends IngresCallOptions<I, void> {
   /**
    * If set, the invocation will be executed after the provided delay. In milliseconds.
    */
   delay?: number;
 }
 
-export class Opts {
+export class Opts<I, O> {
   /**
    * Create a call configuration from the provided options.
    *
    * @param opts the call configuration
    */
-  public static from(opts: IngresCallOptions): Opts {
+  public static from<I = unknown, O = unknown>(
+    opts: IngresCallOptions<I, O>
+  ): Opts<I, O> {
     return new Opts(opts);
   }
 
-  constructor(readonly opts: IngresCallOptions) {}
+  constructor(readonly opts: IngresCallOptions<I, O>) {}
 }
 
-export class SendOpts {
+export class SendOpts<I = unknown> {
   /**
    * @param opts Create send options
    */
-  public static from(opts: IngresSendOptions): SendOpts {
+  public static from<I = unknown>(opts: IngresSendOptions<I>): SendOpts<I> {
     return new SendOpts(opts);
   }
 
@@ -129,17 +137,27 @@ export class SendOpts {
     return this.opts.delay;
   }
 
-  constructor(readonly opts: IngresSendOptions) {}
+  constructor(readonly opts: IngresSendOptions<I>) {}
 }
+
+export type InferArgType<P> = P extends [infer A, ...any[]] ? A : unknown;
 
 export type IngressClient<M> = {
   [K in keyof M as M[K] extends never ? never : K]: M[K] extends (
     arg: any,
     ...args: infer P
   ) => PromiseLike<infer O>
-    ? (...args: [...P, ...[opts?: Opts]]) => PromiseLike<O>
+    ? (...args: [...P, ...[opts?: Opts<InferArgType<P>, O>]]) => PromiseLike<O>
     : never;
 };
+
+// eslint-disable-next-line @typescript-eslint/no-namespace
+export namespace rpc {
+  export const opts = <I, O>(opts: IngresCallOptions<I, O>) => Opts.from(opts);
+
+  export const sendOpts = <I>(opts: IngresSendOptions<I>) =>
+    SendOpts.from(opts);
+}
 
 /**
  * Represents the output of a workflow.
@@ -190,7 +208,9 @@ export type IngressWorkflowClient<M> = Omit<
       arg: any,
       ...args: infer P
     ) => PromiseLike<infer O>
-      ? (...args: P) => PromiseLike<O>
+      ? (
+          ...args: [...P, ...[opts?: Opts<InferArgType<P>, O>]]
+        ) => PromiseLike<O>
       : never;
   } & {
     /**
@@ -205,7 +225,9 @@ export type IngressWorkflowClient<M> = Omit<
      */
     workflowSubmit: M extends Record<string, unknown>
       ? M["run"] extends (arg: any, ...args: infer I) => Promise<infer O>
-        ? (...args: I) => Promise<WorkflowSubmission<O>>
+        ? (
+            ...args: [...I, ...[opts?: SendOpts<InferArgType<I>>]]
+          ) => Promise<WorkflowSubmission<O>>
         : never
       : never;
 
@@ -222,7 +244,7 @@ export type IngressWorkflowClient<M> = Omit<
      */
     workflowAttach: M extends Record<string, unknown>
       ? M["run"] extends (...args: any) => Promise<infer O>
-        ? () => Promise<O>
+        ? (opts?: Opts<void, O>) => Promise<O>
         : never
       : never;
 
@@ -238,7 +260,7 @@ export type IngressWorkflowClient<M> = Omit<
      */
     workflowOutput: M extends Record<string, unknown>
       ? M["run"] extends (...args: any) => Promise<infer O>
-        ? () => Promise<Output<O>>
+        ? (opts?: Opts<void, O>) => Promise<Output<O>>
         : never
       : never;
   },
@@ -270,7 +292,9 @@ export type IngressSendClient<M> = {
     arg: any,
     ...args: infer P
   ) => infer O
-    ? (...args: [...P, ...[opts?: SendOpts]]) => Promise<Send<O>>
+    ? (
+        ...args: [...P, ...[opts?: SendOpts<InferArgType<P>>]]
+      ) => Promise<Send<O>>
     : never;
 };
 

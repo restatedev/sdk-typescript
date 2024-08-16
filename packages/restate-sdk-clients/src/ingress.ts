@@ -9,13 +9,15 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import type {
-  Service,
-  ServiceDefinitionFrom,
-  VirtualObject,
-  WorkflowDefinitionFrom,
-  Workflow,
-  VirtualObjectDefinitionFrom,
+import {
+  type Service,
+  type ServiceDefinitionFrom,
+  type VirtualObject,
+  type WorkflowDefinitionFrom,
+  type Workflow,
+  type VirtualObjectDefinitionFrom,
+  type Serde,
+  serde,
 } from "@restatedev/restate-sdk-core";
 import type {
   ConnectionOpts,
@@ -55,17 +57,17 @@ type InvocationParameters<I> = {
   handler: string;
   key?: string;
   send?: boolean;
-  opts?: Opts | SendOpts;
+  opts?: Opts<I, unknown> | SendOpts<I>;
   parameter?: I;
   method?: string;
 };
 
 function optsFromArgs(args: unknown[]): {
   parameter?: unknown;
-  opts?: Opts | SendOpts;
+  opts?: Opts<unknown, unknown> | SendOpts<unknown>;
 } {
   let parameter: unknown;
-  let opts: Opts | SendOpts | undefined;
+  let opts: Opts<unknown, unknown> | SendOpts<unknown> | undefined;
   switch (args.length) {
     case 0: {
       break;
@@ -138,13 +140,18 @@ const doComponentInvocation = async <I, O>(
       fragments.push("send");
     }
   }
-  const raw = params.opts?.opts.raw ?? false;
+  const raw: boolean = params.opts?.opts.raw ?? false;
   //
   // request body
   //
+  let inputSerde = params.opts?.opts.inputSerde;
+  if (!inputSerde) {
+    inputSerde = raw ? serde.binary : serde.json;
+  }
+
   const { body, contentType } = serializeBodyWithContentType(
     params.parameter,
-    raw
+    inputSerde
   );
   //
   // headers
@@ -182,10 +189,12 @@ const doComponentInvocation = async <I, O>(
     );
   }
   const responseBuf = await httpResponse.arrayBuffer();
-  const json = deserializeJson(new Uint8Array(responseBuf), raw) as O;
   if (!params.send) {
-    return json;
+    const outputSerde =
+      params.opts?.opts.outputSerde ?? (raw ? serde.binary : serde.json);
+    return outputSerde.deserialize(new Uint8Array(responseBuf)) as O;
   }
+  const json = serde.json.deserialize(new Uint8Array(responseBuf)) as O;
   return { ...json, attachable };
 };
 
@@ -193,8 +202,10 @@ const doWorkflowHandleCall = async <O>(
   opts: ConnectionOpts,
   wfName: string,
   wfKey: string,
-  op: "output" | "attach"
+  op: "output" | "attach",
+  callOpts?: Opts<unknown, O> | SendOpts<unknown>
 ): Promise<O> => {
+  const outputSerde = callOpts?.opts.outputSerde ?? serde.json;
   //
   // headers
   //
@@ -214,7 +225,7 @@ const doWorkflowHandleCall = async <O>(
   });
   if (httpResponse.ok) {
     const responseBuf = await httpResponse.arrayBuffer();
-    return deserializeJson(new Uint8Array(responseBuf), false) as O;
+    return outputSerde.deserialize(new Uint8Array(responseBuf)) as O;
   }
   const body = await httpResponse.text();
   throw new HttpCallError(
@@ -235,7 +246,7 @@ class HttpIngress implements Ingress {
           const handler = prop as string;
           return (...args: unknown[]) => {
             const { parameter, opts } = optsFromArgs(args);
-            return doComponentInvocation(this.opts, {
+            return doComponentInvocation<unknown, unknown>(this.opts, {
               component,
               handler,
               key,
@@ -268,7 +279,8 @@ class HttpIngress implements Ingress {
     const conn = this.opts;
 
     const workflowSubmit = async (
-      parameter?: unknown
+      parameter?: unknown,
+      opts?: SendOpts<unknown>
     ): Promise<WorkflowSubmission<unknown>> => {
       const res: Send = await doComponentInvocation(conn, {
         component,
@@ -276,6 +288,7 @@ class HttpIngress implements Ingress {
         key,
         send: true,
         parameter,
+        opts,
       });
 
       return {
@@ -285,16 +298,19 @@ class HttpIngress implements Ingress {
       };
     };
 
-    const workflowAttach = () =>
-      doWorkflowHandleCall(conn, component, key, "attach");
+    const workflowAttach = (opts?: Opts<void, unknown>) =>
+      doWorkflowHandleCall(conn, component, key, "attach", opts);
 
-    const workflowOutput = async (): Promise<Output<unknown>> => {
+    const workflowOutput = async (
+      opts?: Opts<void, unknown>
+    ): Promise<Output<unknown>> => {
       try {
         const result = await doWorkflowHandleCall(
           conn,
           component,
           key,
-          "output"
+          "output",
+          opts
         );
 
         return {
@@ -362,10 +378,14 @@ class HttpIngress implements Ingress {
 
   async resolveAwakeable<T>(
     id: string,
-    payload?: T | undefined
+    payload?: T | undefined,
+    payloadSerde?: Serde<T>
   ): Promise<void> {
     const url = `${this.opts.url}/restate/a/${id}/resolve`;
-    const { body, contentType } = serializeBodyWithContentType(payload, false);
+    const { body, contentType } = serializeBodyWithContentType(
+      payload,
+      payloadSerde ?? serde.json
+    );
     const headers = {
       ...(this.opts.headers ?? {}),
     };
@@ -408,7 +428,10 @@ class HttpIngress implements Ingress {
     }
   }
 
-  async result<T>(send: Send<T> | WorkflowSubmission<T>): Promise<T> {
+  async result<T>(
+    send: Send<T> | WorkflowSubmission<T>,
+    resultSerde?: Serde<T>
+  ): Promise<T> {
     if (!send.attachable) {
       throw new Error(
         `Unable to fetch the result for ${send.invocationId}.
@@ -431,7 +454,8 @@ class HttpIngress implements Ingress {
     });
     if (httpResponse.ok) {
       const responseBuf = await httpResponse.arrayBuffer();
-      return deserializeJson(new Uint8Array(responseBuf), false) as T;
+      const ser = resultSerde ?? serde.json;
+      return ser.deserialize(new Uint8Array(responseBuf)) as T;
     }
     const body = await httpResponse.text();
     throw new HttpCallError(
@@ -450,24 +474,9 @@ function computeDelayAsIso(opts: SendOpts): string {
   return `send?delay=${delay}ms`;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function deserializeJson(what: Uint8Array, raw: boolean): any {
-  if (what === undefined) {
-    return undefined;
-  }
-  if (raw) {
-    return what;
-  }
-  if (what.length == 0) {
-    return undefined;
-  }
-  const json = new TextDecoder().decode(what);
-  return JSON.parse(json);
-}
-
 function serializeBodyWithContentType(
   body: unknown,
-  raw: boolean
+  serde: Serde<unknown>
 ): {
   body?: Uint8Array;
   contentType?: string;
@@ -475,14 +484,9 @@ function serializeBodyWithContentType(
   if (body === undefined) {
     return {};
   }
-  if (raw) {
-    return { body: body as Uint8Array };
-  }
-  const json = JSON.stringify(body);
-  const buffer = new TextEncoder().encode(json);
-
+  const buffer = serde.serialize(body);
   return {
     body: buffer,
-    contentType: "application/json",
+    contentType: serde.contentType,
   };
 }

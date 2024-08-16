@@ -45,7 +45,7 @@ const idempotentCall = async (name: string, idempotencyKey: string) => {
   // to remember that key for 3 seconds.
   const greeting = await greeter.greet(
     name,
-    restate.Opts.from({ idempotencyKey })
+    restate.rpc.opts({ idempotencyKey })
   );
 
   console.log(greeting);
@@ -56,7 +56,7 @@ const customHeadersCall = async (name: string) => {
 
   const greeting = await greeter.greet(
     name,
-    restate.Opts.from({ headers: { "x-bob": "1234" } })
+    restate.rpc.opts({ headers: { "x-bob": "1234" } })
   );
 
   console.log(greeting);
@@ -80,7 +80,7 @@ const delayedCall = async (name: string) => {
 
   const greeting = await ingress
     .serviceSendClient(Greeter)
-    .greet(name, restate.SendOpts.from({ delay: 1000 }));
+    .greet(name, restate.rpc.sendOpts({ delay: 1000 }));
 
   console.log(greeting);
 };
@@ -92,7 +92,7 @@ const sendAndCollectResultLater = async (name: string) => {
 
   const send = await ingress
     .serviceSendClient(Greeter)
-    .greet(name, restate.SendOpts.from({ idempotencyKey: "abcde" }));
+    .greet(name, restate.rpc.sendOpts({ idempotencyKey: "abcde" }));
 
   // Few MinUtEs LaTeR ...
 
@@ -153,8 +153,9 @@ const binaryRawCall = async (name: string) => {
 
   const outBuffer = await counter.binary(
     buffer,
-    restate.Opts.from({
-      raw: true, // <-- tell the client to avoid JSON encoding/decoding
+    restate.rpc.opts({
+      inputSerde: restate.serde.binary,
+      outputSerde: restate.serde.binary,
       headers: { "content-type": "application/octet-stream" },
     })
   );

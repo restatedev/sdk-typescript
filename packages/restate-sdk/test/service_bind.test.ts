@@ -87,7 +87,7 @@ describe("AcceptBytes", () => {
     });
 
     expect(result).toStrictEqual([
-      outputMessage(Buffer.from(JSON.stringify({ length: 5 }))),
+      outputMessage(new TextEncoder().encode(JSON.stringify({ length: 5 }))),
       END_MESSAGE,
     ]);
   });

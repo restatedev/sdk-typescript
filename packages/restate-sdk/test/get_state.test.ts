@@ -78,12 +78,6 @@ describe("GetStringStateGreeter", () => {
       outputMessage(greetResponse("Hello Francesco"))
     );
     expect(result[2]).toStrictEqual(END_MESSAGE);
-
-    // expect(result).toBe([
-    //   getStateMessage("STATE"),
-    //   outputMessage(greetResponse("Hello Francesco")),
-    //   END_MESSAGE,
-    // ]);
   });
 
   it("handles completion with empty", async () => {

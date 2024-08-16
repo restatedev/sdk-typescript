@@ -15,37 +15,205 @@
 import type {
   CombineablePromise,
   Context,
+  GenericCall,
+  GenericSend,
   ObjectContext,
   ObjectSharedContext,
   WorkflowContext,
   WorkflowSharedContext,
 } from "../context.js";
-import {
-  deserializeJson,
-  deserializeNoop,
-  serializeJson,
-  serializeNoop,
-} from "../utils/serde.js";
 
-import type {
-  ServiceHandler,
-  ServiceDefinition,
-  ObjectHandler,
-  ObjectSharedHandler,
-  VirtualObjectDefinition,
-  WorkflowHandler,
-  WorkflowDefinition,
-  WorkflowSharedHandler,
+import {
+  type ServiceHandler,
+  type ServiceDefinition,
+  type ObjectHandler,
+  type ObjectSharedHandler,
+  type VirtualObjectDefinition,
+  type WorkflowHandler,
+  type WorkflowDefinition,
+  type WorkflowSharedHandler,
+  type Serde,
+  serde,
 } from "@restatedev/restate-sdk-core";
 
 // ----------- rpc clients -------------------------------------------------------
+
+export type ClientCallOptions<I, O> = {
+  input?: Serde<I>;
+  output?: Serde<O>;
+};
+
+export class Opts<I, O> {
+  /**
+   * Create a call configuration from the provided options.
+   *
+   * @param opts the call configuration
+   */
+  public static from<I, O>(opts: ClientCallOptions<I, O>): Opts<I, O> {
+    return new Opts<I, O>(opts);
+  }
+
+  private constructor(private readonly opts: ClientCallOptions<I, O>) {}
+
+  public getOpts(): ClientCallOptions<I, O> {
+    return this.opts;
+  }
+}
+
+export type ClientSendOptions<I> = {
+  input?: Serde<I>;
+  delay?: number;
+};
+
+export class SendOpts<I> {
+  public static from<I>(opts: ClientSendOptions<I>): SendOpts<I> {
+    return new SendOpts<I>(opts);
+  }
+
+  public getOpts(): ClientSendOptions<I> {
+    return this.opts;
+  }
+
+  private constructor(private readonly opts: ClientSendOptions<I>) {}
+}
+
+export namespace rpc {
+  export const opts = <I, O>(opts: ClientCallOptions<I, O>) => Opts.from(opts);
+
+  export const sendOpts = <I>(opts: ClientSendOptions<I>) =>
+    SendOpts.from(opts);
+}
+
+function optsFromArgs(args: unknown[]): {
+  parameter?: unknown;
+  opts?:
+    | ClientCallOptions<unknown, unknown>
+    | ClientSendOptions<unknown>
+    | undefined;
+} {
+  let parameter: unknown;
+  let opts:
+    | ClientCallOptions<unknown, unknown>
+    | ClientSendOptions<unknown>
+    | undefined;
+  switch (args.length) {
+    case 0: {
+      break;
+    }
+    case 1: {
+      if (args[0] instanceof Opts) {
+        opts = args[0].getOpts();
+      } else if (args[0] instanceof SendOpts) {
+        opts = args[0].getOpts();
+      } else {
+        parameter = args[0];
+      }
+      break;
+    }
+    case 2: {
+      parameter = args[0];
+      if (args[1] instanceof Opts) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        opts = args[1].getOpts();
+      } else if (args[1] instanceof SendOpts) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        opts = args[1].getOpts();
+      } else {
+        throw new TypeError(
+          "The second argument must be either Opts or SendOpts"
+        );
+      }
+      break;
+    }
+    default: {
+      throw new TypeError("unexpected number of arguments");
+    }
+  }
+  return {
+    parameter,
+    opts,
+  };
+}
+
+export const defaultSerde = <T>(): Serde<T> => {
+  return serde.json as Serde<T>;
+};
+
+export const makeRpcCallProxy = <T>(
+  genericCall: (call: GenericCall<unknown, unknown>) => Promise<unknown>,
+  service: string,
+  key?: string
+): T => {
+  const clientProxy = new Proxy(
+    {},
+    {
+      get: (_target, prop) => {
+        const method = prop as string;
+        return (...args: unknown[]) => {
+          const { parameter, opts } = optsFromArgs(args);
+          const requestSerde = opts?.input ?? defaultSerde();
+          const responseSerde =
+            (opts as ClientCallOptions<unknown, unknown> | undefined)?.output ??
+            defaultSerde();
+          return genericCall({
+            service,
+            method,
+            parameter,
+            key,
+            inputSerde: requestSerde,
+            outputSerde: responseSerde,
+          });
+        };
+      },
+    }
+  );
+
+  return clientProxy as T;
+};
+
+export const makeRpcSendProxy = <T>(
+  genericSend: (send: GenericSend<unknown>) => void,
+  service: string,
+  key?: string,
+  legacyDelay?: number
+): T => {
+  const clientProxy = new Proxy(
+    {},
+    {
+      get: (_target, prop) => {
+        const method = prop as string;
+        return (...args: unknown[]) => {
+          const { parameter, opts } = optsFromArgs(args);
+          const requestSerde = opts?.input ?? defaultSerde();
+          const delay =
+            legacyDelay ??
+            (opts as ClientSendOptions<unknown> | undefined)?.delay;
+          return genericSend({
+            service,
+            method,
+            parameter,
+            key,
+            delay,
+            inputSerde: requestSerde,
+          });
+        };
+      },
+    }
+  );
+
+  return clientProxy as T;
+};
+
+export type InferArg<P> = P extends [infer A, ...any[]] ? A : unknown;
 
 export type Client<M> = {
   [K in keyof M as M[K] extends never ? never : K]: M[K] extends (
     arg: any,
     ...args: infer P
   ) => PromiseLike<infer O>
-    ? (...args: P) => CombineablePromise<O>
+    ? (
+        ...args: [...P, ...[opts?: Opts<InferArg<P>, O>]]
+      ) => CombineablePromise<O>
     : never;
 };
 
@@ -54,7 +222,7 @@ export type SendClient<M> = {
     arg: any,
     ...args: infer P
   ) => any
-    ? (...args: P) => void
+    ? (...args: [...P, ...[opts?: SendOpts<InferArg<P>>]]) => void
     : never;
 };
 
@@ -68,49 +236,188 @@ export enum HandlerKind {
 }
 
 export type ServiceHandlerOpts = {
+  /** @deprecated Use input instead */
   accept?: string;
-  contentType?: string;
+  /** @deprecated Use input instead */
   inputDeserializer?: <T>(input: Uint8Array) => T | undefined;
+
+  /** @deprecated Use output instead */
+  contentType?: string;
+
+  /** @deprecated Use output instead */
   outputSerializer?: <T>(output: T | undefined) => Uint8Array;
+
+  /**
+   * The Serde to use for deserializing the input parameter.
+   * defaults to: restate.serde.json
+   *
+   * Provide a custom Serde if the input is not JSON, or use:
+   * restate.serde.binary the skip serialization/deserialization altogether.
+   * in that case, the input parameter is a Uint8Array.
+   */
+  input?: Serde<unknown>;
+
+  /**
+   * The Serde to use for serializing the output.
+   * defaults to: restate.serde.json
+   *
+   * Provide a custom Serde if the output is not JSON, or use:
+   * restate.serde.binary the skip serialization/deserialization altogether.
+   * in that case, the output parameter is a Uint8Array.
+   */
+  output?: Serde<unknown>;
 };
 
 export type ObjectHandlerOpts = {
+  /** @deprecated Use input instead */
   accept?: string;
-  contentType?: string;
+  /** @deprecated Use input instead */
   inputDeserializer?: <T>(input: Uint8Array) => T | undefined;
+
+  /** @deprecated Use output instead */
+  contentType?: string;
+
+  /** @deprecated Use output instead */
   outputSerializer?: <T>(output: T | undefined) => Uint8Array;
+
+  /**
+   * The Serde to use for deserializing the input parameter.
+   * defaults to: restate.serde.json
+   *
+   * Provide a custom Serde if the input is not JSON, or use:
+   * restate.serde.binary the skip serialization/deserialization altogether.
+   * in that case, the input parameter is a Uint8Array.
+   */
+  input?: Serde<unknown>;
+
+  /**
+   * The Serde to use for serializing the output.
+   * defaults to: restate.serde.json
+   *
+   * Provide a custom Serde if the output is not JSON, or use:
+   * restate.serde.binary the skip serialization/deserialization altogether.
+   * in that case, the output parameter is a Uint8Array.
+   */
+  output?: Serde<unknown>;
 };
 
 export type WorkflowHandlerOpts = {
+  /** @deprecated Use input instead */
   accept?: string;
-  contentType?: string;
+  /** @deprecated Use input instead */
   inputDeserializer?: <T>(input: Uint8Array) => T | undefined;
+
+  /** @deprecated Use output instead */
+  contentType?: string;
+
+  /** @deprecated Use output instead */
   outputSerializer?: <T>(output: T | undefined) => Uint8Array;
+
+  /**
+   * The Serde to use for deserializing the input parameter.
+   * defaults to: restate.serde.json
+   *
+   * Provide a custom Serde if the input is not JSON, or use:
+   * restate.serde.binary the skip serialization/deserialization altogether.
+   * in that case, the input parameter is a Uint8Array.
+   */
+  input?: Serde<unknown>;
+
+  /**
+   * The Serde to use for serializing the output.
+   * defaults to: restate.serde.json
+   *
+   * Provide a custom Serde if the output is not JSON, or use:
+   * restate.serde.binary the skip serialization/deserialization altogether.
+   * in that case, the output parameter is a Uint8Array.
+   */
+  output?: Serde<unknown>;
 };
 
 const JSON_CONTENT_TYPE = "application/json";
 const HANDLER_SYMBOL = Symbol("Handler");
 
+/** For backward compatability with the serializer handler option */
+class SerializerWrapper<T> implements Serde<T> {
+  constructor(
+    public readonly contentType: string,
+    private readonly serializer: (input: T) => Uint8Array
+  ) {}
+
+  serialize(input: T): Uint8Array {
+    return this.serializer(input);
+  }
+
+  deserialize(): T {
+    throw new Error("Not implemented");
+  }
+}
+
+/** For backward compatability with the serializer handler option */
+class DeserializerWrapper<T> implements Serde<T> {
+  constructor(
+    public readonly contentType: string,
+    private readonly deserializer: (input: Uint8Array) => T
+  ) {}
+
+  serialize(): Uint8Array {
+    throw new Error("Not implemented");
+  }
+
+  deserialize(input: Uint8Array): T {
+    return this.deserializer(input);
+  }
+}
+
 export class HandlerWrapper {
   public static from(
     kind: HandlerKind,
     handler: Function,
-    opts?: ServiceHandlerOpts | ObjectHandlerOpts
+    opts?: ServiceHandlerOpts | ObjectHandlerOpts | WorkflowHandlerOpts
   ): HandlerWrapper {
-    const input = opts?.accept ?? JSON_CONTENT_TYPE;
-    const output = opts?.contentType ?? JSON_CONTENT_TYPE;
-
-    const deserializer =
-      opts?.inputDeserializer ??
-      (input.toLocaleLowerCase() == JSON_CONTENT_TYPE
-        ? deserializeJson
-        : deserializeNoop);
-
-    const serializer =
-      opts?.outputSerializer ??
-      (output.toLocaleLowerCase() == JSON_CONTENT_TYPE
-        ? serializeJson
-        : serializeNoop);
+    // backwards compatibility with the deserializer+accept options
+    let inputSerde: Serde<unknown>;
+    if (opts?.inputDeserializer) {
+      // the caller has specified a custom serializer, use it
+      // if the accept is also specified, use it, otherwise use JSON
+      inputSerde = new DeserializerWrapper(
+        opts.accept ?? JSON_CONTENT_TYPE,
+        opts.inputDeserializer
+      );
+    } else if (opts?.accept) {
+      // accept but no serializer, use pass trough
+      inputSerde = new DeserializerWrapper(opts.accept, (input) => input);
+    } else if (opts?.contentType == JSON_CONTENT_TYPE) {
+      // contentType is JSON, use the default serde
+      inputSerde = defaultSerde();
+    } else if (opts?.input) {
+      // did the caller specify a custom serde?
+      inputSerde = opts.input;
+    } else {
+      // use the default (JSON) serde
+      inputSerde = defaultSerde();
+    }
+    // backwards compatibility with the deserializer handler option
+    let outputSerde: Serde<unknown>;
+    if (opts?.outputSerializer) {
+      outputSerde = new SerializerWrapper(
+        opts.contentType ?? JSON_CONTENT_TYPE,
+        opts.outputSerializer
+      );
+    } else if (opts?.contentType == JSON_CONTENT_TYPE) {
+      // contentType is JSON, use the default serde
+      outputSerde = defaultSerde();
+    } else if (opts?.contentType) {
+      // contentType but no serializer, use passtrough
+      outputSerde = new SerializerWrapper(
+        opts.contentType,
+        (input) => input as Uint8Array
+      );
+    } else if (opts?.output) {
+      outputSerde = opts.output;
+    } else {
+      outputSerde = defaultSerde();
+    }
 
     // we must create here a copy of the handler
     // to be able to reuse the original handler in other places.
@@ -119,14 +426,7 @@ export class HandlerWrapper {
       return handler.apply(this, args);
     };
 
-    return new HandlerWrapper(
-      kind,
-      handlerCopy,
-      input,
-      output,
-      deserializer,
-      serializer
-    );
+    return new HandlerWrapper(kind, handlerCopy, inputSerde, outputSerde);
   }
 
   public static fromHandler(handler: any): HandlerWrapper | undefined {
@@ -134,23 +434,27 @@ export class HandlerWrapper {
     return handler[HANDLER_SYMBOL] as HandlerWrapper | undefined;
   }
 
+  public readonly accept: string;
+  public readonly contentType: string;
+
   private constructor(
     public readonly kind: HandlerKind,
     private handler: Function,
-    public readonly accept: string,
-    public readonly contentType: string,
-    public readonly deserializer: (input: Uint8Array) => unknown,
-    public readonly serializer: (input: unknown) => Uint8Array
-  ) {}
+    public readonly inputSerde: Serde<unknown>,
+    public readonly outputSerde: Serde<unknown>
+  ) {
+    this.accept = inputSerde.contentType;
+    this.contentType = outputSerde.contentType;
+  }
 
   bindInstance(t: unknown) {
     this.handler = this.handler.bind(t) as Function;
   }
 
   async invoke(context: unknown, input: Uint8Array) {
-    const req = this.deserializer(input);
+    const req = this.inputSerde.deserialize(input);
     const res: unknown = await this.handler(context, req);
-    return this.serializer(res);
+    return this.outputSerde.serialize(res);
   }
 
   /**
