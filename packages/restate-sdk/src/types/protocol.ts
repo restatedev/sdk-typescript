@@ -230,7 +230,7 @@ export const SUSPENSION_TRIGGERS: bigint[] = [
 const MIN_SERVICE_PROTOCOL_VERSION: ServiceProtocolVersion =
   ServiceProtocolVersion.V1;
 const MAX_SERVICE_PROTOCOL_VERSION: ServiceProtocolVersion =
-  ServiceProtocolVersion.V1;
+  ServiceProtocolVersion.V2;
 
 const MIN_SERVICE_DISCOVERY_PROTOCOL_VERSION: ServiceDiscoveryProtocolVersion =
   ServiceDiscoveryProtocolVersion.V1;
@@ -272,6 +272,9 @@ export function parseServiceProtocolVersion(
   if (versionString === "application/vnd.restate.invocation.v1") {
     return ServiceProtocolVersion.V1;
   }
+  if (versionString === "application/vnd.restate.invocation.v2") {
+    return ServiceProtocolVersion.V2;
+  }
 
   return ServiceProtocolVersion.SERVICE_PROTOCOL_VERSION_UNSPECIFIED;
 }
@@ -282,6 +285,8 @@ export function serviceProtocolVersionToHeaderValue(
   switch (serviceProtocolVersion) {
     case ServiceProtocolVersion.V1:
       return "application/vnd.restate.invocation.v1";
+    case ServiceProtocolVersion.V2:
+      return "application/vnd.restate.invocation.v2";
     default:
       throw new Error(
         `Unsupported service discovery protocol version: ${serviceProtocolVersion}`

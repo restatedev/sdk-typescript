@@ -130,15 +130,12 @@ export class EndpointBuilder {
 
   computeDiscovery(protocolMode: discovery.ProtocolMode): discovery.Endpoint {
     const services = [...this.services.values()].map((c) => c.discovery());
-
-    const endpoint: discovery.Endpoint = {
+    return {
       protocolMode,
       minProtocolVersion: 1,
       maxProtocolVersion: 2,
       services,
     };
-
-    return endpoint;
   }
 
   private bindServiceComponent(name: string, router: any) {
