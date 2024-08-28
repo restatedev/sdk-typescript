@@ -28,6 +28,9 @@ class JsonSerde<T> implements Serde<T | undefined> {
     if (value == undefined) {
       return new Uint8Array(0);
     }
+    if (value instanceof Uint8Array) {
+      return value
+    }
     return new TextEncoder().encode(JSON.stringify(value));
   }
 
