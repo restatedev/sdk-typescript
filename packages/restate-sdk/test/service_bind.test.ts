@@ -64,13 +64,28 @@ describe("BindService", () => {
   });
 });
 
-const acceptBytes = restate.service({
+const inputBytes = restate.service({
   name: "acceptBytes",
   handlers: {
     greeter: restate.handlers.handler(
       {
-        accept: "application/octet-stream",
-        contentType: "application/json",
+        input: restate.serde.binary,
+      },
+      // eslint-disable-next-line @typescript-eslint/require-await
+      async (_ctx: restate.Context, audio: Uint8Array) => {
+        return { length: audio.length };
+      }
+    ),
+  },
+});
+
+const inputBytesWithCustomAccept = restate.service({
+  name: "acceptBytes",
+  handlers: {
+    greeter: restate.handlers.handler(
+      {
+        accept: "application/*",
+        input: restate.serde.binary,
       },
       // eslint-disable-next-line @typescript-eslint/require-await
       async (_ctx: restate.Context, audio: Uint8Array) => {
@@ -82,7 +97,7 @@ const acceptBytes = restate.service({
 
 describe("AcceptBytes", () => {
   it("should accept bytes", async () => {
-    const result = await testService(acceptBytes).run({
+    const result = await testService(inputBytes).run({
       input: [startMessage(), inputMessage(new Uint8Array([0, 1, 2, 3, 4]))],
     });
 
@@ -90,5 +105,19 @@ describe("AcceptBytes", () => {
       outputMessage(new TextEncoder().encode(JSON.stringify({ length: 5 }))),
       END_MESSAGE,
     ]);
+  });
+
+  it("should declare accept content type correctly", () => {
+    const svc = testService(inputBytes).serviceDiscovery();
+
+    expect(svc.handlers[0]?.input?.contentType).toEqual(
+      restate.serde.binary.contentType
+    );
+  });
+
+  it("should declare accept content type correctly when custom accept is provided", () => {
+    const svc = testService(inputBytesWithCustomAccept).serviceDiscovery();
+
+    expect(svc.handlers[0]?.input?.contentType).toEqual("application/*");
   });
 });

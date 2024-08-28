@@ -28,6 +28,7 @@ import type {
 import { object } from "../src/public_api.js";
 import { NodeEndpoint } from "../src/endpoint/node_endpoint.js";
 import type { EndpointBuilder } from "../src/endpoint/endpoint_builder.js";
+import type * as d from "../src/types/discovery.js";
 
 export type TestRequest = {
   name: string;
@@ -241,6 +242,19 @@ export class UUT<N extends string, T> {
     await completed;
 
     return Promise.resolve(testConnection.sentMessages());
+  }
+
+  public serviceDiscovery(): d.Service {
+    const restateServer = new TestRestateServer();
+    restateServer.bind(this.definition);
+
+    const discovery = restateServer
+      .componentByName(this.defaultService)
+      ?.discovery();
+    if (discovery) {
+      return discovery;
+    }
+    throw new Error("Discovery should not be null for " + this.defaultService);
   }
 }
 

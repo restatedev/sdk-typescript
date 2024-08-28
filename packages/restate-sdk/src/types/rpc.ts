@@ -236,8 +236,15 @@ export enum HandlerKind {
 }
 
 export type ServiceHandlerOpts = {
-  /** @deprecated Use input instead */
+  /**
+   * Define the acceptable content-type. Wildcards can be used, e.g. `application/*` or `* / *`.
+   * If not provided, the `input.contentType` will be used instead.
+   *
+   * Setting this value has no effect on the input serde.
+   * If you want to customize how to deserialize the input, you still need to provide an `input` serde.
+   */
   accept?: string;
+
   /** @deprecated Use input instead */
   inputDeserializer?: <T>(input: Uint8Array) => T | undefined;
 
@@ -269,8 +276,15 @@ export type ServiceHandlerOpts = {
 };
 
 export type ObjectHandlerOpts = {
-  /** @deprecated Use input instead */
+  /**
+   * Define the acceptable content-type. Wildcards can be used, e.g. `application/*` or `* / *`.
+   * If not provided, the `input.contentType` will be used instead.
+   *
+   * Setting this value has no effect on the input serde.
+   * If you want to customize how to deserialize the input, you still need to provide an `input` serde.
+   */
   accept?: string;
+
   /** @deprecated Use input instead */
   inputDeserializer?: <T>(input: Uint8Array) => T | undefined;
 
@@ -302,8 +316,15 @@ export type ObjectHandlerOpts = {
 };
 
 export type WorkflowHandlerOpts = {
-  /** @deprecated Use input instead */
+  /**
+   * Define the acceptable content-type. Wildcards can be used, e.g. `application/*` or `* / *`.
+   * If not provided, the `input.contentType` will be used instead.
+   *
+   * Setting this value has no effect on the input serde.
+   * If you want to customize how to deserialize the input, you still need to provide an `input` serde.
+   */
   accept?: string;
+
   /** @deprecated Use input instead */
   inputDeserializer?: <T>(input: Uint8Array) => T | undefined;
 
@@ -426,7 +447,13 @@ export class HandlerWrapper {
       return handler.apply(this, args);
     };
 
-    return new HandlerWrapper(kind, handlerCopy, inputSerde, outputSerde);
+    return new HandlerWrapper(
+      kind,
+      handlerCopy,
+      inputSerde,
+      outputSerde,
+      opts?.accept
+    );
   }
 
   public static fromHandler(handler: any): HandlerWrapper | undefined {
@@ -441,9 +468,10 @@ export class HandlerWrapper {
     public readonly kind: HandlerKind,
     private handler: Function,
     public readonly inputSerde: Serde<unknown>,
-    public readonly outputSerde: Serde<unknown>
+    public readonly outputSerde: Serde<unknown>,
+    accept?: string
   ) {
-    this.accept = inputSerde.contentType;
+    this.accept = accept ? accept : inputSerde.contentType;
     this.contentType = outputSerde.contentType;
   }
 
