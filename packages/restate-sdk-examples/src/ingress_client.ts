@@ -154,8 +154,8 @@ const binaryRawCall = async (name: string) => {
   const outBuffer = await counter.binary(
     buffer,
     restate.rpc.opts({
-      inputSerde: restate.serde.binary,
-      outputSerde: restate.serde.binary,
+      input: restate.serde.binary,
+      output: restate.serde.binary,
       headers: { "content-type": "application/octet-stream" },
     })
   );
