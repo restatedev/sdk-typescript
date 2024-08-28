@@ -134,8 +134,8 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     this.rand = new RandImpl(id, this.checkState.bind(this));
   }
 
-  public promise<T = void>(name: string): DurablePromise<T> {
-    return new DurablePromiseImpl(this, name);
+  public promise<T>(name: string, serde?: Serde<T>): DurablePromise<T> {
+    return new DurablePromiseImpl(this, name, serde);
   }
 
   public get key(): string {
@@ -699,9 +699,9 @@ class DurablePromiseImpl<T> implements DurablePromise<T> {
   constructor(
     private readonly ctx: ContextImpl,
     private readonly name: string,
-    _serde?: Serde<T>
+    serde?: Serde<T>
   ) {
-    this.serde = _serde ?? defaultSerde();
+    this.serde = serde ?? defaultSerde();
   }
 
   then<TResult1 = T, TResult2 = never>(

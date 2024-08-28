@@ -742,7 +742,7 @@ export interface WorkflowSharedContext<TState extends TypedState = UntypedState>
    *
    * @param name the name of the durable promise
    */
-  promise<T = void>(name: string): DurablePromise<T>;
+  promise<T>(name: string, serde?: Serde<T>): DurablePromise<T>;
 }
 
 export interface WorkflowContext<TState extends TypedState = UntypedState>
