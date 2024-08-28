@@ -144,7 +144,7 @@ const doComponentInvocation = async <I, O>(
   //
   // request body
   //
-  let inputSerde = params.opts?.opts.inputSerde;
+  let inputSerde = params.opts?.opts.input;
   if (!inputSerde) {
     inputSerde = raw ? serde.binary : serde.json;
   }
@@ -191,7 +191,7 @@ const doComponentInvocation = async <I, O>(
   const responseBuf = await httpResponse.arrayBuffer();
   if (!params.send) {
     const outputSerde =
-      params.opts?.opts.outputSerde ?? (raw ? serde.binary : serde.json);
+      params.opts?.opts.output ?? (raw ? serde.binary : serde.json);
     return outputSerde.deserialize(new Uint8Array(responseBuf)) as O;
   }
   const json = serde.json.deserialize(new Uint8Array(responseBuf)) as O;
@@ -205,7 +205,7 @@ const doWorkflowHandleCall = async <O>(
   op: "output" | "attach",
   callOpts?: Opts<unknown, O> | SendOpts<unknown>
 ): Promise<O> => {
-  const outputSerde = callOpts?.opts.outputSerde ?? serde.json;
+  const outputSerde = callOpts?.opts.output ?? serde.json;
   //
   // headers
   //

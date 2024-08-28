@@ -98,9 +98,9 @@ export interface IngresCallOptions<I = unknown, O = unknown> {
    */
   raw?: boolean;
 
-  inputSerde?: Serde<I>;
+  input?: Serde<I>;
 
-  outputSerde?: Serde<O>;
+  output?: Serde<O>;
 }
 
 export interface IngresSendOptions<I> extends IngresCallOptions<I, void> {
