@@ -20,10 +20,14 @@ import type { Logger } from "./logger.js";
 /**
  * Utility interface for a bundle of one or more services belonging together
  * and being registered together.
+ *
+ * @deprecated Service bundle is unused and will be removed.
  */
 export interface ServiceBundle {
   /**
    * Called to register the services at the endpoint.
+   *
+   * @deprecated Service bundle is unused and will be removed.
    */
   registerServices(endpoint: RestateEndpoint): void;
 }
@@ -44,6 +48,8 @@ export interface RestateEndpointBase<E> {
   /**
    * Adds one or more services to this endpoint. This will call the
    * {@link ServiceBundle.registerServices} function to register all services at this endpoint.
+   *
+   * @deprecated service bundle is deprecated
    */
   bindBundle(services: ServiceBundle): E;
 
