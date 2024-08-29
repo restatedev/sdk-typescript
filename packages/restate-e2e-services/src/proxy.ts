@@ -33,12 +33,14 @@ async function rawCall(
   key?: string
 ) {
   const input = new Uint8Array(message);
-  const response: Uint8Array = await (ctx as any).invoke(
-    serviceName,
-    handlerName,
-    input,
-    key
-  );
+  const response: Uint8Array = await ctx.genericCall({
+    service: serviceName,
+    method: handlerName,
+    key: key,
+    inputSerde: restate.serde.binary,
+    outputSerde: restate.serde.binary,
+    parameter: input,
+  });
 
   return Array.from(response);
 }
@@ -51,14 +53,13 @@ async function rawSend(
   key?: string
 ) {
   const input = new Uint8Array(message);
-  await (ctx as any).invokeOneWay(
-    serviceName,
-    handlerName,
-    input,
-    undefined,
-    undefined,
-    key
-  );
+  ctx.genericSend({
+    service: serviceName,
+    method: handlerName,
+    key: key,
+    inputSerde: restate.serde.binary,
+    parameter: input,
+  });
 }
 
 const o = restate.service({
