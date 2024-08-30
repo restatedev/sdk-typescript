@@ -48,7 +48,7 @@
     "vitest": "^1.6.0"
   },
   "engines": {
-    "node": ">= 18"
+    "node": ">= 18.13"
   },
   "publishConfig": {
     "@restatedev:registry": "https://registry.npmjs.org",

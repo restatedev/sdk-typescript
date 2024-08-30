@@ -89,7 +89,7 @@
     "@types/aws-lambda": "^8.10.115"
   },
   "engines": {
-    "node": ">= 18"
+    "node": ">= 18.13"
   },
   "directories": {
     "example": "examples",
