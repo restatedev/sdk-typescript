@@ -35,6 +35,7 @@ import {
   type Serde,
   serde,
 } from "@restatedev/restate-sdk-core";
+import { TerminalError } from "./errors.js";
 
 // ----------- rpc clients -------------------------------------------------------
 
@@ -480,7 +481,14 @@ export class HandlerWrapper {
   }
 
   async invoke(context: unknown, input: Uint8Array) {
-    const req = this.inputSerde.deserialize(input);
+    let req: unknown;
+    try {
+      req = this.inputSerde.deserialize(input);
+    } catch (e) {
+      throw new TerminalError(`Failed to deserialize input.`, {
+        cause: e,
+      });
+    }
     const res: unknown = await this.handler(context, req);
     return this.outputSerde.serialize(res);
   }
