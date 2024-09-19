@@ -25,40 +25,27 @@ type ManyCallRequest = {
   awaitAtTheEnd: boolean;
 };
 
-async function rawCall(
+function rawCall(
   ctx: restate.Context,
-  serviceName: string,
-  handlerName: string,
-  message: Array<number>,
-  key?: string
-) {
-  const input = new Uint8Array(message);
-  const response: Uint8Array = await ctx.genericCall({
-    service: serviceName,
-    method: handlerName,
-    key: key,
+  request: ProxyRequest
+): Promise<Uint8Array> {
+  return ctx.genericCall({
+    service: request.serviceName,
+    method: request.handlerName,
+    key: request.virtualObjectKey,
     inputSerde: restate.serde.binary,
     outputSerde: restate.serde.binary,
-    parameter: input,
+    parameter: new Uint8Array(request.message),
   });
-
-  return Array.from(response);
 }
 
-async function rawSend(
-  ctx: restate.Context,
-  serviceName: string,
-  handlerName: string,
-  message: Array<number>,
-  key?: string
-) {
-  const input = new Uint8Array(message);
+function rawSend(ctx: restate.Context, request: ProxyRequest) {
   ctx.genericSend({
-    service: serviceName,
-    method: handlerName,
-    key: key,
+    service: request.serviceName,
+    method: request.handlerName,
+    key: request.virtualObjectKey,
     inputSerde: restate.serde.binary,
-    parameter: input,
+    parameter: new Uint8Array(request.message),
   });
 }
 
@@ -66,23 +53,11 @@ const o = restate.service({
   name: "Proxy",
   handlers: {
     async call(ctx: restate.Context, request: ProxyRequest) {
-      return await rawCall(
-        ctx,
-        request.serviceName,
-        request.handlerName,
-        request.message,
-        request.virtualObjectKey
-      );
+      return Array.from(await rawCall(ctx, request));
     },
 
     async oneWayCall(ctx: restate.Context, request: ProxyRequest) {
-      return await rawSend(
-        ctx,
-        request.serviceName,
-        request.handlerName,
-        request.message,
-        request.virtualObjectKey
-      );
+      rawSend(ctx, request);
     },
 
     async manyCalls(ctx: restate.Context, request: ManyCallRequest[]) {
@@ -90,10 +65,10 @@ const o = restate.service({
 
       for (const r of request) {
         if (r.oneWayCall) {
-          await this.oneWayCall(ctx, r.proxyRequest);
+          rawSend(ctx, r.proxyRequest);
           continue;
         }
-        const promise = this.call(ctx, r.proxyRequest);
+        const promise = rawCall(ctx, r.proxyRequest);
         if (r.awaitAtTheEnd) {
           toAwait.push(promise);
         }

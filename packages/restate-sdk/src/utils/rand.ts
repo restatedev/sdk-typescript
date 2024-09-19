@@ -21,10 +21,10 @@ export class RandImpl implements Rand {
   private randstate256: [bigint, bigint, bigint, bigint];
 
   constructor(
-    id: Uint8Array | [bigint, bigint, bigint, bigint],
+    id: string | [bigint, bigint, bigint, bigint],
     private readonly checkState: (state: string) => void = () => undefined
   ) {
-    if (id instanceof Uint8Array) {
+    if (typeof id == "string") {
       // hash the invocation ID, which is known to contain 74 bits of entropy
       const hash = createHash("sha256").update(id).digest();
 

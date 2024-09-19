@@ -9,25 +9,13 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { formatMessageAsJson } from "../src/utils/utils.js";
 import { RandImpl } from "../src/utils/rand.js";
 import { describe, expect, it } from "vitest";
-
-describe("JSON printing", () => {
-  it("should be able to handle bigInt", () => {
-    const myType = {
-      a: "Hello!",
-      b: 42n,
-    };
-
-    formatMessageAsJson(myType);
-  });
-});
 
 describe("rand", () => {
   it("correctly hashes invocation ids", () => {
     const rand = new RandImpl(
-      Buffer.from("f311f1fdcb9863f0018bd3400ecd7d69b547204e776218b2", "hex")
+      "f311f1fdcb9863f0018bd3400ecd7d69b547204e776218b2"
     );
 
     const actual: bigint[] = Array.from(Array(10)).map(() => rand.u64());
@@ -35,16 +23,16 @@ describe("rand", () => {
     // These values were produced with the reference implementation:
     // http://xoshiro.di.unimi.it/xoshiro256plusplus.c
     const expected = [
-      6541268553928124324n,
-      1632128201851599825n,
-      3999496359968271420n,
-      9099219592091638755n,
-      2609122094717920550n,
-      16569362788292807660n,
-      14955958648458255954n,
-      15581072429430901841n,
-      4951852598761288088n,
-      2380816196140950843n,
+      6221017497105640564n,
+      6390535423083911304n,
+      6450107027926477268n,
+      6892944322147831477n,
+      11902315545316364308n,
+      11803614765068293030n,
+      3688900223715244673n,
+      16180860676245615018n,
+      14289837324736329951n,
+      5956009879523072622n,
     ];
 
     expect(actual).toStrictEqual(expected);

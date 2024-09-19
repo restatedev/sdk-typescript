@@ -25,50 +25,14 @@ import type {
   SendOptions,
   WorkflowContext,
 } from "./context.js";
-import type { StateMachine } from "./state_machine.js";
-import type { GetStateKeysEntryMessage_StateKeys } from "./generated/proto/protocol_pb.js";
+import type * as vm from "./endpoint/handlers/vm/sdk_shared_core_wasm_bindings.js";
 import {
-  AwakeableEntryMessage,
-  OneWayCallEntryMessage,
-  CompleteAwakeableEntryMessage,
-  Empty,
-  GetStateEntryMessage,
-  GetStateKeysEntryMessage,
-  CallEntryMessage,
-  RunEntryMessage,
-  SleepEntryMessage,
-  GetPromiseEntryMessage,
-  PeekPromiseEntryMessage,
-  CompletePromiseEntryMessage,
-} from "./generated/proto/protocol_pb.js";
-import {
-  AWAKEABLE_ENTRY_MESSAGE_TYPE,
-  AWAKEABLE_IDENTIFIER_PREFIX,
-  BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE,
-  CLEAR_ALL_STATE_ENTRY_MESSAGE_TYPE,
-  CLEAR_STATE_ENTRY_MESSAGE_TYPE,
-  COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
-  GET_STATE_ENTRY_MESSAGE_TYPE,
-  GET_STATE_KEYS_ENTRY_MESSAGE_TYPE,
-  INVOKE_ENTRY_MESSAGE_TYPE,
-  SET_STATE_ENTRY_MESSAGE_TYPE,
-  SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-  SLEEP_ENTRY_MESSAGE_TYPE,
-  GET_PROMISE_MESSAGE_TYPE,
-  PEEK_PROMISE_MESSAGE_TYPE,
-  COMPLETE_PROMISE_MESSAGE_TYPE,
-} from "./types/protocol.js";
-import {
-  RetryableError,
   TerminalError,
   ensureError,
-  TimeoutError,
-  INTERNAL_ERROR_CODE,
   UNKNOWN_ERROR_CODE,
-  errorToFailure,
+  INTERNAL_ERROR_CODE,
+  TimeoutError,
 } from "./types/errors.js";
-import type { PartialMessage } from "@bufbuild/protobuf";
-import { protoInt64 } from "@bufbuild/protobuf";
 import {
   HandlerKind,
   makeRpcCallProxy,
@@ -87,18 +51,17 @@ import type {
 } from "@restatedev/restate-sdk-core";
 import { serde } from "@restatedev/restate-sdk-core";
 import { RandImpl } from "./utils/rand.js";
-import { newJournalEntryPromiseId } from "./promise_combinator_tracker.js";
-import type { WrappedPromise } from "./utils/promises.js";
-import { Buffer } from "node:buffer";
+import type { Headers } from "./endpoint/handlers/generic.js";
+import type {
+  ReadableStreamDefaultReader,
+  WritableStreamDefaultWriter,
+} from "node:stream/web";
 
 export type InternalCombineablePromise<T> = CombineablePromise<T> & {
-  journalIndex: number;
+  asyncResultHandle: number;
 };
 
 export class ContextImpl implements ObjectContext, WorkflowContext {
-  // This is used to guard users against calling ctx.sideEffect without awaiting it.
-  // See https://github.com/restatedev/sdk-typescript/issues/197 for more details.
-  private executingRun = false;
   private readonly invocationRequest: Request;
   public readonly rand: Rand;
 
@@ -113,29 +76,43 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
   };
 
   constructor(
-    id: Uint8Array,
+    readonly coreVm: vm.WasmVM,
+    readonly input: vm.WasmInput,
     public readonly console: Console,
     public readonly handlerKind: HandlerKind,
-    public readonly keyedContextKey: string | undefined,
-    invocationValue: Uint8Array,
-    invocationHeaders: ReadonlyMap<string, string>,
-    attemptHeaders: ReadonlyMap<string, string | string[] | undefined>,
+    attemptHeaders: Headers,
     extraArgs: unknown[],
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    readonly stateMachine: StateMachine
+    private readonly inputReader: ReadableStreamDefaultReader<Uint8Array>,
+    private readonly outputWriter: WritableStreamDefaultWriter<Uint8Array>
   ) {
     this.invocationRequest = {
-      id,
-      headers: invocationHeaders,
-      attemptHeaders,
-      body: invocationValue,
+      id: input.invocation_id,
+      headers: input.headers.reduce((headers, { key, value }) => {
+        headers.set(key, value);
+        return headers;
+      }, new Map()),
+      attemptHeaders: Object.entries(attemptHeaders).reduce(
+        (headers, [key, value]) => {
+          if (value != undefined) {
+            headers.set(key, value instanceof Array ? value[0] : value);
+          }
+          return headers;
+        },
+        new Map()
+      ),
+      body: input.input,
       extraArgs,
     };
-    this.rand = new RandImpl(id, this.checkState.bind(this));
-  }
 
-  public promise<T>(name: string, serde?: Serde<T>): DurablePromise<T> {
-    return new DurablePromiseImpl(this, name, serde);
+    this.rand = new RandImpl(input.invocation_id, () => {
+      if (coreVm.is_inside_run()) {
+        const err = new Error(
+          "Cannot generate random numbers within a run closure. Use the random object outside the run closure."
+        );
+        coreVm.notify_error(err.message, err.stack);
+        throw err;
+      }
+    });
   }
 
   public get key(): string {
@@ -143,10 +120,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       case HandlerKind.EXCLUSIVE:
       case HandlerKind.SHARED:
       case HandlerKind.WORKFLOW: {
-        if (this.keyedContextKey === undefined) {
-          throw new TerminalError("unexpected missing key");
-        }
-        return this.keyedContextKey;
+        return this.input.key;
       }
       case HandlerKind.SERVICE:
         throw new TerminalError("unexpected missing key");
@@ -161,143 +135,126 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
 
   // DON'T make this function async!!! see sideEffect comment for details.
   public get<T>(name: string, serde?: Serde<T>): Promise<T | null> {
-    // Check if this is a valid action
-    this.checkState("get state");
-
-    // Create the message and let the state machine process it
-    const msg = new GetStateEntryMessage({
-      key: new TextEncoder().encode(name),
-    });
-    const completed = this.stateMachine.localStateStore.tryCompleteGet(
-      name,
-      msg
-    );
-
-    const getState = async (): Promise<T | null> => {
-      const result = await this.stateMachine.handleUserCodeMessage(
-        GET_STATE_ENTRY_MESSAGE_TYPE,
-        msg,
-        completed
-      );
-
-      // If the GetState message did not have a value or empty,
-      // then we went to the runtime to get the value.
-      // When we get the response, we set it in the localStateStore,
-      // to answer subsequent requests
-      if (!completed) {
-        this.stateMachine.localStateStore.add(
-          name,
-          result as Uint8Array | Empty
+    const handle = this.coreVm.sys_get_state(name);
+    return new LazyContextPromise(handle, this, () =>
+      this.pollAsyncResult(handle, (asyncResultValue) => {
+        if (asyncResultValue == "Empty") {
+          // Empty
+          return null;
+        } else if ("Success" in asyncResultValue) {
+          return (serde ?? defaultSerde()).deserialize(
+            asyncResultValue.Success
+          );
+        } else if ("Failure" in asyncResultValue) {
+          throw new TerminalError(asyncResultValue.Failure.message, {
+            errorCode: asyncResultValue.Failure.code,
+          });
+        }
+        throw new Error(
+          `Unexpected variant in async result: ${JSON.stringify(
+            asyncResultValue
+          )}`
         );
-      }
-
-      if (!(result instanceof Uint8Array)) {
-        return null;
-      }
-
-      return (serde ?? defaultSerde()).deserialize(result);
-    };
-    return getState();
+      })
+    );
   }
 
-  // DON'T make this function async!!! see sideEffect comment for details.
   public stateKeys(): Promise<Array<string>> {
-    // Check if this is a valid action
-    this.checkState("state keys");
-
-    // Create the message and let the state machine process it
-    const msg = new GetStateKeysEntryMessage({});
-    const completed =
-      this.stateMachine.localStateStore.tryCompletedGetStateKeys(msg);
-
-    const getStateKeys = async (): Promise<Array<string>> => {
-      const result = await this.stateMachine.handleUserCodeMessage(
-        GET_STATE_KEYS_ENTRY_MESSAGE_TYPE,
-        msg,
-        completed
-      );
-
-      return (result as GetStateKeysEntryMessage_StateKeys).keys.map((b) =>
-        new TextDecoder().decode(b)
-      );
-    };
-    return getStateKeys();
+    const handle = this.coreVm.sys_get_state_keys();
+    return new LazyContextPromise(handle, this, () =>
+      this.pollAsyncResult(handle, (asyncResultValue) => {
+        if (
+          typeof asyncResultValue === "object" &&
+          "StateKeys" in asyncResultValue
+        ) {
+          return asyncResultValue.StateKeys;
+        } else if (
+          typeof asyncResultValue === "object" &&
+          "Failure" in asyncResultValue
+        ) {
+          throw new TerminalError(asyncResultValue.Failure.message, {
+            errorCode: asyncResultValue.Failure.code,
+          });
+        }
+        throw new Error(
+          `Unexpected variant in async result: ${JSON.stringify(
+            asyncResultValue
+          )}`
+        );
+      })
+    );
   }
 
   public set<T>(name: string, value: T, serde?: Serde<T>): void {
-    this.checkState("set state");
-    const bytes = (serde ?? defaultSerde()).serialize(value);
-    const msg = this.stateMachine.localStateStore.set(name, bytes);
-    this.stateMachine
-      .handleUserCodeMessage(SET_STATE_ENTRY_MESSAGE_TYPE, msg)
-      .catch((e) => this.stateMachine.handleDanglingPromiseError(e as Error));
+    this.coreVm.sys_set_state(
+      name,
+      this.runWrappingError(() => (serde ?? defaultSerde()).serialize(value))
+    );
   }
 
   public clear(name: string): void {
-    this.checkState("clear state");
-
-    const msg = this.stateMachine.localStateStore.clear(name);
-    this.stateMachine
-      .handleUserCodeMessage(CLEAR_STATE_ENTRY_MESSAGE_TYPE, msg)
-      .catch((e) => this.stateMachine.handleDanglingPromiseError(e as Error));
+    this.coreVm.sys_clear_state(name);
   }
 
   public clearAll(): void {
-    this.checkState("clear all state");
-
-    const msg = this.stateMachine.localStateStore.clearAll();
-    this.stateMachine
-      .handleUserCodeMessage(CLEAR_ALL_STATE_ENTRY_MESSAGE_TYPE, msg)
-      .catch((e) => this.stateMachine.handleDanglingPromiseError(e as Error));
+    this.coreVm.sys_clear_all_state();
   }
 
   // --- Calls, background calls, etc
   //
   public genericCall<REQ = Uint8Array, RES = Uint8Array>(
     call: GenericCall<REQ, RES>
-  ): Promise<RES> {
+  ): CombineablePromise<RES> {
     const requestSerde: Serde<REQ> =
       call.inputSerde ?? (serde.binary as Serde<REQ>);
-
     const responseSerde: Serde<RES> =
       call.outputSerde ?? (serde.binary as Serde<RES>);
-
-    const parameter = requestSerde.serialize(call.parameter);
-    const msg = new CallEntryMessage({
-      serviceName: call.service,
-      handlerName: call.method,
-      parameter,
-      key: call.key,
-    });
-    const rawRequest = this.stateMachine.handleUserCodeMessage(
-      INVOKE_ENTRY_MESSAGE_TYPE,
-      msg
-    ) as WrappedPromise<Uint8Array>;
-    const decoded = rawRequest.transform((res: Uint8Array) =>
-      responseSerde.deserialize(res)
+    const parameter = this.runWrappingError(() =>
+      requestSerde.serialize(call.parameter)
     );
-    return this.markCombineablePromise(decoded);
+
+    const handle = this.coreVm.sys_call(
+      call.service,
+      call.method,
+      parameter,
+      call.key
+    );
+    return new LazyContextPromise(handle, this, () =>
+      this.pollAsyncResult(handle, (asyncResultValue) => {
+        if (
+          typeof asyncResultValue === "object" &&
+          "Success" in asyncResultValue
+        ) {
+          return responseSerde.deserialize(asyncResultValue.Success);
+        } else if (
+          typeof asyncResultValue === "object" &&
+          "Failure" in asyncResultValue
+        ) {
+          throw new TerminalError(asyncResultValue.Failure.message, {
+            errorCode: asyncResultValue.Failure.code,
+          });
+        }
+        throw new Error(
+          `Unexpected variant in async result: ${JSON.stringify(
+            asyncResultValue
+          )}`
+        );
+      })
+    );
   }
 
   public genericSend<REQ = Uint8Array>(send: GenericSend<REQ>) {
     const requestSerde = send.inputSerde ?? (serde.binary as Serde<REQ>);
-    const parameter = requestSerde.serialize(send.parameter);
-    const actualDelay = send.delay || 0;
-    const jsInvokeTime =
-      actualDelay > 0 ? Date.now() + actualDelay : protoInt64.zero;
-    const invokeTime = protoInt64.parse(jsInvokeTime);
-    const msg = new OneWayCallEntryMessage({
-      serviceName: send.service,
-      handlerName: send.method,
-      parameter,
-      invokeTime,
-      key: send.key,
-    });
-    this.stateMachine
-      .handleUserCodeMessage(BACKGROUND_INVOKE_ENTRY_MESSAGE_TYPE, msg)
-      .catch((e) => {
-        this.stateMachine.handleDanglingPromiseError(e as Error);
-      });
+    const parameter = this.runWrappingError(() =>
+      requestSerde.serialize(send.parameter)
+    );
+
+    let delay;
+    if (send.delay != undefined) {
+      delay = BigInt(send.delay);
+    }
+
+    this.coreVm.sys_send(send.service, send.method, parameter, send.key, delay);
   }
 
   serviceClient<D>({ name }: ServiceDefinitionFrom<D>): Client<Service<D>> {
@@ -365,123 +322,106 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     actionSecondParameter?: RunAction<T>,
     options?: RunOptions<T>
   ): Promise<T> {
-    this.checkState("run");
-
     const { name, action } = unpack(nameOrAction, actionSecondParameter);
-    this.executingRun = true;
-
     const serde = options?.serde ?? defaultSerde();
 
-    const executeRun = async () => {
-      // in replay mode, we directly return the value from the log
-      if (this.stateMachine.nextEntryWillBeReplayed()) {
-        const emptyMsg = new RunEntryMessage({});
-        return this.stateMachine
-          .handleUserCodeMessage(SIDE_EFFECT_ENTRY_MESSAGE_TYPE, emptyMsg)
-          .transform((result) => {
-            if (!result || result instanceof Empty) {
-              return undefined as T;
-            }
-            return serde.deserialize(result);
-          });
-      }
+    const runEnterResult = this.coreVm.sys_run_enter(name || "");
 
-      let sideEffectResult: T;
-      try {
-        sideEffectResult = await action();
-      } catch (e) {
-        if (!(e instanceof TerminalError)) {
-          ///non terminal errors are retirable.
-          // we do not commit the error itself into the journal, but rather let restate know about this
-          // so that restate can retry this invocation later.
-          // Before we can propagate this error to the user, we must let the state machine know that this attempt
-          // is finished with an error, and it should not append anything else to the journal from now on.
-          const error = ensureError(e);
-          const additionalContext = {
-            relatedEntryName: name,
-            relatedEntryType: SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-          };
-          await this.stateMachine.sendErrorAndFinish(error, additionalContext);
-          throw e;
-        }
-        // we commit a terminal error from the side effect to the journal, and re-throw it into
-        // the function. that way, any catching by the user and reacting to it will be
-        // deterministic on replay
-        const error = ensureError(e);
-        const failure = errorToFailure(error);
-        const sideEffectMsg = new RunEntryMessage({
-          name,
-          result: { case: "failure", value: failure },
-        });
-
-        // this may throw an error from the SDK/runtime/connection side, in case the
-        // failure message cannot be committed to the journal. That error would then
-        // be returned from this function (replace the original error)
-        // that is acceptable, because in such a situation (failure to append to journal),
-        // the state machine closes anyways and no further operations will succeed and the
-        // the execution aborts
-        await this.stateMachine.handleUserCodeMessage(
-          SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-          sideEffectMsg,
-          false,
-          true
-        );
-
-        throw e;
-      }
-
-      // we have this code outside the above try/catch block, to ensure that any error arising
-      // from here is not incorrectly attributed to the side-effect
-      const sideEffectMsg =
-        sideEffectResult !== undefined
-          ? new RunEntryMessage({
-              name,
-              result: {
-                case: "value",
-                value: serde.serialize(sideEffectResult),
-              },
-            })
-          : new RunEntryMessage({
-              name,
-            });
-
-      // if an error arises from committing the side effect result, then this error will
-      // be thrown here (reject the returned promise) and the function will see that error,
-      // even if the side-effect function completed correctly
-      // that is acceptable, because in such a situation (failure to append to journal),
-      // the state machine closes anyways and reports an execution failure, meaning no further
-      // operations will succeed and the the execution will be retried.
-      // If the side-effect result did in fact not make it to the journal, then the side-effect
-      // re-executes, and if it made it to the journal after all (error happend inly during
-      // ack-back), then retries will use the journaled result.
-      // So all good in any case, due to the beauty of "the runtime log is the ground thruth" approach.
-      await this.stateMachine.handleUserCodeMessage(
-        SIDE_EFFECT_ENTRY_MESSAGE_TYPE,
-        sideEffectMsg,
-        false,
-        true
+    // Check if the run was already executed
+    if (
+      typeof runEnterResult === "object" &&
+      "ExecutedWithSuccess" in runEnterResult
+    ) {
+      return Promise.resolve(
+        this.runWrappingError(() =>
+          serde.deserialize(runEnterResult.ExecutedWithSuccess)
+        )
       );
+    } else if (
+      typeof runEnterResult === "object" &&
+      "ExecutedWithFailure" in runEnterResult
+    ) {
+      return Promise.reject(
+        new TerminalError(runEnterResult.ExecutedWithFailure.message, {
+          errorCode: runEnterResult.ExecutedWithFailure.code,
+        })
+      );
+    }
 
-      return sideEffectResult;
+    // We wrap the rest of the execution in this closure to create a future
+    const doRun = async () => {
+      let res: T;
+      let err;
+      try {
+        res = await action();
+      } catch (e) {
+        err = ensureError(e);
+      }
+
+      // Record the result/failure, get back the handle for the ack.
+      let handle;
+      if (err != undefined) {
+        if (err instanceof TerminalError) {
+          // Record failure, go ahead
+          handle = this.coreVm.sys_run_exit_failure({
+            code: err.code,
+            message: err.message,
+          });
+        } else {
+          // TODO plug retries here!
+          throw err;
+        }
+      } else {
+        handle = this.coreVm.sys_run_exit_success(
+          this.runWrappingError(() => serde.serialize(res))
+        );
+      }
+
+      // Got the handle, wait for the result now (which we get once we get the ack)
+      return await this.pollAsyncResult(handle, (asyncResultValue) => {
+        if (
+          typeof asyncResultValue === "object" &&
+          "Success" in asyncResultValue
+        ) {
+          return serde.deserialize(asyncResultValue.Success);
+        } else if (
+          typeof asyncResultValue === "object" &&
+          "Failure" in asyncResultValue
+        ) {
+          throw new TerminalError(asyncResultValue.Failure.message, {
+            errorCode: asyncResultValue.Failure.code,
+          });
+        }
+        throw new Error(
+          `Unexpected variant in async result: ${JSON.stringify(
+            asyncResultValue
+          )}`
+        );
+      });
     };
 
-    return executeRun().finally(() => {
-      this.executingRun = false;
-    });
+    return doRun();
   }
 
   public sleep(millis: number): CombineablePromise<void> {
-    this.checkState("sleep");
-    return this.markCombineablePromise(this.sleepInternal(millis));
-  }
-
-  private sleepInternal(millis: number): WrappedPromise<void> {
-    return this.stateMachine.handleUserCodeMessage(
-      SLEEP_ENTRY_MESSAGE_TYPE,
-      new SleepEntryMessage({
-        wakeUpTime: protoInt64.parse(Date.now() + millis),
+    const handle = this.coreVm.sys_sleep(BigInt(millis));
+    return new LazyContextPromise(handle, this, () =>
+      this.pollAsyncResult(handle, (asyncResultValue) => {
+        if (asyncResultValue == "Empty") {
+          // Empty
+          return undefined as void;
+        } else if ("Failure" in asyncResultValue) {
+          throw new TerminalError(asyncResultValue.Failure.message, {
+            errorCode: asyncResultValue.Failure.code,
+          });
+        }
+        throw new Error(
+          `Unexpected variant in async result: ${JSON.stringify(
+            asyncResultValue
+          )}`
+        );
       })
-    ) as WrappedPromise<void>;
+    );
   }
 
   // -- Awakeables
@@ -490,42 +430,37 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     id: string;
     promise: CombineablePromise<T>;
   } {
-    this.checkState("awakeable");
-
-    const msg = new AwakeableEntryMessage();
-    const promise = this.stateMachine
-      .handleUserCodeMessage(AWAKEABLE_ENTRY_MESSAGE_TYPE, msg)
-      .transform((result: Uint8Array | Empty | void) => {
-        if (!(result instanceof Uint8Array)) {
-          // This should either be a filled buffer or an empty buffer but never anything else.
-          throw RetryableError.internal(
-            "Awakeable was not resolved with a buffer payload"
-          );
-        }
-        if (!serde) {
-          return defaultSerde<T>().deserialize(result);
-        }
-        if (result.length == 0) {
-          return undefined as T;
-        }
-        return serde.deserialize(result);
-      });
-
-    // This needs to be done after handling the message in the state machine
-    // otherwise the index is not yet incremented.
-
-    const encodedEntryIndex = Buffer.alloc(4 /* Size of u32 */);
-    encodedEntryIndex.writeUInt32BE(
-      this.stateMachine.getUserCodeJournalIndex()
-    );
-
+    const awakeable = this.coreVm.sys_awakeable();
     return {
-      id:
-        AWAKEABLE_IDENTIFIER_PREFIX +
-        Buffer.concat([this.request().id, encodedEntryIndex]).toString(
-          "base64url"
-        ),
-      promise: this.markCombineablePromise(promise),
+      id: awakeable.id,
+      promise: new LazyContextPromise(awakeable.handle, this, () =>
+        this.pollAsyncResult(awakeable.handle, (asyncResultValue) => {
+          if (
+            typeof asyncResultValue === "object" &&
+            "Success" in asyncResultValue
+          ) {
+            if (!serde) {
+              return defaultSerde<T>().deserialize(asyncResultValue.Success);
+            }
+            if (asyncResultValue.Success.length == 0) {
+              return undefined as T;
+            }
+            return serde.deserialize(asyncResultValue.Success);
+          } else if (
+            typeof asyncResultValue === "object" &&
+            "Failure" in asyncResultValue
+          ) {
+            throw new TerminalError(asyncResultValue.Failure.message, {
+              errorCode: asyncResultValue.Failure.code,
+            });
+          }
+          throw new Error(
+            `Unexpected variant in async result: ${JSON.stringify(
+              asyncResultValue
+            )}`
+          );
+        })
+      ),
     };
   }
 
@@ -543,127 +478,273 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
           : defaultSerde().serialize(null);
     }
 
-    this.checkState("resolveAwakeable");
-    this.completeAwakeable(id, {
-      result: {
-        case: "value",
-        value,
-      },
-    });
+    this.coreVm.sys_complete_awakeable_success(id, value);
   }
 
   public rejectAwakeable(id: string, reason: string): void {
-    this.checkState("rejectAwakeable");
-    this.completeAwakeable(id, {
-      result: {
-        case: "failure",
-        value: { code: UNKNOWN_ERROR_CODE, message: reason },
-      },
+    this.coreVm.sys_complete_awakeable_failure(id, {
+      code: UNKNOWN_ERROR_CODE,
+      message: reason,
     });
   }
 
-  private completeAwakeable(
-    id: string,
-    base: PartialMessage<CompleteAwakeableEntryMessage>
-  ): void {
-    base.id = id;
-    this.stateMachine
-      .handleUserCodeMessage(
-        COMPLETE_AWAKEABLE_ENTRY_MESSAGE_TYPE,
-        new CompleteAwakeableEntryMessage(base)
-      )
-      .catch((e) => this.stateMachine.handleDanglingPromiseError(e as Error));
+  public promise<T>(name: string, serde?: Serde<T>): DurablePromise<T> {
+    return new DurablePromiseImpl(this, name, serde);
   }
 
   // Used by static methods of CombineablePromise
   public static createCombinator<
     T extends readonly CombineablePromise<unknown>[]
-  >(
-    combinatorConstructor: (
-      promises: PromiseLike<unknown>[]
-    ) => Promise<unknown>,
-    promises: T
-  ): WrappedPromise<unknown> {
+  >(combinatorType: PromiseCombinatorType, promises: T): Promise<unknown> {
+    // Extract context from first promise
     const self = extractContext(promises[0]);
     if (!self) {
-      throw RetryableError.internal("Not a combinable promise");
+      throw new Error("Not a combinable promise");
     }
-    const outPromises = [];
+
+    // Collect first the promises downcasted to the internal promise type
+    const castedPromises: InternalCombineablePromise<unknown>[] = [];
     for (const promise of promises) {
       if (extractContext(promise) !== self) {
-        throw RetryableError.internal(
+        throw new Error(
           "You're mixing up CombineablePromises from different RestateContext. This is not supported."
         );
       }
-      const index = (promise as InternalCombineablePromise<unknown>)
-        .journalIndex;
-      outPromises.push({
-        id: newJournalEntryPromiseId(index),
-        promise: promise,
-      });
+      castedPromises.push(promise as InternalCombineablePromise<unknown>);
     }
-
-    return self.stateMachine.createCombinator(
-      combinatorConstructor,
-      outPromises
+    const handles = new Uint32Array(
+      castedPromises.map((p) => p.asyncResultHandle)
     );
+
+    // From now on, lazily executes on await
+    return new LazyPromise(async () => {
+      // Take output
+      const nextOutput1 = self.coreVm.take_output() as
+        | Uint8Array
+        | null
+        | undefined;
+      if (nextOutput1 instanceof Uint8Array) {
+        await self.outputWriter.write(nextOutput1);
+      }
+
+      let combinatorResultHandle;
+      for (;;) {
+        switch (combinatorType) {
+          case "All":
+            combinatorResultHandle =
+              self.coreVm.sys_try_complete_all_combinator(handles);
+            break;
+          case "Any":
+            combinatorResultHandle =
+              self.coreVm.sys_try_complete_any_combinator(handles);
+            break;
+          case "AllSettled":
+            combinatorResultHandle =
+              self.coreVm.sys_try_complete_all_settled_combinator(handles);
+            break;
+          case "Race":
+          case "OrTimeout":
+            combinatorResultHandle =
+              self.coreVm.sys_try_complete_race_combinator(handles);
+            break;
+        }
+
+        // We got a result, we're done in this loop
+        if (combinatorResultHandle !== undefined) {
+          break;
+        }
+
+        // No result yet, take input, and notify it to the vm
+        const nextValue = await self.inputReader.read();
+        if (nextValue.value !== undefined) {
+          self.coreVm.notify_input(nextValue.value);
+        }
+        if (nextValue.done) {
+          self.coreVm.notify_input_closed();
+        }
+      }
+
+      // We got a result, we need to take_output to write the combinator entry, then we need to poll the result
+      const nextOutput = self.coreVm.take_output() as
+        | Uint8Array
+        | null
+        | undefined;
+      if (nextOutput instanceof Uint8Array) {
+        await self.outputWriter.write(nextOutput);
+      }
+
+      const handlesResult = await self.pollAsyncResult(
+        combinatorResultHandle,
+        (asyncResultValue) => {
+          if (
+            typeof asyncResultValue === "object" &&
+            "CombinatorResult" in asyncResultValue
+          ) {
+            return asyncResultValue.CombinatorResult;
+          }
+
+          throw new Error(
+            `Unexpected variant in async result: ${JSON.stringify(
+              asyncResultValue
+            )}`
+          );
+        }
+      );
+
+      const promisesMap = new Map(
+        castedPromises.map((p) => [p.asyncResultHandle, p])
+      );
+
+      // Now all we need to do is to construct the final output based on the handles,
+      // this depends on combinators themselves.
+      switch (combinatorType) {
+        case "All":
+          return this.extractAllCombinatorResult(handlesResult, promisesMap);
+        case "Any":
+          return this.extractAnyCombinatorResult(handlesResult, promisesMap);
+        case "AllSettled":
+          return this.extractAllSettledCombinatorResult(
+            handlesResult,
+            promisesMap
+          );
+        case "Race":
+          // Just one promise succeeded
+          return promisesMap.get(handlesResult[0]);
+        case "OrTimeout":
+          // The sleep promise is always the second one in the list.
+          if (handlesResult[0] == castedPromises[1].asyncResultHandle) {
+            return Promise.reject(new TimeoutError());
+          } else {
+            return promisesMap.get(handlesResult[0]);
+          }
+      }
+    });
+  }
+
+  private static async extractAllCombinatorResult(
+    handlesResult: number[],
+    promisesMap: Map<number, Promise<unknown>>
+  ): Promise<unknown[]> {
+    // The result can either all values, or one error
+    const resultValues = [];
+    for (const handle of handlesResult) {
+      try {
+        resultValues.push(await promisesMap.get(handle));
+      } catch (e) {
+        return Promise.reject(e);
+      }
+    }
+    return Promise.resolve(resultValues);
+  }
+
+  private static async extractAnyCombinatorResult(
+    handlesResult: number[],
+    promisesMap: Map<number, Promise<unknown>>
+  ): Promise<unknown> {
+    // The result can either be one value, or a list of errors
+    const resultFailures = [];
+    for (const handle of handlesResult) {
+      try {
+        return Promise.resolve(await promisesMap.get(handle));
+      } catch (e) {
+        resultFailures.push(e);
+      }
+    }
+    // Giving back the cause here is completely fine, because all these errors in Aggregate error are Terminal errors!
+    return Promise.reject(
+      new TerminalError("All input promises failed", {
+        cause: new AggregateError(resultFailures),
+      })
+    );
+  }
+
+  private static async extractAllSettledCombinatorResult(
+    handlesResult: number[],
+    promisesMap: Map<number, Promise<unknown>>
+  ): Promise<unknown[]> {
+    const resultValues = [];
+    for (const handle of handlesResult) {
+      try {
+        resultValues.push(await promisesMap.get(handle));
+      } catch (e) {
+        resultValues.push(e);
+      }
+    }
+    return Promise.resolve(resultValues);
+  }
+
+  private static async extractOrTimeoutCombinatorResult(
+    handlesResult: number[],
+    promisesMap: Map<number, Promise<unknown>>
+  ): Promise<unknown[]> {
+    // The result can either all values, or one error
+    const resultValues = [];
+    for (const handle of handlesResult) {
+      try {
+        resultValues.push(await promisesMap.get(handle));
+      } catch (e) {
+        return Promise.reject(e);
+      }
+    }
+    return Promise.resolve(resultValues);
   }
 
   // -- Various private methods
 
-  private checkNotExecutingRun(callType: string) {
-    if (this.executingRun) {
-      throw new TerminalError(
-        `Invoked a RestateContext method (${callType}) while a run() is still executing.
-          Make sure you await the ctx.run() call before using any other RestateContext method.`,
-        { errorCode: INTERNAL_ERROR_CODE }
-      );
+  runWrappingError<T>(fn: () => T): T {
+    try {
+      return fn();
+    } catch (e) {
+      const error = ensureError(e);
+      if (error instanceof TerminalError) {
+        // Just rethrow it
+        throw error;
+      }
+
+      this.coreVm.notify_error(error.message, error.stack);
+      throw error;
     }
   }
 
-  private checkState(callType: string): void {
-    this.checkNotExecutingRun(callType);
+  async pollAsyncResult<T>(
+    handle: number,
+    transformer: (
+      value:
+        | "Empty"
+        | { Success: Uint8Array }
+        | { Failure: vm.WasmFailure }
+        | { StateKeys: string[] }
+        | { CombinatorResult: number[] }
+    ) => T
+  ): Promise<T> {
+    // Take output
+    const nextOutput = this.coreVm.take_output() as
+      | Uint8Array
+      | null
+      | undefined;
+    if (nextOutput instanceof Uint8Array) {
+      await this.outputWriter.write(nextOutput);
+    }
+
+    // Notify await point
+    this.coreVm.notify_await_point(handle);
+
+    // Now loop waiting for the async result
+    let asyncResult = this.coreVm.take_async_result(handle);
+    while (asyncResult == "NotReady") {
+      // Take input, and notify it to the vm
+      const nextValue = await this.inputReader.read();
+      if (nextValue.value !== undefined) {
+        this.coreVm.notify_input(nextValue.value);
+      }
+      if (nextValue.done) {
+        this.coreVm.notify_input_closed();
+      }
+      asyncResult = this.coreVm.take_async_result(handle);
+    }
+
+    return this.runWrappingError(() => transformer(asyncResult));
   }
-
-  markCombineablePromise<T>(
-    p: WrappedPromise<T>
-  ): InternalCombineablePromise<T> {
-    const journalIndex = this.stateMachine.getUserCodeJournalIndex();
-    const orTimeout = (millis: number): Promise<T> => {
-      const sleepPromise: Promise<T> = this.sleepInternal(millis).transform(
-        () => {
-          throw new TimeoutError();
-        }
-      );
-      const sleepPromiseIndex = this.stateMachine.getUserCodeJournalIndex();
-
-      return this.stateMachine.createCombinator(Promise.race.bind(Promise), [
-        {
-          id: newJournalEntryPromiseId(journalIndex),
-          promise: p,
-        },
-        {
-          id: newJournalEntryPromiseId(sleepPromiseIndex),
-          promise: sleepPromise,
-        },
-      ]) as Promise<T>;
-    };
-
-    defineProperty(p, RESTATE_CTX_SYMBOL, this);
-    defineProperty(p, "journalIndex", journalIndex);
-    defineProperty(p, "orTimeout", orTimeout.bind(this));
-
-    return p;
-  }
-}
-
-// wraps defineProperty such that it informs tsc of the correct type of its output
-function defineProperty<Obj extends object, Key extends PropertyKey, T>(
-  obj: Obj,
-  prop: Key,
-  value: T
-): asserts obj is Obj & Readonly<Record<Key, T>> {
-  Object.defineProperty(obj, prop, { value });
 }
 
 function unpack<T>(
@@ -733,71 +814,173 @@ class DurablePromiseImpl<T> implements DurablePromise<T> {
   [Symbol.toStringTag] = "DurablePromise";
 
   get(): InternalCombineablePromise<T> {
-    const msg = new GetPromiseEntryMessage({
-      key: this.name,
-    });
-
-    return this.ctx.markCombineablePromise(
-      this.ctx.stateMachine
-        .handleUserCodeMessage(GET_PROMISE_MESSAGE_TYPE, msg)
-        .transform((v) => {
-          if (!v) {
-            return undefined as T;
-          }
-          if (v instanceof Empty) {
-            return undefined as T;
-          }
-          return this.serde.deserialize(v);
-        })
+    const handle = this.ctx.coreVm.sys_get_promise(this.name);
+    return new LazyContextPromise(handle, this.ctx, () =>
+      this.ctx.pollAsyncResult(handle, (asyncResultValue) => {
+        if (
+          typeof asyncResultValue === "object" &&
+          "Success" in asyncResultValue
+        ) {
+          return this.serde.deserialize(asyncResultValue.Success);
+        } else if (
+          typeof asyncResultValue === "object" &&
+          "Failure" in asyncResultValue
+        ) {
+          throw new TerminalError(asyncResultValue.Failure.message, {
+            errorCode: asyncResultValue.Failure.code,
+          });
+        }
+        throw new Error(
+          `Unexpected variant in async result: ${JSON.stringify(
+            asyncResultValue
+          )}`
+        );
+      })
     );
   }
 
   peek(): Promise<T | undefined> {
-    const msg = new PeekPromiseEntryMessage({
-      key: this.name,
-    });
-
-    return this.ctx.stateMachine
-      .handleUserCodeMessage(PEEK_PROMISE_MESSAGE_TYPE, msg)
-      .transform((v): any => {
-        if (!v || v instanceof Empty) {
-          return undefined as T;
+    const handle = this.ctx.coreVm.sys_peek_promise(this.name);
+    return new LazyContextPromise(handle, this.ctx, () =>
+      this.ctx.pollAsyncResult(handle, (asyncResultValue) => {
+        if (asyncResultValue === "Empty") {
+          return undefined;
+        } else if (
+          typeof asyncResultValue === "object" &&
+          "Success" in asyncResultValue
+        ) {
+          return this.serde.deserialize(asyncResultValue.Success);
+        } else if (
+          typeof asyncResultValue === "object" &&
+          "Failure" in asyncResultValue
+        ) {
+          throw new TerminalError(asyncResultValue.Failure.message, {
+            errorCode: asyncResultValue.Failure.code,
+          });
         }
-        return this.serde.deserialize(v);
-      });
+        throw new Error(
+          `Unexpected variant in async result: ${JSON.stringify(
+            asyncResultValue
+          )}`
+        );
+      })
+    );
   }
 
   resolve(value?: T | undefined): Promise<void> {
-    const buffer =
-      value != undefined ? this.serde.serialize(value) : new Uint8Array();
-    const msg = new CompletePromiseEntryMessage({
-      key: this.name,
-      completion: {
-        case: "completionValue",
-        value: buffer,
-      },
-    });
-
-    return this.ctx.stateMachine.handleUserCodeMessage(
-      COMPLETE_PROMISE_MESSAGE_TYPE,
-      msg
-    ) as Promise<void>;
+    const handle = this.ctx.coreVm.sys_complete_promise_success(
+      this.name,
+      this.ctx.runWrappingError(() => this.serde.serialize(value as T))
+    );
+    return new LazyContextPromise(handle, this.ctx, () =>
+      this.ctx.pollAsyncResult(handle, (asyncResultValue) => {
+        if (asyncResultValue === "Empty") {
+          return undefined;
+        } else if (
+          typeof asyncResultValue === "object" &&
+          "Failure" in asyncResultValue
+        ) {
+          throw new TerminalError(asyncResultValue.Failure.message, {
+            errorCode: asyncResultValue.Failure.code,
+          });
+        }
+        throw new Error(
+          `Unexpected variant in async result: ${JSON.stringify(
+            asyncResultValue
+          )}`
+        );
+      })
+    );
   }
 
   reject(errorMsg: string): Promise<void> {
-    const msg = new CompletePromiseEntryMessage({
-      key: this.name,
-      completion: {
-        case: "completionFailure",
-        value: {
-          message: errorMsg,
-        },
-      },
+    const handle = this.ctx.coreVm.sys_complete_promise_failure(this.name, {
+      code: INTERNAL_ERROR_CODE,
+      message: errorMsg,
     });
-
-    return this.ctx.stateMachine.handleUserCodeMessage(
-      COMPLETE_PROMISE_MESSAGE_TYPE,
-      msg
-    ) as Promise<void>;
+    return new LazyContextPromise(handle, this.ctx, () =>
+      this.ctx.pollAsyncResult(handle, (asyncResultValue) => {
+        if (asyncResultValue === "Empty") {
+          return undefined;
+        } else if (
+          typeof asyncResultValue === "object" &&
+          "Failure" in asyncResultValue
+        ) {
+          throw new TerminalError(asyncResultValue.Failure.message, {
+            errorCode: asyncResultValue.Failure.code,
+          });
+        }
+        throw new Error(
+          `Unexpected variant in async result: ${JSON.stringify(
+            asyncResultValue
+          )}`
+        );
+      })
+    );
   }
 }
+
+class LazyPromise<T> implements Promise<T> {
+  private _promise?: Promise<T>;
+
+  constructor(private readonly executor: () => Promise<T>) {}
+
+  then<TResult1 = T, TResult2 = never>(
+    onfulfilled?:
+      | ((value: T) => TResult1 | PromiseLike<TResult1>)
+      | null
+      | undefined,
+    onrejected?:
+      | ((reason: any) => TResult2 | PromiseLike<TResult2>)
+      | null
+      | undefined
+  ): Promise<TResult1 | TResult2> {
+    this._promise = this._promise || this.executor();
+    return this._promise.then(onfulfilled, onrejected);
+  }
+  catch<TResult = never>(
+    onrejected?:
+      | ((reason: any) => TResult | PromiseLike<TResult>)
+      | null
+      | undefined
+  ): Promise<T | TResult> {
+    this._promise = this._promise || this.executor();
+    return this._promise.catch(onrejected);
+  }
+  finally(onfinally?: (() => void) | null | undefined): Promise<T> {
+    this._promise = this._promise || this.executor();
+    return this._promise.finally(onfinally);
+  }
+
+  readonly [Symbol.toStringTag] = "LazyPromise";
+}
+
+class LazyContextPromise<T>
+  extends LazyPromise<T>
+  implements InternalCombineablePromise<T>
+{
+  [RESTATE_CTX_SYMBOL]: ContextImpl;
+
+  constructor(
+    readonly asyncResultHandle: number,
+    ctx: ContextImpl,
+    executor: () => Promise<T>
+  ) {
+    super(executor);
+    this[RESTATE_CTX_SYMBOL] = ctx;
+  }
+
+  orTimeout(millis: number): Promise<T> {
+    return ContextImpl.createCombinator("OrTimeout", [
+      this,
+      this[RESTATE_CTX_SYMBOL].sleep(millis),
+    ]) as Promise<T>;
+  }
+}
+
+type PromiseCombinatorType =
+  | "All"
+  | "Any"
+  | "AllSettled"
+  | "Race"
+  | "OrTimeout";

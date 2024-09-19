@@ -15,7 +15,15 @@ const greeter = service({
   name: "greeter",
   handlers: {
     greet: async (ctx: Context, name: string) => {
-      return `Hello ${name}`;
+      const { id, promise } = ctx.awakeable<string>();
+
+      ctx.console.log(
+        `curl -X POST http://localhost:8080/restate/awakeables/${id}/resolve --json '"Guardiani"'`
+      );
+
+      const surnameProm = promise.orTimeout(1000 * 10);
+
+      return `Hello ${name} ${await surnameProm}`;
     },
   },
 });

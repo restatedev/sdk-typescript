@@ -37,7 +37,7 @@ export interface Request {
    * The unique id that identifies the current function invocation. This id is guaranteed to be
    * unique across invocations, but constant across reties and suspensions.
    */
-  readonly id: Uint8Array;
+  readonly id: string;
 
   /**
    * Request headers - the following headers capture the original invocation headers, as provided to
@@ -609,10 +609,7 @@ export const CombineablePromise = {
     if (values.length == 0) {
       return Promise.all(values);
     }
-    return ContextImpl.createCombinator(
-      Promise.all.bind(Promise),
-      values
-    ) as Promise<{
+    return ContextImpl.createCombinator("All", values) as Promise<{
       -readonly [P in keyof T]: Awaited<T[P]>;
     }>;
   },
@@ -632,10 +629,9 @@ export const CombineablePromise = {
     if (values.length == 0) {
       return Promise.race(values);
     }
-    return ContextImpl.createCombinator(
-      Promise.race.bind(Promise),
-      values
-    ) as Promise<Awaited<T[number]>>;
+    return ContextImpl.createCombinator("Race", values) as Promise<
+      Awaited<T[number]>
+    >;
   },
 
   /**
@@ -654,10 +650,9 @@ export const CombineablePromise = {
     if (values.length == 0) {
       return Promise.any(values);
     }
-    return ContextImpl.createCombinator(
-      Promise.any.bind(Promise),
-      values
-    ) as Promise<Awaited<T[number]>>;
+    return ContextImpl.createCombinator("Any", values) as Promise<
+      Awaited<T[number]>
+    >;
   },
 
   /**
@@ -677,10 +672,7 @@ export const CombineablePromise = {
     if (values.length == 0) {
       return Promise.allSettled(values);
     }
-    return ContextImpl.createCombinator(
-      Promise.allSettled.bind(Promise),
-      values
-    ) as Promise<{
+    return ContextImpl.createCombinator("AllSettled", values) as Promise<{
       -readonly [P in keyof T]: PromiseSettledResult<Awaited<T[P]>>;
     }>;
   },

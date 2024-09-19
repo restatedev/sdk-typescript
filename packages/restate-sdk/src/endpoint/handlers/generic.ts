@@ -9,16 +9,7 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { InvocationBuilder } from "../../invocation.js";
-import { StateMachine } from "../../state_machine.js";
-import { ensureError } from "../../types/errors.js";
-import {
-  isServiceProtocolVersionSupported,
-  parseServiceProtocolVersion,
-  selectSupportedServiceDiscoveryProtocolVersion,
-  serviceDiscoveryProtocolVersionToHeaderValue,
-  serviceProtocolVersionToHeaderValue,
-} from "../../types/protocol.js";
+import { ensureError, TerminalError } from "../../types/errors.js";
 import type { ProtocolMode } from "../../types/discovery.js";
 import type {
   ComponentHandler,
@@ -27,16 +18,16 @@ import type {
 import { parseUrlComponents } from "../../types/components.js";
 import { validateRequestSignature } from "../request_signing/validate.js";
 import { X_RESTATE_SERVER } from "../../user_agent.js";
-import { ServiceDiscoveryProtocolVersion } from "../../generated/proto/discovery_pb.js";
-import type { ServiceProtocolVersion } from "../../generated/proto/protocol_pb.js";
 import type { EndpointBuilder } from "../endpoint_builder.js";
-import {
-  type ReadableStream,
-  TransformStream,
-  type TransformStreamDefaultController,
-} from "node:stream/web";
-import { RestateConnection } from "../../connection/connection.js";
+import { type ReadableStream, TransformStream } from "node:stream/web";
 import { OnceStream } from "../../utils/streams.js";
+import { ContextImpl } from "../../context_impl.js";
+import {
+  createRestateConsole,
+  LoggerContext,
+  LogSource,
+} from "../../logger.js";
+import * as vm from "./vm/sdk_shared_core_wasm_bindings.js";
 
 export interface Headers {
   [name: string]: string | string[] | undefined;
@@ -61,6 +52,20 @@ export interface RestateResponse {
   readonly headers: ResponseHeaders;
   readonly statusCode: number;
   readonly body: ReadableStream<Uint8Array>;
+}
+
+export enum ServiceDiscoveryProtocolVersion {
+  /**
+   * @generated from enum value: SERVICE_DISCOVERY_PROTOCOL_VERSION_UNSPECIFIED = 0;
+   */
+  SERVICE_DISCOVERY_PROTOCOL_VERSION_UNSPECIFIED = 0,
+
+  /**
+   * initial service discovery protocol version using endpoint_manifest_schema.json
+   *
+   * @generated from enum value: V1 = 1;
+   */
+  V1 = 1,
 }
 
 export interface RestateHandler {
@@ -145,14 +150,6 @@ export class GenericHandler implements RestateHandler {
       this.endpoint.rlog.warn(errorMessage);
       return this.toErrorResponse(415, errorMessage);
     }
-    const serviceProtocolVersion = parseServiceProtocolVersion(
-      serviceProtocolVersionString
-    );
-    if (!isServiceProtocolVersionSupported(serviceProtocolVersion)) {
-      const errorMessage = `Unsupported service protocol version '${serviceProtocolVersionString}'`;
-      this.endpoint.rlog.warn(errorMessage);
-      return this.toErrorResponse(415, errorMessage);
-    }
     const method = this.endpoint.componentByName(parsed.componentName);
     if (!method) {
       const msg = `No service found for URL: ${JSON.stringify(parsed)}`;
@@ -174,7 +171,6 @@ export class GenericHandler implements RestateHandler {
       handler,
       request.body,
       request.headers,
-      serviceProtocolVersion,
       request.extraArgs,
       context ?? {}
     );
@@ -220,65 +216,114 @@ export class GenericHandler implements RestateHandler {
   private async handleInvoke(
     handler: ComponentHandler,
     body: ReadableStream<Uint8Array>,
-    headers: Record<string, string | string[] | undefined>,
-    serviceProtocolVersion: ServiceProtocolVersion,
+    headers: Headers,
     extraArgs: unknown[],
-    context: AdditionalContext
+    additionalContext: AdditionalContext
   ): Promise<RestateResponse> {
-    let responseController: TransformStreamDefaultController<Uint8Array>;
-    const responseBody = new TransformStream<Uint8Array>({
-      start: (ctrl) => {
-        responseController =
-          ctrl as TransformStreamDefaultController<Uint8Array>;
-      },
-    });
-    const connection = RestateConnection.from(this.endpoint.rlog, headers, {
-      readable: body,
-      writable: responseBody.writable,
-    });
+    // Instantiate core vm and prepare response headers
+    const vmHeaders = Object.entries(headers)
+      .filter(([, v]) => v !== undefined)
+      .map(
+        ([k, v]) =>
+          new vm.WasmHeader(k, v instanceof Array ? v[0] : (v as string))
+      );
+    const coreVm = new vm.WasmVM(vmHeaders);
+    const responseHead = coreVm.get_response_head();
+    const responseHeaders = responseHead.headers.reduce(
+      (headers, { key, value }) => ({
+        [key]: value,
+        ...headers,
+      }),
+      {
+        "x-restate-server": X_RESTATE_SERVER,
+      }
+    );
 
-    // step 1: collect all journal events
-    const journalBuilder = new InvocationBuilder(handler);
-    connection.pipeToConsumer(journalBuilder);
-    try {
-      await journalBuilder.completion();
-    } finally {
-      // ensure GC friendliness, also in case of errors
-      connection.removeCurrentConsumer();
+    const inputReader = body.getReader();
+
+    // Now buffer input entries
+    while (!coreVm.is_ready_to_execute()) {
+      const nextValue = await inputReader.read();
+      if (nextValue.value != undefined) {
+        coreVm.notify_input(nextValue.value);
+      }
+      if (nextValue.done) {
+        coreVm.notify_input_closed();
+        break;
+      }
     }
 
-    // step 2: create the state machine
-    const invocation = journalBuilder.build();
-    const stateMachine = new StateMachine(
-      connection,
-      invocation,
-      handler.kind(),
+    // Get input
+    const input = coreVm.sys_input();
+
+    // Prepare context
+    const console = createRestateConsole(
       this.endpoint.logger,
-      invocation.inferLoggerContext(context),
-      extraArgs
+      LogSource.USER,
+      new LoggerContext(
+        input.invocation_id,
+        "",
+        handler.component().name(),
+        handler.name(),
+        additionalContext
+      ),
+      () => !coreVm.is_processing()
     );
-    connection.pipeToConsumer(stateMachine);
 
-    // step 3: invoke the function
+    // Prepare response stream
+    const responseTransformStream = new TransformStream<Uint8Array>();
+    const outputWriter = responseTransformStream.writable.getWriter();
+    const ctx = new ContextImpl(
+      coreVm,
+      input,
+      console,
+      handler.kind(),
+      headers,
+      extraArgs,
+      inputReader,
+      outputWriter
+    );
 
-    // This call would propagate errors in the state machine logic, but not errors
-    // in the application function code. Ending a function with an error as well
-    // as failign an invocation and being retried are perfectly valid actions from the
-    // SDK's perspective.
-    stateMachine
-      .invoke()
-      .catch((e) => responseController.error(e)) // in bidi case the best we can do is abort the connection
-      .finally(() => connection.removeCurrentConsumer());
+    // Finally invoke user handler
+    handler
+      .invoke(ctx, input.input)
+      .then(
+        (bytes) => {
+          coreVm.sys_write_output_success(bytes);
+          coreVm.sys_end();
+        },
+        (e) => {
+          const error = ensureError(e);
+          console.warn("Function completed with an error.\n", error);
+
+          if (error instanceof TerminalError) {
+            coreVm.sys_write_output_failure({
+              code: error.code,
+              message: error.message,
+            });
+            coreVm.sys_end();
+          } else {
+            coreVm.notify_error(error.message, error.stack);
+          }
+        }
+      )
+      // Doesn't make much sense this linting error, because finally can accept async functions,
+      // per https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/finally
+      // eslint-disable-next-line @typescript-eslint/no-misused-promises
+      .finally(async () => {
+        // Consume output till the end, write it out, then close the stream
+        let nextOutput = coreVm.take_output() as Uint8Array | null | undefined;
+        while (nextOutput !== null && nextOutput !== undefined) {
+          await outputWriter.write(nextOutput);
+          nextOutput = coreVm.take_output() as Uint8Array | null | undefined;
+        }
+        await outputWriter.close();
+      });
 
     return {
-      headers: {
-        "content-type": serviceProtocolVersionToHeaderValue(
-          serviceProtocolVersion
-        ),
-        "x-restate-server": X_RESTATE_SERVER,
-      },
-      statusCode: 200,
-      body: responseBody.readable as ReadableStream<Uint8Array>,
+      headers: responseHeaders,
+      statusCode: responseHead.status_code,
+      body: responseTransformStream.readable as ReadableStream<Uint8Array>,
     };
   }
 
@@ -291,12 +336,10 @@ export class GenericHandler implements RestateHandler {
       return this.toErrorResponse(415, errorMessage);
     }
 
-    const serviceDiscoveryProtocolVersion =
-      selectSupportedServiceDiscoveryProtocolVersion(acceptVersionsString);
-
     if (
-      serviceDiscoveryProtocolVersion ===
-      ServiceDiscoveryProtocolVersion.SERVICE_DISCOVERY_PROTOCOL_VERSION_UNSPECIFIED
+      !acceptVersionsString.includes(
+        "application/vnd.restate.endpointmanifest.v1+json"
+      )
     ) {
       const errorMessage = `Unsupported service discovery protocol version '${acceptVersionsString}'`;
       this.endpoint.rlog.warn(errorMessage);
@@ -304,25 +347,11 @@ export class GenericHandler implements RestateHandler {
     }
 
     const discovery = this.endpoint.computeDiscovery(this.protocolMode);
-
-    let body;
-
-    if (
-      serviceDiscoveryProtocolVersion === ServiceDiscoveryProtocolVersion.V1
-    ) {
-      body = JSON.stringify(discovery);
-    } else {
-      // should not be reached since we check for compatibility before
-      throw new Error(
-        `Unsupported service discovery protocol version: ${serviceDiscoveryProtocolVersion}`
-      );
-    }
+    const body = JSON.stringify(discovery);
 
     return {
       headers: {
-        "content-type": serviceDiscoveryProtocolVersionToHeaderValue(
-          serviceDiscoveryProtocolVersion
-        ),
+        "content-type": "application/vnd.restate.endpointmanifest.v1+json",
         "x-restate-server": X_RESTATE_SERVER,
       },
       statusCode: 200,

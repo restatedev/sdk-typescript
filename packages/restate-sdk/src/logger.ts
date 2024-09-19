@@ -13,6 +13,11 @@
 /* eslint-disable no-console */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 
+import {
+  set_log_level,
+  LogLevel as WasmLogLevel,
+} from "./endpoint/handlers/vm/sdk_shared_core_wasm_bindings.js";
+
 export enum RestateLogLevel {
   TRACE = "trace",
   DEBUG = "debug",
@@ -74,6 +79,25 @@ export type Logger = (
 // but it only affects the default logger - custom loggers get all log events and
 // should use their own filtering mechanism
 export const DEFAULT_LOGGER_LOG_LEVEL = readRestateLogLevel();
+
+// Set the logging level in the shared core too!
+switch (DEFAULT_LOGGER_LOG_LEVEL) {
+  case RestateLogLevel.TRACE:
+    set_log_level(WasmLogLevel.TRACE);
+    break;
+  case RestateLogLevel.DEBUG:
+    set_log_level(WasmLogLevel.DEBUG);
+    break;
+  case RestateLogLevel.INFO:
+    set_log_level(WasmLogLevel.INFO);
+    break;
+  case RestateLogLevel.WARN:
+    set_log_level(WasmLogLevel.WARN);
+    break;
+  case RestateLogLevel.ERROR:
+    set_log_level(WasmLogLevel.ERROR);
+    break;
+}
 
 export const defaultLogger: Logger = (
   params: LogParams,
@@ -213,4 +237,31 @@ export function createRestateConsole(
       context
     ),
   }) as Console;
+}
+
+function wasmLogLevelToRestateLogLevel(level: WasmLogLevel): RestateLogLevel {
+  switch (level) {
+    case WasmLogLevel.TRACE:
+      return RestateLogLevel.TRACE;
+    case WasmLogLevel.DEBUG:
+      return RestateLogLevel.DEBUG;
+    case WasmLogLevel.INFO:
+      return RestateLogLevel.INFO;
+    case WasmLogLevel.WARN:
+      return RestateLogLevel.WARN;
+    case WasmLogLevel.ERROR:
+      return RestateLogLevel.ERROR;
+  }
+}
+
+/// This is used by the shared core!
+export function vm_log(level: WasmLogLevel, str: string) {
+  defaultLogger(
+    {
+      level: wasmLogLevelToRestateLogLevel(level),
+      replaying: false,
+      source: LogSource.JOURNAL,
+    },
+    str
+  );
 }
