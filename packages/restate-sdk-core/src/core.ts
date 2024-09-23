@@ -114,9 +114,7 @@ export type WorkflowDefinition<P extends string, M> = {
   name: P;
 };
 
-export type Workflow<M> = M extends WorkflowDefinition<string, infer W>
-  ? W
-  : never;
+export type Workflow<M> = M extends WorkflowDefinition<string, infer W> ? W : M;
 
 export type WorkflowDefinitionFrom<M> = M extends WorkflowDefinition<
   string,
