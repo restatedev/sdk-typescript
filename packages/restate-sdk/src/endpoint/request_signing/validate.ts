@@ -9,6 +9,7 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
+import type { PathComponents } from "../../types/components.js";
 import type { KeySetV1 } from "./v1.js";
 import { SCHEME_V1, validateV1 } from "./v1.js";
 
@@ -22,7 +23,7 @@ export type ValidateSuccess = { valid: true; validKey: string; scheme: string };
 
 export async function validateRequestSignature(
   keySet: KeySetV1,
-  path: string,
+  path: PathComponents,
   headers: { [name: string]: string | string[] | undefined }
 ): Promise<ValidateResponse> {
   const scheme = headerValue(SIGNATURE_SCHEME_HEADER, headers) ?? "unsigned";

@@ -15,6 +15,7 @@ import { headerValue } from "./validate.js";
 import type { Key } from "./ed25519.js";
 import { importKey, verify } from "./ed25519.js";
 import base from "./basex.js";
+import type { PathComponents } from "../../types/components.js";
 
 const JWT_HEADER = "x-restate-jwt-v1";
 export const SCHEME_V1 = "v1";
@@ -62,7 +63,7 @@ export function parseKeySetV1(keys: string[]): KeySetV1 {
 
 export async function validateV1(
   keySet: KeySetV1,
-  path: string,
+  path: PathComponents,
   headers: { [name: string]: string | string[] | undefined }
 ): Promise<ValidateResponse> {
   const jwt = headerValue(JWT_HEADER, headers);
@@ -74,13 +75,24 @@ export async function validateV1(
   }
 
   try {
-    return await jwtVerify(keySet, jwt, path);
+    return await jwtVerify(keySet, jwt, normalisedPath(path));
   } catch (e) {
     return {
       valid: false,
       scheme: SCHEME_V1,
       error: e,
     };
+  }
+}
+
+function normalisedPath(path: PathComponents): string {
+  switch (path.type) {
+    case "invoke":
+      return `/invoke/${path.componentName}/${path.handlerName}`;
+    case "discover":
+      return "/discover";
+    case "unknown":
+      return path.path;
   }
 }
 

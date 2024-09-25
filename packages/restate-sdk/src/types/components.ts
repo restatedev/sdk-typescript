@@ -22,7 +22,7 @@ import { HandlerKind } from "./rpc.js";
 //
 export interface Component {
   name(): string;
-  handlerMatching(url: UrlPathComponents): ComponentHandler | undefined;
+  handlerMatching(url: InvokePathComponents): ComponentHandler | undefined;
   discovery(): d.Service;
 }
 
@@ -77,7 +77,7 @@ export class ServiceComponent implements Component {
     };
   }
 
-  handlerMatching(url: UrlPathComponents): ComponentHandler | undefined {
+  handlerMatching(url: InvokePathComponents): ComponentHandler | undefined {
     return this.handlers.get(url.handlerName);
   }
 }
@@ -159,7 +159,7 @@ export class VirtualObjectComponent implements Component {
     };
   }
 
-  handlerMatching(url: UrlPathComponents): ComponentHandler | undefined {
+  handlerMatching(url: InvokePathComponents): ComponentHandler | undefined {
     const wrapper = this.handlers.get(url.handlerName);
     if (!wrapper) {
       return undefined;
@@ -234,7 +234,7 @@ export class WorkflowComponent implements Component {
     };
   }
 
-  handlerMatching(url: UrlPathComponents): ComponentHandler | undefined {
+  handlerMatching(url: InvokePathComponents): ComponentHandler | undefined {
     const wrapper = this.handlers.get(url.handlerName);
     if (!wrapper) {
       return undefined;
@@ -266,26 +266,31 @@ export class WorkflowHandler implements ComponentHandler {
   }
 }
 
-export type UrlPathComponents = {
+export type PathComponents =
+  | InvokePathComponents
+  | { type: "discover" }
+  | { type: "unknown"; path: string };
+
+export type InvokePathComponents = {
+  type: "invoke";
   componentName: string;
   handlerName: string;
 };
 
-export function parseUrlComponents(
-  urlPath?: string
-): UrlPathComponents | "discovery" | undefined {
+export function parseUrlComponents(urlPath?: string): PathComponents {
   if (!urlPath) {
-    return undefined;
+    return { type: "unknown", path: "" };
   }
   const fragments = urlPath.split("/");
   if (fragments.length >= 3 && fragments[fragments.length - 3] === "invoke") {
     return {
+      type: "invoke",
       componentName: fragments[fragments.length - 2],
       handlerName: fragments[fragments.length - 1],
     };
   }
   if (fragments.length > 0 && fragments[fragments.length - 1] === "discover") {
-    return "discovery";
+    return { type: "discover" };
   }
-  return undefined;
+  return { type: "unknown", path: urlPath };
 }

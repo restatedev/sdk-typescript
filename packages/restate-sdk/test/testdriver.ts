@@ -205,6 +205,7 @@ export class UUT<N extends string, T> {
     const method = restateServer
       .componentByName(options.service ? options.service : this.defaultService)
       ?.handlerMatching({
+        type: "invoke",
         componentName: options.service ? options.service : this.defaultService,
         handlerName: options.handler ? options.handler : this.defaultHandler,
       });
