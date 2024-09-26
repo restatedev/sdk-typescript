@@ -20,7 +20,10 @@ import {
   serviceProtocolVersionToHeaderValue,
 } from "../../types/protocol.js";
 import type { ProtocolMode } from "../../types/discovery.js";
-import type { ComponentHandler } from "../../types/components.js";
+import type {
+  ComponentHandler,
+  PathComponents,
+} from "../../types/components.js";
 import { parseUrlComponents } from "../../types/components.js";
 import { validateRequestSignature } from "../request_signing/validate.js";
 import { X_RESTATE_SERVER } from "../../user_agent.js";
@@ -117,18 +120,23 @@ export class GenericHandler implements RestateHandler {
     // this is the recommended way to get the relative path from a url that may be relative or absolute
     const path = new URL(request.url, "https://example.com").pathname;
 
-    const error = await this.validateConnectionSignature(path, request.headers);
+    const parsed = parseUrlComponents(path);
+
+    const error = await this.validateConnectionSignature(
+      parsed,
+      request.headers
+    );
     if (error !== null) {
       return error;
     }
 
-    const parsed = parseUrlComponents(path);
-    if (!parsed) {
+    if (parsed.type === "unknown") {
       const msg = `Invalid path: path doesn't end in /invoke/SvcName/handlerName and also not in /discover: ${path}`;
       this.endpoint.rlog.trace(msg);
       return this.toErrorResponse(404, msg);
     }
-    if (parsed === "discovery") {
+
+    if (parsed.type === "discover") {
       return this.handleDiscovery(request.headers["accept"]);
     }
     const serviceProtocolVersionString = request.headers["content-type"];
@@ -173,7 +181,7 @@ export class GenericHandler implements RestateHandler {
   }
 
   private async validateConnectionSignature(
-    path: string,
+    path: PathComponents,
     headers: Headers
   ): Promise<RestateResponse | null> {
     if (!this.endpoint.keySet) {
