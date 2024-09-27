@@ -731,9 +731,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     }
 
     // eslint-disable-next-line @typescript-eslint/no-misused-promises
-    return new Promise<void>((resolve) =>
-      this.currentRead?.finally(resolve)
-    );
+    return new Promise<void>((resolve) => this.currentRead?.finally(resolve));
   }
 
   private async readNext(): Promise<void> {
