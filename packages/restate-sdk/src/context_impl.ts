@@ -56,6 +56,7 @@ import type {
   ReadableStreamDefaultReader,
   WritableStreamDefaultWriter,
 } from "node:stream/web";
+import type { ReadableStreamDefaultReadResult } from "stream/web";
 
 export type InternalCombineablePromise<T> = CombineablePromise<T> & {
   asyncResultHandle: number;
@@ -74,6 +75,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       return this.run(() => new Date().toJSON());
     },
   };
+  private currentRead?: Promise<void>;
 
   constructor(
     readonly coreVm: vm.WasmVM,
@@ -554,14 +556,8 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
           break;
         }
 
-        // No result yet, take input, and notify it to the vm
-        const nextValue = await self.inputReader.read();
-        if (nextValue.value !== undefined) {
-          self.coreVm.notify_input(nextValue.value);
-        }
-        if (nextValue.done) {
-          self.coreVm.notify_input_closed();
-        }
+        // No result yet, await the next read
+        await self.awaitNextRead();
       }
 
       // We got a result, we need to take_output to write the combinator entry, then we need to poll the result
@@ -673,22 +669,6 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     return Promise.resolve(resultValues);
   }
 
-  private static async extractOrTimeoutCombinatorResult(
-    handlesResult: number[],
-    promisesMap: Map<number, Promise<unknown>>
-  ): Promise<unknown[]> {
-    // The result can either all values, or one error
-    const resultValues = [];
-    for (const handle of handlesResult) {
-      try {
-        resultValues.push(await promisesMap.get(handle));
-      } catch (e) {
-        return Promise.reject(e);
-      }
-    }
-    return Promise.resolve(resultValues);
-  }
-
   // -- Various private methods
 
   runWrappingError<T>(fn: () => T): T {
@@ -732,18 +712,46 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     // Now loop waiting for the async result
     let asyncResult = this.coreVm.take_async_result(handle);
     while (asyncResult == "NotReady") {
-      // Take input, and notify it to the vm
-      const nextValue = await this.inputReader.read();
-      if (nextValue.value !== undefined) {
-        this.coreVm.notify_input(nextValue.value);
-      }
-      if (nextValue.done) {
-        this.coreVm.notify_input_closed();
-      }
+      await this.awaitNextRead();
       asyncResult = this.coreVm.take_async_result(handle);
     }
 
     return this.runWrappingError(() => transformer(asyncResult));
+  }
+
+  // This function triggers a read on the input reader,
+  // and will notify the caller that a read was executed
+  // and the result was piped in the state machine.
+  private awaitNextRead(): Promise<void> {
+    if (this.currentRead == undefined) {
+      // Register a new read
+      this.currentRead = this.readNext().finally(() => {
+        this.currentRead = undefined;
+      });
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
+    return new Promise<void>((resolve) =>
+      this.currentRead?.finally(resolve)
+    );
+  }
+
+  private async readNext(): Promise<void> {
+    // Take input, and notify it to the vm
+    let nextValue: ReadableStreamDefaultReadResult<Uint8Array>;
+    try {
+      nextValue = await this.inputReader.read();
+    } catch (e: any) {
+      const err = ensureError(e);
+      this.coreVm.notify_error(err.message, err.stack);
+      return;
+    }
+    if (nextValue.value !== undefined) {
+      this.coreVm.notify_input(nextValue.value);
+    }
+    if (nextValue.done) {
+      this.coreVm.notify_input_closed();
+    }
   }
 }
 
