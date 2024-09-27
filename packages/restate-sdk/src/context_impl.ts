@@ -706,13 +706,14 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       await this.outputWriter.write(nextOutput);
     }
 
-    // Notify await point
-    this.coreVm.notify_await_point(handle);
-
     // Now loop waiting for the async result
     let asyncResult = this.coreVm.take_async_result(handle);
     while (asyncResult == "NotReady") {
       await this.awaitNextRead();
+      // Using notify_await_point immediately before take_async_result
+      // makes sure the state machine will try to suspend only now,
+      // in case there aren't other concurrent tasks trying to poll this async result.
+      this.coreVm.notify_await_point(handle);
       asyncResult = this.coreVm.take_async_result(handle);
     }
 
