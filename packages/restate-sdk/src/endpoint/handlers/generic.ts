@@ -291,8 +291,8 @@ export class GenericHandler implements RestateHandler {
         (bytes) => {
           coreVm.sys_write_output_success(bytes);
           coreVm.sys_end();
-        },
-        (e) => {
+        })
+        .catch((e) => {
           const error = ensureError(e);
           console.warn("Function completed with an error.\n", error);
 
