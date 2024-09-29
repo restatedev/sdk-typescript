@@ -28,6 +28,7 @@ import {
   LogSource,
 } from "../../logger.js";
 import * as vm from "./vm/sdk_shared_core_wasm_bindings.js";
+import { CompletablePromise } from "../../utils/completable_promise.js";
 
 export interface Headers {
   [name: string]: string | string[] | undefined;
@@ -270,9 +271,18 @@ export class GenericHandler implements RestateHandler {
       () => !coreVm.is_processing()
     );
 
+    // This promise is used to signal the end of the computation,
+    // which can be either the user returns a value,
+    // or an exception gets catched, or the state machine fails/suspends.
+    //
+    // The last case is handled internally within the ContextImpl.
+    const invocationEndPromise = new CompletablePromise<void>();
+
     // Prepare response stream
     const responseTransformStream = new TransformStream<Uint8Array>();
     const outputWriter = responseTransformStream.writable.getWriter();
+
+    // Prepare context
     const ctx = new ContextImpl(
       coreVm,
       input,
@@ -280,6 +290,7 @@ export class GenericHandler implements RestateHandler {
       handler.kind(),
       headers,
       extraArgs,
+      invocationEndPromise,
       inputReader,
       outputWriter
     );
@@ -287,30 +298,31 @@ export class GenericHandler implements RestateHandler {
     // Finally invoke user handler
     handler
       .invoke(ctx, input.input)
-      .then(
-        (bytes) => {
-          coreVm.sys_write_output_success(bytes);
-          coreVm.sys_end();
-        })
-        .catch((e) => {
-          const error = ensureError(e);
-          console.warn("Function completed with an error.\n", error);
+      .then((bytes) => {
+        coreVm.sys_write_output_success(bytes);
+        coreVm.sys_end();
+      })
+      .catch((e) => {
+        const error = ensureError(e);
+        console.warn("Function completed with an error.\n", error);
 
-          if (error instanceof TerminalError) {
-            coreVm.sys_write_output_failure({
-              code: error.code,
-              message: error.message,
-            });
-            coreVm.sys_end();
-          } else {
-            coreVm.notify_error(error.message, error.stack);
-          }
+        if (error instanceof TerminalError) {
+          coreVm.sys_write_output_failure({
+            code: error.code,
+            message: error.message,
+          });
+          coreVm.sys_end();
+        } else {
+          coreVm.notify_error(error.message, error.stack);
         }
-      )
-      // Doesn't make much sense this linting error, because finally can accept async functions,
-      // per https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise/finally
-      // eslint-disable-next-line @typescript-eslint/no-misused-promises
-      .finally(async () => {
+      })
+      .finally(() => {
+        invocationEndPromise.resolve();
+      });
+
+    // Let's wire up invocationEndPromise with consuming all the output and closing the streams.
+    invocationEndPromise.promise
+      .then(async () => {
         // Consume output till the end, write it out, then close the stream
         let nextOutput = coreVm.take_output() as Uint8Array | null | undefined;
         while (nextOutput !== null && nextOutput !== undefined) {
@@ -318,7 +330,10 @@ export class GenericHandler implements RestateHandler {
           nextOutput = coreVm.take_output() as Uint8Array | null | undefined;
         }
         await outputWriter.close();
-      });
+        // Let's cancel the input reader, if it's still here
+        inputReader.cancel().catch(() => {});
+      })
+      .catch(() => {});
 
     return {
       headers: responseHeaders,

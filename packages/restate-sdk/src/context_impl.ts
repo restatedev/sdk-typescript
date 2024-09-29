@@ -27,27 +27,27 @@ import type {
 } from "./context.js";
 import type * as vm from "./endpoint/handlers/vm/sdk_shared_core_wasm_bindings.js";
 import {
-  TerminalError,
   ensureError,
-  UNKNOWN_ERROR_CODE,
   INTERNAL_ERROR_CODE,
+  TerminalError,
   TimeoutError,
+  UNKNOWN_ERROR_CODE,
 } from "./types/errors.js";
+import type { Client, SendClient } from "./types/rpc.js";
 import {
+  defaultSerde,
   HandlerKind,
   makeRpcCallProxy,
   makeRpcSendProxy,
-  defaultSerde,
 } from "./types/rpc.js";
-import type { Client, SendClient } from "./types/rpc.js";
 import type {
+  Serde,
   Service,
   ServiceDefinitionFrom,
-  VirtualObjectDefinitionFrom,
   VirtualObject,
-  WorkflowDefinitionFrom,
+  VirtualObjectDefinitionFrom,
   Workflow,
-  Serde,
+  WorkflowDefinitionFrom,
 } from "@restatedev/restate-sdk-core";
 import { serde } from "@restatedev/restate-sdk-core";
 import { RandImpl } from "./utils/rand.js";
@@ -57,6 +57,7 @@ import type {
   WritableStreamDefaultWriter,
 } from "node:stream/web";
 import type { ReadableStreamDefaultReadResult } from "stream/web";
+import type { CompletablePromise } from "./utils/completable_promise.js";
 
 export type InternalCombineablePromise<T> = CombineablePromise<T> & {
   asyncResultHandle: number;
@@ -84,6 +85,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     public readonly handlerKind: HandlerKind,
     attemptHeaders: Headers,
     extraArgs: unknown[],
+    private readonly invocationEndPromise: CompletablePromise<void>,
     private readonly inputReader: ReadableStreamDefaultReader<Uint8Array>,
     private readonly outputWriter: WritableStreamDefaultWriter<Uint8Array>
   ) {
@@ -108,11 +110,9 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
 
     this.rand = new RandImpl(input.invocation_id, () => {
       if (coreVm.is_inside_run()) {
-        const err = new Error(
+        throw new Error(
           "Cannot generate random numbers within a run closure. Use the random object outside the run closure."
         );
-        coreVm.notify_error(err.message, err.stack);
-        throw err;
       }
     });
   }
@@ -124,10 +124,8 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       case HandlerKind.WORKFLOW: {
         return this.input.key;
       }
-      case HandlerKind.SERVICE:
-        throw new TerminalError("unexpected missing key");
       default:
-        throw new TerminalError("unknown handler type");
+        throw new TerminalError("this handler type doesn't support key()");
     }
   }
 
@@ -135,11 +133,10 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     return this.invocationRequest;
   }
 
-  // DON'T make this function async!!! see sideEffect comment for details.
   public get<T>(name: string, serde?: Serde<T>): Promise<T | null> {
-    const handle = this.coreVm.sys_get_state(name);
-    return new LazyContextPromise(handle, this, () =>
-      this.pollAsyncResult(handle, (asyncResultValue) => {
+    return this.processCompletableEntry(
+      (vm) => vm.sys_get_state(name),
+      (asyncResultValue) => {
         if (asyncResultValue == "Empty") {
           // Empty
           return null;
@@ -157,14 +154,14 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
             asyncResultValue
           )}`
         );
-      })
+      }
     );
   }
 
   public stateKeys(): Promise<Array<string>> {
-    const handle = this.coreVm.sys_get_state_keys();
-    return new LazyContextPromise(handle, this, () =>
-      this.pollAsyncResult(handle, (asyncResultValue) => {
+    return this.processCompletableEntry(
+      (vm) => vm.sys_get_state_keys(),
+      (asyncResultValue) => {
         if (
           typeof asyncResultValue === "object" &&
           "StateKeys" in asyncResultValue
@@ -183,23 +180,22 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
             asyncResultValue
           )}`
         );
-      })
+      }
     );
   }
 
   public set<T>(name: string, value: T, serde?: Serde<T>): void {
-    this.coreVm.sys_set_state(
-      name,
-      this.runWrappingError(() => (serde ?? defaultSerde()).serialize(value))
+    this.processNonCompletableEntry((vm) =>
+      vm.sys_set_state(name, (serde ?? defaultSerde()).serialize(value))
     );
   }
 
   public clear(name: string): void {
-    this.coreVm.sys_clear_state(name);
+    this.processNonCompletableEntry((vm) => vm.sys_clear_state(name));
   }
 
   public clearAll(): void {
-    this.coreVm.sys_clear_all_state();
+    this.processNonCompletableEntry((vm) => vm.sys_clear_all_state());
   }
 
   // --- Calls, background calls, etc
@@ -211,18 +207,13 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       call.inputSerde ?? (serde.binary as Serde<REQ>);
     const responseSerde: Serde<RES> =
       call.outputSerde ?? (serde.binary as Serde<RES>);
-    const parameter = this.runWrappingError(() =>
-      requestSerde.serialize(call.parameter)
-    );
 
-    const handle = this.coreVm.sys_call(
-      call.service,
-      call.method,
-      parameter,
-      call.key
-    );
-    return new LazyContextPromise(handle, this, () =>
-      this.pollAsyncResult(handle, (asyncResultValue) => {
+    return this.processCompletableEntry(
+      (vm) => {
+        const parameter = requestSerde.serialize(call.parameter);
+        return vm.sys_call(call.service, call.method, parameter, call.key);
+      },
+      (asyncResultValue) => {
         if (
           typeof asyncResultValue === "object" &&
           "Success" in asyncResultValue
@@ -241,22 +232,22 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
             asyncResultValue
           )}`
         );
-      })
+      }
     );
   }
 
   public genericSend<REQ = Uint8Array>(send: GenericSend<REQ>) {
-    const requestSerde = send.inputSerde ?? (serde.binary as Serde<REQ>);
-    const parameter = this.runWrappingError(() =>
-      requestSerde.serialize(send.parameter)
-    );
+    this.processNonCompletableEntry((vm) => {
+      const requestSerde = send.inputSerde ?? (serde.binary as Serde<REQ>);
+      const parameter = requestSerde.serialize(send.parameter);
 
-    let delay;
-    if (send.delay != undefined) {
-      delay = BigInt(send.delay);
-    }
+      let delay;
+      if (send.delay != undefined) {
+        delay = BigInt(send.delay);
+      }
 
-    this.coreVm.sys_send(send.service, send.method, parameter, send.key, delay);
+      vm.sys_send(send.service, send.method, parameter, send.key, delay);
+    });
   }
 
   serviceClient<D>({ name }: ServiceDefinitionFrom<D>): Client<Service<D>> {
@@ -327,27 +318,29 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     const { name, action } = unpack(nameOrAction, actionSecondParameter);
     const serde = options?.serde ?? defaultSerde();
 
-    const runEnterResult = this.coreVm.sys_run_enter(name || "");
-
-    // Check if the run was already executed
-    if (
-      typeof runEnterResult === "object" &&
-      "ExecutedWithSuccess" in runEnterResult
-    ) {
-      return Promise.resolve(
-        this.runWrappingError(() =>
+    try {
+      const runEnterResult = this.coreVm.sys_run_enter(name || "");
+      // Check if the run was already executed
+      if (
+        typeof runEnterResult === "object" &&
+        "ExecutedWithSuccess" in runEnterResult
+      ) {
+        return Promise.resolve(
           serde.deserialize(runEnterResult.ExecutedWithSuccess)
-        )
-      );
-    } else if (
-      typeof runEnterResult === "object" &&
-      "ExecutedWithFailure" in runEnterResult
-    ) {
-      return Promise.reject(
-        new TerminalError(runEnterResult.ExecutedWithFailure.message, {
-          errorCode: runEnterResult.ExecutedWithFailure.code,
-        })
-      );
+        );
+      } else if (
+        typeof runEnterResult === "object" &&
+        "ExecutedWithFailure" in runEnterResult
+      ) {
+        return Promise.reject(
+          new TerminalError(runEnterResult.ExecutedWithFailure.message, {
+            errorCode: runEnterResult.ExecutedWithFailure.code,
+          })
+        );
+      }
+    } catch (e) {
+      this.handleInvocationEndError(e);
+      return PENDING_PROMISE as Promise<T>;
     }
 
     // We wrap the rest of the execution in this closure to create a future
@@ -362,21 +355,26 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
 
       // Record the result/failure, get back the handle for the ack.
       let handle;
-      if (err != undefined) {
-        if (err instanceof TerminalError) {
-          // Record failure, go ahead
-          handle = this.coreVm.sys_run_exit_failure({
-            code: err.code,
-            message: err.message,
-          });
+      try {
+        if (err != undefined) {
+          if (err instanceof TerminalError) {
+            // Record failure, go ahead
+            handle = this.coreVm.sys_run_exit_failure({
+              code: err.code,
+              message: err.message,
+            });
+          } else {
+            // TODO plug retries here!
+            throw err;
+          }
         } else {
-          // TODO plug retries here!
-          throw err;
+          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+          // @ts-expect-error
+          handle = this.coreVm.sys_run_exit_success(serde.serialize(res));
         }
-      } else {
-        handle = this.coreVm.sys_run_exit_success(
-          this.runWrappingError(() => serde.serialize(res))
-        );
+      } catch (e) {
+        this.handleInvocationEndError(e);
+        return PENDING_PROMISE as Promise<T>;
       }
 
       // Got the handle, wait for the result now (which we get once we get the ack)
@@ -406,9 +404,9 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
   }
 
   public sleep(millis: number): CombineablePromise<void> {
-    const handle = this.coreVm.sys_sleep(BigInt(millis));
-    return new LazyContextPromise(handle, this, () =>
-      this.pollAsyncResult(handle, (asyncResultValue) => {
+    return this.processCompletableEntry(
+      (vm) => vm.sys_sleep(BigInt(millis)),
+      (asyncResultValue) => {
         if (asyncResultValue == "Empty") {
           // Empty
           return undefined as void;
@@ -422,7 +420,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
             asyncResultValue
           )}`
         );
-      })
+      }
     );
   }
 
@@ -432,7 +430,16 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     id: string;
     promise: CombineablePromise<T>;
   } {
-    const awakeable = this.coreVm.sys_awakeable();
+    let awakeable: vm.WasmAwakeable;
+    try {
+      awakeable = this.coreVm.sys_awakeable();
+    } catch (e) {
+      this.handleInvocationEndError(e);
+      return {
+        id: "invalid",
+        promise: new LazyContextPromise(0, this, () => PENDING_PROMISE),
+      };
+    }
     return {
       id: awakeable.id,
       promise: new LazyContextPromise(awakeable.handle, this, () =>
@@ -467,26 +474,30 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
   }
 
   public resolveAwakeable<T>(id: string, payload?: T, serde?: Serde<T>): void {
-    // We coerce undefined to null as null can be stringified by JSON.stringify
-    let value: Uint8Array;
+    this.processNonCompletableEntry((vm) => {
+      // We coerce undefined to null as null can be stringified by JSON.stringify
+      let value: Uint8Array;
 
-    if (serde) {
-      value =
-        payload == undefined ? new Uint8Array() : serde.serialize(payload);
-    } else {
-      value =
-        payload != undefined
-          ? defaultSerde().serialize(payload)
-          : defaultSerde().serialize(null);
-    }
+      if (serde) {
+        value =
+          payload == undefined ? new Uint8Array() : serde.serialize(payload);
+      } else {
+        value =
+          payload != undefined
+            ? defaultSerde().serialize(payload)
+            : defaultSerde().serialize(null);
+      }
 
-    this.coreVm.sys_complete_awakeable_success(id, value);
+      vm.sys_complete_awakeable_success(id, value);
+    });
   }
 
   public rejectAwakeable(id: string, reason: string): void {
-    this.coreVm.sys_complete_awakeable_failure(id, {
-      code: UNKNOWN_ERROR_CODE,
-      message: reason,
+    this.processNonCompletableEntry((vm) => {
+      vm.sys_complete_awakeable_failure(id, {
+        code: UNKNOWN_ERROR_CODE,
+        message: reason,
+      });
     });
   }
 
@@ -508,9 +519,12 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     const castedPromises: InternalCombineablePromise<unknown>[] = [];
     for (const promise of promises) {
       if (extractContext(promise) !== self) {
-        throw new Error(
-          "You're mixing up CombineablePromises from different RestateContext. This is not supported."
+        self.handleInvocationEndError(
+          new Error(
+            "You're mixing up CombineablePromises from different RestateContext. This is not supported."
+          )
         );
+        return PENDING_PROMISE;
       }
       castedPromises.push(promise as InternalCombineablePromise<unknown>);
     }
@@ -520,53 +534,63 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
 
     // From now on, lazily executes on await
     return new LazyPromise(async () => {
-      // Take output
-      const nextOutput1 = self.coreVm.take_output() as
-        | Uint8Array
-        | null
-        | undefined;
-      if (nextOutput1 instanceof Uint8Array) {
-        await self.outputWriter.write(nextOutput1);
-      }
-
       let combinatorResultHandle;
-      for (;;) {
-        switch (combinatorType) {
-          case "All":
-            combinatorResultHandle =
-              self.coreVm.sys_try_complete_all_combinator(handles);
-            break;
-          case "Any":
-            combinatorResultHandle =
-              self.coreVm.sys_try_complete_any_combinator(handles);
-            break;
-          case "AllSettled":
-            combinatorResultHandle =
-              self.coreVm.sys_try_complete_all_settled_combinator(handles);
-            break;
-          case "Race":
-          case "OrTimeout":
-            combinatorResultHandle =
-              self.coreVm.sys_try_complete_race_combinator(handles);
-            break;
+      try {
+        // Take output
+        const nextOutput1 = self.coreVm.take_output() as
+          | Uint8Array
+          | null
+          | undefined;
+        if (nextOutput1 instanceof Uint8Array) {
+          await self.outputWriter.write(nextOutput1);
         }
 
-        // We got a result, we're done in this loop
-        if (combinatorResultHandle !== undefined) {
-          break;
+        for (;;) {
+          switch (combinatorType) {
+            case "All":
+              combinatorResultHandle =
+                self.coreVm.sys_try_complete_all_combinator(handles);
+              break;
+            case "Any":
+              combinatorResultHandle =
+                self.coreVm.sys_try_complete_any_combinator(handles);
+              break;
+            case "AllSettled":
+              combinatorResultHandle =
+                self.coreVm.sys_try_complete_all_settled_combinator(handles);
+              break;
+            case "Race":
+            case "OrTimeout":
+              combinatorResultHandle =
+                self.coreVm.sys_try_complete_race_combinator(handles);
+              break;
+          }
+
+          // We got a result, we're done in this loop
+          if (combinatorResultHandle !== undefined) {
+            break;
+          }
+
+          // No result yet, await the next read
+          await self.awaitNextRead();
         }
 
-        // No result yet, await the next read
-        await self.awaitNextRead();
-      }
-
-      // We got a result, we need to take_output to write the combinator entry, then we need to poll the result
-      const nextOutput = self.coreVm.take_output() as
-        | Uint8Array
-        | null
-        | undefined;
-      if (nextOutput instanceof Uint8Array) {
-        await self.outputWriter.write(nextOutput);
+        // We got a result, we need to take_output to write the combinator entry, then we need to poll the result
+        const nextOutput = self.coreVm.take_output() as
+          | Uint8Array
+          | null
+          | undefined;
+        if (nextOutput instanceof Uint8Array) {
+          await self.outputWriter.write(nextOutput);
+        }
+      } catch (e) {
+        if (e instanceof TerminalError) {
+          // All good, this is a recorded failure
+          throw e;
+        }
+        // Not good, this is a retryable error.
+        self.handleInvocationEndError(e);
+        return (await PENDING_PROMISE) as T;
       }
 
       const handlesResult = await self.pollAsyncResult(
@@ -671,19 +695,39 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
 
   // -- Various private methods
 
-  runWrappingError<T>(fn: () => T): T {
+  processNonCompletableEntry(vmCall: (vm: vm.WasmVM) => void) {
     try {
-      return fn();
+      vmCall(this.coreVm);
     } catch (e) {
-      const error = ensureError(e);
-      if (error instanceof TerminalError) {
-        // Just rethrow it
-        throw error;
-      }
-
-      this.coreVm.notify_error(error.message, error.stack);
-      throw error;
+      this.handleInvocationEndError(e);
     }
+  }
+
+  processCompletableEntry<T>(
+    vmCall: (vm: vm.WasmVM) => number,
+    transformer: (
+      value:
+        | "Empty"
+        | { Success: Uint8Array }
+        | { Failure: vm.WasmFailure }
+        | { StateKeys: string[] }
+        | { CombinatorResult: number[] }
+    ) => T
+  ): LazyContextPromise<T> {
+    let handle: number;
+    try {
+      handle = vmCall(this.coreVm);
+    } catch (e) {
+      this.handleInvocationEndError(e);
+      return new LazyContextPromise(
+        0,
+        this,
+        () => PENDING_PROMISE
+      ) as LazyContextPromise<T>;
+    }
+    return new LazyContextPromise(handle, this, () =>
+      this.pollAsyncResult(handle, transformer)
+    );
   }
 
   async pollAsyncResult<T>(
@@ -697,27 +741,37 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
         | { CombinatorResult: number[] }
     ) => T
   ): Promise<T> {
-    // Take output
-    const nextOutput = this.coreVm.take_output() as
-      | Uint8Array
-      | null
-      | undefined;
-    if (nextOutput instanceof Uint8Array) {
-      await this.outputWriter.write(nextOutput);
-    }
+    try {
+      // Take output
+      const nextOutput = this.coreVm.take_output() as
+        | Uint8Array
+        | null
+        | undefined;
+      if (nextOutput instanceof Uint8Array) {
+        await this.outputWriter.write(nextOutput);
+      }
 
-    // Now loop waiting for the async result
-    let asyncResult = this.coreVm.take_async_result(handle);
-    while (asyncResult == "NotReady") {
-      await this.awaitNextRead();
-      // Using notify_await_point immediately before take_async_result
-      // makes sure the state machine will try to suspend only now,
-      // in case there aren't other concurrent tasks trying to poll this async result.
-      this.coreVm.notify_await_point(handle);
-      asyncResult = this.coreVm.take_async_result(handle);
-    }
+      // Now loop waiting for the async result
+      let asyncResult = this.coreVm.take_async_result(handle);
+      while (asyncResult == "NotReady") {
+        await this.awaitNextRead();
+        // Using notify_await_point immediately before take_async_result
+        // makes sure the state machine will try to suspend only now,
+        // in case there aren't other concurrent tasks trying to poll this async result.
+        this.coreVm.notify_await_point(handle);
+        asyncResult = this.coreVm.take_async_result(handle);
+      }
 
-    return this.runWrappingError(() => transformer(asyncResult));
+      return transformer(asyncResult);
+    } catch (e) {
+      if (e instanceof TerminalError) {
+        // All good, this is a recorded failure
+        throw e;
+      }
+      // Not good, this is a retryable error.
+      this.handleInvocationEndError(e);
+      return (await PENDING_PROMISE) as T;
+    }
   }
 
   // This function triggers a read on the input reader,
@@ -740,10 +794,9 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     let nextValue: ReadableStreamDefaultReadResult<Uint8Array>;
     try {
       nextValue = await this.inputReader.read();
-    } catch (e: any) {
-      const err = ensureError(e);
-      this.coreVm.notify_error(err.message, err.stack);
-      return;
+    } catch (e) {
+      this.handleInvocationEndError(e);
+      return PENDING_PROMISE as Promise<void>;
     }
     if (nextValue.value !== undefined) {
       this.coreVm.notify_input(nextValue.value);
@@ -751,6 +804,14 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     if (nextValue.done) {
       this.coreVm.notify_input_closed();
     }
+  }
+
+  handleInvocationEndError(e: unknown) {
+    const err = ensureError(e);
+    this.coreVm.notify_error(err.message, err.stack);
+
+    // From now on, no progress will be made.
+    this.invocationEndPromise.resolve();
   }
 }
 
@@ -821,9 +882,9 @@ class DurablePromiseImpl<T> implements DurablePromise<T> {
   [Symbol.toStringTag] = "DurablePromise";
 
   get(): InternalCombineablePromise<T> {
-    const handle = this.ctx.coreVm.sys_get_promise(this.name);
-    return new LazyContextPromise(handle, this.ctx, () =>
-      this.ctx.pollAsyncResult(handle, (asyncResultValue) => {
+    return this.ctx.processCompletableEntry(
+      (vm) => vm.sys_get_promise(this.name),
+      (asyncResultValue) => {
         if (
           typeof asyncResultValue === "object" &&
           "Success" in asyncResultValue
@@ -842,14 +903,14 @@ class DurablePromiseImpl<T> implements DurablePromise<T> {
             asyncResultValue
           )}`
         );
-      })
+      }
     );
   }
 
   peek(): Promise<T | undefined> {
-    const handle = this.ctx.coreVm.sys_peek_promise(this.name);
-    return new LazyContextPromise(handle, this.ctx, () =>
-      this.ctx.pollAsyncResult(handle, (asyncResultValue) => {
+    return this.ctx.processCompletableEntry(
+      (vm) => vm.sys_peek_promise(this.name),
+      (asyncResultValue) => {
         if (asyncResultValue === "Empty") {
           return undefined;
         } else if (
@@ -870,17 +931,18 @@ class DurablePromiseImpl<T> implements DurablePromise<T> {
             asyncResultValue
           )}`
         );
-      })
+      }
     );
   }
 
   resolve(value?: T | undefined): Promise<void> {
-    const handle = this.ctx.coreVm.sys_complete_promise_success(
-      this.name,
-      this.ctx.runWrappingError(() => this.serde.serialize(value as T))
-    );
-    return new LazyContextPromise(handle, this.ctx, () =>
-      this.ctx.pollAsyncResult(handle, (asyncResultValue) => {
+    return this.ctx.processCompletableEntry(
+      (vm) =>
+        vm.sys_complete_promise_success(
+          this.name,
+          this.serde.serialize(value as T)
+        ),
+      (asyncResultValue) => {
         if (asyncResultValue === "Empty") {
           return undefined;
         } else if (
@@ -896,17 +958,18 @@ class DurablePromiseImpl<T> implements DurablePromise<T> {
             asyncResultValue
           )}`
         );
-      })
+      }
     );
   }
 
   reject(errorMsg: string): Promise<void> {
-    const handle = this.ctx.coreVm.sys_complete_promise_failure(this.name, {
-      code: INTERNAL_ERROR_CODE,
-      message: errorMsg,
-    });
-    return new LazyContextPromise(handle, this.ctx, () =>
-      this.ctx.pollAsyncResult(handle, (asyncResultValue) => {
+    return this.ctx.processCompletableEntry(
+      (vm) =>
+        vm.sys_complete_promise_failure(this.name, {
+          code: INTERNAL_ERROR_CODE,
+          message: errorMsg,
+        }),
+      (asyncResultValue) => {
         if (asyncResultValue === "Empty") {
           return undefined;
         } else if (
@@ -922,7 +985,7 @@ class DurablePromiseImpl<T> implements DurablePromise<T> {
             asyncResultValue
           )}`
         );
-      })
+      }
     );
   }
 }
@@ -991,3 +1054,7 @@ type PromiseCombinatorType =
   | "AllSettled"
   | "Race"
   | "OrTimeout";
+
+// A promise that is never completed
+// eslint-disable-next-line @typescript-eslint/no-empty-function
+export const PENDING_PROMISE: Promise<any> = new Promise<any>(() => {});
