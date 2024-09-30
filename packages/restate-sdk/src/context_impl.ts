@@ -340,7 +340,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       }
     } catch (e) {
       this.handleInvocationEndError(e);
-      return PENDING_PROMISE as Promise<T>;
+      return pendingPromise();
     }
 
     // We wrap the rest of the execution in this closure to create a future
@@ -374,7 +374,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
         }
       } catch (e) {
         this.handleInvocationEndError(e);
-        return PENDING_PROMISE as Promise<T>;
+        return pendingPromise<T>();
       }
 
       // Got the handle, wait for the result now (which we get once we get the ack)
@@ -437,7 +437,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       this.handleInvocationEndError(e);
       return {
         id: "invalid",
-        promise: new LazyContextPromise(0, this, () => PENDING_PROMISE),
+        promise: new LazyContextPromise(0, this, () => pendingPromise()),
       };
     }
     return {
@@ -524,7 +524,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
             "You're mixing up CombineablePromises from different RestateContext. This is not supported."
           )
         );
-        return PENDING_PROMISE;
+        return pendingPromise();
       }
       castedPromises.push(promise as InternalCombineablePromise<unknown>);
     }
@@ -590,7 +590,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
         }
         // Not good, this is a retryable error.
         self.handleInvocationEndError(e);
-        return (await PENDING_PROMISE) as T;
+        return await pendingPromise<T>();
       }
 
       const handlesResult = await self.pollAsyncResult(
@@ -719,11 +719,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       handle = vmCall(this.coreVm);
     } catch (e) {
       this.handleInvocationEndError(e);
-      return new LazyContextPromise(
-        0,
-        this,
-        () => PENDING_PROMISE
-      ) as LazyContextPromise<T>;
+      return new LazyContextPromise(0, this, () => pendingPromise<T>());
     }
     return new LazyContextPromise(handle, this, () =>
       this.pollAsyncResult(handle, transformer)
@@ -770,7 +766,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       }
       // Not good, this is a retryable error.
       this.handleInvocationEndError(e);
-      return (await PENDING_PROMISE) as T;
+      return await pendingPromise<T>();
     }
   }
 
@@ -796,7 +792,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       nextValue = await this.inputReader.read();
     } catch (e) {
       this.handleInvocationEndError(e);
-      return PENDING_PROMISE as Promise<void>;
+      return pendingPromise<void>();
     }
     if (nextValue.value !== undefined) {
       this.coreVm.notify_input(nextValue.value);
@@ -1056,5 +1052,7 @@ type PromiseCombinatorType =
   | "OrTimeout";
 
 // A promise that is never completed
-// eslint-disable-next-line @typescript-eslint/no-empty-function
-export const PENDING_PROMISE: Promise<any> = new Promise<any>(() => {});
+function pendingPromise<T>(): Promise<T> {
+  // eslint-disable-next-line @typescript-eslint/no-empty-function
+  return new Promise<T>(() => {});
+}
