@@ -25,7 +25,7 @@
     "lint": "eslint --ignore-path .eslintignore --max-warnings=0 --ext .ts .",
     "format": "prettier --ignore-path .eslintignore --write \"**/*.+(js|ts|json)\"",
     "format-check": "prettier --ignore-path .eslintignore --check \"**/*.+(js|ts|json)\"",
-    "test": "vitest run --silent",
+    "test": "vitest run --silent --passWithNoTests",
     "verify": "npm run format-check && npm run lint && npm run build",
     "release": ""
   },

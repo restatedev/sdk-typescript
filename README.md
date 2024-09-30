@@ -71,10 +71,9 @@ We know that your time is precious and, therefore, deeply value any effort to co
 #### Prerequisites
 - [NodeJS (and npm)](https://nodejs.org) installed
 
-Install the dependencies, build the Restate protocol types (from ProtoBuf), and transpile the TypeScript code:
+Install the dependencies and transpile the TypeScript code:
 ```shell
 npm install
-npm run proto
 npm run build
 ```
 

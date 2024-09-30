@@ -24,7 +24,7 @@ jobs:
           registry-url: "https://registry.npmjs.org"
       - run: npm run clean
       - run: npm ci
-      - run: npm run proto
+      - run: npm run build
       - run: npm run verify
       - run: npm pack --workspaces true --include-workspace-root false
       - run: find -type f -name "restatedev-restate-sdk-[0-9.]*\.tgz" | xargs -I {} mv {} restatedev-restate-sdk.tgz

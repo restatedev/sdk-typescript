@@ -24,7 +24,6 @@
   "type": "module",
   "scripts": {
     "build": "npm run build -ws --if-present",
-    "proto": "npm run proto -ws --if-present",
     "test": "npm run test -ws --if-present",
     "lint": "npm run lint -ws --if-present",
     "format": "npm run format -ws --if-present",

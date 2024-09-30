@@ -133,8 +133,8 @@ export class EndpointBuilder {
 
     const endpoint: discovery.Endpoint = {
       protocolMode,
-      minProtocolVersion: 1,
-      maxProtocolVersion: 1,
+      minProtocolVersion: 2,
+      maxProtocolVersion: 2,
       services,
     };
 
