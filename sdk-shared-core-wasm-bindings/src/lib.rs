@@ -1,8 +1,8 @@
 use js_sys::Uint8Array;
 use restate_sdk_shared_core::{
     AsyncResultAccessTracker, AsyncResultCombinator, AsyncResultHandle, AsyncResultState, CoreVM,
-    Error, Header, HeaderMap, Input, NonEmptyValue, ResponseHead, RetryPolicy, RunEnterResult,
-    RunExitResult, TakeOutputResult, Target, TerminalFailure, VMOptions, Value, VM,
+    Error, Header, HeaderMap, IdentityVerifier, Input, NonEmptyValue, ResponseHead, RetryPolicy,
+    RunEnterResult, RunExitResult, TakeOutputResult, Target, TerminalFailure, VMOptions, Value, VM,
 };
 use serde::{Deserialize, Serialize};
 use std::convert::{Infallible, Into};
@@ -769,5 +769,27 @@ impl HeaderMap for WasmHeaderList {
             }
         }
         Ok(None)
+    }
+}
+
+#[wasm_bindgen]
+pub struct WasmIdentityVerifier {
+    identity_verifier: IdentityVerifier,
+}
+
+#[wasm_bindgen]
+impl WasmIdentityVerifier {
+    #[wasm_bindgen(constructor)]
+    pub fn new(keys: Vec<String>) -> Result<WasmIdentityVerifier, JsError> {
+        let k: Vec<_> = keys.iter().map(|s| s.as_str()).collect();
+        Ok(WasmIdentityVerifier {
+            identity_verifier: IdentityVerifier::new(&k)?,
+        })
+    }
+
+    pub fn verify_identity(&self, path: &str, headers: Vec<WasmHeader>) -> Result<(), JsError> {
+        self.identity_verifier
+            .verify_identity(&WasmHeaderList(headers), path)?;
+        Ok(())
     }
 }

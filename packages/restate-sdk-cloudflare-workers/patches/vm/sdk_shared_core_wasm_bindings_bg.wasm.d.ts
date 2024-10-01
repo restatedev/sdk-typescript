@@ -52,10 +52,15 @@ export function wasmvm_sys_try_complete_all_combinator(a: number, b: number, c: 
 export function wasmvm_sys_try_complete_any_combinator(a: number, b: number, c: number, d: number): void;
 export function wasmvm_sys_try_complete_all_settled_combinator(a: number, b: number, c: number, d: number): void;
 export function wasmvm_sys_try_complete_race_combinator(a: number, b: number, c: number, d: number): void;
+export function __wbg_wasmidentityverifier_free(a: number, b: number): void;
+export function wasmidentityverifier_new(a: number, b: number, c: number): void;
+export function wasmidentityverifier_verify_identity(a: number, b: number, c: number, d: number, e: number, f: number): void;
 export function __wbg_get_wasminput_invocation_id(a: number, b: number): void;
 export function __wbg_get_wasminput_key(a: number, b: number): void;
+export function ring_core_0_17_8_bn_mul_mont(a: number, b: number, c: number, d: number, e: number, f: number): void;
 export function __wbindgen_malloc(a: number, b: number): number;
 export function __wbindgen_realloc(a: number, b: number, c: number, d: number): number;
 export function __wbindgen_add_to_stack_pointer(a: number): number;
 export function __wbindgen_free(a: number, b: number, c: number): void;
+export function __wbindgen_exn_store(a: number): void;
 export function __wbindgen_start(): void;

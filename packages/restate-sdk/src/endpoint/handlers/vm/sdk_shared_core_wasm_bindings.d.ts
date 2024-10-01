@@ -66,6 +66,20 @@ export class WasmHeader {
 }
 /**
  */
+export class WasmIdentityVerifier {
+  free(): void;
+  /**
+   * @param {(string)[]} keys
+   */
+  constructor(keys: string[]);
+  /**
+   * @param {string} path
+   * @param {(WasmHeader)[]} headers
+   */
+  verify_identity(path: string, headers: WasmHeader[]): void;
+}
+/**
+ */
 export class WasmInput {
   free(): void;
   /**

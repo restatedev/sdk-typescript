@@ -11,12 +11,8 @@
 
 import { ensureError, TerminalError } from "../../types/errors.js";
 import type { ProtocolMode } from "../../types/discovery.js";
-import type {
-  ComponentHandler,
-  PathComponents,
-} from "../../types/components.js";
+import type { ComponentHandler } from "../../types/components.js";
 import { parseUrlComponents } from "../../types/components.js";
-import { validateRequestSignature } from "../request_signing/validate.js";
 import { X_RESTATE_SERVER } from "../../user_agent.js";
 import type { EndpointBuilder } from "../endpoint_builder.js";
 import { type ReadableStream, TransformStream } from "node:stream/web";
@@ -89,21 +85,24 @@ export interface RestateHandler {
  * Different runtimes have slightly different shapes of the incoming request, and responses.
  */
 export class GenericHandler implements RestateHandler {
+  private readonly identityVerifier?: vm.WasmIdentityVerifier;
+
   constructor(
     readonly endpoint: EndpointBuilder,
     private readonly protocolMode: ProtocolMode
   ) {
-    if (!this.endpoint.keySet) {
+    // Setup identity verifier
+    if (this.endpoint.keySet == undefined || this.endpoint.keySet.length == 0) {
       this.endpoint.rlog.warn(
         `Accepting requests without validating request signatures; handler access must be restricted`
       );
     } else {
       this.endpoint.rlog.info(
-        `Validating requests using signing keys [${Array.from(
-          this.endpoint.keySet.keys()
-        )}]`
+        `Validating requests using signing keys [${this.endpoint.keySet}]`
       );
+      this.identityVerifier = new vm.WasmIdentityVerifier(this.endpoint.keySet);
     }
+
     // Set the logging level in the shared core too!
     switch (DEFAULT_LOGGER_LOG_LEVEL) {
       case RestateLogLevel.TRACE:
@@ -146,13 +145,9 @@ export class GenericHandler implements RestateHandler {
   ): Promise<RestateResponse> {
     // this is the recommended way to get the relative path from a url that may be relative or absolute
     const path = new URL(request.url, "https://example.com").pathname;
-
     const parsed = parseUrlComponents(path);
 
-    const error = await this.validateConnectionSignature(
-      parsed,
-      request.headers
-    );
+    const error = this.validateConnectionSignature(path, request.headers);
     if (error !== null) {
       return error;
     }
@@ -198,38 +193,29 @@ export class GenericHandler implements RestateHandler {
     );
   }
 
-  private async validateConnectionSignature(
-    path: PathComponents,
+  private validateConnectionSignature(
+    path: string,
     headers: Headers
-  ): Promise<RestateResponse | null> {
-    if (!this.endpoint.keySet) {
+  ): RestateResponse | null {
+    if (!this.identityVerifier) {
       // not validating
       return null;
     }
 
-    try {
-      const validateResponse = await validateRequestSignature(
-        this.endpoint.keySet,
-        path,
-        headers
+    const vmHeaders = Object.entries(headers)
+      .filter(([, v]) => v !== undefined)
+      .map(
+        ([k, v]) =>
+          new vm.WasmHeader(k, v instanceof Array ? v[0] : (v as string))
       );
 
-      if (!validateResponse.valid) {
-        this.endpoint.rlog.error(
-          `Rejecting request as its JWT did not validate: ${
-            // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
-            validateResponse.error
-          }`
-        );
-        return this.toErrorResponse(401, "Unauthorized");
-      } else {
-        return null;
-      }
+    try {
+      this.identityVerifier.verify_identity(path, vmHeaders);
+      return null;
     } catch (e) {
-      const error = ensureError(e);
       this.endpoint.rlog.error(
-        "Error while attempting to validate request signature: " +
-          (error.stack ?? error.message)
+        // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
+        `Rejecting request as its JWT did not validate: ${e}`
       );
       return this.toErrorResponse(401, "Unauthorized");
     }
