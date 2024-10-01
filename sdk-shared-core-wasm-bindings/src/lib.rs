@@ -1,5 +1,9 @@
 use js_sys::Uint8Array;
-use restate_sdk_shared_core::{AsyncResultAccessTracker, AsyncResultCombinator, AsyncResultHandle, AsyncResultState, CoreVM, Failure, Header, HeaderMap, Input, NonEmptyValue, ResponseHead, RetryPolicy, RunEnterResult, RunExitResult, TakeOutputResult, Target, VMOptions, Value, VM};
+use restate_sdk_shared_core::{
+    AsyncResultAccessTracker, AsyncResultCombinator, AsyncResultHandle, AsyncResultState, CoreVM,
+    Failure, Header, HeaderMap, Input, NonEmptyValue, ResponseHead, RetryPolicy, RunEnterResult,
+    RunExitResult, TakeOutputResult, Target, VMOptions, Value, VM,
+};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::convert::Infallible;
@@ -7,9 +11,9 @@ use std::io::Write;
 use std::time::Duration;
 use tracing::metadata::LevelFilter;
 use tracing::Level;
+use tracing_subscriber::fmt::MakeWriter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::{Layer, Registry};
-use tracing_subscriber::fmt::MakeWriter;
 use tsify::Tsify;
 use wasm_bindgen::prelude::*;
 
@@ -31,7 +35,7 @@ pub enum LogLevel {
     ERROR = 4,
 }
 
-#[wasm_bindgen(raw_module = "../../../logger.js")]
+#[wasm_bindgen(raw_module = "../generic.js")]
 extern "C" {
     #[wasm_bindgen]
     fn vm_log(level: LogLevel, s: &str);
@@ -121,8 +125,7 @@ pub fn set_log_level(level: LogLevel) {
             LogLevel::ERROR => Level::ERROR,
         }));
 
-    tracing::subscriber::set_global_default(Registry::default().with(fmt_layer))
-        .expect("set_log_level must be called once");
+    let _ = tracing::subscriber::set_global_default(Registry::default().with(fmt_layer));
 }
 
 // Data model
@@ -293,9 +296,12 @@ impl WasmVM {
     #[wasm_bindgen(constructor)]
     pub fn new(headers: Vec<WasmHeader>) -> Result<WasmVM, JsError> {
         Ok(Self {
-            vm: CoreVM::new(WasmHeaderList::from(headers), VMOptions {
-                fail_on_wait_concurrent_async_result: false,
-            })?,
+            vm: CoreVM::new(
+                WasmHeaderList::from(headers),
+                VMOptions {
+                    fail_on_wait_concurrent_async_result: false,
+                },
+            )?,
         })
     }
 
