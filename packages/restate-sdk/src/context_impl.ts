@@ -29,6 +29,8 @@ import type * as vm from "./endpoint/handlers/vm/sdk_shared_core_wasm_bindings.j
 import {
   ensureError,
   INTERNAL_ERROR_CODE,
+  RestateError,
+  SUSPENDED_ERROR_CODE,
   TerminalError,
   TimeoutError,
   UNKNOWN_ERROR_CODE,
@@ -803,8 +805,14 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
   }
 
   handleInvocationEndError(e: unknown) {
-    const err = ensureError(e);
-    this.coreVm.notify_error(err.message, err.stack);
+    const error = ensureError(e);
+    if (
+      !(error instanceof RestateError) ||
+      error.code != SUSPENDED_ERROR_CODE
+    ) {
+      this.console.warn("Function completed with an error.\n", error);
+    }
+    this.coreVm.notify_error(error.message, error.stack);
 
     // From now on, no progress will be made.
     this.invocationEndPromise.resolve();

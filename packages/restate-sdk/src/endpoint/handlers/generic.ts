@@ -9,7 +9,12 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { ensureError, TerminalError } from "../../types/errors.js";
+import {
+  ensureError,
+  RestateError,
+  SUSPENDED_ERROR_CODE,
+  TerminalError,
+} from "../../types/errors.js";
 import type { ProtocolMode } from "../../types/discovery.js";
 import type { ComponentHandler } from "../../types/components.js";
 import { parseUrlComponents } from "../../types/components.js";
@@ -311,7 +316,12 @@ export class GenericHandler implements RestateHandler {
       })
       .catch((e) => {
         const error = ensureError(e);
-        console.warn("Function completed with an error.\n", error);
+        if (
+          !(error instanceof RestateError) ||
+          error.code != SUSPENDED_ERROR_CODE
+        ) {
+          console.warn("Function completed with an error.\n", error);
+        }
 
         if (error instanceof TerminalError) {
           coreVm.sys_write_output_failure({
