@@ -538,13 +538,13 @@ export class WasmVM {
         wasm.wasmvm_notify_input_closed(this.__wbg_ptr);
     }
     /**
-    * @param {string} error
-    * @param {string | undefined} [description]
+    * @param {string} error_message
+    * @param {string | undefined} [error_description]
     */
-    notify_error(error, description) {
-        const ptr0 = passStringToWasm0(error, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+    notify_error(error_message, error_description) {
+        const ptr0 = passStringToWasm0(error_message, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
-        var ptr1 = isLikeNone(description) ? 0 : passStringToWasm0(description, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        var ptr1 = isLikeNone(error_description) ? 0 : passStringToWasm0(error_description, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         var len1 = WASM_VECTOR_LEN;
         wasm.wasmvm_notify_error(this.__wbg_ptr, ptr0, len0, ptr1, len1);
     }
@@ -982,15 +982,20 @@ export class WasmVM {
         }
     }
     /**
-    * @param {WasmFailure} value
+    * @param {string} error_message
+    * @param {string | undefined} error_description
     * @param {bigint} attempt_duration
     * @param {WasmExponentialRetryConfig} config
     * @returns {number}
     */
-    sys_run_exit_failure_transient(value, attempt_duration, config) {
+    sys_run_exit_failure_transient(error_message, error_description, attempt_duration, config) {
         try {
             const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            wasm.wasmvm_sys_run_exit_failure_transient(retptr, this.__wbg_ptr, addHeapObject(value), attempt_duration, addHeapObject(config));
+            const ptr0 = passStringToWasm0(error_message, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            const len0 = WASM_VECTOR_LEN;
+            var ptr1 = isLikeNone(error_description) ? 0 : passStringToWasm0(error_description, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+            var len1 = WASM_VECTOR_LEN;
+            wasm.wasmvm_sys_run_exit_failure_transient(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1, attempt_duration, addHeapObject(config));
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
             var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
             var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);

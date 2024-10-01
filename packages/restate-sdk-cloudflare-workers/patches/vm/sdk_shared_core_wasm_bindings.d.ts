@@ -103,10 +103,10 @@ export class WasmVM {
 */
   notify_input_closed(): void;
 /**
-* @param {string} error
-* @param {string | undefined} [description]
+* @param {string} error_message
+* @param {string | undefined} [error_description]
 */
-  notify_error(error: string, description?: string): void;
+  notify_error(error_message: string, error_description?: string): void;
 /**
 * @returns {any}
 */
@@ -222,12 +222,13 @@ export class WasmVM {
 */
   sys_run_exit_failure(value: WasmFailure): number;
 /**
-* @param {WasmFailure} value
+* @param {string} error_message
+* @param {string | undefined} error_description
 * @param {bigint} attempt_duration
 * @param {WasmExponentialRetryConfig} config
 * @returns {number}
 */
-  sys_run_exit_failure_transient(value: WasmFailure, attempt_duration: bigint, config: WasmExponentialRetryConfig): number;
+  sys_run_exit_failure_transient(error_message: string, error_description: string | undefined, attempt_duration: bigint, config: WasmExponentialRetryConfig): number;
 /**
 * @param {Uint8Array} buffer
 */

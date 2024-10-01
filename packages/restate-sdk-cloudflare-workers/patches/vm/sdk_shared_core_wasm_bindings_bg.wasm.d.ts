@@ -42,7 +42,7 @@ export function wasmvm_sys_complete_promise_failure(a: number, b: number, c: num
 export function wasmvm_sys_run_enter(a: number, b: number, c: number, d: number): void;
 export function wasmvm_sys_run_exit_success(a: number, b: number, c: number): void;
 export function wasmvm_sys_run_exit_failure(a: number, b: number, c: number): void;
-export function wasmvm_sys_run_exit_failure_transient(a: number, b: number, c: number, d: number, e: number): void;
+export function wasmvm_sys_run_exit_failure_transient(a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number): void;
 export function wasmvm_sys_write_output_success(a: number, b: number, c: number): void;
 export function wasmvm_sys_write_output_failure(a: number, b: number, c: number): void;
 export function wasmvm_sys_end(a: number, b: number): void;
