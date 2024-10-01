@@ -35,3 +35,5 @@ const o = restate.object({
 });
 
 REGISTRY.addObject(o);
+
+export type ListObject = typeof o;
