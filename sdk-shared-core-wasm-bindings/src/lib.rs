@@ -2,7 +2,8 @@ use js_sys::Uint8Array;
 use restate_sdk_shared_core::{
     AsyncResultAccessTracker, AsyncResultCombinator, AsyncResultHandle, AsyncResultState, CoreVM,
     Error, Header, HeaderMap, IdentityVerifier, Input, NonEmptyValue, ResponseHead, RetryPolicy,
-    RunEnterResult, RunExitResult, TakeOutputResult, Target, TerminalFailure, VMOptions, Value, VM,
+    RunEnterResult, RunExitResult, SuspendedOrVMError, TakeOutputResult, Target, TerminalFailure,
+    VMOptions, Value, VM,
 };
 use serde::{Deserialize, Serialize};
 use std::convert::{Infallible, Into};
@@ -187,6 +188,21 @@ pub struct WasmFailure {
     pub message: String,
 }
 
+impl From<Error> for WasmFailure {
+    fn from(value: Error) -> Self {
+        WasmFailure {
+            code: value.code(),
+            message: value.to_string(),
+        }
+    }
+}
+
+impl From<WasmFailure> for JsValue {
+    fn from(value: WasmFailure) -> Self {
+        serde_wasm_bindgen::to_value(&value).unwrap_or_else(|e| e.into())
+    }
+}
+
 #[derive(Tsify, Serialize, Deserialize)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct WasmExponentialRetryConfig {
@@ -293,7 +309,7 @@ pub struct WasmVM {
 #[wasm_bindgen]
 impl WasmVM {
     #[wasm_bindgen(constructor)]
-    pub fn new(headers: Vec<WasmHeader>) -> Result<WasmVM, JsError> {
+    pub fn new(headers: Vec<WasmHeader>) -> Result<WasmVM, WasmFailure> {
         Ok(Self {
             vm: CoreVM::new(
                 WasmHeaderList::from(headers),
@@ -333,7 +349,7 @@ impl WasmVM {
         }
     }
 
-    pub fn is_ready_to_execute(&self) -> Result<bool, JsError> {
+    pub fn is_ready_to_execute(&self) -> Result<bool, WasmFailure> {
         self.vm.is_ready_to_execute().map_err(Into::into)
     }
 
@@ -344,9 +360,18 @@ impl WasmVM {
     pub fn take_async_result(
         &mut self,
         handle: WasmAsyncResultHandle,
-    ) -> Result<WasmAsyncResultValue, JsError> {
+    ) -> Result<WasmAsyncResultValue, WasmFailure> {
         Ok(
-            match self.vm.take_async_result(AsyncResultHandle::from(handle))? {
+            match self
+                .vm
+                .take_async_result(AsyncResultHandle::from(handle))
+                .map_err(|e| match e {
+                    SuspendedOrVMError::Suspended(_) => WasmFailure {
+                        code: 599,
+                        message: "suspended".to_string(),
+                    },
+                    SuspendedOrVMError::VM(e) => WasmFailure::from(e),
+                })? {
                 None => WasmAsyncResultValue::NotReady,
                 Some(Value::Void) => WasmAsyncResultValue::Empty,
                 Some(Value::Success(b)) => WasmAsyncResultValue::Success(b.to_vec().into()),
@@ -361,18 +386,18 @@ impl WasmVM {
 
     // Syscall(s)
 
-    pub fn sys_input(&mut self) -> Result<WasmInput, JsError> {
+    pub fn sys_input(&mut self) -> Result<WasmInput, WasmFailure> {
         self.vm.sys_input().map(Into::into).map_err(Into::into)
     }
 
-    pub fn sys_get_state(&mut self, key: String) -> Result<WasmAsyncResultHandle, JsError> {
+    pub fn sys_get_state(&mut self, key: String) -> Result<WasmAsyncResultHandle, WasmFailure> {
         self.vm
             .sys_state_get(key)
             .map(Into::into)
             .map_err(Into::into)
     }
 
-    pub fn sys_get_state_keys(&mut self) -> Result<WasmAsyncResultHandle, JsError> {
+    pub fn sys_get_state_keys(&mut self) -> Result<WasmAsyncResultHandle, WasmFailure> {
         self.vm
             .sys_state_get_keys()
             .map(Into::into)
@@ -383,21 +408,21 @@ impl WasmVM {
         &mut self,
         key: String,
         buffer: js_sys::Uint8Array,
-    ) -> Result<(), JsError> {
+    ) -> Result<(), WasmFailure> {
         self.vm
             .sys_state_set(key, buffer.to_vec().into())
             .map_err(Into::into)
     }
 
-    pub fn sys_clear_state(&mut self, key: String) -> Result<(), JsError> {
+    pub fn sys_clear_state(&mut self, key: String) -> Result<(), WasmFailure> {
         self.vm.sys_state_clear(key).map_err(Into::into)
     }
 
-    pub fn sys_clear_all_state(&mut self) -> Result<(), JsError> {
+    pub fn sys_clear_all_state(&mut self) -> Result<(), WasmFailure> {
         self.vm.sys_state_clear_all().map_err(Into::into)
     }
 
-    pub fn sys_sleep(&mut self, millis: u64) -> Result<WasmAsyncResultHandle, JsError> {
+    pub fn sys_sleep(&mut self, millis: u64) -> Result<WasmAsyncResultHandle, WasmFailure> {
         self.vm
             .sys_sleep(duration_since_unix_epoch() + Duration::from_millis(millis))
             .map(Into::into)
@@ -410,7 +435,7 @@ impl WasmVM {
         handler: String,
         buffer: js_sys::Uint8Array,
         key: Option<String>,
-    ) -> Result<WasmAsyncResultHandle, JsError> {
+    ) -> Result<WasmAsyncResultHandle, WasmFailure> {
         self.vm
             .sys_call(
                 Target {
@@ -431,7 +456,7 @@ impl WasmVM {
         buffer: Uint8Array,
         key: Option<String>,
         delay: Option<u64>,
-    ) -> Result<(), JsError> {
+    ) -> Result<(), WasmFailure> {
         self.vm
             .sys_send(
                 Target {
@@ -445,7 +470,7 @@ impl WasmVM {
             .map_err(Into::into)
     }
 
-    pub fn sys_awakeable(&mut self) -> Result<WasmAwakeable, JsError> {
+    pub fn sys_awakeable(&mut self) -> Result<WasmAwakeable, WasmFailure> {
         self.vm
             .sys_awakeable()
             .map(|(id, handle)| WasmAwakeable {
@@ -459,7 +484,7 @@ impl WasmVM {
         &mut self,
         id: String,
         buffer: Uint8Array,
-    ) -> Result<(), JsError> {
+    ) -> Result<(), WasmFailure> {
         self.vm
             .sys_complete_awakeable(id, NonEmptyValue::Success(buffer.to_vec().into()))
             .map_err(Into::into)
@@ -469,20 +494,20 @@ impl WasmVM {
         &mut self,
         id: String,
         value: WasmFailure,
-    ) -> Result<(), JsError> {
+    ) -> Result<(), WasmFailure> {
         self.vm
             .sys_complete_awakeable(id, NonEmptyValue::Failure(value.into()))
             .map_err(Into::into)
     }
 
-    pub fn sys_get_promise(&mut self, key: String) -> Result<WasmAsyncResultHandle, JsError> {
+    pub fn sys_get_promise(&mut self, key: String) -> Result<WasmAsyncResultHandle, WasmFailure> {
         self.vm
             .sys_get_promise(key)
             .map(Into::into)
             .map_err(Into::into)
     }
 
-    pub fn sys_peek_promise(&mut self, key: String) -> Result<WasmAsyncResultHandle, JsError> {
+    pub fn sys_peek_promise(&mut self, key: String) -> Result<WasmAsyncResultHandle, WasmFailure> {
         self.vm
             .sys_peek_promise(key)
             .map(Into::into)
@@ -493,7 +518,7 @@ impl WasmVM {
         &mut self,
         key: String,
         buffer: Uint8Array,
-    ) -> Result<WasmAsyncResultHandle, JsError> {
+    ) -> Result<WasmAsyncResultHandle, WasmFailure> {
         self.vm
             .sys_complete_promise(key, NonEmptyValue::Success(buffer.to_vec().into()))
             .map(Into::into)
@@ -504,14 +529,14 @@ impl WasmVM {
         &mut self,
         key: String,
         value: WasmFailure,
-    ) -> Result<WasmAsyncResultHandle, JsError> {
+    ) -> Result<WasmAsyncResultHandle, WasmFailure> {
         self.vm
             .sys_complete_promise(key, NonEmptyValue::Failure(value.into()))
             .map(Into::into)
             .map_err(Into::into)
     }
 
-    pub fn sys_run_enter(&mut self, name: String) -> Result<WasmRunEnterResult, JsError> {
+    pub fn sys_run_enter(&mut self, name: String) -> Result<WasmRunEnterResult, WasmFailure> {
         Ok(match self.vm.sys_run_enter(name)? {
             RunEnterResult::Executed(NonEmptyValue::Success(b)) => {
                 WasmRunEnterResult::ExecutedWithSuccess(b.to_vec().into())
@@ -526,7 +551,7 @@ impl WasmVM {
     pub fn sys_run_exit_success(
         &mut self,
         buffer: Uint8Array,
-    ) -> Result<WasmAsyncResultHandle, JsError> {
+    ) -> Result<WasmAsyncResultHandle, WasmFailure> {
         CoreVM::sys_run_exit(
             &mut self.vm,
             RunExitResult::Success(buffer.to_vec().into()),
@@ -539,7 +564,7 @@ impl WasmVM {
     pub fn sys_run_exit_failure(
         &mut self,
         value: WasmFailure,
-    ) -> Result<WasmAsyncResultHandle, JsError> {
+    ) -> Result<WasmAsyncResultHandle, WasmFailure> {
         self.vm
             .sys_run_exit(
                 RunExitResult::TerminalFailure(value.into()),
@@ -555,7 +580,7 @@ impl WasmVM {
         error_description: Option<String>,
         attempt_duration: u64,
         config: WasmExponentialRetryConfig,
-    ) -> Result<WasmAsyncResultHandle, JsError> {
+    ) -> Result<WasmAsyncResultHandle, WasmFailure> {
         self.vm
             .sys_run_exit(
                 RunExitResult::RetryableFailure {
@@ -569,21 +594,24 @@ impl WasmVM {
             .map_err(Into::into)
     }
 
-    pub fn sys_write_output_success(&mut self, buffer: js_sys::Uint8Array) -> Result<(), JsError> {
+    pub fn sys_write_output_success(
+        &mut self,
+        buffer: js_sys::Uint8Array,
+    ) -> Result<(), WasmFailure> {
         self.vm
             .sys_write_output(NonEmptyValue::Success(buffer.to_vec().into()))
             .map(Into::into)
             .map_err(Into::into)
     }
 
-    pub fn sys_write_output_failure(&mut self, value: WasmFailure) -> Result<(), JsError> {
+    pub fn sys_write_output_failure(&mut self, value: WasmFailure) -> Result<(), WasmFailure> {
         self.vm
             .sys_write_output(NonEmptyValue::Failure(value.into()))
             .map(Into::into)
             .map_err(Into::into)
     }
 
-    pub fn sys_end(&mut self) -> Result<(), JsError> {
+    pub fn sys_end(&mut self) -> Result<(), WasmFailure> {
         self.vm.sys_end().map(Into::into).map_err(Into::into)
     }
 
@@ -598,7 +626,7 @@ impl WasmVM {
     pub fn sys_try_complete_all_combinator(
         &mut self,
         handles: Vec<WasmAsyncResultHandle>,
-    ) -> Result<Option<WasmAsyncResultHandle>, JsError> {
+    ) -> Result<Option<WasmAsyncResultHandle>, WasmFailure> {
         self.vm
             .sys_try_complete_combinator(AllAsyncResultCombinator(
                 handles.into_iter().map(Into::into).collect(),
@@ -610,7 +638,7 @@ impl WasmVM {
     pub fn sys_try_complete_any_combinator(
         &mut self,
         handles: Vec<WasmAsyncResultHandle>,
-    ) -> Result<Option<WasmAsyncResultHandle>, JsError> {
+    ) -> Result<Option<WasmAsyncResultHandle>, WasmFailure> {
         self.vm
             .sys_try_complete_combinator(AnyAsyncResultCombinator(
                 handles.into_iter().map(Into::into).collect(),
@@ -622,7 +650,7 @@ impl WasmVM {
     pub fn sys_try_complete_all_settled_combinator(
         &mut self,
         handles: Vec<WasmAsyncResultHandle>,
-    ) -> Result<Option<WasmAsyncResultHandle>, JsError> {
+    ) -> Result<Option<WasmAsyncResultHandle>, WasmFailure> {
         self.vm
             .sys_try_complete_combinator(AllSettledAsyncResultCombinator(
                 handles.into_iter().map(Into::into).collect(),
@@ -634,7 +662,7 @@ impl WasmVM {
     pub fn sys_try_complete_race_combinator(
         &mut self,
         handles: Vec<WasmAsyncResultHandle>,
-    ) -> Result<Option<WasmAsyncResultHandle>, JsError> {
+    ) -> Result<Option<WasmAsyncResultHandle>, WasmFailure> {
         self.vm
             .sys_try_complete_combinator(RaceAsyncResultCombinator(
                 handles.into_iter().map(Into::into).collect(),
