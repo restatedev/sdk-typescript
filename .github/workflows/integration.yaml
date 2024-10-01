@@ -40,7 +40,7 @@ jobs:
     name: "Features integration test (sdk-test-suite version ${{ matrix.sdk-test-suite }})"
     strategy:
       matrix:
-        sdk-test-suite: ["1.5"]
+        sdk-test-suite: ["2.1"]
     permissions:
       contents: read
       issues: read

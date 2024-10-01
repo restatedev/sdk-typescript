@@ -11,8 +11,20 @@ import * as restate from "@restatedev/restate-sdk";
 import { REGISTRY } from "./services.js";
 
 import type { AwakeableHolder } from "./awakeable_holder.js";
+import * as process from "node:process";
+import { ListObject } from "./list.js";
 
 const AwakeableHolder: AwakeableHolder = { name: "AwakeableHolder" };
+const ListObject: ListObject = { name: "ListObject" };
+
+type Command =
+  | { type: "createAwakeableAndAwaitIt"; awakeableKey: string }
+  | { type: "getEnvVariable"; envName: string };
+
+interface InterpretRequest {
+  listName: string;
+  commands: Command[];
+}
 
 const o = restate.service({
   name: "TestUtilsService",
@@ -31,6 +43,13 @@ const o = restate.service({
         Object.fromEntries(ctx.request().headers.entries())
       );
     },
+
+    rawEcho: restate.handlers.handler(
+      { input: restate.serde.binary, output: restate.serde.binary },
+      (ctx: restate.Context, input: Uint8Array) => {
+        return Promise.resolve(input);
+      }
+    ),
 
     async createAwakeableAndAwaitIt(
       ctx: restate.Context,
@@ -81,6 +100,42 @@ const o = restate.service({
       }
 
       return invokedSideEffects;
+    },
+
+    async getEnvVariable(ctx: restate.Context, env: string): Promise<string> {
+      return ctx.run(() => process.env[env] ?? "");
+    },
+
+    async interpretCommands(
+      ctx: restate.Context,
+      req: InterpretRequest
+    ): Promise<void> {
+      const listClient = ctx.objectSendClient(ListObject, req.listName);
+
+      async function createAwakeableAndAwaitIt(
+        awakeableKey: string
+      ): Promise<string> {
+        const { id, promise } = ctx.awakeable<string>();
+        await ctx.objectClient(AwakeableHolder, awakeableKey).hold(id);
+        return promise;
+      }
+
+      async function getEnvVariable(envName: string): Promise<string> {
+        return ctx.run(() => process.env[envName] ?? "");
+      }
+
+      for (const command of req.commands) {
+        switch (command.type) {
+          case "createAwakeableAndAwaitIt":
+            listClient.append(
+              await createAwakeableAndAwaitIt(command.awakeableKey)
+            );
+            break;
+          case "getEnvVariable":
+            listClient.append(await getEnvVariable(command.envName));
+            break;
+        }
+      }
     },
   },
 });

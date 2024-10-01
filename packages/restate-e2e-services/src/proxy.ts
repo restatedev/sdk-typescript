@@ -17,6 +17,7 @@ type ProxyRequest = {
   virtualObjectKey?: string;
   handlerName: string;
   message: Array<number>;
+  delayMillis?: number;
 };
 
 type ManyCallRequest = {
@@ -46,6 +47,7 @@ function rawSend(ctx: restate.Context, request: ProxyRequest) {
     key: request.virtualObjectKey,
     inputSerde: restate.serde.binary,
     parameter: new Uint8Array(request.message),
+    delay: request.delayMillis,
   });
 }
 
