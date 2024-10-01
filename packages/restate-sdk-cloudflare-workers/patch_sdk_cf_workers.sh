@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+if [[ ! -d ../restate-sdk/dist ]]; then
+  echo "ERROR - You need to build the restate-sdk module first!"
+  exit 1
+fi
+
 cp -r ../restate-sdk/dist .
 rm -r dist/cjs
 
