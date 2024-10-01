@@ -27,8 +27,6 @@ import {
 } from "../types/components.js";
 
 import type * as discovery from "../types/discovery.js";
-import type { KeySetV1 } from "./request_signing/v1.js";
-import { parseKeySetV1 } from "./request_signing/v1.js";
 import {
   LogSource,
   type Logger,
@@ -65,9 +63,9 @@ export class EndpointBuilder {
    */
   public rlog = createRestateConsole(this.logger, LogSource.SYSTEM);
 
-  private _keySet?: KeySetV1;
+  private _keySet: string[] = [];
 
-  public get keySet(): KeySetV1 | undefined {
+  public get keySet(): string[] {
     return this._keySet;
   }
 
@@ -112,13 +110,7 @@ export class EndpointBuilder {
   }
 
   public withIdentityV1(...keys: string[]) {
-    if (!this._keySet) {
-      this._keySet = parseKeySetV1(keys);
-      return this;
-    }
-    parseKeySetV1(keys).forEach((buffer, key) =>
-      this._keySet?.set(key, buffer)
-    );
+    this._keySet.push(...keys);
     return this;
   }
 

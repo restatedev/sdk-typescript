@@ -23,7 +23,6 @@ import type { Http2ServerRequest, Http2ServerResponse } from "http2";
 import * as http2 from "http2";
 import { LambdaHandler } from "./handlers/lambda.js";
 import type { Component } from "../types/components.js";
-import type { KeySetV1 } from "./request_signing/v1.js";
 import { EndpointBuilder } from "./endpoint_builder.js";
 import { GenericHandler } from "./handlers/generic.js";
 import { Readable, Writable } from "node:stream";
@@ -35,7 +34,7 @@ import type { Logger } from "../logger.js";
 export class NodeEndpoint implements RestateEndpoint {
   private builder: EndpointBuilder = new EndpointBuilder();
 
-  public get keySet(): KeySetV1 | undefined {
+  public get keySet(): string[] {
     return this.builder.keySet;
   }
 

@@ -1,12 +1,11 @@
 use js_sys::Uint8Array;
 use restate_sdk_shared_core::{
     AsyncResultAccessTracker, AsyncResultCombinator, AsyncResultHandle, AsyncResultState, CoreVM,
-    Failure, Header, HeaderMap, Input, NonEmptyValue, ResponseHead, RetryPolicy, RunEnterResult,
-    RunExitResult, TakeOutputResult, Target, VMOptions, Value, VM,
+    Error, Header, HeaderMap, IdentityVerifier, Input, NonEmptyValue, ResponseHead, RetryPolicy,
+    RunEnterResult, RunExitResult, TakeOutputResult, Target, TerminalFailure, VMOptions, Value, VM,
 };
 use serde::{Deserialize, Serialize};
-use std::borrow::Cow;
-use std::convert::Infallible;
+use std::convert::{Infallible, Into};
 use std::io::Write;
 use std::time::Duration;
 use tracing::metadata::LevelFilter;
@@ -210,8 +209,8 @@ impl From<WasmExponentialRetryConfig> for RetryPolicy {
     }
 }
 
-impl From<Failure> for WasmFailure {
-    fn from(value: Failure) -> Self {
+impl From<TerminalFailure> for WasmFailure {
+    fn from(value: TerminalFailure) -> Self {
         WasmFailure {
             code: value.code,
             message: value.message,
@@ -219,9 +218,9 @@ impl From<Failure> for WasmFailure {
     }
 }
 
-impl From<WasmFailure> for Failure {
+impl From<WasmFailure> for TerminalFailure {
     fn from(value: WasmFailure) -> Self {
-        Failure {
+        TerminalFailure {
             code: value.code,
             message: value.message,
         }
@@ -318,13 +317,13 @@ impl WasmVM {
         self.vm.notify_input_closed();
     }
 
-    pub fn notify_error(&mut self, error: String, description: Option<String>) {
-        CoreVM::notify_error(
-            &mut self.vm,
-            Cow::Owned(error),
-            description.map(Cow::Owned).unwrap_or(Cow::Borrowed("")),
-            None,
-        );
+    pub fn notify_error(&mut self, error_message: String, error_description: Option<String>) {
+        let mut e = Error::internal(error_message);
+        if let Some(description) = error_description {
+            e = e.with_description(description);
+        }
+
+        CoreVM::notify_error(&mut self.vm, e, None);
     }
 
     pub fn take_output(&mut self) -> JsValue {
@@ -552,7 +551,8 @@ impl WasmVM {
 
     pub fn sys_run_exit_failure_transient(
         &mut self,
-        value: WasmFailure,
+        error_message: String,
+        error_description: Option<String>,
         attempt_duration: u64,
         config: WasmExponentialRetryConfig,
     ) -> Result<WasmAsyncResultHandle, JsError> {
@@ -560,7 +560,8 @@ impl WasmVM {
             .sys_run_exit(
                 RunExitResult::RetryableFailure {
                     attempt_duration: Duration::from_millis(attempt_duration),
-                    failure: value.into(),
+                    error: Error::internal(error_message)
+                        .with_description(error_description.unwrap_or_default()),
                 },
                 config.into(),
             )
@@ -768,5 +769,27 @@ impl HeaderMap for WasmHeaderList {
             }
         }
         Ok(None)
+    }
+}
+
+#[wasm_bindgen]
+pub struct WasmIdentityVerifier {
+    identity_verifier: IdentityVerifier,
+}
+
+#[wasm_bindgen]
+impl WasmIdentityVerifier {
+    #[wasm_bindgen(constructor)]
+    pub fn new(keys: Vec<String>) -> Result<WasmIdentityVerifier, JsError> {
+        let k: Vec<_> = keys.iter().map(|s| s.as_str()).collect();
+        Ok(WasmIdentityVerifier {
+            identity_verifier: IdentityVerifier::new(&k)?,
+        })
+    }
+
+    pub fn verify_identity(&self, path: &str, headers: Vec<WasmHeader>) -> Result<(), JsError> {
+        self.identity_verifier
+            .verify_identity(&WasmHeaderList(headers), path)?;
+        Ok(())
     }
 }

@@ -15,7 +15,6 @@ import type {
   WorkflowDefinition,
 } from "@restatedev/restate-sdk-core";
 import type { Component } from "../types/components.js";
-import type { KeySetV1 } from "./request_signing/v1.js";
 import { EndpointBuilder } from "./endpoint_builder.js";
 import type {
   RestateEndpoint,
@@ -49,7 +48,7 @@ export interface LambdaEndpoint extends RestateEndpointBase<LambdaEndpoint> {
 export class LambdaEndpointImpl implements LambdaEndpoint {
   private builder: EndpointBuilder = new EndpointBuilder();
 
-  public get keySet(): KeySetV1 | undefined {
+  public get keySet(): string[] {
     return this.builder.keySet;
   }
 
