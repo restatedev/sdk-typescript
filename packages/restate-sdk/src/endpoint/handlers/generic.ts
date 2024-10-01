@@ -24,8 +24,11 @@ import { OnceStream } from "../../utils/streams.js";
 import { ContextImpl } from "../../context_impl.js";
 import {
   createRestateConsole,
+  DEFAULT_LOGGER_LOG_LEVEL,
+  defaultLogger,
   LoggerContext,
   LogSource,
+  RestateLogLevel,
 } from "../../logger.js";
 import * as vm from "./vm/sdk_shared_core_wasm_bindings.js";
 import { CompletablePromise } from "../../utils/completable_promise.js";
@@ -100,6 +103,24 @@ export class GenericHandler implements RestateHandler {
           this.endpoint.keySet.keys()
         )}]`
       );
+    }
+    // Set the logging level in the shared core too!
+    switch (DEFAULT_LOGGER_LOG_LEVEL) {
+      case RestateLogLevel.TRACE:
+        vm.set_log_level(vm.LogLevel.TRACE);
+        break;
+      case RestateLogLevel.DEBUG:
+        vm.set_log_level(vm.LogLevel.DEBUG);
+        break;
+      case RestateLogLevel.INFO:
+        vm.set_log_level(vm.LogLevel.INFO);
+        break;
+      case RestateLogLevel.WARN:
+        vm.set_log_level(vm.LogLevel.WARN);
+        break;
+      case RestateLogLevel.ERROR:
+        vm.set_log_level(vm.LogLevel.ERROR);
+        break;
     }
   }
 
@@ -384,4 +405,31 @@ export class GenericHandler implements RestateHandler {
       body: OnceStream(new TextEncoder().encode(JSON.stringify({ message }))),
     };
   }
+}
+
+function wasmLogLevelToRestateLogLevel(level: vm.LogLevel): RestateLogLevel {
+  switch (level) {
+    case vm.LogLevel.TRACE:
+      return RestateLogLevel.TRACE;
+    case vm.LogLevel.DEBUG:
+      return RestateLogLevel.DEBUG;
+    case vm.LogLevel.INFO:
+      return RestateLogLevel.INFO;
+    case vm.LogLevel.WARN:
+      return RestateLogLevel.WARN;
+    case vm.LogLevel.ERROR:
+      return RestateLogLevel.ERROR;
+  }
+}
+
+/// This is used by the shared core!
+export function vm_log(level: vm.LogLevel, str: string) {
+  defaultLogger(
+    {
+      level: wasmLogLevelToRestateLogLevel(level),
+      replaying: false,
+      source: LogSource.JOURNAL,
+    },
+    str
+  );
 }

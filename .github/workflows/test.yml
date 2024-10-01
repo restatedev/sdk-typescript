@@ -68,6 +68,7 @@ jobs:
           }
           set "@restatedev/restate-sdk-core"
           set "@restatedev/restate-sdk"
+          set "@restatedev/restate-sdk-cloudflare-workers"
           set "@restatedev/restate-sdk-clients"
           npm --workspaces update
           # We use dist-tag dev for the snapshot releases, see https://docs.npmjs.com/cli/v9/commands/npm-dist-tag for more info
