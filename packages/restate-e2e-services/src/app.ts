@@ -9,6 +9,7 @@
 
 import * as restate from "@restatedev/restate-sdk";
 
+import "./interpreter/entry_point.js";
 import "./awakeable_holder.js";
 import "./counter.js";
 import "./event_handler.js";
