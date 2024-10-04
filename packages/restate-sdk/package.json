@@ -1,6 +1,6 @@
 {
   "name": "@restatedev/restate-sdk",
-  "version": "1.3.1",
+  "version": "1.3.2",
   "description": "Typescript SDK for Restate",
   "author": "Restate Developers",
   "license": "MIT",
@@ -81,7 +81,7 @@
   },
   "dependencies": {
     "@bufbuild/protobuf": "^1.8.0",
-    "@restatedev/restate-sdk-core": "^1.3.1"
+    "@restatedev/restate-sdk-core": "^1.3.2"
   },
   "devDependencies": {
     "@bufbuild/buf": "^1.15.0",
