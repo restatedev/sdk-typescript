@@ -25,7 +25,7 @@ class JsonSerde<T> implements Serde<T | undefined> {
   contentType = "application/json";
 
   serialize(value: T): Uint8Array {
-    if (value == undefined) {
+    if (value === undefined) {
       return new Uint8Array(0);
     }
     return new TextEncoder().encode(JSON.stringify(value));
