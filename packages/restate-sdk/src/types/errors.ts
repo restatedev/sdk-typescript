@@ -22,7 +22,7 @@ export function ensureError(e: unknown): Error {
   if (e instanceof Error) {
     return e;
   }
-  if (typeof e == "object" && e != null && "code" in e && "message" in e) {
+  if (typeof e === "object" && e !== null && "code" in e && "message" in e) {
     // This is an error from the VM
     return new RestateError(e.message as string, {
       errorCode: e.code as number,

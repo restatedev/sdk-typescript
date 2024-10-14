@@ -34,6 +34,7 @@
   "plugins": ["@typescript-eslint", "require-extensions"],
   "rules": {
     "no-console": "error",
+    "eqeqeq": "error",
     "@typescript-eslint/consistent-type-imports": "error",
     "@typescript-eslint/consistent-type-exports": "error",
     "@typescript-eslint/restrict-template-expressions": [

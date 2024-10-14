@@ -18,7 +18,7 @@ const wf = restate.workflow({
 
       const output = await ctx.promise("p");
 
-      if (ctx.promise("p").peek() == undefined) {
+      if (ctx.promise("p").peek() === undefined) {
         throw new restate.TerminalError("Durable promise should be completed");
       }
 

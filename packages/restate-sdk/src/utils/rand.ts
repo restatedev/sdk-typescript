@@ -24,7 +24,7 @@ export class RandImpl implements Rand {
     id: string | [bigint, bigint, bigint, bigint],
     private readonly checkState: (state: string) => void = () => undefined
   ) {
-    if (typeof id == "string") {
+    if (typeof id === "string") {
       // hash the invocation ID, which is known to contain 74 bits of entropy
       const hash = createHash("sha256").update(id).digest();
 

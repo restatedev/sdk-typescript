@@ -32,7 +32,7 @@ class JsonSerde<T> implements Serde<T | undefined> {
   }
 
   deserialize(data: Uint8Array): T | undefined {
-    if (data.length == 0) {
+    if (data.length === 0) {
       return undefined;
     }
     return JSON.parse(new TextDecoder().decode(data)) as T;
@@ -62,7 +62,7 @@ class VoidSerde implements Serde<void> {
   }
 
   deserialize(data: Uint8Array): void {
-    if (data.length != 0) {
+    if (data.length !== 0) {
       throw new Error("Expected empty data");
     }
   }

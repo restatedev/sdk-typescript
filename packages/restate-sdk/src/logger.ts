@@ -108,7 +108,7 @@ export const defaultLogger: Logger = (
 function readRestateLogLevel(): RestateLogLevel {
   const env = globalThis.process?.env?.RESTATE_LOGGING;
   const level = logLevelFromName(env);
-  if (level != null) {
+  if (level !== null) {
     return level;
   }
   return RestateLogLevel.INFO;
