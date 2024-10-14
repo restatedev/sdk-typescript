@@ -97,7 +97,10 @@ export class GenericHandler implements RestateHandler {
     private readonly protocolMode: ProtocolMode
   ) {
     // Setup identity verifier
-    if (this.endpoint.keySet == undefined || this.endpoint.keySet.length == 0) {
+    if (
+      this.endpoint.keySet === undefined ||
+      this.endpoint.keySet.length === 0
+    ) {
       this.endpoint.rlog.warn(
         `Accepting requests without validating request signatures; handler access must be restricted`
       );
@@ -257,7 +260,7 @@ export class GenericHandler implements RestateHandler {
     // Now buffer input entries
     while (!coreVm.is_ready_to_execute()) {
       const nextValue = await inputReader.read();
-      if (nextValue.value != undefined) {
+      if (nextValue.value !== undefined) {
         coreVm.notify_input(nextValue.value);
       }
       if (nextValue.done) {
@@ -318,7 +321,7 @@ export class GenericHandler implements RestateHandler {
         const error = ensureError(e);
         if (
           !(error instanceof RestateError) ||
-          error.code != SUSPENDED_ERROR_CODE
+          error.code !== SUSPENDED_ERROR_CODE
         ) {
           console.warn("Function completed with an error.\n", error);
         }

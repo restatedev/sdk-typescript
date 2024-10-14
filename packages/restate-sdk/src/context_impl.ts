@@ -99,7 +99,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       }, new Map()),
       attemptHeaders: Object.entries(attemptHeaders).reduce(
         (headers, [key, value]) => {
-          if (value != undefined) {
+          if (value !== undefined) {
             headers.set(key, value instanceof Array ? value[0] : value);
           }
           return headers;
@@ -139,7 +139,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     return this.processCompletableEntry(
       (vm) => vm.sys_get_state(name),
       (asyncResultValue) => {
-        if (asyncResultValue == "Empty") {
+        if (asyncResultValue === "Empty") {
           // Empty
           return null;
         } else if ("Success" in asyncResultValue) {
@@ -244,7 +244,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       const parameter = requestSerde.serialize(send.parameter);
 
       let delay;
-      if (send.delay != undefined) {
+      if (send.delay !== undefined) {
         delay = BigInt(send.delay);
       }
 
@@ -358,7 +358,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       // Record the result/failure, get back the handle for the ack.
       let handle;
       try {
-        if (err != undefined) {
+        if (err !== undefined) {
           if (err instanceof TerminalError) {
             // Record failure, go ahead
             handle = this.coreVm.sys_run_exit_failure({
@@ -409,7 +409,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     return this.processCompletableEntry(
       (vm) => vm.sys_sleep(BigInt(millis)),
       (asyncResultValue) => {
-        if (asyncResultValue == "Empty") {
+        if (asyncResultValue === "Empty") {
           // Empty
           return undefined as void;
         } else if ("Failure" in asyncResultValue) {
@@ -453,7 +453,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
             if (!serde) {
               return defaultSerde<T>().deserialize(asyncResultValue.Success);
             }
-            if (asyncResultValue.Success.length == 0) {
+            if (asyncResultValue.Success.length === 0) {
               return undefined as T;
             }
             return serde.deserialize(asyncResultValue.Success);
@@ -482,10 +482,10 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
 
       if (serde) {
         value =
-          payload == undefined ? new Uint8Array() : serde.serialize(payload);
+          payload === undefined ? new Uint8Array() : serde.serialize(payload);
       } else {
         value =
-          payload != undefined
+          payload !== undefined
             ? defaultSerde().serialize(payload)
             : defaultSerde().serialize(null);
       }
@@ -634,7 +634,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
           return promisesMap.get(handlesResult[0]);
         case "OrTimeout":
           // The sleep promise is always the second one in the list.
-          if (handlesResult[0] == castedPromises[1].asyncResultHandle) {
+          if (handlesResult[0] === castedPromises[1].asyncResultHandle) {
             return Promise.reject(new TimeoutError());
           } else {
             return promisesMap.get(handlesResult[0]);
@@ -751,7 +751,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
 
       // Now loop waiting for the async result
       let asyncResult = this.coreVm.take_async_result(handle);
-      while (asyncResult == "NotReady") {
+      while (asyncResult === "NotReady") {
         await this.awaitNextRead();
         // Using notify_await_point immediately before take_async_result
         // makes sure the state machine will try to suspend only now,
@@ -776,7 +776,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
   // and will notify the caller that a read was executed
   // and the result was piped in the state machine.
   private awaitNextRead(): Promise<void> {
-    if (this.currentRead == undefined) {
+    if (this.currentRead === undefined) {
       // Register a new read
       this.currentRead = this.readNext().finally(() => {
         this.currentRead = undefined;
@@ -808,7 +808,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     const error = ensureError(e);
     if (
       !(error instanceof RestateError) ||
-      error.code != SUSPENDED_ERROR_CODE
+      error.code !== SUSPENDED_ERROR_CODE
     ) {
       this.console.warn("Function completed with an error.\n", error);
     }
@@ -823,7 +823,7 @@ function unpack<T>(
   a: string | RunAction<T>,
   b?: RunAction<T>
 ): { name?: string; action: RunAction<T> } {
-  if (typeof a == "string") {
+  if (typeof a === "string") {
     if (typeof b !== "function") {
       throw new TypeError("");
     }

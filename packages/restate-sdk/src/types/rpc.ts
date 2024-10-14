@@ -409,7 +409,7 @@ export class HandlerWrapper {
     } else if (opts?.accept) {
       // accept but no serializer, use pass trough
       inputSerde = new DeserializerWrapper(opts.accept, (input) => input);
-    } else if (opts?.contentType == JSON_CONTENT_TYPE) {
+    } else if (opts?.contentType === JSON_CONTENT_TYPE) {
       // contentType is JSON, use the default serde
       inputSerde = defaultSerde();
     } else if (opts?.input) {
@@ -426,7 +426,7 @@ export class HandlerWrapper {
         opts.contentType ?? JSON_CONTENT_TYPE,
         opts.outputSerializer
       );
-    } else if (opts?.contentType == JSON_CONTENT_TYPE) {
+    } else if (opts?.contentType === JSON_CONTENT_TYPE) {
       // contentType is JSON, use the default serde
       outputSerde = defaultSerde();
     } else if (opts?.contentType) {
@@ -541,7 +541,7 @@ export namespace handlers {
       optsOrFn: WorkflowHandlerOpts | WorkflowHandler<F, WorkflowContext<any>>,
       fn?: WorkflowHandler<F, WorkflowContext<any>>
     ): F {
-      if (typeof optsOrFn == "function") {
+      if (typeof optsOrFn === "function") {
         return HandlerWrapper.from(HandlerKind.WORKFLOW, optsOrFn).transpose();
       }
       const opts = optsOrFn satisfies WorkflowHandlerOpts;
@@ -593,7 +593,7 @@ export namespace handlers {
         | WorkflowSharedHandler<F, WorkflowSharedContext<any>>,
       fn?: WorkflowSharedHandler<F, WorkflowSharedContext<any>>
     ): F {
-      if (typeof optsOrFn == "function") {
+      if (typeof optsOrFn === "function") {
         return HandlerWrapper.from(HandlerKind.SHARED, optsOrFn).transpose();
       }
       const opts = optsOrFn satisfies ObjectHandlerOpts;
@@ -649,7 +649,7 @@ export namespace handlers {
       optsOrFn: ObjectHandlerOpts | ObjectHandler<F, ObjectContext<any>>,
       fn?: ObjectHandler<F, ObjectContext<any>>
     ): F {
-      if (typeof optsOrFn == "function") {
+      if (typeof optsOrFn === "function") {
         return HandlerWrapper.from(HandlerKind.EXCLUSIVE, optsOrFn).transpose();
       }
       const opts = optsOrFn satisfies ObjectHandlerOpts;
@@ -707,7 +707,7 @@ export namespace handlers {
         | ObjectSharedHandler<F, ObjectSharedContext<any>>,
       fn?: ObjectSharedHandler<F, ObjectSharedContext<any>>
     ): F {
-      if (typeof optsOrFn == "function") {
+      if (typeof optsOrFn === "function") {
         return HandlerWrapper.from(HandlerKind.SHARED, optsOrFn).transpose();
       }
       const opts = optsOrFn satisfies ObjectHandlerOpts;
@@ -973,7 +973,7 @@ export const workflow = <P extends string, M>(workflow: {
   } else {
     throw new TypeError(`Missing main workflow handler, named 'run'`);
   }
-  if (runWrapper.kind != HandlerKind.WORKFLOW) {
+  if (runWrapper.kind !== HandlerKind.WORKFLOW) {
     throw new TypeError(
       `Workflow's main handler handler run, must be of type workflow'`
     );
@@ -986,7 +986,7 @@ export const workflow = <P extends string, M>(workflow: {
   //
 
   for (const [name, handler] of Object.entries(workflow.handlers)) {
-    if (name == "run") {
+    if (name === "run") {
       continue;
     }
     let wrapper: HandlerWrapper;
@@ -1000,7 +1000,7 @@ export const workflow = <P extends string, M>(workflow: {
     } else {
       throw new TypeError(`Unexpected handler type ${name}`);
     }
-    if (wrapper.kind == HandlerKind.WORKFLOW) {
+    if (wrapper.kind === HandlerKind.WORKFLOW) {
       throw new TypeError(
         `A workflow must contain exactly one handler annotated as workflow, named 'run'. Please use a shared handler for any additional handlers`
       );

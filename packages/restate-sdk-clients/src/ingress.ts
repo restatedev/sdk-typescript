@@ -318,7 +318,7 @@ class HttpIngress implements Ingress {
           result,
         };
       } catch (e) {
-        if (!(e instanceof HttpCallError) || e.status != 470) {
+        if (!(e instanceof HttpCallError) || e.status !== 470) {
           throw e;
         }
         return {
@@ -335,11 +335,11 @@ class HttpIngress implements Ingress {
       {
         get: (_target, prop) => {
           const handler = prop as string;
-          if (handler == "workflowSubmit") {
+          if (handler === "workflowSubmit") {
             return workflowSubmit;
-          } else if (handler == "workflowAttach") {
+          } else if (handler === "workflowAttach") {
             return workflowAttach;
-          } else if (handler == "workflowOutput") {
+          } else if (handler === "workflowOutput") {
             return workflowOutput;
           }
           // shared handlers pass trough via the ingress's normal invocation form

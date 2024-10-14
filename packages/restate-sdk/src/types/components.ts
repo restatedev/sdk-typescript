@@ -145,7 +145,7 @@ export class VirtualObjectComponent implements Component {
             contentType: opts.contentType ?? "application/json",
           },
           ty:
-            opts.kind == HandlerKind.EXCLUSIVE
+            opts.kind === HandlerKind.EXCLUSIVE
               ? d.ServiceHandlerType.EXCLUSIVE
               : d.ServiceHandlerType.SHARED,
         };
@@ -220,7 +220,7 @@ export class WorkflowComponent implements Component {
             contentType: handler.contentType ?? "application/json",
           },
           ty:
-            handler.kind == HandlerKind.WORKFLOW
+            handler.kind === HandlerKind.WORKFLOW
               ? d.ServiceHandlerType.WORKFLOW
               : d.ServiceHandlerType.SHARED,
         };

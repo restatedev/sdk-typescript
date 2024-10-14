@@ -606,7 +606,7 @@ export const CombineablePromise = {
   all<T extends readonly CombineablePromise<unknown>[] | []>(
     values: T
   ): Promise<{ -readonly [P in keyof T]: Awaited<T[P]> }> {
-    if (values.length == 0) {
+    if (values.length === 0) {
       return Promise.all(values);
     }
     return ContextImpl.createCombinator("All", values) as Promise<{
@@ -626,7 +626,7 @@ export const CombineablePromise = {
   race<T extends readonly CombineablePromise<unknown>[] | []>(
     values: T
   ): Promise<Awaited<T[number]>> {
-    if (values.length == 0) {
+    if (values.length === 0) {
       return Promise.race(values);
     }
     return ContextImpl.createCombinator("Race", values) as Promise<
@@ -647,7 +647,7 @@ export const CombineablePromise = {
   any<T extends readonly CombineablePromise<unknown>[] | []>(
     values: T
   ): Promise<Awaited<T[number]>> {
-    if (values.length == 0) {
+    if (values.length === 0) {
       return Promise.any(values);
     }
     return ContextImpl.createCombinator("Any", values) as Promise<
@@ -669,7 +669,7 @@ export const CombineablePromise = {
   ): Promise<{
     -readonly [P in keyof T]: PromiseSettledResult<Awaited<T[P]>>;
   }> {
-    if (values.length == 0) {
+    if (values.length === 0) {
       return Promise.allSettled(values);
     }
     return ContextImpl.createCombinator("AllSettled", values) as Promise<{
