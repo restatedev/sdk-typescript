@@ -1,7 +1,1 @@
-exclusions:
-  "alwaysSuspending":
-    - "dev.restate.sdktesting.tests.RunRetry"
-  "default":
-    - "dev.restate.sdktesting.tests.RunRetry"
-  "singleThreadSinglePartition":
-    - "dev.restate.sdktesting.tests.RunRetry"
+exclusions: {}

@@ -179,11 +179,48 @@ export type RunAction<T> = (() => Promise<T>) | (() => T);
 
 export type RunOptions<T> = {
   serde?: Serde<T>;
+
+  /**
+   * Max number of retry attempts, before giving up.
+   *
+   * When giving up, `ctx.run` will throw a `TerminalError` wrapping the original error message.
+   */
+  maxRetryAttempts?: number;
+
+  /**
+   * Max duration of retries, before giving up.
+   *
+   * When giving up, `ctx.run` will throw a `TerminalError` wrapping the original error message.
+   */
+  maxRetryDurationMillis?: number;
+
+  /**
+   * Initial interval for the first retry attempt.
+   * Retry interval will grow by a factor specified in `retryIntervalFactor`.
+   *
+   * The default is 50 milliseconds.
+   */
+  initialRetryIntervalMillis?: number;
+
+  /**
+   * Max interval between retries.
+   * Retry interval will grow by a factor specified in `retryIntervalFactor`.
+   *
+   * The default is 10 seconds.
+   */
+  maxRetryIntervalMillis?: number;
+
+  /**
+   * Exponentiation factor to use when computing the next retry delay.
+   *
+   * The default value is `2`, meaning retry interval will double at each attempt.
+   */
+  retryIntervalFactor?: number;
 };
 
 /**
  * Call a handler directly avoiding restate's type safety checks.
- * This is a generic machnisim to invoke handlers directly by only knowing
+ * This is a generic mechanism to invoke handlers directly by only knowing
  * the service and handler name, (or key in the case of objects or workflows)
  */
 export type GenericCall<REQ, RES> = {
@@ -275,6 +312,7 @@ export interface Context extends RestateContext {
    *            throw new TerminalError("Payment failed");
    *        } else if (result.paymentGatewayBusy) {
    *            // restate will retry automatically
+   *            // to bound retries, use RunOptions
    *            throw new Exception("Payment gateway busy");
    *        } else {
    *            // success!

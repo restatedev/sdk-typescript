@@ -9,9 +9,11 @@
 
 import * as restate from "@restatedev/restate-sdk";
 import { REGISTRY } from "./services.js";
+import { TerminalError } from "@restatedev/restate-sdk";
 
 let eventualSuccessCalls = 0;
 let eventualSuccessSideEffectCalls = 0;
+let eventualFailureSideEffectCalls = 0;
 
 const service = restate.object({
   name: "Failing",
@@ -46,24 +48,6 @@ const service = restate.object({
       }
     },
 
-    failingSideEffectWithEventualSuccess: async (
-      context: restate.ObjectContext
-    ) => {
-      const successAttempt = await context.run(() => {
-        eventualSuccessSideEffectCalls += 1;
-        const currentAttempt = eventualSuccessSideEffectCalls;
-
-        if (currentAttempt >= 4) {
-          eventualSuccessSideEffectCalls = 0;
-          return currentAttempt;
-        } else {
-          throw new Error("Failed at attempt: " + currentAttempt);
-        }
-      });
-
-      return successAttempt;
-    },
-
     terminallyFailingSideEffect: async (
       ctx: restate.ObjectContext,
       errorMessage: string
@@ -73,6 +57,59 @@ const service = restate.object({
       });
 
       throw new Error("Should not be reached.");
+    },
+
+    sideEffectSucceedsAfterGivenAttempts: async (
+      context: restate.ObjectContext,
+      minimumAttempts: number
+    ) => {
+      return await context.run(
+        "failing-side-effect",
+        () => {
+          eventualSuccessSideEffectCalls += 1;
+          const currentAttempt = eventualSuccessSideEffectCalls;
+
+          if (currentAttempt >= minimumAttempts) {
+            eventualSuccessSideEffectCalls = 0;
+            return currentAttempt;
+          } else {
+            throw new Error("Failed at attempt: " + currentAttempt);
+          }
+        },
+        { retryIntervalFactor: 1, initialRetryIntervalMillis: 10 }
+      );
+    },
+
+    sideEffectFailsAfterGivenAttempts: async (
+      context: restate.ObjectContext,
+      retryPolicyMaxRetryCount: number
+    ) => {
+      try {
+        await context.run(
+          "failing-side-effect",
+          () => {
+            eventualFailureSideEffectCalls += 1;
+            throw new Error(
+              "Failed at attempt: " + eventualFailureSideEffectCalls
+            );
+          },
+          {
+            maxRetryAttempts: retryPolicyMaxRetryCount,
+            retryIntervalFactor: 1,
+            initialRetryIntervalMillis: 10,
+          }
+        );
+      } catch (e) {
+        if (e instanceof TerminalError) {
+          context.console.log(
+            `run failed as expected with ${JSON.stringify(e)}`
+          );
+          return eventualFailureSideEffectCalls;
+        }
+        // This is not a TerminalError!
+        throw e;
+      }
+      throw new TerminalError("Side effect was supposed to fail!");
     },
   },
 });

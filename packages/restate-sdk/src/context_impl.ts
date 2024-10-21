@@ -347,6 +347,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
 
     // We wrap the rest of the execution in this closure to create a future
     const doRun = async () => {
+      const startTime = Date.now();
       let res: T;
       let err;
       try {
@@ -354,6 +355,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       } catch (e) {
         err = ensureError(e);
       }
+      const attemptDuration = Date.now() - startTime;
 
       // Record the result/failure, get back the handle for the ack.
       let handle;
@@ -366,8 +368,29 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
               message: err.message,
             });
           } else {
-            // TODO plug retries here!
-            throw err;
+            if (
+              options?.retryIntervalFactor === undefined &&
+              options?.initialRetryIntervalMillis === undefined &&
+              options?.maxRetryAttempts === undefined &&
+              options?.maxRetryDurationMillis === undefined &&
+              options?.maxRetryIntervalMillis === undefined
+            ) {
+              // If no retry option was set, simply throw the error.
+              // This will lead to the invoker applying its retry, without the SDK overriding it.
+              throw err;
+            }
+            handle = this.coreVm.sys_run_exit_failure_transient(
+              err.message,
+              err.cause?.toString(),
+              BigInt(attemptDuration),
+              {
+                factor: options?.retryIntervalFactor || 2.0,
+                initial_interval: options?.initialRetryIntervalMillis || 50,
+                max_attempts: options?.maxRetryAttempts,
+                max_duration: options?.maxRetryDurationMillis,
+                max_interval: options?.maxRetryIntervalMillis || 10 * 1000,
+              }
+            );
           }
         } else {
           // eslint-disable-next-line @typescript-eslint/ban-ts-comment
