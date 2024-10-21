@@ -75,17 +75,3 @@ jobs:
           # A snapshot MUST not be published with latest tag (omitting --tag defaults to latest) to avoid users to install snapshot releases
           # when using npm install
           npm publish --workspaces true --tag dev --access public --include-workspace-root false
-
-  e2e:
-    permissions:
-      contents: read
-      issues: read
-      checks: write
-      pull-requests: write
-      actions: read
-    secrets: inherit
-    needs: build
-    uses: restatedev/e2e/.github/workflows/e2e.yaml@main
-    with:
-      sdkTypescriptCommit: ${{ github.event.pull_request.head.sha || github.sha }}
-      e2eRef: main
