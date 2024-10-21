@@ -368,6 +368,17 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
               message: err.message,
             });
           } else {
+            if (
+              options?.retryIntervalFactor === undefined &&
+              options?.initialRetryIntervalMillis === undefined &&
+              options?.maxRetryAttempts === undefined &&
+              options?.maxRetryDurationMillis === undefined &&
+              options?.maxRetryIntervalMillis === undefined
+            ) {
+              // If no retry option was set, simply throw the error.
+              // This will lead to the invoker applying its retry, without the SDK overriding it.
+              throw err;
+            }
             handle = this.coreVm.sys_run_exit_failure_transient(
               err.message,
               err.cause?.toString(),
