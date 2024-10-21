@@ -373,11 +373,11 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
               err.cause?.toString(),
               BigInt(attemptDuration),
               {
-                factor: 2.0,
-                initial_interval: 50,
-                max_attempts: options?.maxAttempts,
+                factor: options?.retryIntervalFactor || 2.0,
+                initial_interval: options?.initialRetryIntervalMillis || 50,
+                max_attempts: options?.maxRetryAttempts,
                 max_duration: options?.maxRetryDurationMillis,
-                max_interval: 10 * 1000 /* A sane default */,
+                max_interval: options?.maxRetryIntervalMillis || 10 * 1000,
               }
             );
           }

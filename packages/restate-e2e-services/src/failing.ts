@@ -63,17 +63,21 @@ const service = restate.object({
       context: restate.ObjectContext,
       minimumAttempts: number
     ) => {
-      return await context.run(() => {
-        eventualSuccessSideEffectCalls += 1;
-        const currentAttempt = eventualSuccessSideEffectCalls;
+      return await context.run(
+        "failing-side-effect",
+        () => {
+          eventualSuccessSideEffectCalls += 1;
+          const currentAttempt = eventualSuccessSideEffectCalls;
 
-        if (currentAttempt >= minimumAttempts) {
-          eventualSuccessSideEffectCalls = 0;
-          return currentAttempt;
-        } else {
-          throw new Error("Failed at attempt: " + currentAttempt);
-        }
-      });
+          if (currentAttempt >= minimumAttempts) {
+            eventualSuccessSideEffectCalls = 0;
+            return currentAttempt;
+          } else {
+            throw new Error("Failed at attempt: " + currentAttempt);
+          }
+        },
+        { retryIntervalFactor: 1, initialRetryIntervalMillis: 10 }
+      );
     },
 
     sideEffectFailsAfterGivenAttempts: async (
@@ -89,7 +93,11 @@ const service = restate.object({
               "Failed at attempt: " + eventualFailureSideEffectCalls
             );
           },
-          { maxAttempts: retryPolicyMaxRetryCount }
+          {
+            maxRetryAttempts: retryPolicyMaxRetryCount,
+            retryIntervalFactor: 1,
+            initialRetryIntervalMillis: 10,
+          }
         );
       } catch (e) {
         if (e instanceof TerminalError) {
