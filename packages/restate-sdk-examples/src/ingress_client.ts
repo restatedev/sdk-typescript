@@ -51,6 +51,17 @@ const idempotentCall = async (name: string, idempotencyKey: string) => {
   console.log(greeting);
 };
 
+const callWithTimeout = async (name: string) => {
+  const greeter = ingress.serviceClient<Greeter>({ name: "greeter" });
+
+  const greeting = await greeter.greet(
+    name,
+    restate.rpc.opts({ timeout: 5 * 1000 })
+  );
+
+  console.log(greeting);
+};
+
 const customHeadersCall = async (name: string) => {
   const greeter = ingress.serviceClient(Greeter);
 
@@ -178,6 +189,7 @@ Promise.resolve()
   .then(() => objectCall("bob"))
   .then(() => objectCall("mop"))
   .then(() => simpleCall("bob"))
+  .then(() => callWithTimeout("lateBob"))
   .then(() => sendAndCollectResultLater("boby"))
   .then(() => workflow("boby"))
   .then(() => idempotentCall("joe", "idemp-1"))

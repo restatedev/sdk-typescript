@@ -101,11 +101,27 @@ export interface IngresCallOptions<I = unknown, O = unknown> {
   input?: Serde<I>;
 
   output?: Serde<O>;
+
+  /**
+   * Timeout to be used when executing the request. In milliseconds.
+   *
+   * Same as {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal#aborting_a_fetch_with_timeout_or_explicit_abort | AbortSignal.timeout()}.
+   *
+   * This field is exclusive with `signal`, and using both of them will result in a runtime failure.
+   */
+  timeout?: number;
+
+  /**
+   * Signal to abort the underlying `fetch` operation. See {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal}.
+   *
+   * This field is exclusive with `timeout`, and using both of them will result in a runtime failure.
+   */
+  signal?: AbortSignal;
 }
 
 export interface IngresSendOptions<I> extends IngresCallOptions<I, void> {
   /**
-   * If set, the invocation will be executed after the provided delay. In milliseconds.
+   * If set, the invocation will be enqueued now to be executed after the provided delay. In milliseconds.
    */
   delay?: number;
 }

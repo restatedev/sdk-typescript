@@ -171,6 +171,22 @@ const doComponentInvocation = async <I, O>(
     headers[IDEMPOTENCY_KEY_HEADER] = idempotencyKey;
     attachable = true;
   }
+
+  // Abort signal, if any
+  let signal: AbortSignal | undefined;
+  if (
+    params.opts?.opts.signal !== undefined &&
+    params.opts?.opts.timeout !== undefined
+  ) {
+    throw new Error(
+      "You can't specify both signal and timeout options at the same time"
+    );
+  } else if (params.opts?.opts.signal !== undefined) {
+    signal = params.opts?.opts.signal;
+  } else if (params.opts?.opts.timeout !== undefined) {
+    signal = AbortSignal.timeout(params.opts?.opts.timeout);
+  }
+
   //
   // make the call
   //
@@ -179,6 +195,7 @@ const doComponentInvocation = async <I, O>(
     method: params.method ?? "POST",
     headers,
     body,
+    signal,
   });
   if (!httpResponse.ok) {
     const body = await httpResponse.text();
