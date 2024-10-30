@@ -115,18 +115,19 @@ function readRestateLogLevel(): RestateLogLevel {
 }
 
 export class LoggerContext {
-  readonly fqMethodName: string;
+  readonly invocationTarget: string;
 
   constructor(
     readonly invocationId: string,
-    packageName: string,
-    serviceName: string,
-    handlerName: string,
+    readonly serviceName: string,
+    readonly handlerName: string,
+    readonly key?: string,
     readonly additionalContext?: { [name: string]: string }
   ) {
-    this.fqMethodName = packageName
-      ? `${packageName}.${serviceName}/${handlerName}`
-      : `${serviceName}/${handlerName}`;
+    this.invocationTarget =
+      key === undefined || key.length === 0
+        ? `${serviceName}/${handlerName}`
+        : `${serviceName}/${key}/${handlerName}`;
   }
 }
 
@@ -134,7 +135,7 @@ function formatLogPrefix(context?: LoggerContext): string {
   if (context === undefined) {
     return "[restate] ";
   }
-  let prefix = `[restate] [${context.fqMethodName}][${context.invocationId}]`;
+  let prefix = `[restate] [${context.invocationTarget}][${context.invocationId}]`;
   if (context.additionalContext !== undefined) {
     for (const [k, v] of Object.entries(context.additionalContext)) {
       prefix = prefix + `[${k}: ${v}]`;
