@@ -33,6 +33,7 @@ import {
 } from "../../logger.js";
 import * as vm from "./vm/sdk_shared_core_wasm_bindings.js";
 import { CompletablePromise } from "../../utils/completable_promise.js";
+import { HandlerKind } from "../../types/rpc.js";
 
 export interface Headers {
   [name: string]: string | string[] | undefined;
@@ -278,9 +279,9 @@ export class GenericHandler implements RestateHandler {
       LogSource.USER,
       new LoggerContext(
         input.invocation_id,
-        "",
         handler.component().name(),
         handler.name(),
+        handler.kind() === HandlerKind.SERVICE ? undefined : input.key,
         additionalContext
       ),
       () => !coreVm.is_processing()
