@@ -20,6 +20,7 @@
     "packages/restate-sdk-cloudflare-workers",
     "packages/restate-sdk-clients",
     "packages/restate-sdk-examples",
+    "packages/restate-sdk-testcontainers",
     "packages/restate-e2e-services"
   ],
   "type": "module",

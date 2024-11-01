@@ -11,7 +11,7 @@
 
 import * as restate from "@restatedev/restate-sdk";
 
-const counter = restate.object({
+export const counter = restate.object({
   name: "counter",
   handlers: {
     /**
