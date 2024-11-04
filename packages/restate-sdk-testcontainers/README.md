@@ -18,12 +18,12 @@ An usage example can be found in [`restate-sdk-examples/test/testcontainers.test
 * 🙋 [Create a GitHub issue](https://github.com/restatedev/sdk-typescript/issues) for requesting a new feature or reporting a problem.
 * 🏠 [Visit our GitHub org](https://github.com/restatedev) for exploring other repositories.
 
-## Using the SDK
+## Using the library
 
-To use this client, add the dependency to your project:
+To use this library, add the dependency to your project:
 
 ```shell
-npm install @restatedev/restate-sdk-testcontainers
+npm install --save-dev @restatedev/restate-sdk-testcontainers
 ```
 
 ## Versions
