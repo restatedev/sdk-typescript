@@ -8,7 +8,7 @@
 [Restate](https://restate.dev/) is a system for easily building resilient applications using *distributed durable async/await*.
 
 This package contains utilities to test Restate SDK services against a Restate server container.
-An usage example can be found in [`restate-sdk-examples/test/testcontainers.test.ts`](../restate-sdk-examples/test/testcontainers.test.ts)
+An usage example can be found in [`restate-sdk-examples/test/testcontainers.test.ts`](../../packages/restate-sdk-examples/test/testcontainers.test.ts)
 
 ## Community
 
