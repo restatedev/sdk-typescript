@@ -137,6 +137,7 @@ export class RestateTestEnvironment {
     )}`;
   }
 
+  // Create a handle that allows read/write of state under a given Virtual Object/Workflow key.
   public stateOf<TState extends TypedState = UntypedState>(
     service:
       | restate.VirtualObjectDefinition<string, unknown>
@@ -182,6 +183,7 @@ export class StateProxy<TState extends TypedState> {
     private serviceKey: string
   ) {}
 
+  // Read a single value from state under a given Virtual Object or Workflow key
   public async get<TValue, TKey extends keyof TState = string>(
     name: TState extends UntypedState ? string : TKey,
     serde?: core.Serde<TState extends UntypedState ? TValue : TState[TKey]>
@@ -218,6 +220,7 @@ export class StateProxy<TState extends TypedState> {
     return serde.deserialize(table[0].value);
   }
 
+  // Read all values from state under a given Virtual Object or Workflow key
   public async getAll<TValues extends TypedState>(
     serde?: core.Serde<
       TState extends UntypedState
@@ -261,6 +264,11 @@ export class StateProxy<TState extends TypedState> {
     return table;
   }
 
+  // Asynchronously set a single value from state under a given Virtual Object or Workflow key.
+  // This will first read all values, then insert the update and submit the new set of values to Restate;
+  // as such it is possible to overwrite changes that happened between the read and the mutation being applied.
+  // A successful return from this function does not imply that the set has finished, only that the mutation
+  // was submitted to Restate for processing.
   public async set<TValue, TKey extends keyof TState = string>(
     name: TState extends UntypedState ? string : TKey,
     value: TState extends UntypedState ? TValue : TState[TKey],
@@ -273,13 +281,12 @@ export class StateProxy<TState extends TypedState> {
 
     items.push({ key: String(name), value: serialisedValue });
 
-    const values = Object.fromEntries(
-      items.map(({ key, value }) => [key, value])
-    );
-
-    await this.setAllRaw(values);
+    await this.setAllRaw(items.map(({ key, value }) => [key, value]));
   }
 
+  // Asynchronously set all state values under a given Virtual Object or Workflow key.
+  // A successful return from this function does not imply that the set has finished,
+  // only that the mutation was submitted to Restate for processing.
   public async setAll<TValues extends TypedState>(
     values: TState extends UntypedState ? TValues : TState,
     serde?: core.Serde<
@@ -290,7 +297,7 @@ export class StateProxy<TState extends TypedState> {
   ) {
     serde = serde ?? defaultSerde();
 
-    const serialisedValues = Object.fromEntries(
+    return this.setAllRaw(
       Object.entries<
         TState extends UntypedState
           ? TValues[keyof TValues]
@@ -299,12 +306,10 @@ export class StateProxy<TState extends TypedState> {
         return [key, serde.serialize(value)];
       })
     );
-
-    return this.setAllRaw(serialisedValues);
   }
 
   private async setAllRaw(
-    values: { [name: string]: Uint8Array },
+    entries: [key: string, value: Uint8Array][],
     version?: string
   ) {
     const res = await fetch(
@@ -318,7 +323,7 @@ export class StateProxy<TState extends TypedState> {
           {
             version,
             object_key: this.serviceKey,
-            new_state: values,
+            new_state: Object.fromEntries(entries),
           },
           (key, value) => {
             if (value instanceof Uint8Array) {
