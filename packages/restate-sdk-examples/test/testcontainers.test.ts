@@ -9,7 +9,10 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { RestateTestEnvironment } from "@restatedev/restate-sdk-testcontainers";
+import {
+  RestateTestEnvironment,
+  restateContainerFactory,
+} from "@restatedev/restate-sdk-testcontainers";
 import { counter } from "../src/object.js";
 import * as clients from "@restatedev/restate-sdk-clients";
 import * as core from "@restatedev/restate-sdk-core";
@@ -125,8 +128,8 @@ describe("Custom testcontainer config", () => {
   beforeAll(async () => {
     restateTestEnvironment = await RestateTestEnvironment.start(
       (restateServer) => restateServer.bind(counter),
-      (c) =>
-        c
+      () =>
+        restateContainerFactory("restatedev/restate:1.1")()
           .withEnvironment({ RESTATE_LOG_FORMAT: "json" })
           .withLogConsumer((stream) => {
             // eslint-disable-next-line no-console
