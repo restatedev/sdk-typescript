@@ -40,7 +40,8 @@
   },
   "devDependencies": {
     "tsx": "^4.15.7",
-    "@restatedev/restate-sdk-testcontainers": "^1.4.0"
+    "@restatedev/restate-sdk-testcontainers": "^1.4.0",
+    "testcontainers": "^10.4.0"
   },
   "engines": {
     "node": ">= 18.13"

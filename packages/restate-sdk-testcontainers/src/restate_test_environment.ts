@@ -50,9 +50,18 @@ async function prepareRestateEndpoint(
 // Prepare the restate testcontainer
 async function prepareRestateTestContainer(
   restateServerPort: number,
-  restateContainerFactory: () => GenericContainer = () => new GenericContainer("docker.io/restatedev/restate:1.1")
+  restateContainerFactory: () => GenericContainer
 ): Promise<StartedTestContainer> {
-  const restateContainer = restateContainerFactory();
+  const restateContainer = restateContainerFactory()
+    // Expose ports
+    .withExposedPorts(8080, 9070)
+    // Wait start on health checks
+    .withWaitStrategy(
+      Wait.forAll([
+        Wait.forHttp("/restate/health", 8080),
+        Wait.forHttp("/health", 9070),
+      ])
+    );
 
   // This MUST be executed before starting the restate container
   // Expose host port to access the restate server
@@ -102,23 +111,6 @@ async function prepareRestateTestContainer(
   }
 }
 
-export function restateContainerFactory(image: string): () => GenericContainer {
-  return () => {
-    const restateContainer = new GenericContainer(image)
-      // Expose ports
-      .withExposedPorts(8080, 9070)
-      // Wait start on health checks
-      .withWaitStrategy(
-        Wait.forAll([
-          Wait.forHttp("/restate/health", 8080),
-          Wait.forHttp("/health", 9070),
-        ])
-      );
-
-    return restateContainer;
-  };
-}
-
 export class RestateTestEnvironment {
   constructor(
     readonly startedRestateHttpServer: http2.Http2Server,
@@ -154,16 +146,15 @@ export class RestateTestEnvironment {
 
   public static async start(
     mountServicesFn: (server: restate.RestateEndpoint) => void,
-    _restateContainerFactory: () => GenericContainer = restateContainerFactory(
-      "restatedev/restate:1.1"
-    )
+    restateContainerFactory: () => GenericContainer = () =>
+      new GenericContainer("restatedev/restate:1.1")
   ): Promise<RestateTestEnvironment> {
     const startedRestateHttpServer = await prepareRestateEndpoint(
       mountServicesFn
     );
     const startedRestateContainer = await prepareRestateTestContainer(
       (startedRestateHttpServer.address() as net.AddressInfo).port,
-      _restateContainerFactory
+      restateContainerFactory
     );
     return new RestateTestEnvironment(
       startedRestateHttpServer,
