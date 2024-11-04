@@ -286,6 +286,7 @@ export class GenericHandler implements RestateHandler {
       ),
       () => !coreVm.is_processing()
     );
+    console.info("Starting invocation.");
 
     // This promise is used to signal the end of the computation,
     // which can be either the user returns a value,
@@ -317,6 +318,7 @@ export class GenericHandler implements RestateHandler {
       .then((bytes) => {
         coreVm.sys_write_output_success(bytes);
         coreVm.sys_end();
+        console.info("Invocation completed successfully.");
       })
       .catch((e) => {
         const error = ensureError(e);
@@ -324,7 +326,7 @@ export class GenericHandler implements RestateHandler {
           !(error instanceof RestateError) ||
           error.code !== SUSPENDED_ERROR_CODE
         ) {
-          console.warn("Function completed with an error.\n", error);
+          console.warn("Invocation completed with an error.\n", error);
         }
 
         if (error instanceof TerminalError) {
