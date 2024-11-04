@@ -50,7 +50,7 @@ async function prepareRestateEndpoint(
 // Prepare the restate testcontainer
 async function prepareRestateTestContainer(
   restateServerPort: number,
-  restateContainerFactory: () => GenericContainer
+  restateContainerFactory: () => GenericContainer = () => new GenericContainer("docker.io/restatedev/restate:1.1")
 ): Promise<StartedTestContainer> {
   const restateContainer = restateContainerFactory();
 
