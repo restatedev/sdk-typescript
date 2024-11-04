@@ -2,7 +2,7 @@
   "extends": "./tsconfig.json",
   "include": ["src/**/*.ts", "test/**/*.ts"],
   "references": [
-    { "path": "../restate-sdk-core" },
-    { "path": "../restate-sdk-testcontainers" }
+    { "path": "../restate-sdk-clients" },
+    { "path": "../restate-sdk-core" }
   ]
 }

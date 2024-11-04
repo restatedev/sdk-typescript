@@ -58,7 +58,7 @@ import type {
   ReadableStreamDefaultReader,
   WritableStreamDefaultWriter,
 } from "node:stream/web";
-import type { ReadableStreamDefaultReadResult } from "stream/web";
+import type { ReadableStreamReadResult } from "stream/web";
 import type { CompletablePromise } from "./utils/completable_promise.js";
 
 export type InternalCombineablePromise<T> = CombineablePromise<T> & {
@@ -812,7 +812,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
 
   private async readNext(): Promise<void> {
     // Take input, and notify it to the vm
-    let nextValue: ReadableStreamDefaultReadResult<Uint8Array>;
+    let nextValue: ReadableStreamReadResult<Uint8Array>;
     try {
       nextValue = await this.inputReader.read();
     } catch (e) {
