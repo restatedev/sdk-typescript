@@ -57,6 +57,7 @@ jobs:
       - name: Set up Docker containerd snapshotter
         uses: crazy-max/ghaction-setup-docker@v3
         with:
+          set-host: true
           daemon-config: |
             {
               "features": {
