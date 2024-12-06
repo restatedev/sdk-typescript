@@ -29,7 +29,7 @@ import { Readable, Writable } from "node:stream";
 import type { WritableStream } from "node:stream/web";
 import { ProtocolMode } from "../types/discovery.js";
 import { ensureError } from "../types/errors.js";
-import type { Logger } from "../logger.js";
+import type { LoggerTransport } from "../logging/logger_transport.js";
 
 export class NodeEndpoint implements RestateEndpoint {
   private builder: EndpointBuilder = new EndpointBuilder();
@@ -66,7 +66,7 @@ export class NodeEndpoint implements RestateEndpoint {
     return this;
   }
 
-  public setLogger(logger: Logger): RestateEndpoint {
+  public setLogger(logger: LoggerTransport): RestateEndpoint {
     this.builder.setLogger(logger);
     return this;
   }

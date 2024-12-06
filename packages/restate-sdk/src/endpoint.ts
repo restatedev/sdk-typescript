@@ -15,7 +15,7 @@ import type {
   ServiceDefinition,
   WorkflowDefinition,
 } from "@restatedev/restate-sdk-core";
-import type { Logger } from "./logger.js";
+import type { LoggerTransport } from "./logging/logger_transport.js";
 
 /**
  * Utility interface for a bundle of one or more services belonging together
@@ -65,27 +65,27 @@ export interface RestateEndpointBase<E> {
   withIdentityV1(...keys: string[]): E;
 
   /**
-   * Replace the default console-based {@link Logger}
+   * Replace the default console-based {@link LoggerTransport}
    * @param logger
    * @example
    * Using console:
    * ```ts
-   *     restate.setLogger((params, message, ...o) => {console.log(`${params.level}: `, message, ...o)})
+   *     restate.setLogger((meta, message, ...o) => {console.log(`${meta.level}: `, message, ...o)})
    *  ```
    * @example
    * Using winston:
    * ```ts
    *     const logger = createLogger({ ... })
-   *     restate.setLogger((params, message, ...o) => {logger.log(params.level, {invocationId: params.context?.invocationId}, [message, ...o].join(' '))})
+   *     restate.setLogger((meta, message, ...o) => {logger.log(meta.level, {invocationId: meta.context?.invocationId}, [message, ...o].join(' '))})
    *  ```
    * @example
    * Using pino:
    * ```ts
    *     const logger = pino()
-   *     restate.setLogger((params, message, ...o) => {logger[params.level]({invocationId: params.context?.invocationId}, [message, ...o].join(' '))})
+   *     restate.setLogger((meta, message, ...o) => {logger[meta.level]({invocationId: meta.context?.invocationId}, [message, ...o].join(' '))})
    *  ```
    */
-  setLogger(logger: Logger): E;
+  setLogger(logger: LoggerTransport): E;
 }
 
 /**

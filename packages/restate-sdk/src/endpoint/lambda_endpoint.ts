@@ -24,7 +24,7 @@ import type {
 import { GenericHandler } from "./handlers/generic.js";
 import { LambdaHandler } from "./handlers/lambda.js";
 import { ProtocolMode } from "../types/discovery.js";
-import type { Logger } from "../logger.js";
+import type { LoggerTransport } from "../logging/logger_transport.js";
 
 /**
  * LambdaEndpoint encapsulates all the Restate services served by this endpoint.
@@ -80,7 +80,7 @@ export class LambdaEndpointImpl implements LambdaEndpoint {
     return this;
   }
 
-  public setLogger(logger: Logger): LambdaEndpoint {
+  public setLogger(logger: LoggerTransport): LambdaEndpoint {
     this.builder.setLogger(logger);
     return this;
   }

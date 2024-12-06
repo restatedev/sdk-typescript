@@ -23,17 +23,16 @@ import type { EndpointBuilder } from "../endpoint_builder.js";
 import { type ReadableStream, TransformStream } from "node:stream/web";
 import { OnceStream } from "../../utils/streams.js";
 import { ContextImpl } from "../../context_impl.js";
-import {
-  createRestateConsole,
-  DEFAULT_LOGGER_LOG_LEVEL,
-  defaultLogger,
-  LoggerContext,
-  LogSource,
-  RestateLogLevel,
-} from "../../logger.js";
 import * as vm from "./vm/sdk_shared_core_wasm_bindings.js";
 import { CompletablePromise } from "../../utils/completable_promise.js";
 import { HandlerKind } from "../../types/rpc.js";
+import { createLogger } from "../../logging/logger.js";
+import { DEFAULT_CONSOLE_LOGGER_LOG_LEVEL } from "../../logging/console_logger_transport.js";
+import {
+  LoggerContext,
+  LogSource,
+  RestateLogLevel,
+} from "../../logging/logger_transport.js";
 
 export interface Headers {
   [name: string]: string | string[] | undefined;
@@ -113,7 +112,7 @@ export class GenericHandler implements RestateHandler {
     }
 
     // Set the logging level in the shared core too!
-    switch (DEFAULT_LOGGER_LOG_LEVEL) {
+    switch (DEFAULT_CONSOLE_LOGGER_LOG_LEVEL) {
       case RestateLogLevel.TRACE:
         vm.set_log_level(vm.LogLevel.TRACE);
         break;
@@ -274,8 +273,8 @@ export class GenericHandler implements RestateHandler {
     const input = coreVm.sys_input();
 
     // Prepare context
-    const console = createRestateConsole(
-      this.endpoint.logger,
+    const console = createLogger(
+      this.endpoint.loggerTransport,
       LogSource.USER,
       new LoggerContext(
         input.invocation_id,
@@ -409,29 +408,30 @@ export class GenericHandler implements RestateHandler {
   }
 }
 
-function wasmLogLevelToRestateLogLevel(level: vm.LogLevel): RestateLogLevel {
-  switch (level) {
-    case vm.LogLevel.TRACE:
-      return RestateLogLevel.TRACE;
-    case vm.LogLevel.DEBUG:
-      return RestateLogLevel.DEBUG;
-    case vm.LogLevel.INFO:
-      return RestateLogLevel.INFO;
-    case vm.LogLevel.WARN:
-      return RestateLogLevel.WARN;
-    case vm.LogLevel.ERROR:
-      return RestateLogLevel.ERROR;
-  }
-}
+// function wasmLogLevelToRestateLogLevel(level: vm.LogLevel): RestateLogLevel {
+//   switch (level) {
+//     case vm.LogLevel.TRACE:
+//       return RestateLogLevel.TRACE;
+//     case vm.LogLevel.DEBUG:
+//       return RestateLogLevel.DEBUG;
+//     case vm.LogLevel.INFO:
+//       return RestateLogLevel.INFO;
+//     case vm.LogLevel.WARN:
+//       return RestateLogLevel.WARN;
+//     case vm.LogLevel.ERROR:
+//       return RestateLogLevel.ERROR;
+//   }
+// }
 
-/// This is used by the shared core!
+// This is used by the shared core!
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function vm_log(level: vm.LogLevel, str: string) {
-  defaultLogger(
-    {
-      level: wasmLogLevelToRestateLogLevel(level),
-      replaying: false,
-      source: LogSource.JOURNAL,
-    },
-    str
-  );
+  // defaultLogger(
+  //   {
+  //     level: wasmLogLevelToRestateLogLevel(level),
+  //     replaying,
+  //     source: LogSource.JOURNAL,
+  //   },
+  //   str
+  // );
 }

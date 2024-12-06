@@ -27,12 +27,12 @@ import {
 } from "../types/components.js";
 
 import type * as discovery from "../types/discovery.js";
+import { defaultLoggerTransport } from "../logging/console_logger_transport.js";
 import {
+  type LoggerTransport,
   LogSource,
-  type Logger,
-  createRestateConsole,
-  defaultLogger,
-} from "../logger.js";
+} from "../logging/logger_transport.js";
+import { createLogger } from "../logging/logger.js";
 
 function isServiceDefinition<P extends string, M>(
   m: Record<string, any>
@@ -54,14 +54,14 @@ function isWorkflowDefinition<P extends string, M>(
 
 export class EndpointBuilder {
   private readonly services: Map<string, Component> = new Map();
-  public logger: Logger = defaultLogger;
+  public loggerTransport: LoggerTransport = defaultLoggerTransport;
 
   /**
    * This is a simple console without contextual info.
    *
    * This should be used only in cases where no contextual info is available.
    */
-  public rlog = createRestateConsole(this.logger, LogSource.SYSTEM);
+  public rlog = createLogger(this.loggerTransport, LogSource.SYSTEM);
 
   private _keySet: string[] = [];
 
@@ -114,9 +114,9 @@ export class EndpointBuilder {
     return this;
   }
 
-  public setLogger(newLogger: Logger) {
-    this.logger = newLogger;
-    this.rlog = createRestateConsole(this.logger, LogSource.SYSTEM);
+  public setLogger(newLogger: LoggerTransport) {
+    this.loggerTransport = newLogger;
+    this.rlog = createLogger(this.loggerTransport, LogSource.SYSTEM);
     return this;
   }
 
