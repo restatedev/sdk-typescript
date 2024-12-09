@@ -62,20 +62,6 @@ export interface RestateResponse {
   readonly body: ReadableStream<Uint8Array>;
 }
 
-export enum ServiceDiscoveryProtocolVersion {
-  /**
-   * @generated from enum value: SERVICE_DISCOVERY_PROTOCOL_VERSION_UNSPECIFIED = 0;
-   */
-  SERVICE_DISCOVERY_PROTOCOL_VERSION_UNSPECIFIED = 0,
-
-  /**
-   * initial service discovery protocol version using endpoint_manifest_schema.json
-   *
-   * @generated from enum value: V1 = 1;
-   */
-  V1 = 1,
-}
-
 export interface RestateHandler {
   handle(
     request: RestateRequest,
