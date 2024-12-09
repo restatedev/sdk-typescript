@@ -6,11 +6,13 @@ use restate_sdk_shared_core::{
     TerminalFailure, VMOptions, Value, VM,
 };
 use serde::{Deserialize, Serialize};
+use std::cmp;
 use std::convert::{Infallible, Into};
 use std::io::Write;
 use std::time::Duration;
 use tracing::metadata::LevelFilter;
-use tracing::Level;
+use tracing::{info, Dispatch, Level, Subscriber};
+use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::fmt::MakeWriter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::{Layer, Registry};
@@ -38,11 +40,12 @@ pub enum LogLevel {
 #[wasm_bindgen(raw_module = "../generic.js")]
 extern "C" {
     #[wasm_bindgen]
-    fn vm_log(level: LogLevel, s: &str);
+    fn vm_log(level: LogLevel, s: &[u8], logger_id: Option<u32>);
 }
 
-#[derive(Default)]
-pub struct MakeWebConsoleWriter {}
+pub struct MakeWebConsoleWriter {
+    logger_id: Option<u32>,
+}
 
 impl<'a> MakeWriter<'a> for MakeWebConsoleWriter {
     type Writer = ConsoleWriter;
@@ -51,6 +54,7 @@ impl<'a> MakeWriter<'a> for MakeWebConsoleWriter {
         ConsoleWriter {
             buffer: vec![],
             level: Level::TRACE, // if no level is known, assume the most detailed
+            logger_id: self.logger_id,
         }
     }
 
@@ -59,13 +63,16 @@ impl<'a> MakeWriter<'a> for MakeWebConsoleWriter {
         ConsoleWriter {
             buffer: vec![],
             level,
+            logger_id: self.logger_id,
         }
     }
 }
 
 pub struct ConsoleWriter {
     buffer: Vec<u8>,
+
     level: Level,
+    logger_id: Option<u32>,
 }
 
 impl Write for ConsoleWriter {
@@ -80,10 +87,6 @@ impl Write for ConsoleWriter {
 
 impl Drop for ConsoleWriter {
     fn drop(&mut self) {
-        // TODO: it's rather pointless to decoded to utf-8 here,
-        //  just to re-encode as utf-16 when crossing wasm-bindgen boundaries
-        // we could use TextDecoder directly to produce a
-        let message = String::from_utf8_lossy(&self.buffer);
         vm_log(
             match self.level {
                 Level::TRACE => LogLevel::TRACE,
@@ -92,13 +95,31 @@ impl Drop for ConsoleWriter {
                 Level::WARN => LogLevel::WARN,
                 Level::ERROR => LogLevel::ERROR,
             },
-            message.as_ref(),
+            // Remove last character, which is always a new line
+            &self.buffer[..cmp::max(0, self.buffer.len() - 1)],
+            self.logger_id,
         )
     }
 }
 
+/// This will set the log level of the overall log subscriber.
 #[wasm_bindgen]
 pub fn set_log_level(level: LogLevel) {
+    let _ = tracing::subscriber::set_global_default(log_subscriber(level, None));
+}
+
+fn log_subscriber(
+    level: LogLevel,
+    logger_id: Option<u32>,
+) -> impl Subscriber + Send + Sync + 'static {
+    let level = match level {
+        LogLevel::TRACE => Level::TRACE,
+        LogLevel::DEBUG => Level::DEBUG,
+        LogLevel::INFO => Level::INFO,
+        LogLevel::WARN => Level::WARN,
+        LogLevel::ERROR => Level::ERROR,
+    };
+
     let fmt_layer = tracing_subscriber::fmt::layer()
         .with_ansi(false)
         .without_time()
@@ -106,23 +127,20 @@ pub fn set_log_level(level: LogLevel) {
         .with_thread_ids(false)
         .with_file(false)
         .with_line_number(false)
-        .with_target(true)
+        .with_target(level == Level::TRACE)
         .with_level(false)
-        .with_writer(MakeWebConsoleWriter::default())
+        .with_span_events(if level == Level::TRACE {
+            FmtSpan::ENTER
+        } else {
+            FmtSpan::NONE
+        })
+        .with_writer(MakeWebConsoleWriter { logger_id })
         // We do filtering here too,
         // as it might get expensive to pass logs through
         // the various layers even though we don't need them
-        .with_filter(LevelFilter::from_level(match level {
-            LogLevel::TRACE => Level::TRACE,
-            LogLevel::DEBUG => Level::DEBUG,
-            LogLevel::INFO => Level::INFO,
-            LogLevel::WARN => Level::WARN,
-            LogLevel::ERROR => Level::ERROR,
-        }));
-
-    let _ = tracing::subscriber::set_global_default(Registry::default().with(fmt_layer));
+        .with_filter(LevelFilter::from_level(level));
+    Registry::default().with(fmt_layer)
 }
-
 // Data model
 
 #[wasm_bindgen(getter_with_clone)]
@@ -319,29 +337,45 @@ pub enum WasmRunEnterResult {
 #[wasm_bindgen]
 pub struct WasmVM {
     vm: CoreVM,
+    log_dispatcher: Dispatch,
+}
+
+macro_rules! use_log_dispatcher {
+    ($vm:expr, $f:expr) => {{
+        let WasmVM { vm, log_dispatcher } = $vm;
+        tracing::dispatcher::with_default(&log_dispatcher, || $f(vm))
+    }};
 }
 
 #[wasm_bindgen]
 impl WasmVM {
     #[wasm_bindgen(constructor)]
-    pub fn new(headers: Vec<WasmHeader>) -> Result<WasmVM, WasmFailure> {
-        Ok(Self {
-            vm: CoreVM::new(
+    pub fn new(
+        headers: Vec<WasmHeader>,
+        log_level: LogLevel,
+        logger_id: u32,
+    ) -> Result<WasmVM, WasmFailure> {
+        let log_dispatcher = Dispatch::new(log_subscriber(log_level, Some(logger_id)));
+
+        let vm = tracing::dispatcher::with_default(&log_dispatcher, || {
+            CoreVM::new(
                 WasmHeaderList::from(headers),
                 VMOptions {
                     fail_on_wait_concurrent_async_result: false,
                 },
-            )?,
-        })
+            )
+        })?;
+
+        Ok(Self { vm, log_dispatcher })
     }
 
     pub fn get_response_head(&self) -> WasmResponseHead {
-        self.vm.get_response_head().into()
+        use_log_dispatcher!(self, |vm| CoreVM::get_response_head(vm).into())
     }
 
     pub fn notify_input(&mut self, buffer: Vec<u8>) {
         let buf = buffer.into();
-        self.vm.notify_input(buf);
+        use_log_dispatcher!(self, |vm| CoreVM::notify_input(vm, buf))
     }
 
     pub fn notify_input_closed(&mut self) {
@@ -354,22 +388,22 @@ impl WasmVM {
             e = e.with_description(description);
         }
 
-        CoreVM::notify_error(&mut self.vm, e, None);
+        use_log_dispatcher!(self, |vm| CoreVM::notify_error(vm, e, None))
     }
 
     pub fn take_output(&mut self) -> JsValue {
-        match self.vm.take_output() {
+        match use_log_dispatcher!(self, CoreVM::take_output) {
             TakeOutputResult::Buffer(v) => Uint8Array::from(&*v).into(),
             TakeOutputResult::EOF => JsValue::null(),
         }
     }
 
     pub fn is_ready_to_execute(&self) -> Result<bool, WasmFailure> {
-        self.vm.is_ready_to_execute().map_err(Into::into)
+        use_log_dispatcher!(self, CoreVM::is_ready_to_execute).map_err(Into::into)
     }
 
     pub fn notify_await_point(&mut self, handle: WasmAsyncResultHandle) {
-        self.vm.notify_await_point(handle.into())
+        use_log_dispatcher!(self, |vm| CoreVM::notify_await_point(vm, handle.into()))
     }
 
     pub fn take_async_result(
@@ -377,16 +411,17 @@ impl WasmVM {
         handle: WasmAsyncResultHandle,
     ) -> Result<WasmAsyncResultValue, WasmFailure> {
         Ok(
-            match self
-                .vm
-                .take_async_result(AsyncResultHandle::from(handle))
-                .map_err(|e| match e {
-                    SuspendedOrVMError::Suspended(_) => WasmFailure {
-                        code: 599,
-                        message: "suspended".to_string(),
-                    },
-                    SuspendedOrVMError::VM(e) => WasmFailure::from(e),
-                })? {
+            match use_log_dispatcher!(self, |vm| CoreVM::take_async_result(
+                vm,
+                AsyncResultHandle::from(handle)
+            ))
+            .map_err(|e| match e {
+                SuspendedOrVMError::Suspended(_) => WasmFailure {
+                    code: 599,
+                    message: "suspended".to_string(),
+                },
+                SuspendedOrVMError::VM(e) => WasmFailure::from(e),
+            })? {
                 None => WasmAsyncResultValue::NotReady,
                 Some(Value::Void) => WasmAsyncResultValue::Empty,
                 Some(Value::Success(b)) => WasmAsyncResultValue::Success(b.to_vec().into()),
@@ -406,19 +441,19 @@ impl WasmVM {
     // Syscall(s)
 
     pub fn sys_input(&mut self) -> Result<WasmInput, WasmFailure> {
-        self.vm.sys_input().map(Into::into).map_err(Into::into)
+        use_log_dispatcher!(self, CoreVM::sys_input)
+            .map(Into::into)
+            .map_err(Into::into)
     }
 
     pub fn sys_get_state(&mut self, key: String) -> Result<WasmAsyncResultHandle, WasmFailure> {
-        self.vm
-            .sys_state_get(key)
+        use_log_dispatcher!(self, |vm| CoreVM::sys_state_get(vm, key))
             .map(Into::into)
             .map_err(Into::into)
     }
 
     pub fn sys_get_state_keys(&mut self) -> Result<WasmAsyncResultHandle, WasmFailure> {
-        self.vm
-            .sys_state_get_keys()
+        use_log_dispatcher!(self, CoreVM::sys_state_get_keys)
             .map(Into::into)
             .map_err(Into::into)
     }
@@ -428,24 +463,29 @@ impl WasmVM {
         key: String,
         buffer: js_sys::Uint8Array,
     ) -> Result<(), WasmFailure> {
-        self.vm
-            .sys_state_set(key, buffer.to_vec().into())
-            .map_err(Into::into)
+        use_log_dispatcher!(self, |vm| CoreVM::sys_state_set(
+            vm,
+            key,
+            buffer.to_vec().into()
+        ))
+        .map_err(Into::into)
     }
 
     pub fn sys_clear_state(&mut self, key: String) -> Result<(), WasmFailure> {
-        self.vm.sys_state_clear(key).map_err(Into::into)
+        use_log_dispatcher!(self, |vm| CoreVM::sys_state_clear(vm, key)).map_err(Into::into)
     }
 
     pub fn sys_clear_all_state(&mut self) -> Result<(), WasmFailure> {
-        self.vm.sys_state_clear_all().map_err(Into::into)
+        use_log_dispatcher!(self, CoreVM::sys_state_clear_all).map_err(Into::into)
     }
 
     pub fn sys_sleep(&mut self, millis: u64) -> Result<WasmAsyncResultHandle, WasmFailure> {
-        self.vm
-            .sys_sleep(duration_since_unix_epoch() + Duration::from_millis(millis))
-            .map(Into::into)
-            .map_err(Into::into)
+        use_log_dispatcher!(self, |vm| CoreVM::sys_sleep(
+            vm,
+            duration_since_unix_epoch() + Duration::from_millis(millis)
+        ))
+        .map(Into::into)
+        .map_err(Into::into)
     }
 
     pub fn sys_call(
@@ -456,19 +496,18 @@ impl WasmVM {
         key: Option<String>,
         headers: Vec<WasmHeader>,
     ) -> Result<WasmAsyncResultHandle, WasmFailure> {
-        self.vm
-            .sys_call(
-                Target {
-                    service,
-                    handler,
-                    key,
-                    idempotency_key: None,
-                    headers: headers.into_iter().map(Header::from).collect(),
-                },
-                buffer.to_vec().into(),
-            )
-            .map(Into::into)
-            .map_err(Into::into)
+        use_log_dispatcher!(self, |vm| CoreVM::sys_call(
+            vm,
+            Target {
+                service,
+                handler,
+                key,
+            idempotency_key: None,
+                    headers: headers.into_iter().map(Header::from).collect(),},
+            buffer.to_vec().into()
+        ))
+        .map(Into::into)
+        .map_err(Into::into)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -481,8 +520,7 @@ impl WasmVM {
         headers: Vec<WasmHeader>,
         delay: Option<u64>,
     ) -> Result<WasmSendHandle, WasmFailure> {
-        self.vm
-            .sys_send(
+        use_log_dispatcher!(self, |vm| CoreVM::sys_send(
                 Target {
                     service,
                     handler,
@@ -492,14 +530,13 @@ impl WasmVM {
                 },
                 buffer.to_vec().into(),
                 delay.map(|delay| duration_since_unix_epoch() + Duration::from_millis(delay)),
-            )
+            ))
             .map(Into::into)
             .map_err(Into::into)
     }
 
     pub fn sys_awakeable(&mut self) -> Result<WasmAwakeable, WasmFailure> {
-        self.vm
-            .sys_awakeable()
+        use_log_dispatcher!(self, CoreVM::sys_awakeable)
             .map(|(id, handle)| WasmAwakeable {
                 id,
                 handle: handle.into(),
@@ -512,9 +549,12 @@ impl WasmVM {
         id: String,
         buffer: Uint8Array,
     ) -> Result<(), WasmFailure> {
-        self.vm
-            .sys_complete_awakeable(id, NonEmptyValue::Success(buffer.to_vec().into()))
-            .map_err(Into::into)
+        use_log_dispatcher!(self, |vm| CoreVM::sys_complete_awakeable(
+            vm,
+            id,
+            NonEmptyValue::Success(buffer.to_vec().into())
+        ))
+        .map_err(Into::into)
     }
 
     pub fn sys_complete_awakeable_failure(
@@ -522,21 +562,22 @@ impl WasmVM {
         id: String,
         value: WasmFailure,
     ) -> Result<(), WasmFailure> {
-        self.vm
-            .sys_complete_awakeable(id, NonEmptyValue::Failure(value.into()))
-            .map_err(Into::into)
+        use_log_dispatcher!(self, |vm| CoreVM::sys_complete_awakeable(
+            vm,
+            id,
+            NonEmptyValue::Failure(value.into())
+        ))
+        .map_err(Into::into)
     }
 
     pub fn sys_get_promise(&mut self, key: String) -> Result<WasmAsyncResultHandle, WasmFailure> {
-        self.vm
-            .sys_get_promise(key)
+        use_log_dispatcher!(self, |vm| CoreVM::sys_get_promise(vm, key))
             .map(Into::into)
             .map_err(Into::into)
     }
 
     pub fn sys_peek_promise(&mut self, key: String) -> Result<WasmAsyncResultHandle, WasmFailure> {
-        self.vm
-            .sys_peek_promise(key)
+        use_log_dispatcher!(self, |vm| CoreVM::sys_peek_promise(vm, key))
             .map(Into::into)
             .map_err(Into::into)
     }
@@ -546,10 +587,13 @@ impl WasmVM {
         key: String,
         buffer: Uint8Array,
     ) -> Result<WasmAsyncResultHandle, WasmFailure> {
-        self.vm
-            .sys_complete_promise(key, NonEmptyValue::Success(buffer.to_vec().into()))
-            .map(Into::into)
-            .map_err(Into::into)
+        use_log_dispatcher!(self, |vm| CoreVM::sys_complete_promise(
+            vm,
+            key,
+            NonEmptyValue::Success(buffer.to_vec().into())
+        ))
+        .map(Into::into)
+        .map_err(Into::into)
     }
 
     pub fn sys_complete_promise_failure(
@@ -557,33 +601,38 @@ impl WasmVM {
         key: String,
         value: WasmFailure,
     ) -> Result<WasmAsyncResultHandle, WasmFailure> {
-        self.vm
-            .sys_complete_promise(key, NonEmptyValue::Failure(value.into()))
-            .map(Into::into)
-            .map_err(Into::into)
+        use_log_dispatcher!(self, |vm| CoreVM::sys_complete_promise(
+            vm,
+            key,
+            NonEmptyValue::Failure(value.into())
+        ))
+        .map(Into::into)
+        .map_err(Into::into)
     }
 
     pub fn sys_run_enter(&mut self, name: String) -> Result<WasmRunEnterResult, WasmFailure> {
-        Ok(match self.vm.sys_run_enter(name)? {
-            RunEnterResult::Executed(NonEmptyValue::Success(b)) => {
-                WasmRunEnterResult::ExecutedWithSuccess(b.to_vec().into())
-            }
-            RunEnterResult::Executed(NonEmptyValue::Failure(f)) => {
-                WasmRunEnterResult::ExecutedWithFailure(f.into())
-            }
-            RunEnterResult::NotExecuted(_) => WasmRunEnterResult::NotExecuted,
-        })
+        Ok(
+            match use_log_dispatcher!(self, |vm| CoreVM::sys_run_enter(vm, name))? {
+                RunEnterResult::Executed(NonEmptyValue::Success(b)) => {
+                    WasmRunEnterResult::ExecutedWithSuccess(b.to_vec().into())
+                }
+                RunEnterResult::Executed(NonEmptyValue::Failure(f)) => {
+                    WasmRunEnterResult::ExecutedWithFailure(f.into())
+                }
+                RunEnterResult::NotExecuted(_) => WasmRunEnterResult::NotExecuted,
+            },
+        )
     }
 
     pub fn sys_run_exit_success(
         &mut self,
         buffer: Uint8Array,
     ) -> Result<WasmAsyncResultHandle, WasmFailure> {
-        CoreVM::sys_run_exit(
-            &mut self.vm,
+        use_log_dispatcher!(self, |vm| CoreVM::sys_run_exit(
+            vm,
             RunExitResult::Success(buffer.to_vec().into()),
             RetryPolicy::None,
-        )
+        ))
         .map(Into::into)
         .map_err(Into::into)
     }
@@ -592,13 +641,13 @@ impl WasmVM {
         &mut self,
         value: WasmFailure,
     ) -> Result<WasmAsyncResultHandle, WasmFailure> {
-        self.vm
-            .sys_run_exit(
-                RunExitResult::TerminalFailure(value.into()),
-                RetryPolicy::None,
-            )
-            .map(Into::into)
-            .map_err(Into::into)
+        use_log_dispatcher!(self, |vm| CoreVM::sys_run_exit(
+            vm,
+            RunExitResult::TerminalFailure(value.into()),
+            RetryPolicy::None
+        ))
+        .map(Into::into)
+        .map_err(Into::into)
     }
 
     pub fn sys_run_exit_failure_transient(
@@ -608,94 +657,100 @@ impl WasmVM {
         attempt_duration: u64,
         config: WasmExponentialRetryConfig,
     ) -> Result<WasmAsyncResultHandle, WasmFailure> {
-        self.vm
-            .sys_run_exit(
-                RunExitResult::RetryableFailure {
-                    attempt_duration: Duration::from_millis(attempt_duration),
-                    error: Error::internal(error_message)
-                        .with_description(error_description.unwrap_or_default()),
-                },
-                config.into(),
-            )
-            .map(Into::into)
-            .map_err(Into::into)
+        use_log_dispatcher!(self, |vm| CoreVM::sys_run_exit(
+            vm,
+            RunExitResult::RetryableFailure {
+                attempt_duration: Duration::from_millis(attempt_duration),
+                error: Error::internal(error_message)
+                    .with_description(error_description.unwrap_or_default()),
+            },
+            config.into()
+        ))
+        .map(Into::into)
+        .map_err(Into::into)
     }
 
     pub fn sys_write_output_success(
         &mut self,
         buffer: js_sys::Uint8Array,
     ) -> Result<(), WasmFailure> {
-        self.vm
-            .sys_write_output(NonEmptyValue::Success(buffer.to_vec().into()))
-            .map(Into::into)
-            .map_err(Into::into)
+        use_log_dispatcher!(self, |vm| CoreVM::sys_write_output(
+            vm,
+            NonEmptyValue::Success(buffer.to_vec().into())
+        ))
+        .map(Into::into)
+        .map_err(Into::into)
     }
 
     pub fn sys_write_output_failure(&mut self, value: WasmFailure) -> Result<(), WasmFailure> {
-        self.vm
-            .sys_write_output(NonEmptyValue::Failure(value.into()))
+        use_log_dispatcher!(self, |vm| CoreVM::sys_write_output(
+            vm,
+            NonEmptyValue::Failure(value.into())
+        ))
+        .map(Into::into)
+        .map_err(Into::into)
+    }
+
+    pub fn sys_end(&mut self) -> Result<(), WasmFailure> {
+        use_log_dispatcher!(self, CoreVM::sys_end)
             .map(Into::into)
             .map_err(Into::into)
     }
 
-    pub fn sys_end(&mut self) -> Result<(), WasmFailure> {
-        self.vm.sys_end().map(Into::into).map_err(Into::into)
-    }
-
     pub fn is_processing(&self) -> bool {
-        self.vm.is_processing()
+        use_log_dispatcher!(self, CoreVM::is_processing)
     }
 
     pub fn is_inside_run(&self) -> bool {
-        self.vm.is_inside_run()
+        use_log_dispatcher!(self, CoreVM::is_inside_run)
     }
 
     pub fn sys_try_complete_all_combinator(
         &mut self,
         handles: Vec<WasmAsyncResultHandle>,
     ) -> Result<Option<WasmAsyncResultHandle>, WasmFailure> {
-        self.vm
-            .sys_try_complete_combinator(AllAsyncResultCombinator(
-                handles.into_iter().map(Into::into).collect(),
-            ))
-            .map(|opt| opt.map(Into::into))
-            .map_err(Into::into)
+        use_log_dispatcher!(self, |vm| CoreVM::sys_try_complete_combinator(
+            vm,
+            AllAsyncResultCombinator(handles.into_iter().map(Into::into).collect(),)
+        ))
+        .map(|opt| opt.map(Into::into))
+        .map_err(Into::into)
     }
 
     pub fn sys_try_complete_any_combinator(
         &mut self,
         handles: Vec<WasmAsyncResultHandle>,
     ) -> Result<Option<WasmAsyncResultHandle>, WasmFailure> {
-        self.vm
-            .sys_try_complete_combinator(AnyAsyncResultCombinator(
-                handles.into_iter().map(Into::into).collect(),
-            ))
-            .map(|opt| opt.map(Into::into))
-            .map_err(Into::into)
+        use_log_dispatcher!(self, |vm| CoreVM::sys_try_complete_combinator(
+            vm,
+            AnyAsyncResultCombinator(handles.into_iter().map(Into::into).collect(),)
+        ))
+        .map(|opt| opt.map(Into::into))
+        .map_err(Into::into)
     }
 
     pub fn sys_try_complete_all_settled_combinator(
         &mut self,
         handles: Vec<WasmAsyncResultHandle>,
     ) -> Result<Option<WasmAsyncResultHandle>, WasmFailure> {
-        self.vm
-            .sys_try_complete_combinator(AllSettledAsyncResultCombinator(
-                handles.into_iter().map(Into::into).collect(),
-            ))
-            .map(|opt| opt.map(Into::into))
-            .map_err(Into::into)
+        use_log_dispatcher!(self, |vm| CoreVM::sys_try_complete_combinator(
+            vm,
+            AllSettledAsyncResultCombinator(handles.into_iter().map(Into::into).collect(),)
+        ))
+        .map(|opt| opt.map(Into::into))
+        .map_err(Into::into)
     }
 
     pub fn sys_try_complete_race_combinator(
         &mut self,
         handles: Vec<WasmAsyncResultHandle>,
     ) -> Result<Option<WasmAsyncResultHandle>, WasmFailure> {
-        self.vm
-            .sys_try_complete_combinator(RaceAsyncResultCombinator(
-                handles.into_iter().map(Into::into).collect(),
-            ))
-            .map(|opt| opt.map(Into::into))
-            .map_err(Into::into)
+        use_log_dispatcher!(self, |vm| CoreVM::sys_try_complete_combinator(
+            vm,
+            RaceAsyncResultCombinator(handles.into_iter().map(Into::into).collect(),)
+        ))
+        .map(|opt| opt.map(Into::into))
+        .map_err(Into::into)
     }
 }
 

@@ -99,16 +99,28 @@ export function createLogger(
           message?: any,
           ...optionalParams: any[]
         ): void => {
-          loggerTransport.bind(null)(
-            {
-              source,
-              level,
-              replaying: isReplaying(),
-              context,
-            },
-            message,
-            optionalParams
-          );
+          if (optionalParams?.length === 0 || optionalParams === undefined) {
+            loggerTransport.bind(null)(
+              {
+                source,
+                level,
+                replaying: isReplaying(),
+                context,
+              },
+              message
+            );
+          } else {
+            loggerTransport.bind(null)(
+              {
+                source,
+                level,
+                replaying: isReplaying(),
+                context,
+              },
+              message,
+              optionalParams
+            );
+          }
         };
       },
     },
