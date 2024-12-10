@@ -31,9 +31,7 @@ export const defaultLoggerTransport: LoggerTransport = (
   if (logLevel(params.level) < logLevel(DEFAULT_CONSOLE_LOGGER_LOG_LEVEL)) {
     return;
   }
-  const p = `${formatLogPrefix(
-    params.context
-  )}[${new Date().toISOString()}] ${params.level.toUpperCase()}: `;
+  const p = `${formatLogPrefix(params.context)} ${params.level.toUpperCase()}:`;
   switch (params.level) {
     case RestateLogLevel.TRACE:
       return console.trace(p, message, ...optionalParams);
@@ -101,10 +99,11 @@ function logLevel(level: RestateLogLevel): number {
 }
 
 function formatLogPrefix(context?: LoggerContext): string {
+  let prefix = `[restate][${new Date().toISOString()}]`;
   if (context === undefined) {
-    return "[restate] ";
+    return prefix;
   }
-  let prefix = `[restate] [${context.invocationTarget}][${context.invocationId}]`;
+  prefix = `${prefix}[${context.invocationTarget}][${context.invocationId}]`;
   if (context.additionalContext !== undefined) {
     for (const [k, v] of Object.entries(context.additionalContext)) {
       prefix = prefix + `[${k}: ${v}]`;
