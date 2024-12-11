@@ -86,7 +86,7 @@ jobs:
       - name: Install restate snapshot
         if: ${{ inputs.restateCommit != '' }}
         run: |
-          output=$(docker load --input restate.tar)
+          output=$(docker load --input restate.tar | head -n 1)
           docker tag "${output#*: }" "localhost/restatedev/restate-commit-download:latest"
           docker image ls -a
 
