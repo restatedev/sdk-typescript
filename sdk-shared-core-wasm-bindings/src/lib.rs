@@ -11,7 +11,7 @@ use std::convert::{Infallible, Into};
 use std::io::Write;
 use std::time::Duration;
 use tracing::metadata::LevelFilter;
-use tracing::{info, Dispatch, Level, Subscriber};
+use tracing::{Dispatch, Level, Subscriber};
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::fmt::MakeWriter;
 use tracing_subscriber::layer::SubscriberExt;
@@ -434,6 +434,9 @@ impl WasmVM {
                 Some(Value::CombinatorResult(handles)) => WasmAsyncResultValue::CombinatorResult(
                     handles.into_iter().map(Into::into).collect(),
                 ),
+                _ => {
+                    panic!("Unsupported yet")
+                }
             },
         )
     }
@@ -480,9 +483,11 @@ impl WasmVM {
     }
 
     pub fn sys_sleep(&mut self, millis: u64) -> Result<WasmAsyncResultHandle, WasmFailure> {
+        let now = now_since_unix_epoch();
         use_log_dispatcher!(self, |vm| CoreVM::sys_sleep(
             vm,
-            duration_since_unix_epoch() + Duration::from_millis(millis)
+            now + Duration::from_millis(millis),
+            Some(now)
         ))
         .map(Into::into)
         .map_err(Into::into)
@@ -856,7 +861,7 @@ impl AsyncResultCombinator for AllSettledAsyncResultCombinator {
     }
 }
 
-fn duration_since_unix_epoch() -> Duration {
+fn now_since_unix_epoch() -> Duration {
     Duration::from_millis(js_sys::Date::now() as u64)
 }
 
