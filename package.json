@@ -46,7 +46,9 @@
     "prettier": "^2.8.4",
     "release-it": "^17.3.0",
     "typescript": "^5.4.5",
-    "vitest": "^1.6.0"
+    "vitest": "^1.6.0",
+    "wasm-pack": "^0.13.1",
+    "wasm-pack-inline": "^0.1.2"
   },
   "engines": {
     "node": ">= 18.13"

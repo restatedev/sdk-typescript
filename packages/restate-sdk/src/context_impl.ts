@@ -60,6 +60,7 @@ import type {
 } from "node:stream/web";
 import type { ReadableStreamReadResult } from "stream/web";
 import type { CompletablePromise } from "./utils/completable_promise.js";
+import { WasmHeader } from "./endpoint/handlers/vm/sdk_shared_core_wasm_bindings.js";
 
 export type InternalCombineablePromise<T> = CombineablePromise<T> & {
   asyncResultHandle: number;
@@ -213,7 +214,17 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     return this.processCompletableEntry(
       (vm) => {
         const parameter = requestSerde.serialize(call.parameter);
-        return vm.sys_call(call.service, call.method, parameter, call.key);
+        return vm.sys_call(
+          call.service,
+          call.method,
+          parameter,
+          call.key,
+          call.headers
+            ? Object.entries(call.headers).map(
+                ([key, value]) => new WasmHeader(key, value)
+              )
+            : []
+        );
       },
       (asyncResultValue) => {
         if (
@@ -248,7 +259,18 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
         delay = BigInt(send.delay);
       }
 
-      vm.sys_send(send.service, send.method, parameter, send.key, delay);
+      void vm.sys_send(
+        send.service,
+        send.method,
+        parameter,
+        send.key,
+        send.headers
+          ? Object.entries(send.headers).map(
+              ([key, value]) => new WasmHeader(key, value)
+            )
+          : [],
+        delay
+      );
     });
   }
 
@@ -736,6 +758,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
         | { Success: Uint8Array }
         | { Failure: vm.WasmFailure }
         | { StateKeys: string[] }
+        | { InvocationId: string }
         | { CombinatorResult: number[] }
     ) => T
   ): LazyContextPromise<T> {
@@ -759,6 +782,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
         | { Success: Uint8Array }
         | { Failure: vm.WasmFailure }
         | { StateKeys: string[] }
+        | { InvocationId: string }
         | { CombinatorResult: number[] }
     ) => T
   ): Promise<T> {
