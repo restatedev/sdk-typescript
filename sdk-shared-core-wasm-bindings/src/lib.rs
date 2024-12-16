@@ -434,9 +434,6 @@ impl WasmVM {
                 Some(Value::CombinatorResult(handles)) => WasmAsyncResultValue::CombinatorResult(
                     handles.into_iter().map(Into::into).collect(),
                 ),
-                _ => {
-                    panic!("Unsupported yet")
-                }
             },
         )
     }
@@ -507,8 +504,9 @@ impl WasmVM {
                 service,
                 handler,
                 key,
-            idempotency_key: None,
-                    headers: headers.into_iter().map(Header::from).collect(),},
+                idempotency_key: None,
+                headers: headers.into_iter().map(Header::from).collect(),
+            },
             buffer.to_vec().into()
         ))
         .map(Into::into)
@@ -526,18 +524,19 @@ impl WasmVM {
         delay: Option<u64>,
     ) -> Result<WasmSendHandle, WasmFailure> {
         use_log_dispatcher!(self, |vm| CoreVM::sys_send(
-                Target {
-                    service,
-                    handler,
-                    key,
-                    idempotency_key: None,
-                    headers: headers.into_iter().map(Header::from).collect(),
-                },
-                buffer.to_vec().into(),
-                delay.map(|delay| duration_since_unix_epoch() + Duration::from_millis(delay)),
-            ))
-            .map(Into::into)
-            .map_err(Into::into)
+            vm,
+            Target {
+                service,
+                handler,
+                key,
+                idempotency_key: None,
+                headers: headers.into_iter().map(Header::from).collect(),
+            },
+            buffer.to_vec().into(),
+            delay.map(|delay| now_since_unix_epoch() + Duration::from_millis(delay)),
+        ))
+        .map(Into::into)
+        .map_err(Into::into)
     }
 
     pub fn sys_awakeable(&mut self) -> Result<WasmAwakeable, WasmFailure> {

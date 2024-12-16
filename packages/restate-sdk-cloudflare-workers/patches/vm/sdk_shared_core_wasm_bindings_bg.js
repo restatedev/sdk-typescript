@@ -197,7 +197,12 @@ export function start() {
     wasm.start();
 }
 
+function getArrayU8FromWasm0(ptr, len) {
+    ptr = ptr >>> 0;
+    return getUint8ArrayMemory0().subarray(ptr / 1, ptr / 1 + len);
+}
 /**
+* This will set the log level of the overall log subscriber.
 * @param {LogLevel} level
 */
 export function set_log_level(level) {
@@ -568,13 +573,15 @@ export class WasmVM {
     }
     /**
     * @param {(WasmHeader)[]} headers
+    * @param {LogLevel} log_level
+    * @param {number} logger_id
     */
-    constructor(headers) {
+    constructor(headers, log_level, logger_id) {
         try {
             const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
             const ptr0 = passArrayJsValueToWasm0(headers, wasm.__wbindgen_malloc);
             const len0 = WASM_VECTOR_LEN;
-            wasm.wasmvm_new(retptr, ptr0, len0);
+            wasm.wasmvm_new(retptr, ptr0, len0, log_level, logger_id);
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
             var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
             var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
@@ -801,10 +808,11 @@ export class WasmVM {
     * @param {string} service
     * @param {string} handler
     * @param {Uint8Array} buffer
-    * @param {string | undefined} [key]
+    * @param {string | undefined} key
+    * @param {(WasmHeader)[]} headers
     * @returns {number}
     */
-    sys_call(service, handler, buffer, key) {
+    sys_call(service, handler, buffer, key, headers) {
         try {
             const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
             const ptr0 = passStringToWasm0(service, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
@@ -813,7 +821,9 @@ export class WasmVM {
             const len1 = WASM_VECTOR_LEN;
             var ptr2 = isLikeNone(key) ? 0 : passStringToWasm0(key, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
             var len2 = WASM_VECTOR_LEN;
-            wasm.wasmvm_sys_call(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1, addHeapObject(buffer), ptr2, len2);
+            const ptr3 = passArrayJsValueToWasm0(headers, wasm.__wbindgen_malloc);
+            const len3 = WASM_VECTOR_LEN;
+            wasm.wasmvm_sys_call(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1, addHeapObject(buffer), ptr2, len2, ptr3, len3);
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
             var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
             var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
@@ -829,10 +839,12 @@ export class WasmVM {
     * @param {string} service
     * @param {string} handler
     * @param {Uint8Array} buffer
-    * @param {string | undefined} [key]
+    * @param {string | undefined} key
+    * @param {(WasmHeader)[]} headers
     * @param {bigint | undefined} [delay]
+    * @returns {WasmSendHandle}
     */
-    sys_send(service, handler, buffer, key, delay) {
+    sys_send(service, handler, buffer, key, headers, delay) {
         try {
             const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
             const ptr0 = passStringToWasm0(service, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
@@ -841,12 +853,16 @@ export class WasmVM {
             const len1 = WASM_VECTOR_LEN;
             var ptr2 = isLikeNone(key) ? 0 : passStringToWasm0(key, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
             var len2 = WASM_VECTOR_LEN;
-            wasm.wasmvm_sys_send(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1, addHeapObject(buffer), ptr2, len2, !isLikeNone(delay), isLikeNone(delay) ? BigInt(0) : delay);
+            const ptr3 = passArrayJsValueToWasm0(headers, wasm.__wbindgen_malloc);
+            const len3 = WASM_VECTOR_LEN;
+            wasm.wasmvm_sys_send(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1, addHeapObject(buffer), ptr2, len2, ptr3, len3, !isLikeNone(delay), isLikeNone(delay) ? BigInt(0) : delay);
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
             var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            if (r1) {
-                throw takeObject(r0);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
             }
+            return takeObject(r0);
         } finally {
             wasm.__wbindgen_add_to_stack_pointer(16);
         }
@@ -1229,8 +1245,8 @@ export class WasmVM {
     }
 }
 
-export function __wbg_vmlog_13455a06b760bbc0(arg0, arg1, arg2) {
-    vm_log(arg0, getStringFromWasm0(arg1, arg2));
+export function __wbg_vmlog_13455a06b760bbc0(arg0, arg1, arg2, arg3, arg4) {
+    vm_log(arg0, getArrayU8FromWasm0(arg1, arg2), arg3 === 0 ? undefined : arg4 >>> 0);
 };
 
 export function __wbindgen_object_drop_ref(arg0) {

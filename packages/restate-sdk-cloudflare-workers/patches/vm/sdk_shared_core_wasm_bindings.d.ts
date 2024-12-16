@@ -5,6 +5,7 @@
 */
 export function start(): void;
 /**
+* This will set the log level of the overall log subscriber.
 * @param {LogLevel} level
 */
 export function set_log_level(level: LogLevel): void;
@@ -22,6 +23,8 @@ export interface WasmFailure {
     message: string;
 }
 
+export type WasmSendHandle = number;
+
 export interface WasmExponentialRetryConfig {
     initial_interval: number | undefined;
     factor: number;
@@ -35,7 +38,7 @@ export interface WasmAwakeable {
     handle: number;
 }
 
-export type WasmAsyncResultValue = "NotReady" | "Empty" | { Success: Uint8Array } | { Failure: WasmFailure } | { StateKeys: string[] } | { CombinatorResult: WasmAsyncResultHandle[] };
+export type WasmAsyncResultValue = "NotReady" | "Empty" | { Success: Uint8Array } | { Failure: WasmFailure } | { StateKeys: string[] } | { InvocationId: string } | { CombinatorResult: WasmAsyncResultHandle[] };
 
 export type WasmRunEnterResult = { ExecutedWithSuccess: Uint8Array } | { ExecutedWithFailure: WasmFailure } | "NotExecuted";
 
@@ -103,8 +106,10 @@ export class WasmVM {
   free(): void;
 /**
 * @param {(WasmHeader)[]} headers
+* @param {LogLevel} log_level
+* @param {number} logger_id
 */
-  constructor(headers: (WasmHeader)[]);
+  constructor(headers: (WasmHeader)[], log_level: LogLevel, logger_id: number);
 /**
 * @returns {WasmResponseHead}
 */
@@ -172,18 +177,21 @@ export class WasmVM {
 * @param {string} service
 * @param {string} handler
 * @param {Uint8Array} buffer
-* @param {string | undefined} [key]
+* @param {string | undefined} key
+* @param {(WasmHeader)[]} headers
 * @returns {number}
 */
-  sys_call(service: string, handler: string, buffer: Uint8Array, key?: string): number;
+  sys_call(service: string, handler: string, buffer: Uint8Array, key: string | undefined, headers: (WasmHeader)[]): number;
 /**
 * @param {string} service
 * @param {string} handler
 * @param {Uint8Array} buffer
-* @param {string | undefined} [key]
+* @param {string | undefined} key
+* @param {(WasmHeader)[]} headers
 * @param {bigint | undefined} [delay]
+* @returns {WasmSendHandle}
 */
-  sys_send(service: string, handler: string, buffer: Uint8Array, key?: string, delay?: bigint): void;
+  sys_send(service: string, handler: string, buffer: Uint8Array, key: string | undefined, headers: (WasmHeader)[], delay?: bigint): WasmSendHandle;
 /**
 * @returns {WasmAwakeable}
 */
