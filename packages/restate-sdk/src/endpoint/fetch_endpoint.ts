@@ -24,7 +24,7 @@ import type {
 import { GenericHandler } from "./handlers/generic.js";
 import { fetcher } from "./handlers/fetch.js";
 import { ProtocolMode } from "../types/discovery.js";
-import type { Logger } from "../logger.js";
+import type { LoggerTransport } from "../logging/logger_transport.js";
 
 /**
  * Generic Fetch encapsulates all the Restate services served by this endpoint.
@@ -93,7 +93,7 @@ export class FetchEndpointImpl implements FetchEndpoint {
     return this;
   }
 
-  public setLogger(newLogger: Logger): FetchEndpoint {
+  public setLogger(newLogger: LoggerTransport): FetchEndpoint {
     this.builder.setLogger(newLogger);
     return this;
   }

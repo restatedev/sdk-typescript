@@ -23,17 +23,19 @@ import type { EndpointBuilder } from "../endpoint_builder.js";
 import { type ReadableStream, TransformStream } from "node:stream/web";
 import { OnceStream } from "../../utils/streams.js";
 import { ContextImpl } from "../../context_impl.js";
-import {
-  createRestateConsole,
-  DEFAULT_LOGGER_LOG_LEVEL,
-  defaultLogger,
-  LoggerContext,
-  LogSource,
-  RestateLogLevel,
-} from "../../logger.js";
 import * as vm from "./vm/sdk_shared_core_wasm_bindings.js";
 import { CompletablePromise } from "../../utils/completable_promise.js";
 import { HandlerKind } from "../../types/rpc.js";
+import { createLogger, type Logger } from "../../logging/logger.js";
+import {
+  DEFAULT_CONSOLE_LOGGER_LOG_LEVEL,
+  defaultLoggerTransport,
+} from "../../logging/console_logger_transport.js";
+import {
+  LoggerContext,
+  LogSource,
+  RestateLogLevel,
+} from "../../logging/logger_transport.js";
 
 export interface Headers {
   [name: string]: string | string[] | undefined;
@@ -58,20 +60,6 @@ export interface RestateResponse {
   readonly headers: ResponseHeaders;
   readonly statusCode: number;
   readonly body: ReadableStream<Uint8Array>;
-}
-
-export enum ServiceDiscoveryProtocolVersion {
-  /**
-   * @generated from enum value: SERVICE_DISCOVERY_PROTOCOL_VERSION_UNSPECIFIED = 0;
-   */
-  SERVICE_DISCOVERY_PROTOCOL_VERSION_UNSPECIFIED = 0,
-
-  /**
-   * initial service discovery protocol version using endpoint_manifest_schema.json
-   *
-   * @generated from enum value: V1 = 1;
-   */
-  V1 = 1,
 }
 
 export interface RestateHandler {
@@ -113,23 +101,9 @@ export class GenericHandler implements RestateHandler {
     }
 
     // Set the logging level in the shared core too!
-    switch (DEFAULT_LOGGER_LOG_LEVEL) {
-      case RestateLogLevel.TRACE:
-        vm.set_log_level(vm.LogLevel.TRACE);
-        break;
-      case RestateLogLevel.DEBUG:
-        vm.set_log_level(vm.LogLevel.DEBUG);
-        break;
-      case RestateLogLevel.INFO:
-        vm.set_log_level(vm.LogLevel.INFO);
-        break;
-      case RestateLogLevel.WARN:
-        vm.set_log_level(vm.LogLevel.WARN);
-        break;
-      case RestateLogLevel.ERROR:
-        vm.set_log_level(vm.LogLevel.ERROR);
-        break;
-    }
+    vm.set_log_level(
+      restateLogLevelToWasmLogLevel(DEFAULT_CONSOLE_LOGGER_LOG_LEVEL)
+    );
   }
 
   // handle does not throw.
@@ -237,6 +211,8 @@ export class GenericHandler implements RestateHandler {
     extraArgs: unknown[],
     additionalContext: AdditionalContext
   ): Promise<RestateResponse> {
+    const loggerId = Math.floor(Math.random() * 4_294_967_295 /* u32::MAX */);
+
     // Instantiate core vm and prepare response headers
     const vmHeaders = Object.entries(headers)
       .filter(([, v]) => v !== undefined)
@@ -244,7 +220,11 @@ export class GenericHandler implements RestateHandler {
         ([k, v]) =>
           new vm.WasmHeader(k, v instanceof Array ? v[0] : (v as string))
       );
-    const coreVm = new vm.WasmVM(vmHeaders);
+    const coreVm = new vm.WasmVM(
+      vmHeaders,
+      restateLogLevelToWasmLogLevel(DEFAULT_CONSOLE_LOGGER_LOG_LEVEL),
+      loggerId
+    );
     const responseHead = coreVm.get_response_head();
     const responseHeaders = responseHead.headers.reduce(
       (headers, { key, value }) => ({
@@ -272,21 +252,30 @@ export class GenericHandler implements RestateHandler {
 
     // Get input
     const input = coreVm.sys_input();
-
-    // Prepare context
-    const console = createRestateConsole(
-      this.endpoint.logger,
+    // Prepare logger
+    const loggerContext = new LoggerContext(
+      input.invocation_id,
+      handler.component().name(),
+      handler.name(),
+      handler.kind() === HandlerKind.SERVICE ? undefined : input.key,
+      additionalContext
+    );
+    const ctxLogger = createLogger(
+      this.endpoint.loggerTransport,
       LogSource.USER,
-      new LoggerContext(
-        input.invocation_id,
-        handler.component().name(),
-        handler.name(),
-        handler.kind() === HandlerKind.SERVICE ? undefined : input.key,
-        additionalContext
-      ),
+      loggerContext,
       () => !coreVm.is_processing()
     );
-    console.info("Starting invocation.");
+    const vmLogger = createLogger(
+      this.endpoint.loggerTransport,
+      LogSource.USER,
+      loggerContext,
+      // Filtering is done within the shared core
+      () => false
+    );
+    // See vm_log below for more details
+    invocationLoggers.set(loggerId, vmLogger);
+    ctxLogger.info("Starting invocation.");
 
     // This promise is used to signal the end of the computation,
     // which can be either the user returns a value,
@@ -303,7 +292,7 @@ export class GenericHandler implements RestateHandler {
     const ctx = new ContextImpl(
       coreVm,
       input,
-      console,
+      ctxLogger,
       handler.kind(),
       headers,
       extraArgs,
@@ -318,7 +307,7 @@ export class GenericHandler implements RestateHandler {
       .then((bytes) => {
         coreVm.sys_write_output_success(bytes);
         coreVm.sys_end();
-        console.info("Invocation completed successfully.");
+        ctxLogger.info("Invocation completed successfully.");
       })
       .catch((e) => {
         const error = ensureError(e);
@@ -326,7 +315,7 @@ export class GenericHandler implements RestateHandler {
           !(error instanceof RestateError) ||
           error.code !== SUSPENDED_ERROR_CODE
         ) {
-          console.warn("Invocation completed with an error.\n", error);
+          ctxLogger.warn("Invocation completed with an error.\n", error);
         }
 
         if (error instanceof TerminalError) {
@@ -355,6 +344,9 @@ export class GenericHandler implements RestateHandler {
         await outputWriter.close();
         // Let's cancel the input reader, if it's still here
         inputReader.cancel().catch(() => {});
+      })
+      .finally(() => {
+        invocationLoggers.delete(loggerId);
       })
       .catch(() => {});
 
@@ -409,6 +401,35 @@ export class GenericHandler implements RestateHandler {
   }
 }
 
+// See vm_log below for more details
+const invocationLoggers: Map<number, Logger> = new Map<number, Logger>();
+const logsTextDecoder = new TextDecoder();
+
+/**
+ * The shared core propagates logs to the SDK invoking this method.
+ * When possible it provides an invocationId, which is used to access the registered invocationLoggers, that should contain the logger per invocation id.
+ */
+export function vm_log(
+  level: vm.LogLevel,
+  strBytes: Uint8Array,
+  loggerId?: number
+) {
+  const logger = (loggerId && invocationLoggers.get(loggerId)) || undefined;
+  const str = logsTextDecoder.decode(strBytes);
+  if (logger !== undefined) {
+    logger.logForLevel(wasmLogLevelToRestateLogLevel(level), str);
+  } else {
+    defaultLoggerTransport(
+      {
+        level: wasmLogLevelToRestateLogLevel(level),
+        replaying: false,
+        source: LogSource.JOURNAL,
+      },
+      str
+    );
+  }
+}
+
 function wasmLogLevelToRestateLogLevel(level: vm.LogLevel): RestateLogLevel {
   switch (level) {
     case vm.LogLevel.TRACE:
@@ -424,14 +445,17 @@ function wasmLogLevelToRestateLogLevel(level: vm.LogLevel): RestateLogLevel {
   }
 }
 
-/// This is used by the shared core!
-export function vm_log(level: vm.LogLevel, str: string) {
-  defaultLogger(
-    {
-      level: wasmLogLevelToRestateLogLevel(level),
-      replaying: false,
-      source: LogSource.JOURNAL,
-    },
-    str
-  );
+function restateLogLevelToWasmLogLevel(level: RestateLogLevel): vm.LogLevel {
+  switch (level) {
+    case RestateLogLevel.TRACE:
+      return vm.LogLevel.TRACE;
+    case RestateLogLevel.DEBUG:
+      return vm.LogLevel.DEBUG;
+    case RestateLogLevel.INFO:
+      return vm.LogLevel.INFO;
+    case RestateLogLevel.WARN:
+      return vm.LogLevel.WARN;
+    case RestateLogLevel.ERROR:
+      return vm.LogLevel.ERROR;
+  }
 }

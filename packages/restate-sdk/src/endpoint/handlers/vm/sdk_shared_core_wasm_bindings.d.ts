@@ -5,6 +5,7 @@
  */
 export function start(): void;
 /**
+ * This will set the log level of the overall log subscriber.
  * @param {LogLevel} level
  */
 export function set_log_level(level: LogLevel): void;
@@ -115,8 +116,10 @@ export class WasmVM {
   free(): void;
   /**
    * @param {(WasmHeader)[]} headers
+   * @param {LogLevel} log_level
+   * @param {number} logger_id
    */
-  constructor(headers: WasmHeader[]);
+  constructor(headers: WasmHeader[], log_level: LogLevel, logger_id: number);
   /**
    * @returns {WasmResponseHead}
    */
