@@ -228,6 +228,7 @@ export type GenericCall<REQ, RES> = {
   method: string;
   parameter: REQ;
   key?: string;
+  headers?: Record<string, string>;
   inputSerde?: Serde<REQ>;
   outputSerde?: Serde<RES>;
 };
@@ -242,6 +243,7 @@ export type GenericSend<REQ> = {
   method: string;
   parameter: REQ;
   key?: string;
+  headers?: Record<string, string>;
   inputSerde?: Serde<REQ>;
   delay?: number;
 };

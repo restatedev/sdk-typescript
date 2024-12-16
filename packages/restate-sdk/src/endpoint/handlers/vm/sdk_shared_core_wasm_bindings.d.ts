@@ -22,6 +22,8 @@ export interface WasmFailure {
   message: string;
 }
 
+export type WasmSendHandle = number;
+
 export interface WasmExponentialRetryConfig {
   initial_interval: number | undefined;
   factor: number;
@@ -41,6 +43,7 @@ export type WasmAsyncResultValue =
   | { Success: Uint8Array }
   | { Failure: WasmFailure }
   | { StateKeys: string[] }
+  | { InvocationId: string }
   | { CombinatorResult: WasmAsyncResultHandle[] };
 
 export type WasmRunEnterResult =
@@ -181,29 +184,34 @@ export class WasmVM {
    * @param {string} service
    * @param {string} handler
    * @param {Uint8Array} buffer
-   * @param {string | undefined} [key]
+   * @param {string | undefined} key
+   * @param {(WasmHeader)[]} headers
    * @returns {number}
    */
   sys_call(
     service: string,
     handler: string,
     buffer: Uint8Array,
-    key?: string
+    key: string | undefined,
+    headers: WasmHeader[]
   ): number;
   /**
    * @param {string} service
    * @param {string} handler
    * @param {Uint8Array} buffer
-   * @param {string | undefined} [key]
+   * @param {string | undefined} key
+   * @param {(WasmHeader)[]} headers
    * @param {bigint | undefined} [delay]
+   * @returns {WasmSendHandle}
    */
   sys_send(
     service: string,
     handler: string,
     buffer: Uint8Array,
-    key?: string,
+    key: string | undefined,
+    headers: WasmHeader[],
     delay?: bigint
-  ): void;
+  ): WasmSendHandle;
   /**
    * @returns {WasmAwakeable}
    */

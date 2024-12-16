@@ -2,8 +2,8 @@ use js_sys::Uint8Array;
 use restate_sdk_shared_core::{
     AsyncResultAccessTracker, AsyncResultCombinator, AsyncResultHandle, AsyncResultState, CoreVM,
     Error, Header, HeaderMap, IdentityVerifier, Input, NonEmptyValue, ResponseHead, RetryPolicy,
-    RunEnterResult, RunExitResult, SuspendedOrVMError, TakeOutputResult, Target, TerminalFailure,
-    VMOptions, Value, VM,
+    RunEnterResult, RunExitResult, SendHandle, SuspendedOrVMError, TakeOutputResult, Target,
+    TerminalFailure, VMOptions, Value, VM,
 };
 use serde::{Deserialize, Serialize};
 use std::convert::{Infallible, Into};
@@ -41,13 +41,8 @@ extern "C" {
     fn vm_log(level: LogLevel, s: &str);
 }
 
+#[derive(Default)]
 pub struct MakeWebConsoleWriter {}
-
-impl Default for MakeWebConsoleWriter {
-    fn default() -> Self {
-        MakeWebConsoleWriter {}
-    }
-}
 
 impl<'a> MakeWriter<'a> for MakeWebConsoleWriter {
     type Writer = ConsoleWriter;
@@ -155,6 +150,15 @@ impl From<Header> for WasmHeader {
     }
 }
 
+impl From<WasmHeader> for Header {
+    fn from(h: WasmHeader) -> Self {
+        Header {
+            key: h.key.into(),
+            value: h.value.into(),
+        }
+    }
+}
+
 #[wasm_bindgen(getter_with_clone)]
 pub struct WasmResponseHead {
     #[wasm_bindgen(readonly)]
@@ -200,6 +204,16 @@ impl From<Error> for WasmFailure {
 impl From<WasmFailure> for JsValue {
     fn from(value: WasmFailure) -> Self {
         serde_wasm_bindgen::to_value(&value).unwrap_or_else(|e| e.into())
+    }
+}
+
+#[derive(Tsify, Serialize, Deserialize)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct WasmSendHandle(u32);
+
+impl From<SendHandle> for WasmSendHandle {
+    fn from(value: SendHandle) -> Self {
+        WasmSendHandle(value.into())
     }
 }
 
@@ -285,6 +299,7 @@ pub enum WasmAsyncResultValue {
     ),
     Failure(WasmFailure),
     StateKeys(Vec<String>),
+    InvocationId(String),
     CombinatorResult(Vec<WasmAsyncResultHandle>),
 }
 
@@ -377,6 +392,10 @@ impl WasmVM {
                 Some(Value::Success(b)) => WasmAsyncResultValue::Success(b.to_vec().into()),
                 Some(Value::Failure(f)) => WasmAsyncResultValue::Failure(f.into()),
                 Some(Value::StateKeys(keys)) => WasmAsyncResultValue::StateKeys(keys),
+                Some(Value::InvocationId(invocation_id)) => {
+                    WasmAsyncResultValue::InvocationId(invocation_id)
+                }
+
                 Some(Value::CombinatorResult(handles)) => WasmAsyncResultValue::CombinatorResult(
                     handles.into_iter().map(Into::into).collect(),
                 ),
@@ -435,6 +454,7 @@ impl WasmVM {
         handler: String,
         buffer: js_sys::Uint8Array,
         key: Option<String>,
+        headers: Vec<WasmHeader>,
     ) -> Result<WasmAsyncResultHandle, WasmFailure> {
         self.vm
             .sys_call(
@@ -442,6 +462,8 @@ impl WasmVM {
                     service,
                     handler,
                     key,
+                    idempotency_key: None,
+                    headers: headers.into_iter().map(Header::from).collect(),
                 },
                 buffer.to_vec().into(),
             )
@@ -449,24 +471,29 @@ impl WasmVM {
             .map_err(Into::into)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn sys_send(
         &mut self,
         service: String,
         handler: String,
         buffer: Uint8Array,
         key: Option<String>,
+        headers: Vec<WasmHeader>,
         delay: Option<u64>,
-    ) -> Result<(), WasmFailure> {
+    ) -> Result<WasmSendHandle, WasmFailure> {
         self.vm
             .sys_send(
                 Target {
                     service,
                     handler,
                     key,
+                    idempotency_key: None,
+                    headers: headers.into_iter().map(Header::from).collect(),
                 },
                 buffer.to_vec().into(),
                 delay.map(|delay| duration_since_unix_epoch() + Duration::from_millis(delay)),
             )
+            .map(Into::into)
             .map_err(Into::into)
     }
 
