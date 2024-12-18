@@ -42,6 +42,7 @@ import { TerminalError } from "./errors.js";
 export type ClientCallOptions<I, O> = {
   input?: Serde<I>;
   output?: Serde<O>;
+  headers?: Record<string, string>;
 };
 
 export class Opts<I, O> {
@@ -64,6 +65,7 @@ export class Opts<I, O> {
 export type ClientSendOptions<I> = {
   input?: Serde<I>;
   delay?: number;
+  headers?: Record<string, string>;
 };
 
 export class SendOpts<I> {
@@ -161,6 +163,7 @@ export const makeRpcCallProxy = <T>(
             method,
             parameter,
             key,
+            headers: opts?.headers,
             inputSerde: requestSerde,
             outputSerde: responseSerde,
           });
@@ -194,6 +197,7 @@ export const makeRpcSendProxy = <T>(
             method,
             parameter,
             key,
+            headers: opts?.headers,
             delay,
             inputSerde: requestSerde,
           });
