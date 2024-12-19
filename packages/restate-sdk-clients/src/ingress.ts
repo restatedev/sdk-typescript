@@ -236,9 +236,25 @@ const doWorkflowHandleCall = async <O>(
     wfKey
   )}/${op}`;
 
+  // Abort signal, if any
+  let signal: AbortSignal | undefined;
+  if (
+    callOpts?.opts?.signal !== undefined &&
+    callOpts?.opts?.timeout !== undefined
+  ) {
+    throw new Error(
+      "You can't specify both signal and timeout options at the same time"
+    );
+  } else if (callOpts?.opts?.signal !== undefined) {
+    signal = callOpts?.opts?.signal;
+  } else if (callOpts?.opts?.timeout !== undefined) {
+    signal = AbortSignal.timeout(callOpts?.opts?.timeout);
+  }
+
   const httpResponse = await fetch(url, {
     method: "GET",
     headers,
+    signal,
   });
   if (httpResponse.ok) {
     const responseBuf = await httpResponse.arrayBuffer();
