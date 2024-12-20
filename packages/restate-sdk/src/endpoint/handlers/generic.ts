@@ -237,6 +237,19 @@ export class GenericHandler implements RestateHandler {
       }
     );
 
+    // Use a default logger that still respects the endpoint custom logger
+    // We will override this later with a logger that has a LoggerContext
+    // See vm_log below for more details
+    invocationLoggers.set(
+      loggerId,
+      createLogger(
+        this.endpoint.loggerTransport,
+        LogSource.JOURNAL,
+        undefined,
+        () => false
+      )
+    );
+
     const inputReader = body.getReader();
 
     // Now buffer input entries
@@ -290,14 +303,18 @@ export class GenericHandler implements RestateHandler {
     );
     const vmLogger = createLogger(
       this.endpoint.loggerTransport,
-      LogSource.USER,
+      LogSource.JOURNAL,
       loggerContext,
       // Filtering is done within the shared core
       () => false
     );
     // See vm_log below for more details
     invocationLoggers.set(loggerId, vmLogger);
-    ctxLogger.info("Starting invocation.");
+    if (!coreVm.is_processing()) {
+      vmLogger.info("Replaying invocation.");
+    } else {
+      vmLogger.info("Starting invocation.");
+    }
 
     // This promise is used to signal the end of the computation,
     // which can be either the user returns a value,
@@ -316,6 +333,7 @@ export class GenericHandler implements RestateHandler {
       input,
       ctxLogger,
       handler.kind(),
+      vmLogger,
       invocationRequest,
       invocationEndPromise,
       inputReader,
@@ -328,7 +346,7 @@ export class GenericHandler implements RestateHandler {
       .then((bytes) => {
         coreVm.sys_write_output_success(bytes);
         coreVm.sys_end();
-        ctxLogger.info("Invocation completed successfully.");
+        vmLogger.info("Invocation completed successfully.");
       })
       .catch((e) => {
         const error = ensureError(e);
@@ -336,7 +354,7 @@ export class GenericHandler implements RestateHandler {
           !(error instanceof RestateError) ||
           error.code !== SUSPENDED_ERROR_CODE
         ) {
-          ctxLogger.warn("Invocation completed with an error.\n", error);
+          vmLogger.warn("Invocation completed with an error.\n", error);
         }
 
         if (error instanceof TerminalError) {
