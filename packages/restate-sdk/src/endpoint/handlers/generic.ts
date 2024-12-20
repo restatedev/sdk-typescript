@@ -23,6 +23,7 @@ import type { EndpointBuilder } from "../endpoint_builder.js";
 import { type ReadableStream, TransformStream } from "node:stream/web";
 import { OnceStream } from "../../utils/streams.js";
 import { ContextImpl } from "../../context_impl.js";
+import type { Request } from "../../context.js";
 import * as vm from "./vm/sdk_shared_core_wasm_bindings.js";
 import { CompletablePromise } from "../../utils/completable_promise.js";
 import { HandlerKind } from "../../types/rpc.js";
@@ -252,12 +253,33 @@ export class GenericHandler implements RestateHandler {
 
     // Get input
     const input = coreVm.sys_input();
+
+    const invocationRequest: Request = {
+      id: input.invocation_id,
+      headers: input.headers.reduce((headers, { key, value }) => {
+        headers.set(key, value);
+        return headers;
+      }, new Map()),
+      attemptHeaders: Object.entries(headers).reduce(
+        (headers, [key, value]) => {
+          if (value !== undefined) {
+            headers.set(key, value instanceof Array ? value[0] : value);
+          }
+          return headers;
+        },
+        new Map()
+      ),
+      body: input.input,
+      extraArgs,
+    };
+
     // Prepare logger
     const loggerContext = new LoggerContext(
       input.invocation_id,
       handler.component().name(),
       handler.name(),
       handler.kind() === HandlerKind.SERVICE ? undefined : input.key,
+      invocationRequest,
       additionalContext
     );
     const ctxLogger = createLogger(
@@ -294,8 +316,7 @@ export class GenericHandler implements RestateHandler {
       input,
       ctxLogger,
       handler.kind(),
-      headers,
-      extraArgs,
+      invocationRequest,
       invocationEndPromise,
       inputReader,
       outputWriter

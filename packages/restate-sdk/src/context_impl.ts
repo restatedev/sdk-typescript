@@ -53,7 +53,6 @@ import type {
 } from "@restatedev/restate-sdk-core";
 import { serde } from "@restatedev/restate-sdk-core";
 import { RandImpl } from "./utils/rand.js";
-import type { Headers } from "./endpoint/handlers/generic.js";
 import type {
   ReadableStreamDefaultReader,
   WritableStreamDefaultWriter,
@@ -67,7 +66,6 @@ export type InternalCombineablePromise<T> = CombineablePromise<T> & {
 };
 
 export class ContextImpl implements ObjectContext, WorkflowContext {
-  private readonly invocationRequest: Request;
   public readonly rand: Rand;
 
   public readonly date: ContextDate = {
@@ -86,31 +84,11 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     readonly input: vm.WasmInput,
     public readonly console: Console,
     public readonly handlerKind: HandlerKind,
-    attemptHeaders: Headers,
-    extraArgs: unknown[],
+    private readonly invocationRequest: Request,
     private readonly invocationEndPromise: CompletablePromise<void>,
     private readonly inputReader: ReadableStreamDefaultReader<Uint8Array>,
     private readonly outputWriter: WritableStreamDefaultWriter<Uint8Array>
   ) {
-    this.invocationRequest = {
-      id: input.invocation_id,
-      headers: input.headers.reduce((headers, { key, value }) => {
-        headers.set(key, value);
-        return headers;
-      }, new Map()),
-      attemptHeaders: Object.entries(attemptHeaders).reduce(
-        (headers, [key, value]) => {
-          if (value !== undefined) {
-            headers.set(key, value instanceof Array ? value[0] : value);
-          }
-          return headers;
-        },
-        new Map()
-      ),
-      body: input.input,
-      extraArgs,
-    };
-
     this.rand = new RandImpl(input.invocation_id, () => {
       if (coreVm.is_inside_run()) {
         throw new Error(
