@@ -11,6 +11,8 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import type { Request } from "../context.js";
+
 /**
  * Logger level.
  */
@@ -73,6 +75,7 @@ export class LoggerContext {
     readonly serviceName: string,
     readonly handlerName: string,
     readonly key?: string,
+    readonly request?: Request,
     readonly additionalContext?: { [name: string]: string }
   ) {
     this.invocationTarget =
