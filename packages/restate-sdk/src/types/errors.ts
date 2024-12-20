@@ -41,6 +41,7 @@ export function ensureError(e: unknown): Error {
 
 export class RestateError extends Error {
   public readonly code: number;
+  public name = "RestateError";
 
   constructor(message: string, options?: { errorCode?: number; cause?: any }) {
     super(message, { cause: options?.cause });
@@ -51,12 +52,16 @@ export class RestateError extends Error {
 // Does not lead to Restate retries
 // Leads to an output message with a failure defined
 export class TerminalError extends RestateError {
+  public name = "TerminalError";
+
   constructor(message: string, options?: { errorCode?: number; cause?: any }) {
     super(message, options);
   }
 }
 
 export class TimeoutError extends TerminalError {
+  public name = "TimeoutError";
+
   constructor() {
     super("Timeout occurred", { errorCode: TIMEOUT_ERROR_CODE });
   }
