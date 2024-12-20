@@ -84,6 +84,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     readonly input: vm.WasmInput,
     public readonly console: Console,
     public readonly handlerKind: HandlerKind,
+    private readonly vmLogger: Console,
     private readonly invocationRequest: Request,
     private readonly invocationEndPromise: CompletablePromise<void>,
     private readonly inputReader: ReadableStreamDefaultReader<Uint8Array>,
@@ -835,7 +836,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       !(error instanceof RestateError) ||
       error.code !== SUSPENDED_ERROR_CODE
     ) {
-      this.console.warn("Function completed with an error.\n", error);
+      this.vmLogger.warn("Invocation completed with an error.\n", error);
     }
     this.coreVm.notify_error(error.message, error.stack);
 
