@@ -94,7 +94,9 @@ npm run lint
 
 Launch a sample program (requires no build)
 ```shell
-npm run example
+npm run -w packages/restate-sdk-examples greeter
+npm run -w packages/restate-sdk-examples object
+npm run -w packages/restate-sdk-examples workflow
 ```
 
 ### Testing end-to-end with Restate Server
