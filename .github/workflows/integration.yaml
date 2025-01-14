@@ -37,10 +37,7 @@ jobs:
   sdk-test-suite:
     if: github.repository_owner == 'restatedev'
     runs-on: ubuntu-latest
-    name: "Features integration test (sdk-test-suite version ${{ matrix.sdk-test-suite }})"
-    strategy:
-      matrix:
-        sdk-test-suite: ["2.1"]
+    name: Features integration test
     permissions:
       contents: read
       issues: read
@@ -90,17 +87,10 @@ jobs:
           docker tag "${output#*: }" "localhost/restatedev/restate-commit-download:latest"
           docker image ls -a
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: "temurin"
-          java-version: "17"
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      - name: Setup sdk-test-suite
-        run: wget --no-verbose https://github.com/restatedev/sdk-test-suite/releases/download/v${{ matrix.sdk-test-suite }}/restate-sdk-test-suite.jar
 
       - name: Build Typescript test-services image
         id: build
@@ -110,25 +100,14 @@ jobs:
           file: "packages/restate-e2e-services/Dockerfile"
           push: false
           load: true
-          tags: localhost/restatedev/test-services:latest
+          tags: restatedev/typescript-test-services
           cache-from: type=gha,scope=${{ github.workflow }}
           cache-to: type=gha,mode=max,scope=${{ github.workflow }}
 
-      # Run test suite
-      - name: Run test suite
-        env:
-          RESTATE_CONTAINER_IMAGE: ${{ inputs.restateCommit != '' && 'localhost/restatedev/restate-commit-download:latest' || (inputs.restateImage != '' && inputs.restateImage || 'ghcr.io/restatedev/restate:main') }}
-        run: java -jar restate-sdk-test-suite.jar run --report-dir=test-report --exclusions-file packages/restate-e2e-services/exclusions.yaml localhost/restatedev/test-services:latest
-
-      # Upload logs and publish test result
-      - uses: actions/upload-artifact@v4
-        if: always() # Make sure this is run even when test fails
+      - name: Run test tool
+        uses: restatedev/sdk-test-suite@v2.4
         with:
-          name: sdk-typescript-integration-test-report
-          path: test-report
-      - name: Publish Test Results
-        uses: EnricoMi/publish-unit-test-result-action@v2
-        if: always()
-        with:
-          files: |
-            test-report/*/*.xml
+          restateContainerImage: ${{ inputs.restateCommit != '' && 'localhost/restatedev/restate-commit-download:latest' || (inputs.restateImage != '' && inputs.restateImage || 'ghcr.io/restatedev/restate:main') }}
+          serviceContainerImage: "restatedev/typescript-test-services"
+          exclusionsFile: "packages/restate-e2e-services/exclusions.yaml"
+          testArtifactOutput: "sdk-typescript-integration-test-report"
