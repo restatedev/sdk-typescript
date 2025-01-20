@@ -643,14 +643,13 @@ export const CombineablePromise = {
    * @param values An iterable of Promises.
    * @returns A new Promise.
    */
-  all<T extends readonly CombineablePromise<unknown>[] | []>(
+  all<T extends readonly CombineablePromise<unknown>[]>(
     values: T
   ): CombineablePromise<{ -readonly [P in keyof T]: Awaited<T[P]> }> {
     if (values.length === 0) {
-      // TODO
-      return Promise.all(values) as unknown as CombineablePromise<{
-        -readonly [P in keyof T]: Awaited<T[P]>;
-      }>;
+      throw new Error(
+        "Expected combineable promise to have at least one promise"
+      );
     }
     return ContextImpl.createCombinator(
       (p) => Promise.all(p),
@@ -669,14 +668,13 @@ export const CombineablePromise = {
    * @param values An iterable of Promises.
    * @returns A new Promise.
    */
-  race<T extends readonly CombineablePromise<unknown>[] | []>(
+  race<T extends readonly CombineablePromise<unknown>[]>(
     values: T
   ): CombineablePromise<Awaited<T[number]>> {
     if (values.length === 0) {
-      // TODO
-      return Promise.race(values) as unknown as CombineablePromise<
-        Awaited<T[number]>
-      >;
+      throw new Error(
+        "Expected combineable promise to have at least one promise"
+      );
     }
     return ContextImpl.createCombinator(
       (p) => Promise.race(p),
@@ -694,14 +692,13 @@ export const CombineablePromise = {
    * @param values An iterable of Promises.
    * @returns A new Promise.
    */
-  any<T extends readonly CombineablePromise<unknown>[] | []>(
+  any<T extends readonly CombineablePromise<unknown>[]>(
     values: T
   ): CombineablePromise<Awaited<T[number]>> {
     if (values.length === 0) {
-      // TODO
-      return Promise.any(values) as unknown as CombineablePromise<
-        Awaited<T[number]>
-      >;
+      throw new Error(
+        "Expected combineable promise to have at least one promise"
+      );
     }
     return ContextImpl.createCombinator(
       (p) => Promise.any(p),
@@ -718,16 +715,15 @@ export const CombineablePromise = {
    * @param values An iterable of Promises.
    * @returns A new Promise.
    */
-  allSettled<T extends readonly CombineablePromise<unknown>[] | []>(
+  allSettled<T extends readonly CombineablePromise<unknown>[]>(
     values: T
   ): CombineablePromise<{
     -readonly [P in keyof T]: PromiseSettledResult<Awaited<T[P]>>;
   }> {
     if (values.length === 0) {
-      // TODO
-      return Promise.allSettled(values) as unknown as CombineablePromise<{
-        -readonly [P in keyof T]: PromiseSettledResult<Awaited<T[P]>>;
-      }>;
+      throw new Error(
+        "Expected combineable promise to have at least one promise"
+      );
     }
     return ContextImpl.createCombinator(
       (p) => Promise.allSettled(p),
