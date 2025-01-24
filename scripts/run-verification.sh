@@ -71,7 +71,7 @@ export UNIVERSE_ENV_JSON=$(cat <<-EOF
       "RESTATE_METADATA_STORE_CLIENT__TYPE": "embedded",
       "RESTATE_ALLOW_BOOTSTRAP": "false",
       "RESTATE_METADATA_STORE_CLIENT__ADDRESSES": "[http://n1:5122]",
-      "RESTATE_ADVERTISED_ADDRESS": "http://n2:5122",
+      "RESTATE_ADVERTISED_ADDRESS": "http://n3:5122",
       "DO_NOT_TRACK": "true"
     }
   },
