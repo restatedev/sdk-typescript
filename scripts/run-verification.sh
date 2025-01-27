@@ -9,8 +9,8 @@ SEED=$(date --iso-8601=seconds)
 export INTERPRETER_DRIVER_CONF=$(cat <<-EOF
 {
 	"seed"	: "${SEED}",
-	"keys"	: 100000,
-	"tests" : 1000000,
+	"keys"	: 1000000,
+	"tests" : 100000,
 	"maxProgramSize"	:  20,
 	"crashInterval"		: 900000,
 	"bootstrap"				: true
@@ -84,6 +84,8 @@ export UNIVERSE_ENV_JSON=$(cat <<-EOF
       "PORT": "9000",
       "RESTATE_LOGGING": "ERROR",
       "NODE_ENV": "production",
+			"UV_THREADPOOL_SIZE" : "8",
+			"NODE_OPTS" : "--max-old-space-size=4096",
       "SERVICES": "ObjectInterpreterL0"
     }
   },
@@ -95,6 +97,8 @@ export UNIVERSE_ENV_JSON=$(cat <<-EOF
       "PORT": "9001",
       "RESTATE_LOGGING": "ERROR",
       "NODE_ENV": "production",
+			"UV_THREADPOOL_SIZE" : "8",
+			"NODE_OPTS" : "--max-old-space-size=4096",
       "SERVICES": "ObjectInterpreterL1"
     }
   },
@@ -106,6 +110,8 @@ export UNIVERSE_ENV_JSON=$(cat <<-EOF
       "PORT": "9002",
       "RESTATE_LOGGING": "ERROR",
       "NODE_ENV": "production",
+			"UV_THREADPOOL_SIZE" : "8",
+			"NODE_OPTS" : "--max-old-space-size=4096",
       "SERVICES": "ObjectInterpreterL2"
     }
   },
@@ -117,6 +123,8 @@ export UNIVERSE_ENV_JSON=$(cat <<-EOF
       "PORT": "9003",
       "RESTATE_LOGGING": "ERROR",
       "NODE_ENV": "production",
+			"UV_THREADPOOL_SIZE" : "8",
+			"NODE_OPTS" : "--max-old-space-size=4096",
       "SERVICES": "ServiceInterpreterHelper"
     }
   }
