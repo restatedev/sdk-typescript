@@ -26,7 +26,7 @@ export UNIVERSE_ENV_JSON=$(cat <<-EOF
     "ports": [8080, 9070, 5122],
     "pull": "always",
     "env": {
-      "RESTATE_LOG_FILTER": "restate=warn",
+      "RESTATE_LOG_FILTER": "restate=info",
       "RESTATE_LOG_FORMAT": "json",
       "RESTATE_ROLES": "[worker,log-server,admin,metadata-store]",
       "RESTATE_CLUSTER_NAME": "foobar",
@@ -43,7 +43,7 @@ export UNIVERSE_ENV_JSON=$(cat <<-EOF
     "ports": [8080],
     "pull": "always",
     "env": {
-      "RESTATE_LOG_FILTER": "restate=warn",
+      "RESTATE_LOG_FILTER": "restate=info",
       "RESTATE_LOG_FORMAT": "json",
       "RESTATE_ROLES": "[worker,admin,log-server, metadata-store]",
       "RESTATE_CLUSTER_NAME": "foobar",
@@ -62,7 +62,7 @@ export UNIVERSE_ENV_JSON=$(cat <<-EOF
     "ports": [8080],
     "pull": "always",
     "env": {
-      "RESTATE_LOG_FILTER": "restate=warn",
+      "RESTATE_LOG_FILTER": "restate=info",
       "RESTATE_LOG_FORMAT": "json",
       "RESTATE_ROLES": "[worker,admin,log-server, metadata-store]",
       "RESTATE_CLUSTER_NAME": "foobar",
