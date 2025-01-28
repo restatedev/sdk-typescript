@@ -10,7 +10,7 @@ export INTERPRETER_DRIVER_CONF=$(cat <<-EOF
 {
 	"seed"	: "${SEED}",
 	"keys"	: 1000000,
-	"tests" : 100000,
+	"tests" : 1000000,
 	"maxProgramSize"	:  20,
 	"crashInterval"		: 900000,
 	"bootstrap"				: true
