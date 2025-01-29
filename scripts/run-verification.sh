@@ -2,7 +2,8 @@
 
 export DRIVER_IMAGE=${DRIVER_IMAGE:-"ghcr.io/restatedev/e2e-verification-runner:main"}
 export RESTATE_CONTAINER_IMAGE=${RESTATE_CONTAINER_IMAGE:-"ghcr.io/restatedev/restate:main"}
-export SERVICES_CONTAINER_IMAGE=${SERVICES_CONTAINER_IMAGE:-"localhost/restatedev/test-services:latest"}
+# export SERVICES_CONTAINER_IMAGE=${SERVICES_CONTAINER_IMAGE:-"localhost/restatedev/test-services:latest"}
+export SERVICES_CONTAINER_IMAGE="ghcr.io/restatedev/test-services:java130"
 
 SEED=$(date --iso-8601=seconds)
 
@@ -10,7 +11,7 @@ export INTERPRETER_DRIVER_CONF=$(cat <<-EOF
 {
 	"seed"	: "${SEED}",
 	"keys"	: 1000000,
-	"tests" : 100000,
+	"tests" : 1000000,
 	"maxProgramSize"	:  20,
 	"crashInterval"		: 900000,
 	"bootstrap"				: true
@@ -79,7 +80,7 @@ export UNIVERSE_ENV_JSON=$(cat <<-EOF
   "interpreter_zero": {
     "image": "${SERVICES_CONTAINER_IMAGE}",
     "ports": [9000],
-    "pull": "never",
+    "pull": "always",
     "env": {
       "PORT": "9000",
       "RESTATE_LOGGING": "ERROR",
@@ -92,7 +93,7 @@ export UNIVERSE_ENV_JSON=$(cat <<-EOF
   "interpreter_one": {
     "image": "${SERVICES_CONTAINER_IMAGE}",
     "ports": [9001],
-    "pull": "never",
+    "pull": "always",
     "env": {
       "PORT": "9001",
       "RESTATE_LOGGING": "ERROR",
@@ -105,7 +106,7 @@ export UNIVERSE_ENV_JSON=$(cat <<-EOF
   "interpreter_two": {
     "image": "${SERVICES_CONTAINER_IMAGE}",
     "ports": [9002],
-    "pull": "never",
+    "pull": "always",
     "env": {
       "PORT": "9002",
       "RESTATE_LOGGING": "ERROR",
@@ -118,7 +119,7 @@ export UNIVERSE_ENV_JSON=$(cat <<-EOF
   "services": {
     "image": "${SERVICES_CONTAINER_IMAGE}",
     "ports": [9003],
-    "pull": "never",
+    "pull": "always",
     "env": {
       "PORT": "9003",
       "RESTATE_LOGGING": "ERROR",
