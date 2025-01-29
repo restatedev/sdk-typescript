@@ -12,12 +12,12 @@ export INTERPRETER_DRIVER_CONF=$(cat <<-EOF
 	"keys"	: 1000000,
 	"tests" : 1000000,
 	"maxProgramSize"	:  20,
-	"crashInterval"		: 900000,
 	"bootstrap"				: true
 }
 EOF
 )
 
+#	"crashInterval"		: ,
 
 export UNIVERSE_ENV_JSON=$(cat <<-EOF
 {
@@ -26,13 +26,13 @@ export UNIVERSE_ENV_JSON=$(cat <<-EOF
     "ports": [8080, 9070, 5122],
     "pull": "always",
     "env": {
-      "RESTATE_LOG_FILTER": "restate=info",
+      "RESTATE_LOG_FILTER": "restate=warn",
       "RESTATE_LOG_FORMAT": "json",
       "RESTATE_ROLES": "[worker,log-server,admin,metadata-store]",
       "RESTATE_CLUSTER_NAME": "foobar",
       "RESTATE_BIFROST__DEFAULT_PROVIDER": "replicated",
       "RESTATE_BIFROST__REPLICATED_LOGLET__DEFAULT_REPLICATION_PROPERTY": "2",
-      "RESTATE_METADATA_STORE__TYPE": "embedded",
+      "RESTATE_METADATA_STORE__TYPE": "local",
       "RESTATE_ALLOW_BOOTSTRAP": "true",
       "RESTATE_ADVERTISED_ADDRESS": "http://n1:5122",
       "DO_NOT_TRACK": "true"
@@ -43,13 +43,12 @@ export UNIVERSE_ENV_JSON=$(cat <<-EOF
     "ports": [8080],
     "pull": "always",
     "env": {
-      "RESTATE_LOG_FILTER": "restate=info",
+      "RESTATE_LOG_FILTER": "restate=warn",
       "RESTATE_LOG_FORMAT": "json",
-      "RESTATE_ROLES": "[worker,admin,log-server, metadata-store]",
+      "RESTATE_ROLES": "[worker,admin,log-server]",
       "RESTATE_CLUSTER_NAME": "foobar",
       "RESTATE_BIFROST__DEFAULT_PROVIDER": "replicated",
       "RESTATE_BIFROST__REPLICATED_LOGLET__DEFAULT_REPLICATION_PROPERTY": "2",
-      "RESTATE_METADATA_STORE__TYPE": "embedded",
       "RESTATE_METADATA_STORE_CLIENT__TYPE": "embedded",
       "RESTATE_ALLOW_BOOTSTRAP": "false",
       "RESTATE_METADATA_STORE_CLIENT__ADDRESSES": "[http://n1:5122]",
@@ -62,13 +61,12 @@ export UNIVERSE_ENV_JSON=$(cat <<-EOF
     "ports": [8080],
     "pull": "always",
     "env": {
-      "RESTATE_LOG_FILTER": "restate=info",
+      "RESTATE_LOG_FILTER": "restate=warn",
       "RESTATE_LOG_FORMAT": "json",
-      "RESTATE_ROLES": "[worker,admin,log-server, metadata-store]",
+      "RESTATE_ROLES": "[worker,admin,log-server]",
       "RESTATE_CLUSTER_NAME": "foobar",
       "RESTATE_BIFROST__DEFAULT_PROVIDER": "replicated",
       "RESTATE_BIFROST__REPLICATED_LOGLET__DEFAULT_REPLICATION_PROPERTY": "2",
-      "RESTATE_METADATA_STORE__TYPE": "embedded",
       "RESTATE_METADATA_STORE_CLIENT__TYPE": "embedded",
       "RESTATE_ALLOW_BOOTSTRAP": "false",
       "RESTATE_METADATA_STORE_CLIENT__ADDRESSES": "[http://n1:5122]",
@@ -131,7 +129,6 @@ export UNIVERSE_ENV_JSON=$(cat <<-EOF
 }
 EOF
 )
-
 
 docker pull ${DRIVER_IMAGE}
 
