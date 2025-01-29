@@ -82,7 +82,7 @@ export UNIVERSE_ENV_JSON=$(cat <<-EOF
   "interpreter_zero": {
     "image": "${SERVICES_CONTAINER_IMAGE}",
     "ports": [9000],
-    "pull": "never",
+    "pull": "always",
     "env": {
       "PORT": "9000",
       "RESTATE_LOGGING": "ERROR",
@@ -95,7 +95,7 @@ export UNIVERSE_ENV_JSON=$(cat <<-EOF
   "interpreter_one": {
     "image": "${SERVICES_CONTAINER_IMAGE}",
     "ports": [9001],
-    "pull": "never",
+    "pull": "always",
     "env": {
       "PORT": "9001",
       "RESTATE_LOGGING": "ERROR",
@@ -108,7 +108,7 @@ export UNIVERSE_ENV_JSON=$(cat <<-EOF
   "interpreter_two": {
     "image": "${SERVICES_CONTAINER_IMAGE}",
     "ports": [9002],
-    "pull": "never",
+    "pull": "always",
     "env": {
       "PORT": "9002",
       "RESTATE_LOGGING": "ERROR",
@@ -121,7 +121,7 @@ export UNIVERSE_ENV_JSON=$(cat <<-EOF
   "services": {
     "image": "${SERVICES_CONTAINER_IMAGE}",
     "ports": [9003],
-    "pull": "never",
+    "pull": "always",
     "env": {
       "PORT": "9003",
       "RESTATE_LOGGING": "ERROR",
