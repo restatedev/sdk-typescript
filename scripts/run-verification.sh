@@ -7,18 +7,19 @@ export SERVICES_CONTAINER_IMAGE="ghcr.io/restatedev/test-services:java130"
 
 SEED=$(date --iso-8601=seconds)
 
+
+#	"crashInterval"		: 900000,
+
 export INTERPRETER_DRIVER_CONF=$(cat <<-EOF
 {
 	"seed"	: "${SEED}",
 	"keys"	: 1000000,
 	"tests" : 1000000,
 	"maxProgramSize"	:  20,
-	"crashInterval"		: 900000,
 	"bootstrap"				: true
 }
 EOF
 )
-
 
 export UNIVERSE_ENV_JSON=$(cat <<-EOF
 {
