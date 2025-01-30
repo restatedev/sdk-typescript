@@ -225,7 +225,7 @@ export class RestateCombinatorPromise extends AbstractRestatePromise<any> {
   readonly [Symbol.toStringTag] = "RestateCombinatorPromise";
 }
 
-export class RestatePendingPromise<T> implements CombineablePromise<T> {
+export class RestatePendingPromise<T> implements RestatePromise<T> {
   [RESTATE_CTX_SYMBOL]: ContextImpl;
 
   constructor(ctx: ContextImpl) {
@@ -260,10 +260,19 @@ export class RestatePendingPromise<T> implements CombineablePromise<T> {
     return pendingPromise<T>().finally(onfinally);
   }
 
-  // --- Combineable Promise methods
+  // --- RestatePromise methods
 
   orTimeout(): CombineablePromise<T> {
     return this;
+  }
+
+  tryCancel(): void {}
+  tryComplete(): void {}
+  uncompletedLeaves(): number[] {
+    return [];
+  }
+  publicPromise(): Promise<T> {
+    return pendingPromise<T>();
   }
 
   readonly [Symbol.toStringTag] = "RestatePendingPromise";

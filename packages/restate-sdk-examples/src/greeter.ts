@@ -9,12 +9,24 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { service, endpoint, type Context } from "@restatedev/restate-sdk";
+import {
+  service,
+  endpoint,
+  type Context,
+  CombineablePromise,
+} from "@restatedev/restate-sdk";
+import { setTimeout } from "timers/promises";
 
 const greeter = service({
   name: "greeter",
   handlers: {
     greet: async (ctx: Context, name: string) => {
+      const { id, promise } = ctx.awakeable();
+      console.log("Awakeable fuck u " + id);
+      const p2 = ctx.sleep(110000);
+      const p3 = ctx.run("stuff", async () => setTimeout(10000));
+      await CombineablePromise.allSettled([promise, p2, p3]);
+      await ctx.sleep(100000);
       return `Hello ${name}`;
     },
   },
