@@ -9,6 +9,7 @@ SEED=$(date --iso-8601=seconds)
 
 
 #	"crashInterval"		: 900000,
+# "tests" : 1000000,
 
 export INTERPRETER_DRIVER_CONF=$(cat <<-EOF
 {
