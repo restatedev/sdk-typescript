@@ -44,7 +44,6 @@ export UNIVERSE_ENV_JSON=$(cat <<-EOF
       "RESTATE_BIFROST__DEFAULT_PROVIDER": "replicated",
       "RESTATE_BIFROST__REPLICATED_LOGLET__DEFAULT_REPLICATION_PROPERTY": "2",
 			"RESTATE_ADVERTISED_ADDRESS": "http://n1:5122",
-			"RESTATE_METADATA_STORE__TYPE": "local",
       "RESTATE_ALLOW_BOOTSTRAP": "true",
 			"RUST_BACKTRACE" : "1",
       "DO_NOT_TRACK": "true"
@@ -65,8 +64,7 @@ export UNIVERSE_ENV_JSON=$(cat <<-EOF
       "RESTATE_ALLOW_BOOTSTRAP": "false",
 			"RUST_BACKTRACE" : "1",
       "DO_NOT_TRACK": "true",
-			"RESTATE_METADATA_STORE_CLIENT__TYPE": "embedded",
-      "RESTATE_METADATA_STORE_CLIENT__ADDRESSES": "[http://n1:5122]"
+			"RESTATE_METADATA_STORE_CLIENT__ADDRESS" : "http://n1:5122"
     }
   },
   "n3": {
@@ -84,8 +82,7 @@ export UNIVERSE_ENV_JSON=$(cat <<-EOF
       "RESTATE_ALLOW_BOOTSTRAP": "false",
 			"RUST_BACKTRACE" : "1",
       "DO_NOT_TRACK": "true",
-			"RESTATE_METADATA_STORE_CLIENT__TYPE": "embedded",
-      "RESTATE_METADATA_STORE_CLIENT__ADDRESSES": "[http://n1:5122]"
+			"RESTATE_METADATA_STORE_CLIENT__ADDRESS": "http://n1:5122"
     }
   },
   "interpreter_zero": {
