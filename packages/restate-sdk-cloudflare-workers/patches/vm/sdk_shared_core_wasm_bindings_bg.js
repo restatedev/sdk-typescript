@@ -558,12 +558,12 @@ export class WasmVM {
     }
     /**
      * @param {string} error_message
-     * @param {string | null} [error_description]
+     * @param {string | null} [stacktrace]
      */
-    notify_error(error_message, error_description) {
+    notify_error(error_message, stacktrace) {
         const ptr0 = passStringToWasm0(error_message, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
-        var ptr1 = isLikeNone(error_description) ? 0 : passStringToWasm0(error_description, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        var ptr1 = isLikeNone(stacktrace) ? 0 : passStringToWasm0(stacktrace, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         var len1 = WASM_VECTOR_LEN;
         wasm.wasmvm_notify_error(this.__wbg_ptr, ptr0, len0, ptr1, len1);
     }
@@ -860,14 +860,14 @@ export class WasmVM {
     /**
      * @param {number} handle
      * @param {string} error_message
-     * @param {string | null | undefined} error_description
+     * @param {string | null | undefined} error_stacktrace
      * @param {bigint} attempt_duration
      * @param {WasmExponentialRetryConfig} config
      */
-    propose_run_completion_failure_transient(handle, error_message, error_description, attempt_duration, config) {
+    propose_run_completion_failure_transient(handle, error_message, error_stacktrace, attempt_duration, config) {
         const ptr0 = passStringToWasm0(error_message, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
-        var ptr1 = isLikeNone(error_description) ? 0 : passStringToWasm0(error_description, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        var ptr1 = isLikeNone(error_stacktrace) ? 0 : passStringToWasm0(error_stacktrace, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         var len1 = WASM_VECTOR_LEN;
         const ret = wasm.wasmvm_propose_run_completion_failure_transient(this.__wbg_ptr, handle, ptr0, len0, ptr1, len1, attempt_duration, config);
         if (ret[1]) {

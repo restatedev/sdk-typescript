@@ -21,12 +21,9 @@ const greeter = service({
   name: "greeter",
   handlers: {
     greet: async (ctx: Context, name: string) => {
-      const { id, promise } = ctx.awakeable();
-      console.log("Awakeable fuck u " + id);
-      const p2 = ctx.sleep(110000);
-      const p3 = ctx.run("stuff", async () => setTimeout(10000));
-      await CombineablePromise.allSettled([promise, p2, p3]);
-      await ctx.sleep(100000);
+      const p1 = ctx.sleep(110000);
+      const p2 = ctx.run("stuff-2", async () => setTimeout(10000));
+      await CombineablePromise.allSettled([p1, p2]);
       return `Hello ${name}`;
     },
   },

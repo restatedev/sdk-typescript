@@ -78,7 +78,7 @@ export class WasmVM {
   get_response_head(): WasmResponseHead;
   notify_input(buffer: Uint8Array): void;
   notify_input_closed(): void;
-  notify_error(error_message: string, error_description?: string | null): void;
+  notify_error(error_message: string, stacktrace?: string | null): void;
   take_output(): any;
   is_ready_to_execute(): boolean;
   is_completed(handle: number): boolean;
@@ -103,7 +103,7 @@ export class WasmVM {
   sys_run(name: string): number;
   propose_run_completion_success(handle: number, buffer: Uint8Array): void;
   propose_run_completion_failure(handle: number, value: WasmFailure): void;
-  propose_run_completion_failure_transient(handle: number, error_message: string, error_description: string | null | undefined, attempt_duration: bigint, config: WasmExponentialRetryConfig): void;
+  propose_run_completion_failure_transient(handle: number, error_message: string, error_stacktrace: string | null | undefined, attempt_duration: bigint, config: WasmExponentialRetryConfig): void;
   sys_cancel_invocation(target_invocation_id: string): void;
   sys_write_output_success(buffer: Uint8Array): void;
   sys_write_output_failure(value: WasmFailure): void;

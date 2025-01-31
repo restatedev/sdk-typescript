@@ -411,10 +411,10 @@ impl WasmVM {
         self.vm.notify_input_closed();
     }
 
-    pub fn notify_error(&mut self, error_message: String, error_description: Option<String>) {
+    pub fn notify_error(&mut self, error_message: String, stacktrace: Option<String>) {
         let mut e = Error::internal(error_message);
-        if let Some(description) = error_description {
-            e = e.with_description(description);
+        if let Some(stacktrace) = stacktrace {
+            e = e.with_stacktrace(stacktrace);
         }
 
         use_log_dispatcher!(self, |vm| CoreVM::notify_error(vm, e, None))
@@ -692,7 +692,7 @@ impl WasmVM {
         &mut self,
         handle: WasmNotificationHandle,
         error_message: String,
-        error_description: Option<String>,
+        error_stacktrace: Option<String>,
         attempt_duration: u64,
         config: WasmExponentialRetryConfig,
     ) -> Result<(), WasmFailure> {
@@ -702,7 +702,7 @@ impl WasmVM {
             RunExitResult::RetryableFailure {
                 attempt_duration: Duration::from_millis(attempt_duration),
                 error: Error::internal(error_message)
-                    .with_description(error_description.unwrap_or_default()),
+                    .with_stacktrace(error_stacktrace.unwrap_or_default()),
             },
             config.into()
         ))
