@@ -3,8 +3,10 @@
 export DRIVER_IMAGE=${DRIVER_IMAGE:-"ghcr.io/restatedev/e2e-verification-runner:main"}
 #export RESTATE_CONTAINER_IMAGE=${RESTATE_CONTAINER_IMAGE:-"ghcr.io/restatedev/restate:main"}
 # export SERVICES_CONTAINER_IMAGE=${SERVICES_CONTAINER_IMAGE:-"localhost/restatedev/test-services:latest"}
-# this commit: https://github.com/restatedev/restate/commit/7377bf3ab0c02fac2e767609f759117211827e5c
-export RESTATE_CONTAINER_IMAGE="ghcr.io/restatedev/restate@sha256:5b0ccb634156c14b1f54d1c23abaae3a8b04cd8a80783a2ff8aab5a129f4b3f5"
+#
+
+# this commit: https://github.com/restatedev/restate/commit/0ac0d580b813d64c73231924f3eb6cd26ebdc4cd
+export RESTATE_CONTAINER_IMAGE="ghcr.io/restatedev/restate@sha256:de8a315c98e3c80507d9b70311a7c42e0a328cd5c993bbda83592b6885df9d14"
 export SERVICES_CONTAINER_IMAGE="ghcr.io/restatedev/test-services:java130"
 
 SEED=$(date --iso-8601=seconds)
