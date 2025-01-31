@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 
 export DRIVER_IMAGE=${DRIVER_IMAGE:-"ghcr.io/restatedev/e2e-verification-runner:main"}
-export RESTATE_CONTAINER_IMAGE=${RESTATE_CONTAINER_IMAGE:-"ghcr.io/restatedev/restate:main"}
+#export RESTATE_CONTAINER_IMAGE=${RESTATE_CONTAINER_IMAGE:-"ghcr.io/restatedev/restate:main"}
 # export SERVICES_CONTAINER_IMAGE=${SERVICES_CONTAINER_IMAGE:-"localhost/restatedev/test-services:latest"}
+# this commit: https://github.com/restatedev/restate/commit/7377bf3ab0c02fac2e767609f759117211827e5c
+export RESTATE_CONTAINER_IMAGE="ghcr.io/restatedev/restate@sha256:f1ee177d6f029b61c7202ff27a153817b07d496a5615108ccfccfbd635131480"
 export SERVICES_CONTAINER_IMAGE="ghcr.io/restatedev/test-services:java130"
 
 SEED=$(date --iso-8601=seconds)
@@ -22,6 +24,10 @@ export INTERPRETER_DRIVER_CONF=$(cat <<-EOF
 EOF
 )
 
+#      "RESTATE_METADATA_STORE__TYPE": "embedded",
+#      "RESTATE_ALLOW_BOOTSTRAP": "true",
+ 
+
 export UNIVERSE_ENV_JSON=$(cat <<-EOF
 {
   "n1": {
@@ -35,9 +41,10 @@ export UNIVERSE_ENV_JSON=$(cat <<-EOF
       "RESTATE_CLUSTER_NAME": "foobar",
       "RESTATE_BIFROST__DEFAULT_PROVIDER": "replicated",
       "RESTATE_BIFROST__REPLICATED_LOGLET__DEFAULT_REPLICATION_PROPERTY": "2",
-      "RESTATE_METADATA_STORE__TYPE": "embedded",
+			"RESTATE_ADVERTISED_ADDRESS": "http://n1:5122",
+			"RESTATE_METADATA_STORE__TYPE": "local",
       "RESTATE_ALLOW_BOOTSTRAP": "true",
-      "RESTATE_ADVERTISED_ADDRESS": "http://n1:5122",
+			"RUST_BACKTRACE" : "1",
       "DO_NOT_TRACK": "true"
     }
   },
@@ -46,37 +53,37 @@ export UNIVERSE_ENV_JSON=$(cat <<-EOF
     "ports": [8080],
     "pull": "always",
     "env": {
+      "RESTATE_ADVERTISED_ADDRESS": "http://n2:5122",
       "RESTATE_LOG_FILTER": "restate=warn",
       "RESTATE_LOG_FORMAT": "json",
-      "RESTATE_ROLES": "[worker,admin,log-server, metadata-store]",
+      "RESTATE_ROLES": "[worker,admin,log-server]",
       "RESTATE_CLUSTER_NAME": "foobar",
       "RESTATE_BIFROST__DEFAULT_PROVIDER": "replicated",
       "RESTATE_BIFROST__REPLICATED_LOGLET__DEFAULT_REPLICATION_PROPERTY": "2",
-      "RESTATE_METADATA_STORE__TYPE": "embedded",
-      "RESTATE_METADATA_STORE_CLIENT__TYPE": "embedded",
       "RESTATE_ALLOW_BOOTSTRAP": "false",
-      "RESTATE_METADATA_STORE_CLIENT__ADDRESSES": "[http://n1:5122]",
-      "RESTATE_ADVERTISED_ADDRESS": "http://n2:5122",
-      "DO_NOT_TRACK": "true"
+			"RUST_BACKTRACE" : "1",
+      "DO_NOT_TRACK": "true",
+			"RESTATE_METADATA_STORE_CLIENT__TYPE": "embedded",
+      "RESTATE_METADATA_STORE_CLIENT__ADDRESSES": "[http://n1:5122]"
     }
   },
   "n3": {
     "image": "${RESTATE_CONTAINER_IMAGE}",
     "ports": [8080],
     "pull": "always",
-    "env": {
+		"env": {
+      "RESTATE_ADVERTISED_ADDRESS": "http://n3:5122",
       "RESTATE_LOG_FILTER": "restate=warn",
       "RESTATE_LOG_FORMAT": "json",
-      "RESTATE_ROLES": "[worker,admin,log-server, metadata-store]",
+      "RESTATE_ROLES": "[worker,admin,log-server]",
       "RESTATE_CLUSTER_NAME": "foobar",
       "RESTATE_BIFROST__DEFAULT_PROVIDER": "replicated",
       "RESTATE_BIFROST__REPLICATED_LOGLET__DEFAULT_REPLICATION_PROPERTY": "2",
-      "RESTATE_METADATA_STORE__TYPE": "embedded",
-      "RESTATE_METADATA_STORE_CLIENT__TYPE": "embedded",
       "RESTATE_ALLOW_BOOTSTRAP": "false",
-      "RESTATE_METADATA_STORE_CLIENT__ADDRESSES": "[http://n1:5122]",
-      "RESTATE_ADVERTISED_ADDRESS": "http://n3:5122",
-      "DO_NOT_TRACK": "true"
+			"RUST_BACKTRACE" : "1",
+      "DO_NOT_TRACK": "true",
+			"RESTATE_METADATA_STORE_CLIENT__TYPE": "embedded",
+      "RESTATE_METADATA_STORE_CLIENT__ADDRESSES": "[http://n1:5122]"
     }
   },
   "interpreter_zero": {
@@ -143,7 +150,7 @@ docker pull ${DRIVER_IMAGE}
 #
 export SERVICES=InterpreterDriverJob
 export NODE_ENV=production
-export NODE_OPTIONS="--max-old-space-size=4096"
+export NODE_OPTIONS="--max-old-space-size=8196"
 export AWS_LAMBDA_FUNCTION_NAME=1
 export DEBUG=testcontainers:containers
 
