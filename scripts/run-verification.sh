@@ -23,7 +23,7 @@ export INTERPRETER_DRIVER_CONF=$(cat <<-EOF
 	"tests" : 1000000,
 	"maxProgramSize"	:  20,
 	"bootstrap"				: true,
-	"crashInterval"		: 900000,
+	"crashInterval"		: 900000
 }
 EOF
 )
