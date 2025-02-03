@@ -1,27 +1,29 @@
 #!/usr/bin/env bash
 
-export DRIVER_IMAGE=${DRIVER_IMAGE:-"ghcr.io/restatedev/e2e-verification-runner:main"}
+#export DRIVER_IMAGE=${DRIVER_IMAGE:-"ghcr.io/restatedev/e2e-verification-runner:main"}
 #export RESTATE_CONTAINER_IMAGE=${RESTATE_CONTAINER_IMAGE:-"ghcr.io/restatedev/restate:main"}
 # export SERVICES_CONTAINER_IMAGE=${SERVICES_CONTAINER_IMAGE:-"localhost/restatedev/test-services:latest"}
 #
 
 # this commit: https://github.com/restatedev/restate/commit/0ac0d580b813d64c73231924f3eb6cd26ebdc4cd
+export DRIVER_IMAGE="ghcr.io/restatedev/e2e-verification-runner@sha256:c59d236243c0cd3e500367d8aa6fdc0f057ef389f1668d502b6c15601216f7b6"
 export RESTATE_CONTAINER_IMAGE="ghcr.io/restatedev/restate@sha256:de8a315c98e3c80507d9b70311a7c42e0a328cd5c993bbda83592b6885df9d14"
 export SERVICES_CONTAINER_IMAGE="ghcr.io/restatedev/test-services:java130"
 
 SEED=$(date --iso-8601=seconds)
 
-
 #	"crashInterval"		: 900000,
 # "tests" : 1000000,
+#"tests" : 1000000,
 
 export INTERPRETER_DRIVER_CONF=$(cat <<-EOF
 {
 	"seed"	: "${SEED}",
-	"keys"	: 1000000,
+	"keys"	: 100000,
 	"tests" : 1000000,
 	"maxProgramSize"	:  20,
-	"bootstrap"				: true
+	"bootstrap"				: true,
+	"crashInterval"		: 900000,
 }
 EOF
 )
@@ -156,6 +158,8 @@ export DEBUG=testcontainers:containers
 docker run \
 	--net host\
 	-v /var/run/docker.sock:/var/run/docker.sock	\
+	--env RESTATE_CONTAINER_IMAGE \
+	--env SERVICES_CONTAINER_IMAGE \
 	--env SERVICES	\
 	--env NODE_ENV \
 	--env NODE_OPTIONS \
