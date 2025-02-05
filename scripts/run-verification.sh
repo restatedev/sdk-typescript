@@ -2,8 +2,6 @@
 
 export SERVICES_CONTAINER_IMAGE=${SERVICES_CONTAINER_IMAGE:-"localhost/restatedev/test-services:latest"}
 
-# this commit: https://github.com/restatedev/restate/commit/0ac0d580b813d64c73231924f3eb6cd26ebdc4cd
-
 # LAST WORKS: -------------------------------------------------------------------------------------------------------------------------------------
 # restate commit: 41c72c04e4e91f305f86fa2067f356e72a5e2312 
 # export RESTATE_CONTAINER_IMAGE="ghcr.io/restatedev/restate@sha256:0a0649fb552b6755299d579ff17bad44febb5339351b20f0fa50f0561bd17ff8"
@@ -13,8 +11,8 @@ export SERVICES_CONTAINER_IMAGE=${SERVICES_CONTAINER_IMAGE:-"localhost/restatede
 
 # MAYBE WORKS: -------------------------------------------------------------------------------------------------------------------------------------
 # restate commit: abf1b7f
-#export RESTATE_CONTAINER_IMAGE="ghcr.io/restatedev/restate@sha256:1d70df6a53982ee047b3e82078c5c8dffb33a3d783b6d9dca4f345be2eb0dfc2"
-#export DRIVER_IMAGE="ghcr.io/restatedev/e2e-verification-runner@sha256:c59d236243c0cd3e500367d8aa6fdc0f057ef389f1668d502b6c15601216f7b6"
+# export RESTATE_CONTAINER_IMAGE="ghcr.io/restatedev/restate@sha256:1d70df6a53982ee047b3e82078c5c8dffb33a3d783b6d9dca4f345be2eb0dfc2"
+# export DRIVER_IMAGE="ghcr.io/restatedev/e2e-verification-runner@sha256:c59d236243c0cd3e500367d8aa6fdc0f057ef389f1668d502b6c15601216f7b6"
 # MAYBE WORKS: -------------------------------------------------------------------------------------------------------------------------------------
 #
 export RESTATE_CONTAINER_IMAGE="ghcr.io/restatedev/restate@sha256:3c915915a6b13108cfe486a0bd534da5a61bdbe0ed81425426d93cdb9f13cd26"
@@ -101,7 +99,7 @@ export UNIVERSE_ENV_JSON=$(cat <<-EOF
   "interpreter_zero": {
     "image": "${SERVICES_CONTAINER_IMAGE}",
     "ports": [9000],
-    "pull": "always",
+    "pull": "never",
     "env": {
       "PORT": "9000",
       "RESTATE_LOGGING": "ERROR",
@@ -114,7 +112,7 @@ export UNIVERSE_ENV_JSON=$(cat <<-EOF
   "interpreter_one": {
     "image": "${SERVICES_CONTAINER_IMAGE}",
     "ports": [9001],
-    "pull": "always",
+    "pull": "never",
     "env": {
       "PORT": "9001",
       "RESTATE_LOGGING": "ERROR",
@@ -127,7 +125,7 @@ export UNIVERSE_ENV_JSON=$(cat <<-EOF
   "interpreter_two": {
     "image": "${SERVICES_CONTAINER_IMAGE}",
     "ports": [9002],
-    "pull": "always",
+    "pull": "never",
     "env": {
       "PORT": "9002",
       "RESTATE_LOGGING": "ERROR",
@@ -140,7 +138,7 @@ export UNIVERSE_ENV_JSON=$(cat <<-EOF
   "services": {
     "image": "${SERVICES_CONTAINER_IMAGE}",
     "ports": [9003],
-    "pull": "always",
+    "pull": "never",
     "env": {
       "PORT": "9003",
       "RESTATE_LOGGING": "ERROR",
@@ -156,7 +154,6 @@ EOF
 
 
 docker pull ${DRIVER_IMAGE}
-docker pull ${RESTATE_CONTAINER_IMAGE}
 
 #
 # The following ENV is needed for the driver program itself.
