@@ -16,7 +16,7 @@ export SERVICES_CONTAINER_IMAGE=${SERVICES_CONTAINER_IMAGE:-"localhost/restatede
 # MAYBE WORKS: -------------------------------------------------------------------------------------------------------------------------------------
 #
 export RESTATE_CONTAINER_IMAGE="ghcr.io/restatedev/restate@sha256:3c915915a6b13108cfe486a0bd534da5a61bdbe0ed81425426d93cdb9f13cd26"
-export DRIVER_IMAGE="ghcr.io/restatedev/e2e-verification-runner:main"
+export DRIVER_IMAGE="ghcr.io/restatedev/e2e-verification-runner@sha256:c59d236243c0cd3e500367d8aa6fdc0f057ef389f1668d502b6c15601216f7b6"
 
 
 SEED=$(date --iso-8601=seconds)
