@@ -158,8 +158,6 @@ EOF
 docker pull ${DRIVER_IMAGE}
 docker pull ${RESTATE_CONTAINER_IMAGE}
 
-exit 1
-
 #
 # The following ENV is needed for the driver program itself.
 #
