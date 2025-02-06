@@ -21,19 +21,19 @@ EOF
 
 export UNIVERSE_ENV_JSON=$(cat <<-EOF
 {
-  "n1": {
+ "n1": {
     "image": "${RESTATE_CONTAINER_IMAGE}",
     "ports": [8080, 9070, 5122],
     "pull": "always",
     "env": {
       "RESTATE_LOG_FILTER": "restate=warn",
       "RESTATE_LOG_FORMAT": "json",
-      "RESTATE_ROLES": "[worker,log-server,admin,metadata-store]",
+      "RESTATE_ROLES": "[worker,log-server,admin,metadata-server]",
       "RESTATE_CLUSTER_NAME": "foobar",
       "RESTATE_BIFROST__DEFAULT_PROVIDER": "replicated",
-      "RESTATE_BIFROST__REPLICATED_LOGLET__DEFAULT_REPLICATION_PROPERTY": "2",
-      "RESTATE_METADATA_STORE__TYPE": "embedded",
-      "RESTATE_ALLOW_BOOTSTRAP": "true",
+      "RESTATE_BIFROST__REPLICATED_LOGLET__DEFAULT_LOG_REPLICATION": "2",
+      "RESTATE_METADATA_SERVER__TYPE": "replicated",
+      "RESTATE_AUTO_PROVISION": "true",
       "RESTATE_ADVERTISED_ADDRESS": "http://n1:5122",
       "DO_NOT_TRACK": "true"
     }
@@ -45,14 +45,13 @@ export UNIVERSE_ENV_JSON=$(cat <<-EOF
     "env": {
       "RESTATE_LOG_FILTER": "restate=warn",
       "RESTATE_LOG_FORMAT": "json",
-      "RESTATE_ROLES": "[worker,admin,log-server, metadata-store]",
+      "RESTATE_ROLES": "[worker,admin,log-server,metadata-server]",
       "RESTATE_CLUSTER_NAME": "foobar",
       "RESTATE_BIFROST__DEFAULT_PROVIDER": "replicated",
-      "RESTATE_BIFROST__REPLICATED_LOGLET__DEFAULT_REPLICATION_PROPERTY": "2",
-      "RESTATE_METADATA_STORE__TYPE": "embedded",
-      "RESTATE_METADATA_STORE_CLIENT__TYPE": "embedded",
-      "RESTATE_ALLOW_BOOTSTRAP": "false",
-      "RESTATE_METADATA_STORE_CLIENT__ADDRESSES": "[http://n1:5122]",
+      "RESTATE_BIFROST__REPLICATED_LOGLET__DEFAULT_LOG_REPLICATION": "2",
+      "RESTATE_METADATA_SERVER__TYPE": "replicated",
+      "RESTATE_AUTO_PROVISION": "false",
+      "RESTATE_METADATA_CLIENT__ADDRESSES": "[http://n1:5122]",
       "RESTATE_ADVERTISED_ADDRESS": "http://n2:5122",
       "DO_NOT_TRACK": "true"
     }
@@ -64,14 +63,13 @@ export UNIVERSE_ENV_JSON=$(cat <<-EOF
     "env": {
       "RESTATE_LOG_FILTER": "restate=warn",
       "RESTATE_LOG_FORMAT": "json",
-      "RESTATE_ROLES": "[worker,admin,log-server, metadata-store]",
+      "RESTATE_ROLES": "[worker,admin,log-server,metadata-server]",
       "RESTATE_CLUSTER_NAME": "foobar",
       "RESTATE_BIFROST__DEFAULT_PROVIDER": "replicated",
-      "RESTATE_BIFROST__REPLICATED_LOGLET__DEFAULT_REPLICATION_PROPERTY": "2",
-      "RESTATE_METADATA_STORE__TYPE": "embedded",
-      "RESTATE_METADATA_STORE_CLIENT__TYPE": "embedded",
-      "RESTATE_ALLOW_BOOTSTRAP": "false",
-      "RESTATE_METADATA_STORE_CLIENT__ADDRESSES": "[http://n1:5122]",
+      "RESTATE_BIFROST__REPLICATED_LOGLET__DEFAULT_LOG_REPLICATION": "2",
+      "RESTATE_METADATA_SERVER__TYPE": "replicated",
+      "RESTATE_AUTO_PROVISION": "false",
+      "RESTATE_METADATA_CLIENT__ADDRESSES": "[http://n1:5122]",
       "RESTATE_ADVERTISED_ADDRESS": "http://n3:5122",
       "DO_NOT_TRACK": "true"
     }
