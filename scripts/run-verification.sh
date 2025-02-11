@@ -1,141 +1,85 @@
 #!/usr/bin/env bash
 
+#
+# input parameters to this script, they all have defaults
+#
 export DRIVER_IMAGE=${DRIVER_IMAGE:-"ghcr.io/restatedev/e2e-verification-runner:main"}
 export RESTATE_CONTAINER_IMAGE=${RESTATE_CONTAINER_IMAGE:-"ghcr.io/restatedev/restate:main"}
 export SERVICES_CONTAINER_IMAGE=${SERVICES_CONTAINER_IMAGE:-"localhost/restatedev/test-services:latest"}
+export ENV_FILE=${ENV_FILE:-"correctness/env.json"}
+export PARAMS_FILE=${PARAMS_FILE:-"correctness/params.json"}
 
 SEED=$(date --iso-8601=seconds)
 
-export INTERPRETER_DRIVER_CONF=$(cat <<-EOF
-{
-	"seed"	: "${SEED}",
-	"keys"	: 1000000,
-	"tests" : 100000,
-	"maxProgramSize"	:  20,
-	"crashInterval"		: 900000,
-	"bootstrap"				: true
+#
+# template a string file 
+#
+function template_json() {
+	local tmpfile=$(mktemp)
+
+	echo "local template=\$(cat <<-EOF" >> $tmpfile
+	cat $1 >> $tmpfile
+	echo "" >> $tmpfile
+	echo "EOF" >> $tmpfile
+	echo ")" >> $tmpfile
+
+	source $tmpfile
+	rm $tmpfile
+
+	echo $template
 }
-EOF
-)
 
+function fix_path() {
+	local file_path=$1
 
-export UNIVERSE_ENV_JSON=$(cat <<-EOF
-{
- "n1": {
-    "image": "${RESTATE_CONTAINER_IMAGE}",
-    "ports": [8080, 9070, 5122],
-    "pull": "always",
-    "env": {
-      "RESTATE_LOG_FILTER": "restate=warn",
-      "RESTATE_LOG_FORMAT": "json",
-      "RESTATE_ROLES": "[worker,log-server,admin,metadata-server]",
-      "RESTATE_CLUSTER_NAME": "foobar",
-      "RESTATE_BIFROST__DEFAULT_PROVIDER": "replicated",
-      "RESTATE_BIFROST__REPLICATED_LOGLET__DEFAULT_LOG_REPLICATION": "2",
-      "RESTATE_METADATA_SERVER__TYPE": "replicated",
-      "RESTATE_AUTO_PROVISION": "true",
-      "RESTATE_ADVERTISED_ADDRESS": "http://n1:5122",
-      "DO_NOT_TRACK": "true"
-    }
-  },
-  "n2": {
-    "image": "${RESTATE_CONTAINER_IMAGE}",
-    "ports": [8080],
-    "pull": "always",
-    "env": {
-      "RESTATE_LOG_FILTER": "restate=warn",
-      "RESTATE_LOG_FORMAT": "json",
-      "RESTATE_ROLES": "[worker,admin,log-server,metadata-server]",
-      "RESTATE_CLUSTER_NAME": "foobar",
-      "RESTATE_BIFROST__DEFAULT_PROVIDER": "replicated",
-      "RESTATE_BIFROST__REPLICATED_LOGLET__DEFAULT_LOG_REPLICATION": "2",
-      "RESTATE_METADATA_SERVER__TYPE": "replicated",
-      "RESTATE_AUTO_PROVISION": "false",
-      "RESTATE_METADATA_CLIENT__ADDRESSES": "[http://n1:5122]",
-      "RESTATE_ADVERTISED_ADDRESS": "http://n2:5122",
-      "DO_NOT_TRACK": "true"
-    }
-  },
-  "n3": {
-    "image": "${RESTATE_CONTAINER_IMAGE}",
-    "ports": [8080],
-    "pull": "always",
-    "env": {
-      "RESTATE_LOG_FILTER": "restate=warn",
-      "RESTATE_LOG_FORMAT": "json",
-      "RESTATE_ROLES": "[worker,admin,log-server,metadata-server]",
-      "RESTATE_CLUSTER_NAME": "foobar",
-      "RESTATE_BIFROST__DEFAULT_PROVIDER": "replicated",
-      "RESTATE_BIFROST__REPLICATED_LOGLET__DEFAULT_LOG_REPLICATION": "2",
-      "RESTATE_METADATA_SERVER__TYPE": "replicated",
-      "RESTATE_AUTO_PROVISION": "false",
-      "RESTATE_METADATA_CLIENT__ADDRESSES": "[http://n1:5122]",
-      "RESTATE_ADVERTISED_ADDRESS": "http://n3:5122",
-      "DO_NOT_TRACK": "true"
-    }
-  },
-  "interpreter_zero": {
-    "image": "${SERVICES_CONTAINER_IMAGE}",
-    "ports": [9000],
-    "pull": "never",
-    "env": {
-      "PORT": "9000",
-      "RESTATE_LOGGING": "ERROR",
-      "NODE_ENV": "production",
-			"UV_THREADPOOL_SIZE" : "8",
-			"NODE_OPTS" : "--max-old-space-size=4096",
-      "SERVICES": "ObjectInterpreterL0"
-    }
-  },
-  "interpreter_one": {
-    "image": "${SERVICES_CONTAINER_IMAGE}",
-    "ports": [9001],
-    "pull": "never",
-    "env": {
-      "PORT": "9001",
-      "RESTATE_LOGGING": "ERROR",
-      "NODE_ENV": "production",
-			"UV_THREADPOOL_SIZE" : "8",
-			"NODE_OPTS" : "--max-old-space-size=4096",
-      "SERVICES": "ObjectInterpreterL1"
-    }
-  },
-  "interpreter_two": {
-    "image": "${SERVICES_CONTAINER_IMAGE}",
-    "ports": [9002],
-    "pull": "never",
-    "env": {
-      "PORT": "9002",
-      "RESTATE_LOGGING": "ERROR",
-      "NODE_ENV": "production",
-			"UV_THREADPOOL_SIZE" : "8",
-			"NODE_OPTS" : "--max-old-space-size=4096",
-      "SERVICES": "ObjectInterpreterL2"
-    }
-  },
-  "services": {
-    "image": "${SERVICES_CONTAINER_IMAGE}",
-    "ports": [9003],
-    "pull": "never",
-    "env": {
-      "PORT": "9003",
-      "RESTATE_LOGGING": "ERROR",
-      "NODE_ENV": "production",
-			"UV_THREADPOOL_SIZE" : "8",
-			"NODE_OPTS" : "--max-old-space-size=4096",
-      "SERVICES": "ServiceInterpreterHelper"
-    }
-  }
+	if [ -f $file_path  ]; then
+		echo $file_path
+		return 0
+	fi
+
+	local script_dir=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+	local local_file_path="${script_dir}/${file_path}"
+
+	if [ -f $local_file_path  ]; then
+		echo $local_file_path
+		return 0
+	fi
+	
+	echo "could not find ${file_path} or ${local_file_path}"
+	exit 1
+
 }
-EOF
-)
-
 
 docker pull ${DRIVER_IMAGE}
+docker pull ${RESTATE_CONTAINER_IMAGE}
+
+# log configuration parameters
+echo "Driver ================================================"
+echo ${DRIVER_IMAGE}
+docker inspect ${DRIVER_IMAGE} | grep org.opencontainers.image.revision
+
+echo "RESTATE ================================================"
+echo ${RESTATE_CONTAINER_IMAGE}
+docker inspect ${RESTATE_CONTAINER_IMAGE} | grep org.opencontainers.image.revision
+
+echo "SERVICE ================================================"
+echo ${SERVICES_CONTAINER_IMAGE}
+docker inspect ${SERVICES_CONTAINER_IMAGE} | grep org.opencontainers.image.revision
+
+echo "======================================================="
+
+export ENV_FILE=$(fix_path ${ENV_FILE})
+export PARAMS_FILE=$(fix_path ${PARAMS_FILE})
+
+echo ${ENV_FILE}
+echo ${PARAMS_FILE}
 
 #
 # The following ENV is needed for the driver program itself.
 #
+
+export INTERPRETER_DRIVER_CONF=$(template_json ${PARAMS_FILE})
+export UNIVERSE_ENV_JSON=$(template_json ${ENV_FILE})
 export SERVICES=InterpreterDriverJob
 export NODE_ENV=production
 export NODE_OPTIONS="--max-old-space-size=4096"
