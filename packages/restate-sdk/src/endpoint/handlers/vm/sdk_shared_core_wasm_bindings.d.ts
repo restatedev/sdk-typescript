@@ -17,34 +17,45 @@ export enum LogLevel {
   ERROR = 4,
 }
 export interface WasmFailure {
-    code: number;
-    message: string;
+  code: number;
+  message: string;
 }
 
 export interface WasmExponentialRetryConfig {
-    initial_interval: number | undefined;
-    factor: number;
-    max_interval: number | undefined;
-    max_attempts: number | undefined;
-    max_duration: number | undefined;
+  initial_interval: number | undefined;
+  factor: number;
+  max_interval: number | undefined;
+  max_attempts: number | undefined;
+  max_duration: number | undefined;
 }
 
 export interface WasmAwakeable {
-    id: string;
-    handle: number;
+  id: string;
+  handle: number;
 }
 
-export type WasmAsyncResultValue = "NotReady" | "Empty" | { Success: Uint8Array } | { Failure: WasmFailure } | { StateKeys: string[] } | { InvocationId: string };
+export type WasmAsyncResultValue =
+  | "NotReady"
+  | "Empty"
+  | { Success: Uint8Array }
+  | { Failure: WasmFailure }
+  | { StateKeys: string[] }
+  | { InvocationId: string };
 
-export type WasmDoProgressResult = "AnyCompleted" | "ReadFromInput" | "WaitingPendingRun" | { ExecuteRun: number };
+export type WasmDoProgressResult =
+  | "AnyCompleted"
+  | "ReadFromInput"
+  | "WaitingPendingRun"
+  | { ExecuteRun: number }
+  | "CancelSignalReceived";
 
 export interface WasmCallHandle {
-    invocation_id_completion_id: number;
-    call_completion_id: number;
+  invocation_id_completion_id: number;
+  call_completion_id: number;
 }
 
 export interface WasmSendHandle {
-    invocation_id_completion_id: number;
+  invocation_id_completion_id: number;
 }
 
 export class WasmHeader {
@@ -91,8 +102,21 @@ export class WasmVM {
   sys_clear_state(key: string): void;
   sys_clear_all_state(): void;
   sys_sleep(millis: bigint): number;
-  sys_call(service: string, handler: string, buffer: Uint8Array, key: string | null | undefined, headers: WasmHeader[]): WasmCallHandle;
-  sys_send(service: string, handler: string, buffer: Uint8Array, key: string | null | undefined, headers: WasmHeader[], delay?: bigint | null): WasmSendHandle;
+  sys_call(
+    service: string,
+    handler: string,
+    buffer: Uint8Array,
+    key: string | null | undefined,
+    headers: WasmHeader[]
+  ): WasmCallHandle;
+  sys_send(
+    service: string,
+    handler: string,
+    buffer: Uint8Array,
+    key: string | null | undefined,
+    headers: WasmHeader[],
+    delay?: bigint | null
+  ): WasmSendHandle;
   sys_awakeable(): WasmAwakeable;
   sys_complete_awakeable_success(id: string, buffer: Uint8Array): void;
   sys_complete_awakeable_failure(id: string, value: WasmFailure): void;
@@ -103,11 +127,16 @@ export class WasmVM {
   sys_run(name: string): number;
   propose_run_completion_success(handle: number, buffer: Uint8Array): void;
   propose_run_completion_failure(handle: number, value: WasmFailure): void;
-  propose_run_completion_failure_transient(handle: number, error_message: string, error_stacktrace: string | null | undefined, attempt_duration: bigint, config: WasmExponentialRetryConfig): void;
+  propose_run_completion_failure_transient(
+    handle: number,
+    error_message: string,
+    error_stacktrace: string | null | undefined,
+    attempt_duration: bigint,
+    config: WasmExponentialRetryConfig
+  ): void;
   sys_cancel_invocation(target_invocation_id: string): void;
   sys_write_output_success(buffer: Uint8Array): void;
   sys_write_output_failure(value: WasmFailure): void;
   sys_end(): void;
   is_processing(): boolean;
 }
-

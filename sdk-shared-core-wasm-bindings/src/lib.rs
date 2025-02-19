@@ -320,6 +320,8 @@ pub enum WasmDoProgressResult {
     WaitingPendingRun,
     /// The SDK should execute a pending run
     ExecuteRun(#[tsify(type = "number")] WasmNotificationHandle),
+    /// Got cancel signal
+    CancelSignalReceived,
 }
 
 impl From<DoProgressResponse> for WasmDoProgressResult {
@@ -329,6 +331,7 @@ impl From<DoProgressResponse> for WasmDoProgressResult {
             DoProgressResponse::ReadFromInput => WasmDoProgressResult::ReadFromInput,
             DoProgressResponse::WaitingPendingRun => WasmDoProgressResult::WaitingPendingRun,
             DoProgressResponse::ExecuteRun(n) => WasmDoProgressResult::ExecuteRun(n.into()),
+            DoProgressResponse::CancelSignalReceived => WasmDoProgressResult::CancelSignalReceived
         }
     }
 }
@@ -392,7 +395,7 @@ impl WasmVM {
         let log_dispatcher = Dispatch::new(log_subscriber(log_level, Some(logger_id)));
 
         let vm = tracing::dispatcher::with_default(&log_dispatcher, || {
-            CoreVM::new(WasmHeaderList::from(headers), VMOptions {})
+            CoreVM::new(WasmHeaderList::from(headers), VMOptions::default())
         })?;
 
         Ok(Self { vm, log_dispatcher })

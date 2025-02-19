@@ -12,7 +12,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import type { CombineablePromise } from "./context.js";
-import * as vm from "./endpoint/handlers/vm/sdk_shared_core_wasm_bindings.js";
+import type * as vm from "./endpoint/handlers/vm/sdk_shared_core_wasm_bindings.js";
 import { CancelledError, TimeoutError } from "./types/errors.js";
 import { CompletablePromise } from "./utils/completable_promise.js";
 import type { ContextImpl, RunClosuresTracker } from "./context_impl.js";
@@ -80,7 +80,7 @@ abstract class AbstractRestatePromise<T> implements RestatePromise<T> {
     this.pollingPromise =
       this.pollingPromise ||
       this[RESTATE_CTX_SYMBOL].promisesExecutor
-        .doProgress(true, this)
+        .doProgress(this)
         .catch(() => {});
     return this.publicPromiseOrCancelPromise().then(onfulfilled, onrejected);
   }
@@ -94,7 +94,7 @@ abstract class AbstractRestatePromise<T> implements RestatePromise<T> {
     this.pollingPromise =
       this.pollingPromise ||
       this[RESTATE_CTX_SYMBOL].promisesExecutor
-        .doProgress(true, this)
+        .doProgress(this)
         .catch(() => {});
     return this.publicPromiseOrCancelPromise().catch(onrejected);
   }
@@ -103,7 +103,7 @@ abstract class AbstractRestatePromise<T> implements RestatePromise<T> {
     this.pollingPromise =
       this.pollingPromise ||
       this[RESTATE_CTX_SYMBOL].promisesExecutor
-        .doProgress(true, this)
+        .doProgress(this)
         .catch(() => {});
     return this.publicPromiseOrCancelPromise().finally(onfinally);
   }
@@ -282,9 +282,6 @@ export class RestatePendingPromise<T> implements RestatePromise<T> {
  * Promises executor, gluing VM with I/O and Promises given to user space.
  */
 export class PromisesExecutor {
-  private readonly invocationIdsToCancel: Array<RestateSinglePromise<string>> =
-    [];
-
   constructor(
     private readonly coreVm: vm.WasmVM,
     private readonly inputPump: InputPump,
@@ -293,52 +290,13 @@ export class PromisesExecutor {
     private readonly errorCallback: (e: any) => void
   ) {}
 
-  async doProgress(
-    enableImplicitCancellation: boolean,
-    restatePromise: RestatePromise<unknown>
-  ) {
+  async doProgress(restatePromise: RestatePromise<unknown>) {
     // Only the first time try process output
     await this.outputPump.awaitNextProgress();
-    await this.doProgressInner(enableImplicitCancellation, restatePromise);
+    await this.doProgressInner(restatePromise);
   }
 
-  registerInvocationIdToCancel(p: RestateSinglePromise<string>) {
-    this.invocationIdsToCancel.push(p);
-  }
-
-  private async doProgressInner(
-    enableImplicitCancellation: boolean,
-    restatePromise: RestatePromise<unknown>
-  ) {
-    if (enableImplicitCancellation) {
-      const cancellation_notification = this.coreVm.take_notification(
-        vm.cancel_handle()
-      );
-      if (cancellation_notification !== "NotReady") {
-        // Cancel child invocations!
-        try {
-          const invocationIds: string[] = [];
-          // Await all the invocation id promises
-          for (const invocationId of this.invocationIdsToCancel) {
-            // This will not cancel, because I flipped the cancellation by taking it with take_notification
-            invocationIds.push(await invocationId);
-          }
-          // Now cancel all of them boom!
-          for (const invocationId of invocationIds) {
-            this.coreVm.sys_cancel_invocation(invocationId);
-          }
-        } catch (e) {
-          // Not good
-          this.errorCallback(e);
-          return;
-        }
-
-        // Now flag this promise as cancelled and boom!
-        restatePromise.tryCancel();
-        return;
-      }
-    }
-
+  private async doProgressInner(restatePromise: RestatePromise<unknown>) {
     // Try complete the promise
     restatePromise.tryComplete();
 
@@ -356,10 +314,6 @@ export class PromisesExecutor {
           // Completed, we're good!
           return;
         }
-        if (enableImplicitCancellation) {
-          // We want to be woken up on the cancellation marker too!
-          handles.push(vm.cancel_handle());
-        }
         const doProgressResult = this.coreVm.do_progress(
           new Uint32Array(handles)
         );
@@ -372,6 +326,9 @@ export class PromisesExecutor {
         } else if (doProgressResult === "WaitingPendingRun") {
           // Wait for any of the pending run to complete
           await this.runClosuresTracker.awaitNextCompletedRun();
+        } else if (doProgressResult === "CancelSignalReceived") {
+          restatePromise.tryCancel();
+          return;
         } else {
           // We need to execute a run closure
           this.runClosuresTracker.executeRun(doProgressResult.ExecuteRun);
@@ -380,7 +337,7 @@ export class PromisesExecutor {
         }
 
         // Recursion
-        await this.doProgress(enableImplicitCancellation, restatePromise);
+        await this.doProgress(restatePromise);
       } catch (e) {
         // Not good, this is a retryable error.
         this.errorCallback(e);

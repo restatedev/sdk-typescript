@@ -189,10 +189,9 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       );
 
       // TODO eventually we return this promise back to the user
-      const invocationIdPromise = this.createInvocationIdPromise(
-        call_handles.invocation_id_completion_id
-      );
-      this.promisesExecutor.registerInvocationIdToCancel(invocationIdPromise);
+      // const invocationIdPromise = this.createInvocationIdPromise(
+      //   call_handles.invocation_id_completion_id
+      // );
 
       return call_handles.call_completion_id;
     }, completeUsing(SuccessWithSerde(responseSerde), Failure));
@@ -208,7 +207,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
         delay = BigInt(send.delay);
       }
 
-      const invocation_id_handle = vm.sys_send(
+      vm.sys_send(
         send.service,
         send.method,
         parameter,
@@ -222,9 +221,8 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       ).invocation_id_completion_id;
 
       // TODO eventually we return this promise back to the user
-      const invocationIdPromise =
-        this.createInvocationIdPromise(invocation_id_handle);
-      this.promisesExecutor.registerInvocationIdToCancel(invocationIdPromise);
+      // const invocationIdPromise =
+      //   this.createInvocationIdPromise(invocation_id_handle);
     });
   }
 

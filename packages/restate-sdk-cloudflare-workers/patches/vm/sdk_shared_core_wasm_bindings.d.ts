@@ -36,7 +36,7 @@ export interface WasmAwakeable {
 
 export type WasmAsyncResultValue = "NotReady" | "Empty" | { Success: Uint8Array } | { Failure: WasmFailure } | { StateKeys: string[] } | { InvocationId: string };
 
-export type WasmDoProgressResult = "AnyCompleted" | "ReadFromInput" | "WaitingPendingRun" | { ExecuteRun: number };
+export type WasmDoProgressResult = "AnyCompleted" | "ReadFromInput" | "WaitingPendingRun" | { ExecuteRun: number } | "CancelSignalReceived";
 
 export interface WasmCallHandle {
     invocation_id_completion_id: number;
