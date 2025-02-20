@@ -13,6 +13,7 @@
 
 export const INTERNAL_ERROR_CODE = 500;
 export const TIMEOUT_ERROR_CODE = 408;
+export const CANCEL_ERROR_CODE = 409;
 export const UNKNOWN_ERROR_CODE = 500;
 
 // From shared core!
@@ -64,5 +65,13 @@ export class TimeoutError extends TerminalError {
 
   constructor() {
     super("Timeout occurred", { errorCode: TIMEOUT_ERROR_CODE });
+  }
+}
+
+export class CancelledError extends TerminalError {
+  public name = "CancelledError";
+
+  constructor() {
+    super("Cancelled", { errorCode: CANCEL_ERROR_CODE });
   }
 }
