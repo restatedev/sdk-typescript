@@ -1,7 +1,0 @@
-{
-	"seed"	: "${SEED}",
-	"keys"	: 1000000,
-	"tests" : 100000,
-	"maxProgramSize"	:  20,
-	"bootstrap"				: true
-}
