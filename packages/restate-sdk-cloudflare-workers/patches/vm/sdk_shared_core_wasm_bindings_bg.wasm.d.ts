@@ -55,7 +55,7 @@ export const wasmidentityverifier_verify_identity: (a: number, b: number, c: num
 export const cancel_handle: () => number;
 export const __wbg_get_wasminput_invocation_id: (a: number) => [number, number];
 export const __wbg_get_wasminput_key: (a: number) => [number, number];
-export const ring_core_0_17_8_bn_mul_mont: (a: number, b: number, c: number, d: number, e: number, f: number) => void;
+export const ring_core_0_17_11__bn_mul_mont: (a: number, b: number, c: number, d: number, e: number, f: number) => void;
 export const __wbindgen_malloc: (a: number, b: number) => number;
 export const __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
 export const __wbindgen_exn_store: (a: number) => void;
