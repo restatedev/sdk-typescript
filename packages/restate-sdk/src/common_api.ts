@@ -47,12 +47,11 @@ export type {
   WorkflowDefinition,
 } from "@restatedev/restate-sdk-core";
 
-export type { ServiceBundle, RestateEndpoint } from "./endpoint.js";
+export type { RestateEndpoint } from "./endpoint.js";
 export { RestateError, TerminalError, TimeoutError } from "./types/errors.js";
 export type {
   LoggerTransport,
   LogMetadata,
-  LogParams,
   RestateLogLevel,
   LoggerContext,
   LogSource,

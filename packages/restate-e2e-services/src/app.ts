@@ -36,11 +36,8 @@ REGISTRY.register(fqdns, endpoint);
 if (process.env.E2E_REQUEST_SIGNING) {
   endpoint.withIdentityV1(...process.env.E2E_REQUEST_SIGNING.split(","));
 }
-if (!process.env.AWS_LAMBDA_FUNCTION_NAME) {
-  endpoint.listen().catch((e) => {
-    // eslint-disable-next-line no-console
-    console.error(e);
-  });
-}
 
-export const handler = endpoint.lambdaHandler();
+endpoint.listen().catch((e) => {
+  // eslint-disable-next-line no-console
+  console.error(e);
+});

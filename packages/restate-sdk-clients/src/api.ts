@@ -90,14 +90,6 @@ export interface IngresCallOptions<I = unknown, O = unknown> {
    */
   headers?: Record<string, string>;
 
-  /**
-   * Do not auto serialize the input and output of the handler.
-   * Setting this to true, would allow you to send binary data to the handler,
-   * and not assuming that the payload is JSON.
-   * @deprecated please use inputSerde and outputSerde instead, and provide `restate.serde.binary` as an argument.
-   */
-  raw?: boolean;
-
   input?: Serde<I>;
 
   output?: Serde<O>;

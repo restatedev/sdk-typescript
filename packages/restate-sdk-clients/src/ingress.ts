@@ -140,14 +140,10 @@ const doComponentInvocation = async <I, O>(
       fragments.push("send");
     }
   }
-  const raw: boolean = params.opts?.opts.raw ?? false;
   //
   // request body
   //
-  let inputSerde = params.opts?.opts.input;
-  if (!inputSerde) {
-    inputSerde = raw ? serde.binary : serde.json;
-  }
+  const inputSerde = params.opts?.opts.input ?? serde.json;
 
   const { body, contentType } = serializeBodyWithContentType(
     params.parameter,
@@ -207,8 +203,7 @@ const doComponentInvocation = async <I, O>(
   }
   const responseBuf = await httpResponse.arrayBuffer();
   if (!params.send) {
-    const outputSerde =
-      params.opts?.opts.output ?? (raw ? serde.binary : serde.json);
+    const outputSerde = params.opts?.opts.output ?? serde.json;
     return outputSerde.deserialize(new Uint8Array(responseBuf)) as O;
   }
   const json = serde.json.deserialize(new Uint8Array(responseBuf)) as O;

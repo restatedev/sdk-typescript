@@ -12,7 +12,7 @@
 /* eslint-disable @typescript-eslint/ban-types */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import type { RestateEndpoint, ServiceBundle } from "../public_api.js";
+import type { RestateEndpoint } from "../public_api.js";
 import type {
   ServiceDefinition,
   VirtualObjectDefinition,
@@ -44,11 +44,6 @@ export class NodeEndpoint implements RestateEndpoint {
 
   public addComponent(component: Component) {
     this.builder.addComponent(component);
-  }
-
-  public bindBundle(services: ServiceBundle): RestateEndpoint {
-    services.registerServices(this);
-    return this;
   }
 
   public bind<P extends string, M>(

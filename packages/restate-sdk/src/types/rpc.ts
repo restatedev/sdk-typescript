@@ -250,15 +250,6 @@ export type ServiceHandlerOpts = {
    */
   accept?: string;
 
-  /** @deprecated Use input instead */
-  inputDeserializer?: <T>(input: Uint8Array) => T | undefined;
-
-  /** @deprecated Use output instead */
-  contentType?: string;
-
-  /** @deprecated Use output instead */
-  outputSerializer?: <T>(output: T | undefined) => Uint8Array;
-
   /**
    * The Serde to use for deserializing the input parameter.
    * defaults to: restate.serde.json
@@ -289,15 +280,6 @@ export type ObjectHandlerOpts = {
    * If you want to customize how to deserialize the input, you still need to provide an `input` serde.
    */
   accept?: string;
-
-  /** @deprecated Use input instead */
-  inputDeserializer?: <T>(input: Uint8Array) => T | undefined;
-
-  /** @deprecated Use output instead */
-  contentType?: string;
-
-  /** @deprecated Use output instead */
-  outputSerializer?: <T>(output: T | undefined) => Uint8Array;
 
   /**
    * The Serde to use for deserializing the input parameter.
@@ -330,15 +312,6 @@ export type WorkflowHandlerOpts = {
    */
   accept?: string;
 
-  /** @deprecated Use input instead */
-  inputDeserializer?: <T>(input: Uint8Array) => T | undefined;
-
-  /** @deprecated Use output instead */
-  contentType?: string;
-
-  /** @deprecated Use output instead */
-  outputSerializer?: <T>(output: T | undefined) => Uint8Array;
-
   /**
    * The Serde to use for deserializing the input parameter.
    * defaults to: restate.serde.json
@@ -360,40 +333,7 @@ export type WorkflowHandlerOpts = {
   output?: Serde<unknown>;
 };
 
-const JSON_CONTENT_TYPE = "application/json";
 const HANDLER_SYMBOL = Symbol("Handler");
-
-/** For backward compatability with the serializer handler option */
-class SerializerWrapper<T> implements Serde<T> {
-  constructor(
-    public readonly contentType: string,
-    private readonly serializer: (input: T) => Uint8Array
-  ) {}
-
-  serialize(input: T): Uint8Array {
-    return this.serializer(input);
-  }
-
-  deserialize(): T {
-    throw new Error("Not implemented");
-  }
-}
-
-/** For backward compatability with the serializer handler option */
-class DeserializerWrapper<T> implements Serde<T> {
-  constructor(
-    public readonly contentType: string,
-    private readonly deserializer: (input: Uint8Array) => T
-  ) {}
-
-  serialize(): Uint8Array {
-    throw new Error("Not implemented");
-  }
-
-  deserialize(input: Uint8Array): T {
-    return this.deserializer(input);
-  }
-}
 
 export class HandlerWrapper {
   public static from(
@@ -401,49 +341,8 @@ export class HandlerWrapper {
     handler: Function,
     opts?: ServiceHandlerOpts | ObjectHandlerOpts | WorkflowHandlerOpts
   ): HandlerWrapper {
-    // backwards compatibility with the deserializer+accept options
-    let inputSerde: Serde<unknown>;
-    if (opts?.inputDeserializer) {
-      // the caller has specified a custom serializer, use it
-      // if the accept is also specified, use it, otherwise use JSON
-      inputSerde = new DeserializerWrapper(
-        opts.accept ?? JSON_CONTENT_TYPE,
-        opts.inputDeserializer
-      );
-    } else if (opts?.accept) {
-      // accept but no serializer, use pass trough
-      inputSerde = new DeserializerWrapper(opts.accept, (input) => input);
-    } else if (opts?.contentType === JSON_CONTENT_TYPE) {
-      // contentType is JSON, use the default serde
-      inputSerde = defaultSerde();
-    } else if (opts?.input) {
-      // did the caller specify a custom serde?
-      inputSerde = opts.input;
-    } else {
-      // use the default (JSON) serde
-      inputSerde = defaultSerde();
-    }
-    // backwards compatibility with the deserializer handler option
-    let outputSerde: Serde<unknown>;
-    if (opts?.outputSerializer) {
-      outputSerde = new SerializerWrapper(
-        opts.contentType ?? JSON_CONTENT_TYPE,
-        opts.outputSerializer
-      );
-    } else if (opts?.contentType === JSON_CONTENT_TYPE) {
-      // contentType is JSON, use the default serde
-      outputSerde = defaultSerde();
-    } else if (opts?.contentType) {
-      // contentType but no serializer, use passtrough
-      outputSerde = new SerializerWrapper(
-        opts.contentType,
-        (input) => input as Uint8Array
-      );
-    } else if (opts?.output) {
-      outputSerde = opts.output;
-    } else {
-      outputSerde = defaultSerde();
-    }
+    const inputSerde: Serde<unknown> = opts?.input ?? defaultSerde();
+    const outputSerde: Serde<unknown> = opts?.output ?? defaultSerde();
 
     // we must create here a copy of the handler
     // to be able to reuse the original handler in other places.
