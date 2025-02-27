@@ -137,11 +137,21 @@ export class GenericHandler implements RestateHandler {
     }
 
     if (parsed.type === "unknown") {
-      const msg = `Invalid path: path doesn't end in /invoke/SvcName/handlerName and also not in /discover: ${path}`;
+      const msg = `Invalid path. Allowed are /health, or /discover, or /invoke/SvcName/handlerName, but was: ${path}`;
       this.endpoint.rlog.trace(msg);
       return this.toErrorResponse(404, msg);
     }
 
+    if (parsed.type === "health") {
+      return {
+        body: OnceStream(new TextEncoder().encode("OK")),
+        headers: {
+          "content-type": "application/text",
+          "x-restate-server": X_RESTATE_SERVER,
+        },
+        statusCode: 200,
+      };
+    }
     if (parsed.type === "discover") {
       return this.handleDiscovery(request.headers["accept"]);
     }

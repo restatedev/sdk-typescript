@@ -269,6 +269,7 @@ export class WorkflowHandler implements ComponentHandler {
 export type PathComponents =
   | InvokePathComponents
   | { type: "discover" }
+  | { type: "health" }
   | { type: "unknown"; path: string };
 
 export type InvokePathComponents = {
@@ -291,6 +292,9 @@ export function parseUrlComponents(urlPath?: string): PathComponents {
   }
   if (fragments.length > 0 && fragments[fragments.length - 1] === "discover") {
     return { type: "discover" };
+  }
+  if (fragments.length > 0 && fragments[fragments.length - 1] === "health") {
+    return { type: "health" };
   }
   return { type: "unknown", path: urlPath };
 }
