@@ -16,11 +16,7 @@ import type {
 } from "@restatedev/restate-sdk-core";
 import type { Component } from "../types/components.js";
 import { EndpointBuilder } from "./endpoint_builder.js";
-import type {
-  RestateEndpoint,
-  RestateEndpointBase,
-  ServiceBundle,
-} from "../endpoint.js";
+import type { RestateEndpointBase } from "../endpoint.js";
 import { GenericHandler } from "./handlers/generic.js";
 import { LambdaHandler } from "./handlers/lambda.js";
 import { ProtocolMode } from "../types/discovery.js";
@@ -58,11 +54,6 @@ export class LambdaEndpointImpl implements LambdaEndpoint {
 
   public addComponent(component: Component) {
     this.builder.addComponent(component);
-  }
-
-  bindBundle(services: ServiceBundle): LambdaEndpoint {
-    services.registerServices(this as unknown as RestateEndpoint);
-    return this;
   }
 
   public bind<P extends string, M>(

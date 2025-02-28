@@ -44,11 +44,6 @@ export type LogMetadata = {
 };
 
 /**
- * @deprecated use {@link LogMetadata}
- */
-export type LogParams = LogMetadata;
-
-/**
  * Logger transport, often known in other logging libraries as appender. Filtering of log events should happen within this function as well.
  *
  * This can be overridden in {@link RestateEndpointBase.setLogger} to customize logging. The default Logger transport will log to console.
@@ -58,11 +53,6 @@ export type LoggerTransport = (
   message?: any,
   ...optionalParams: any[]
 ) => void;
-
-/**
- * @deprecated use {@link LoggerTransport}
- */
-export type Logger = LoggerTransport;
 
 /**
  * Logger context.

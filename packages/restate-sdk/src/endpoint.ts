@@ -17,21 +17,6 @@ import type {
 } from "@restatedev/restate-sdk-core";
 import type { LoggerTransport } from "./logging/logger_transport.js";
 
-/**
- * Utility interface for a bundle of one or more services belonging together
- * and being registered together.
- *
- * @deprecated Service bundle is unused and will be removed.
- */
-export interface ServiceBundle {
-  /**
-   * Called to register the services at the endpoint.
-   *
-   * @deprecated Service bundle is unused and will be removed.
-   */
-  registerServices(endpoint: RestateEndpoint): void;
-}
-
 export interface RestateEndpointBase<E> {
   /**
    * Binds a new durable service / virtual object / workflow.
@@ -44,14 +29,6 @@ export interface RestateEndpointBase<E> {
       | VirtualObjectDefinition<P, M>
       | WorkflowDefinition<P, M>
   ): E;
-
-  /**
-   * Adds one or more services to this endpoint. This will call the
-   * {@link ServiceBundle.registerServices} function to register all services at this endpoint.
-   *
-   * @deprecated service bundle is deprecated
-   */
-  bindBundle(services: ServiceBundle): E;
 
   /**
    * Provide a list of v1 request identity public keys eg `publickeyv1_2G8dCQhArfvGpzPw5Vx2ALciR4xCLHfS5YaT93XjNxX9` to validate
@@ -116,18 +93,6 @@ export interface RestateEndpointBase<E> {
  * ```
  */
 export interface RestateEndpoint extends RestateEndpointBase<RestateEndpoint> {
-  /**
-   * Creates the invocation handler function to be called by AWS Lambda.
-   *
-   * The returned type of this function is `(event: APIGatewayProxyEvent | APIGatewayProxyEventV2) => Promise<APIGatewayProxyResult | APIGatewayProxyResultV2>`.
-   * We use `any` types here to avoid a dependency on the `@types/aws-lambda` dependency for consumers of this API.
-   *
-   * @returns The invocation handler function for to be called by AWS Lambda.
-   * @deprecated import "@restatedev/restate-sdk/lambda" instead
-   */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  lambdaHandler(): (event: any, ctx: any) => Promise<any>;
-
   /**
    * Serve this Restate Endpoint as HTTP2 server, listening to the given port.
    *
