@@ -452,7 +452,7 @@ export class GenericHandler implements RestateHandler {
 
 // See vm_log below for more details
 const invocationLoggers: Map<number, Logger> = new Map<number, Logger>();
-const logsTextDecoder = new TextDecoder();
+const logsTextDecoder = new TextDecoder("utf-8", { fatal: false });
 
 /**
  * The shared core propagates logs to the SDK invoking this method.
@@ -463,18 +463,31 @@ export function vm_log(
   strBytes: Uint8Array,
   loggerId?: number
 ) {
-  const logger = (loggerId && invocationLoggers.get(loggerId)) || undefined;
-  const str = logsTextDecoder.decode(strBytes);
-  if (logger !== undefined) {
-    logger.logForLevel(wasmLogLevelToRestateLogLevel(level), str);
-  } else {
+  try {
+    const logger = (loggerId && invocationLoggers.get(loggerId)) || undefined;
+    const str = logsTextDecoder.decode(strBytes);
+    if (logger !== undefined) {
+      logger.logForLevel(wasmLogLevelToRestateLogLevel(level), str);
+    } else {
+      defaultLoggerTransport(
+        {
+          level: wasmLogLevelToRestateLogLevel(level),
+          replaying: false,
+          source: LogSource.JOURNAL,
+        },
+        str
+      );
+    }
+  } catch (e) {
+    // This function CAN'T EVER propagate an error,
+    // because otherwise it will cause an awesome error in the shared core due to concurrent usage of it.
     defaultLoggerTransport(
       {
-        level: wasmLogLevelToRestateLogLevel(level),
+        level: RestateLogLevel.ERROR,
         replaying: false,
-        source: LogSource.JOURNAL,
+        source: LogSource.SYSTEM,
       },
-      str
+      "Unexpected error thrown while trying to log: " + e?.toString()
     );
   }
 }
