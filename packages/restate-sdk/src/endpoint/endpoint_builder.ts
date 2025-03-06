@@ -125,8 +125,8 @@ export class EndpointBuilder {
 
     const endpoint: discovery.Endpoint = {
       protocolMode,
-      minProtocolVersion: 4,
-      maxProtocolVersion: 4,
+      minProtocolVersion: 5,
+      maxProtocolVersion: 5,
       services,
     };
 
