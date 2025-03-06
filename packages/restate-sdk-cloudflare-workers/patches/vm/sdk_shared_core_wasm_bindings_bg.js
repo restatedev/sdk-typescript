@@ -656,7 +656,9 @@ export class WasmVM {
     sys_set_state(key, buffer) {
         const ptr0 = passStringToWasm0(key, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.wasmvm_sys_set_state(this.__wbg_ptr, ptr0, len0, buffer);
+        const ptr1 = passArray8ToWasm0(buffer, wasm.__wbindgen_malloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmvm_sys_set_state(this.__wbg_ptr, ptr0, len0, ptr1, len1);
         if (ret[1]) {
             throw takeFromExternrefTable0(ret[0]);
         }
@@ -702,11 +704,13 @@ export class WasmVM {
         const len0 = WASM_VECTOR_LEN;
         const ptr1 = passStringToWasm0(handler, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len1 = WASM_VECTOR_LEN;
-        var ptr2 = isLikeNone(key) ? 0 : passStringToWasm0(key, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-        var len2 = WASM_VECTOR_LEN;
-        const ptr3 = passArrayJsValueToWasm0(headers, wasm.__wbindgen_malloc);
-        const len3 = WASM_VECTOR_LEN;
-        const ret = wasm.wasmvm_sys_call(this.__wbg_ptr, ptr0, len0, ptr1, len1, buffer, ptr2, len2, ptr3, len3);
+        const ptr2 = passArray8ToWasm0(buffer, wasm.__wbindgen_malloc);
+        const len2 = WASM_VECTOR_LEN;
+        var ptr3 = isLikeNone(key) ? 0 : passStringToWasm0(key, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        var len3 = WASM_VECTOR_LEN;
+        const ptr4 = passArrayJsValueToWasm0(headers, wasm.__wbindgen_malloc);
+        const len4 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmvm_sys_call(this.__wbg_ptr, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, ptr4, len4);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }
@@ -726,11 +730,13 @@ export class WasmVM {
         const len0 = WASM_VECTOR_LEN;
         const ptr1 = passStringToWasm0(handler, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len1 = WASM_VECTOR_LEN;
-        var ptr2 = isLikeNone(key) ? 0 : passStringToWasm0(key, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-        var len2 = WASM_VECTOR_LEN;
-        const ptr3 = passArrayJsValueToWasm0(headers, wasm.__wbindgen_malloc);
-        const len3 = WASM_VECTOR_LEN;
-        const ret = wasm.wasmvm_sys_send(this.__wbg_ptr, ptr0, len0, ptr1, len1, buffer, ptr2, len2, ptr3, len3, !isLikeNone(delay), isLikeNone(delay) ? BigInt(0) : delay);
+        const ptr2 = passArray8ToWasm0(buffer, wasm.__wbindgen_malloc);
+        const len2 = WASM_VECTOR_LEN;
+        var ptr3 = isLikeNone(key) ? 0 : passStringToWasm0(key, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        var len3 = WASM_VECTOR_LEN;
+        const ptr4 = passArrayJsValueToWasm0(headers, wasm.__wbindgen_malloc);
+        const len4 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmvm_sys_send(this.__wbg_ptr, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, ptr4, len4, !isLikeNone(delay), isLikeNone(delay) ? BigInt(0) : delay);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }
@@ -753,7 +759,9 @@ export class WasmVM {
     sys_complete_awakeable_success(id, buffer) {
         const ptr0 = passStringToWasm0(id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.wasmvm_sys_complete_awakeable_success(this.__wbg_ptr, ptr0, len0, buffer);
+        const ptr1 = passArray8ToWasm0(buffer, wasm.__wbindgen_malloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmvm_sys_complete_awakeable_success(this.__wbg_ptr, ptr0, len0, ptr1, len1);
         if (ret[1]) {
             throw takeFromExternrefTable0(ret[0]);
         }
@@ -804,7 +812,9 @@ export class WasmVM {
     sys_complete_promise_success(key, buffer) {
         const ptr0 = passStringToWasm0(key, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.wasmvm_sys_complete_promise_success(this.__wbg_ptr, ptr0, len0, buffer);
+        const ptr1 = passArray8ToWasm0(buffer, wasm.__wbindgen_malloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmvm_sys_complete_promise_success(this.__wbg_ptr, ptr0, len0, ptr1, len1);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }
@@ -842,7 +852,9 @@ export class WasmVM {
      * @param {Uint8Array} buffer
      */
     propose_run_completion_success(handle, buffer) {
-        const ret = wasm.wasmvm_propose_run_completion_success(this.__wbg_ptr, handle, buffer);
+        const ptr0 = passArray8ToWasm0(buffer, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmvm_propose_run_completion_success(this.__wbg_ptr, handle, ptr0, len0);
         if (ret[1]) {
             throw takeFromExternrefTable0(ret[0]);
         }
@@ -889,7 +901,9 @@ export class WasmVM {
      * @param {Uint8Array} buffer
      */
     sys_write_output_success(buffer) {
-        const ret = wasm.wasmvm_sys_write_output_success(this.__wbg_ptr, buffer);
+        const ptr0 = passArray8ToWasm0(buffer, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmvm_sys_write_output_success(this.__wbg_ptr, ptr0, len0);
         if (ret[1]) {
             throw takeFromExternrefTable0(ret[0]);
         }

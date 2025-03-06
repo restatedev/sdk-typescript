@@ -17,7 +17,7 @@ console_error_panic_hook = { version = "0.1.7", optional = true }
 serde = { version = "1.0.210", features = ["derive"] }
 serde-wasm-bindgen = "0.6.5"
 tsify = { version = "0.4.5", default-features = false, features = ["js"] }
-js-sys = "0.3.70"
+js-sys = "0.3.77"
 serde_bytes = "0.11.15"
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", default-features = false, features = ["fmt", "std"] }
