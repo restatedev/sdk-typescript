@@ -1,4 +1,3 @@
-use js_sys::Uint8Array;
 use restate_sdk_shared_core::{
     CallHandle, CoreVM, DoProgressResponse, Error, Header, HeaderMap, IdentityVerifier, Input,
     NonEmptyValue, ResponseHead, RetryPolicy, RunExitResult, SendHandle, SuspendedOrVMError,
@@ -9,6 +8,7 @@ use std::cmp;
 use std::convert::{Infallible, Into};
 use std::io::Write;
 use std::time::Duration;
+use js_sys::Uint8Array;
 use tracing::metadata::LevelFilter;
 use tracing::{Dispatch, Level, Subscriber};
 use tracing_subscriber::fmt::format::FmtSpan;
@@ -504,12 +504,12 @@ impl WasmVM {
     pub fn sys_set_state(
         &mut self,
         key: String,
-        buffer: js_sys::Uint8Array,
+        buffer: Vec<u8>,
     ) -> Result<(), WasmFailure> {
         use_log_dispatcher!(self, |vm| CoreVM::sys_state_set(
             vm,
             key,
-            buffer.to_vec().into()
+            buffer.into()
         ))
         .map_err(Into::into)
     }
@@ -537,7 +537,7 @@ impl WasmVM {
         &mut self,
         service: String,
         handler: String,
-        buffer: js_sys::Uint8Array,
+        buffer: Vec<u8>,
         key: Option<String>,
         headers: Vec<WasmHeader>,
     ) -> Result<WasmCallHandle, WasmFailure> {
@@ -561,7 +561,7 @@ impl WasmVM {
         &mut self,
         service: String,
         handler: String,
-        buffer: Uint8Array,
+        buffer: Vec<u8>,
         key: Option<String>,
         headers: Vec<WasmHeader>,
         delay: Option<u64>,
@@ -594,7 +594,7 @@ impl WasmVM {
     pub fn sys_complete_awakeable_success(
         &mut self,
         id: String,
-        buffer: Uint8Array,
+        buffer: Vec<u8>,
     ) -> Result<(), WasmFailure> {
         use_log_dispatcher!(self, |vm| CoreVM::sys_complete_awakeable(
             vm,
@@ -632,7 +632,7 @@ impl WasmVM {
     pub fn sys_complete_promise_success(
         &mut self,
         key: String,
-        buffer: Uint8Array,
+        buffer: Vec<u8>,
     ) -> Result<WasmNotificationHandle, WasmFailure> {
         use_log_dispatcher!(self, |vm| CoreVM::sys_complete_promise(
             vm,
@@ -666,7 +666,7 @@ impl WasmVM {
     pub fn propose_run_completion_success(
         &mut self,
         handle: WasmNotificationHandle,
-        buffer: Uint8Array,
+        buffer: Vec<u8>,
     ) -> Result<(), WasmFailure> {
         use_log_dispatcher!(self, |vm| CoreVM::propose_run_completion(
             vm,
@@ -726,7 +726,7 @@ impl WasmVM {
 
     pub fn sys_write_output_success(
         &mut self,
-        buffer: js_sys::Uint8Array,
+        buffer: Vec<u8>,
     ) -> Result<(), WasmFailure> {
         use_log_dispatcher!(self, |vm| CoreVM::sys_write_output(
             vm,
