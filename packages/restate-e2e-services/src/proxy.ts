@@ -11,6 +11,7 @@
 
 import * as restate from "@restatedev/restate-sdk";
 import { REGISTRY } from "./services.js";
+import { TerminalError } from "@restatedev/restate-sdk";
 
 type ProxyRequest = {
   serviceName: string;
@@ -18,6 +19,7 @@ type ProxyRequest = {
   handlerName: string;
   message: Array<number>;
   delayMillis?: number;
+  idempotencyKey?: string;
 };
 
 type ManyCallRequest = {
@@ -30,6 +32,10 @@ function rawCall(
   ctx: restate.Context,
   request: ProxyRequest
 ): Promise<Uint8Array> {
+  // TODO add idempotency key support here
+  if (request.idempotencyKey != undefined) {
+    throw new TerminalError("idempotency key not supported yet");
+  }
   return ctx.genericCall({
     service: request.serviceName,
     method: request.handlerName,
@@ -40,7 +46,11 @@ function rawCall(
   });
 }
 
-function rawSend(ctx: restate.Context, request: ProxyRequest) {
+function rawSend(ctx: restate.Context, request: ProxyRequest): Promise<string> {
+  // TODO add idempotency key support here
+  if (request.idempotencyKey != undefined) {
+    throw new TerminalError("idempotency key not supported yet");
+  }
   ctx.genericSend({
     service: request.serviceName,
     method: request.handlerName,
@@ -49,6 +59,8 @@ function rawSend(ctx: restate.Context, request: ProxyRequest) {
     parameter: new Uint8Array(request.message),
     delay: request.delayMillis,
   });
+  // TODO this should return the invocation id
+  return Promise.resolve("unknown");
 }
 
 const o = restate.service({
@@ -59,7 +71,7 @@ const o = restate.service({
     },
 
     async oneWayCall(ctx: restate.Context, request: ProxyRequest) {
-      rawSend(ctx, request);
+      return rawSend(ctx, request);
     },
 
     async manyCalls(ctx: restate.Context, request: ManyCallRequest[]) {
@@ -67,7 +79,7 @@ const o = restate.service({
 
       for (const r of request) {
         if (r.oneWayCall) {
-          rawSend(ctx, r.proxyRequest);
+          await rawSend(ctx, r.proxyRequest);
           continue;
         }
         const promise = rawCall(ctx, r.proxyRequest);

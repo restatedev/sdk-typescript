@@ -11,11 +11,11 @@ import * as restate from "@restatedev/restate-sdk";
 import { REGISTRY } from "./services.js";
 import type { AwakeableHolder } from "./awakeable_holder.js";
 
-const kill = restate.service({
+const kill = restate.object({
   name: "KillTestRunner",
   handlers: {
     async startCallTree(ctx: restate.ObjectContext) {
-      await ctx.objectClient(killSingleton, "").recursiveCall();
+      await ctx.objectClient(killSingleton, ctx.key).recursiveCall();
     },
   },
 });
@@ -26,11 +26,11 @@ const killSingleton = restate.object({
     async recursiveCall(ctx: restate.ObjectContext) {
       const { id, promise } = ctx.awakeable();
       ctx
-        .objectSendClient<AwakeableHolder>({ name: "AwakeableHolder" }, "kill")
+        .objectSendClient<AwakeableHolder>({ name: "AwakeableHolder" }, ctx.key)
         .hold(id);
       await promise;
 
-      await ctx.objectClient(killSingleton, "").recursiveCall();
+      await ctx.objectClient(killSingleton, ctx.key).recursiveCall();
     },
 
     isUnlocked() {
@@ -39,5 +39,5 @@ const killSingleton = restate.object({
   },
 });
 
-REGISTRY.addService(kill);
+REGISTRY.addObject(kill);
 REGISTRY.addObject(killSingleton);

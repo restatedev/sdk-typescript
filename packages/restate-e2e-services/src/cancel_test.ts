@@ -48,9 +48,7 @@ const blockingService = restate.object({
   handlers: {
     async block(ctx: restate.ObjectContext, request: BlockingOperation) {
       const { id, promise } = ctx.awakeable();
-      // DO NOT await the next CALL otherwise the test deadlocks.
-      // eslint-disable-next-line @typescript-eslint/no-floating-promises
-      ctx.objectClient(AwakeableHolder, "cancel").hold(id);
+      await ctx.objectClient(AwakeableHolder, ctx.key).hold(id);
       await promise;
 
       switch (request) {
