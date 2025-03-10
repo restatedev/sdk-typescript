@@ -131,11 +131,6 @@ export class GenericHandler implements RestateHandler {
     const path = new URL(request.url, "https://example.com").pathname;
     const parsed = parseUrlComponents(path);
 
-    const error = this.validateConnectionSignature(path, request.headers);
-    if (error !== null) {
-      return error;
-    }
-
     if (parsed.type === "unknown") {
       const msg = `Invalid path. Allowed are /health, or /discover, or /invoke/SvcName/handlerName, but was: ${path}`;
       this.endpoint.rlog.trace(msg);
@@ -151,6 +146,11 @@ export class GenericHandler implements RestateHandler {
         },
         statusCode: 200,
       };
+    }
+
+    const error = this.validateConnectionSignature(path, request.headers);
+    if (error !== null) {
+      return error;
     }
     if (parsed.type === "discover") {
       return this.handleDiscovery(request.headers["accept"]);
