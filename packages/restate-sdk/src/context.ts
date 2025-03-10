@@ -537,7 +537,7 @@ export interface Context extends RestateContext {
 
   genericCall<REQ = Uint8Array, RES = Uint8Array>(
     call: GenericCall<REQ, RES>
-  ): Promise<RES>;
+  ): CombineablePromise<RES>;
 
   genericSend<REQ = Uint8Array>(call: GenericSend<REQ>): void;
 
