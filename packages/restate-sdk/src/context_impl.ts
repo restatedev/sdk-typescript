@@ -125,6 +125,29 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     );
   }
 
+  cancel(invocationId: InvocationId): void {
+    this.processNonCompletableEntry((vm) =>
+      vm.sys_cancel_invocation(invocationId)
+    );
+  }
+
+  attach<T>(
+    invocationId: InvocationId,
+    serde?: Serde<T>
+  ): CombineablePromise<T> {
+    return this.processCompletableEntry(
+      (vm) => vm.sys_attach_invocation(invocationId),
+      completeUsing(SuccessWithSerde(serde ?? defaultSerde()), Failure)
+    );
+  }
+
+  getOutput<T>(invocationId: InvocationId): CombineablePromise<T> {
+    return this.processCompletableEntry(
+      (vm) => vm.sys_get_invocation_output(invocationId),
+      completeUsing(SuccessWithSerde(defaultSerde()), Failure)
+    );
+  }
+
   public get key(): string {
     switch (this.handlerKind) {
       case HandlerKind.EXCLUSIVE:

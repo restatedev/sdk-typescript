@@ -546,6 +546,27 @@ export interface Context extends RestateContext {
    * Use that object to inspect the original request headers
    */
   request(): Request;
+
+  /**
+   * Cancel an invocation
+   *
+   * @param invocationId the invocation id to cancel
+   */
+  cancel(invocationId: InvocationId): void;
+
+  /**
+   * Get the output of an invocation
+   *
+   * @param invocationId the invocation id to get the output for
+   */
+  getOutput<T>(invocationId: InvocationId): CombineablePromise<T>;
+
+  /**
+   * Attach to an invocation
+   *
+   * @param invocationId the invocation id to attach to
+   */
+  attach<T>(invocationId: InvocationId): CombineablePromise<T>;
 }
 
 /**

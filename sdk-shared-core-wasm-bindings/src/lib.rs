@@ -533,6 +533,22 @@ impl WasmVM {
         .map_err(Into::into)
     }
 
+    pub fn sys_attach_invocation(&mut self, invocation_id: String) -> Result<WasmNotificationHandle, WasmFailure> {
+        let target = restate_sdk_shared_core::AttachInvocationTarget::InvocationId(invocation_id);
+
+        use_log_dispatcher!(self, |vm| CoreVM::sys_attach_invocation(vm, target))
+        .map(Into::into)
+        .map_err(Into::into)
+    }
+
+    pub fn sys_get_invocation_output(&mut self, invocation_id: String) -> Result<WasmNotificationHandle, WasmFailure> {
+        let target = restate_sdk_shared_core::AttachInvocationTarget::InvocationId(invocation_id);
+
+        use_log_dispatcher!(self, |vm| CoreVM::sys_get_invocation_output(vm, target))
+        .map(Into::into)
+        .map_err(Into::into)
+    }
+
     pub fn sys_call(
         &mut self,
         service: String,

@@ -16,6 +16,7 @@ import type {
   Context,
   GenericCall,
   GenericSend,
+  InvocationHandle,
   InvocationPromise,
   ObjectContext,
   ObjectSharedContext,
@@ -226,8 +227,8 @@ export type SendClient<M> = {
   [K in keyof M as M[K] extends never ? never : K]: M[K] extends (
     arg: any,
     ...args: infer P
-  ) => any
-    ? (...args: [...P, ...[opts?: SendOpts<InferArg<P>>]]) => void
+  ) => void
+    ? (...args: [...P, ...[opts?: SendOpts<InferArg<P>>]]) => InvocationHandle
     : never;
 };
 
