@@ -1,26 +1,11 @@
 exclusions:
   "alwaysSuspending":
-    - "dev.restate.sdktesting.tests.Cancellation.cancelFromContext"
     - "dev.restate.sdktesting.tests.Combinators.awakeableOrTimeoutUsingAwaitAny"
-    - "dev.restate.sdktesting.tests.ServiceToServiceCommunication.callWithIdempotencyKey"
-    - "dev.restate.sdktesting.tests.ServiceToServiceCommunication.oneWayCallWithIdempotencyKey"
   "default":
-    - "dev.restate.sdktesting.tests.Cancellation.cancelFromContext"
     - "dev.restate.sdktesting.tests.Combinators.awakeableOrTimeoutUsingAwaitAny"
-    - "dev.restate.sdktesting.tests.ServiceToServiceCommunication.callWithIdempotencyKey"
-    - "dev.restate.sdktesting.tests.ServiceToServiceCommunication.oneWayCallWithIdempotencyKey"
   "singleThreadSinglePartition":
-    - "dev.restate.sdktesting.tests.Cancellation.cancelFromContext"
     - "dev.restate.sdktesting.tests.Combinators.awakeableOrTimeoutUsingAwaitAny"
-    - "dev.restate.sdktesting.tests.ServiceToServiceCommunication.callWithIdempotencyKey"
-    - "dev.restate.sdktesting.tests.ServiceToServiceCommunication.oneWayCallWithIdempotencyKey"
   "threeNodes":
-    - "dev.restate.sdktesting.tests.Cancellation.cancelFromContext"
     - "dev.restate.sdktesting.tests.Combinators.awakeableOrTimeoutUsingAwaitAny"
-    - "dev.restate.sdktesting.tests.ServiceToServiceCommunication.callWithIdempotencyKey"
-    - "dev.restate.sdktesting.tests.ServiceToServiceCommunication.oneWayCallWithIdempotencyKey"
   "threeNodesAlwaysSuspending":
-    - "dev.restate.sdktesting.tests.Cancellation.cancelFromContext"
     - "dev.restate.sdktesting.tests.Combinators.awakeableOrTimeoutUsingAwaitAny"
-    - "dev.restate.sdktesting.tests.ServiceToServiceCommunication.callWithIdempotencyKey"
-    - "dev.restate.sdktesting.tests.ServiceToServiceCommunication.oneWayCallWithIdempotencyKey"

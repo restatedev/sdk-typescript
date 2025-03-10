@@ -66,13 +66,11 @@ const o = restate.service({
     },
 
     async cancelInvocation(
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       ctx: restate.Context,
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       invocationId: string
     ): Promise<void> {
-      // TODO add cancel invocation here!
-      return Promise.reject(new TerminalError("cancel is not supported yet"));
+      const id = restate.InvocationIdParser.fromString(invocationId);
+      ctx.cancel(id);
     },
   },
 });

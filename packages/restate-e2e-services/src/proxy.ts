@@ -32,10 +32,6 @@ function rawCall(
   ctx: restate.Context,
   request: ProxyRequest
 ): Promise<Uint8Array> {
-  // TODO add idempotency key support here
-  if (request.idempotencyKey != undefined) {
-    throw new TerminalError("idempotency key not supported yet");
-  }
   return ctx.genericCall({
     service: request.serviceName,
     method: request.handlerName,
@@ -43,24 +39,21 @@ function rawCall(
     inputSerde: restate.serde.binary,
     outputSerde: restate.serde.binary,
     parameter: new Uint8Array(request.message),
+    idempotencyKey: request.idempotencyKey,
   });
 }
 
 function rawSend(ctx: restate.Context, request: ProxyRequest): Promise<string> {
-  // TODO add idempotency key support here
-  if (request.idempotencyKey != undefined) {
-    throw new TerminalError("idempotency key not supported yet");
-  }
-  ctx.genericSend({
+  const handle = ctx.genericSend({
     service: request.serviceName,
     method: request.handlerName,
     key: request.virtualObjectKey,
     inputSerde: restate.serde.binary,
     parameter: new Uint8Array(request.message),
     delay: request.delayMillis,
+    idempotencyKey: request.idempotencyKey,
   });
-  // TODO this should return the invocation id
-  return Promise.resolve("unknown");
+  return handle.invocationId;
 }
 
 const o = restate.service({

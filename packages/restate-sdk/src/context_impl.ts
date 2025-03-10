@@ -17,6 +17,8 @@ import type {
   DurablePromise,
   GenericCall,
   GenericSend,
+  InvocationPromise,
+  InvocationId,
   ObjectContext,
   Rand,
   Request,
@@ -24,6 +26,7 @@ import type {
   RunOptions,
   SendOptions,
   WorkflowContext,
+  InvocationHandle,
 } from "./context.js";
 import type * as vm from "./endpoint/handlers/vm/sdk_shared_core_wasm_bindings.js";
 import { WasmHeader } from "./endpoint/handlers/vm/sdk_shared_core_wasm_bindings.js";
@@ -63,8 +66,10 @@ import {
   extractContext,
   pendingPromise,
   PromisesExecutor,
+  RestateInvocationPromise,
   RestateCombinatorPromise,
   RestatePendingPromise,
+  InvocationPendingPromise,
   RestateSinglePromise,
 } from "./promises.js";
 import { InputPump, OutputPump } from "./io.js";
@@ -120,6 +125,22 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     );
   }
 
+  cancel(invocationId: InvocationId): void {
+    this.processNonCompletableEntry((vm) =>
+      vm.sys_cancel_invocation(invocationId)
+    );
+  }
+
+  attach<T>(
+    invocationId: InvocationId,
+    serde?: Serde<T>
+  ): CombineablePromise<T> {
+    return this.processCompletableEntry(
+      (vm) => vm.sys_attach_invocation(invocationId),
+      completeUsing(SuccessWithSerde(serde ?? defaultSerde()), Failure)
+    );
+  }
+
   public get key(): string {
     switch (this.handlerKind) {
       case HandlerKind.EXCLUSIVE:
@@ -168,13 +189,14 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
   //
   public genericCall<REQ = Uint8Array, RES = Uint8Array>(
     call: GenericCall<REQ, RES>
-  ): CombineablePromise<RES> {
+  ): InvocationPromise<RES> {
     const requestSerde: Serde<REQ> =
       call.inputSerde ?? (serde.binary as Serde<REQ>);
     const responseSerde: Serde<RES> =
       call.outputSerde ?? (serde.binary as Serde<RES>);
 
-    return this.processCompletableEntry((vm) => {
+    try {
+      const vm = this.coreVm;
       const parameter = requestSerde.serialize(call.parameter);
       const call_handles = vm.sys_call(
         call.service,
@@ -185,20 +207,33 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
           ? Object.entries(call.headers).map(
               ([key, value]) => new WasmHeader(key, value)
             )
-          : []
+          : [],
+        call.idempotencyKey
       );
 
-      // TODO eventually we return this promise back to the user
-      // const invocationIdPromise = this.createInvocationIdPromise(
-      //   call_handles.invocation_id_completion_id
-      // );
+      const invocationIdHandle = call_handles.invocation_id_completion_id;
+      const invocationIdPromise =
+        this.createInvocationIdPromise(invocationIdHandle);
+      const callHandle = call_handles.call_completion_id;
 
-      return call_handles.call_completion_id;
-    }, completeUsing(SuccessWithSerde(responseSerde), Failure));
+      return new RestateInvocationPromise(
+        this,
+        callHandle,
+        completeUsing(SuccessWithSerde(responseSerde), Failure),
+        invocationIdPromise
+      );
+    } catch (e) {
+      this.handleInvocationEndError(e);
+      // We return a pending promise to avoid the caller to see the error.
+      return new InvocationPendingPromise(this);
+    }
   }
 
-  public genericSend<REQ = Uint8Array>(send: GenericSend<REQ>) {
-    this.processNonCompletableEntry((vm) => {
+  public genericSend<REQ = Uint8Array>(
+    send: GenericSend<REQ>
+  ): InvocationHandle {
+    try {
+      const vm = this.coreVm;
       const requestSerde = send.inputSerde ?? (serde.binary as Serde<REQ>);
       const parameter = requestSerde.serialize(send.parameter);
 
@@ -207,7 +242,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
         delay = BigInt(send.delay);
       }
 
-      vm.sys_send(
+      const handles = vm.sys_send(
         send.service,
         send.method,
         parameter,
@@ -217,19 +252,31 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
               ([key, value]) => new WasmHeader(key, value)
             )
           : [],
-        delay
-      ).invocation_id_completion_id;
+        delay,
+        send.idempotencyKey
+      );
+      const handle = handles.invocation_id_completion_id;
+      const invocationId = this.createInvocationIdPromise(handle);
 
-      // TODO eventually we return this promise back to the user
-      // const invocationIdPromise =
-      //   this.createInvocationIdPromise(invocation_id_handle);
-    });
+      return {
+        invocationId,
+      };
+    } catch (e) {
+      this.handleInvocationEndError(e);
+      return {
+        invocationId: pendingPromise(),
+      };
+    }
   }
 
   private createInvocationIdPromise(
     handle: number
-  ): RestateSinglePromise<string> {
-    return new RestateSinglePromise(this, handle, completeUsing(InvocationId));
+  ): RestateSinglePromise<InvocationId> {
+    return new RestateSinglePromise(
+      this,
+      handle,
+      completeUsing(InvocationIdCompleter)
+    );
   }
 
   serviceClient<D>({ name }: ServiceDefinitionFrom<D>): Client<Service<D>> {
@@ -696,17 +743,25 @@ const VoidAsUndefined: Completer = (value, prom) => {
   return false;
 };
 
-function SuccessWithSerde<T>(serde?: Serde<T>): Completer {
+function SuccessWithSerde<T>(
+  serde?: Serde<T>,
+  transform?: <U>(success: T) => U
+): Completer {
   return (value, prom) => {
-    if (typeof value === "object" && "Success" in value) {
-      if (!serde) {
-        prom.resolve(defaultSerde<T>().deserialize(value.Success));
-      } else {
-        prom.resolve(serde.deserialize(value.Success));
-      }
-      return true;
+    if (typeof value !== "object" || !("Success" in value)) {
+      return false;
     }
-    return false;
+    let val: T;
+    if (serde) {
+      val = serde.deserialize(value.Success);
+    } else {
+      val = defaultSerde<T>().deserialize(value.Success);
+    }
+    if (transform) {
+      val = transform(val);
+    }
+    prom.resolve(val);
+    return true;
   };
 }
 
@@ -730,7 +785,7 @@ const StateKeys: Completer = (value, prom) => {
   return false;
 };
 
-const InvocationId: Completer = (value, prom) => {
+const InvocationIdCompleter: Completer = (value, prom) => {
   if (typeof value === "object" && "InvocationId" in value) {
     prom.resolve(value.InvocationId);
     return true;

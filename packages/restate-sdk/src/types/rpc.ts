@@ -13,10 +13,11 @@
 /* eslint-disable @typescript-eslint/no-namespace */
 /* eslint-disable @typescript-eslint/ban-types */
 import type {
-  CombineablePromise,
   Context,
   GenericCall,
   GenericSend,
+  InvocationHandle,
+  InvocationPromise,
   ObjectContext,
   ObjectSharedContext,
   WorkflowContext,
@@ -43,6 +44,7 @@ export type ClientCallOptions<I, O> = {
   input?: Serde<I>;
   output?: Serde<O>;
   headers?: Record<string, string>;
+  idempotencyKey?: string;
 };
 
 export class Opts<I, O> {
@@ -66,6 +68,7 @@ export type ClientSendOptions<I> = {
   input?: Serde<I>;
   delay?: number;
   headers?: Record<string, string>;
+  idempotencyKey?: string;
 };
 
 export class SendOpts<I> {
@@ -166,6 +169,7 @@ export const makeRpcCallProxy = <T>(
             headers: opts?.headers,
             inputSerde: requestSerde,
             outputSerde: responseSerde,
+            idempotencyKey: opts?.idempotencyKey,
           });
         };
       },
@@ -200,6 +204,7 @@ export const makeRpcSendProxy = <T>(
             headers: opts?.headers,
             delay,
             inputSerde: requestSerde,
+            idempotencyKey: opts?.idempotencyKey,
           });
         };
       },
@@ -218,7 +223,7 @@ export type Client<M> = {
   ) => PromiseLike<infer O>
     ? (
         ...args: [...P, ...[opts?: Opts<InferArg<P>, O>]]
-      ) => CombineablePromise<O>
+      ) => InvocationPromise<O>
     : never;
 };
 
@@ -226,8 +231,8 @@ export type SendClient<M> = {
   [K in keyof M as M[K] extends never ? never : K]: M[K] extends (
     arg: any,
     ...args: infer P
-  ) => any
-    ? (...args: [...P, ...[opts?: SendOpts<InferArg<P>>]]) => void
+  ) => void
+    ? (...args: [...P, ...[opts?: SendOpts<InferArg<P>>]]) => InvocationHandle
     : never;
 };
 

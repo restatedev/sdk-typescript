@@ -18,8 +18,11 @@ export type {
   Rand,
   GenericCall,
   GenericSend,
+  InvocationId,
+  InvocationHandle,
+  InvocationPromise,
 } from "./context.js";
-export { CombineablePromise } from "./context.js";
+export { InvocationIdParser, CombineablePromise } from "./context.js";
 
 export type { Serde } from "@restatedev/restate-sdk-core";
 export { serde } from "@restatedev/restate-sdk-core";
