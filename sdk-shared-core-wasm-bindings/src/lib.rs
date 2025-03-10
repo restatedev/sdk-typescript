@@ -1,3 +1,4 @@
+use js_sys::Uint8Array;
 use restate_sdk_shared_core::{
     CallHandle, CoreVM, DoProgressResponse, Error, Header, HeaderMap, IdentityVerifier, Input,
     NonEmptyValue, ResponseHead, RetryPolicy, RunExitResult, SendHandle, SuspendedOrVMError,
@@ -8,7 +9,6 @@ use std::cmp;
 use std::convert::{Infallible, Into};
 use std::io::Write;
 use std::time::Duration;
-use js_sys::Uint8Array;
 use tracing::metadata::LevelFilter;
 use tracing::{Dispatch, Level, Subscriber};
 use tracing_subscriber::fmt::format::FmtSpan;
@@ -331,7 +331,7 @@ impl From<DoProgressResponse> for WasmDoProgressResult {
             DoProgressResponse::ReadFromInput => WasmDoProgressResult::ReadFromInput,
             DoProgressResponse::WaitingPendingRun => WasmDoProgressResult::WaitingPendingRun,
             DoProgressResponse::ExecuteRun(n) => WasmDoProgressResult::ExecuteRun(n.into()),
-            DoProgressResponse::CancelSignalReceived => WasmDoProgressResult::CancelSignalReceived
+            DoProgressResponse::CancelSignalReceived => WasmDoProgressResult::CancelSignalReceived,
         }
     }
 }
@@ -501,17 +501,9 @@ impl WasmVM {
             .map_err(Into::into)
     }
 
-    pub fn sys_set_state(
-        &mut self,
-        key: String,
-        buffer: Vec<u8>,
-    ) -> Result<(), WasmFailure> {
-        use_log_dispatcher!(self, |vm| CoreVM::sys_state_set(
-            vm,
-            key,
-            buffer.into()
-        ))
-        .map_err(Into::into)
+    pub fn sys_set_state(&mut self, key: String, buffer: Vec<u8>) -> Result<(), WasmFailure> {
+        use_log_dispatcher!(self, |vm| CoreVM::sys_state_set(vm, key, buffer.into()))
+            .map_err(Into::into)
     }
 
     pub fn sys_clear_state(&mut self, key: String) -> Result<(), WasmFailure> {
@@ -533,20 +525,26 @@ impl WasmVM {
         .map_err(Into::into)
     }
 
-    pub fn sys_attach_invocation(&mut self, invocation_id: String) -> Result<WasmNotificationHandle, WasmFailure> {
+    pub fn sys_attach_invocation(
+        &mut self,
+        invocation_id: String,
+    ) -> Result<WasmNotificationHandle, WasmFailure> {
         let target = restate_sdk_shared_core::AttachInvocationTarget::InvocationId(invocation_id);
 
         use_log_dispatcher!(self, |vm| CoreVM::sys_attach_invocation(vm, target))
-        .map(Into::into)
-        .map_err(Into::into)
+            .map(Into::into)
+            .map_err(Into::into)
     }
 
-    pub fn sys_get_invocation_output(&mut self, invocation_id: String) -> Result<WasmNotificationHandle, WasmFailure> {
+    pub fn sys_get_invocation_output(
+        &mut self,
+        invocation_id: String,
+    ) -> Result<WasmNotificationHandle, WasmFailure> {
         let target = restate_sdk_shared_core::AttachInvocationTarget::InvocationId(invocation_id);
 
         use_log_dispatcher!(self, |vm| CoreVM::sys_get_invocation_output(vm, target))
-        .map(Into::into)
-        .map_err(Into::into)
+            .map(Into::into)
+            .map_err(Into::into)
     }
 
     pub fn sys_call(
@@ -736,14 +734,11 @@ impl WasmVM {
             vm,
             target_invocation_id
         ))
-            .map(Into::into)
-            .map_err(Into::into)
+        .map(Into::into)
+        .map_err(Into::into)
     }
 
-    pub fn sys_write_output_success(
-        &mut self,
-        buffer: Vec<u8>,
-    ) -> Result<(), WasmFailure> {
+    pub fn sys_write_output_success(&mut self, buffer: Vec<u8>) -> Result<(), WasmFailure> {
         use_log_dispatcher!(self, |vm| CoreVM::sys_write_output(
             vm,
             NonEmptyValue::Success(buffer.to_vec().into())
