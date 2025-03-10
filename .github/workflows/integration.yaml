@@ -105,9 +105,10 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ github.workflow }}
 
       - name: Run test tool
-        uses: restatedev/sdk-test-suite@v2.4
+        uses: restatedev/sdk-test-suite@v3.0
         with:
           restateContainerImage: ${{ inputs.restateCommit != '' && 'localhost/restatedev/restate-commit-download:latest' || (inputs.restateImage != '' && inputs.restateImage || 'ghcr.io/restatedev/restate:main') }}
           serviceContainerImage: "restatedev/typescript-test-services"
           exclusionsFile: "packages/restate-e2e-services/exclusions.yaml"
           testArtifactOutput: "sdk-typescript-integration-test-report"
+          serviceContainerEnvFile: "packages/restate-e2e-services/.env"

@@ -23,6 +23,7 @@ import "./workflow.js";
 import "./proxy.js";
 import "./test_utils.js";
 import "./kill.js";
+import "./virtual_object_command_interpreter.js";
 
 import { REGISTRY } from "./services.js";
 
