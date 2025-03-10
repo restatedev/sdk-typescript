@@ -18,6 +18,9 @@ export type {
   Rand,
   GenericCall,
   GenericSend,
+  InvocationId,
+  InvocationHandle,
+  InvocationPromise,
 } from "./context.js";
 export { CombineablePromise } from "./context.js";
 

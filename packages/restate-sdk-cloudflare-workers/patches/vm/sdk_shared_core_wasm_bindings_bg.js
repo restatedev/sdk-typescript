@@ -692,6 +692,32 @@ export class WasmVM {
         return ret[0] >>> 0;
     }
     /**
+     * @param {string} invocation_id
+     * @returns {number}
+     */
+    sys_attach_invocation(invocation_id) {
+        const ptr0 = passStringToWasm0(invocation_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmvm_sys_attach_invocation(this.__wbg_ptr, ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ret[0] >>> 0;
+    }
+    /**
+     * @param {string} invocation_id
+     * @returns {number}
+     */
+    sys_get_invocation_output(invocation_id) {
+        const ptr0 = passStringToWasm0(invocation_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmvm_sys_get_invocation_output(this.__wbg_ptr, ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ret[0] >>> 0;
+    }
+    /**
      * @param {string} service
      * @param {string} handler
      * @param {Uint8Array} buffer

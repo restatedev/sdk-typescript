@@ -537,15 +537,36 @@ export interface Context extends RestateContext {
 
   genericCall<REQ = Uint8Array, RES = Uint8Array>(
     call: GenericCall<REQ, RES>
-  ): Promise<RES>;
+  ): InvocationPromise<RES>;
 
-  genericSend<REQ = Uint8Array>(call: GenericSend<REQ>): void;
+  genericSend<REQ = Uint8Array>(call: GenericSend<REQ>): InvocationHandle;
 
   /**
    * Returns the raw request that triggered that handler.
    * Use that object to inspect the original request headers
    */
   request(): Request;
+
+  /**
+   * Cancel an invocation
+   *
+   * @param invocationId the invocation id to cancel
+   */
+  cancel(invocationId: InvocationId): void;
+
+  /**
+   * Get the output of an invocation
+   *
+   * @param invocationId the invocation id to get the output for
+   */
+  getOutput<T>(invocationId: InvocationId): CombineablePromise<T>;
+
+  /**
+   * Attach to an invocation
+   *
+   * @param invocationId the invocation id to attach to
+   */
+  attach<T>(invocationId: InvocationId): CombineablePromise<T>;
 }
 
 /**
@@ -632,6 +653,15 @@ export type CombineablePromise<T> = Promise<T> & {
    */
   orTimeout(millis: number): CombineablePromise<T>;
 };
+
+export type InvocationId = string & { __brand: "InvocationId" };
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export type InvocationHandle = {
+  invocationId(): Promise<InvocationId>;
+};
+
+export type InvocationPromise<T> = CombineablePromise<T> & InvocationHandle;
 
 export const CombineablePromise = {
   /**
