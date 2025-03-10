@@ -13,10 +13,10 @@
 /* eslint-disable @typescript-eslint/no-namespace */
 /* eslint-disable @typescript-eslint/ban-types */
 import type {
-  CombineablePromise,
   Context,
   GenericCall,
   GenericSend,
+  InvocationPromise,
   ObjectContext,
   ObjectSharedContext,
   WorkflowContext,
@@ -218,7 +218,7 @@ export type Client<M> = {
   ) => PromiseLike<infer O>
     ? (
         ...args: [...P, ...[opts?: Opts<InferArg<P>, O>]]
-      ) => CombineablePromise<O>
+      ) => InvocationPromise<O>
     : never;
 };
 

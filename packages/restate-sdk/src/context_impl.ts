@@ -17,6 +17,8 @@ import type {
   DurablePromise,
   GenericCall,
   GenericSend,
+  InvocationPromise,
+  InvocationId,
   ObjectContext,
   Rand,
   Request,
@@ -63,8 +65,10 @@ import {
   extractContext,
   pendingPromise,
   PromisesExecutor,
+  RestateInvocationPromise,
   RestateCombinatorPromise,
   RestatePendingPromise,
+  InvocationPendingPromise,
   RestateSinglePromise,
 } from "./promises.js";
 import { InputPump, OutputPump } from "./io.js";
@@ -168,13 +172,14 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
   //
   public genericCall<REQ = Uint8Array, RES = Uint8Array>(
     call: GenericCall<REQ, RES>
-  ): CombineablePromise<RES> {
+  ): InvocationPromise<RES> {
     const requestSerde: Serde<REQ> =
       call.inputSerde ?? (serde.binary as Serde<REQ>);
     const responseSerde: Serde<RES> =
       call.outputSerde ?? (serde.binary as Serde<RES>);
 
-    return this.processCompletableEntry((vm) => {
+    try {
+      const vm = this.coreVm;
       const parameter = requestSerde.serialize(call.parameter);
       const call_handles = vm.sys_call(
         call.service,
@@ -188,13 +193,25 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
           : []
       );
 
-      // TODO eventually we return this promise back to the user
-      // const invocationIdPromise = this.createInvocationIdPromise(
-      //   call_handles.invocation_id_completion_id
-      // );
+      const invocationIdHandle = call_handles.invocation_id_completion_id;
+      const invocationHandle = () => {
+        // create a promise, on demand that resolves to an invocation id if needed.
+        return this.createInvocationIdPromise(invocationIdHandle);
+      };
 
-      return call_handles.call_completion_id;
-    }, completeUsing(SuccessWithSerde(responseSerde), Failure));
+      const callHandle = call_handles.call_completion_id;
+
+      return new RestateInvocationPromise(
+        this,
+        callHandle,
+        completeUsing(SuccessWithSerde(responseSerde), Failure),
+        invocationHandle
+      );
+    } catch (e) {
+      this.handleInvocationEndError(e);
+      // We return a pending promise to avoid the caller to see the error.
+      return new InvocationPendingPromise(this);
+    }
   }
 
   public genericSend<REQ = Uint8Array>(send: GenericSend<REQ>) {
@@ -228,7 +245,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
 
   private createInvocationIdPromise(
     handle: number
-  ): RestateSinglePromise<string> {
+  ): RestateSinglePromise<InvocationId> {
     return new RestateSinglePromise(this, handle, completeUsing(InvocationId));
   }
 
@@ -696,17 +713,25 @@ const VoidAsUndefined: Completer = (value, prom) => {
   return false;
 };
 
-function SuccessWithSerde<T>(serde?: Serde<T>): Completer {
+function SuccessWithSerde<T>(
+  serde?: Serde<T>,
+  transform?: <U>(success: T) => U
+): Completer {
   return (value, prom) => {
-    if (typeof value === "object" && "Success" in value) {
-      if (!serde) {
-        prom.resolve(defaultSerde<T>().deserialize(value.Success));
-      } else {
-        prom.resolve(serde.deserialize(value.Success));
-      }
-      return true;
+    if (typeof value !== "object" || !("Success" in value)) {
+      return false;
     }
-    return false;
+    let val: T;
+    if (serde) {
+      val = serde.deserialize(value.Success);
+    } else {
+      val = defaultSerde<T>().deserialize(value.Success);
+    }
+    if (transform) {
+      val = transform(val);
+    }
+    prom.resolve(val);
+    return true;
   };
 }
 

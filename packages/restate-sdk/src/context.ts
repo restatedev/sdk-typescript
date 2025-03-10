@@ -537,7 +537,7 @@ export interface Context extends RestateContext {
 
   genericCall<REQ = Uint8Array, RES = Uint8Array>(
     call: GenericCall<REQ, RES>
-  ): CombineablePromise<RES>;
+  ): InvocationPromise<RES>;
 
   genericSend<REQ = Uint8Array>(call: GenericSend<REQ>): void;
 
@@ -632,6 +632,14 @@ export type CombineablePromise<T> = Promise<T> & {
    */
   orTimeout(millis: number): CombineablePromise<T>;
 };
+
+export type InvocationId = string & { __brand: "InvocationId" };
+
+export type InvocationHandle = {
+  invocationId(): Promise<InvocationId>;
+};
+
+export type InvocationPromise<T> = CombineablePromise<T> & InvocationHandle;
 
 export const CombineablePromise = {
   /**
