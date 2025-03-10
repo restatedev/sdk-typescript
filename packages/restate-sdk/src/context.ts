@@ -539,7 +539,7 @@ export interface Context extends RestateContext {
     call: GenericCall<REQ, RES>
   ): InvocationPromise<RES>;
 
-  genericSend<REQ = Uint8Array>(call: GenericSend<REQ>): void;
+  genericSend<REQ = Uint8Array>(call: GenericSend<REQ>): InvocationHandle;
 
   /**
    * Returns the raw request that triggered that handler.
@@ -635,6 +635,7 @@ export type CombineablePromise<T> = Promise<T> & {
 
 export type InvocationId = string & { __brand: "InvocationId" };
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export type InvocationHandle = {
   invocationId(): Promise<InvocationId>;
 };

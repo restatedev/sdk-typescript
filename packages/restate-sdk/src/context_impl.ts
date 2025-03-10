@@ -26,6 +26,7 @@ import type {
   RunOptions,
   SendOptions,
   WorkflowContext,
+  InvocationHandle,
 } from "./context.js";
 import type * as vm from "./endpoint/handlers/vm/sdk_shared_core_wasm_bindings.js";
 import { WasmHeader } from "./endpoint/handlers/vm/sdk_shared_core_wasm_bindings.js";
@@ -214,8 +215,11 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     }
   }
 
-  public genericSend<REQ = Uint8Array>(send: GenericSend<REQ>) {
-    this.processNonCompletableEntry((vm) => {
+  public genericSend<REQ = Uint8Array>(
+    send: GenericSend<REQ>
+  ): InvocationHandle {
+    try {
+      const vm = this.coreVm;
       const requestSerde = send.inputSerde ?? (serde.binary as Serde<REQ>);
       const parameter = requestSerde.serialize(send.parameter);
 
@@ -224,7 +228,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
         delay = BigInt(send.delay);
       }
 
-      vm.sys_send(
+      const handles = vm.sys_send(
         send.service,
         send.method,
         parameter,
@@ -235,12 +239,19 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
             )
           : [],
         delay
-      ).invocation_id_completion_id;
+      );
+      const handle = handles.invocation_id_completion_id;
+      const invocationId = () => this.createInvocationIdPromise(handle);
 
-      // TODO eventually we return this promise back to the user
-      // const invocationIdPromise =
-      //   this.createInvocationIdPromise(invocation_id_handle);
-    });
+      return {
+        invocationId,
+      };
+    } catch (e) {
+      this.handleInvocationEndError(e);
+      return {
+        invocationId: () => pendingPromise(),
+      };
+    }
   }
 
   private createInvocationIdPromise(
