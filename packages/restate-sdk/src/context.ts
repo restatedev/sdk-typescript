@@ -231,6 +231,7 @@ export type GenericCall<REQ, RES> = {
   headers?: Record<string, string>;
   inputSerde?: Serde<REQ>;
   outputSerde?: Serde<RES>;
+  idempotencyKey?: string;
 };
 
 /**
@@ -246,6 +247,7 @@ export type GenericSend<REQ> = {
   headers?: Record<string, string>;
   inputSerde?: Serde<REQ>;
   delay?: number;
+  idempotencyKey?: string;
 };
 
 /**
@@ -537,15 +539,33 @@ export interface Context extends RestateContext {
 
   genericCall<REQ = Uint8Array, RES = Uint8Array>(
     call: GenericCall<REQ, RES>
-  ): Promise<RES>;
+  ): InvocationPromise<RES>;
 
-  genericSend<REQ = Uint8Array>(call: GenericSend<REQ>): void;
+  genericSend<REQ = Uint8Array>(call: GenericSend<REQ>): InvocationHandle;
 
   /**
    * Returns the raw request that triggered that handler.
    * Use that object to inspect the original request headers
    */
   request(): Request;
+
+  /**
+   * Cancel an invocation
+   *
+   * @param invocationId the invocation id to cancel
+   */
+  cancel(invocationId: InvocationId): void;
+
+  /**
+   * Attach to an invocation
+   *
+   * @param invocationId the invocation id to attach to
+   * @param serde the serde to use for the result, default to JSON serde.
+   */
+  attach<T>(
+    invocationId: InvocationId,
+    serde?: Serde<T>
+  ): CombineablePromise<T>;
 }
 
 /**
@@ -632,6 +652,34 @@ export type CombineablePromise<T> = Promise<T> & {
    */
   orTimeout(millis: number): CombineablePromise<T>;
 };
+
+/**
+ * Represents an invocation id.
+ * @see {@link InvocationIdParser}
+ */
+export type InvocationId = string & { __brand: "InvocationId" };
+
+export const InvocationIdParser = {
+  /**
+   * Creates an invocation id from a string.
+   * @param id the string to use as invocation id.
+   */
+  fromString(id: string): InvocationId {
+    if (!id.startsWith("inv")) {
+      throw new Error(
+        `Expected invocation id to start with 'inv' but got ${id}`
+      );
+    }
+    return id as InvocationId;
+  },
+};
+
+export type InvocationHandle = {
+  // The invocation id of the call
+  readonly invocationId: Promise<InvocationId>;
+};
+
+export type InvocationPromise<T> = CombineablePromise<T> & InvocationHandle;
 
 export const CombineablePromise = {
   /**

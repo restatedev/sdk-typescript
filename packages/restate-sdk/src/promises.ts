@@ -11,7 +11,11 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import type { CombineablePromise } from "./context.js";
+import type {
+  CombineablePromise,
+  InvocationId,
+  InvocationPromise,
+} from "./context.js";
 import type * as vm from "./endpoint/handlers/vm/sdk_shared_core_wasm_bindings.js";
 import { CancelledError, TimeoutError } from "./types/errors.js";
 import { CompletablePromise } from "./utils/completable_promise.js";
@@ -191,6 +195,24 @@ export class RestateSinglePromise<T> extends AbstractRestatePromise<T> {
   readonly [Symbol.toStringTag] = "RestateSinglePromise";
 }
 
+export class RestateInvocationPromise<T>
+  extends RestateSinglePromise<T>
+  implements InvocationPromise<T>
+{
+  constructor(
+    ctx: ContextImpl,
+    handle: number,
+    completer: (value: AsyncResultValue, prom: CompletablePromise<T>) => void,
+    private readonly invocationIdPromise: Promise<InvocationId>
+  ) {
+    super(ctx, handle, completer);
+  }
+
+  get invocationId(): Promise<InvocationId> {
+    return this.invocationIdPromise;
+  }
+}
+
 export class RestateCombinatorPromise extends AbstractRestatePromise<any> {
   private state: PromiseState = PromiseState.NOT_COMPLETED;
   private readonly combinatorPromise: Promise<any>;
@@ -276,6 +298,19 @@ export class RestatePendingPromise<T> implements RestatePromise<T> {
   }
 
   readonly [Symbol.toStringTag] = "RestatePendingPromise";
+}
+
+export class InvocationPendingPromise<T>
+  extends RestatePendingPromise<T>
+  implements InvocationPromise<T>
+{
+  constructor(ctx: ContextImpl) {
+    super(ctx);
+  }
+
+  get invocationId(): Promise<InvocationId> {
+    return pendingPromise();
+  }
 }
 
 /**

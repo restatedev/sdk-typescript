@@ -10,8 +10,6 @@
 import * as restate from "@restatedev/restate-sdk";
 import { REGISTRY } from "./services.js";
 
-import { TerminalError } from "@restatedev/restate-sdk";
-
 const o = restate.service({
   name: "TestUtilsService",
   handlers: {
@@ -65,14 +63,13 @@ const o = restate.service({
       return invokedSideEffects;
     },
 
-    async cancelInvocation(
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    cancelInvocation(
       ctx: restate.Context,
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       invocationId: string
     ): Promise<void> {
-      // TODO add cancel invocation here!
-      return Promise.reject(new TerminalError("cancel is not supported yet"));
+      const id = restate.InvocationIdParser.fromString(invocationId);
+      ctx.cancel(id);
+      return Promise.resolve();
     },
   },
 });

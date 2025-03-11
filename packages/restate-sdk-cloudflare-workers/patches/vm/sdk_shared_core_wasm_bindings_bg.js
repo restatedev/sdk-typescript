@@ -692,14 +692,41 @@ export class WasmVM {
         return ret[0] >>> 0;
     }
     /**
+     * @param {string} invocation_id
+     * @returns {number}
+     */
+    sys_attach_invocation(invocation_id) {
+        const ptr0 = passStringToWasm0(invocation_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmvm_sys_attach_invocation(this.__wbg_ptr, ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ret[0] >>> 0;
+    }
+    /**
+     * @param {string} invocation_id
+     * @returns {number}
+     */
+    sys_get_invocation_output(invocation_id) {
+        const ptr0 = passStringToWasm0(invocation_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmvm_sys_get_invocation_output(this.__wbg_ptr, ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ret[0] >>> 0;
+    }
+    /**
      * @param {string} service
      * @param {string} handler
      * @param {Uint8Array} buffer
      * @param {string | null | undefined} key
      * @param {WasmHeader[]} headers
+     * @param {string | null} [idempotency_key]
      * @returns {WasmCallHandle}
      */
-    sys_call(service, handler, buffer, key, headers) {
+    sys_call(service, handler, buffer, key, headers, idempotency_key) {
         const ptr0 = passStringToWasm0(service, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ptr1 = passStringToWasm0(handler, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
@@ -710,7 +737,9 @@ export class WasmVM {
         var len3 = WASM_VECTOR_LEN;
         const ptr4 = passArrayJsValueToWasm0(headers, wasm.__wbindgen_malloc);
         const len4 = WASM_VECTOR_LEN;
-        const ret = wasm.wasmvm_sys_call(this.__wbg_ptr, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, ptr4, len4);
+        var ptr5 = isLikeNone(idempotency_key) ? 0 : passStringToWasm0(idempotency_key, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        var len5 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmvm_sys_call(this.__wbg_ptr, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, ptr4, len4, ptr5, len5);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }
@@ -723,9 +752,10 @@ export class WasmVM {
      * @param {string | null | undefined} key
      * @param {WasmHeader[]} headers
      * @param {bigint | null} [delay]
+     * @param {string | null} [idempotency_key]
      * @returns {WasmSendHandle}
      */
-    sys_send(service, handler, buffer, key, headers, delay) {
+    sys_send(service, handler, buffer, key, headers, delay, idempotency_key) {
         const ptr0 = passStringToWasm0(service, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ptr1 = passStringToWasm0(handler, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
@@ -736,7 +766,9 @@ export class WasmVM {
         var len3 = WASM_VECTOR_LEN;
         const ptr4 = passArrayJsValueToWasm0(headers, wasm.__wbindgen_malloc);
         const len4 = WASM_VECTOR_LEN;
-        const ret = wasm.wasmvm_sys_send(this.__wbg_ptr, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, ptr4, len4, !isLikeNone(delay), isLikeNone(delay) ? BigInt(0) : delay);
+        var ptr5 = isLikeNone(idempotency_key) ? 0 : passStringToWasm0(idempotency_key, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        var len5 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmvm_sys_send(this.__wbg_ptr, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, ptr4, len4, !isLikeNone(delay), isLikeNone(delay) ? BigInt(0) : delay, ptr5, len5);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }

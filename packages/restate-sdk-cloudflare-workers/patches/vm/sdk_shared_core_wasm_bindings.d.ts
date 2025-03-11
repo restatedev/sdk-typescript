@@ -91,8 +91,10 @@ export class WasmVM {
   sys_clear_state(key: string): void;
   sys_clear_all_state(): void;
   sys_sleep(millis: bigint): number;
-  sys_call(service: string, handler: string, buffer: Uint8Array, key: string | null | undefined, headers: WasmHeader[]): WasmCallHandle;
-  sys_send(service: string, handler: string, buffer: Uint8Array, key: string | null | undefined, headers: WasmHeader[], delay?: bigint | null): WasmSendHandle;
+  sys_attach_invocation(invocation_id: string): number;
+  sys_get_invocation_output(invocation_id: string): number;
+  sys_call(service: string, handler: string, buffer: Uint8Array, key: string | null | undefined, headers: WasmHeader[], idempotency_key?: string | null): WasmCallHandle;
+  sys_send(service: string, handler: string, buffer: Uint8Array, key: string | null | undefined, headers: WasmHeader[], delay?: bigint | null, idempotency_key?: string | null): WasmSendHandle;
   sys_awakeable(): WasmAwakeable;
   sys_complete_awakeable_success(id: string, buffer: Uint8Array): void;
   sys_complete_awakeable_failure(id: string, value: WasmFailure): void;
