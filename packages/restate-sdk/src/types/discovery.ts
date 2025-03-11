@@ -46,12 +46,16 @@ export interface Handler {
   input?: InputPayload;
   /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
   output?: OutputPayload;
+  metadata?: Record<string, string>;
+  documentation?: string;
 }
 
 export interface Service {
   name: string;
   ty: ServiceType;
   handlers: Handler[];
+  metadata?: Record<string, string>;
+  documentations?: string;
 }
 
 export interface Endpoint {

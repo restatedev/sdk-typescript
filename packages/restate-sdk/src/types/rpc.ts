@@ -274,6 +274,16 @@ export type ServiceHandlerOpts = {
    * in that case, the output parameter is a Uint8Array.
    */
   output?: Serde<unknown>;
+
+  /**
+   * An additional description for the handler, for documentation purposes.
+   */
+  description?: string;
+
+  /**
+   * Additional metadata for the handler.
+   */
+  metadata?: Record<string, string>;
 };
 
 export type ObjectHandlerOpts = {
@@ -305,6 +315,16 @@ export type ObjectHandlerOpts = {
    * in that case, the output parameter is a Uint8Array.
    */
   output?: Serde<unknown>;
+
+  /**
+   * An additional description for the handler, for documentation purposes.
+   */
+  description?: string;
+
+  /**
+   * Additional metadata for the handler.
+   */
+  metadata?: Record<string, string>;
 };
 
 export type WorkflowHandlerOpts = {
@@ -336,6 +356,16 @@ export type WorkflowHandlerOpts = {
    * in that case, the output parameter is a Uint8Array.
    */
   output?: Serde<unknown>;
+
+  /**
+   * An additional description for the handler, for documentation purposes.
+   */
+  description?: string;
+
+  /**
+   * Additional metadata for the handler.
+   */
+  metadata?: Record<string, string>;
 };
 
 const HANDLER_SYMBOL = Symbol("Handler");
@@ -361,7 +391,9 @@ export class HandlerWrapper {
       handlerCopy,
       inputSerde,
       outputSerde,
-      opts?.accept
+      opts?.accept,
+      opts?.description,
+      opts?.metadata
     );
   }
 
@@ -378,7 +410,9 @@ export class HandlerWrapper {
     private handler: Function,
     public readonly inputSerde: Serde<unknown>,
     public readonly outputSerde: Serde<unknown>,
-    accept?: string
+    accept?: string,
+    public readonly description?: string,
+    public readonly metadata?: Record<string, string>
   ) {
     this.accept = accept ? accept : inputSerde.contentType;
     this.contentType = outputSerde.contentType;
@@ -675,12 +709,16 @@ export type ServiceOpts<U> = {
  *
  * @param name the service name
  * @param handlers the handlers for the service
+ * @param description an optional description for the service
+ * @param metadata an optional metadata for the service
  * @type P the name of the service
  * @type M the handlers for the service
  */
 export const service = <P extends string, M>(service: {
   name: P;
   handlers: ServiceOpts<M>;
+  description?: string;
+  metadata?: Record<string, string>;
 }): ServiceDefinition<P, M> => {
   if (!service.handlers) {
     throw new Error("service must be defined");
@@ -701,6 +739,8 @@ export const service = <P extends string, M>(service: {
   return {
     name: service.name,
     service: Object.fromEntries(handlers) as object,
+    metadata: service.metadata,
+    description: service.description,
   } as ServiceDefinition<P, M>;
 };
 
@@ -763,10 +803,16 @@ export type ObjectOpts<U> = {
  *
  * @param name the name of the object
  * @param handlers the handlers for the object
+ * @param description an optional description for the object
+ * @param metadata an optional metadata for the object
+ * @type P the name of the object
+ * @type M the handlers for the object
  */
 export const object = <P extends string, M>(object: {
   name: P;
   handlers: ObjectOpts<M>;
+  description?: string;
+  metadata?: Record<string, string>;
 }): VirtualObjectDefinition<P, M> => {
   if (!object.handlers) {
     throw new Error("object options must be defined");
@@ -789,6 +835,8 @@ export const object = <P extends string, M>(object: {
   return {
     name: object.name,
     object: Object.fromEntries(handlers) as object,
+    metadata: object.metadata,
+    description: object.description,
   } as VirtualObjectDefinition<P, M>;
 };
 
@@ -861,6 +909,8 @@ export type WorkflowOpts<U> = {
 export const workflow = <P extends string, M>(workflow: {
   name: P;
   handlers: WorkflowOpts<M>;
+  description?: string;
+  metadata?: Record<string, string>;
 }): WorkflowDefinition<P, M> => {
   if (!workflow.handlers) {
     throw new Error("workflow must contain handlers");
@@ -919,5 +969,7 @@ export const workflow = <P extends string, M>(workflow: {
   return {
     name: workflow.name,
     workflow: Object.fromEntries(handlers) as object,
+    metadata: workflow.metadata,
+    description: workflow.description,
   } as WorkflowDefinition<P, M>;
 };
