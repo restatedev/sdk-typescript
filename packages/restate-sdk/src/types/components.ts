@@ -64,13 +64,13 @@ export class ServiceComponent implements Component {
             required: false,
             contentType:
               serviceHandler.handlerWrapper.accept ?? "application/json",
-            jsonSchema: serviceHandler.handlerWrapper.inputSchema,
+            jsonSchema: serviceHandler.handlerWrapper.inputSerde.jsonSchema,
           },
           output: {
             setContentTypeIfEmpty: false,
             contentType:
               serviceHandler.handlerWrapper.contentType ?? "application/json",
-            jsonSchema: serviceHandler.handlerWrapper.outputSchema,
+            jsonSchema: serviceHandler.handlerWrapper.outputSerde.jsonSchema,
           },
           documentation: serviceHandler.handlerWrapper.description,
           metadata: serviceHandler.handlerWrapper.metadata,
@@ -153,12 +153,12 @@ export class VirtualObjectComponent implements Component {
           input: {
             required: false,
             contentType: opts.accept ?? "application/json",
-            jsonSchema: opts.inputSchema,
+            jsonSchema: opts.inputSerde.jsonSchema,
           },
           output: {
             setContentTypeIfEmpty: false,
             contentType: opts.contentType ?? "application/json",
-            jsonSchema: opts.outputSchema,
+            jsonSchema: opts.outputSerde.jsonSchema,
           },
           ty:
             opts.kind === HandlerKind.EXCLUSIVE
@@ -239,12 +239,12 @@ export class WorkflowComponent implements Component {
           input: {
             required: false,
             contentType: handler.accept ?? "application/json",
-            jsonSchema: handler.inputSchema,
+            jsonSchema: handler.inputSerde.jsonSchema,
           },
           output: {
             setContentTypeIfEmpty: false,
             contentType: handler.contentType ?? "application/json",
-            jsonSchema: handler.outputSchema,
+            jsonSchema: handler.outputSerde.jsonSchema,
           },
           ty:
             handler.kind === HandlerKind.WORKFLOW

@@ -284,18 +284,6 @@ export type ServiceHandlerOpts = {
    * Additional metadata for the handler.
    */
   metadata?: Record<string, string>;
-
-  /**
-   * An optional JSON schema definition for the input parameter.
-   * Please note that this is not enforced,  but only used as a documentation hint.
-   */
-  inputSchema?: object;
-
-  /**
-   * An optional JSON schema definition for the input parameter.
-   * Please note that this is not enforced,  but only used as a documentation hint.
-   */
-  outputSchema?: object;
 };
 
 export type ObjectHandlerOpts = {
@@ -337,18 +325,6 @@ export type ObjectHandlerOpts = {
    * Additional metadata for the handler.
    */
   metadata?: Record<string, string>;
-
-  /**
-   * An optional JSON schema definition for the input parameter.
-   * Please note that this is not enforced,  but only used as a documentation hint.
-   */
-  inputSchema?: object;
-
-  /**
-   * An optional JSON schema definition for the input parameter.
-   * Please note that this is not enforced,  but only used as a documentation hint.
-   */
-  outputSchema?: object;
 };
 
 export type WorkflowHandlerOpts = {
@@ -390,18 +366,6 @@ export type WorkflowHandlerOpts = {
    * Additional metadata for the handler.
    */
   metadata?: Record<string, string>;
-
-  /**
-   * An optional JSON schema definition for the input parameter.
-   * Please note that this is not enforced,  but only used as a documentation hint.
-   */
-  inputSchema?: object;
-
-  /**
-   * An optional JSON schema definition for the input parameter.
-   * Please note that this is not enforced,  but only used as a documentation hint.
-   */
-  outputSchema?: object;
 };
 
 const HANDLER_SYMBOL = Symbol("Handler");
@@ -429,9 +393,7 @@ export class HandlerWrapper {
       outputSerde,
       opts?.accept,
       opts?.description,
-      opts?.metadata,
-      opts?.inputSchema,
-      opts?.outputSchema
+      opts?.metadata
     );
   }
 
@@ -450,9 +412,7 @@ export class HandlerWrapper {
     public readonly outputSerde: Serde<unknown>,
     accept?: string,
     public readonly description?: string,
-    public readonly metadata?: Record<string, string>,
-    public readonly inputSchema?: object,
-    public readonly outputSchema?: object
+    public readonly metadata?: Record<string, string>
   ) {
     this.accept = accept ? accept : inputSerde.contentType;
     this.contentType = outputSerde.contentType;

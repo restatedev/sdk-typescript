@@ -15,28 +15,11 @@
 
 export interface Serde<T> {
   readonly contentType: string;
+  readonly jsonSchema?: object;
 
   serialize(value: T): Uint8Array;
 
   deserialize(data: Uint8Array): T;
-}
-
-class JsonSerde<T> implements Serde<T | undefined> {
-  contentType = "application/json";
-
-  serialize(value: T): Uint8Array {
-    if (value === undefined) {
-      return new Uint8Array(0);
-    }
-    return new TextEncoder().encode(JSON.stringify(value));
-  }
-
-  deserialize(data: Uint8Array): T | undefined {
-    if (data.length === 0) {
-      return undefined;
-    }
-    return JSON.parse(new TextDecoder().decode(data)) as T;
-  }
 }
 
 class BinarySerde implements Serde<Uint8Array> {
@@ -69,7 +52,31 @@ class VoidSerde implements Serde<void> {
 }
 
 export namespace serde {
-  export const json: Serde<any> = new JsonSerde<any>();
+  export class JsonSerde<T> implements Serde<T | undefined> {
+    contentType = "application/json";
+
+    constructor(readonly jsonSchema?: object) {}
+
+    serialize(value: T): Uint8Array {
+      if (value === undefined) {
+        return new Uint8Array(0);
+      }
+      return new TextEncoder().encode(JSON.stringify(value));
+    }
+
+    deserialize(data: Uint8Array): T | undefined {
+      if (data.length === 0) {
+        return undefined;
+      }
+      return JSON.parse(new TextDecoder().decode(data)) as T;
+    }
+
+    schema<U>(schema: object): JsonSerde<U> {
+      return new JsonSerde<U>(schema);
+    }
+  }
+
+  export const json: JsonSerde<any> = new JsonSerde<any>();
   export const binary: Serde<Uint8Array> = new BinarySerde();
   export const empty: Serde<void> = new VoidSerde();
 }
