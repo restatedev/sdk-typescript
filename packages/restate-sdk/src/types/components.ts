@@ -40,7 +40,11 @@ export interface ComponentHandler {
 export class ServiceComponent implements Component {
   private readonly handlers: Map<string, ServiceHandler> = new Map();
 
-  constructor(private readonly componentName: string) {}
+  constructor(
+    private readonly componentName: string,
+    public readonly description?: string,
+    public readonly metadata?: Record<string, string>
+  ) {}
 
   name(): string {
     return this.componentName;
@@ -66,7 +70,9 @@ export class ServiceComponent implements Component {
             contentType:
               serviceHandler.handlerWrapper.contentType ?? "application/json",
           },
-        };
+          documentation: serviceHandler.handlerWrapper.description,
+          metadata: serviceHandler.handlerWrapper.metadata,
+        } satisfies d.Handler;
       }
     );
 
@@ -74,7 +80,9 @@ export class ServiceComponent implements Component {
       name: this.componentName,
       ty: d.ServiceType.SERVICE,
       handlers,
-    };
+      documentations: this.description,
+      metadata: this.metadata,
+    } satisfies d.Service;
   }
 
   handlerMatching(url: InvokePathComponents): ComponentHandler | undefined {
@@ -121,7 +129,11 @@ export class ServiceHandler implements ComponentHandler {
 export class VirtualObjectComponent implements Component {
   private readonly handlers: Map<string, HandlerWrapper> = new Map();
 
-  constructor(public readonly componentName: string) {}
+  constructor(
+    public readonly componentName: string,
+    public readonly description?: string,
+    public readonly metadata?: Record<string, string>
+  ) {}
 
   name(): string {
     return this.componentName;
@@ -148,7 +160,10 @@ export class VirtualObjectComponent implements Component {
             opts.kind === HandlerKind.EXCLUSIVE
               ? d.ServiceHandlerType.EXCLUSIVE
               : d.ServiceHandlerType.SHARED,
-        };
+
+          documentation: opts.description,
+          metadata: opts.metadata,
+        } satisfies d.Handler;
       }
     );
 
@@ -156,7 +171,9 @@ export class VirtualObjectComponent implements Component {
       name: this.componentName,
       ty: d.ServiceType.VIRTUAL_OBJECT,
       handlers,
-    };
+      documentations: this.description,
+      metadata: this.metadata,
+    } satisfies d.Service;
   }
 
   handlerMatching(url: InvokePathComponents): ComponentHandler | undefined {
@@ -196,7 +213,11 @@ export class VirtualObjectHandler implements ComponentHandler {
 export class WorkflowComponent implements Component {
   private readonly handlers: Map<string, HandlerWrapper> = new Map();
 
-  constructor(public readonly componentName: string) {}
+  constructor(
+    public readonly componentName: string,
+    public readonly description?: string,
+    public readonly metadata?: Record<string, string>
+  ) {}
 
   name(): string {
     return this.componentName;
@@ -223,7 +244,10 @@ export class WorkflowComponent implements Component {
             handler.kind === HandlerKind.WORKFLOW
               ? d.ServiceHandlerType.WORKFLOW
               : d.ServiceHandlerType.SHARED,
-        };
+
+          documentation: handler.description,
+          metadata: handler.metadata,
+        } satisfies d.Handler;
       }
     );
 
@@ -231,7 +255,9 @@ export class WorkflowComponent implements Component {
       name: this.componentName,
       ty: d.ServiceType.WORKFLOW,
       handlers,
-    };
+      documentations: this.description,
+      metadata: this.metadata,
+    } satisfies d.Service;
   }
 
   handlerMatching(url: InvokePathComponents): ComponentHandler | undefined {

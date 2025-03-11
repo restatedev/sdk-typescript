@@ -52,6 +52,15 @@ function isWorkflowDefinition<P extends string, M>(
   return m && m.workflow !== undefined;
 }
 
+/**
+ * Services can have additional information that is not part of the definition.
+ * For example a description or metadata.
+ */
+type ServiceAuxInfo = {
+  description?: string;
+  metadata?: Record<string, any>;
+};
+
 export class EndpointBuilder {
   private readonly services: Map<string, Component> = new Map();
   public loggerTransport: LoggerTransport = defaultLoggerTransport;
@@ -88,19 +97,31 @@ export class EndpointBuilder {
       if (!service) {
         throw new TypeError(`no service implementation found.`);
       }
-      this.bindServiceComponent(name, service);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      this.bindServiceComponent(name, service, definition as ServiceAuxInfo);
     } else if (isObjectDefinition(definition)) {
       const { name, object } = definition;
       if (!object) {
         throw new TypeError(`no object implementation found.`);
       }
-      this.bindVirtualObjectComponent(name, object);
+
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      this.bindVirtualObjectComponent(
+        name,
+        object,
+        definition as ServiceAuxInfo
+      );
     } else if (isWorkflowDefinition(definition)) {
       const { name, workflow } = definition;
       if (!workflow) {
         throw new TypeError(`no workflow implementation found.`);
       }
-      this.bindWorkflowObjectComponent(name, workflow);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      this.bindWorkflowObjectComponent(
+        name,
+        workflow,
+        definition as ServiceAuxInfo
+      );
     } else {
       throw new TypeError(
         "can only bind a service or a virtual object or a workflow definition"
@@ -133,11 +154,19 @@ export class EndpointBuilder {
     return endpoint;
   }
 
-  private bindServiceComponent(name: string, router: any) {
+  private bindServiceComponent(
+    name: string,
+    router: any,
+    definition: ServiceAuxInfo
+  ) {
     if (name.indexOf("/") !== -1) {
       throw new Error("service name must not contain any slash '/'");
     }
-    const component = new ServiceComponent(name);
+    const component = new ServiceComponent(
+      name,
+      definition.description,
+      definition.metadata
+    );
 
     for (const [route, handler] of Object.entries(
       router as { [s: string]: any }
@@ -153,11 +182,19 @@ export class EndpointBuilder {
     this.addComponent(component);
   }
 
-  private bindVirtualObjectComponent(name: string, router: any) {
+  private bindVirtualObjectComponent(
+    name: string,
+    router: any,
+    definition: ServiceAuxInfo
+  ) {
     if (name.indexOf("/") !== -1) {
       throw new Error("service name must not contain any slash '/'");
     }
-    const component = new VirtualObjectComponent(name);
+    const component = new VirtualObjectComponent(
+      name,
+      definition.description,
+      definition.metadata
+    );
 
     for (const [route, handler] of Object.entries(
       router as { [s: string]: any }
@@ -172,11 +209,19 @@ export class EndpointBuilder {
     this.addComponent(component);
   }
 
-  private bindWorkflowObjectComponent(name: string, workflow: any) {
+  private bindWorkflowObjectComponent(
+    name: string,
+    workflow: any,
+    definition: ServiceAuxInfo
+  ) {
     if (name.indexOf("/") !== -1) {
       throw new Error("service name must not contain any slash '/'");
     }
-    const component = new WorkflowComponent(name);
+    const component = new WorkflowComponent(
+      name,
+      definition.description,
+      definition.metadata
+    );
 
     for (const [route, handler] of Object.entries(
       workflow as { [s: string]: any }
