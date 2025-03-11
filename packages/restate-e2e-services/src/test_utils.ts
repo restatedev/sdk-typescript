@@ -63,12 +63,13 @@ const o = restate.service({
       return invokedSideEffects;
     },
 
-    async cancelInvocation(
+    cancelInvocation(
       ctx: restate.Context,
       invocationId: string
     ): Promise<void> {
       const id = restate.InvocationIdParser.fromString(invocationId);
       ctx.cancel(id);
+      return Promise.resolve();
     },
   },
 });
