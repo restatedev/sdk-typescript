@@ -64,11 +64,13 @@ export class ServiceComponent implements Component {
             required: false,
             contentType:
               serviceHandler.handlerWrapper.accept ?? "application/json",
+            jsonSchema: serviceHandler.handlerWrapper.inputSchema,
           },
           output: {
             setContentTypeIfEmpty: false,
             contentType:
               serviceHandler.handlerWrapper.contentType ?? "application/json",
+            jsonSchema: serviceHandler.handlerWrapper.outputSchema,
           },
           documentation: serviceHandler.handlerWrapper.description,
           metadata: serviceHandler.handlerWrapper.metadata,
@@ -151,10 +153,12 @@ export class VirtualObjectComponent implements Component {
           input: {
             required: false,
             contentType: opts.accept ?? "application/json",
+            jsonSchema: opts.inputSchema,
           },
           output: {
             setContentTypeIfEmpty: false,
             contentType: opts.contentType ?? "application/json",
+            jsonSchema: opts.outputSchema,
           },
           ty:
             opts.kind === HandlerKind.EXCLUSIVE
@@ -235,10 +239,12 @@ export class WorkflowComponent implements Component {
           input: {
             required: false,
             contentType: handler.accept ?? "application/json",
+            jsonSchema: handler.inputSchema,
           },
           output: {
             setContentTypeIfEmpty: false,
             contentType: handler.contentType ?? "application/json",
+            jsonSchema: handler.outputSchema,
           },
           ty:
             handler.kind === HandlerKind.WORKFLOW
