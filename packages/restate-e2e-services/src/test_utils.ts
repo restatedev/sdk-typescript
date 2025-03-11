@@ -10,8 +10,6 @@
 import * as restate from "@restatedev/restate-sdk";
 import { REGISTRY } from "./services.js";
 
-import { TerminalError } from "@restatedev/restate-sdk";
-
 const o = restate.service({
   name: "TestUtilsService",
   handlers: {
