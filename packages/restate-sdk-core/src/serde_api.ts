@@ -71,8 +71,8 @@ export namespace serde {
       return JSON.parse(new TextDecoder().decode(data)) as T;
     }
 
-    schema<U>(schema: object): JsonSerde<U> {
-      return new JsonSerde<U>(schema);
+    schema<U>(schema: object): Serde<U> {
+      return new JsonSerde<U>(schema) as Serde<U>;
     }
   }
 

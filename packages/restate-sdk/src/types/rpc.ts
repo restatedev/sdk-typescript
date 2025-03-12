@@ -34,6 +34,8 @@ import {
   type WorkflowDefinition,
   type WorkflowSharedHandler,
   type Serde,
+  type ArgType,
+  type HandlerReturnType,
   serde,
 } from "@restatedev/restate-sdk-core";
 import { TerminalError } from "./errors.js";
@@ -245,7 +247,7 @@ export enum HandlerKind {
   WORKFLOW,
 }
 
-export type ServiceHandlerOpts = {
+export type ServiceHandlerOpts<I, O> = {
   /**
    * Define the acceptable content-type. Wildcards can be used, e.g. `application/*` or `* / *`.
    * If not provided, the `input.contentType` will be used instead.
@@ -263,7 +265,7 @@ export type ServiceHandlerOpts = {
    * restate.serde.binary the skip serialization/deserialization altogether.
    * in that case, the input parameter is a Uint8Array.
    */
-  input?: Serde<unknown>;
+  input?: Serde<I>;
 
   /**
    * The Serde to use for serializing the output.
@@ -273,7 +275,7 @@ export type ServiceHandlerOpts = {
    * restate.serde.binary the skip serialization/deserialization altogether.
    * in that case, the output parameter is a Uint8Array.
    */
-  output?: Serde<unknown>;
+  output?: Serde<O>;
 
   /**
    * An additional description for the handler, for documentation purposes.
@@ -286,7 +288,7 @@ export type ServiceHandlerOpts = {
   metadata?: Record<string, string>;
 };
 
-export type ObjectHandlerOpts = {
+export type ObjectHandlerOpts<I, O> = {
   /**
    * Define the acceptable content-type. Wildcards can be used, e.g. `application/*` or `* / *`.
    * If not provided, the `input.contentType` will be used instead.
@@ -304,7 +306,7 @@ export type ObjectHandlerOpts = {
    * restate.serde.binary the skip serialization/deserialization altogether.
    * in that case, the input parameter is a Uint8Array.
    */
-  input?: Serde<unknown>;
+  input?: Serde<I>;
 
   /**
    * The Serde to use for serializing the output.
@@ -314,7 +316,7 @@ export type ObjectHandlerOpts = {
    * restate.serde.binary the skip serialization/deserialization altogether.
    * in that case, the output parameter is a Uint8Array.
    */
-  output?: Serde<unknown>;
+  output?: Serde<O>;
 
   /**
    * An additional description for the handler, for documentation purposes.
@@ -327,7 +329,7 @@ export type ObjectHandlerOpts = {
   metadata?: Record<string, string>;
 };
 
-export type WorkflowHandlerOpts = {
+export type WorkflowHandlerOpts<I, O> = {
   /**
    * Define the acceptable content-type. Wildcards can be used, e.g. `application/*` or `* / *`.
    * If not provided, the `input.contentType` will be used instead.
@@ -345,7 +347,7 @@ export type WorkflowHandlerOpts = {
    * restate.serde.binary the skip serialization/deserialization altogether.
    * in that case, the input parameter is a Uint8Array.
    */
-  input?: Serde<unknown>;
+  input?: Serde<I>;
 
   /**
    * The Serde to use for serializing the output.
@@ -355,7 +357,7 @@ export type WorkflowHandlerOpts = {
    * restate.serde.binary the skip serialization/deserialization altogether.
    * in that case, the output parameter is a Uint8Array.
    */
-  output?: Serde<unknown>;
+  output?: Serde<O>;
 
   /**
    * An additional description for the handler, for documentation purposes.
@@ -374,7 +376,10 @@ export class HandlerWrapper {
   public static from(
     kind: HandlerKind,
     handler: Function,
-    opts?: ServiceHandlerOpts | ObjectHandlerOpts | WorkflowHandlerOpts
+    opts?:
+      | ServiceHandlerOpts<unknown, unknown>
+      | ObjectHandlerOpts<unknown, unknown>
+      | WorkflowHandlerOpts<unknown, unknown>
   ): HandlerWrapper {
     const inputSerde: Serde<unknown> = opts?.input ?? defaultSerde();
     const outputSerde: Serde<unknown> = opts?.output ?? defaultSerde();
@@ -463,7 +468,7 @@ export namespace handlers {
    * @param fn the actual handler code to execute
    */
   export function handler<F>(
-    opts: ServiceHandlerOpts,
+    opts: ServiceHandlerOpts<ArgType<F>, HandlerReturnType<F>>,
     fn: ServiceHandler<F, Context>
   ): F {
     return HandlerWrapper.from(HandlerKind.SERVICE, fn, opts).transpose();
@@ -471,7 +476,7 @@ export namespace handlers {
 
   export namespace workflow {
     export function workflow<F>(
-      opts: WorkflowHandlerOpts,
+      opts: WorkflowHandlerOpts<ArgType<F>, HandlerReturnType<F>>,
       fn: WorkflowHandler<F, WorkflowContext<any>>
     ): F;
 
@@ -480,13 +485,18 @@ export namespace handlers {
     ): F;
 
     export function workflow<F>(
-      optsOrFn: WorkflowHandlerOpts | WorkflowHandler<F, WorkflowContext<any>>,
+      optsOrFn:
+        | WorkflowHandlerOpts<ArgType<F>, HandlerReturnType<F>>
+        | WorkflowHandler<F, WorkflowContext<any>>,
       fn?: WorkflowHandler<F, WorkflowContext<any>>
     ): F {
       if (typeof optsOrFn === "function") {
         return HandlerWrapper.from(HandlerKind.WORKFLOW, optsOrFn).transpose();
       }
-      const opts = optsOrFn satisfies WorkflowHandlerOpts;
+      const opts = optsOrFn satisfies WorkflowHandlerOpts<
+        ArgType<F>,
+        HandlerReturnType<F>
+      >;
       if (typeof fn !== "function") {
         throw new TypeError("The second argument must be a function");
       }
@@ -503,7 +513,7 @@ export namespace handlers {
      * @param fn the handler to execute
      */
     export function shared<F>(
-      opts: WorkflowHandlerOpts,
+      opts: WorkflowHandlerOpts<ArgType<F>, HandlerReturnType<F>>,
       fn: WorkflowSharedHandler<F, WorkflowSharedContext<any>>
     ): F;
 
@@ -531,14 +541,17 @@ export namespace handlers {
      */
     export function shared<F>(
       optsOrFn:
-        | WorkflowHandlerOpts
+        | WorkflowHandlerOpts<ArgType<F>, HandlerReturnType<F>>
         | WorkflowSharedHandler<F, WorkflowSharedContext<any>>,
       fn?: WorkflowSharedHandler<F, WorkflowSharedContext<any>>
     ): F {
       if (typeof optsOrFn === "function") {
         return HandlerWrapper.from(HandlerKind.SHARED, optsOrFn).transpose();
       }
-      const opts = optsOrFn satisfies ObjectHandlerOpts;
+      const opts = optsOrFn satisfies ObjectHandlerOpts<
+        ArgType<F>,
+        HandlerReturnType<F>
+      >;
       if (typeof fn !== "function") {
         throw new TypeError("The second argument must be a function");
       }
@@ -556,7 +569,7 @@ export namespace handlers {
      * @param fn the handler to execute
      */
     export function exclusive<F>(
-      opts: ObjectHandlerOpts,
+      opts: ObjectHandlerOpts<ArgType<F>, HandlerReturnType<F>>,
       fn: ObjectHandler<F, ObjectContext<any>>
     ): F;
 
@@ -588,13 +601,18 @@ export namespace handlers {
      * @param fn the handler to execute
      */
     export function exclusive<F>(
-      optsOrFn: ObjectHandlerOpts | ObjectHandler<F, ObjectContext<any>>,
+      optsOrFn:
+        | ObjectHandlerOpts<ArgType<F>, HandlerReturnType<F>>
+        | ObjectHandler<F, ObjectContext<any>>,
       fn?: ObjectHandler<F, ObjectContext<any>>
     ): F {
       if (typeof optsOrFn === "function") {
         return HandlerWrapper.from(HandlerKind.EXCLUSIVE, optsOrFn).transpose();
       }
-      const opts = optsOrFn satisfies ObjectHandlerOpts;
+      const opts = optsOrFn satisfies ObjectHandlerOpts<
+        ArgType<F>,
+        HandlerReturnType<F>
+      >;
       if (typeof fn !== "function") {
         throw new TypeError("The second argument must be a function");
       }
@@ -613,7 +631,7 @@ export namespace handlers {
      * @param fn the handler to execute
      */
     export function shared<F>(
-      opts: ObjectHandlerOpts,
+      opts: ObjectHandlerOpts<ArgType<F>, HandlerReturnType<F>>,
       fn: ObjectSharedHandler<F, ObjectSharedContext<any>>
     ): F;
 
@@ -645,14 +663,17 @@ export namespace handlers {
      */
     export function shared<F>(
       optsOrFn:
-        | ObjectHandlerOpts
+        | ObjectHandlerOpts<ArgType<F>, HandlerReturnType<F>>
         | ObjectSharedHandler<F, ObjectSharedContext<any>>,
       fn?: ObjectSharedHandler<F, ObjectSharedContext<any>>
     ): F {
       if (typeof optsOrFn === "function") {
         return HandlerWrapper.from(HandlerKind.SHARED, optsOrFn).transpose();
       }
-      const opts = optsOrFn satisfies ObjectHandlerOpts;
+      const opts = optsOrFn satisfies ObjectHandlerOpts<
+        ArgType<F>,
+        HandlerReturnType<F>
+      >;
       if (typeof fn !== "function") {
         throw new TypeError("The second argument must be a function");
       }

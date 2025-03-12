@@ -29,6 +29,8 @@ export type {
   RestateWorkflowSharedContext,
   Workflow,
   WorkflowDefinitionFrom,
+  ArgType,
+  HandlerReturnType,
 } from "./core.js";
 
 export type { Serde } from "./serde_api.js";
