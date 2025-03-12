@@ -29,6 +29,19 @@ export interface RestateWorkflowContext
 
 // ----------- service -------------------------------------------------------
 
+export type ArgType<T> = T extends (ctx: any) => any
+  ? void
+  : T extends (ctx: any, input: infer I) => any
+  ? I
+  : never;
+
+export type HandlerReturnType<T> = T extends (
+  ctx: any,
+  input: any
+) => Promise<infer R>
+  ? R
+  : never;
+
 export type ServiceHandler<F, C = RestateContext> = F extends (
   ctx: C
 ) => Promise<any>
