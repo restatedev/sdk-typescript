@@ -24,8 +24,8 @@ class ZodSerde<T extends z.ZodType> implements Serde<z.infer<T>> {
   contentType = "application/json";
   jsonSchema?: object | undefined;
 
-  constructor(private readonly schema: T, name: string) {
-    this.jsonSchema = zodToJsonSchema(schema, name);
+  constructor(private readonly schema: T) {
+    this.jsonSchema = zodToJsonSchema(schema);
   }
 
   serialize(value: T): Uint8Array {
@@ -54,13 +54,9 @@ export namespace serde {
    * A Zod based serde.
    *
    * @param schema the zod type
-   * @param name the name of the type for the json schema
    * @returns a serde that will validate the data with the zod schema
    */
-  export const zod = <T extends z.ZodType>(
-    zodType: T,
-    name: string
-  ): Serde<z.infer<T>> => {
-    return new ZodSerde(zodType, name);
+  export const zod = <T extends z.ZodType>(zodType: T): Serde<z.infer<T>> => {
+    return new ZodSerde(zodType);
   };
 }

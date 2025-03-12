@@ -460,6 +460,9 @@ export class HandlerWrapper {
 
 // ----------- handler decorators ----------------------------------------------
 
+type SerdeInputType<T> = T extends { input?: Serde<infer U> } ? U : unknown;
+type SerdeOutputType<T> = T extends { output?: Serde<infer U> } ? U : unknown;
+
 export namespace handlers {
   /**
    * Create a service handler.
@@ -467,36 +470,33 @@ export namespace handlers {
    * @param opts additional configuration
    * @param fn the actual handler code to execute
    */
-  export function handler<F>(
-    opts: ServiceHandlerOpts<ArgType<F>, HandlerReturnType<F>>,
-    fn: ServiceHandler<F, Context>
-  ): F {
+  export function handler<I, O>(
+    opts: ServiceHandlerOpts<I, O>,
+    fn: (ctx: Context, input: I) => Promise<O>
+  ): typeof fn {
     return HandlerWrapper.from(HandlerKind.SERVICE, fn, opts).transpose();
   }
 
   export namespace workflow {
-    export function workflow<F>(
-      opts: WorkflowHandlerOpts<ArgType<F>, HandlerReturnType<F>>,
-      fn: WorkflowHandler<F, WorkflowContext<any>>
-    ): F;
+    export function workflow<I, O>(
+      opts: WorkflowHandlerOpts<I, O>,
+      fn: (ctx: WorkflowContext, input: I) => Promise<O>
+    ): typeof fn;
 
-    export function workflow<F>(
-      fn: WorkflowHandler<F, WorkflowContext<any>>
-    ): F;
+    export function workflow<I, O>(
+      fn: (ctx: WorkflowContext, input: I) => Promise<O>
+    ): typeof fn;
 
-    export function workflow<F>(
+    export function workflow<I, O>(
       optsOrFn:
-        | WorkflowHandlerOpts<ArgType<F>, HandlerReturnType<F>>
-        | WorkflowHandler<F, WorkflowContext<any>>,
-      fn?: WorkflowHandler<F, WorkflowContext<any>>
-    ): F {
+        | WorkflowHandlerOpts<I, O>
+        | ((ctx: WorkflowContext, input: I) => Promise<O>),
+      fn?: (ctx: WorkflowContext, input: I) => Promise<O>
+    ): typeof fn {
       if (typeof optsOrFn === "function") {
         return HandlerWrapper.from(HandlerKind.WORKFLOW, optsOrFn).transpose();
       }
-      const opts = optsOrFn satisfies WorkflowHandlerOpts<
-        ArgType<F>,
-        HandlerReturnType<F>
-      >;
+      const opts = optsOrFn satisfies WorkflowHandlerOpts<I, O>;
       if (typeof fn !== "function") {
         throw new TypeError("The second argument must be a function");
       }
@@ -512,10 +512,10 @@ export namespace handlers {
      * @param opts additional configurations
      * @param fn the handler to execute
      */
-    export function shared<F>(
-      opts: WorkflowHandlerOpts<ArgType<F>, HandlerReturnType<F>>,
-      fn: WorkflowSharedHandler<F, WorkflowSharedContext<any>>
-    ): F;
+    export function shared<I, O>(
+      opts: WorkflowHandlerOpts<I, O>,
+      fn: (ctx: WorkflowSharedContext, input: I) => Promise<O>
+    ): typeof fn;
 
     /**
      * Creates a shared handler for a workflow.
@@ -526,9 +526,9 @@ export namespace handlers {
      * @param opts additional configurations
      * @param fn the handler to execute
      */
-    export function shared<F>(
-      fn: WorkflowSharedHandler<F, WorkflowSharedContext<any>>
-    ): F;
+    export function shared<I, O>(
+      fn: (ctx: WorkflowSharedContext, input: I) => Promise<O>
+    ): typeof fn;
 
     /**
      * Creates a shared handler for a workflow
@@ -539,19 +539,16 @@ export namespace handlers {
      * @param opts additional configurations
      * @param fn the handler to execute
      */
-    export function shared<F>(
+    export function shared<I, O>(
       optsOrFn:
-        | WorkflowHandlerOpts<ArgType<F>, HandlerReturnType<F>>
-        | WorkflowSharedHandler<F, WorkflowSharedContext<any>>,
-      fn?: WorkflowSharedHandler<F, WorkflowSharedContext<any>>
-    ): F {
+        | WorkflowHandlerOpts<I, O>
+        | ((ctx: WorkflowSharedContext, input: I) => Promise<O>),
+      fn?: (ctx: WorkflowSharedContext, input: I) => Promise<O>
+    ): typeof fn {
       if (typeof optsOrFn === "function") {
         return HandlerWrapper.from(HandlerKind.SHARED, optsOrFn).transpose();
       }
-      const opts = optsOrFn satisfies ObjectHandlerOpts<
-        ArgType<F>,
-        HandlerReturnType<F>
-      >;
+      const opts = optsOrFn satisfies ObjectHandlerOpts<I, O>;
       if (typeof fn !== "function") {
         throw new TypeError("The second argument must be a function");
       }
@@ -568,10 +565,10 @@ export namespace handlers {
      * @param opts additional configurations
      * @param fn the handler to execute
      */
-    export function exclusive<F>(
-      opts: ObjectHandlerOpts<ArgType<F>, HandlerReturnType<F>>,
-      fn: ObjectHandler<F, ObjectContext<any>>
-    ): F;
+    export function exclusive<I, O>(
+      opts: ObjectHandlerOpts<I, O>,
+      fn: (ctx: ObjectContext, input: I) => Promise<O>
+    ): typeof fn;
 
     /**
      * Creates an exclusive handler for a virtual Object.
@@ -585,7 +582,9 @@ export namespace handlers {
      *
      * @param fn the handler to execute
      */
-    export function exclusive<F>(fn: ObjectHandler<F, ObjectContext<any>>): F;
+    export function exclusive<I, O>(
+      fn: (ctx: ObjectContext, input: I) => Promise<O>
+    ): typeof fn;
 
     /**
      * Creates an exclusive handler for a virtual Object.
@@ -600,19 +599,16 @@ export namespace handlers {
      * @param opts additional configurations
      * @param fn the handler to execute
      */
-    export function exclusive<F>(
+    export function exclusive<I, O>(
       optsOrFn:
-        | ObjectHandlerOpts<ArgType<F>, HandlerReturnType<F>>
-        | ObjectHandler<F, ObjectContext<any>>,
-      fn?: ObjectHandler<F, ObjectContext<any>>
-    ): F {
+        | ObjectHandlerOpts<I, O>
+        | ((ctx: ObjectContext, input: I) => Promise<O>),
+      fn?: (ctx: ObjectContext, input: I) => Promise<O>
+    ): typeof fn {
       if (typeof optsOrFn === "function") {
         return HandlerWrapper.from(HandlerKind.EXCLUSIVE, optsOrFn).transpose();
       }
-      const opts = optsOrFn satisfies ObjectHandlerOpts<
-        ArgType<F>,
-        HandlerReturnType<F>
-      >;
+      const opts = optsOrFn satisfies ObjectHandlerOpts<I, O>;
       if (typeof fn !== "function") {
         throw new TypeError("The second argument must be a function");
       }
@@ -630,10 +626,10 @@ export namespace handlers {
      * @param opts additional configurations
      * @param fn the handler to execute
      */
-    export function shared<F>(
-      opts: ObjectHandlerOpts<ArgType<F>, HandlerReturnType<F>>,
-      fn: ObjectSharedHandler<F, ObjectSharedContext<any>>
-    ): F;
+    export function shared<I, O>(
+      opts: ObjectHandlerOpts<I, O>,
+      fn: (ctx: ObjectSharedContext, input: I) => Promise<O>
+    ): typeof fn;
 
     /**
      * Creates a shared handler for a virtual Object.
@@ -646,9 +642,9 @@ export namespace handlers {
      * @param opts additional configurations
      * @param fn the handler to execute
      */
-    export function shared<F>(
-      fn: ObjectSharedHandler<F, ObjectSharedContext<any>>
-    ): F;
+    export function shared<I, O>(
+      fn: (ctx: ObjectSharedContext, input: I) => Promise<O>
+    ): typeof fn;
 
     /**
      * Creates a shared handler for a virtual Object.
@@ -661,19 +657,16 @@ export namespace handlers {
      * @param opts additional configurations
      * @param fn the handler to execute
      */
-    export function shared<F>(
+    export function shared<I, O>(
       optsOrFn:
-        | ObjectHandlerOpts<ArgType<F>, HandlerReturnType<F>>
-        | ObjectSharedHandler<F, ObjectSharedContext<any>>,
-      fn?: ObjectSharedHandler<F, ObjectSharedContext<any>>
-    ): F {
+        | ObjectHandlerOpts<I, O>
+        | ((ctx: ObjectSharedContext, input: I) => Promise<O>),
+      fn?: (ctx: ObjectSharedContext, input: I) => Promise<O>
+    ): typeof fn {
       if (typeof optsOrFn === "function") {
         return HandlerWrapper.from(HandlerKind.SHARED, optsOrFn).transpose();
       }
-      const opts = optsOrFn satisfies ObjectHandlerOpts<
-        ArgType<F>,
-        HandlerReturnType<F>
-      >;
+      const opts = optsOrFn satisfies ObjectHandlerOpts<I, O>;
       if (typeof fn !== "function") {
         throw new TypeError("The second argument must be a function");
       }
