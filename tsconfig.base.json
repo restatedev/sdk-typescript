@@ -21,7 +21,8 @@
       "@restatedev/restate-sdk": ["./packages/restate-sdk/src/public_api.ts"],
       "@restatedev/restate-sdk-clients": [
         "./packages/restate-sdk-clients/src/public_api.ts"
-      ]
+      ],
+      "@restatedev/restate-sdk-zod": ["./packages/restate-sdk-zod/src/public_api.ts"]
     }
   }
 }

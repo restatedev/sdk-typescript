@@ -19,6 +19,7 @@
     "packages/restate-sdk",
     "packages/restate-sdk-cloudflare-workers",
     "packages/restate-sdk-clients",
+		"packages/restate-sdk-zod",
     "packages/restate-sdk-examples",
     "packages/restate-sdk-testcontainers",
     "packages/restate-e2e-services"
@@ -31,7 +32,7 @@
     "format": "npm run format -ws --if-present",
     "format-check": "npm run format-check -ws --if-present",
     "verify": "npm run verify -ws --if-present",
-    "clean": "rm -rf packages/restate-sdk/dist && rm -rf packages/restate-sdk-cloudflare-workers/dist && rm -rf packages/restate-sdk-examples/dist && rm -rf packages/restate-sdk-ingress/dist && rm -rf packages/restate-e2e-services/dist && rm -rf packages/restate-sdk-core/dist"
+    "clean": "rm -rf packages/restate-sdk-zod/dist && rm -rf packages/restate-sdk/dist && rm -rf packages/restate-sdk-cloudflare-workers/dist && rm -rf packages/restate-sdk-examples/dist && rm -rf packages/restate-sdk-ingress/dist && rm -rf packages/restate-e2e-services/dist && rm -rf packages/restate-sdk-core/dist"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.15.3",

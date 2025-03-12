@@ -3,6 +3,7 @@
   "include": ["src/**/*.ts", "test/**/*.ts"],
   "references": [
     { "path": "../restate-sdk-core" },
+    { "path": "../restate-sdk-zod" },
     { "path": "../restate-sdk-testcontainers" }
   ]
 }

@@ -1,0 +1,8 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist/esm"
+  },
+  "include": ["src/**/*.ts"],
+  "references": [{ "path": "../restate-sdk-core" }]
+}
