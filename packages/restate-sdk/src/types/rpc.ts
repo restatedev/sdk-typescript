@@ -28,14 +28,11 @@ import {
   type ServiceHandler,
   type ServiceDefinition,
   type ObjectHandler,
-  type ObjectSharedHandler,
   type VirtualObjectDefinition,
   type WorkflowHandler,
   type WorkflowDefinition,
   type WorkflowSharedHandler,
   type Serde,
-  type ArgType,
-  type HandlerReturnType,
   serde,
 } from "@restatedev/restate-sdk-core";
 import { TerminalError } from "./errors.js";
@@ -459,9 +456,14 @@ export class HandlerWrapper {
 }
 
 // ----------- handler decorators ----------------------------------------------
-
-type SerdeInputType<T> = T extends { input?: Serde<infer U> } ? U : unknown;
-type SerdeOutputType<T> = T extends { output?: Serde<infer U> } ? U : unknown;
+export type RemoveVoidArgument<F> = F extends (
+  ctx: infer C,
+  arg: infer A
+) => infer R
+  ? A extends void
+    ? (ctx: C) => R
+    : F
+  : F;
 
 export namespace handlers {
   /**
@@ -470,29 +472,29 @@ export namespace handlers {
    * @param opts additional configuration
    * @param fn the actual handler code to execute
    */
-  export function handler<I, O>(
+  export function handler<O, I = void>(
     opts: ServiceHandlerOpts<I, O>,
     fn: (ctx: Context, input: I) => Promise<O>
-  ): typeof fn {
+  ): RemoveVoidArgument<typeof fn> {
     return HandlerWrapper.from(HandlerKind.SERVICE, fn, opts).transpose();
   }
 
   export namespace workflow {
-    export function workflow<I, O>(
+    export function workflow<O, I = void>(
       opts: WorkflowHandlerOpts<I, O>,
       fn: (ctx: WorkflowContext, input: I) => Promise<O>
-    ): typeof fn;
+    ): RemoveVoidArgument<typeof fn>;
 
-    export function workflow<I, O>(
+    export function workflow<O, I = void>(
       fn: (ctx: WorkflowContext, input: I) => Promise<O>
-    ): typeof fn;
+    ): RemoveVoidArgument<typeof fn>;
 
-    export function workflow<I, O>(
+    export function workflow<O, I = void>(
       optsOrFn:
         | WorkflowHandlerOpts<I, O>
         | ((ctx: WorkflowContext, input: I) => Promise<O>),
       fn?: (ctx: WorkflowContext, input: I) => Promise<O>
-    ): typeof fn {
+    ) {
       if (typeof optsOrFn === "function") {
         return HandlerWrapper.from(HandlerKind.WORKFLOW, optsOrFn).transpose();
       }
@@ -512,10 +514,10 @@ export namespace handlers {
      * @param opts additional configurations
      * @param fn the handler to execute
      */
-    export function shared<I, O>(
+    export function shared<O, I = void>(
       opts: WorkflowHandlerOpts<I, O>,
       fn: (ctx: WorkflowSharedContext, input: I) => Promise<O>
-    ): typeof fn;
+    ): RemoveVoidArgument<typeof fn>;
 
     /**
      * Creates a shared handler for a workflow.
@@ -526,9 +528,9 @@ export namespace handlers {
      * @param opts additional configurations
      * @param fn the handler to execute
      */
-    export function shared<I, O>(
+    export function shared<O, I = void>(
       fn: (ctx: WorkflowSharedContext, input: I) => Promise<O>
-    ): typeof fn;
+    ): RemoveVoidArgument<typeof fn>;
 
     /**
      * Creates a shared handler for a workflow
@@ -539,12 +541,12 @@ export namespace handlers {
      * @param opts additional configurations
      * @param fn the handler to execute
      */
-    export function shared<I, O>(
+    export function shared<O, I = void>(
       optsOrFn:
         | WorkflowHandlerOpts<I, O>
         | ((ctx: WorkflowSharedContext, input: I) => Promise<O>),
       fn?: (ctx: WorkflowSharedContext, input: I) => Promise<O>
-    ): typeof fn {
+    ) {
       if (typeof optsOrFn === "function") {
         return HandlerWrapper.from(HandlerKind.SHARED, optsOrFn).transpose();
       }
@@ -565,10 +567,10 @@ export namespace handlers {
      * @param opts additional configurations
      * @param fn the handler to execute
      */
-    export function exclusive<I, O>(
+    export function exclusive<O, I = void>(
       opts: ObjectHandlerOpts<I, O>,
       fn: (ctx: ObjectContext, input: I) => Promise<O>
-    ): typeof fn;
+    ): RemoveVoidArgument<typeof fn>;
 
     /**
      * Creates an exclusive handler for a virtual Object.
@@ -582,9 +584,9 @@ export namespace handlers {
      *
      * @param fn the handler to execute
      */
-    export function exclusive<I, O>(
+    export function exclusive<O, I = void>(
       fn: (ctx: ObjectContext, input: I) => Promise<O>
-    ): typeof fn;
+    ): RemoveVoidArgument<typeof fn>;
 
     /**
      * Creates an exclusive handler for a virtual Object.
@@ -599,12 +601,12 @@ export namespace handlers {
      * @param opts additional configurations
      * @param fn the handler to execute
      */
-    export function exclusive<I, O>(
+    export function exclusive<O, I = void>(
       optsOrFn:
         | ObjectHandlerOpts<I, O>
         | ((ctx: ObjectContext, input: I) => Promise<O>),
       fn?: (ctx: ObjectContext, input: I) => Promise<O>
-    ): typeof fn {
+    ) {
       if (typeof optsOrFn === "function") {
         return HandlerWrapper.from(HandlerKind.EXCLUSIVE, optsOrFn).transpose();
       }
@@ -626,10 +628,10 @@ export namespace handlers {
      * @param opts additional configurations
      * @param fn the handler to execute
      */
-    export function shared<I, O>(
+    export function shared<O, I = void>(
       opts: ObjectHandlerOpts<I, O>,
       fn: (ctx: ObjectSharedContext, input: I) => Promise<O>
-    ): typeof fn;
+    ): RemoveVoidArgument<typeof fn>;
 
     /**
      * Creates a shared handler for a virtual Object.
@@ -642,9 +644,9 @@ export namespace handlers {
      * @param opts additional configurations
      * @param fn the handler to execute
      */
-    export function shared<I, O>(
+    export function shared<O, I = void>(
       fn: (ctx: ObjectSharedContext, input: I) => Promise<O>
-    ): typeof fn;
+    ): RemoveVoidArgument<typeof fn>;
 
     /**
      * Creates a shared handler for a virtual Object.
@@ -662,7 +664,7 @@ export namespace handlers {
         | ObjectHandlerOpts<I, O>
         | ((ctx: ObjectSharedContext, input: I) => Promise<O>),
       fn?: (ctx: ObjectSharedContext, input: I) => Promise<O>
-    ): typeof fn {
+    ) {
       if (typeof optsOrFn === "function") {
         return HandlerWrapper.from(HandlerKind.SHARED, optsOrFn).transpose();
       }
