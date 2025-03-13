@@ -28,14 +28,11 @@ import {
   type ServiceHandler,
   type ServiceDefinition,
   type ObjectHandler,
-  type ObjectSharedHandler,
   type VirtualObjectDefinition,
   type WorkflowHandler,
   type WorkflowDefinition,
   type WorkflowSharedHandler,
   type Serde,
-  type ArgType,
-  type HandlerReturnType,
   serde,
 } from "@restatedev/restate-sdk-core";
 import { TerminalError } from "./errors.js";
@@ -459,6 +456,14 @@ export class HandlerWrapper {
 }
 
 // ----------- handler decorators ----------------------------------------------
+export type RemoveVoidArgument<F> = F extends (
+  ctx: infer C,
+  arg: infer A
+) => infer R
+  ? A extends void
+    ? (ctx: C) => R
+    : F
+  : F;
 
 export namespace handlers {
   /**
@@ -467,36 +472,33 @@ export namespace handlers {
    * @param opts additional configuration
    * @param fn the actual handler code to execute
    */
-  export function handler<F>(
-    opts: ServiceHandlerOpts<ArgType<F>, HandlerReturnType<F>>,
-    fn: ServiceHandler<F, Context>
-  ): F {
+  export function handler<O, I = void>(
+    opts: ServiceHandlerOpts<I, O>,
+    fn: (ctx: Context, input: I) => Promise<O>
+  ): RemoveVoidArgument<typeof fn> {
     return HandlerWrapper.from(HandlerKind.SERVICE, fn, opts).transpose();
   }
 
   export namespace workflow {
-    export function workflow<F>(
-      opts: WorkflowHandlerOpts<ArgType<F>, HandlerReturnType<F>>,
-      fn: WorkflowHandler<F, WorkflowContext<any>>
-    ): F;
+    export function workflow<O, I = void>(
+      opts: WorkflowHandlerOpts<I, O>,
+      fn: (ctx: WorkflowContext, input: I) => Promise<O>
+    ): RemoveVoidArgument<typeof fn>;
 
-    export function workflow<F>(
-      fn: WorkflowHandler<F, WorkflowContext<any>>
-    ): F;
+    export function workflow<O, I = void>(
+      fn: (ctx: WorkflowContext, input: I) => Promise<O>
+    ): RemoveVoidArgument<typeof fn>;
 
-    export function workflow<F>(
+    export function workflow<O, I = void>(
       optsOrFn:
-        | WorkflowHandlerOpts<ArgType<F>, HandlerReturnType<F>>
-        | WorkflowHandler<F, WorkflowContext<any>>,
-      fn?: WorkflowHandler<F, WorkflowContext<any>>
-    ): F {
+        | WorkflowHandlerOpts<I, O>
+        | ((ctx: WorkflowContext, input: I) => Promise<O>),
+      fn?: (ctx: WorkflowContext, input: I) => Promise<O>
+    ) {
       if (typeof optsOrFn === "function") {
         return HandlerWrapper.from(HandlerKind.WORKFLOW, optsOrFn).transpose();
       }
-      const opts = optsOrFn satisfies WorkflowHandlerOpts<
-        ArgType<F>,
-        HandlerReturnType<F>
-      >;
+      const opts = optsOrFn satisfies WorkflowHandlerOpts<I, O>;
       if (typeof fn !== "function") {
         throw new TypeError("The second argument must be a function");
       }
@@ -512,10 +514,10 @@ export namespace handlers {
      * @param opts additional configurations
      * @param fn the handler to execute
      */
-    export function shared<F>(
-      opts: WorkflowHandlerOpts<ArgType<F>, HandlerReturnType<F>>,
-      fn: WorkflowSharedHandler<F, WorkflowSharedContext<any>>
-    ): F;
+    export function shared<O, I = void>(
+      opts: WorkflowHandlerOpts<I, O>,
+      fn: (ctx: WorkflowSharedContext, input: I) => Promise<O>
+    ): RemoveVoidArgument<typeof fn>;
 
     /**
      * Creates a shared handler for a workflow.
@@ -526,9 +528,9 @@ export namespace handlers {
      * @param opts additional configurations
      * @param fn the handler to execute
      */
-    export function shared<F>(
-      fn: WorkflowSharedHandler<F, WorkflowSharedContext<any>>
-    ): F;
+    export function shared<O, I = void>(
+      fn: (ctx: WorkflowSharedContext, input: I) => Promise<O>
+    ): RemoveVoidArgument<typeof fn>;
 
     /**
      * Creates a shared handler for a workflow
@@ -539,19 +541,16 @@ export namespace handlers {
      * @param opts additional configurations
      * @param fn the handler to execute
      */
-    export function shared<F>(
+    export function shared<O, I = void>(
       optsOrFn:
-        | WorkflowHandlerOpts<ArgType<F>, HandlerReturnType<F>>
-        | WorkflowSharedHandler<F, WorkflowSharedContext<any>>,
-      fn?: WorkflowSharedHandler<F, WorkflowSharedContext<any>>
-    ): F {
+        | WorkflowHandlerOpts<I, O>
+        | ((ctx: WorkflowSharedContext, input: I) => Promise<O>),
+      fn?: (ctx: WorkflowSharedContext, input: I) => Promise<O>
+    ) {
       if (typeof optsOrFn === "function") {
         return HandlerWrapper.from(HandlerKind.SHARED, optsOrFn).transpose();
       }
-      const opts = optsOrFn satisfies ObjectHandlerOpts<
-        ArgType<F>,
-        HandlerReturnType<F>
-      >;
+      const opts = optsOrFn satisfies ObjectHandlerOpts<I, O>;
       if (typeof fn !== "function") {
         throw new TypeError("The second argument must be a function");
       }
@@ -568,10 +567,10 @@ export namespace handlers {
      * @param opts additional configurations
      * @param fn the handler to execute
      */
-    export function exclusive<F>(
-      opts: ObjectHandlerOpts<ArgType<F>, HandlerReturnType<F>>,
-      fn: ObjectHandler<F, ObjectContext<any>>
-    ): F;
+    export function exclusive<O, I = void>(
+      opts: ObjectHandlerOpts<I, O>,
+      fn: (ctx: ObjectContext, input: I) => Promise<O>
+    ): RemoveVoidArgument<typeof fn>;
 
     /**
      * Creates an exclusive handler for a virtual Object.
@@ -585,7 +584,9 @@ export namespace handlers {
      *
      * @param fn the handler to execute
      */
-    export function exclusive<F>(fn: ObjectHandler<F, ObjectContext<any>>): F;
+    export function exclusive<O, I = void>(
+      fn: (ctx: ObjectContext, input: I) => Promise<O>
+    ): RemoveVoidArgument<typeof fn>;
 
     /**
      * Creates an exclusive handler for a virtual Object.
@@ -600,19 +601,16 @@ export namespace handlers {
      * @param opts additional configurations
      * @param fn the handler to execute
      */
-    export function exclusive<F>(
+    export function exclusive<O, I = void>(
       optsOrFn:
-        | ObjectHandlerOpts<ArgType<F>, HandlerReturnType<F>>
-        | ObjectHandler<F, ObjectContext<any>>,
-      fn?: ObjectHandler<F, ObjectContext<any>>
-    ): F {
+        | ObjectHandlerOpts<I, O>
+        | ((ctx: ObjectContext, input: I) => Promise<O>),
+      fn?: (ctx: ObjectContext, input: I) => Promise<O>
+    ) {
       if (typeof optsOrFn === "function") {
         return HandlerWrapper.from(HandlerKind.EXCLUSIVE, optsOrFn).transpose();
       }
-      const opts = optsOrFn satisfies ObjectHandlerOpts<
-        ArgType<F>,
-        HandlerReturnType<F>
-      >;
+      const opts = optsOrFn satisfies ObjectHandlerOpts<I, O>;
       if (typeof fn !== "function") {
         throw new TypeError("The second argument must be a function");
       }
@@ -630,10 +628,10 @@ export namespace handlers {
      * @param opts additional configurations
      * @param fn the handler to execute
      */
-    export function shared<F>(
-      opts: ObjectHandlerOpts<ArgType<F>, HandlerReturnType<F>>,
-      fn: ObjectSharedHandler<F, ObjectSharedContext<any>>
-    ): F;
+    export function shared<O, I = void>(
+      opts: ObjectHandlerOpts<I, O>,
+      fn: (ctx: ObjectSharedContext, input: I) => Promise<O>
+    ): RemoveVoidArgument<typeof fn>;
 
     /**
      * Creates a shared handler for a virtual Object.
@@ -646,9 +644,9 @@ export namespace handlers {
      * @param opts additional configurations
      * @param fn the handler to execute
      */
-    export function shared<F>(
-      fn: ObjectSharedHandler<F, ObjectSharedContext<any>>
-    ): F;
+    export function shared<O, I = void>(
+      fn: (ctx: ObjectSharedContext, input: I) => Promise<O>
+    ): RemoveVoidArgument<typeof fn>;
 
     /**
      * Creates a shared handler for a virtual Object.
@@ -661,19 +659,16 @@ export namespace handlers {
      * @param opts additional configurations
      * @param fn the handler to execute
      */
-    export function shared<F>(
+    export function shared<I, O>(
       optsOrFn:
-        | ObjectHandlerOpts<ArgType<F>, HandlerReturnType<F>>
-        | ObjectSharedHandler<F, ObjectSharedContext<any>>,
-      fn?: ObjectSharedHandler<F, ObjectSharedContext<any>>
-    ): F {
+        | ObjectHandlerOpts<I, O>
+        | ((ctx: ObjectSharedContext, input: I) => Promise<O>),
+      fn?: (ctx: ObjectSharedContext, input: I) => Promise<O>
+    ) {
       if (typeof optsOrFn === "function") {
         return HandlerWrapper.from(HandlerKind.SHARED, optsOrFn).transpose();
       }
-      const opts = optsOrFn satisfies ObjectHandlerOpts<
-        ArgType<F>,
-        HandlerReturnType<F>
-      >;
+      const opts = optsOrFn satisfies ObjectHandlerOpts<I, O>;
       if (typeof fn !== "function") {
         throw new TypeError("The second argument must be a function");
       }
