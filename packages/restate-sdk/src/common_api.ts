@@ -32,6 +32,7 @@ export type {
   SendClient,
   ClientCallOptions,
   ClientSendOptions,
+  RemoveVoidArgument,
 } from "./types/rpc.js";
 export {
   service,

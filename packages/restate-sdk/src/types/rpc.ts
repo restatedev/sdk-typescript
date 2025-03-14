@@ -20,6 +20,8 @@ import type {
   InvocationPromise,
   ObjectContext,
   ObjectSharedContext,
+  TypedState,
+  UntypedState,
   WorkflowContext,
   WorkflowSharedContext,
 } from "../context.js";
@@ -480,13 +482,21 @@ export namespace handlers {
   }
 
   export namespace workflow {
-    export function workflow<O, I = void>(
+    export function workflow<
+      O,
+      I = void,
+      TState extends TypedState = UntypedState
+    >(
       opts: WorkflowHandlerOpts<I, O>,
-      fn: (ctx: WorkflowContext, input: I) => Promise<O>
+      fn: (ctx: WorkflowContext<TState>, input: I) => Promise<O>
     ): RemoveVoidArgument<typeof fn>;
 
-    export function workflow<O, I = void>(
-      fn: (ctx: WorkflowContext, input: I) => Promise<O>
+    export function workflow<
+      O,
+      I = void,
+      TState extends TypedState = UntypedState
+    >(
+      fn: (ctx: WorkflowContext<TState>, input: I) => Promise<O>
     ): RemoveVoidArgument<typeof fn>;
 
     export function workflow<O, I = void>(
@@ -514,9 +524,13 @@ export namespace handlers {
      * @param opts additional configurations
      * @param fn the handler to execute
      */
-    export function shared<O, I = void>(
+    export function shared<
+      O,
+      I = void,
+      TState extends TypedState = UntypedState
+    >(
       opts: WorkflowHandlerOpts<I, O>,
-      fn: (ctx: WorkflowSharedContext, input: I) => Promise<O>
+      fn: (ctx: WorkflowSharedContext<TState>, input: I) => Promise<O>
     ): RemoveVoidArgument<typeof fn>;
 
     /**
@@ -528,8 +542,12 @@ export namespace handlers {
      * @param opts additional configurations
      * @param fn the handler to execute
      */
-    export function shared<O, I = void>(
-      fn: (ctx: WorkflowSharedContext, input: I) => Promise<O>
+    export function shared<
+      O,
+      I = void,
+      TState extends TypedState = UntypedState
+    >(
+      fn: (ctx: WorkflowSharedContext<TState>, input: I) => Promise<O>
     ): RemoveVoidArgument<typeof fn>;
 
     /**
@@ -567,9 +585,13 @@ export namespace handlers {
      * @param opts additional configurations
      * @param fn the handler to execute
      */
-    export function exclusive<O, I = void>(
+    export function exclusive<
+      O,
+      I = void,
+      TState extends TypedState = UntypedState
+    >(
       opts: ObjectHandlerOpts<I, O>,
-      fn: (ctx: ObjectContext, input: I) => Promise<O>
+      fn: (ctx: ObjectContext<TState>, input: I) => Promise<O>
     ): RemoveVoidArgument<typeof fn>;
 
     /**
@@ -584,8 +606,12 @@ export namespace handlers {
      *
      * @param fn the handler to execute
      */
-    export function exclusive<O, I = void>(
-      fn: (ctx: ObjectContext, input: I) => Promise<O>
+    export function exclusive<
+      O,
+      I = void,
+      TState extends TypedState = UntypedState
+    >(
+      fn: (ctx: ObjectContext<TState>, input: I) => Promise<O>
     ): RemoveVoidArgument<typeof fn>;
 
     /**
@@ -628,9 +654,13 @@ export namespace handlers {
      * @param opts additional configurations
      * @param fn the handler to execute
      */
-    export function shared<O, I = void>(
+    export function shared<
+      O,
+      I = void,
+      TState extends TypedState = UntypedState
+    >(
       opts: ObjectHandlerOpts<I, O>,
-      fn: (ctx: ObjectSharedContext, input: I) => Promise<O>
+      fn: (ctx: ObjectSharedContext<TState>, input: I) => Promise<O>
     ): RemoveVoidArgument<typeof fn>;
 
     /**
@@ -644,8 +674,12 @@ export namespace handlers {
      * @param opts additional configurations
      * @param fn the handler to execute
      */
-    export function shared<O, I = void>(
-      fn: (ctx: ObjectSharedContext, input: I) => Promise<O>
+    export function shared<
+      O,
+      I = void,
+      TState extends TypedState = UntypedState
+    >(
+      fn: (ctx: ObjectSharedContext<TState>, input: I) => Promise<O>
     ): RemoveVoidArgument<typeof fn>;
 
     /**
