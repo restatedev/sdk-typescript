@@ -17,7 +17,12 @@ import type {
   InvocationPromise,
 } from "./context.js";
 import type * as vm from "./endpoint/handlers/vm/sdk_shared_core_wasm_bindings.js";
-import { CancelledError, TimeoutError } from "./types/errors.js";
+import {
+  CancelledError,
+  RestateError,
+  TerminalError,
+  TimeoutError,
+} from "./types/errors.js";
 import { CompletablePromise } from "./utils/completable_promise.js";
 import type { ContextImpl, RunClosuresTracker } from "./context_impl.js";
 import { setTimeout } from "timers/promises";
@@ -134,6 +139,12 @@ abstract class AbstractRestatePromise<T> implements RestatePromise<T> {
       },
       [this, this[RESTATE_CTX_SYMBOL].sleep(millis) as RestatePromise<any>]
     ) as CombineablePromise<T>;
+  }
+
+  map<U>(
+    mapper: (value?: T, failure?: TerminalError) => U
+  ): CombineablePromise<U> {
+    return new RestateMappedPromise(this[RESTATE_CTX_SYMBOL], this, mapper);
   }
 
   tryCancel() {
@@ -288,6 +299,10 @@ export class RestatePendingPromise<T> implements RestatePromise<T> {
     return this;
   }
 
+  map<U>(): CombineablePromise<U> {
+    return this as unknown as CombineablePromise<U>;
+  }
+
   tryCancel(): void {}
   tryComplete(): void {}
   uncompletedLeaves(): number[] {
@@ -311,6 +326,58 @@ export class InvocationPendingPromise<T>
   get invocationId(): Promise<InvocationId> {
     return pendingPromise();
   }
+}
+
+export class RestateMappedPromise<T, U> extends AbstractRestatePromise<U> {
+  private publicPromiseMapper: (
+    value?: T,
+    failure?: TerminalError
+  ) => Promise<U>;
+
+  constructor(
+    ctx: ContextImpl,
+    readonly inner: RestatePromise<T>,
+    mapper: (value?: T, failure?: TerminalError) => U
+  ) {
+    super(ctx);
+    this.publicPromiseMapper = (value?: T, failure?: TerminalError) => {
+      try {
+        return Promise.resolve(mapper(value, failure));
+      } catch (e) {
+        if (e instanceof TerminalError) {
+          return Promise.reject(e);
+        } else {
+          ctx.handleInvocationEndError(e);
+          return pendingPromise();
+        }
+      }
+    };
+  }
+
+  tryComplete(): void {
+    this.inner.tryComplete();
+  }
+
+  uncompletedLeaves(): number[] {
+    return this.inner.uncompletedLeaves();
+  }
+
+  publicPromise(): Promise<U> {
+    const promiseMapper = this.publicPromiseMapper;
+    return this.inner.publicPromise().then(
+      (t) => promiseMapper(t, undefined),
+      (error) => {
+        if (error instanceof RestateError) {
+          return promiseMapper(undefined, error);
+        } else {
+          // Something else, just re-throw it
+          throw error;
+        }
+      }
+    );
+  }
+
+  readonly [Symbol.toStringTag] = "RestateMappedPromise";
 }
 
 /**

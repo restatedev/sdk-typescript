@@ -25,6 +25,7 @@ import type {
   Serde,
 } from "@restatedev/restate-sdk-core";
 import { ContextImpl } from "./context_impl.js";
+import type { TerminalError } from "./types/errors.js";
 
 /**
  * Represents the original request as sent to this handler.
@@ -651,6 +652,24 @@ export type CombineablePromise<T> = Promise<T> & {
    * This is a lower-bound.
    */
   orTimeout(millis: number): CombineablePromise<T>;
+
+  /**
+   * Creates a new {@link CombineablePromise} that maps the result of this promise with
+   * the provided `mapper`, once this promise is fulfilled.
+   *
+   * **NOTE**: You **MUST** use this API when you need to map the result of a
+   * {@link CombineablePromise} without `await`ing it, rather than using {@link Promise.then}.
+   * {@link Promise.then} is used by Restate to distinguish when awaiting an asynchronous operation,
+   * thus calling `.then` on several Restate promises can lead to concurrency issues.
+   *
+   * @param mapper the function to execute when this promise is fulfilled.
+   * If the promise completed successfully, `value` is provided as input, otherwise `failure` is provided as input.
+   * If this mapper returns a value, this value will be used to resolve the returned {@link CombineablePromise}.
+   * If the mapper throws a {@link TerminalError}, this error will be used to reject the returned {@link CombineablePromise}.
+   */
+  map<U>(
+    mapper: (value?: T, failure?: TerminalError) => U
+  ): CombineablePromise<U>;
 };
 
 /**
