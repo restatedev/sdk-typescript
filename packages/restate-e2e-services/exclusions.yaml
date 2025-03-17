@@ -1,11 +1,1 @@
-exclusions:
-  "alwaysSuspending":
-    - "dev.restate.sdktesting.tests.Combinators.awakeableOrTimeoutUsingAwaitAny"
-  "default":
-    - "dev.restate.sdktesting.tests.Combinators.awakeableOrTimeoutUsingAwaitAny"
-  "singleThreadSinglePartition":
-    - "dev.restate.sdktesting.tests.Combinators.awakeableOrTimeoutUsingAwaitAny"
-  "threeNodes":
-    - "dev.restate.sdktesting.tests.Combinators.awakeableOrTimeoutUsingAwaitAny"
-  "threeNodesAlwaysSuspending":
-    - "dev.restate.sdktesting.tests.Combinators.awakeableOrTimeoutUsingAwaitAny"
+exclusions: {}

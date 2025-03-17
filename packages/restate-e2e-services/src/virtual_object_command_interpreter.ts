@@ -96,13 +96,7 @@ function parseAwaitableCommand(
     case "createAwakeable":
       return createAwakeable(ctx, command.awakeableKey);
     case "sleep":
-      // TODO yes this is an incorrect cast, but for now this is fine, type coercion in TS FTW.
-      //  We need a mapper function in our promise type to make this working.
-      //  The kotlin code looks like this:
-      //  ctx.timer(this.timeoutMillis.milliseconds).map { "sleep" }
-      return ctx.sleep(
-        command.timeoutMillis
-      ) as unknown as CombineablePromise<string>;
+      return ctx.sleep(command.timeoutMillis).map(() => "sleep");
     case "runThrowTerminalException":
       return ctx.run<string>(() => {
         throw new TerminalError(command.reason);
