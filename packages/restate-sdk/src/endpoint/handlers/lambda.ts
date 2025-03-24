@@ -17,7 +17,11 @@ import type {
   Context,
 } from "aws-lambda";
 import { Buffer } from "node:buffer";
-import type { GenericHandler, RestateRequest } from "./generic.js";
+import type {
+  GenericHandler,
+  RestateRequest,
+  RestateResponse,
+} from "./generic.js";
 import { WritableStream, type ReadableStream } from "node:stream/web";
 import { OnceStream } from "../../utils/streams.js";
 import { X_RESTATE_SERVER } from "../../user_agent.js";
@@ -48,16 +52,26 @@ export class LambdaHandler {
       body = OnceStream(new TextEncoder().encode(event.body));
     }
 
+    const abortController = new AbortController();
+
     const request: RestateRequest = {
       body,
       headers: event.headers,
       url: path,
       extraArgs: [context],
+      abortSignal: abortController.signal,
     };
 
-    const resp = await this.handler.handle(request, {
-      AWSRequestId: context.awsRequestId,
-    });
+    let resp: RestateResponse;
+
+    try {
+      resp = await this.handler.handle(request, {
+        AWSRequestId: context.awsRequestId,
+      });
+    } catch (e) {
+      abortController.abort();
+      throw e;
+    }
 
     const chunks: Uint8Array[] = [];
 
@@ -85,6 +99,8 @@ export class LambdaHandler {
         isBase64Encoded: false,
         body: JSON.stringify({ message: error.message }),
       };
+    } finally {
+      abortController.abort();
     }
 
     return {

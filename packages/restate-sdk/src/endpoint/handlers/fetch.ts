@@ -25,6 +25,7 @@ export function fetcher(handler: GenericHandler) {
         headers,
         body: event.body,
         extraArgs,
+        abortSignal: event.signal,
       };
 
       const resp = await handler.handle(request);

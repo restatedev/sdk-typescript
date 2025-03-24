@@ -55,6 +55,7 @@ export interface RestateRequest {
   readonly headers: Headers;
   readonly body: ReadableStream<Uint8Array> | null;
   readonly extraArgs: unknown[];
+  readonly abortSignal: AbortSignal;
 }
 
 export interface RestateResponse {
@@ -178,11 +179,13 @@ export class GenericHandler implements RestateHandler {
       this.endpoint.rlog.error(msg);
       return this.toErrorResponse(400, msg);
     }
+
     return this.handleInvoke(
       handler,
       request.body,
       request.headers,
       request.extraArgs,
+      request.abortSignal,
       context ?? {}
     );
   }
@@ -220,6 +223,7 @@ export class GenericHandler implements RestateHandler {
     body: ReadableStream<Uint8Array>,
     headers: Headers,
     extraArgs: unknown[],
+    abortSignal: AbortSignal,
     additionalContext: AdditionalContext
   ): Promise<RestateResponse> {
     const loggerId = Math.floor(Math.random() * 4_294_967_295 /* u32::MAX */);
@@ -277,8 +281,6 @@ export class GenericHandler implements RestateHandler {
     // Get input
     const input = coreVm.sys_input();
 
-    const abortController = new AbortController();
-
     const invocationRequest: Request = {
       id: input.invocation_id,
       headers: input.headers.reduce((headers, { key, value }) => {
@@ -296,7 +298,7 @@ export class GenericHandler implements RestateHandler {
       ),
       body: input.input,
       extraArgs,
-      attemptCompletedSignal: abortController.signal,
+      attemptCompletedSignal: abortSignal,
     };
 
     // Prepare logger
@@ -398,11 +400,6 @@ export class GenericHandler implements RestateHandler {
         inputReader.cancel().catch(() => {});
       })
       .finally(() => {
-        try {
-          abortController.abort();
-        } catch (e) {
-          // suppressed
-        }
         invocationLoggers.delete(loggerId);
       })
       .catch(() => {});

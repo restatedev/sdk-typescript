@@ -74,6 +74,16 @@ export class NodeEndpoint implements RestateEndpoint {
 
     return (request, response) => {
       (async () => {
+        const abortController = new AbortController();
+        request.once("aborted", () => {
+          abortController.abort();
+        });
+        request.once("close", () => {
+          abortController.abort();
+        });
+        request.once("error", () => {
+          abortController.abort();
+        });
         try {
           const url = request.url;
           const resp = await handler.handle({
@@ -81,8 +91,8 @@ export class NodeEndpoint implements RestateEndpoint {
             headers: request.headers,
             body: Readable.toWeb(request),
             extraArgs: [],
+            abortSignal: abortController.signal,
           });
-
           response.writeHead(resp.statusCode, resp.headers);
           const responseWeb = Writable.toWeb(
             response
@@ -95,6 +105,7 @@ export class NodeEndpoint implements RestateEndpoint {
             "Error while handling connection: " + (error.stack ?? error.message)
           );
           response.destroy(error);
+          abortController.abort();
         }
       })().catch(() => {});
     };
