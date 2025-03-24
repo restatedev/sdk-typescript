@@ -277,6 +277,8 @@ export class GenericHandler implements RestateHandler {
     // Get input
     const input = coreVm.sys_input();
 
+    const abortController = new AbortController();
+
     const invocationRequest: Request = {
       id: input.invocation_id,
       headers: input.headers.reduce((headers, { key, value }) => {
@@ -294,6 +296,7 @@ export class GenericHandler implements RestateHandler {
       ),
       body: input.input,
       extraArgs,
+      attemptCompletedSignal: abortController.signal,
     };
 
     // Prepare logger
@@ -395,6 +398,11 @@ export class GenericHandler implements RestateHandler {
         inputReader.cancel().catch(() => {});
       })
       .finally(() => {
+        try {
+          abortController.abort();
+        } catch (e) {
+          // suppressed
+        }
         invocationLoggers.delete(loggerId);
       })
       .catch(() => {});

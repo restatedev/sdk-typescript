@@ -68,6 +68,13 @@ export interface Request {
    * Care should be taken to use them deterministically.
    */
   readonly extraArgs: unknown[];
+
+  /**
+   * This is a signal that is aborted when the current attempt has been completed either successful or unsuccessfully.
+   * When the signal is aborted, the current attempt has been completed and the handler should not perform any more work, other
+   * than cleanup any external resources that might be shared across attempts (e.g. database connections).
+   */
+  readonly attemptCompletedSignal: AbortSignal;
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
