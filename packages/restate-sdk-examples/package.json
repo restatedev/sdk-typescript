@@ -37,7 +37,8 @@
   },
   "dependencies": {
     "@restatedev/restate-sdk": "^1.4.0",
-    "@restatedev/restate-sdk-clients": "^1.4.0"
+    "@restatedev/restate-sdk-clients": "^1.4.0",
+    "@restatedev/restate-sdk-zod": "^1.4.0"
   },
   "devDependencies": {
     "tsx": "^4.15.7",
