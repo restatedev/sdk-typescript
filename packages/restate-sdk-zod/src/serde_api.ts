@@ -36,10 +36,10 @@ class ZodSerde<T extends z.ZodType> implements Serde<z.infer<T>> {
   }
 
   deserialize(data: Uint8Array): T {
-    if (data.length === 0) {
-      return undefined as any;
-    }
-    const js = JSON.parse(new TextDecoder().decode(data));
+    const js =
+      data.length === 0
+        ? undefined
+        : JSON.parse(new TextDecoder().decode(data));
 
     const res = this.schema.safeParse(js);
     if (res.success) {
