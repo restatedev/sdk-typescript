@@ -432,6 +432,7 @@ export class HandlerWrapper {
       req = this.inputSerde.deserialize(input);
     } catch (e) {
       throw new TerminalError(`Failed to deserialize input.`, {
+        errorCode: 400,
         cause: e,
       });
     }
