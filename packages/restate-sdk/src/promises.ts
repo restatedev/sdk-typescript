@@ -43,7 +43,11 @@ enum PromiseState {
   NOT_COMPLETED,
 }
 
+export const RESTATE_CTX_SYMBOL = Symbol("restateContext");
+
 export interface RestatePromise<T> extends CombineablePromise<T> {
+  [RESTATE_CTX_SYMBOL]: ContextImpl;
+
   tryCancel(): void;
   tryComplete(): void;
   uncompletedLeaves(): Array<number>;
@@ -56,8 +60,6 @@ export type AsyncResultValue =
   | { Failure: vm.WasmFailure }
   | { StateKeys: string[] }
   | { InvocationId: string };
-
-export const RESTATE_CTX_SYMBOL = Symbol("restateContext");
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function extractContext(n: any): ContextImpl | undefined {
@@ -183,20 +185,14 @@ export class RestateSinglePromise<T> extends AbstractRestatePromise<T> {
     if (this.state === PromiseState.COMPLETED) {
       return;
     }
-    try {
-      const notification = this[RESTATE_CTX_SYMBOL].coreVm.take_notification(
-        this.handle
-      );
-      if (notification === "NotReady") {
-        return;
-      }
-      this.state = PromiseState.COMPLETED;
-      this.completer(notification, this.completablePromise);
-    } catch (e) {
-      // This can happen if either take_notification throws an exception or completer throws an exception.
-      // Both should be programming mistakes of the SDK, but we cover them here.
-      this[RESTATE_CTX_SYMBOL].handleInvocationEndError(e);
+    const notification = this[RESTATE_CTX_SYMBOL].coreVm.take_notification(
+      this.handle
+    );
+    if (notification === "NotReady") {
+      return;
     }
+    this.state = PromiseState.COMPLETED;
+    this.completer(notification, this.completablePromise);
   }
 
   publicPromise(): Promise<T> {
@@ -400,7 +396,14 @@ export class PromisesExecutor {
 
   private async doProgressInner(restatePromise: RestatePromise<unknown>) {
     // Try complete the promise
-    restatePromise.tryComplete();
+    try {
+      restatePromise.tryComplete();
+    } catch (e) {
+      // This can happen if either take_notification throws an exception or completer throws an exception.
+      // Both should be programming mistakes of the SDK, but we cover them here.
+      restatePromise[RESTATE_CTX_SYMBOL].handleInvocationEndError(e);
+      return Promise.resolve();
+    }
 
     // tl;dr don't touch this, or you can break combineable promises,
     // slinkydeveloper won't be happy about it

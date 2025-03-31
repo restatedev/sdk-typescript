@@ -382,6 +382,11 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
               message: err.message,
             });
           } else {
+            this.vmLogger.warn(
+              `Error when processing ctx.run '${name}'.\n`,
+              err
+            );
+
             if (
               options?.retryIntervalFactor === undefined &&
               options?.initialRetryIntervalMillis === undefined &&
@@ -389,9 +394,12 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
               options?.maxRetryDurationMillis === undefined &&
               options?.maxRetryIntervalMillis === undefined
             ) {
-              // If no retry option was set, simply throw the error.
-              // This will lead to the invoker applying its retry, without the SDK overriding it.
-              throw err;
+              // If no retry option was set, simply notify the error.
+              this.coreVm.notify_error(err.message, err.stack);
+
+              // From now on, no progress will be made.
+              this.invocationEndPromise.resolve();
+              return pendingPromise<T>();
             }
             this.coreVm.propose_run_completion_failure_transient(
               handle,
@@ -562,7 +570,10 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       !(error instanceof RestateError) ||
       error.code !== SUSPENDED_ERROR_CODE
     ) {
-      this.vmLogger.warn("Invocation completed with an error.\n", error);
+      this.vmLogger.warn(
+        "Error when processing a Restate context operation.\n",
+        error
+      );
     }
     this.coreVm.notify_error(error.message, error.stack);
 
