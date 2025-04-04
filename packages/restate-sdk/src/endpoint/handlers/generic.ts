@@ -120,7 +120,10 @@ export class GenericHandler implements RestateHandler {
       this.endpoint.rlog.error(
         "Error while handling invocation: " + (error.stack ?? error.message)
       );
-      return this.toErrorResponse(500, error.message);
+      return this.toErrorResponse(
+        error instanceof RestateError ? error.code : 500,
+        error.message
+      );
     }
   }
 
