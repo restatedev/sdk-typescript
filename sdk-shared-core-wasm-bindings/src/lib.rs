@@ -518,6 +518,7 @@ impl WasmVM {
         let now = now_since_unix_epoch();
         use_log_dispatcher!(self, |vm| CoreVM::sys_sleep(
             vm,
+            Default::default(),
             now + Duration::from_millis(millis),
             Some(now)
         ))
