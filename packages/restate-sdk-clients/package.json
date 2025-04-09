@@ -1,6 +1,6 @@
 {
   "name": "@restatedev/restate-sdk-clients",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "Typescript SDK for Restate Clients",
   "author": "Restate Developers",
   "license": "MIT",
@@ -46,7 +46,7 @@
     "release": "release-it"
   },
   "dependencies": {
-    "@restatedev/restate-sdk-core": "^1.4.0"
+    "@restatedev/restate-sdk-core": "^1.5.0"
   },
   "engines": {
     "node": ">= 18.13"
