@@ -25,7 +25,7 @@ import {
 } from "./types/errors.js";
 import { CompletablePromise } from "./utils/completable_promise.js";
 import type { ContextImpl, RunClosuresTracker } from "./context_impl.js";
-import { setTimeout } from "timers/promises";
+import { setTimeout } from "node:timers/promises";
 import type { InputPump, OutputPump } from "./io.js";
 
 // A promise that is never completed
