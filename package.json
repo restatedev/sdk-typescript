@@ -69,5 +69,8 @@
       "release": true
     },
     "npm": false
+  },
+  "overrides": {
+    "release-it": "^18.1.2"
   }
 }
