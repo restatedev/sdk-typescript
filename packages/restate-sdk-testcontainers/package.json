@@ -49,7 +49,7 @@
     "@restatedev/restate-sdk-core": "^1.5.3",
     "@restatedev/restate-sdk-clients": "^1.5.3",
     "apache-arrow": "^18.0.0",
-    "testcontainers": "^10.4.0"
+    "testcontainers": "^10.24.1"
   },
   "engines": {
     "node": ">= 18.13"

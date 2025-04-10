@@ -42,7 +42,7 @@
   "devDependencies": {
     "tsx": "^4.15.7",
     "@restatedev/restate-sdk-testcontainers": "^1.5.3",
-    "testcontainers": "^10.4.0"
+    "testcontainers": "^10.24.1"
   },
   "engines": {
     "node": ">= 18.13"
