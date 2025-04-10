@@ -30,6 +30,9 @@ jobs:
       - run: find -type f -name "restatedev-restate-sdk-[0-9.]*\.tgz" | xargs -I {} mv {} restatedev-restate-sdk.tgz
       - run: find -type f -name "restatedev-restate-sdk-clients-[0-9.]*\.tgz" | xargs -I {} mv {} restatedev-restate-sdk-clients.tgz
       - run: find -type f -name "restatedev-restate-sdk-core-[0-9.]*\.tgz" | xargs -I {} mv {} restatedev-restate-sdk-core.tgz
+      - run: find -type f -name "restatedev-restate-sdk-testcontainers-[0-9.]*\.tgz" | xargs -I {} mv {} restatedev-restate-sdk-testcontainers.tgz
+      - run: find -type f -name "restatedev-restate-sdk-zod-[0-9.]*\.tgz" | xargs -I {} mv {} restatedev-restate-sdk-zod.tgz
+      - run: find -type f -name "restatedev-restate-sdk-cloudflare-workers-[0-9.]*\.tgz" | xargs -I {} mv {} restatedev-restate-sdk-cloudflare-workers.tgz
       - uses: actions/upload-artifact@v4
         with:
           name: restatedev-restate-sdk
@@ -46,6 +49,24 @@ jobs:
         with:
           name: restatedev-restate-sdk-core
           path: restatedev-restate-sdk-core.tgz
+          retention-days: 1
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: restatedev-restate-sdk-testcontainers
+          path: restatedev-restate-sdk-testcontainers.tgz
+          retention-days: 1
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: restatedev-restate-sdk-zod
+          path: restatedev-restate-sdk-zod.tgz
+          retention-days: 1
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: restatedev-restate-sdk-cloudflare-workers
+          path: restatedev-restate-sdk-cloudflare-workers.tgz
           retention-days: 1
           if-no-files-found: error
 
@@ -71,6 +92,7 @@ jobs:
           set "@restatedev/restate-sdk-cloudflare-workers"
           set "@restatedev/restate-sdk-clients"
           set "@restatedev/restate-sdk-testcontainers"
+          set "@restatedev/restate-sdk-zod"
           npm --workspaces update
           # We use dist-tag dev for the snapshot releases, see https://docs.npmjs.com/cli/v9/commands/npm-dist-tag for more info
           # A snapshot MUST not be published with latest tag (omitting --tag defaults to latest) to avoid users to install snapshot releases
