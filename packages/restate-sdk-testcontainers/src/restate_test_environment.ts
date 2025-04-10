@@ -23,6 +23,7 @@ import {
 import { tableFromIPC } from "apache-arrow";
 import * as http2 from "http2";
 import type * as net from "net";
+import { setTimeout } from "node:timers/promises";
 
 // Prepare the restate server
 async function prepareRestateEndpoint(
@@ -303,37 +304,46 @@ export class StateProxy<TState extends TypedState> {
     entries: [key: string, value: Uint8Array][],
     version?: string
   ) {
-    const res = await fetch(
-      `${this.adminAPIBaseUrl}/services/${this.service}/state`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(
-          {
-            version,
-            object_key: this.serviceKey,
-            new_state: Object.fromEntries(entries),
+    let lastFailure: Error | undefined = undefined;
+    for (let i = 0; i < 10; i++) {
+      const res = await fetch(
+        `${this.adminAPIBaseUrl}/services/${this.service}/state`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
           },
-          (key, value) => {
-            if (value instanceof Uint8Array) {
-              return Array.from(value);
-            } else {
-              // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-              return value;
+          body: JSON.stringify(
+            {
+              version,
+              object_key: this.serviceKey,
+              new_state: Object.fromEntries(entries),
+            },
+            (key, value) => {
+              if (value instanceof Uint8Array) {
+                return Array.from(value);
+              } else {
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+                return value;
+              }
             }
-          }
-        ),
-      }
-    );
+          ),
+        }
+      );
 
-    if (!res.ok) {
+      if (res.ok) {
+        return;
+      }
+
       const badResponse = await res.text();
-      throw new Error(
+      lastFailure = new Error(
         `Error ${res.status} during modify state: ${badResponse}`
       );
+
+      await setTimeout(1000);
     }
+
+    throw lastFailure;
   }
 }
 
