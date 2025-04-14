@@ -100,7 +100,7 @@ export interface RestateEndpoint extends RestateEndpointBase<RestateEndpoint> {
    * environment variable. If that variable is undefined as well, the method will
    * default to port 9080.
    *
-   * This method's result promise never completes.
+   * The returned promise resolves with the bound port when the server starts listening, or rejects with a failure otherwise.
    *
    * This method is a shorthand for:
    *
