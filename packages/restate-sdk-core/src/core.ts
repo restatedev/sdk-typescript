@@ -81,7 +81,7 @@ export type ObjectHandler<F, C = RestateObjectContext> = F extends (
   ? F
   : F extends (ctx: C) => Promise<any>
   ? F
-  : never;
+  : ((ctx: C, param: any) => Promise<any>) | ((ctx: C) => Promise<any>);
 
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
 export type VirtualObjectDefinition<P extends string, M> = {

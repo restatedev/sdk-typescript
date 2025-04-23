@@ -802,7 +802,9 @@ export type ObjectOpts<U> = {
     ? U[K]
     : U[K] extends ObjectHandler<U[K], ObjectSharedContext<any>>
     ? U[K]
-    : never;
+    :
+        | ObjectHandler<U[K], ObjectContext<any>>
+        | ObjectHandler<U[K], ObjectSharedContext<any>>;
 };
 
 /**
