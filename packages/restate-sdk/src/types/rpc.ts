@@ -715,7 +715,9 @@ export namespace handlers {
 // ----------- services ----------------------------------------------
 
 export type ServiceOpts<U> = {
-  [K in keyof U]: U[K] extends ServiceHandler<any, Context> ? U[K] : never;
+  [K in keyof U]: U[K] extends ServiceHandler<U[K], Context>
+    ? U[K]
+    : ServiceHandler<U[K], Context>;
 };
 
 /**
