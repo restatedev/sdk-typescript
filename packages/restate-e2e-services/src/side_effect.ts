@@ -13,7 +13,7 @@ import { REGISTRY } from "./services.js";
 const c = restate.service({
   name: "SideEffect",
   handlers: {
-    invokeSideEffects: async (ctx: restate.ObjectContext): Promise<number> => {
+    invokeSideEffects: async (ctx: restate.Context): Promise<number> => {
       let n = 0;
 
       await ctx.run(() => {
