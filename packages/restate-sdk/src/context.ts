@@ -717,7 +717,7 @@ export const CombineablePromise = {
    * @param values An iterable of Promises.
    * @returns A new Promise.
    */
-  all<T extends readonly CombineablePromise<unknown>[]>(
+  all<const T extends readonly CombineablePromise<unknown>[]>(
     values: T
   ): CombineablePromise<{ -readonly [P in keyof T]: Awaited<T[P]> }> {
     if (values.length === 0) {
@@ -742,7 +742,7 @@ export const CombineablePromise = {
    * @param values An iterable of Promises.
    * @returns A new Promise.
    */
-  race<T extends readonly CombineablePromise<unknown>[]>(
+  race<const T extends readonly CombineablePromise<unknown>[]>(
     values: T
   ): CombineablePromise<Awaited<T[number]>> {
     if (values.length === 0) {
@@ -766,7 +766,7 @@ export const CombineablePromise = {
    * @param values An iterable of Promises.
    * @returns A new Promise.
    */
-  any<T extends readonly CombineablePromise<unknown>[]>(
+  any<const T extends readonly CombineablePromise<unknown>[]>(
     values: T
   ): CombineablePromise<Awaited<T[number]>> {
     if (values.length === 0) {
@@ -789,7 +789,7 @@ export const CombineablePromise = {
    * @param values An iterable of Promises.
    * @returns A new Promise.
    */
-  allSettled<T extends readonly CombineablePromise<unknown>[]>(
+  allSettled<const T extends readonly CombineablePromise<unknown>[]>(
     values: T
   ): CombineablePromise<{
     -readonly [P in keyof T]: PromiseSettledResult<Awaited<T[P]>>;
