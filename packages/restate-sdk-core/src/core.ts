@@ -48,7 +48,7 @@ export type ServiceHandler<F, C = RestateContext> = F extends (
   ? F
   : F extends (ctx: C, input: any) => Promise<any>
   ? F
-  : ((ctx: C) => Promise<any>) | ((ctx: C, input: any) => Promise<any>);
+  : (ctx: C, input?: any) => Promise<any>;
 
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
 export type ServiceDefinition<P extends string, M> = {
@@ -72,7 +72,7 @@ export type ObjectSharedHandler<
   ? F
   : F extends (ctx: SC) => Promise<any>
   ? F
-  : never;
+  : (ctx: SC, param?: any) => Promise<any>;
 
 export type ObjectHandler<F, C = RestateObjectContext> = F extends (
   ctx: C,
@@ -81,7 +81,7 @@ export type ObjectHandler<F, C = RestateObjectContext> = F extends (
   ? F
   : F extends (ctx: C) => Promise<any>
   ? F
-  : ((ctx: C, param: any) => Promise<any>) | ((ctx: C) => Promise<any>);
+  : (ctx: C, param?: any) => Promise<any>;
 
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
 export type VirtualObjectDefinition<P extends string, M> = {
@@ -111,7 +111,7 @@ export type WorkflowSharedHandler<
   ? F
   : F extends (ctx: SC) => Promise<any>
   ? F
-  : ((ctx: SC, param: any) => Promise<any>) | ((ctx: SC) => Promise<any>);
+  : (ctx: SC, param?: any) => Promise<any>;
 
 export type WorkflowHandler<F, C = RestateWorkflowContext> = F extends (
   ctx: C,
@@ -120,7 +120,7 @@ export type WorkflowHandler<F, C = RestateWorkflowContext> = F extends (
   ? F
   : F extends (ctx: C) => Promise<any>
   ? F
-  : ((ctx: C, param: any) => Promise<any>) | ((ctx: C) => Promise<any>);
+  : (ctx: C, param?: any) => Promise<any>;
 
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
 export type WorkflowDefinition<P extends string, M> = {
