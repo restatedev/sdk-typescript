@@ -17,12 +17,12 @@ const greeterFoo = restate.service({
   name: "greeter",
   handlers: {
     /* eslint-disable @typescript-eslint/no-unused-vars */
-    greet(ctx: restate.ObjectContext, req: string): Promise<string> {
+    greet(ctx: restate.Context, req: string): Promise<string> {
       return this.foo(ctx, req);
     },
 
     // eslint-disable-next-line @typescript-eslint/require-await
-    async foo(ctx: restate.ObjectContext, req: string): Promise<string> {
+    async foo(ctx: restate.Context, req: string): Promise<string> {
       return req;
     },
   },
