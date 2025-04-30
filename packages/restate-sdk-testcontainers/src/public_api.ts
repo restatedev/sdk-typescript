@@ -9,4 +9,7 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-export { RestateTestEnvironment } from "./restate_test_environment.js";
+export {
+  RestateTestEnvironment,
+  RestateGenericContainer,
+} from "./restate_test_environment.js";
