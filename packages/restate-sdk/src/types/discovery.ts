@@ -26,15 +26,15 @@ export enum ServiceHandlerType {
   SHARED = "SHARED",
 }
 
-type InputPayload = {
-  required: boolean;
-  contentType: string;
+export type InputPayload = {
+  required?: boolean;
+  contentType?: string;
   /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
   jsonSchema?: any; // You should specify the type of jsonSchema if known
 };
 
-type OutputPayload = {
-  contentType: string;
+export type OutputPayload = {
+  contentType?: string;
   setContentTypeIfEmpty: boolean;
   /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
   jsonSchema?: any; // You should specify the type of jsonSchema if known

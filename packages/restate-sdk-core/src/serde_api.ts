@@ -14,8 +14,8 @@
 /* eslint-disable @typescript-eslint/ban-types */
 
 export interface Serde<T> {
-  readonly contentType: string;
-  readonly jsonSchema?: object;
+  contentType?: string;
+  jsonSchema?: object;
 
   serialize(value: T): Uint8Array;
 
@@ -35,8 +35,6 @@ class BinarySerde implements Serde<Uint8Array> {
 }
 
 class VoidSerde implements Serde<void> {
-  contentType = "application/octet-stream";
-
   serialize(value: any): Uint8Array {
     if (value !== undefined) {
       throw new Error("Expected undefined value");

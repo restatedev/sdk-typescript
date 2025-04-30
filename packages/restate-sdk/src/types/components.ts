@@ -37,6 +37,56 @@ export interface ComponentHandler {
 // Service
 //
 
+function handlerInputDiscovery(handler: HandlerWrapper): d.InputPayload {
+  let contentType = undefined;
+  let jsonSchema = undefined;
+
+  if (handler.inputSerde.jsonSchema) {
+    jsonSchema = handler.inputSerde.jsonSchema;
+    contentType =
+      handler.accept ?? handler.inputSerde.contentType ?? "application/json";
+  } else if (handler.accept) {
+    contentType = handler.accept;
+  } else if (handler.inputSerde.contentType) {
+    contentType = handler.inputSerde.contentType;
+  } else {
+    // no input information
+    return {};
+  }
+
+  return {
+    required: false,
+    contentType,
+    jsonSchema,
+  };
+}
+
+function handlerOutputDiscovery(handler: HandlerWrapper): d.OutputPayload {
+  let contentType = undefined;
+  let jsonSchema = undefined;
+
+  if (handler.outputSerde.jsonSchema) {
+    jsonSchema = handler.outputSerde.jsonSchema;
+    contentType =
+      handler.contentType ??
+      handler.outputSerde.contentType ??
+      "application/json";
+  } else if (handler.contentType) {
+    contentType = handler.contentType;
+  } else if (handler.outputSerde.contentType) {
+    contentType = handler.outputSerde.contentType;
+  } else {
+    // no input information
+    return { setContentTypeIfEmpty: false };
+  }
+
+  return {
+    setContentTypeIfEmpty: false,
+    jsonSchema,
+    contentType,
+  };
+}
+
 export class ServiceComponent implements Component {
   private readonly handlers: Map<string, ServiceHandler> = new Map();
 
@@ -60,18 +110,8 @@ export class ServiceComponent implements Component {
       ([name, serviceHandler]) => {
         return {
           name,
-          input: {
-            required: false,
-            contentType:
-              serviceHandler.handlerWrapper.accept ?? "application/json",
-            jsonSchema: serviceHandler.handlerWrapper.inputSerde.jsonSchema,
-          },
-          output: {
-            setContentTypeIfEmpty: false,
-            contentType:
-              serviceHandler.handlerWrapper.contentType ?? "application/json",
-            jsonSchema: serviceHandler.handlerWrapper.outputSerde.jsonSchema,
-          },
+          input: handlerInputDiscovery(serviceHandler.handlerWrapper),
+          output: handlerOutputDiscovery(serviceHandler.handlerWrapper),
           documentation: serviceHandler.handlerWrapper.description,
           metadata: serviceHandler.handlerWrapper.metadata,
         } satisfies d.Handler;
@@ -150,16 +190,8 @@ export class VirtualObjectComponent implements Component {
       ([name, opts]) => {
         return {
           name,
-          input: {
-            required: false,
-            contentType: opts.accept ?? "application/json",
-            jsonSchema: opts.inputSerde.jsonSchema,
-          },
-          output: {
-            setContentTypeIfEmpty: false,
-            contentType: opts.contentType ?? "application/json",
-            jsonSchema: opts.outputSerde.jsonSchema,
-          },
+          input: handlerInputDiscovery(opts),
+          output: handlerOutputDiscovery(opts),
           ty:
             opts.kind === HandlerKind.EXCLUSIVE
               ? d.ServiceHandlerType.EXCLUSIVE
@@ -236,16 +268,8 @@ export class WorkflowComponent implements Component {
       ([name, handler]) => {
         return {
           name,
-          input: {
-            required: false,
-            contentType: handler.accept ?? "application/json",
-            jsonSchema: handler.inputSerde.jsonSchema,
-          },
-          output: {
-            setContentTypeIfEmpty: false,
-            contentType: handler.contentType ?? "application/json",
-            jsonSchema: handler.outputSerde.jsonSchema,
-          },
+          input: handlerInputDiscovery(handler),
+          output: handlerOutputDiscovery(handler),
           ty:
             handler.kind === HandlerKind.WORKFLOW
               ? d.ServiceHandlerType.WORKFLOW

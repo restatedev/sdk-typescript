@@ -406,8 +406,8 @@ export class HandlerWrapper {
     return handler[HANDLER_SYMBOL] as HandlerWrapper | undefined;
   }
 
-  public readonly accept: string;
-  public readonly contentType: string;
+  public readonly accept?: string;
+  public readonly contentType?: string;
 
   private constructor(
     public readonly kind: HandlerKind,
