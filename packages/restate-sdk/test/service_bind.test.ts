@@ -13,18 +13,20 @@ import { toServiceDiscovery } from "./testutils.js";
 import * as restate from "../src/public_api.js";
 import { describe, expect, it } from "vitest";
 
+async function foo(ctx: restate.Context, req: string): Promise<string> {
+  return req;
+}
+
 const greeterFoo = restate.service({
   name: "greeter",
   handlers: {
     /* eslint-disable @typescript-eslint/no-unused-vars */
-    greet(ctx: restate.Context, req: string): Promise<string> {
-      return this.foo(ctx, req);
+    greet: (ctx: restate.Context, req: string): Promise<string> => {
+      return foo(ctx, req);
     },
 
     // eslint-disable-next-line @typescript-eslint/require-await
-    async foo(ctx: restate.Context, req: string): Promise<string> {
-      return req;
-    },
+    foo,
   },
 });
 
