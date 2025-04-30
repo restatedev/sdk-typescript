@@ -30,8 +30,9 @@ const greeterFoo = restate.service({
 
 describe("BindService", () => {
   it("should preserve `this`", async () => {
-    // @ts-ignore
-    expect(await greeterFoo.service.greet({}, "abc")).toEqual("abc");
+    // @ts-expect-error service does not exist in the returned type
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call
+    expect(await greeterFoo.service?.greet({}, "abc")).toEqual("abc");
   });
 });
 
