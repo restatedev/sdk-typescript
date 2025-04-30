@@ -11,5 +11,5 @@
 
 export {
   RestateTestEnvironment,
-  RestateGenericContainer,
+  RestateContainer,
 } from "./restate_test_environment.js";

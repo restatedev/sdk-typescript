@@ -147,7 +147,7 @@ export class RestateTestEnvironment {
   public static async start(
     mountServicesFn: (server: restate.RestateEndpoint) => void,
     restateContainerFactory: () => GenericContainer = () =>
-      new RestateGenericContainer()
+      new RestateContainer()
   ): Promise<RestateTestEnvironment> {
     const startedRestateHttpServer = await prepareRestateEndpoint(
       mountServicesFn
@@ -167,7 +167,7 @@ export class RestateTestEnvironment {
 export type TypedState = Record<string, any>;
 export type UntypedState = { _: never };
 
-export class RestateGenericContainer extends GenericContainer {
+export class RestateContainer extends GenericContainer {
   constructor(version = "latest") {
     super(`docker.io/restatedev/restate:${version}`);
   }

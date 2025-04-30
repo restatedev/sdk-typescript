@@ -10,7 +10,7 @@
  */
 
 import {
-  RestateGenericContainer,
+  RestateContainer,
   RestateTestEnvironment,
 } from "@restatedev/restate-sdk-testcontainers";
 import { counter } from "../src/object.js";
@@ -129,7 +129,7 @@ describe("Custom testcontainer config", () => {
     restateTestEnvironment = await RestateTestEnvironment.start(
       (restateServer) => restateServer.bind(counter),
       () =>
-        new RestateGenericContainer()
+        new RestateContainer()
           .withEnvironment({ RESTATE_LOG_FORMAT: "json" })
           .withLogConsumer((stream) => {
             // eslint-disable-next-line no-console
