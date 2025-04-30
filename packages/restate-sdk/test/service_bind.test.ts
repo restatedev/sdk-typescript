@@ -17,7 +17,7 @@ const greeterFoo = restate.service({
   name: "greeter",
   handlers: {
     /* eslint-disable @typescript-eslint/no-unused-vars */
-    greet: (ctx: restate.Context, req: string): Promise<string> => {
+    greet(ctx: restate.Context, req: string): Promise<string> {
       return this.foo(ctx, req);
     },
 
