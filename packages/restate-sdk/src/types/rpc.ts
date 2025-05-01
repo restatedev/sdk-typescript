@@ -769,7 +769,7 @@ export type ServiceOpts<U> = {
  */
 export const service = <P extends string, M>(service: {
   name: P;
-  handlers: ServiceOpts<M>;
+  handlers: ServiceOpts<M> & ThisType<M>;
   description?: string;
   metadata?: Record<string, string>;
 }): ServiceDefinition<P, M> => {
@@ -865,7 +865,7 @@ export type ObjectOpts<U> = {
  */
 export const object = <P extends string, M>(object: {
   name: P;
-  handlers: ObjectOpts<M>;
+  handlers: ObjectOpts<M> & ThisType<M>;
   description?: string;
   metadata?: Record<string, string>;
 }): VirtualObjectDefinition<P, M> => {
@@ -963,7 +963,7 @@ export type WorkflowOpts<U> = {
  */
 export const workflow = <P extends string, M>(workflow: {
   name: P;
-  handlers: WorkflowOpts<M>;
+  handlers: WorkflowOpts<M> & ThisType<M>;
   description?: string;
   metadata?: Record<string, string>;
 }): WorkflowDefinition<P, M> => {
