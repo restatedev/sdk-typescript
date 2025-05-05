@@ -3,6 +3,6 @@
   "compilerOptions": {
     "outDir": "./dist/esm"
   },
-  "include": ["test/**/*.ts","src/**/*.ts", "src/**/*.js"],
+  "include": ["test/**/*.ts", "src/**/*.ts", "src/**/*.js"],
   "references": [{ "path": "../restate-sdk-core" }]
 }
