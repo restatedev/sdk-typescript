@@ -504,7 +504,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     return new DurablePromiseImpl(this, name, serde);
   }
 
-  // Used by static methods of CombineablePromise
+  // Used by static methods of RestatePromise
   public static createCombinator<T extends readonly RestatePromise<unknown>[]>(
     combinatorConstructor: (promises: Promise<any>[]) => Promise<any>,
     promises: T
@@ -521,7 +521,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       if (extractContext(promise) !== self) {
         self.handleInvocationEndError(
           new Error(
-            "You're mixing up CombineablePromises from different RestateContext. This is not supported."
+            "You're mixing up RestatePromises from different RestateContext. This is not supported."
           )
         );
         return new RestatePendingPromise(self);
