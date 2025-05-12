@@ -12,7 +12,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import type {
-  CombineablePromise,
+  RestatePromise,
   InvocationId,
   InvocationPromise,
 } from "./context.js";
@@ -45,7 +45,7 @@ enum PromiseState {
 
 export const RESTATE_CTX_SYMBOL = Symbol("restateContext");
 
-export interface InternalRestatePromise<T> extends CombineablePromise<T> {
+export interface InternalRestatePromise<T> extends RestatePromise<T> {
   [RESTATE_CTX_SYMBOL]: ContextImpl;
 
   tryCancel(): void;
@@ -128,7 +128,7 @@ abstract class AbstractRestatePromise<T> implements InternalRestatePromise<T> {
 
   // --- Combineable Promise methods
 
-  orTimeout(millis: number): CombineablePromise<T> {
+  orTimeout(millis: number): RestatePromise<T> {
     return new RestateCombinatorPromise(
       this[RESTATE_CTX_SYMBOL],
       ([thisPromise, sleepPromise]) => {
@@ -143,12 +143,10 @@ abstract class AbstractRestatePromise<T> implements InternalRestatePromise<T> {
         this,
         this[RESTATE_CTX_SYMBOL].sleep(millis) as InternalRestatePromise<any>,
       ]
-    ) as CombineablePromise<T>;
+    ) as RestatePromise<T>;
   }
 
-  map<U>(
-    mapper: (value?: T, failure?: TerminalError) => U
-  ): CombineablePromise<U> {
+  map<U>(mapper: (value?: T, failure?: TerminalError) => U): RestatePromise<U> {
     return new RestateMappedPromise(this[RESTATE_CTX_SYMBOL], this, mapper);
   }
 
@@ -294,12 +292,12 @@ export class RestatePendingPromise<T> implements InternalRestatePromise<T> {
 
   // --- RestatePromise methods
 
-  orTimeout(): CombineablePromise<T> {
+  orTimeout(): RestatePromise<T> {
     return this;
   }
 
-  map<U>(): CombineablePromise<U> {
-    return this as unknown as CombineablePromise<U>;
+  map<U>(): RestatePromise<U> {
+    return this as unknown as RestatePromise<U>;
   }
 
   tryCancel(): void {}

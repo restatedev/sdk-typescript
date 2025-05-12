@@ -335,7 +335,7 @@ export interface Context extends RestateContext {
    *
    * @param action The function to run.
    */
-  run<T>(action: RunAction<T>): CombineablePromise<T>;
+  run<T>(action: RunAction<T>): RestatePromise<T>;
 
   /**
    * Run an operation and store the result in Restate. The operation will thus not
@@ -344,13 +344,13 @@ export interface Context extends RestateContext {
    * @param name the action's name
    * @param action the action to run.
    */
-  run<T>(name: string, action: RunAction<T>): CombineablePromise<T>;
+  run<T>(name: string, action: RunAction<T>): RestatePromise<T>;
 
   run<T>(
     name: string,
     action: RunAction<T>,
     options: RunOptions<T>
-  ): CombineablePromise<T>;
+  ): RestatePromise<T>;
 
   /**
    * Register an awakeable and pause the processing until the awakeable ID (and optional payload) have been returned to the service
@@ -373,7 +373,7 @@ export interface Context extends RestateContext {
    */
   awakeable<T>(serde?: Serde<T>): {
     id: string;
-    promise: CombineablePromise<T>;
+    promise: RestatePromise<T>;
   };
 
   /**
@@ -410,7 +410,7 @@ export interface Context extends RestateContext {
    * @example
    * await ctx.sleep(1000);
    */
-  sleep(millis: number): CombineablePromise<void>;
+  sleep(millis: number): RestatePromise<void>;
 
   /**
    * Makes a type-safe request/response RPC to the specified target service.
@@ -570,10 +570,7 @@ export interface Context extends RestateContext {
    * @param invocationId the invocation id to attach to
    * @param serde the serde to use for the result, default to JSON serde.
    */
-  attach<T>(
-    invocationId: InvocationId,
-    serde?: Serde<T>
-  ): CombineablePromise<T>;
+  attach<T>(invocationId: InvocationId, serde?: Serde<T>): RestatePromise<T>;
 }
 
 /**
@@ -650,7 +647,7 @@ export interface Rand {
 /**
  * A promise that can be combined using Promise combinators in RestateContext.
  */
-export type CombineablePromise<T> = Promise<T> & {
+export type RestatePromise<T> = Promise<T> & {
   /**
    * Creates a promise that awaits for the current promise up to the specified timeout duration.
    * If the timeout is fired, this Promise will be rejected with a {@link TimeoutError}.
@@ -658,25 +655,23 @@ export type CombineablePromise<T> = Promise<T> & {
    * @param millis duration of the sleep in millis.
    * This is a lower-bound.
    */
-  orTimeout(millis: number): CombineablePromise<T>;
+  orTimeout(millis: number): RestatePromise<T>;
 
   /**
-   * Creates a new {@link CombineablePromise} that maps the result of this promise with
+   * Creates a new {@link RestatePromise} that maps the result of this promise with
    * the provided `mapper`, once this promise is fulfilled.
    *
    * **NOTE**: You **MUST** use this API when you need to map the result of a
-   * {@link CombineablePromise} without `await`ing it, rather than using {@link Promise.then}.
+   * {@link RestatePromise} without `await`ing it, rather than using {@link Promise.then}.
    * {@link Promise.then} is used by Restate to distinguish when awaiting an asynchronous operation,
    * thus calling `.then` on several Restate promises can lead to concurrency issues.
    *
    * @param mapper the function to execute when this promise is fulfilled.
    * If the promise completed successfully, `value` is provided as input, otherwise `failure` is provided as input.
-   * If this mapper returns a value, this value will be used to resolve the returned {@link CombineablePromise}.
-   * If the mapper throws a {@link TerminalError}, this error will be used to reject the returned {@link CombineablePromise}.
+   * If this mapper returns a value, this value will be used to resolve the returned {@link RestatePromise}.
+   * If the mapper throws a {@link TerminalError}, this error will be used to reject the returned {@link RestatePromise}.
    */
-  map<U>(
-    mapper: (value?: T, failure?: TerminalError) => U
-  ): CombineablePromise<U>;
+  map<U>(mapper: (value?: T, failure?: TerminalError) => U): RestatePromise<U>;
 };
 
 /**
@@ -705,9 +700,9 @@ export type InvocationHandle = {
   readonly invocationId: Promise<InvocationId>;
 };
 
-export type InvocationPromise<T> = CombineablePromise<T> & InvocationHandle;
+export type InvocationPromise<T> = RestatePromise<T> & InvocationHandle;
 
-export const CombineablePromise = {
+export const RestatePromise = {
   /**
    * Creates a Promise that is resolved with an array of results when all of the provided Promises
    * resolve, or rejected when any Promise is rejected.
@@ -717,9 +712,9 @@ export const CombineablePromise = {
    * @param values An iterable of Promises.
    * @returns A new Promise.
    */
-  all<const T extends readonly CombineablePromise<unknown>[]>(
+  all<const T extends readonly RestatePromise<unknown>[]>(
     values: T
-  ): CombineablePromise<{ -readonly [P in keyof T]: Awaited<T[P]> }> {
+  ): RestatePromise<{ -readonly [P in keyof T]: Awaited<T[P]> }> {
     if (values.length === 0) {
       throw new Error(
         "Expected combineable promise to have at least one promise"
@@ -728,7 +723,7 @@ export const CombineablePromise = {
     return ContextImpl.createCombinator(
       (p) => Promise.all(p),
       values
-    ) as CombineablePromise<{
+    ) as RestatePromise<{
       -readonly [P in keyof T]: Awaited<T[P]>;
     }>;
   },
@@ -742,9 +737,9 @@ export const CombineablePromise = {
    * @param values An iterable of Promises.
    * @returns A new Promise.
    */
-  race<const T extends readonly CombineablePromise<unknown>[]>(
+  race<const T extends readonly RestatePromise<unknown>[]>(
     values: T
-  ): CombineablePromise<Awaited<T[number]>> {
+  ): RestatePromise<Awaited<T[number]>> {
     if (values.length === 0) {
       throw new Error(
         "Expected combineable promise to have at least one promise"
@@ -753,7 +748,7 @@ export const CombineablePromise = {
     return ContextImpl.createCombinator(
       (p) => Promise.race(p),
       values
-    ) as CombineablePromise<Awaited<T[number]>>;
+    ) as RestatePromise<Awaited<T[number]>>;
   },
 
   /**
@@ -766,9 +761,9 @@ export const CombineablePromise = {
    * @param values An iterable of Promises.
    * @returns A new Promise.
    */
-  any<const T extends readonly CombineablePromise<unknown>[]>(
+  any<const T extends readonly RestatePromise<unknown>[]>(
     values: T
-  ): CombineablePromise<Awaited<T[number]>> {
+  ): RestatePromise<Awaited<T[number]>> {
     if (values.length === 0) {
       throw new Error(
         "Expected combineable promise to have at least one promise"
@@ -777,7 +772,7 @@ export const CombineablePromise = {
     return ContextImpl.createCombinator(
       (p) => Promise.any(p),
       values
-    ) as CombineablePromise<Awaited<T[number]>>;
+    ) as RestatePromise<Awaited<T[number]>>;
   },
 
   /**
@@ -789,9 +784,9 @@ export const CombineablePromise = {
    * @param values An iterable of Promises.
    * @returns A new Promise.
    */
-  allSettled<const T extends readonly CombineablePromise<unknown>[]>(
+  allSettled<const T extends readonly RestatePromise<unknown>[]>(
     values: T
-  ): CombineablePromise<{
+  ): RestatePromise<{
     -readonly [P in keyof T]: PromiseSettledResult<Awaited<T[P]>>;
   }> {
     if (values.length === 0) {
@@ -802,7 +797,7 @@ export const CombineablePromise = {
     return ContextImpl.createCombinator(
       (p) => Promise.allSettled(p),
       values
-    ) as CombineablePromise<{
+    ) as RestatePromise<{
       -readonly [P in keyof T]: PromiseSettledResult<Awaited<T[P]>>;
     }>;
   },
@@ -832,9 +827,9 @@ export type DurablePromise<T> = Promise<T> & {
   reject(errorMsg: string): Promise<void>;
 
   /**
-   * Obtain a {@link CombineablePromise} variant of this promise.
+   * Obtain a {@link RestatePromise} variant of this promise.
    */
-  get(): CombineablePromise<T>;
+  get(): RestatePromise<T>;
 };
 
 export interface WorkflowSharedContext<TState extends TypedState = UntypedState>
