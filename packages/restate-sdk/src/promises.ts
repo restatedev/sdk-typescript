@@ -45,7 +45,7 @@ enum PromiseState {
 
 export const RESTATE_CTX_SYMBOL = Symbol("restateContext");
 
-export interface RestatePromise<T> extends CombineablePromise<T> {
+export interface InternalRestatePromise<T> extends CombineablePromise<T> {
   [RESTATE_CTX_SYMBOL]: ContextImpl;
 
   tryCancel(): void;
@@ -67,7 +67,7 @@ export function extractContext(n: any): ContextImpl | undefined {
   return n[RESTATE_CTX_SYMBOL] as ContextImpl | undefined;
 }
 
-abstract class AbstractRestatePromise<T> implements RestatePromise<T> {
+abstract class AbstractRestatePromise<T> implements InternalRestatePromise<T> {
   [RESTATE_CTX_SYMBOL]: ContextImpl;
   private pollingPromise?: Promise<any>;
   private cancelPromise: CompletablePromise<any> = new CompletablePromise();
@@ -139,7 +139,10 @@ abstract class AbstractRestatePromise<T> implements RestatePromise<T> {
           }, reject);
         });
       },
-      [this, this[RESTATE_CTX_SYMBOL].sleep(millis) as RestatePromise<any>]
+      [
+        this,
+        this[RESTATE_CTX_SYMBOL].sleep(millis) as InternalRestatePromise<any>,
+      ]
     ) as CombineablePromise<T>;
   }
 
@@ -227,7 +230,7 @@ export class RestateCombinatorPromise extends AbstractRestatePromise<any> {
   constructor(
     ctx: ContextImpl,
     combinatorConstructor: (promises: Promise<any>[]) => Promise<any>,
-    readonly childs: Array<RestatePromise<any>>
+    readonly childs: Array<InternalRestatePromise<any>>
   ) {
     super(ctx);
     this.combinatorPromise = combinatorConstructor(
@@ -254,7 +257,7 @@ export class RestateCombinatorPromise extends AbstractRestatePromise<any> {
   readonly [Symbol.toStringTag] = "RestateCombinatorPromise";
 }
 
-export class RestatePendingPromise<T> implements RestatePromise<T> {
+export class RestatePendingPromise<T> implements InternalRestatePromise<T> {
   [RESTATE_CTX_SYMBOL]: ContextImpl;
 
   constructor(ctx: ContextImpl) {
@@ -332,7 +335,7 @@ export class RestateMappedPromise<T, U> extends AbstractRestatePromise<U> {
 
   constructor(
     ctx: ContextImpl,
-    readonly inner: RestatePromise<T>,
+    readonly inner: InternalRestatePromise<T>,
     mapper: (value?: T, failure?: TerminalError) => U
   ) {
     super(ctx);
@@ -388,13 +391,15 @@ export class PromisesExecutor {
     private readonly errorCallback: (e: any) => void
   ) {}
 
-  async doProgress(restatePromise: RestatePromise<unknown>) {
+  async doProgress(restatePromise: InternalRestatePromise<unknown>) {
     // Only the first time try process output
     await this.outputPump.awaitNextProgress();
     await this.doProgressInner(restatePromise);
   }
 
-  private async doProgressInner(restatePromise: RestatePromise<unknown>) {
+  private async doProgressInner(
+    restatePromise: InternalRestatePromise<unknown>
+  ) {
     // Try complete the promise
     try {
       restatePromise.tryComplete();

@@ -61,7 +61,7 @@ import type {
   WritableStreamDefaultWriter,
 } from "node:stream/web";
 import { CompletablePromise } from "./utils/completable_promise.js";
-import type { AsyncResultValue, RestatePromise } from "./promises.js";
+import type { AsyncResultValue, InternalRestatePromise } from "./promises.js";
 import {
   extractContext,
   pendingPromise,
@@ -521,7 +521,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     }
 
     // Collect first the promises downcasted to the internal promise type
-    const castedPromises: RestatePromise<any>[] = [];
+    const castedPromises: InternalRestatePromise<any>[] = [];
     for (const promise of promises) {
       if (extractContext(promise) !== self) {
         self.handleInvocationEndError(
@@ -531,7 +531,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
         );
         return new RestatePendingPromise(self);
       }
-      castedPromises.push(promise as RestatePromise<any>);
+      castedPromises.push(promise as InternalRestatePromise<any>);
     }
     return new RestateCombinatorPromise(
       self,
