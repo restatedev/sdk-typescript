@@ -439,6 +439,11 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
   }
 
   public sleep(millis: number): RestatePromise<void> {
+    if (millis < 0) {
+      throw new Error(
+        `Invalid duration. The sleep function only accepts non-negative values. Received: ${millis}ms.`
+      );
+    }
     return this.processCompletableEntry(
       (vm) => vm.sys_sleep(BigInt(millis)),
       completeUsing(VoidAsUndefined)
