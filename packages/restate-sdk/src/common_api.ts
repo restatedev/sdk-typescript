@@ -9,6 +9,8 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
+import { RestatePromise } from "./context.js";
+
 export type {
   Context,
   ObjectContext,
@@ -22,7 +24,17 @@ export type {
   InvocationHandle,
   InvocationPromise,
 } from "./context.js";
-export { InvocationIdParser, CombineablePromise } from "./context.js";
+export { InvocationIdParser, RestatePromise } from "./context.js";
+
+/**
+ * @deprecated Use {@link RestatePromise}
+ */
+export const CombineablePromise = RestatePromise;
+
+/**
+ * @deprecated Use {@link RestatePromise}
+ */
+export type CombineablePromise<T> = RestatePromise<T>;
 
 export type { Serde } from "@restatedev/restate-sdk-core";
 export { serde } from "@restatedev/restate-sdk-core";

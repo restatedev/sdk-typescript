@@ -12,7 +12,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import type {
-  CombineablePromise,
+  RestatePromise,
   ContextDate,
   DurablePromise,
   GenericCall,
@@ -61,7 +61,7 @@ import type {
   WritableStreamDefaultWriter,
 } from "node:stream/web";
 import { CompletablePromise } from "./utils/completable_promise.js";
-import type { AsyncResultValue, RestatePromise } from "./promises.js";
+import type { AsyncResultValue, InternalRestatePromise } from "./promises.js";
 import {
   extractContext,
   pendingPromise,
@@ -131,10 +131,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     );
   }
 
-  attach<T>(
-    invocationId: InvocationId,
-    serde?: Serde<T>
-  ): CombineablePromise<T> {
+  attach<T>(invocationId: InvocationId, serde?: Serde<T>): RestatePromise<T> {
     return this.processCompletableEntry(
       (vm) => vm.sys_attach_invocation(invocationId),
       completeUsing(SuccessWithSerde(serde ?? defaultSerde()), Failure)
@@ -157,14 +154,14 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     return this.invocationRequest;
   }
 
-  public get<T>(name: string, serde?: Serde<T>): CombineablePromise<T | null> {
+  public get<T>(name: string, serde?: Serde<T>): RestatePromise<T | null> {
     return this.processCompletableEntry(
       (vm) => vm.sys_get_state(name),
       completeUsing(VoidAsNull, SuccessWithSerde(serde ?? defaultSerde()))
     );
   }
 
-  public stateKeys(): CombineablePromise<Array<string>> {
+  public stateKeys(): RestatePromise<Array<string>> {
     return this.processCompletableEntry(
       (vm) => vm.sys_get_state_keys(),
       completeUsing(StateKeys)
@@ -343,7 +340,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     nameOrAction: string | RunAction<T>,
     actionSecondParameter?: RunAction<T>,
     options?: RunOptions<T>
-  ): CombineablePromise<T> {
+  ): RestatePromise<T> {
     const { name, action } = unpackRunParameters(
       nameOrAction,
       actionSecondParameter
@@ -441,7 +438,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     );
   }
 
-  public sleep(millis: number): CombineablePromise<void> {
+  public sleep(millis: number): RestatePromise<void> {
     return this.processCompletableEntry(
       (vm) => vm.sys_sleep(BigInt(millis)),
       completeUsing(VoidAsUndefined)
@@ -452,7 +449,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
 
   public awakeable<T>(serde?: Serde<T>): {
     id: string;
-    promise: CombineablePromise<T>;
+    promise: RestatePromise<T>;
   } {
     let awakeable: vm.WasmAwakeable;
     try {
@@ -507,13 +504,11 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     return new DurablePromiseImpl(this, name, serde);
   }
 
-  // Used by static methods of CombineablePromise
-  public static createCombinator<
-    T extends readonly CombineablePromise<unknown>[]
-  >(
+  // Used by static methods of RestatePromise
+  public static createCombinator<T extends readonly RestatePromise<unknown>[]>(
     combinatorConstructor: (promises: Promise<any>[]) => Promise<any>,
     promises: T
-  ): CombineablePromise<unknown> {
+  ): RestatePromise<unknown> {
     // Extract context from first promise
     const self = extractContext(promises[0]);
     if (!self) {
@@ -521,17 +516,17 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     }
 
     // Collect first the promises downcasted to the internal promise type
-    const castedPromises: RestatePromise<any>[] = [];
+    const castedPromises: InternalRestatePromise<any>[] = [];
     for (const promise of promises) {
       if (extractContext(promise) !== self) {
         self.handleInvocationEndError(
           new Error(
-            "You're mixing up CombineablePromises from different RestateContext. This is not supported."
+            "You're mixing up RestatePromises from different RestateContext. This is not supported."
           )
         );
         return new RestatePendingPromise(self);
       }
-      castedPromises.push(promise as RestatePromise<any>);
+      castedPromises.push(promise as InternalRestatePromise<any>);
     }
     return new RestateCombinatorPromise(
       self,
@@ -553,7 +548,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
   processCompletableEntry<T>(
     vmCall: (vm: vm.WasmVM) => number,
     completer: (value: AsyncResultValue, prom: CompletablePromise<T>) => void
-  ): CombineablePromise<T> {
+  ): RestatePromise<T> {
     let handle: number;
     try {
       handle = vmCall(this.coreVm);
@@ -640,7 +635,7 @@ class DurablePromiseImpl<T> implements DurablePromise<T> {
 
   [Symbol.toStringTag] = "DurablePromise";
 
-  get(): CombineablePromise<T> {
+  get(): RestatePromise<T> {
     return this.ctx.processCompletableEntry(
       (vm) => vm.sys_get_promise(this.name),
       completeUsing(SuccessWithSerde(this.serde), Failure)

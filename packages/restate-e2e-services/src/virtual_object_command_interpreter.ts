@@ -12,7 +12,7 @@ import { REGISTRY } from "./services.js";
 
 import * as process from "node:process";
 import type { ObjectContext } from "@restatedev/restate-sdk";
-import { CombineablePromise, TerminalError } from "@restatedev/restate-sdk";
+import { RestatePromise, TerminalError } from "@restatedev/restate-sdk";
 
 type AwaitableCommand = CreateAwakeable | Sleep | RunThrowTerminalException;
 
@@ -91,7 +91,7 @@ function createAwakeable(ctx: ObjectContext, awakeableKey: string) {
 function parseAwaitableCommand(
   ctx: ObjectContext,
   command: AwaitableCommand
-): CombineablePromise<string> {
+): RestatePromise<string> {
   switch (command.type) {
     case "createAwakeable":
       return createAwakeable(ctx, command.awakeableKey);
@@ -173,12 +173,12 @@ const virtualObjectCommandInterpreter = restate.object({
         for (const command of req.commands) {
           switch (command.type) {
             case "awaitAnySuccessful":
-              lastResult = await CombineablePromise.any(
+              lastResult = await RestatePromise.any(
                 command.commands.map((cmd) => parseAwaitableCommand(ctx, cmd))
               );
               break;
             case "awaitAny":
-              lastResult = await CombineablePromise.race(
+              lastResult = await RestatePromise.race(
                 command.commands.map((cmd) => parseAwaitableCommand(ctx, cmd))
               );
               break;

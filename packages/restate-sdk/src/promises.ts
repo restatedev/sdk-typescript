@@ -12,7 +12,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import type {
-  CombineablePromise,
+  RestatePromise,
   InvocationId,
   InvocationPromise,
 } from "./context.js";
@@ -45,7 +45,7 @@ enum PromiseState {
 
 export const RESTATE_CTX_SYMBOL = Symbol("restateContext");
 
-export interface RestatePromise<T> extends CombineablePromise<T> {
+export interface InternalRestatePromise<T> extends RestatePromise<T> {
   [RESTATE_CTX_SYMBOL]: ContextImpl;
 
   tryCancel(): void;
@@ -67,7 +67,7 @@ export function extractContext(n: any): ContextImpl | undefined {
   return n[RESTATE_CTX_SYMBOL] as ContextImpl | undefined;
 }
 
-abstract class AbstractRestatePromise<T> implements RestatePromise<T> {
+abstract class AbstractRestatePromise<T> implements InternalRestatePromise<T> {
   [RESTATE_CTX_SYMBOL]: ContextImpl;
   private pollingPromise?: Promise<any>;
   private cancelPromise: CompletablePromise<any> = new CompletablePromise();
@@ -128,7 +128,7 @@ abstract class AbstractRestatePromise<T> implements RestatePromise<T> {
 
   // --- Combineable Promise methods
 
-  orTimeout(millis: number): CombineablePromise<T> {
+  orTimeout(millis: number): RestatePromise<T> {
     return new RestateCombinatorPromise(
       this[RESTATE_CTX_SYMBOL],
       ([thisPromise, sleepPromise]) => {
@@ -139,13 +139,14 @@ abstract class AbstractRestatePromise<T> implements RestatePromise<T> {
           }, reject);
         });
       },
-      [this, this[RESTATE_CTX_SYMBOL].sleep(millis) as RestatePromise<any>]
-    ) as CombineablePromise<T>;
+      [
+        this,
+        this[RESTATE_CTX_SYMBOL].sleep(millis) as InternalRestatePromise<any>,
+      ]
+    ) as RestatePromise<T>;
   }
 
-  map<U>(
-    mapper: (value?: T, failure?: TerminalError) => U
-  ): CombineablePromise<U> {
+  map<U>(mapper: (value?: T, failure?: TerminalError) => U): RestatePromise<U> {
     return new RestateMappedPromise(this[RESTATE_CTX_SYMBOL], this, mapper);
   }
 
@@ -227,7 +228,7 @@ export class RestateCombinatorPromise extends AbstractRestatePromise<any> {
   constructor(
     ctx: ContextImpl,
     combinatorConstructor: (promises: Promise<any>[]) => Promise<any>,
-    readonly childs: Array<RestatePromise<any>>
+    readonly childs: Array<InternalRestatePromise<any>>
   ) {
     super(ctx);
     this.combinatorPromise = combinatorConstructor(
@@ -254,7 +255,7 @@ export class RestateCombinatorPromise extends AbstractRestatePromise<any> {
   readonly [Symbol.toStringTag] = "RestateCombinatorPromise";
 }
 
-export class RestatePendingPromise<T> implements RestatePromise<T> {
+export class RestatePendingPromise<T> implements InternalRestatePromise<T> {
   [RESTATE_CTX_SYMBOL]: ContextImpl;
 
   constructor(ctx: ContextImpl) {
@@ -291,12 +292,12 @@ export class RestatePendingPromise<T> implements RestatePromise<T> {
 
   // --- RestatePromise methods
 
-  orTimeout(): CombineablePromise<T> {
+  orTimeout(): RestatePromise<T> {
     return this;
   }
 
-  map<U>(): CombineablePromise<U> {
-    return this as unknown as CombineablePromise<U>;
+  map<U>(): RestatePromise<U> {
+    return this as unknown as RestatePromise<U>;
   }
 
   tryCancel(): void {}
@@ -332,7 +333,7 @@ export class RestateMappedPromise<T, U> extends AbstractRestatePromise<U> {
 
   constructor(
     ctx: ContextImpl,
-    readonly inner: RestatePromise<T>,
+    readonly inner: InternalRestatePromise<T>,
     mapper: (value?: T, failure?: TerminalError) => U
   ) {
     super(ctx);
@@ -388,13 +389,15 @@ export class PromisesExecutor {
     private readonly errorCallback: (e: any) => void
   ) {}
 
-  async doProgress(restatePromise: RestatePromise<unknown>) {
+  async doProgress(restatePromise: InternalRestatePromise<unknown>) {
     // Only the first time try process output
     await this.outputPump.awaitNextProgress();
     await this.doProgressInner(restatePromise);
   }
 
-  private async doProgressInner(restatePromise: RestatePromise<unknown>) {
+  private async doProgressInner(
+    restatePromise: InternalRestatePromise<unknown>
+  ) {
     // Try complete the promise
     try {
       restatePromise.tryComplete();
