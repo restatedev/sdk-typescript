@@ -38,7 +38,12 @@ import {
   TerminalError,
   UNKNOWN_ERROR_CODE,
 } from "./types/errors.js";
-import type { Client, SendClient } from "./types/rpc.js";
+import type {
+  Client,
+  SendClient,
+  ClientCallOptsMapper,
+  ClientSendOptsMapper,
+} from "./types/rpc.js";
 import {
   defaultSerde,
   HandlerKind,
@@ -100,7 +105,9 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     private readonly invocationRequest: Request,
     private readonly invocationEndPromise: CompletablePromise<void>,
     inputReader: ReadableStreamDefaultReader<Uint8Array>,
-    outputWriter: WritableStreamDefaultWriter<Uint8Array>
+    outputWriter: WritableStreamDefaultWriter<Uint8Array>,
+    private readonly clientCallOptsMapper: ClientCallOptsMapper,
+    private readonly clientSendOptsMapper: ClientSendOptsMapper
   ) {
     this.rand = new RandImpl(input.invocation_id, () => {
       // TODO reimplement this check with async context
@@ -280,21 +287,35 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
   }
 
   serviceClient<D>({ name }: ServiceDefinitionFrom<D>): Client<Service<D>> {
-    return makeRpcCallProxy((call) => this.genericCall(call), name);
+    return makeRpcCallProxy(
+      (call) => this.genericCall(call),
+      this.clientCallOptsMapper,
+      name
+    );
   }
 
   objectClient<D>(
     { name }: VirtualObjectDefinitionFrom<D>,
     key: string
   ): Client<VirtualObject<D>> {
-    return makeRpcCallProxy((call) => this.genericCall(call), name, key);
+    return makeRpcCallProxy(
+      (call) => this.genericCall(call),
+      this.clientCallOptsMapper,
+      name,
+      key
+    );
   }
 
   workflowClient<D>(
     { name }: WorkflowDefinitionFrom<D>,
     key: string
   ): Client<Workflow<D>> {
-    return makeRpcCallProxy((call) => this.genericCall(call), name, key);
+    return makeRpcCallProxy(
+      (call) => this.genericCall(call),
+      this.clientCallOptsMapper,
+      name,
+      key
+    );
   }
 
   public serviceSendClient<D>(
@@ -303,6 +324,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
   ): SendClient<Service<D>> {
     return makeRpcSendProxy(
       (send) => this.genericSend(send),
+      this.clientSendOptsMapper,
       name,
       undefined,
       opts?.delay
@@ -316,6 +338,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
   ): SendClient<VirtualObject<D>> {
     return makeRpcSendProxy(
       (send) => this.genericSend(send),
+      this.clientSendOptsMapper,
       name,
       key,
       opts?.delay
@@ -329,6 +352,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
   ): SendClient<Workflow<D>> {
     return makeRpcSendProxy(
       (send) => this.genericSend(send),
+      this.clientSendOptsMapper,
       name,
       key,
       opts?.delay

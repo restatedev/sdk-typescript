@@ -22,6 +22,10 @@ import type {
 import type { Http2ServerRequest, Http2ServerResponse } from "http2";
 import * as http2 from "http2";
 import { LambdaHandler } from "./handlers/lambda.js";
+import type {
+  ClientCallOptsMapper,
+  ClientSendOptsMapper,
+} from "../types/rpc.js";
 import type { Component } from "../types/components.js";
 import { EndpointBuilder } from "./endpoint_builder.js";
 import { GenericHandler } from "./handlers/generic.js";
@@ -63,6 +67,20 @@ export class NodeEndpoint implements RestateEndpoint {
 
   public setLogger(logger: LoggerTransport): RestateEndpoint {
     this.builder.setLogger(logger);
+    return this;
+  }
+
+  public setClientCallOptsMapper(
+    optsMapper: ClientCallOptsMapper
+  ): RestateEndpoint {
+    this.builder.setClientCallOptsMapper(optsMapper);
+    return this;
+  }
+
+  public setClientSendOptsMapper(
+    optsMapper: ClientSendOptsMapper
+  ): RestateEndpoint {
+    this.builder.setClientSendOptsMapper(optsMapper);
     return this;
   }
 

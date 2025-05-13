@@ -16,6 +16,10 @@ import type {
   WorkflowDefinition,
 } from "@restatedev/restate-sdk-core";
 import type { LoggerTransport } from "./logging/logger_transport.js";
+import type {
+  ClientCallOptsMapper,
+  ClientSendOptsMapper,
+} from "./types/rpc.js";
 
 export interface RestateEndpointBase<E> {
   /**
@@ -63,6 +67,26 @@ export interface RestateEndpointBase<E> {
    *  ```
    */
   setLogger(logger: LoggerTransport): E;
+
+  /**
+   * Set a ClientCallOptions mapper function that will be called on every RPC call
+   *
+   * Can be used to set default headers, or a default input/output serde e.g. always binary instead of JSON
+   *
+   * The mapper function will receive the ClientCallOptions provided by the handler
+   * and should return either a ClientCallOptions object or undefined
+   */
+  setClientCallOptsMapper(optsMapper: ClientCallOptsMapper): E;
+
+  /**
+   * Set a ClientSendOptions mapper function that will be called on every RPC call
+   *
+   * Can be used to set default headers, or a default input/output serde e.g. always binary instead of JSON
+   *
+   * The mapper function will receive the ClientSendOptions provided by the handler
+   * and should return either a ClientSendOptions object or undefined
+   */
+  setClientSendOptsMapper(optsMapper: ClientSendOptsMapper): E;
 }
 
 /**

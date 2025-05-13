@@ -304,10 +304,12 @@ export class GenericHandler implements RestateHandler {
       attemptCompletedSignal: abortSignal,
     };
 
+    const handlerComponent = handler.component();
+
     // Prepare logger
     const loggerContext = new LoggerContext(
       input.invocation_id,
-      handler.component().name(),
+      handlerComponent.name(),
       handler.name(),
       handler.kind() === HandlerKind.SERVICE ? undefined : input.key,
       invocationRequest,
@@ -355,7 +357,9 @@ export class GenericHandler implements RestateHandler {
       invocationRequest,
       invocationEndPromise,
       inputReader,
-      outputWriter
+      outputWriter,
+      handlerComponent.clientCallOptsMapper,
+      handlerComponent.clientSendOptsMapper
     );
 
     // Finally invoke user handler
