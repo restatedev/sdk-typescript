@@ -77,7 +77,7 @@ export interface Ingress {
   result<T>(send: Send<T> | WorkflowSubmission<T>): Promise<T>;
 }
 
-export interface IngresCallOptions<I = unknown, O = unknown> {
+export interface IngressCallOptions<I = unknown, O = unknown> {
   /**
    * Key to use for idempotency key.
    *
@@ -111,7 +111,7 @@ export interface IngresCallOptions<I = unknown, O = unknown> {
   signal?: AbortSignal;
 }
 
-export interface IngresSendOptions<I> extends IngresCallOptions<I, void> {
+export interface IngressSendOptions<I> extends IngressCallOptions<I, void> {
   /**
    * If set, the invocation will be enqueued now to be executed after the provided delay. In milliseconds.
    */
@@ -125,19 +125,19 @@ export class Opts<I, O> {
    * @param opts the call configuration
    */
   public static from<I = unknown, O = unknown>(
-    opts: IngresCallOptions<I, O>
+    opts: IngressCallOptions<I, O>
   ): Opts<I, O> {
     return new Opts(opts);
   }
 
-  constructor(readonly opts: IngresCallOptions<I, O>) {}
+  constructor(readonly opts: IngressCallOptions<I, O>) {}
 }
 
 export class SendOpts<I = unknown> {
   /**
    * @param opts Create send options
    */
-  public static from<I = unknown>(opts: IngresSendOptions<I>): SendOpts<I> {
+  public static from<I = unknown>(opts: IngressSendOptions<I>): SendOpts<I> {
     return new SendOpts(opts);
   }
 
@@ -145,7 +145,7 @@ export class SendOpts<I = unknown> {
     return this.opts.delay;
   }
 
-  constructor(readonly opts: IngresSendOptions<I>) {}
+  constructor(readonly opts: IngressSendOptions<I>) {}
 }
 
 export type InferArgType<P> = P extends [infer A, ...any[]] ? A : unknown;
@@ -161,9 +161,9 @@ export type IngressClient<M> = {
 
 // eslint-disable-next-line @typescript-eslint/no-namespace
 export namespace rpc {
-  export const opts = <I, O>(opts: IngresCallOptions<I, O>) => Opts.from(opts);
+  export const opts = <I, O>(opts: IngressCallOptions<I, O>) => Opts.from(opts);
 
-  export const sendOpts = <I>(opts: IngresSendOptions<I>) =>
+  export const sendOpts = <I>(opts: IngressSendOptions<I>) =>
     SendOpts.from(opts);
 }
 
