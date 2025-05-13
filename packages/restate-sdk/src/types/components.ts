@@ -101,19 +101,18 @@ export class ServiceComponent implements Component {
   }
 
   add(name: string, handlerWrapper: HandlerWrapper) {
-    const serviceHandler = new ServiceHandler(name, handlerWrapper, this);
-    this.handlers.set(name, serviceHandler);
+    this.handlers.set(name, new ServiceHandler(name, handlerWrapper, this));
   }
 
   discovery(): d.Service {
     const handlers: d.Handler[] = [...this.handlers.entries()].map(
-      ([name, serviceHandler]) => {
+      ([name, handler]) => {
         return {
           name,
-          input: handlerInputDiscovery(serviceHandler.handlerWrapper),
-          output: handlerOutputDiscovery(serviceHandler.handlerWrapper),
-          documentation: serviceHandler.handlerWrapper.description,
-          metadata: serviceHandler.handlerWrapper.metadata,
+          input: handlerInputDiscovery(handler.handlerWrapper),
+          output: handlerOutputDiscovery(handler.handlerWrapper),
+          documentation: handler.handlerWrapper.description,
+          metadata: handler.handlerWrapper.metadata,
         } satisfies d.Handler;
       }
     );
@@ -133,18 +132,18 @@ export class ServiceComponent implements Component {
 }
 
 export class ServiceHandler implements ComponentHandler {
-  private readonly handlerName: string;
-  private readonly parent: ServiceComponent;
-  public readonly handlerWrapper: HandlerWrapper;
-
   constructor(
-    name: string,
-    handlerWrapper: HandlerWrapper,
-    parent: ServiceComponent
-  ) {
-    this.handlerName = name;
-    this.parent = parent;
-    this.handlerWrapper = handlerWrapper;
+    private readonly handlerName: string,
+    public readonly handlerWrapper: HandlerWrapper,
+    private readonly parent: ServiceComponent
+  ) {}
+
+  name(): string {
+    return this.handlerName;
+  }
+
+  component(): Component {
+    return this.parent;
   }
 
   kind(): HandlerKind {
@@ -154,14 +153,6 @@ export class ServiceHandler implements ComponentHandler {
   invoke(context: ContextImpl, input: Uint8Array): Promise<Uint8Array> {
     return this.handlerWrapper.invoke(context, input);
   }
-
-  name(): string {
-    return this.handlerName;
-  }
-
-  component(): Component {
-    return this.parent;
-  }
 }
 
 //
@@ -169,7 +160,7 @@ export class ServiceHandler implements ComponentHandler {
 //
 
 export class VirtualObjectComponent implements Component {
-  private readonly handlers: Map<string, HandlerWrapper> = new Map();
+  private readonly handlers: Map<string, VirtualObjectHandler> = new Map();
 
   constructor(
     public readonly componentName: string,
@@ -182,23 +173,23 @@ export class VirtualObjectComponent implements Component {
   }
 
   add(name: string, wrapper: HandlerWrapper) {
-    this.handlers.set(name, wrapper);
+    this.handlers.set(name, new VirtualObjectHandler(name, wrapper, this));
   }
 
   discovery(): d.Service {
     const handlers: d.Handler[] = [...this.handlers.entries()].map(
-      ([name, opts]) => {
+      ([name, handler]) => {
         return {
           name,
-          input: handlerInputDiscovery(opts),
-          output: handlerOutputDiscovery(opts),
+          input: handlerInputDiscovery(handler.handlerWrapper),
+          output: handlerOutputDiscovery(handler.handlerWrapper),
           ty:
-            opts.kind === HandlerKind.EXCLUSIVE
+            handler.kind() === HandlerKind.EXCLUSIVE
               ? d.ServiceHandlerType.EXCLUSIVE
               : d.ServiceHandlerType.SHARED,
 
-          documentation: opts.description,
-          metadata: opts.metadata,
+          documentation: handler.handlerWrapper.description,
+          metadata: handler.handlerWrapper.metadata,
         } satisfies d.Handler;
       }
     );
@@ -213,24 +204,21 @@ export class VirtualObjectComponent implements Component {
   }
 
   handlerMatching(url: InvokePathComponents): ComponentHandler | undefined {
-    const wrapper = this.handlers.get(url.handlerName);
-    if (!wrapper) {
-      return undefined;
-    }
-    return new VirtualObjectHandler(url.handlerName, this, wrapper);
+    return this.handlers.get(url.handlerName);
   }
 }
 
 export class VirtualObjectHandler implements ComponentHandler {
   constructor(
-    private readonly componentName: string,
-    private readonly parent: VirtualObjectComponent,
-    private readonly handlerWrapper: HandlerWrapper
+    private readonly handlerName: string,
+    public readonly handlerWrapper: HandlerWrapper,
+    private readonly parent: VirtualObjectComponent
   ) {}
 
   name(): string {
-    return this.componentName;
+    return this.handlerName;
   }
+
   component(): Component {
     return this.parent;
   }
@@ -247,7 +235,7 @@ export class VirtualObjectHandler implements ComponentHandler {
 // Workflow
 
 export class WorkflowComponent implements Component {
-  private readonly handlers: Map<string, HandlerWrapper> = new Map();
+  private readonly handlers: Map<string, WorkflowHandler> = new Map();
 
   constructor(
     public readonly componentName: string,
@@ -260,7 +248,7 @@ export class WorkflowComponent implements Component {
   }
 
   add(name: string, wrapper: HandlerWrapper) {
-    this.handlers.set(name, wrapper);
+    this.handlers.set(name, new WorkflowHandler(name, wrapper, this));
   }
 
   discovery(): d.Service {
@@ -268,15 +256,15 @@ export class WorkflowComponent implements Component {
       ([name, handler]) => {
         return {
           name,
-          input: handlerInputDiscovery(handler),
-          output: handlerOutputDiscovery(handler),
+          input: handlerInputDiscovery(handler.handlerWrapper),
+          output: handlerOutputDiscovery(handler.handlerWrapper),
           ty:
-            handler.kind === HandlerKind.WORKFLOW
+            handler.kind() === HandlerKind.WORKFLOW
               ? d.ServiceHandlerType.WORKFLOW
               : d.ServiceHandlerType.SHARED,
 
-          documentation: handler.description,
-          metadata: handler.metadata,
+          documentation: handler.handlerWrapper.description,
+          metadata: handler.handlerWrapper.metadata,
         } satisfies d.Handler;
       }
     );
@@ -291,23 +279,19 @@ export class WorkflowComponent implements Component {
   }
 
   handlerMatching(url: InvokePathComponents): ComponentHandler | undefined {
-    const wrapper = this.handlers.get(url.handlerName);
-    if (!wrapper) {
-      return undefined;
-    }
-    return new WorkflowHandler(url.handlerName, this, wrapper);
+    return this.handlers.get(url.handlerName);
   }
 }
 
 export class WorkflowHandler implements ComponentHandler {
   constructor(
-    private readonly componentName: string,
-    private readonly parent: WorkflowComponent,
-    private readonly handlerWrapper: HandlerWrapper
+    private readonly handlerName: string,
+    public readonly handlerWrapper: HandlerWrapper,
+    private readonly parent: WorkflowComponent
   ) {}
 
   name(): string {
-    return this.componentName;
+    return this.handlerName;
   }
   component(): Component {
     return this.parent;
