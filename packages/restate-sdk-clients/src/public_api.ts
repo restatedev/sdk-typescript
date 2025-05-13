@@ -27,9 +27,9 @@ export type {
   IngressClient,
   IngressSendClient,
   IngressWorkflowClient,
-  IngresCallOptions,
+  IngressCallOptions,
   Send,
-  IngresSendOptions,
+  IngressSendOptions,
 } from "./api.js";
 export { Opts, SendOpts } from "./api.js";
 
