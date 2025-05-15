@@ -43,7 +43,7 @@
     "format": "prettier --ignore-path .eslintignore --write \"**/*.+(js|ts|json)\"",
     "format-check": "prettier --ignore-path .eslintignore --check \"**/*.+(js|ts|json)\"",
     "attw": "attw --pack",
-    "verify": "npm run format-check && npm run lint && npm run test && npm run build && npm run attw",
+    "verify": "npm run format-check && npm run lint && npm run test && npm run build && npm run attw && npm run api:extract",
     "release": "release-it"
   },
   "dependencies": {

@@ -26,7 +26,6 @@
   ],
   "type": "module",
   "scripts": {
-    "api:extract": "npm run api:extract -ws --if-present",
     "build": "npm run build -ws --if-present",
     "test": "npm run test -ws --if-present",
     "lint": "npm run lint -ws --if-present",
