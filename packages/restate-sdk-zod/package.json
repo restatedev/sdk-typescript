@@ -41,6 +41,7 @@
     "zod-to-json-schema": "3.24.3"
   },
   "scripts": {
+    "api:extract": "api-extractor run --local",
     "build": "npm run build:cjs && npm run build:esm",
     "build:cjs": "tsc --module commonjs --verbatimModuleSyntax false --moduleResolution node10 --outDir ./dist/cjs --declaration --declarationDir ./dist/cjs && echo >./dist/cjs/package.json '{\"type\":\"commonjs\"}'",
     "build:esm": "tsc --outDir ./dist/esm --declaration --declarationDir ./dist/esm",

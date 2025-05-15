@@ -64,6 +64,7 @@
     "dist"
   ],
   "scripts": {
+    "api:extract": "api-extractor run --local",
     "gen:version": "node ./scripts/version.mjs",
     "prebuild": "npm run gen:version",
     "build": "npm run build:cjs && npm run build:esm",
