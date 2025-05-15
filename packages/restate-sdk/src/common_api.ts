@@ -21,6 +21,8 @@ export type {
   InvocationId,
   InvocationHandle,
   InvocationPromise,
+  TypedState,
+  UntypedState,
 } from "./context.js";
 export { InvocationIdParser, CombineablePromise } from "./context.js";
 
