@@ -64,7 +64,6 @@
     "dist"
   ],
   "scripts": {
-    "api:extract": "api-extractor run --local",
     "build": "./patch_sdk_cf_workers.sh",
     "release": "release-it"
   },
