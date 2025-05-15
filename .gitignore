@@ -12,3 +12,5 @@ packages/*/dist/*
 packages/*/src/generated/*
 packages/*/buf.lock
 
+.api/*
+!.api/.gitkeep
