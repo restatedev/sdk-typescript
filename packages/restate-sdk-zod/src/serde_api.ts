@@ -20,6 +20,8 @@ import type { Serde } from "@restatedev/restate-sdk-core";
 import type { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 
+export type { Serde } from "@restatedev/restate-sdk-core";
+
 class ZodSerde<T extends z.ZodType> implements Serde<z.infer<T>> {
   contentType = "application/json";
   jsonSchema?: object | undefined;

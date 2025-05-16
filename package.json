@@ -26,6 +26,7 @@
   ],
   "type": "module",
   "scripts": {
+    "api:extract": "npm run api:extract -ws --if-present",
     "build": "npm run build -ws --if-present",
     "test": "npm run test -ws --if-present",
     "lint": "npm run lint -ws --if-present",
@@ -36,6 +37,7 @@
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.15.3",
+    "@microsoft/api-extractor": "^7.52.8",
     "@release-it-plugins/workspaces": "^4.2.0",
     "@types/node": "^20.10.4",
     "@typescript-eslint/eslint-plugin": "^7.13.0",
