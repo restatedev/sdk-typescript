@@ -15,7 +15,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 
-import type { Serde } from "@restatedev/restate-sdk";
+import type { Serde } from "@restatedev/restate-sdk-core";
 
 import type { z } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
