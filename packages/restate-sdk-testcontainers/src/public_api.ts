@@ -12,4 +12,18 @@
 export {
   RestateTestEnvironment,
   RestateContainer,
+  StateProxy,
 } from "./restate_test_environment.js";
+export type {
+  TypedState,
+  UntypedState,
+  Serde,
+  RestateEndpoint,
+  RestateEndpointBase,
+  LoggerTransport,
+  LogMetadata,
+  LogSource,
+  RestateLogLevel,
+  LoggerContext,
+  Request
+} from "@restatedev/restate-sdk";

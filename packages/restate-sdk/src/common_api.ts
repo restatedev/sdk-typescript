@@ -25,6 +25,13 @@ export type {
   InvocationPromise,
   TypedState,
   UntypedState,
+  ContextDate,
+  RunAction,
+  RunOptions,
+  SendOptions,
+  KeyValueStore,
+  DurablePromise,
+  Request,
 } from "./context.js";
 export { InvocationIdParser, RestatePromise } from "./context.js";
 
@@ -38,7 +45,24 @@ export const CombineablePromise = RestatePromise;
  */
 export type CombineablePromise<T> = RestatePromise<T>;
 
-export type { Serde } from "@restatedev/restate-sdk-core";
+export type {
+  Serde,
+  RestateContext,
+  ServiceDefinitionFrom,
+  Service,
+  VirtualObjectDefinitionFrom,
+  VirtualObject,
+  WorkflowDefinitionFrom,
+  Workflow,
+  RestateObjectContext,
+  RestateObjectSharedContext,
+  RestateWorkflowSharedContext,
+  RestateWorkflowContext,
+  ServiceHandler,
+  ObjectHandler,
+  WorkflowHandler,
+  WorkflowSharedHandler,
+} from "@restatedev/restate-sdk-core";
 export { serde } from "@restatedev/restate-sdk-core";
 
 export type {
@@ -47,6 +71,8 @@ export type {
   ClientCallOptions,
   ClientSendOptions,
   RemoveVoidArgument,
+  InferArg,
+  ServiceHandlerOpts,
 } from "./types/rpc.js";
 export {
   service,
@@ -55,6 +81,11 @@ export {
   handlers,
   Opts,
   SendOpts,
+  WorkflowHandlerOpts,
+  ObjectHandlerOpts,
+  ServiceOpts,
+  ObjectOpts,
+  WorkflowOpts,
 } from "./types/rpc.js";
 
 export { rpc } from "./types/rpc.js";
@@ -65,7 +96,7 @@ export type {
   WorkflowDefinition,
 } from "@restatedev/restate-sdk-core";
 
-export type { RestateEndpoint } from "./endpoint.js";
+export type { RestateEndpoint, RestateEndpointBase } from "./endpoint.js";
 export { RestateError, TerminalError, TimeoutError } from "./types/errors.js";
 export type {
   LoggerTransport,

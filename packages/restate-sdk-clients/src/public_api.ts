@@ -17,6 +17,9 @@ export type {
   VirtualObjectDefinitionFrom,
   WorkflowDefinitionFrom,
   Serde,
+  Service,
+  Workflow,
+  VirtualObject,
 } from "@restatedev/restate-sdk-core";
 
 export { serde } from "@restatedev/restate-sdk-core";
@@ -30,6 +33,9 @@ export type {
   IngressCallOptions,
   Send,
   IngressSendOptions,
+  WorkflowSubmission,
+  InferArgType,
+  Output,
 } from "./api.js";
 export { Opts, SendOpts } from "./api.js";
 

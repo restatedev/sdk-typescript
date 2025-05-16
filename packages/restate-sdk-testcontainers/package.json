@@ -46,7 +46,7 @@
     "release": "release-it"
   },
   "dependencies": {
-    "@restatedev/restate-sdk-core": "^1.5.4",
+    "@restatedev/restate-sdk": "^1.5.4",
     "@restatedev/restate-sdk-clients": "^1.5.4",
     "apache-arrow": "^18.0.0",
     "testcontainers": "^10.24.1"

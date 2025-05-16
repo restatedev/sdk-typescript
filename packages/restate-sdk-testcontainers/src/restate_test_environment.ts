@@ -11,8 +11,15 @@
 
 /* eslint-disable no-console */
 
-import * as restate from "@restatedev/restate-sdk";
-import * as core from "@restatedev/restate-sdk-core";
+import { endpoint, serde } from "@restatedev/restate-sdk";
+import type {
+  TypedState,
+  UntypedState,
+  Serde,
+  RestateEndpoint,
+  VirtualObjectDefinition,
+  WorkflowDefinition,
+} from "@restatedev/restate-sdk";
 
 import {
   GenericContainer,
@@ -26,10 +33,10 @@ import type * as net from "net";
 
 // Prepare the restate server
 async function prepareRestateEndpoint(
-  mountServicesFn: (server: restate.RestateEndpoint) => void
+  mountServicesFn: (server: RestateEndpoint) => void
 ): Promise<http2.Http2Server> {
   // Prepare RestateServer
-  const restateEndpoint = restate.endpoint();
+  const restateEndpoint = endpoint();
   mountServicesFn(restateEndpoint);
 
   // Start HTTP2 server on random port
@@ -132,8 +139,8 @@ export class RestateTestEnvironment {
   // Create a handle that allows read/write of state under a given Virtual Object/Workflow key.
   public stateOf<TState extends TypedState = UntypedState>(
     service:
-      | restate.VirtualObjectDefinition<string, unknown>
-      | restate.WorkflowDefinition<string, unknown>,
+      | VirtualObjectDefinition<string, unknown>
+      | WorkflowDefinition<string, unknown>,
     key: string
   ): StateProxy<TState> {
     return new StateProxy(this.adminAPIBaseUrl(), service.name, key);
@@ -145,7 +152,7 @@ export class RestateTestEnvironment {
   }
 
   public static async start(
-    mountServicesFn: (server: restate.RestateEndpoint) => void,
+    mountServicesFn: (server: RestateEndpoint) => void,
     restateContainerFactory: () => GenericContainer = () =>
       new RestateContainer()
   ): Promise<RestateTestEnvironment> {
@@ -164,8 +171,6 @@ export class RestateTestEnvironment {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type TypedState = Record<string, any>;
-export type UntypedState = { _: never };
 
 export class RestateContainer extends GenericContainer {
   constructor(version = "latest") {
@@ -182,7 +187,7 @@ export class StateProxy<TState extends TypedState> {
   // Read a single value from state under a given Virtual Object or Workflow key
   public async get<TValue, TKey extends keyof TState = string>(
     name: TState extends UntypedState ? string : TKey,
-    serde?: core.Serde<TState extends UntypedState ? TValue : TState[TKey]>
+    serde?: Serde<TState extends UntypedState ? TValue : TState[TKey]>
   ): Promise<(TState extends UntypedState ? TValue : TState[TKey]) | null> {
     serde = serde ?? defaultSerde();
 
@@ -218,7 +223,7 @@ export class StateProxy<TState extends TypedState> {
 
   // Read all values from state under a given Virtual Object or Workflow key
   public async getAll<TValues extends TypedState>(
-    serde?: core.Serde<
+    serde?: Serde<
       TState extends UntypedState
         ? TValues[keyof TValues]
         : TState[keyof TState]
@@ -268,7 +273,7 @@ export class StateProxy<TState extends TypedState> {
   public async set<TValue, TKey extends keyof TState = string>(
     name: TState extends UntypedState ? string : TKey,
     value: TState extends UntypedState ? TValue : TState[TKey],
-    serde?: core.Serde<TState extends UntypedState ? TValue : TState[TKey]>
+    serde?: Serde<TState extends UntypedState ? TValue : TState[TKey]>
   ): Promise<void> {
     serde = serde ?? defaultSerde();
     const serialisedValue = serde.serialize(value);
@@ -285,7 +290,7 @@ export class StateProxy<TState extends TypedState> {
   // only that the mutation was submitted to Restate for processing.
   public async setAll<TValues extends TypedState>(
     values: TState extends UntypedState ? TValues : TState,
-    serde?: core.Serde<
+    serde?: Serde<
       TState extends UntypedState
         ? TValues[keyof TValues]
         : TState[keyof TState]
@@ -342,6 +347,6 @@ export class StateProxy<TState extends TypedState> {
   }
 }
 
-export const defaultSerde = <T>(): core.Serde<T> => {
-  return core.serde.json as core.Serde<T>;
+export const defaultSerde = <T>(): Serde<T> => {
+  return serde.json as Serde<T>;
 };
