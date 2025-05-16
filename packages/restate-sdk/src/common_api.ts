@@ -70,6 +70,8 @@ export type {
   SendClient,
   ClientCallOptions,
   ClientSendOptions,
+  ClientCallOptsMapper,
+  ClientSendOptsMapper,
   RemoveVoidArgument,
   InferArg,
   ServiceHandlerOpts,

@@ -14,6 +14,10 @@ import type {
   VirtualObjectDefinition,
   WorkflowDefinition,
 } from "@restatedev/restate-sdk-core";
+import type {
+  ClientCallOptsMapper,
+  ClientSendOptsMapper,
+} from "../types/rpc.js";
 import type { Component } from "../types/components.js";
 import { EndpointBuilder } from "./endpoint_builder.js";
 import type { RestateEndpointBase } from "../endpoint.js";
@@ -73,6 +77,20 @@ export class LambdaEndpointImpl implements LambdaEndpoint {
 
   public setLogger(logger: LoggerTransport): LambdaEndpoint {
     this.builder.setLogger(logger);
+    return this;
+  }
+
+  public setClientCallOptsMapper(
+    optsMapper: ClientCallOptsMapper
+  ): LambdaEndpoint {
+    this.builder.setClientCallOptsMapper(optsMapper);
+    return this;
+  }
+
+  public setClientSendOptsMapper(
+    optsMapper: ClientSendOptsMapper
+  ): LambdaEndpoint {
+    this.builder.setClientSendOptsMapper(optsMapper);
     return this;
   }
 

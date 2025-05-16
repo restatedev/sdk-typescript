@@ -18,7 +18,11 @@ import type {
   WorkflowDefinition,
 } from "@restatedev/restate-sdk-core";
 
-import { HandlerWrapper } from "../types/rpc.js";
+import type {
+  ClientCallOptsMapper,
+  ClientSendOptsMapper,
+} from "../types/rpc.js";
+import { HandlerWrapper, defaultClientOptsMapper } from "../types/rpc.js";
 import type { Component } from "../types/components.js";
 import {
   ServiceComponent,
@@ -74,8 +78,20 @@ export class EndpointBuilder {
 
   private _keySet: string[] = [];
 
+  private clientCallOptsMapper: ClientCallOptsMapper = defaultClientOptsMapper;
+
+  private clientSendOptsMapper: ClientSendOptsMapper = defaultClientOptsMapper;
+
   public get keySet(): string[] {
     return this._keySet;
+  }
+
+  public setClientCallOptsMapper(optsMapper: ClientCallOptsMapper) {
+    this.clientCallOptsMapper = optsMapper;
+  }
+
+  public setClientSendOptsMapper(optsMapper: ClientSendOptsMapper) {
+    this.clientSendOptsMapper = optsMapper;
   }
 
   public componentByName(componentName: string): Component | undefined {
@@ -165,7 +181,9 @@ export class EndpointBuilder {
     const component = new ServiceComponent(
       name,
       definition.description,
-      definition.metadata
+      definition.metadata,
+      this.clientCallOptsMapper,
+      this.clientSendOptsMapper
     );
 
     for (const [route, handler] of Object.entries(
@@ -193,7 +211,9 @@ export class EndpointBuilder {
     const component = new VirtualObjectComponent(
       name,
       definition.description,
-      definition.metadata
+      definition.metadata,
+      this.clientCallOptsMapper,
+      this.clientSendOptsMapper
     );
 
     for (const [route, handler] of Object.entries(
@@ -220,7 +240,9 @@ export class EndpointBuilder {
     const component = new WorkflowComponent(
       name,
       definition.description,
-      definition.metadata
+      definition.metadata,
+      this.clientCallOptsMapper,
+      this.clientSendOptsMapper
     );
 
     for (const [route, handler] of Object.entries(
