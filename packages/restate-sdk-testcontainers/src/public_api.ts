@@ -25,5 +25,5 @@ export type {
   LogSource,
   RestateLogLevel,
   LoggerContext,
-  Request
+  Request,
 } from "@restatedev/restate-sdk";
