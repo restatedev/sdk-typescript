@@ -73,6 +73,11 @@ export type {
   RemoveVoidArgument,
   InferArg,
   ServiceHandlerOpts,
+  WorkflowHandlerOpts,
+  ObjectHandlerOpts,
+  ServiceOpts,
+  ObjectOpts,
+  WorkflowOpts,
 } from "./types/rpc.js";
 export {
   service,
@@ -81,11 +86,6 @@ export {
   handlers,
   Opts,
   SendOpts,
-  WorkflowHandlerOpts,
-  ObjectHandlerOpts,
-  ServiceOpts,
-  ObjectOpts,
-  WorkflowOpts,
 } from "./types/rpc.js";
 
 export { rpc } from "./types/rpc.js";
