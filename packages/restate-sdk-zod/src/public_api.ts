@@ -10,3 +10,4 @@
  */
 
 export { serde } from "./serde_api.js";
+export type { Serde } from "./serde_api.js";
