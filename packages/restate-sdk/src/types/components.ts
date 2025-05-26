@@ -14,13 +14,19 @@
 
 import * as d from "./discovery.js";
 import type { ContextImpl } from "../context_impl.js";
-import type { HandlerWrapper } from "./rpc.js";
+import type {
+  HandlerWrapper,
+  ClientCallOptsMapper,
+  ClientSendOptsMapper,
+} from "./rpc.js";
 import { HandlerKind } from "./rpc.js";
 
 //
 // Interfaces
 //
 export interface Component {
+  clientCallOptsMapper: ClientCallOptsMapper;
+  clientSendOptsMapper: ClientSendOptsMapper;
   name(): string;
   handlerMatching(url: InvokePathComponents): ComponentHandler | undefined;
   discovery(): d.Service;
@@ -29,8 +35,8 @@ export interface Component {
 export interface ComponentHandler {
   name(): string;
   component(): Component;
-  invoke(context: ContextImpl, input: Uint8Array): Promise<Uint8Array>;
   kind(): HandlerKind;
+  invoke(context: ContextImpl, input: Uint8Array): Promise<Uint8Array>;
 }
 
 //
@@ -92,8 +98,10 @@ export class ServiceComponent implements Component {
 
   constructor(
     private readonly componentName: string,
-    public readonly description?: string,
-    public readonly metadata?: Record<string, string>
+    public readonly description: string | undefined,
+    public readonly metadata: Record<string, string> | undefined,
+    public readonly clientCallOptsMapper: ClientCallOptsMapper,
+    public readonly clientSendOptsMapper: ClientSendOptsMapper
   ) {}
 
   name(): string {
@@ -164,8 +172,10 @@ export class VirtualObjectComponent implements Component {
 
   constructor(
     public readonly componentName: string,
-    public readonly description?: string,
-    public readonly metadata?: Record<string, string>
+    public readonly description: string | undefined,
+    public readonly metadata: Record<string, string> | undefined,
+    public readonly clientCallOptsMapper: ClientCallOptsMapper,
+    public readonly clientSendOptsMapper: ClientSendOptsMapper
   ) {}
 
   name(): string {
@@ -239,8 +249,10 @@ export class WorkflowComponent implements Component {
 
   constructor(
     public readonly componentName: string,
-    public readonly description?: string,
-    public readonly metadata?: Record<string, string>
+    public readonly description: string | undefined,
+    public readonly metadata: Record<string, string> | undefined,
+    public readonly clientCallOptsMapper: ClientCallOptsMapper,
+    public readonly clientSendOptsMapper: ClientSendOptsMapper
   ) {}
 
   name(): string {
