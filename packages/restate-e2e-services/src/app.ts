@@ -24,6 +24,7 @@ import "./proxy.js";
 import "./test_utils.js";
 import "./kill.js";
 import "./virtual_object_command_interpreter.js";
+import * as http2 from "http2";
 
 import { REGISTRY } from "./services.js";
 
@@ -38,7 +39,10 @@ if (process.env.E2E_REQUEST_SIGNING) {
   endpoint.withIdentityV1(...process.env.E2E_REQUEST_SIGNING.split(","));
 }
 
-endpoint.listen().catch((e) => {
-  // eslint-disable-next-line no-console
-  console.error(e);
-});
+const server = http2.createServer(endpoint.http2Handler());
+const maxConcurrentStreams = parseInt(
+  process.env.MAX_CONCURRENT_STREAMS || "256"
+);
+server.updateSettings({ maxConcurrentStreams: maxConcurrentStreams });
+
+server.listen(parseInt(process.env.PORT || "9080"));
