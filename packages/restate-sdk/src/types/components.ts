@@ -121,7 +121,7 @@ export class ServiceComponent implements Component {
       name: this.componentName,
       ty: d.ServiceType.SERVICE,
       handlers,
-      documentations: this.description,
+      documentation: this.description,
       metadata: this.metadata,
     } satisfies d.Service;
   }
@@ -198,7 +198,7 @@ export class VirtualObjectComponent implements Component {
       name: this.componentName,
       ty: d.ServiceType.VIRTUAL_OBJECT,
       handlers,
-      documentations: this.description,
+      documentation: this.description,
       metadata: this.metadata,
     } satisfies d.Service;
   }
@@ -273,7 +273,7 @@ export class WorkflowComponent implements Component {
       name: this.componentName,
       ty: d.ServiceType.WORKFLOW,
       handlers,
-      documentations: this.description,
+      documentation: this.description,
       metadata: this.metadata,
     } satisfies d.Service;
   }
