@@ -55,7 +55,7 @@ export interface Service {
   ty: ServiceType;
   handlers: Handler[];
   metadata?: Record<string, string>;
-  documentations?: string;
+  documentation?: string;
 }
 
 export interface Endpoint {
