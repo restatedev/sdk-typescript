@@ -32,10 +32,12 @@
   "dependencies": {
     "@restatedev/restate-sdk": "^1.6.0",
     "@restatedev/restate-sdk-clients": "^1.6.0",
+    "heapdump": "^0.3.15",
     "uuid": "^9.0.0"
   },
   "devDependencies": {
-    "@types/node": "*",
+    "@types/heapdump": "^0.3.4",
+    "@types/node": "^20.17.4",
     "@types/uuid": "^10.0.0",
     "tsx": "^4.15.7"
   },
