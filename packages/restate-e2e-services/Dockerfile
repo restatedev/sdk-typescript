@@ -7,6 +7,7 @@ COPY . .
 RUN npm install
 
 RUN npm run build
+RUN npm rebuild heapdump
 
 # Install Tini
 RUN apt-get update && apt-get -y install tini

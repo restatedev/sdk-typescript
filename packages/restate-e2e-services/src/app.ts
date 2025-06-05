@@ -25,6 +25,18 @@ import "./test_utils.js";
 import "./kill.js";
 import "./virtual_object_command_interpreter.js";
 import * as http2 from "http2";
+import * as heapdump from "heapdump";
+import path from "path";
+
+// Optional: trigger a heap snapshot on signal
+process.on("SIGUSR2", () => {
+  const filename = path.join("/opt", `heap-${Date.now()}.heapsnapshot`);
+  console.log(`Writing snapshot to ${filename}...`);
+  heapdump.writeSnapshot(filename, (err, filename) => {
+    if (err) console.error(err);
+    else console.log(`Heap snapshot written to ${filename}`);
+  });
+});
 
 import { REGISTRY } from "./services.js";
 
@@ -35,14 +47,32 @@ const fqdns = new Set(process.env.SERVICES.split(","));
 const endpoint = restate.endpoint();
 REGISTRY.register(fqdns, endpoint);
 
+const settings: http2.Settings = {};
+if (process.env.MAX_CONCURRENT_STREAMS) {
+  settings.maxConcurrentStreams = parseInt(process.env.MAX_CONCURRENT_STREAMS);
+}
+
 if (process.env.E2E_REQUEST_SIGNING) {
   endpoint.withIdentityV1(...process.env.E2E_REQUEST_SIGNING.split(","));
 }
 
-const server = http2.createServer(endpoint.http2Handler());
-const maxConcurrentStreams = parseInt(
-  process.env.MAX_CONCURRENT_STREAMS || "256"
-);
-server.updateSettings({ maxConcurrentStreams: maxConcurrentStreams });
+let INFLIGHT_REQUESTS = 0;
+
+const handler = endpoint.http2Handler();
+const server = http2.createServer((req, res) => {
+  INFLIGHT_REQUESTS++;
+  res.once("close", () => {
+    INFLIGHT_REQUESTS--;
+  });
+  handler(req, res);
+});
+
+setInterval(() => {
+  console.log(
+    `${new Date().toISOString()}: Inflight requests: ${INFLIGHT_REQUESTS}`
+  );
+}, 30 * 1000);
+
+server.updateSettings(settings);
 
 server.listen(parseInt(process.env.PORT || "9080"));
