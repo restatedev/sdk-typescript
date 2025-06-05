@@ -91,27 +91,42 @@ export namespace rpc {
     SendOpts.from(opts);
 }
 
-function optsFromArgs(args: unknown[]): {
+export type ClientCallOptsMapper<I = unknown, O = unknown> = (
+  opts: ClientCallOptions<I, O> | undefined
+) => ClientCallOptions<I, O> | undefined;
+
+export type ClientSendOptsMapper<I = unknown> = (
+  opts: ClientSendOptions<I> | undefined
+) => ClientSendOptions<I> | undefined;
+
+type UnknownClientOptions =
+  | ClientCallOptions<unknown, unknown>
+  | ClientSendOptions<unknown>
+  | undefined;
+
+export function defaultClientOptsMapper(opts: UnknownClientOptions) {
+  return opts;
+}
+
+function optsFromArgs(
+  args: unknown[],
+  optsMapper: ClientCallOptsMapper | ClientSendOptsMapper
+): {
   parameter?: unknown;
-  opts?:
-    | ClientCallOptions<unknown, unknown>
-    | ClientSendOptions<unknown>
-    | undefined;
+  opts?: UnknownClientOptions;
 } {
   let parameter: unknown;
-  let opts:
-    | ClientCallOptions<unknown, unknown>
-    | ClientSendOptions<unknown>
-    | undefined;
+  let opts: UnknownClientOptions;
   switch (args.length) {
     case 0: {
+      opts = optsMapper(undefined);
       break;
     }
     case 1: {
       if (args[0] instanceof Opts) {
-        opts = args[0].getOpts();
+        opts = optsMapper(args[0].getOpts());
       } else if (args[0] instanceof SendOpts) {
-        opts = args[0].getOpts();
+        opts = optsMapper(args[0].getOpts());
       } else {
         parameter = args[0];
       }
@@ -121,10 +136,10 @@ function optsFromArgs(args: unknown[]): {
       parameter = args[0];
       if (args[1] instanceof Opts) {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        opts = args[1].getOpts();
+        opts = optsMapper(args[1].getOpts());
       } else if (args[1] instanceof SendOpts) {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        opts = args[1].getOpts();
+        opts = optsMapper(args[1].getOpts());
       } else {
         throw new TypeError(
           "The second argument must be either Opts or SendOpts"
@@ -148,6 +163,7 @@ export const defaultSerde = <T>(): Serde<T> => {
 
 export const makeRpcCallProxy = <T>(
   genericCall: (call: GenericCall<unknown, unknown>) => Promise<unknown>,
+  optsMapper: ClientCallOptsMapper,
   service: string,
   key?: string
 ): T => {
@@ -157,7 +173,7 @@ export const makeRpcCallProxy = <T>(
       get: (_target, prop) => {
         const method = prop as string;
         return (...args: unknown[]) => {
-          const { parameter, opts } = optsFromArgs(args);
+          const { parameter, opts } = optsFromArgs(args, optsMapper);
           const requestSerde = opts?.input ?? defaultSerde();
           const responseSerde =
             (opts as ClientCallOptions<unknown, unknown> | undefined)?.output ??
@@ -182,6 +198,7 @@ export const makeRpcCallProxy = <T>(
 
 export const makeRpcSendProxy = <T>(
   genericSend: (send: GenericSend<unknown>) => void,
+  optsMapper: ClientSendOptsMapper,
   service: string,
   key?: string,
   legacyDelay?: number
@@ -192,7 +209,7 @@ export const makeRpcSendProxy = <T>(
       get: (_target, prop) => {
         const method = prop as string;
         return (...args: unknown[]) => {
-          const { parameter, opts } = optsFromArgs(args);
+          const { parameter, opts } = optsFromArgs(args, optsMapper);
           const requestSerde = opts?.input ?? defaultSerde();
           const delay =
             legacyDelay ??
