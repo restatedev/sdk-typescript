@@ -231,187 +231,193 @@ export class GenericHandler implements RestateHandler {
   ): Promise<RestateResponse> {
     const loggerId = Math.floor(Math.random() * 4_294_967_295 /* u32::MAX */);
 
-    // Instantiate core vm and prepare response headers
-    const vmHeaders = Object.entries(headers)
-      .filter(([, v]) => v !== undefined)
-      .map(
-        ([k, v]) =>
-          new vm.WasmHeader(k, v instanceof Array ? v[0] : (v as string))
+    try {
+      // Instantiate core vm and prepare response headers
+      const vmHeaders = Object.entries(headers)
+        .filter(([, v]) => v !== undefined)
+        .map(
+          ([k, v]) =>
+            new vm.WasmHeader(k, v instanceof Array ? v[0] : (v as string))
+        );
+      const coreVm = new vm.WasmVM(
+        vmHeaders,
+        restateLogLevelToWasmLogLevel(DEFAULT_CONSOLE_LOGGER_LOG_LEVEL),
+        loggerId
       );
-    const coreVm = new vm.WasmVM(
-      vmHeaders,
-      restateLogLevelToWasmLogLevel(DEFAULT_CONSOLE_LOGGER_LOG_LEVEL),
-      loggerId
-    );
-    const responseHead = coreVm.get_response_head();
-    const responseHeaders = responseHead.headers.reduce(
-      (headers, { key, value }) => ({
-        [key]: value,
-        ...headers,
-      }),
-      {
-        "x-restate-server": X_RESTATE_SERVER,
-      }
-    );
+      const responseHead = coreVm.get_response_head();
+      const responseHeaders = responseHead.headers.reduce(
+        (headers, { key, value }) => ({
+          [key]: value,
+          ...headers,
+        }),
+        {
+          "x-restate-server": X_RESTATE_SERVER,
+        }
+      );
 
-    // Use a default logger that still respects the endpoint custom logger
-    // We will override this later with a logger that has a LoggerContext
-    // See vm_log below for more details
-    invocationLoggers.set(
-      loggerId,
-      createLogger(
+      // Use a default logger that still respects the endpoint custom logger
+      // We will override this later with a logger that has a LoggerContext
+      // See vm_log below for more details
+      invocationLoggers.set(
+        loggerId,
+        createLogger(
+          this.endpoint.loggerTransport,
+          LogSource.JOURNAL,
+          undefined
+        )
+      );
+
+      const inputReader = body.getReader();
+
+      // Now buffer input entries
+      while (!coreVm.is_ready_to_execute()) {
+        const nextValue = await inputReader.read();
+        if (nextValue.value !== undefined) {
+          coreVm.notify_input(nextValue.value);
+        }
+        if (nextValue.done) {
+          coreVm.notify_input_closed();
+          break;
+        }
+      }
+
+      // Get input
+      const input = coreVm.sys_input();
+
+      const invocationRequest: Request = {
+        id: input.invocation_id,
+        headers: input.headers.reduce((headers, { key, value }) => {
+          headers.set(key, value);
+          return headers;
+        }, new Map()),
+        attemptHeaders: Object.entries(headers).reduce(
+          (headers, [key, value]) => {
+            if (value !== undefined) {
+              headers.set(key, value instanceof Array ? value[0] : value);
+            }
+            return headers;
+          },
+          new Map()
+        ),
+        body: input.input,
+        extraArgs,
+        attemptCompletedSignal: abortSignal,
+      };
+
+      // Prepare logger
+      const loggerContext = new LoggerContext(
+        input.invocation_id,
+        handler.component().name(),
+        handler.name(),
+        handler.kind() === HandlerKind.SERVICE ? undefined : input.key,
+        invocationRequest,
+        additionalContext
+      );
+      const ctxLogger = createLogger(
+        this.endpoint.loggerTransport,
+        LogSource.USER,
+        loggerContext,
+        () => !coreVm.is_processing()
+      );
+      const vmLogger = createLogger(
         this.endpoint.loggerTransport,
         LogSource.JOURNAL,
-        undefined,
-        () => false
-      )
-    );
-
-    const inputReader = body.getReader();
-
-    // Now buffer input entries
-    while (!coreVm.is_ready_to_execute()) {
-      const nextValue = await inputReader.read();
-      if (nextValue.value !== undefined) {
-        coreVm.notify_input(nextValue.value);
+        loggerContext
+        // Filtering is done within the shared core
+      );
+      // See vm_log below for more details
+      invocationLoggers.set(loggerId, vmLogger);
+      if (!coreVm.is_processing()) {
+        vmLogger.info("Replaying invocation.");
+      } else {
+        vmLogger.info("Starting invocation.");
       }
-      if (nextValue.done) {
-        coreVm.notify_input_closed();
-        break;
-      }
-    }
 
-    // Get input
-    const input = coreVm.sys_input();
+      // This promise is used to signal the end of the computation,
+      // which can be either the user returns a value,
+      // or an exception gets catched, or the state machine fails/suspends.
+      //
+      // The last case is handled internally within the ContextImpl.
+      const invocationEndPromise = new CompletablePromise<void>();
 
-    const invocationRequest: Request = {
-      id: input.invocation_id,
-      headers: input.headers.reduce((headers, { key, value }) => {
-        headers.set(key, value);
-        return headers;
-      }, new Map()),
-      attemptHeaders: Object.entries(headers).reduce(
-        (headers, [key, value]) => {
-          if (value !== undefined) {
-            headers.set(key, value instanceof Array ? value[0] : value);
-          }
-          return headers;
-        },
-        new Map()
-      ),
-      body: input.input,
-      extraArgs,
-      attemptCompletedSignal: abortSignal,
-    };
+      // Prepare response stream
+      const responseTransformStream = new TransformStream<Uint8Array>();
+      const outputWriter = responseTransformStream.writable.getWriter();
 
-    // Prepare logger
-    const loggerContext = new LoggerContext(
-      input.invocation_id,
-      handler.component().name(),
-      handler.name(),
-      handler.kind() === HandlerKind.SERVICE ? undefined : input.key,
-      invocationRequest,
-      additionalContext
-    );
-    const ctxLogger = createLogger(
-      this.endpoint.loggerTransport,
-      LogSource.USER,
-      loggerContext,
-      () => !coreVm.is_processing()
-    );
-    const vmLogger = createLogger(
-      this.endpoint.loggerTransport,
-      LogSource.JOURNAL,
-      loggerContext,
-      // Filtering is done within the shared core
-      () => false
-    );
-    // See vm_log below for more details
-    invocationLoggers.set(loggerId, vmLogger);
-    if (!coreVm.is_processing()) {
-      vmLogger.info("Replaying invocation.");
-    } else {
-      vmLogger.info("Starting invocation.");
-    }
+      // Prepare context
+      const ctx = new ContextImpl(
+        coreVm,
+        input,
+        ctxLogger,
+        handler.kind(),
+        vmLogger,
+        invocationRequest,
+        invocationEndPromise,
+        inputReader,
+        outputWriter
+      );
 
-    // This promise is used to signal the end of the computation,
-    // which can be either the user returns a value,
-    // or an exception gets catched, or the state machine fails/suspends.
-    //
-    // The last case is handled internally within the ContextImpl.
-    const invocationEndPromise = new CompletablePromise<void>();
-
-    // Prepare response stream
-    const responseTransformStream = new TransformStream<Uint8Array>();
-    const outputWriter = responseTransformStream.writable.getWriter();
-
-    // Prepare context
-    const ctx = new ContextImpl(
-      coreVm,
-      input,
-      ctxLogger,
-      handler.kind(),
-      vmLogger,
-      invocationRequest,
-      invocationEndPromise,
-      inputReader,
-      outputWriter
-    );
-
-    // Finally invoke user handler
-    handler
-      .invoke(ctx, input.input)
-      .then((bytes) => {
-        coreVm.sys_write_output_success(bytes);
-        coreVm.sys_end();
-        vmLogger.info("Invocation completed successfully.");
-      })
-      .catch((e) => {
-        const error = ensureError(e);
-        if (
-          !(error instanceof RestateError) ||
-          error.code !== SUSPENDED_ERROR_CODE
-        ) {
-          vmLogger.warn("Invocation completed with an error.\n", error);
-        }
-
-        if (error instanceof TerminalError) {
-          coreVm.sys_write_output_failure({
-            code: error.code,
-            message: error.message,
-          });
+      // Finally invoke user handler
+      handler
+        .invoke(ctx, input.input)
+        .then((bytes) => {
+          coreVm.sys_write_output_success(bytes);
           coreVm.sys_end();
-        } else {
-          coreVm.notify_error(error.message, error.stack);
-        }
-      })
-      .finally(() => {
-        invocationEndPromise.resolve();
-      });
+          vmLogger.info("Invocation completed successfully.");
+        })
+        .catch((e) => {
+          const error = ensureError(e);
+          if (
+            !(error instanceof RestateError) ||
+            error.code !== SUSPENDED_ERROR_CODE
+          ) {
+            vmLogger.warn("Invocation completed with an error.\n", error);
+          }
 
-    // Let's wire up invocationEndPromise with consuming all the output and closing the streams.
-    invocationEndPromise.promise
-      .then(async () => {
-        // Consume output till the end, write it out, then close the stream
-        let nextOutput = coreVm.take_output() as Uint8Array | null | undefined;
-        while (nextOutput !== null && nextOutput !== undefined) {
-          await outputWriter.write(nextOutput);
-          nextOutput = coreVm.take_output() as Uint8Array | null | undefined;
-        }
-        await outputWriter.close();
-        // Let's cancel the input reader, if it's still here
-        inputReader.cancel().catch(() => {});
-      })
-      .finally(() => {
-        invocationLoggers.delete(loggerId);
-      })
-      .catch(() => {});
+          if (error instanceof TerminalError) {
+            coreVm.sys_write_output_failure({
+              code: error.code,
+              message: error.message,
+            });
+            coreVm.sys_end();
+          } else {
+            coreVm.notify_error(error.message, error.stack);
+          }
+        })
+        .finally(() => {
+          invocationEndPromise.resolve();
+        });
 
-    return {
-      headers: responseHeaders,
-      statusCode: responseHead.status_code,
-      body: responseTransformStream.readable as ReadableStream<Uint8Array>,
-    };
+      // Let's wire up invocationEndPromise with consuming all the output and closing the streams.
+      invocationEndPromise.promise
+        .then(async () => {
+          // Consume output till the end, write it out, then close the stream
+          let nextOutput = coreVm.take_output() as
+            | Uint8Array
+            | null
+            | undefined;
+          while (nextOutput !== null && nextOutput !== undefined) {
+            await outputWriter.write(nextOutput);
+            nextOutput = coreVm.take_output() as Uint8Array | null | undefined;
+          }
+          await outputWriter.close();
+          // Let's cancel the input reader, if it's still here
+          inputReader.cancel().catch(() => {});
+        })
+        .finally(() => {
+          invocationLoggers.delete(loggerId);
+        })
+        .catch(() => {});
+
+      return {
+        headers: responseHeaders,
+        statusCode: responseHead.status_code,
+        body: responseTransformStream.readable as ReadableStream<Uint8Array>,
+      };
+    } catch (error) {
+      invocationLoggers.delete(loggerId);
+      throw error;
+    }
   }
 
   private handleDiscovery(
