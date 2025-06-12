@@ -83,12 +83,8 @@ server.on("session", (session) => {
   const streams = new Set();
   sessions.set(sessionId, streams);
 
-  console.log("New session opened. Total:", sessions.size);
-  console.log();
-
   const handleCloseSession = () => {
     sessions.delete(sessionId);
-    console.log("Session closed. Total:", sessions.size);
   };
 
   session.on("close", handleCloseSession);
@@ -97,17 +93,8 @@ server.on("session", (session) => {
   session.on("stream", (stream) => {
     streams.add(`${sessionId}_${stream.id}`);
 
-    console.log(
-      `New stream opened: ${stream.id}. Total per connection: ${streams.size}`
-    );
-    console.log("Total streams:", totalStreamsCount());
-
     const handleCloseStream = () => {
       streams.delete(`${sessionId}_${stream.id}`);
-      console.log(
-        `Stream closed: ${stream.id}. Total per connection: ${streams.size}`
-      );
-      console.log("Total streams:", totalStreamsCount());
     };
 
     stream.on("close", handleCloseStream);
@@ -119,6 +106,9 @@ setInterval(() => {
   // eslint-disable-next-line no-console
   console.log(
     `${new Date().toISOString()}: Inflight requests: ${INFLIGHT_REQUESTS}`
+  );
+  console.table(
+    Array.from(sessions.values()).map((set) => ({ "#streams": set.size }))
   );
 }, 30 * 1000);
 
