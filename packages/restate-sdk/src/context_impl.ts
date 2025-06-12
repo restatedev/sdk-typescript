@@ -237,7 +237,9 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
 
       let delay;
       if (delay !== undefined) {
-        delay = BigInt(millisOrDurationToMillis(send.delay as Duration));
+        delay = BigInt(
+          millisOrDurationToMillis(send.delay as Duration | number)
+        );
       }
 
       const handles = vm.sys_send(
@@ -351,7 +353,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     // Prepare the handle
     let handle: number;
     try {
-      handle = this.coreVm.sys_run(name || "");
+      handle = this.coreVm.sys_run(name ?? "");
     } catch (e) {
       this.handleInvocationEndError(e);
       return new RestatePendingPromise(this);
@@ -403,17 +405,17 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
               return pendingPromise<T>();
             }
             const maxRetryDuration =
-              options?.maxRetryDuration || options?.maxRetryDurationMillis;
+              options?.maxRetryDuration ?? options?.maxRetryDurationMillis;
             this.coreVm.propose_run_completion_failure_transient(
               handle,
               err.message,
               err.cause?.toString(),
               BigInt(attemptDuration),
               {
-                factor: options?.retryIntervalFactor || 2.0,
+                factor: options?.retryIntervalFactor ?? 2.0,
                 initial_interval: millisOrDurationToMillis(
-                  options?.initialRetryInterval ||
-                    options?.initialRetryIntervalMillis ||
+                  options?.initialRetryInterval ??
+                    options?.initialRetryIntervalMillis ??
                     50
                 ),
                 max_attempts: options?.maxRetryAttempts,
@@ -422,8 +424,8 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
                     ? undefined
                     : millisOrDurationToMillis(maxRetryDuration),
                 max_interval: millisOrDurationToMillis(
-                  options?.maxRetryInterval ||
-                    options?.maxRetryIntervalMillis || { seconds: 10 }
+                  options?.maxRetryInterval ??
+                    options?.maxRetryIntervalMillis ?? { seconds: 10 }
                 ),
               }
             );

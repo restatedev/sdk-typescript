@@ -22,9 +22,9 @@ export type Duration = {
 
 export function millisOrDurationToMillis(duration: number | Duration): number {
   if (typeof duration === "number") {
-    return duration;
+    return Math.trunc(duration);
   } else {
-    return durationToMillis(duration);
+    return Math.trunc(durationToMillis(duration));
   }
 }
 
