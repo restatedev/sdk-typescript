@@ -35,3 +35,6 @@ export type {
 
 export type { Serde } from "./serde_api.js";
 export { serde } from "./serde_api.js";
+
+export type { Duration } from "./duration.js";
+export { durationToMillis, millisOrDurationToMillis } from "./duration.js";
