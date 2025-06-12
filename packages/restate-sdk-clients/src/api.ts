@@ -6,7 +6,9 @@ import type {
   ServiceDefinitionFrom,
   WorkflowDefinitionFrom,
   Serde,
+  Duration,
 } from "@restatedev/restate-sdk-core";
+import { millisOrDurationToMillis } from "@restatedev/restate-sdk-core";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -115,7 +117,7 @@ export interface IngressSendOptions<I> extends IngressCallOptions<I, void> {
   /**
    * If set, the invocation will be enqueued now to be executed after the provided delay. In milliseconds.
    */
-  delay?: number;
+  delay?: number | Duration;
 }
 
 export class Opts<I, O> {
@@ -142,7 +144,10 @@ export class SendOpts<I = unknown> {
   }
 
   delay(): number | undefined {
-    return this.opts.delay;
+    if (this.opts.delay !== undefined) {
+      return millisOrDurationToMillis(this.opts.delay);
+    }
+    return undefined;
   }
 
   constructor(readonly opts: IngressSendOptions<I>) {}

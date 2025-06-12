@@ -20,6 +20,7 @@ export type {
   Service,
   Workflow,
   VirtualObject,
+  Duration,
 } from "@restatedev/restate-sdk-core";
 
 export { serde } from "@restatedev/restate-sdk-core";

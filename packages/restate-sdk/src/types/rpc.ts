@@ -35,6 +35,7 @@ import {
   type WorkflowDefinition,
   type WorkflowSharedHandler,
   type Serde,
+  type Duration,
   serde,
 } from "@restatedev/restate-sdk-core";
 import { TerminalError } from "./errors.js";
@@ -67,7 +68,32 @@ export class Opts<I, O> {
 
 export type ClientSendOptions<I> = {
   input?: Serde<I>;
-  delay?: number;
+  /**
+   * Makes a type-safe one-way RPC to the specified target service, after a delay specified by the
+   * milliseconds' argument.
+   * This method is like setting up a fault-tolerant cron job that enqueues the message in a
+   * message queue.
+   * The handler calling this function does not have to stay active for the delay time.
+   *
+   * Both the delay timer and the message are durably stored in Restate and guaranteed to be reliably
+   * delivered. The delivery happens no earlier than specified through the delay, but may happen
+   * later, if the target service is down, or backpressuring the system.
+   *
+   * The delay message is journaled for durable execution and will thus not be duplicated when the
+   * handler is re-invoked for retries or after suspending.
+   *
+   * This call will return immediately; the message sending happens asynchronously in the background.
+   * Despite that, the message is guaranteed to be sent, because the completion of the invocation that
+   * triggers the send (calls this function) happens logically after the sending. That means that any
+   * failure where the message does not reach Restate also cannot complete this invocation, and will
+   * hence recover this handler and (through the durable execution) recover the message to be sent.
+   *
+   * @example
+   * ```ts
+   * ctx.serviceSendClient(Service).anotherAction(1337, { delay: { seconds: 60 } });
+   * ```
+   */
+  delay?: Duration | number;
   headers?: Record<string, string>;
   idempotencyKey?: string;
 };

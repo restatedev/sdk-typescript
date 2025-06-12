@@ -116,8 +116,11 @@ class ProgramInterpreter {
         }
         case CommandType.INCREMENT_VIA_DELAYED_CALL: {
           ctx
-            .serviceSendClient(Service, { delay: command.duration })
-            .incrementIndirectly(this.interpreterId);
+            .serviceSendClient(Service)
+            .incrementIndirectly(
+              this.interpreterId,
+              restate.rpc.sendOpts({ delay: command.duration })
+            );
           break;
         }
         case CommandType.CALL_SLOW_SERVICE: {

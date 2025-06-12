@@ -91,7 +91,7 @@ const delayedCall = async (name: string) => {
 
   const greeting = await ingress
     .serviceSendClient(Greeter)
-    .greet(name, restate.rpc.sendOpts({ delay: 1000 }));
+    .greet(name, restate.rpc.sendOpts({ delay: { seconds: 1 } }));
 
   console.log(greeting);
 };
