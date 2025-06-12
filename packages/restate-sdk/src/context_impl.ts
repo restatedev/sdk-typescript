@@ -236,10 +236,8 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       const parameter = requestSerde.serialize(send.parameter);
 
       let delay;
-      if (delay !== undefined) {
-        delay = BigInt(
-          millisOrDurationToMillis(send.delay as Duration | number)
-        );
+      if (send.delay !== undefined) {
+        delay = BigInt(millisOrDurationToMillis(send.delay));
       }
 
       const handles = vm.sys_send(

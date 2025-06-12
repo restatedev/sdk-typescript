@@ -93,7 +93,7 @@ export type ClientSendOptions<I> = {
    * ctx.serviceSendClient(Service).anotherAction(1337, { delay: { seconds: 60 } });
    * ```
    */
-  delay?: number | Duration;
+  delay?: Duration | number;
   headers?: Record<string, string>;
   idempotencyKey?: string;
 };

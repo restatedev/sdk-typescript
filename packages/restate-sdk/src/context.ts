@@ -257,7 +257,7 @@ export type GenericSend<REQ> = {
   key?: string;
   headers?: Record<string, string>;
   inputSerde?: Serde<REQ>;
-  delay?: number | Duration;
+  delay?: Duration | number;
   idempotencyKey?: string;
 };
 
