@@ -43,6 +43,8 @@ export const defaultLoggerTransport: LoggerTransport = (
       return console.warn(p, message, ...optionalParams);
     case RestateLogLevel.ERROR:
       return console.error(p, message, ...optionalParams);
+    case RestateLogLevel.FATAL:
+      return console.error(p, message, ...optionalParams);
     default:
       throw new TypeError(`unset or unknown log level ${params.level}`);
   }
@@ -78,6 +80,8 @@ function logLevelFromName(name?: string): RestateLogLevel | null {
       return RestateLogLevel.WARN;
     case "ERROR":
       return RestateLogLevel.ERROR;
+    case "FATAL":
+      return RestateLogLevel.FATAL;
     default:
       throw new TypeError(`unknown name ${name}`);
   }
@@ -95,6 +99,8 @@ function logLevel(level: RestateLogLevel): number {
       return 4;
     case RestateLogLevel.ERROR:
       return 5;
+    case RestateLogLevel.FATAL:
+      return 6;
   }
 }
 

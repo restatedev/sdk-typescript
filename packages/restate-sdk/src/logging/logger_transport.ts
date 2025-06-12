@@ -22,6 +22,7 @@ export enum RestateLogLevel {
   INFO = "info",
   WARN = "warn",
   ERROR = "error",
+  FATAL = "fatal",
 }
 
 /**

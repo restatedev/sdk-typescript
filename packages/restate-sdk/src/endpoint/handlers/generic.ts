@@ -518,6 +518,8 @@ function wasmLogLevelToRestateLogLevel(level: vm.LogLevel): RestateLogLevel {
       return RestateLogLevel.WARN;
     case vm.LogLevel.ERROR:
       return RestateLogLevel.ERROR;
+    case vm.LogLevel.FATAL:
+      return RestateLogLevel.FATAL;
   }
 }
 
@@ -533,5 +535,7 @@ function restateLogLevelToWasmLogLevel(level: RestateLogLevel): vm.LogLevel {
       return vm.LogLevel.WARN;
     case RestateLogLevel.ERROR:
       return vm.LogLevel.ERROR;
+    case RestateLogLevel.FATAL:
+      return vm.LogLevel.FATAL;
   }
 }
