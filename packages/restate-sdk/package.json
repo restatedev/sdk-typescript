@@ -1,6 +1,6 @@
 {
   "name": "@restatedev/restate-sdk",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "Typescript SDK for Restate",
   "author": "Restate Developers",
   "license": "MIT",
@@ -80,7 +80,7 @@
     "release": "release-it"
   },
   "dependencies": {
-    "@restatedev/restate-sdk-core": "^1.6.0"
+    "@restatedev/restate-sdk-core": "^1.6.1"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.115"
