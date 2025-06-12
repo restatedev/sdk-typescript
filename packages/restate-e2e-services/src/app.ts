@@ -54,7 +54,9 @@ REGISTRY.register(fqdns, endpoint);
 
 const settings: http2.Settings = {};
 if (process.env.MAX_CONCURRENT_STREAMS) {
-  settings.maxConcurrentStreams = parseInt(process.env.MAX_CONCURRENT_STREAMS);
+  settings.maxConcurrentStreams = parseInt(
+    process.env.MAX_CONCURRENT_STREAMS || "256"
+  );
 }
 
 if (process.env.E2E_REQUEST_SIGNING) {
@@ -62,6 +64,7 @@ if (process.env.E2E_REQUEST_SIGNING) {
 }
 
 let INFLIGHT_REQUESTS = 0;
+let ACTIVE_SESSIONS = 0;
 
 const handler = endpoint.http2Handler();
 const server = http2.createServer((req, res) => {
@@ -70,6 +73,16 @@ const server = http2.createServer((req, res) => {
     INFLIGHT_REQUESTS--;
   });
   handler(req, res);
+});
+
+server.on("session", (session) => {
+  ACTIVE_SESSIONS++;
+  console.log("New session opened. Total:", ACTIVE_SESSIONS);
+
+  session.on("close", () => {
+    --ACTIVE_SESSIONS;
+    console.log("Session closed. Total:", ACTIVE_SESSIONS);
+  });
 });
 
 setInterval(() => {
