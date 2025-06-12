@@ -63,7 +63,7 @@ if (process.env.E2E_REQUEST_SIGNING) {
 
 let INFLIGHT_REQUESTS = 0;
 let ACTIVE_SESSIONS = 0;
-let ACTIVE_STREAMS = 0;
+const sessions = new Map();
 
 const handler = endpoint.http2Handler();
 const server = http2.createServer((req, res) => {
@@ -74,25 +74,45 @@ const server = http2.createServer((req, res) => {
   handler(req, res);
 });
 
+function totalStreamsCount() {
+  return Array.from(sessions.values()).reduce((p, c) => p + c.size, 0);
+}
+
 server.on("session", (session) => {
-  ACTIVE_SESSIONS++;
-  console.log("New session opened. Total:", ACTIVE_SESSIONS);
+  const sessionId = ACTIVE_SESSIONS++;
+  const streams = new Set();
+  sessions.set(sessionId, streams);
 
-  session.on("close", () => {
-    --ACTIVE_SESSIONS;
-    console.log("Session closed. Total:", ACTIVE_SESSIONS);
-  });
-});
-server.on("stream", (stream) => {
-  ACTIVE_STREAMS++;
-  console.log("New stream opened. Total:", ACTIVE_STREAMS);
+  console.log("New session opened. Total:", sessions.size);
+  console.log();
 
-  const handleCloseStream = () => {
-    --ACTIVE_STREAMS;
-    console.log("Stream closed. Total:", ACTIVE_STREAMS);
+  const handleCloseSession = () => {
+    sessions.delete(sessionId);
+    console.log("Session closed. Total:", sessions.size);
   };
-  stream.on("close", handleCloseStream);
-  stream.on("error", handleCloseStream);
+
+  session.on("close", handleCloseSession);
+  session.on("error", handleCloseSession);
+
+  session.on("stream", (stream) => {
+    streams.add(`${sessionId}_${stream.id}`);
+
+    console.log(
+      `New stream opened: ${stream.id}. Total per connection: ${streams.size}`
+    );
+    console.log("Total streams:", totalStreamsCount());
+
+    const handleCloseStream = () => {
+      streams.delete(`${sessionId}_${stream.id}`);
+      console.log(
+        `Stream closed: ${stream.id}. Total per connection: ${streams.size}`
+      );
+      console.log("Total streams:", totalStreamsCount());
+    };
+
+    stream.on("close", handleCloseStream);
+    stream.on("error", handleCloseStream);
+  });
 });
 
 setInterval(() => {
