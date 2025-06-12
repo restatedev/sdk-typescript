@@ -274,8 +274,10 @@ export enum HandlerKind {
 
 export type ServiceHandlerOpts<I, O> = {
   /**
-   * Define the acceptable content-type. Wildcards can be used, e.g. `application/*` or `* / *`.
-   * If not provided, the `input.contentType` will be used instead.
+   * Define the acceptable content-type for this handler when a request is received at the ingress.
+   * Wildcards can be used, e.g. `application/*` or `* / *`.
+   *
+   * If not provided, the `input.contentType` will be used instead as default.
    *
    * Setting this value has no effect on the input serde.
    * If you want to customize how to deserialize the input, you still need to provide an `input` serde.
@@ -311,88 +313,82 @@ export type ServiceHandlerOpts<I, O> = {
    * Additional metadata for the handler.
    */
   metadata?: Record<string, string>;
+
+  /**
+   * The retention duration of idempotent requests to this handler.
+   *
+   * *NOTE:* You can set this field only if you register this endpoint against restate-server >= 1.4,
+   * otherwise the service discovery will fail.
+   */
+  idempotencyRetention?: Duration | number;
+
+  /**
+   * The journal retention for invocations to this handler.
+   *
+   * In case the request has an idempotency key, the `idempotencyRetention` caps the journal retention time.
+   *
+   * *NOTE:* You can set this field only if you register this endpoint against restate-server >= 1.4,
+   * otherwise the service discovery will fail.
+   */
+  journalRetention?: Duration | number;
+
+  /**
+   * This timer guards against stalled invocations. Once it expires, Restate triggers a graceful
+   * termination by asking the invocation to suspend (which preserves intermediate progress).
+   *
+   * The `abortTimeout` is used to abort the invocation, in case it doesn't react to the request to
+   * suspend.
+   *
+   * This overrides the inactivity timeout set for the service and the default set in restate-server.
+   *
+   * *NOTE:* You can set this field only if you register this endpoint against restate-server >= 1.4,
+   * otherwise the service discovery will fail.
+   */
+  inactivityTimeout?: Duration | number;
+
+  /**
+   * This timer guards against stalled invocations that are supposed to terminate. The abort timeout
+   * is started after the [inactivityTimeout] has expired and the invocation has been asked to
+   * gracefully terminate. Once the timer expires, it will abort the invocation.
+   *
+   * This timer potentially *interrupts* user code. If the user code needs longer to gracefully
+   * terminate, then this value needs to be set accordingly.
+   *
+   * This overrides the abort timeout set for the service and the default set in restate-server.
+   *
+   * *NOTE:* You can set this field only if you register this endpoint against restate-server >= 1.4,
+   * otherwise the service discovery will fail.
+   */
+  abortTimeout?: Duration | number;
+
+  /**
+   * When set to `true` this handler cannot be invoked from the restate-server HTTP and Kafka ingress,
+   * but only from other services.
+   *
+   * *NOTE:* You can set this field only if you register this endpoint against restate-server >= 1.4,
+   * otherwise the service discovery will fail.
+   */
+  ingressPrivate?: boolean;
 };
 
-export type ObjectHandlerOpts<I, O> = {
+export type ObjectHandlerOpts<I, O> = ServiceHandlerOpts<I, O> & {
   /**
-   * Define the acceptable content-type. Wildcards can be used, e.g. `application/*` or `* / *`.
-   * If not provided, the `input.contentType` will be used instead.
+   * When set to `true`, lazy state will be enabled for all invocations to this handler.
    *
-   * Setting this value has no effect on the input serde.
-   * If you want to customize how to deserialize the input, you still need to provide an `input` serde.
+   * *NOTE:* You can set this field only if you register this endpoint against restate-server >= 1.4,
+   * otherwise the service discovery will fail.
    */
-  accept?: string;
-
-  /**
-   * The Serde to use for deserializing the input parameter.
-   * defaults to: restate.serde.json
-   *
-   * Provide a custom Serde if the input is not JSON, or use:
-   * restate.serde.binary the skip serialization/deserialization altogether.
-   * in that case, the input parameter is a Uint8Array.
-   */
-  input?: Serde<I>;
-
-  /**
-   * The Serde to use for serializing the output.
-   * defaults to: restate.serde.json
-   *
-   * Provide a custom Serde if the output is not JSON, or use:
-   * restate.serde.binary the skip serialization/deserialization altogether.
-   * in that case, the output parameter is a Uint8Array.
-   */
-  output?: Serde<O>;
-
-  /**
-   * An additional description for the handler, for documentation purposes.
-   */
-  description?: string;
-
-  /**
-   * Additional metadata for the handler.
-   */
-  metadata?: Record<string, string>;
+  enableLazyState?: boolean;
 };
 
-export type WorkflowHandlerOpts<I, O> = {
+export type WorkflowHandlerOpts<I, O> = ServiceHandlerOpts<I, O> & {
   /**
-   * Define the acceptable content-type. Wildcards can be used, e.g. `application/*` or `* / *`.
-   * If not provided, the `input.contentType` will be used instead.
+   * When set to `true`, lazy state will be enabled for all invocations to this handler.
    *
-   * Setting this value has no effect on the input serde.
-   * If you want to customize how to deserialize the input, you still need to provide an `input` serde.
+   * *NOTE:* You can set this field only if you register this endpoint against restate-server >= 1.4,
+   * otherwise the service discovery will fail.
    */
-  accept?: string;
-
-  /**
-   * The Serde to use for deserializing the input parameter.
-   * defaults to: restate.serde.json
-   *
-   * Provide a custom Serde if the input is not JSON, or use:
-   * restate.serde.binary the skip serialization/deserialization altogether.
-   * in that case, the input parameter is a Uint8Array.
-   */
-  input?: Serde<I>;
-
-  /**
-   * The Serde to use for serializing the output.
-   * defaults to: restate.serde.json
-   *
-   * Provide a custom Serde if the output is not JSON, or use:
-   * restate.serde.binary the skip serialization/deserialization altogether.
-   * in that case, the output parameter is a Uint8Array.
-   */
-  output?: Serde<O>;
-
-  /**
-   * An additional description for the handler, for documentation purposes.
-   */
-  description?: string;
-
-  /**
-   * Additional metadata for the handler.
-   */
-  metadata?: Record<string, string>;
+  enableLazyState?: boolean;
 };
 
 const HANDLER_SYMBOL = Symbol("Handler");
@@ -423,7 +419,15 @@ export class HandlerWrapper {
       outputSerde,
       opts?.accept,
       opts?.description,
-      opts?.metadata
+      opts?.metadata,
+      opts?.idempotencyRetention,
+      opts?.journalRetention,
+      opts?.inactivityTimeout,
+      opts?.abortTimeout,
+      opts?.ingressPrivate,
+      opts !== undefined && "enableLazyState" in opts
+        ? opts?.enableLazyState
+        : undefined
     );
   }
 
@@ -442,7 +446,13 @@ export class HandlerWrapper {
     public readonly outputSerde: Serde<unknown>,
     accept?: string,
     public readonly description?: string,
-    public readonly metadata?: Record<string, string>
+    public readonly metadata?: Record<string, string>,
+    public readonly idempotencyRetention?: Duration | number,
+    public readonly journalRetention?: Duration | number,
+    public readonly inactivityTimeout?: Duration | number,
+    public readonly abortTimeout?: Duration | number,
+    public readonly ingressPrivate?: boolean,
+    public readonly enableLazyState?: boolean
   ) {
     this.accept = accept ? accept : inputSerde.contentType;
     this.contentType = outputSerde.contentType;
@@ -746,6 +756,70 @@ export type ServiceOpts<U> = {
     : ServiceHandler<U[K], Context>;
 };
 
+export type ServiceOptions = {
+  /**
+   * The retention duration of idempotent requests to this service.
+   *
+   * *NOTE:* You can set this field only if you register this endpoint against restate-server >= 1.4,
+   * otherwise the service discovery will fail.
+   */
+  idempotencyRetention?: Duration | number;
+
+  /**
+   * The journal retention. When set, this applies to all requests to all handlers of this service.
+   *
+   * In case the request has an idempotency key, the `idempotencyRetention` caps the journal retention
+   * time.
+   *
+   * *NOTE:* You can set this field only if you register this endpoint against restate-server >= 1.4,
+   * otherwise the service discovery will fail.
+   *
+   * @return this
+   */
+  journalRetention?: Duration | number;
+
+  /**
+   * This timer guards against stalled invocations. Once it expires, Restate triggers a graceful
+   * termination by asking the invocation to suspend (which preserves intermediate progress).
+   *
+   * The `abortTimeout` is used to abort the invocation, in case it doesn't react to the request to
+   * suspend.
+   *
+   * This overrides the default inactivity timeout configured in the restate-server for all
+   * invocations to this service.
+   *
+   * *NOTE:* You can set this field only if you register this endpoint against restate-server >= 1.4,
+   * otherwise the service discovery will fail.
+   */
+  inactivityTimeout?: Duration | number;
+
+  /**
+   * This timer guards against stalled service/handler invocations that are supposed to terminate. The
+   * abort timeout is started after the `inactivityTimeout` has expired and the service/handler
+   * invocation has been asked to gracefully terminate. Once the timer expires, it will abort the
+   * service/handler invocation.
+   *
+   * This timer potentially *interrupts* user code. If the user code needs longer to gracefully
+   * terminate, then this value needs to be set accordingly.
+   *
+   * This overrides the default abort timeout configured in the restate-server for all invocations to
+   * this service.
+   *
+   * *NOTE:* You can set this field only if you register this endpoint against restate-server >= 1.4,
+   * otherwise the service discovery will fail.
+   */
+  abortTimeout?: Duration | number;
+
+  /**
+   * When set to `true` this service, with all its handlers, cannot be invoked from the restate-server
+   * HTTP and Kafka ingress, but only from other services.
+   *
+   * *NOTE:* You can set this field only if you register this endpoint against restate-server >= 1.4,
+   * otherwise the service discovery will fail.
+   */
+  ingressPrivate?: boolean;
+};
+
 /**
  * Define a Restate service.
  *
@@ -798,6 +872,7 @@ export const service = <P extends string, M>(service: {
   handlers: ServiceOpts<M> & ThisType<M>;
   description?: string;
   metadata?: Record<string, string>;
+  options?: ServiceOptions;
 }): ServiceDefinition<P, M> => {
   if (!service.handlers) {
     throw new Error("service must be defined");
@@ -820,6 +895,7 @@ export const service = <P extends string, M>(service: {
     service: Object.fromEntries(handlers) as object,
     metadata: service.metadata,
     description: service.description,
+    options: service.options,
   } as ServiceDefinition<P, M>;
 };
 
@@ -833,6 +909,16 @@ export type ObjectOpts<U> = {
     :
         | ObjectHandler<U[K], ObjectContext<any>>
         | ObjectHandler<U[K], ObjectSharedContext<any>>;
+};
+
+export type ObjectOptions = ServiceOptions & {
+  /**
+   * When set to `true`, lazy state will be enabled for all invocations to this service.
+   *
+   * *NOTE:* You can set this field only if you register this endpoint against restate-server >= 1.4,
+   * otherwise the service discovery will fail.
+   */
+  enableLazyState?: boolean;
 };
 
 /**
@@ -894,6 +980,7 @@ export const object = <P extends string, M>(object: {
   handlers: ObjectOpts<M> & ThisType<M>;
   description?: string;
   metadata?: Record<string, string>;
+  options?: ObjectOptions;
 }): VirtualObjectDefinition<P, M> => {
   if (!object.handlers) {
     throw new Error("object options must be defined");
@@ -918,6 +1005,7 @@ export const object = <P extends string, M>(object: {
     object: Object.fromEntries(handlers) as object,
     metadata: object.metadata,
     description: object.description,
+    options: object.options,
   } as VirtualObjectDefinition<P, M>;
 };
 
@@ -945,6 +1033,23 @@ export type WorkflowOpts<U> = {
     : U[K] extends WorkflowSharedHandler<U[K], WorkflowSharedContext<any>>
     ? U[K]
     : "An handler other then 'run' must accept as a first argument a WorkflowSharedContext";
+};
+
+export type WorkflowOptions = ServiceOptions & {
+  /**
+   * The retention duration for this workflow.
+   *
+   * *NOTE:* You can set this field only if you register this endpoint against restate-server >= 1.4,
+   * otherwise the service discovery will fail.
+   */
+  workflowRetention?: Duration | number;
+  /**
+   * When set to `true`, lazy state will be enabled for all invocations to this service.
+   *
+   * *NOTE:* You can set this field only if you register this endpoint against restate-server >= 1.4,
+   * otherwise the service discovery will fail.
+   */
+  enableLazyState?: boolean;
 };
 
 /**
@@ -992,6 +1097,7 @@ export const workflow = <P extends string, M>(workflow: {
   handlers: WorkflowOpts<M> & ThisType<M>;
   description?: string;
   metadata?: Record<string, string>;
+  options?: WorkflowOptions;
 }): WorkflowDefinition<P, M> => {
   if (!workflow.handlers) {
     throw new Error("workflow must contain handlers");
@@ -1052,5 +1158,6 @@ export const workflow = <P extends string, M>(workflow: {
     workflow: Object.fromEntries(handlers) as object,
     metadata: workflow.metadata,
     description: workflow.description,
+    options: workflow.options,
   } as WorkflowDefinition<P, M>;
 };

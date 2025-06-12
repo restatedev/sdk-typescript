@@ -14,8 +14,14 @@
 
 import * as d from "./discovery.js";
 import type { ContextImpl } from "../context_impl.js";
-import type { HandlerWrapper } from "./rpc.js";
+import type {
+  HandlerWrapper,
+  ObjectOptions,
+  ServiceOptions,
+  WorkflowOptions,
+} from "./rpc.js";
 import { HandlerKind } from "./rpc.js";
+import { millisOrDurationToMillis } from "@restatedev/restate-sdk-core";
 
 //
 // Interfaces
@@ -93,7 +99,8 @@ export class ServiceComponent implements Component {
   constructor(
     private readonly componentName: string,
     public readonly description?: string,
-    public readonly metadata?: Record<string, string>
+    public readonly metadata?: Record<string, string>,
+    public readonly options?: ServiceOptions
   ) {}
 
   name(): string {
@@ -109,10 +116,7 @@ export class ServiceComponent implements Component {
       ([name, handler]) => {
         return {
           name,
-          input: handlerInputDiscovery(handler.handlerWrapper),
-          output: handlerOutputDiscovery(handler.handlerWrapper),
-          documentation: handler.handlerWrapper.description,
-          metadata: handler.handlerWrapper.metadata,
+          ...commonHandlerOptions(handler.handlerWrapper),
         } satisfies d.Handler;
       }
     );
@@ -123,6 +127,7 @@ export class ServiceComponent implements Component {
       handlers,
       documentation: this.description,
       metadata: this.metadata,
+      ...commonServiceOptions(this.options),
     } satisfies d.Service;
   }
 
@@ -165,7 +170,8 @@ export class VirtualObjectComponent implements Component {
   constructor(
     public readonly componentName: string,
     public readonly description?: string,
-    public readonly metadata?: Record<string, string>
+    public readonly metadata?: Record<string, string>,
+    public readonly options?: ObjectOptions
   ) {}
 
   name(): string {
@@ -181,12 +187,8 @@ export class VirtualObjectComponent implements Component {
       ([name, handler]) => {
         return {
           name,
-          input: handlerInputDiscovery(handler.handlerWrapper),
-          output: handlerOutputDiscovery(handler.handlerWrapper),
           ty: handler.kind() === HandlerKind.EXCLUSIVE ? "EXCLUSIVE" : "SHARED",
-
-          documentation: handler.handlerWrapper.description,
-          metadata: handler.handlerWrapper.metadata,
+          ...commonHandlerOptions(handler.handlerWrapper),
         } satisfies d.Handler;
       }
     );
@@ -197,6 +199,7 @@ export class VirtualObjectComponent implements Component {
       handlers,
       documentation: this.description,
       metadata: this.metadata,
+      ...commonServiceOptions(this.options),
     } satisfies d.Service;
   }
 
@@ -237,7 +240,8 @@ export class WorkflowComponent implements Component {
   constructor(
     public readonly componentName: string,
     public readonly description?: string,
-    public readonly metadata?: Record<string, string>
+    public readonly metadata?: Record<string, string>,
+    public readonly options?: WorkflowOptions
   ) {}
 
   name(): string {
@@ -253,12 +257,13 @@ export class WorkflowComponent implements Component {
       ([name, handler]) => {
         return {
           name,
-          input: handlerInputDiscovery(handler.handlerWrapper),
-          output: handlerOutputDiscovery(handler.handlerWrapper),
           ty: handler.kind() === HandlerKind.WORKFLOW ? "WORKFLOW" : "SHARED",
-
-          documentation: handler.handlerWrapper.description,
-          metadata: handler.handlerWrapper.metadata,
+          workflowCompletionRetention:
+            handler.kind() === HandlerKind.WORKFLOW &&
+            this.options?.workflowRetention !== undefined
+              ? millisOrDurationToMillis(this.options?.workflowRetention)
+              : undefined,
+          ...commonHandlerOptions(handler.handlerWrapper),
         } satisfies d.Handler;
       }
     );
@@ -269,6 +274,7 @@ export class WorkflowComponent implements Component {
       handlers,
       documentation: this.description,
       metadata: this.metadata,
+      ...commonServiceOptions(this.options),
     } satisfies d.Service;
   }
 
@@ -331,4 +337,59 @@ export function parseUrlComponents(urlPath?: string): PathComponents {
     return { type: "health" };
   }
   return { type: "unknown", path: urlPath };
+}
+
+function commonServiceOptions(
+  options?: ServiceOptions | ObjectOptions | WorkflowOptions
+) {
+  return {
+    journalRetention:
+      options?.journalRetention !== undefined
+        ? millisOrDurationToMillis(options.journalRetention)
+        : undefined,
+    idempotencyRetention:
+      options?.idempotencyRetention !== undefined
+        ? millisOrDurationToMillis(options.idempotencyRetention)
+        : undefined,
+    inactivityTimeout:
+      options?.inactivityTimeout !== undefined
+        ? millisOrDurationToMillis(options.inactivityTimeout)
+        : undefined,
+    abortTimeout:
+      options?.abortTimeout !== undefined
+        ? millisOrDurationToMillis(options.abortTimeout)
+        : undefined,
+    ingressPrivate: options?.ingressPrivate,
+    enableLazyState:
+      options !== undefined && "enableLazyState" in options
+        ? options.enableLazyState
+        : undefined,
+  };
+}
+
+function commonHandlerOptions(wrapper: HandlerWrapper) {
+  return {
+    input: handlerInputDiscovery(wrapper),
+    output: handlerOutputDiscovery(wrapper),
+    journalRetention:
+      wrapper.journalRetention !== undefined
+        ? millisOrDurationToMillis(wrapper.journalRetention)
+        : undefined,
+    idempotencyRetention:
+      wrapper.idempotencyRetention !== undefined
+        ? millisOrDurationToMillis(wrapper.idempotencyRetention)
+        : undefined,
+    inactivityTimeout:
+      wrapper.inactivityTimeout !== undefined
+        ? millisOrDurationToMillis(wrapper.inactivityTimeout)
+        : undefined,
+    abortTimeout:
+      wrapper.abortTimeout !== undefined
+        ? millisOrDurationToMillis(wrapper.abortTimeout)
+        : undefined,
+    ingressPrivate: wrapper.ingressPrivate,
+    enableLazyState: wrapper.enableLazyState,
+    documentation: wrapper.description,
+    metadata: wrapper.metadata,
+  };
 }
