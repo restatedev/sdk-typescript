@@ -54,9 +54,7 @@ REGISTRY.register(fqdns, endpoint);
 
 const settings: http2.Settings = {};
 if (process.env.MAX_CONCURRENT_STREAMS) {
-  settings.maxConcurrentStreams = parseInt(
-    process.env.MAX_CONCURRENT_STREAMS || "256"
-  );
+  settings.maxConcurrentStreams = parseInt(process.env.MAX_CONCURRENT_STREAMS);
 }
 
 if (process.env.E2E_REQUEST_SIGNING) {
