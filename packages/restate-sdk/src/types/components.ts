@@ -119,7 +119,7 @@ export class ServiceComponent implements Component {
 
     return {
       name: this.componentName,
-      ty: d.ServiceType.SERVICE,
+      ty: "SERVICE",
       handlers,
       documentation: this.description,
       metadata: this.metadata,
@@ -183,10 +183,7 @@ export class VirtualObjectComponent implements Component {
           name,
           input: handlerInputDiscovery(handler.handlerWrapper),
           output: handlerOutputDiscovery(handler.handlerWrapper),
-          ty:
-            handler.kind() === HandlerKind.EXCLUSIVE
-              ? d.ServiceHandlerType.EXCLUSIVE
-              : d.ServiceHandlerType.SHARED,
+          ty: handler.kind() === HandlerKind.EXCLUSIVE ? "EXCLUSIVE" : "SHARED",
 
           documentation: handler.handlerWrapper.description,
           metadata: handler.handlerWrapper.metadata,
@@ -196,7 +193,7 @@ export class VirtualObjectComponent implements Component {
 
     return {
       name: this.componentName,
-      ty: d.ServiceType.VIRTUAL_OBJECT,
+      ty: "VIRTUAL_OBJECT",
       handlers,
       documentation: this.description,
       metadata: this.metadata,
@@ -258,10 +255,7 @@ export class WorkflowComponent implements Component {
           name,
           input: handlerInputDiscovery(handler.handlerWrapper),
           output: handlerOutputDiscovery(handler.handlerWrapper),
-          ty:
-            handler.kind() === HandlerKind.WORKFLOW
-              ? d.ServiceHandlerType.WORKFLOW
-              : d.ServiceHandlerType.SHARED,
+          ty: handler.kind() === HandlerKind.WORKFLOW ? "WORKFLOW" : "SHARED",
 
           documentation: handler.handlerWrapper.description,
           metadata: handler.handlerWrapper.metadata,
@@ -271,7 +265,7 @@ export class WorkflowComponent implements Component {
 
     return {
       name: this.componentName,
-      ty: d.ServiceType.WORKFLOW,
+      ty: "WORKFLOW",
       handlers,
       documentation: this.description,
       metadata: this.metadata,
