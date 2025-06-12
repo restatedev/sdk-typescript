@@ -63,6 +63,7 @@ if (process.env.E2E_REQUEST_SIGNING) {
 
 let INFLIGHT_REQUESTS = 0;
 let ACTIVE_SESSIONS = 0;
+let ACTIVE_STREAMS = 0;
 
 const handler = endpoint.http2Handler();
 const server = http2.createServer((req, res) => {
@@ -80,6 +81,15 @@ server.on("session", (session) => {
   session.on("close", () => {
     --ACTIVE_SESSIONS;
     console.log("Session closed. Total:", ACTIVE_SESSIONS);
+  });
+});
+server.on("stream", (session) => {
+  ACTIVE_STREAMS++;
+  console.log("New stream opened.. Total:", ACTIVE_STREAMS);
+
+  session.on("close", () => {
+    --ACTIVE_STREAMS;
+    console.log("Stream closed. Total:", ACTIVE_STREAMS);
   });
 });
 
