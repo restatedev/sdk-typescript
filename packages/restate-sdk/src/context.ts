@@ -23,6 +23,7 @@ import type {
   Workflow,
   WorkflowDefinitionFrom,
   Serde,
+  Duration,
 } from "@restatedev/restate-sdk-core";
 import { ContextImpl } from "./context_impl.js";
 import type { TerminalError } from "./types/errors.js";
@@ -140,31 +141,12 @@ export interface KeyValueStore<TState extends TypedState> {
   clearAll(): void;
 }
 
+/**
+ * @deprecated SendOptions on the client factory are deprecated, please use `restate.rpc.sendOpts` instead
+ */
 export interface SendOptions {
   /**
-   * Makes a type-safe one-way RPC to the specified target service, after a delay specified by the
-   * milliseconds' argument.
-   * This method is like setting up a fault-tolerant cron job that enqueues the message in a
-   * message queue.
-   * The handler calling this function does not have to stay active for the delay time.
-   *
-   * Both the delay timer and the message are durably stored in Restate and guaranteed to be reliably
-   * delivered. The delivery happens no earlier than specified through the delay, but may happen
-   * later, if the target service is down, or backpressuring the system.
-   *
-   * The delay message is journaled for durable execution and will thus not be duplicated when the
-   * handler is re-invoked for retries or after suspending.
-   *
-   * This call will return immediately; the message sending happens asynchronously in the background.
-   * Despite that, the message is guaranteed to be sent, because the completion of the invocation that
-   * triggers the send (calls this function) happens logically after the sending. That means that any
-   * failure where the message does not reach Restate also cannot complete this invocation, and will
-   * hence recover this handler and (through the durable execution) recover the message to be sent.
-   *
-   * @example
-   * ```ts
-   * ctx.serviceSendClient(Service, {delay: 60_000}).anotherAction(1337);
-   * ```
+   * @deprecated SendOptions on the client factory are deprecated, please use `restate.rpc.sendOpts` instead
    */
   delay?: number;
 }
@@ -196,27 +178,48 @@ export type RunOptions<T> = {
   maxRetryAttempts?: number;
 
   /**
+   * @deprecated Use `maxRetryDuration` instead.
+   */
+  maxRetryDurationMillis?: number;
+
+  /**
    * Max duration of retries, before giving up.
    *
    * When giving up, `ctx.run` will throw a `TerminalError` wrapping the original error message.
+   *
+   * If a number is provided, it will be interpreted as milliseconds.
    */
-  maxRetryDurationMillis?: number;
+  maxRetryDuration?: Duration | number;
+
+  /**
+   * @deprecated Use `initialRetryInterval` instead.
+   */
+  initialRetryIntervalMillis?: number;
 
   /**
    * Initial interval for the first retry attempt.
    * Retry interval will grow by a factor specified in `retryIntervalFactor`.
    *
    * The default is 50 milliseconds.
+   *
+   * If a number is provided, it will be interpreted as milliseconds.
    */
-  initialRetryIntervalMillis?: number;
+  initialRetryInterval?: Duration | number;
+
+  /**
+   * @deprecated Use `maxRetryInterval` instead.
+   */
+  maxRetryIntervalMillis?: number;
 
   /**
    * Max interval between retries.
    * Retry interval will grow by a factor specified in `retryIntervalFactor`.
    *
    * The default is 10 seconds.
+   *
+   * If a number is provided, it will be interpreted as milliseconds.
    */
-  maxRetryIntervalMillis?: number;
+  maxRetryInterval?: Duration | number;
 
   /**
    * Exponentiation factor to use when computing the next retry delay.
@@ -244,7 +247,7 @@ export type GenericCall<REQ, RES> = {
 
 /**
  * Send a message to an handler directly avoiding restate's type safety checks.
- * This is a generic machnisim to invoke handlers directly by only knowing
+ * This is a generic mechanism to invoke handlers directly by only knowing
  * the service and handler name, (or key in the case of objects or workflows)
  */
 export type GenericSend<REQ> = {
@@ -254,7 +257,7 @@ export type GenericSend<REQ> = {
   key?: string;
   headers?: Record<string, string>;
   inputSerde?: Serde<REQ>;
-  delay?: number;
+  delay?: number | Duration;
   idempotencyKey?: string;
 };
 
@@ -404,13 +407,13 @@ export interface Context extends RestateContext {
 
   /**
    * Sleep until a timeout has passed.
-   * @param millis duration of the sleep in millis.
+   * @param duration either Duration type or milliseconds.
    * This is a lower-bound.
    *
    * @example
    * await ctx.sleep(1000);
    */
-  sleep(millis: number): RestatePromise<void>;
+  sleep(duration: Duration | number): RestatePromise<void>;
 
   /**
    * Makes a type-safe request/response RPC to the specified target service.
@@ -655,7 +658,7 @@ export type RestatePromise<T> = Promise<T> & {
    * @param millis duration of the sleep in millis.
    * This is a lower-bound.
    */
-  orTimeout(millis: number): RestatePromise<T>;
+  orTimeout(millis: Duration | number): RestatePromise<T>;
 
   /**
    * Creates a new {@link RestatePromise} that maps the result of this promise with

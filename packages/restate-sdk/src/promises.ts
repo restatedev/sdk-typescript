@@ -27,6 +27,7 @@ import { CompletablePromise } from "./utils/completable_promise.js";
 import type { ContextImpl, RunClosuresTracker } from "./context_impl.js";
 import { setTimeout } from "node:timers/promises";
 import type { InputPump, OutputPump } from "./io.js";
+import type { Duration } from "@restatedev/restate-sdk-core";
 
 // A promise that is never completed
 export function pendingPromise<T>(): Promise<T> {
@@ -126,9 +127,9 @@ abstract class AbstractRestatePromise<T> implements InternalRestatePromise<T> {
     ]);
   }
 
-  // --- Combineable Promise methods
+  // --- RestatePromise methods
 
-  orTimeout(millis: number): RestatePromise<T> {
+  orTimeout(duration: number | Duration): RestatePromise<T> {
     return new RestateCombinatorPromise(
       this[RESTATE_CTX_SYMBOL],
       ([thisPromise, sleepPromise]) => {
@@ -141,7 +142,7 @@ abstract class AbstractRestatePromise<T> implements InternalRestatePromise<T> {
       },
       [
         this,
-        this[RESTATE_CTX_SYMBOL].sleep(millis) as InternalRestatePromise<any>,
+        this[RESTATE_CTX_SYMBOL].sleep(duration) as InternalRestatePromise<any>,
       ]
     ) as RestatePromise<T>;
   }

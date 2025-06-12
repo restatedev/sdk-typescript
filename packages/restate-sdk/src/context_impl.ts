@@ -53,8 +53,9 @@ import type {
   VirtualObjectDefinitionFrom,
   Workflow,
   WorkflowDefinitionFrom,
+  Duration,
 } from "@restatedev/restate-sdk-core";
-import { serde } from "@restatedev/restate-sdk-core";
+import { serde, millisOrDurationToMillis } from "@restatedev/restate-sdk-core";
 import { RandImpl } from "./utils/rand.js";
 import type {
   ReadableStreamDefaultReader,
@@ -235,8 +236,8 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       const parameter = requestSerde.serialize(send.parameter);
 
       let delay;
-      if (send.delay !== undefined) {
-        delay = BigInt(send.delay);
+      if (delay !== undefined) {
+        delay = BigInt(millisOrDurationToMillis(send.delay as Duration));
       }
 
       const handles = vm.sys_send(
@@ -386,9 +387,12 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
 
             if (
               options?.retryIntervalFactor === undefined &&
-              options?.initialRetryIntervalMillis === undefined &&
               options?.maxRetryAttempts === undefined &&
+              options?.initialRetryInterval === undefined &&
+              options?.initialRetryIntervalMillis === undefined &&
+              options?.maxRetryDuration === undefined &&
               options?.maxRetryDurationMillis === undefined &&
+              options?.maxRetryInterval === undefined &&
               options?.maxRetryIntervalMillis === undefined
             ) {
               // If no retry option was set, simply notify the error.
@@ -398,6 +402,8 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
               this.invocationEndPromise.resolve();
               return pendingPromise<T>();
             }
+            const maxRetryDuration =
+              options?.maxRetryDuration || options?.maxRetryDurationMillis;
             this.coreVm.propose_run_completion_failure_transient(
               handle,
               err.message,
@@ -405,10 +411,20 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
               BigInt(attemptDuration),
               {
                 factor: options?.retryIntervalFactor || 2.0,
-                initial_interval: options?.initialRetryIntervalMillis || 50,
+                initial_interval: millisOrDurationToMillis(
+                  options?.initialRetryInterval ||
+                    options?.initialRetryIntervalMillis ||
+                    50
+                ),
                 max_attempts: options?.maxRetryAttempts,
-                max_duration: options?.maxRetryDurationMillis,
-                max_interval: options?.maxRetryIntervalMillis || 10 * 1000,
+                max_duration:
+                  maxRetryDuration === undefined
+                    ? undefined
+                    : millisOrDurationToMillis(maxRetryDuration),
+                max_interval: millisOrDurationToMillis(
+                  options?.maxRetryInterval ||
+                    options?.maxRetryIntervalMillis || { seconds: 10 }
+                ),
               }
             );
           }
@@ -438,7 +454,11 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     );
   }
 
-  public sleep(millis: number): RestatePromise<void> {
+  public sleep(duration: number | Duration): RestatePromise<void> {
+    if (duration === undefined) {
+      throw new Error(`Duration is undefined.`);
+    }
+    const millis = millisOrDurationToMillis(duration);
     if (millis < 0) {
       throw new Error(
         `Invalid duration. The sleep function only accepts non-negative values. Received: ${millis}ms.`

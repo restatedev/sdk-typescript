@@ -62,6 +62,7 @@ export type {
   ObjectHandler,
   WorkflowHandler,
   WorkflowSharedHandler,
+  Duration,
 } from "@restatedev/restate-sdk-core";
 export { serde } from "@restatedev/restate-sdk-core";
 
