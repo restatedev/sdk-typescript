@@ -83,14 +83,16 @@ server.on("session", (session) => {
     console.log("Session closed. Total:", ACTIVE_SESSIONS);
   });
 });
-server.on("stream", (session) => {
+server.on("stream", (stream) => {
   ACTIVE_STREAMS++;
-  console.log("New stream opened.. Total:", ACTIVE_STREAMS);
+  console.log("New stream opened. Total:", ACTIVE_STREAMS);
 
-  session.on("close", () => {
+  const handleCloseStream = () => {
     --ACTIVE_STREAMS;
     console.log("Stream closed. Total:", ACTIVE_STREAMS);
-  });
+  };
+  stream.on("close", handleCloseStream);
+  stream.on("error", handleCloseStream);
 });
 
 setInterval(() => {
