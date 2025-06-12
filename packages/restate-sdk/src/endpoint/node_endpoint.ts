@@ -118,9 +118,7 @@ export class NodeEndpoint implements RestateEndpoint {
             "Error while handling connection: " + (error.stack ?? error.message)
           );
           response.destroy(error);
-          if (!abortController.signal.aborted) {
-            abortController.abort();
-          }
+          abortController.abort();
         }
       })().catch(() => {});
     };
