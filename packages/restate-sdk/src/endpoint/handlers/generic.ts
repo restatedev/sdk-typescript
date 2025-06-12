@@ -71,6 +71,9 @@ export interface RestateHandler {
   ): Promise<RestateResponse>;
 }
 
+const ENDPOINT_MANIFEST_V2 = "application/vnd.restate.endpointmanifest.v2+json";
+const ENDPOINT_MANIFEST_V3 = "application/vnd.restate.endpointmanifest.v3+json";
+
 /**
  * This is an internal API to support 'fetch' like handlers.
  * It supports both request-reply mode and bidirectional streaming mode.
@@ -429,11 +432,13 @@ export class GenericHandler implements RestateHandler {
       return this.toErrorResponse(415, errorMessage);
     }
 
-    if (
-      !acceptVersionsString.includes(
-        "application/vnd.restate.endpointmanifest.v1+json"
-      )
-    ) {
+    // Negotiate version to use
+    let manifestVersion;
+    if (acceptVersionsString.includes(ENDPOINT_MANIFEST_V3)) {
+      manifestVersion = 3;
+    } else if (acceptVersionsString.includes(ENDPOINT_MANIFEST_V2)) {
+      manifestVersion = 2;
+    } else {
       const errorMessage = `Unsupported service discovery protocol version '${acceptVersionsString}'`;
       this.endpoint.rlog.warn(errorMessage);
       return this.toErrorResponse(415, errorMessage);
@@ -442,9 +447,71 @@ export class GenericHandler implements RestateHandler {
     const discovery = this.endpoint.computeDiscovery(this.protocolMode);
     const body = JSON.stringify(discovery);
 
+    // type AllowedNames<T, U> = { [K in keyof T]: T[K] extends U ? K : never; }[keyof T];
+    //
+    // const checkUnsupportedFeature =  (obj: Record<string, unknown>, fields: Array<string>)=> {
+    //   for (const field of fields) {
+    //     if (field in obj && obj[field] !== undefined) {
+    //       return this.toErrorResponse(500, `The code uses the new discovery feature '${field}' but the runtime doesn't support it yet. Either remove the usage of this feature, or upgrade the runtime.`);
+    //     }
+    //   }
+    //   return;
+    // }
+
+    const checkUnsupportedFeature = <T extends object>(
+      obj: T,
+      ...fields: Array<keyof T>
+    ) => {
+      for (const field of fields) {
+        if (field in obj && obj[field] !== undefined) {
+          return this.toErrorResponse(
+            500,
+            `The code uses the new discovery feature '${String(
+              field
+            )}' but the runtime doesn't support it yet. Either remove the usage of this feature, or upgrade the runtime.`
+          );
+        }
+      }
+      return;
+    };
+
+    // Verify none of the manifest v3 configuration options are used.
+    if (manifestVersion < 3) {
+      for (const service of discovery.services) {
+        const error = checkUnsupportedFeature(
+          service,
+          "journalRetention",
+          "idempotencyRetention",
+          "inactivityTimeout",
+          "abortTimeout",
+          "enableLazyState",
+          "ingressPrivate"
+        );
+        if (error !== undefined) {
+          return error;
+        }
+        for (const handler of service.handlers) {
+          const error = checkUnsupportedFeature(
+            handler,
+            "journalRetention",
+            "idempotencyRetention",
+            "workflowCompletionRetention",
+            "inactivityTimeout",
+            "abortTimeout",
+            "enableLazyState",
+            "ingressPrivate"
+          );
+          if (error !== undefined) {
+            return error;
+          }
+        }
+      }
+    }
+
     return {
       headers: {
-        "content-type": "application/vnd.restate.endpointmanifest.v1+json",
+        "content-type":
+          manifestVersion === 2 ? ENDPOINT_MANIFEST_V2 : ENDPOINT_MANIFEST_V3,
         "x-restate-server": X_RESTATE_SERVER,
       },
       statusCode: 200,
