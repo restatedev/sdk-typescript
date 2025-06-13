@@ -19,8 +19,8 @@ import { EndpointBuilder } from "./endpoint_builder.js";
 import type { RestateEndpointBase } from "../endpoint.js";
 import { GenericHandler } from "./handlers/generic.js";
 import { fetcher } from "./handlers/fetch.js";
-import { ProtocolMode } from "../types/discovery.js";
 import type { LoggerTransport } from "../logging/logger_transport.js";
+import type { ProtocolMode } from "../types/discovery.js";
 
 /**
  * Generic Fetch encapsulates all the Restate services served by this endpoint.
@@ -90,9 +90,7 @@ export class FetchEndpointImpl implements FetchEndpoint {
   }
 
   public bidirectional(set: boolean = true): FetchEndpoint {
-    this.protocolMode = set
-      ? ProtocolMode.BIDI_STREAM
-      : ProtocolMode.REQUEST_RESPONSE;
+    this.protocolMode = set ? "BIDI_STREAM" : "REQUEST_RESPONSE";
     return this;
   }
 

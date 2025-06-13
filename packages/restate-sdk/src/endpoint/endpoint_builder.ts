@@ -18,6 +18,11 @@ import type {
   WorkflowDefinition,
 } from "@restatedev/restate-sdk-core";
 
+import type {
+  ObjectOptions,
+  ServiceOptions,
+  WorkflowOptions,
+} from "../types/rpc.js";
 import { HandlerWrapper } from "../types/rpc.js";
 import type { Component } from "../types/components.js";
 import {
@@ -59,6 +64,7 @@ function isWorkflowDefinition<P extends string, M>(
 type ServiceAuxInfo = {
   description?: string;
   metadata?: Record<string, any>;
+  options?: ServiceOptions | ObjectOptions | WorkflowOptions;
 };
 
 export class EndpointBuilder {
@@ -165,7 +171,8 @@ export class EndpointBuilder {
     const component = new ServiceComponent(
       name,
       definition.description,
-      definition.metadata
+      definition.metadata,
+      definition?.options as ServiceOptions
     );
 
     for (const [route, handler] of Object.entries(
@@ -193,7 +200,8 @@ export class EndpointBuilder {
     const component = new VirtualObjectComponent(
       name,
       definition.description,
-      definition.metadata
+      definition.metadata,
+      definition?.options as ObjectOptions
     );
 
     for (const [route, handler] of Object.entries(
@@ -220,7 +228,8 @@ export class EndpointBuilder {
     const component = new WorkflowComponent(
       name,
       definition.description,
-      definition.metadata
+      definition.metadata,
+      definition?.options as WorkflowOptions
     );
 
     for (const [route, handler] of Object.entries(

@@ -27,7 +27,6 @@ import { EndpointBuilder } from "./endpoint_builder.js";
 import { GenericHandler } from "./handlers/generic.js";
 import { Readable, Writable } from "node:stream";
 import type { WritableStream } from "node:stream/web";
-import { ProtocolMode } from "../types/discovery.js";
 import { ensureError } from "../types/errors.js";
 import type { LoggerTransport } from "../logging/logger_transport.js";
 
@@ -70,7 +69,7 @@ export class NodeEndpoint implements RestateEndpoint {
     request: Http2ServerRequest,
     response: Http2ServerResponse
   ) => void {
-    const handler = new GenericHandler(this.builder, ProtocolMode.BIDI_STREAM);
+    const handler = new GenericHandler(this.builder, "BIDI_STREAM");
 
     return (request, response) => {
       (async () => {
@@ -113,10 +112,7 @@ export class NodeEndpoint implements RestateEndpoint {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   lambdaHandler(): (event: any, ctx: any) => Promise<any> {
-    const genericHandler = new GenericHandler(
-      this.builder,
-      ProtocolMode.REQUEST_RESPONSE
-    );
+    const genericHandler = new GenericHandler(this.builder, "REQUEST_RESPONSE");
     const handler = new LambdaHandler(genericHandler);
     return handler.handleRequest.bind(handler);
   }

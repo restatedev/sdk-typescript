@@ -79,6 +79,9 @@ export type {
   ServiceOpts,
   ObjectOpts,
   WorkflowOpts,
+  ServiceOptions,
+  ObjectOptions,
+  WorkflowOptions,
 } from "./types/rpc.js";
 export {
   service,

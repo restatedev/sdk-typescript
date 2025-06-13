@@ -109,6 +109,12 @@ npm run -w packages/restate-sdk-examples workflow
 
 See https://github.com/restatedev/e2e/ for more details.
 
+### Re-generating the discovery manifest
+
+```shell
+npx --package=json-schema-to-typescript json2ts endpoint_manifest_schema.json packages/restate-sdk/src/types/discovery.ts
+```
+
 ## Releasing the package
 
 ### Releasing via release-it

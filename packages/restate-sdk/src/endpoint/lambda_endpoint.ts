@@ -19,7 +19,6 @@ import { EndpointBuilder } from "./endpoint_builder.js";
 import type { RestateEndpointBase } from "../endpoint.js";
 import { GenericHandler } from "./handlers/generic.js";
 import { LambdaHandler } from "./handlers/lambda.js";
-import { ProtocolMode } from "../types/discovery.js";
 import type { LoggerTransport } from "../logging/logger_transport.js";
 
 /**
@@ -78,10 +77,7 @@ export class LambdaEndpointImpl implements LambdaEndpoint {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   handler(): (event: any, ctx: any) => Promise<any> {
-    const genericHandler = new GenericHandler(
-      this.builder,
-      ProtocolMode.REQUEST_RESPONSE
-    );
+    const genericHandler = new GenericHandler(this.builder, "REQUEST_RESPONSE");
     const lambdaHandler = new LambdaHandler(genericHandler);
     return lambdaHandler.handleRequest.bind(lambdaHandler);
   }
