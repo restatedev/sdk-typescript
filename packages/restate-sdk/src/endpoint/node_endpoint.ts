@@ -74,6 +74,7 @@ export class NodeEndpoint implements RestateEndpoint {
     return (request, response) => {
       (async () => {
         const abortController = new AbortController();
+
         request.once("aborted", () => {
           abortController.abort();
         });
@@ -83,21 +84,33 @@ export class NodeEndpoint implements RestateEndpoint {
         request.once("error", () => {
           abortController.abort();
         });
+
+        if (request.destroyed || request.aborted) {
+          this.builder.rlog.error("Client disconnected");
+          abortController.abort();
+        }
+
         try {
           const url = request.url;
+          const webRequestBody = Readable.toWeb(request);
+
           const resp = await handler.handle({
             url,
             headers: request.headers,
-            body: Readable.toWeb(request),
+            body: webRequestBody,
             extraArgs: [],
             abortSignal: abortController.signal,
           });
+
+          if (response.destroyed) {
+            return;
+          }
+
           response.writeHead(resp.statusCode, resp.headers);
           const responseWeb = Writable.toWeb(
             response
           ) as WritableStream<Uint8Array>;
           await resp.body.pipeTo(responseWeb);
-          await new Promise<void>((resolve) => response.end(resolve));
         } catch (e) {
           const error = ensureError(e);
           this.builder.rlog.error(

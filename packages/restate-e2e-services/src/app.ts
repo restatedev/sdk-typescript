@@ -62,6 +62,8 @@ if (process.env.E2E_REQUEST_SIGNING) {
 }
 
 let INFLIGHT_REQUESTS = 0;
+let ACTIVE_SESSIONS = 0;
+const sessions = new Map();
 
 const handler = endpoint.http2Handler();
 const server = http2.createServer((req, res) => {
@@ -72,10 +74,41 @@ const server = http2.createServer((req, res) => {
   handler(req, res);
 });
 
+function totalStreamsCount() {
+  return Array.from(sessions.values()).reduce((p, c) => p + c.size, 0);
+}
+
+server.on("session", (session) => {
+  const sessionId = ACTIVE_SESSIONS++;
+  const streams = new Set();
+  sessions.set(sessionId, streams);
+
+  const handleCloseSession = () => {
+    sessions.delete(sessionId);
+  };
+
+  session.on("close", handleCloseSession);
+  session.on("error", handleCloseSession);
+
+  session.on("stream", (stream) => {
+    streams.add(`${sessionId}_${stream.id}`);
+
+    const handleCloseStream = () => {
+      streams.delete(`${sessionId}_${stream.id}`);
+    };
+
+    stream.on("close", handleCloseStream);
+    stream.on("error", handleCloseStream);
+  });
+});
+
 setInterval(() => {
   // eslint-disable-next-line no-console
   console.log(
     `${new Date().toISOString()}: Inflight requests: ${INFLIGHT_REQUESTS}`
+  );
+  console.table(
+    Array.from(sessions.values()).map((set) => ({ "#streams": set.size }))
   );
 }, 30 * 1000);
 
