@@ -235,6 +235,11 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       const requestSerde = send.inputSerde ?? (serde.binary as Serde<REQ>);
       const parameter = requestSerde.serialize(send.parameter);
 
+      const delay =
+        send.delay !== undefined
+          ? millisOrDurationToMillis(send.delay)
+          : undefined;
+
       const handles = vm.sys_send(
         send.service,
         send.method,
@@ -245,9 +250,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
               ([key, value]) => new WasmHeader(key, value)
             )
           : [],
-        send.delay !== undefined
-          ? BigInt(millisOrDurationToMillis(send.delay))
-          : undefined,
+        delay !== undefined && delay > 0 ? BigInt(delay) : undefined,
         send.idempotencyKey
       );
       const handle = handles.invocation_id_completion_id;
