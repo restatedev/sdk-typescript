@@ -74,10 +74,6 @@ const server = http2.createServer((req, res) => {
   handler(req, res);
 });
 
-function totalStreamsCount() {
-  return Array.from(sessions.values()).reduce((p, c) => p + c.size, 0);
-}
-
 server.on("session", (session) => {
   const sessionId = ACTIVE_SESSIONS++;
   const streams = new Set();
@@ -100,6 +96,8 @@ server.on("session", (session) => {
     stream.on("close", handleCloseStream);
     stream.on("error", handleCloseStream);
   });
+
+  return undefined;
 });
 
 setInterval(() => {
@@ -107,8 +105,11 @@ setInterval(() => {
   console.log(
     `${new Date().toISOString()}: Inflight requests: ${INFLIGHT_REQUESTS}`
   );
+  // eslint-disable-next-line no-console
   console.table(
-    Array.from(sessions.values()).map((set) => ({ "#streams": set.size }))
+    Array.from(sessions.values()).map((set: Set<string>) => ({
+      "#streams": set.size,
+    }))
   );
 }, 30 * 1000);
 
