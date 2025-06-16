@@ -271,6 +271,13 @@ export class GenericHandler implements RestateHandler {
       );
 
       const inputReader = body.getReader();
+      abortSignal.addEventListener(
+        "abort",
+        () => {
+          void inputReader.cancel();
+        },
+        { once: true }
+      );
 
       // Now buffer input entries
       while (!coreVm.is_ready_to_execute()) {
