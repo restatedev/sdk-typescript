@@ -1,8 +1,9 @@
 use js_sys::Uint8Array;
 use restate_sdk_shared_core::{
-    CallHandle, CoreVM, DoProgressResponse, Error, Header, HeaderMap, IdentityVerifier, Input,
-    NonEmptyValue, ResponseHead, RetryPolicy, RunExitResult, SendHandle,
-    TakeOutputResult, Target, TerminalFailure, VMOptions, Value, CANCEL_NOTIFICATION_HANDLE, VM,
+    CallHandle, CommandRelationship, CommandType, CoreVM, DoProgressResponse, Error, Header,
+    HeaderMap, IdentityVerifier, Input, NonEmptyValue, ResponseHead, RetryPolicy, RunExitResult,
+    SendHandle, TakeOutputResult, Target, TerminalFailure, VMOptions, Value,
+    CANCEL_NOTIFICATION_HANDLE, VM,
 };
 use serde::{Deserialize, Serialize};
 use std::cmp;
@@ -140,7 +141,57 @@ fn log_subscriber(
         .with_filter(LevelFilter::from_level(level));
     Registry::default().with(fmt_layer)
 }
-// Data model
+
+//--- Data model
+
+#[wasm_bindgen]
+pub enum WasmCommandType {
+    Input,
+    Output,
+    GetState,
+    GetStateKeys,
+    SetState,
+    ClearState,
+    ClearAllState,
+    GetPromise,
+    PeekPromise,
+    CompletePromise,
+    Sleep,
+    Call,
+    OneWayCall,
+    SendSignal,
+    RunCommand,
+    AttachInvocation,
+    GetInvocationOutput,
+    CompleteAwakeable,
+    CancelInvocation,
+}
+
+impl From<WasmCommandType> for CommandType {
+    fn from(value: WasmCommandType) -> Self {
+        match value {
+            WasmCommandType::Input => CommandType::Input,
+            WasmCommandType::Output => CommandType::Output,
+            WasmCommandType::GetState => CommandType::GetState,
+            WasmCommandType::GetStateKeys => CommandType::GetStateKeys,
+            WasmCommandType::SetState => CommandType::SetState,
+            WasmCommandType::ClearState => CommandType::ClearState,
+            WasmCommandType::ClearAllState => CommandType::ClearAllState,
+            WasmCommandType::GetPromise => CommandType::GetPromise,
+            WasmCommandType::PeekPromise => CommandType::PeekPromise,
+            WasmCommandType::CompletePromise => CommandType::CompletePromise,
+            WasmCommandType::Sleep => CommandType::Sleep,
+            WasmCommandType::Call => CommandType::Call,
+            WasmCommandType::OneWayCall => CommandType::OneWayCall,
+            WasmCommandType::SendSignal => CommandType::SendSignal,
+            WasmCommandType::RunCommand => CommandType::RunCommand,
+            WasmCommandType::AttachInvocation => CommandType::AttachInvocation,
+            WasmCommandType::GetInvocationOutput => CommandType::GetInvocationOutput,
+            WasmCommandType::CompleteAwakeable => CommandType::CompleteAwakeable,
+            WasmCommandType::CancelInvocation => CommandType::CancelInvocation,
+        }
+    }
+}
 
 #[wasm_bindgen(getter_with_clone)]
 #[derive(Clone)]
@@ -421,6 +472,27 @@ impl WasmVM {
         }
 
         use_log_dispatcher!(self, |vm| CoreVM::notify_error(vm, e, None))
+    }
+
+    pub fn notify_error_for_next_command(
+        &mut self,
+        error_message: String,
+        stacktrace: Option<String>,
+        wasm_command_type: WasmCommandType,
+    ) {
+        let mut e = Error::internal(error_message);
+        if let Some(stacktrace) = stacktrace {
+            e = e.with_stacktrace(stacktrace);
+        }
+
+        use_log_dispatcher!(self, |vm| CoreVM::notify_error(
+            vm,
+            e,
+            Some(CommandRelationship::Next {
+                ty: wasm_command_type.into(),
+                name: None,
+            })
+        ))
     }
 
     pub fn take_output(&mut self) -> JsValue {
@@ -710,7 +782,9 @@ impl WasmVM {
                 error: Error::internal(error_message)
                     .with_stacktrace(error_stacktrace.unwrap_or_default()),
             },
-            config.map(|config| config.into()).unwrap_or(RetryPolicy::Infinite)
+            config
+                .map(|config| config.into())
+                .unwrap_or(RetryPolicy::Infinite)
         ))
         .map_err(Into::into)
     }

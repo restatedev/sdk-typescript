@@ -29,7 +29,10 @@ import type {
   InvocationHandle,
 } from "./context.js";
 import type * as vm from "./endpoint/handlers/vm/sdk_shared_core_wasm_bindings.js";
-import { WasmHeader } from "./endpoint/handlers/vm/sdk_shared_core_wasm_bindings.js";
+import {
+  WasmCommandType,
+  WasmHeader,
+} from "./endpoint/handlers/vm/sdk_shared_core_wasm_bindings.js";
 import {
   ensureError,
   INTERNAL_ERROR_CODE,
@@ -127,8 +130,10 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
   }
 
   cancel(invocationId: InvocationId): void {
-    this.processNonCompletableEntry((vm) =>
-      vm.sys_cancel_invocation(invocationId)
+    this.processNonCompletableEntry(
+      WasmCommandType.CancelInvocation,
+      () => {},
+      (vm) => vm.sys_cancel_invocation(invocationId)
     );
   }
 
@@ -170,17 +175,27 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
   }
 
   public set<T>(name: string, value: T, serde?: Serde<T>): void {
-    this.processNonCompletableEntry((vm) =>
-      vm.sys_set_state(name, (serde ?? defaultSerde()).serialize(value))
+    this.processNonCompletableEntry(
+      WasmCommandType.SetState,
+      () => (serde ?? defaultSerde()).serialize(value),
+      (vm, bytes) => vm.sys_set_state(name, bytes)
     );
   }
 
   public clear(name: string): void {
-    this.processNonCompletableEntry((vm) => vm.sys_clear_state(name));
+    this.processNonCompletableEntry(
+      WasmCommandType.ClearState,
+      () => {},
+      (vm) => vm.sys_clear_state(name)
+    );
   }
 
   public clearAll(): void {
-    this.processNonCompletableEntry((vm) => vm.sys_clear_all_state());
+    this.processNonCompletableEntry(
+      WasmCommandType.ClearAllState,
+      () => {},
+      (vm) => vm.sys_clear_all_state()
+    );
   }
 
   // --- Calls, background calls, etc
@@ -388,31 +403,31 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
             // Configure the retry policy if any of the parameters are set.
             let retryPolicy;
             if (
-                options?.retryIntervalFactor !== undefined ||
-                options?.maxRetryAttempts !== undefined ||
-                options?.initialRetryInterval !== undefined ||
-                options?.initialRetryIntervalMillis !== undefined ||
-                options?.maxRetryDuration !== undefined ||
-                options?.maxRetryDurationMillis !== undefined ||
-                options?.maxRetryInterval !== undefined ||
-                options?.maxRetryIntervalMillis !== undefined
+              options?.retryIntervalFactor !== undefined ||
+              options?.maxRetryAttempts !== undefined ||
+              options?.initialRetryInterval !== undefined ||
+              options?.initialRetryIntervalMillis !== undefined ||
+              options?.maxRetryDuration !== undefined ||
+              options?.maxRetryDurationMillis !== undefined ||
+              options?.maxRetryInterval !== undefined ||
+              options?.maxRetryIntervalMillis !== undefined
             ) {
               const maxRetryDuration =
-                  options?.maxRetryDuration ?? options?.maxRetryDurationMillis;
+                options?.maxRetryDuration ?? options?.maxRetryDurationMillis;
               retryPolicy = {
                 factor: options?.retryIntervalFactor ?? 2.0,
                 initial_interval: millisOrDurationToMillis(
-                    options?.initialRetryInterval ??
+                  options?.initialRetryInterval ??
                     options?.initialRetryIntervalMillis ??
                     50
                 ),
                 max_attempts: options?.maxRetryAttempts,
                 max_duration:
-                    maxRetryDuration === undefined
-                        ? undefined
-                        : millisOrDurationToMillis(maxRetryDuration),
+                  maxRetryDuration === undefined
+                    ? undefined
+                    : millisOrDurationToMillis(maxRetryDuration),
                 max_interval: millisOrDurationToMillis(
-                    options?.maxRetryInterval ??
+                  options?.maxRetryInterval ??
                     options?.maxRetryIntervalMillis ?? { seconds: 10 }
                 ),
               };
@@ -495,31 +510,38 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
   }
 
   public resolveAwakeable<T>(id: string, payload?: T, serde?: Serde<T>): void {
-    this.processNonCompletableEntry((vm) => {
-      // We coerce undefined to null as null can be stringified by JSON.stringify
-      let value: Uint8Array;
+    this.processNonCompletableEntry(
+      WasmCommandType.CompleteAwakeable,
+      () => {
+        // We coerce undefined to null as null can be stringified by JSON.stringify
+        let value: Uint8Array;
 
-      if (serde) {
-        value =
-          payload === undefined ? new Uint8Array() : serde.serialize(payload);
-      } else {
-        value =
-          payload !== undefined
-            ? defaultSerde().serialize(payload)
-            : defaultSerde().serialize(null);
-      }
-
-      vm.sys_complete_awakeable_success(id, value);
-    });
+        if (serde) {
+          value =
+            payload === undefined ? new Uint8Array() : serde.serialize(payload);
+        } else {
+          value =
+            payload !== undefined
+              ? defaultSerde().serialize(payload)
+              : defaultSerde().serialize(null);
+        }
+        return value;
+      },
+      (vm, bytes) => vm.sys_complete_awakeable_success(id, bytes)
+    );
   }
 
   public rejectAwakeable(id: string, reason: string): void {
-    this.processNonCompletableEntry((vm) => {
-      vm.sys_complete_awakeable_failure(id, {
-        code: UNKNOWN_ERROR_CODE,
-        message: reason,
-      });
-    });
+    this.processNonCompletableEntry(
+      WasmCommandType.CompleteAwakeable,
+      () => {},
+      (vm) => {
+        vm.sys_complete_awakeable_failure(id, {
+          code: UNKNOWN_ERROR_CODE,
+          message: reason,
+        });
+      }
+    );
   }
 
   public promise<T>(name: string, serde?: Serde<T>): DurablePromise<T> {
@@ -559,9 +581,27 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
 
   // -- Various private methods
 
-  private processNonCompletableEntry(vmCall: (vm: vm.WasmVM) => void) {
+  private processNonCompletableEntry<T>(
+    commandType: vm.WasmCommandType,
+    prepare: () => T,
+    vmCall: (vm: vm.WasmVM, input: T) => void
+  ) {
+    let input;
     try {
-      vmCall(this.coreVm);
+      input = prepare();
+    } catch (e) {
+      this.handleInvocationEndError(e, (vm, error) =>
+        vm.notify_error_for_next_command(
+          error.message,
+          error.stack,
+          commandType
+        )
+      );
+      return;
+    }
+
+    try {
+      vmCall(this.coreVm, input);
     } catch (e) {
       this.handleInvocationEndError(e);
     }
@@ -581,7 +621,12 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     return new RestateSinglePromise(this, handle, completer);
   }
 
-  handleInvocationEndError(e: unknown) {
+  handleInvocationEndError(
+    e: unknown,
+    notify_vm_error: (vm: vm.WasmVM, error: Error) => void = (vm, error) => {
+      vm.notify_error(error.message, error.stack);
+    }
+  ) {
     const error = ensureError(e);
     if (
       !(error instanceof RestateError) ||
@@ -592,7 +637,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
         error
       );
     }
-    this.coreVm.notify_error(error.message, error.stack);
+    notify_vm_error(this.coreVm, error);
 
     // From now on, no progress will be made.
     this.invocationEndPromise.resolve();
