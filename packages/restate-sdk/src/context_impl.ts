@@ -385,47 +385,44 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
               err
             );
 
+            // Configure the retry policy if any of the parameters are set.
+            let retryPolicy;
             if (
-              options?.retryIntervalFactor === undefined &&
-              options?.maxRetryAttempts === undefined &&
-              options?.initialRetryInterval === undefined &&
-              options?.initialRetryIntervalMillis === undefined &&
-              options?.maxRetryDuration === undefined &&
-              options?.maxRetryDurationMillis === undefined &&
-              options?.maxRetryInterval === undefined &&
-              options?.maxRetryIntervalMillis === undefined
+                options?.retryIntervalFactor !== undefined ||
+                options?.maxRetryAttempts !== undefined ||
+                options?.initialRetryInterval !== undefined ||
+                options?.initialRetryIntervalMillis !== undefined ||
+                options?.maxRetryDuration !== undefined ||
+                options?.maxRetryDurationMillis !== undefined ||
+                options?.maxRetryInterval !== undefined ||
+                options?.maxRetryIntervalMillis !== undefined
             ) {
-              // If no retry option was set, simply notify the error.
-              this.coreVm.notify_error(err.message, err.stack);
-
-              // From now on, no progress will be made.
-              this.invocationEndPromise.resolve();
-              return pendingPromise<T>();
-            }
-            const maxRetryDuration =
-              options?.maxRetryDuration ?? options?.maxRetryDurationMillis;
-            this.coreVm.propose_run_completion_failure_transient(
-              handle,
-              err.message,
-              err.cause?.toString(),
-              BigInt(attemptDuration),
-              {
+              const maxRetryDuration =
+                  options?.maxRetryDuration ?? options?.maxRetryDurationMillis;
+              retryPolicy = {
                 factor: options?.retryIntervalFactor ?? 2.0,
                 initial_interval: millisOrDurationToMillis(
-                  options?.initialRetryInterval ??
+                    options?.initialRetryInterval ??
                     options?.initialRetryIntervalMillis ??
                     50
                 ),
                 max_attempts: options?.maxRetryAttempts,
                 max_duration:
-                  maxRetryDuration === undefined
-                    ? undefined
-                    : millisOrDurationToMillis(maxRetryDuration),
+                    maxRetryDuration === undefined
+                        ? undefined
+                        : millisOrDurationToMillis(maxRetryDuration),
                 max_interval: millisOrDurationToMillis(
-                  options?.maxRetryInterval ??
+                    options?.maxRetryInterval ??
                     options?.maxRetryIntervalMillis ?? { seconds: 10 }
                 ),
-              }
+              };
+            }
+            this.coreVm.propose_run_completion_failure_transient(
+              handle,
+              err.message,
+              err.stack,
+              BigInt(attemptDuration),
+              retryPolicy
             );
           }
         } else {

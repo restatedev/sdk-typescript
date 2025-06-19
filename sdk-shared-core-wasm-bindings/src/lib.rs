@@ -1,7 +1,7 @@
 use js_sys::Uint8Array;
 use restate_sdk_shared_core::{
     CallHandle, CoreVM, DoProgressResponse, Error, Header, HeaderMap, IdentityVerifier, Input,
-    NonEmptyValue, ResponseHead, RetryPolicy, RunExitResult, SendHandle, SuspendedOrVMError,
+    NonEmptyValue, ResponseHead, RetryPolicy, RunExitResult, SendHandle,
     TakeOutputResult, Target, TerminalFailure, VMOptions, Value, CANCEL_NOTIFICATION_HANDLE, VM,
 };
 use serde::{Deserialize, Serialize};
@@ -445,14 +445,7 @@ impl WasmVM {
         Ok(use_log_dispatcher!(self, |vm| CoreVM::do_progress(
             vm,
             handles.into_iter().map(Into::into).collect()
-        ))
-        .map_err(|e| match e {
-            SuspendedOrVMError::Suspended(_) => WasmFailure {
-                code: 599,
-                message: "suspended".to_string(),
-            },
-            SuspendedOrVMError::VM(e) => WasmFailure::from(e),
-        })?
+        ))?
         .into())
     }
 
@@ -461,14 +454,7 @@ impl WasmVM {
         handle: WasmNotificationHandle,
     ) -> Result<WasmAsyncResultValue, WasmFailure> {
         Ok(
-            match use_log_dispatcher!(self, |vm| CoreVM::take_notification(vm, handle.into()))
-                .map_err(|e| match e {
-                    SuspendedOrVMError::Suspended(_) => WasmFailure {
-                        code: 599,
-                        message: "suspended".to_string(),
-                    },
-                    SuspendedOrVMError::VM(e) => WasmFailure::from(e),
-                })? {
+            match use_log_dispatcher!(self, |vm| CoreVM::take_notification(vm, handle.into()))? {
                 None => WasmAsyncResultValue::NotReady,
                 Some(Value::Void) => WasmAsyncResultValue::Empty,
                 Some(Value::Success(b)) => WasmAsyncResultValue::Success(b.to_vec().into()),
@@ -714,7 +700,7 @@ impl WasmVM {
         error_message: String,
         error_stacktrace: Option<String>,
         attempt_duration: u64,
-        config: WasmExponentialRetryConfig,
+        config: Option<WasmExponentialRetryConfig>,
     ) -> Result<(), WasmFailure> {
         use_log_dispatcher!(self, |vm| CoreVM::propose_run_completion(
             vm,
@@ -724,7 +710,7 @@ impl WasmVM {
                 error: Error::internal(error_message)
                     .with_stacktrace(error_stacktrace.unwrap_or_default()),
             },
-            config.into()
+            config.map(|config| config.into()).unwrap_or(RetryPolicy::Infinite)
         ))
         .map_err(Into::into)
     }

@@ -9,7 +9,7 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { service, endpoint, type Context } from "@restatedev/restate-sdk";
+import { service, endpoint, type Context, RestatePromise } from "@restatedev/restate-sdk";
 
 const greeter = service({
   name: "greeter",
@@ -17,6 +17,31 @@ const greeter = service({
     greet: async (ctx: Context, name: string) => {
       return `Hello ${name}`;
     },
+
+    async foo(ctx: Context) {
+      await RestatePromise.all([
+        ctx.run(
+            "my-side-effect-with-failure",
+            () =>
+                new Promise((r, e) =>
+                    setTimeout(() => {
+                      e(new Error("something wrong really coming from the SDK"));
+                    }, 100)
+                )
+        ),
+        ctx.run(
+            "my-side-effect-with-success",
+            () =>
+                new Promise((r, e) =>
+                    setTimeout(() => {
+                      r("some-value");
+                    }, 20000)
+                )
+        ),
+      ]);
+
+      return true;
+    }
   },
 });
 
