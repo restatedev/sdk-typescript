@@ -12,24 +12,27 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import type {
-  RestatePromise,
   ContextDate,
   DurablePromise,
   GenericCall,
   GenericSend,
-  InvocationPromise,
+  InvocationHandle,
   InvocationId,
+  InvocationPromise,
   ObjectContext,
   Rand,
   Request,
+  RestatePromise,
   RunAction,
   RunOptions,
   SendOptions,
   WorkflowContext,
-  InvocationHandle,
 } from "./context.js";
 import type * as vm from "./endpoint/handlers/vm/sdk_shared_core_wasm_bindings.js";
-import { WasmHeader } from "./endpoint/handlers/vm/sdk_shared_core_wasm_bindings.js";
+import {
+  WasmCommandType,
+  WasmHeader,
+} from "./endpoint/handlers/vm/sdk_shared_core_wasm_bindings.js";
 import {
   ensureError,
   INTERNAL_ERROR_CODE,
@@ -46,6 +49,7 @@ import {
   makeRpcSendProxy,
 } from "./types/rpc.js";
 import type {
+  Duration,
   Serde,
   Service,
   ServiceDefinitionFrom,
@@ -53,9 +57,8 @@ import type {
   VirtualObjectDefinitionFrom,
   Workflow,
   WorkflowDefinitionFrom,
-  Duration,
 } from "@restatedev/restate-sdk-core";
-import { serde, millisOrDurationToMillis } from "@restatedev/restate-sdk-core";
+import { millisOrDurationToMillis, serde } from "@restatedev/restate-sdk-core";
 import { RandImpl } from "./utils/rand.js";
 import type {
   ReadableStreamDefaultReader,
@@ -65,12 +68,12 @@ import { CompletablePromise } from "./utils/completable_promise.js";
 import type { AsyncResultValue, InternalRestatePromise } from "./promises.js";
 import {
   extractContext,
+  InvocationPendingPromise,
   pendingPromise,
   PromisesExecutor,
-  RestateInvocationPromise,
   RestateCombinatorPromise,
+  RestateInvocationPromise,
   RestatePendingPromise,
-  InvocationPendingPromise,
   RestateSinglePromise,
 } from "./promises.js";
 import { InputPump, OutputPump } from "./io.js";
@@ -127,15 +130,20 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
   }
 
   cancel(invocationId: InvocationId): void {
-    this.processNonCompletableEntry((vm) =>
-      vm.sys_cancel_invocation(invocationId)
+    this.processNonCompletableEntry(
+      WasmCommandType.CancelInvocation,
+      () => {},
+      (vm) => vm.sys_cancel_invocation(invocationId)
     );
   }
 
   attach<T>(invocationId: InvocationId, serde?: Serde<T>): RestatePromise<T> {
     return this.processCompletableEntry(
+      WasmCommandType.AttachInvocation,
+      () => {},
       (vm) => vm.sys_attach_invocation(invocationId),
-      completeUsing(SuccessWithSerde(serde ?? defaultSerde()), Failure)
+      SuccessWithSerde(serde ?? defaultSerde()),
+      Failure
     );
   }
 
@@ -157,30 +165,45 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
 
   public get<T>(name: string, serde?: Serde<T>): RestatePromise<T | null> {
     return this.processCompletableEntry(
+      WasmCommandType.GetState,
+      () => {},
       (vm) => vm.sys_get_state(name),
-      completeUsing(VoidAsNull, SuccessWithSerde(serde ?? defaultSerde()))
+      VoidAsNull,
+      SuccessWithSerde(serde ?? defaultSerde())
     );
   }
 
   public stateKeys(): RestatePromise<Array<string>> {
     return this.processCompletableEntry(
+      WasmCommandType.GetStateKeys,
+      () => {},
       (vm) => vm.sys_get_state_keys(),
-      completeUsing(StateKeys)
+      StateKeys
     );
   }
 
   public set<T>(name: string, value: T, serde?: Serde<T>): void {
-    this.processNonCompletableEntry((vm) =>
-      vm.sys_set_state(name, (serde ?? defaultSerde()).serialize(value))
+    this.processNonCompletableEntry(
+      WasmCommandType.SetState,
+      () => (serde ?? defaultSerde()).serialize(value),
+      (vm, bytes) => vm.sys_set_state(name, bytes)
     );
   }
 
   public clear(name: string): void {
-    this.processNonCompletableEntry((vm) => vm.sys_clear_state(name));
+    this.processNonCompletableEntry(
+      WasmCommandType.ClearState,
+      () => {},
+      (vm) => vm.sys_clear_state(name)
+    );
   }
 
   public clearAll(): void {
-    this.processNonCompletableEntry((vm) => vm.sys_clear_all_state());
+    this.processNonCompletableEntry(
+      WasmCommandType.ClearAllState,
+      () => {},
+      (vm) => vm.sys_clear_all_state()
+    );
   }
 
   // --- Calls, background calls, etc
@@ -193,10 +216,22 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     const responseSerde: Serde<RES> =
       call.outputSerde ?? (serde.binary as Serde<RES>);
 
+    let parameter: Uint8Array;
     try {
-      const vm = this.coreVm;
-      const parameter = requestSerde.serialize(call.parameter);
-      const call_handles = vm.sys_call(
+      parameter = requestSerde.serialize(call.parameter);
+    } catch (e) {
+      this.handleInvocationEndError(e, (vm, error) =>
+        vm.notify_error_for_next_command(
+          error.message,
+          error.stack,
+          WasmCommandType.Call
+        )
+      );
+      return new InvocationPendingPromise(this);
+    }
+
+    try {
+      const call_handles = this.coreVm.sys_call(
         call.service,
         call.method,
         parameter,
@@ -208,17 +243,28 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
           : [],
         call.idempotencyKey
       );
+      const commandIndex = this.coreVm.last_command_index();
 
-      const invocationIdHandle = call_handles.invocation_id_completion_id;
-      const invocationIdPromise =
-        this.createInvocationIdPromise(invocationIdHandle);
-      const callHandle = call_handles.call_completion_id;
+      const invocationIdPromise = new RestateSinglePromise(
+        this,
+        call_handles.invocation_id_completion_id,
+        completeCommandPromiseUsing(
+          WasmCommandType.Call,
+          commandIndex,
+          InvocationIdCompleter
+        )
+      );
 
       return new RestateInvocationPromise(
         this,
-        callHandle,
-        completeUsing(SuccessWithSerde(responseSerde), Failure),
-        invocationIdPromise
+        call_handles.call_completion_id,
+        completeCommandPromiseUsing(
+          WasmCommandType.Call,
+          commandIndex,
+          SuccessWithSerde(responseSerde),
+          Failure
+        ),
+        invocationIdPromise as RestatePromise<InvocationId>
       );
     } catch (e) {
       this.handleInvocationEndError(e);
@@ -230,17 +276,29 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
   public genericSend<REQ = Uint8Array>(
     send: GenericSend<REQ>
   ): InvocationHandle {
-    try {
-      const vm = this.coreVm;
-      const requestSerde = send.inputSerde ?? (serde.binary as Serde<REQ>);
-      const parameter = requestSerde.serialize(send.parameter);
+    const requestSerde = send.inputSerde ?? (serde.binary as Serde<REQ>);
 
+    let parameter: Uint8Array;
+    try {
+      parameter = requestSerde.serialize(send.parameter);
+    } catch (e) {
+      this.handleInvocationEndError(e, (vm, error) =>
+        vm.notify_error_for_next_command(
+          error.message,
+          error.stack,
+          WasmCommandType.OneWayCall
+        )
+      );
+      return new InvocationPendingPromise(this);
+    }
+
+    try {
       const delay =
         send.delay !== undefined
           ? millisOrDurationToMillis(send.delay)
           : undefined;
 
-      const handles = vm.sys_send(
+      const handles = this.coreVm.sys_send(
         send.service,
         send.method,
         parameter,
@@ -253,11 +311,18 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
         delay !== undefined && delay > 0 ? BigInt(delay) : undefined,
         send.idempotencyKey
       );
-      const handle = handles.invocation_id_completion_id;
-      const invocationId = this.createInvocationIdPromise(handle);
+      const commandIndex = this.coreVm.last_command_index();
 
       return {
-        invocationId,
+        invocationId: new RestateSinglePromise(
+          this,
+          handles.invocation_id_completion_id,
+          completeCommandPromiseUsing(
+            WasmCommandType.OneWayCall,
+            commandIndex,
+            InvocationIdCompleter
+          )
+        ),
       };
     } catch (e) {
       this.handleInvocationEndError(e);
@@ -265,16 +330,6 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
         invocationId: pendingPromise(),
       };
     }
-  }
-
-  private createInvocationIdPromise(
-    handle: number
-  ): RestateSinglePromise<InvocationId> {
-    return new RestateSinglePromise(
-      this,
-      handle,
-      completeUsing(InvocationIdCompleter)
-    );
   }
 
   serviceClient<D>({ name }: ServiceDefinitionFrom<D>): Client<Service<D>> {
@@ -356,6 +411,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       this.handleInvocationEndError(e);
       return new RestatePendingPromise(this);
     }
+    const commandIndex = this.coreVm.last_command_index();
 
     // Now prepare the run task
     const doRun: () => Promise<any> = async () => {
@@ -385,31 +441,21 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
               err
             );
 
+            // Configure the retry policy if any of the parameters are set.
+            let retryPolicy;
             if (
-              options?.retryIntervalFactor === undefined &&
-              options?.maxRetryAttempts === undefined &&
-              options?.initialRetryInterval === undefined &&
-              options?.initialRetryIntervalMillis === undefined &&
-              options?.maxRetryDuration === undefined &&
-              options?.maxRetryDurationMillis === undefined &&
-              options?.maxRetryInterval === undefined &&
-              options?.maxRetryIntervalMillis === undefined
+              options?.retryIntervalFactor !== undefined ||
+              options?.maxRetryAttempts !== undefined ||
+              options?.initialRetryInterval !== undefined ||
+              options?.initialRetryIntervalMillis !== undefined ||
+              options?.maxRetryDuration !== undefined ||
+              options?.maxRetryDurationMillis !== undefined ||
+              options?.maxRetryInterval !== undefined ||
+              options?.maxRetryIntervalMillis !== undefined
             ) {
-              // If no retry option was set, simply notify the error.
-              this.coreVm.notify_error(err.message, err.stack);
-
-              // From now on, no progress will be made.
-              this.invocationEndPromise.resolve();
-              return pendingPromise<T>();
-            }
-            const maxRetryDuration =
-              options?.maxRetryDuration ?? options?.maxRetryDurationMillis;
-            this.coreVm.propose_run_completion_failure_transient(
-              handle,
-              err.message,
-              err.cause?.toString(),
-              BigInt(attemptDuration),
-              {
+              const maxRetryDuration =
+                options?.maxRetryDuration ?? options?.maxRetryDurationMillis;
+              retryPolicy = {
                 factor: options?.retryIntervalFactor ?? 2.0,
                 initial_interval: millisOrDurationToMillis(
                   options?.initialRetryInterval ??
@@ -425,7 +471,14 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
                   options?.maxRetryInterval ??
                     options?.maxRetryIntervalMillis ?? { seconds: 10 }
                 ),
-              }
+              };
+            }
+            this.coreVm.propose_run_completion_failure_transient(
+              handle,
+              err.message,
+              err.stack,
+              BigInt(attemptDuration),
+              retryPolicy
             );
           }
         } else {
@@ -450,23 +503,32 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     return new RestateSinglePromise(
       this,
       handle,
-      completeUsing(SuccessWithSerde(serde), Failure)
+      completeCommandPromiseUsing(
+        WasmCommandType.Run,
+        commandIndex,
+        SuccessWithSerde(serde),
+        Failure
+      )
     );
   }
 
   public sleep(duration: number | Duration): RestatePromise<void> {
-    if (duration === undefined) {
-      throw new Error(`Duration is undefined.`);
-    }
-    const millis = millisOrDurationToMillis(duration);
-    if (millis < 0) {
-      throw new Error(
-        `Invalid duration. The sleep function only accepts non-negative values. Received: ${millis}ms.`
-      );
-    }
     return this.processCompletableEntry(
-      (vm) => vm.sys_sleep(BigInt(millis)),
-      completeUsing(VoidAsUndefined)
+      WasmCommandType.Sleep,
+      () => {
+        if (duration === undefined) {
+          throw new Error(`Duration is undefined.`);
+        }
+        const millis = millisOrDurationToMillis(duration);
+        if (millis < 0) {
+          throw new Error(
+            `Invalid duration. The sleep function only accepts non-negative values. Received: ${millis}ms.`
+          );
+        }
+        return BigInt(millis);
+      },
+      (vm, millis) => vm.sys_sleep(millis),
+      VoidAsUndefined
     );
   }
 
@@ -492,37 +554,48 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       promise: new RestateSinglePromise(
         this,
         awakeable.handle,
-        completeUsing(VoidAsUndefined, SuccessWithSerde(serde), Failure)
+        completeSignalPromiseUsing(
+          VoidAsUndefined,
+          SuccessWithSerde(serde),
+          Failure
+        )
       ),
     };
   }
 
   public resolveAwakeable<T>(id: string, payload?: T, serde?: Serde<T>): void {
-    this.processNonCompletableEntry((vm) => {
-      // We coerce undefined to null as null can be stringified by JSON.stringify
-      let value: Uint8Array;
+    this.processNonCompletableEntry(
+      WasmCommandType.CompleteAwakeable,
+      () => {
+        // We coerce undefined to null as null can be stringified by JSON.stringify
+        let value: Uint8Array;
 
-      if (serde) {
-        value =
-          payload === undefined ? new Uint8Array() : serde.serialize(payload);
-      } else {
-        value =
-          payload !== undefined
-            ? defaultSerde().serialize(payload)
-            : defaultSerde().serialize(null);
-      }
-
-      vm.sys_complete_awakeable_success(id, value);
-    });
+        if (serde) {
+          value =
+            payload === undefined ? new Uint8Array() : serde.serialize(payload);
+        } else {
+          value =
+            payload !== undefined
+              ? defaultSerde().serialize(payload)
+              : defaultSerde().serialize(null);
+        }
+        return value;
+      },
+      (vm, bytes) => vm.sys_complete_awakeable_success(id, bytes)
+    );
   }
 
   public rejectAwakeable(id: string, reason: string): void {
-    this.processNonCompletableEntry((vm) => {
-      vm.sys_complete_awakeable_failure(id, {
-        code: UNKNOWN_ERROR_CODE,
-        message: reason,
-      });
-    });
+    this.processNonCompletableEntry(
+      WasmCommandType.CompleteAwakeable,
+      () => {},
+      (vm) => {
+        vm.sys_complete_awakeable_failure(id, {
+          code: UNKNOWN_ERROR_CODE,
+          message: reason,
+        });
+      }
+    );
   }
 
   public promise<T>(name: string, serde?: Serde<T>): DurablePromise<T> {
@@ -562,40 +635,102 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
 
   // -- Various private methods
 
-  private processNonCompletableEntry(vmCall: (vm: vm.WasmVM) => void) {
+  private processNonCompletableEntry<T>(
+    commandType: vm.WasmCommandType,
+    prepare: () => T,
+    vmCall: (vm: vm.WasmVM, input: T) => void
+  ) {
+    let input;
     try {
-      vmCall(this.coreVm);
+      input = prepare();
+    } catch (e) {
+      this.handleInvocationEndError(e, (vm, error) =>
+        vm.notify_error_for_next_command(
+          error.message,
+          error.stack,
+          commandType
+        )
+      );
+      return;
+    }
+
+    try {
+      vmCall(this.coreVm, input);
     } catch (e) {
       this.handleInvocationEndError(e);
     }
   }
 
-  processCompletableEntry<T>(
-    vmCall: (vm: vm.WasmVM) => number,
-    completer: (value: AsyncResultValue, prom: CompletablePromise<T>) => void
-  ): RestatePromise<T> {
+  processCompletableEntry<T, U>(
+    commandType: vm.WasmCommandType,
+    prepare: () => T,
+    vmCall: (vm: vm.WasmVM, t: T) => number,
+    ...completers: Array<Completer>
+  ): RestatePromise<U> {
+    let input;
+    try {
+      input = prepare();
+    } catch (e) {
+      this.handleInvocationEndError(e, (vm, error) =>
+        vm.notify_error_for_next_command(
+          error.message,
+          error.stack,
+          commandType
+        )
+      );
+      return new RestatePendingPromise(this);
+    }
+
     let handle: number;
     try {
-      handle = vmCall(this.coreVm);
+      handle = vmCall(this.coreVm, input);
     } catch (e) {
       this.handleInvocationEndError(e);
       return new RestatePendingPromise(this);
     }
-    return new RestateSinglePromise(this, handle, completer);
+    const commandIndex = this.coreVm.last_command_index();
+    return new RestateSinglePromise(
+      this,
+      handle,
+      completeCommandPromiseUsing(commandType, commandIndex, ...completers)
+    );
   }
 
-  handleInvocationEndError(e: unknown) {
-    const error = ensureError(e);
-    if (
-      !(error instanceof RestateError) ||
-      error.code !== SUSPENDED_ERROR_CODE
-    ) {
+  handleInvocationEndError(
+    e: unknown,
+    notify_vm_error: (vm: vm.WasmVM, error: Error) => void = (vm, error) => {
+      vm.notify_error(error.message, error.stack);
+    }
+  ) {
+    if (e instanceof AsyncCompleterError) {
+      const cause = ensureError(e.cause);
+
+      // Special handling for this one!
       this.vmLogger.warn(
         "Error when processing a Restate context operation.\n",
-        error
+        cause
       );
+
+      this.coreVm.notify_error_for_specific_command(
+        cause.message,
+        cause.stack,
+        e.commandType,
+        e.commandIndex,
+        null
+      );
+    } else {
+      const error = ensureError(e);
+      if (
+        !(error instanceof RestateError) ||
+        error.code !== SUSPENDED_ERROR_CODE
+      ) {
+        this.vmLogger.warn(
+          "Error when processing a Restate context operation.\n",
+          error
+        );
+      }
+      notify_vm_error(this.coreVm, error);
     }
-    this.coreVm.notify_error(error.message, error.stack);
 
     // From now on, no progress will be made.
     this.invocationEndPromise.resolve();
@@ -662,37 +797,46 @@ class DurablePromiseImpl<T> implements DurablePromise<T> {
 
   get(): RestatePromise<T> {
     return this.ctx.processCompletableEntry(
+      WasmCommandType.GetPromise,
+      () => {},
       (vm) => vm.sys_get_promise(this.name),
-      completeUsing(SuccessWithSerde(this.serde), Failure)
+      SuccessWithSerde(this.serde),
+      Failure
     );
   }
 
   peek(): Promise<T | undefined> {
     return this.ctx.processCompletableEntry(
+      WasmCommandType.PeekPromise,
+      () => {},
       (vm) => vm.sys_peek_promise(this.name),
-      completeUsing(VoidAsUndefined, SuccessWithSerde(this.serde), Failure)
+      VoidAsUndefined,
+      SuccessWithSerde(this.serde),
+      Failure
     );
   }
 
   resolve(value?: T | undefined): Promise<void> {
     return this.ctx.processCompletableEntry(
-      (vm) =>
-        vm.sys_complete_promise_success(
-          this.name,
-          this.serde.serialize(value as T)
-        ),
-      completeUsing(VoidAsUndefined, Failure)
+      WasmCommandType.CompletePromise,
+      () => this.serde.serialize(value as T),
+      (vm, bytes) => vm.sys_complete_promise_success(this.name, bytes),
+      VoidAsUndefined,
+      Failure
     );
   }
 
   reject(errorMsg: string): Promise<void> {
     return this.ctx.processCompletableEntry(
+      WasmCommandType.CompletePromise,
+      () => {},
       (vm) =>
         vm.sys_complete_promise_failure(this.name, {
           code: INTERNAL_ERROR_CODE,
           message: errorMsg,
         }),
-      completeUsing(VoidAsUndefined, Failure)
+      VoidAsUndefined,
+      Failure
     );
   }
 }
@@ -744,7 +888,39 @@ type Completer = (
   prom: CompletablePromise<any>
 ) => boolean;
 
-function completeUsing<T>(
+// This is just a special type we use to propagate completer errors between this function and handleInvocationEndError
+class AsyncCompleterError {
+  constructor(
+    readonly cause: any,
+    readonly commandType: WasmCommandType,
+    readonly commandIndex: number
+  ) {}
+}
+
+function completeCommandPromiseUsing<T>(
+  commandType: WasmCommandType,
+  commandIndex: number,
+  ...completers: Array<Completer>
+): (value: AsyncResultValue, prom: CompletablePromise<T>) => void {
+  return (value: AsyncResultValue, prom: CompletablePromise<any>) => {
+    try {
+      for (const completer of completers) {
+        if (completer(value, prom)) {
+          return;
+        }
+      }
+    } catch (e) {
+      throw new AsyncCompleterError(e, commandType, commandIndex);
+    }
+
+    throw new Error(
+      `Unexpected variant in async result: ${JSON.stringify(value)}`
+    );
+  };
+}
+
+// This is like the function above, but won't decorate the error with the command metadata
+function completeSignalPromiseUsing<T>(
   ...completers: Array<Completer>
 ): (value: AsyncResultValue, prom: CompletablePromise<T>) => void {
   return (value: AsyncResultValue, prom: CompletablePromise<any>) => {
@@ -753,6 +929,7 @@ function completeUsing<T>(
         return;
       }
     }
+
     throw new Error(
       `Unexpected variant in async result: ${JSON.stringify(value)}`
     );

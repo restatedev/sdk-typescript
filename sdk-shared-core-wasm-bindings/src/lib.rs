@@ -1,8 +1,9 @@
 use js_sys::Uint8Array;
 use restate_sdk_shared_core::{
-    CallHandle, CoreVM, DoProgressResponse, Error, Header, HeaderMap, IdentityVerifier, Input,
-    NonEmptyValue, ResponseHead, RetryPolicy, RunExitResult, SendHandle, SuspendedOrVMError,
-    TakeOutputResult, Target, TerminalFailure, VMOptions, Value, CANCEL_NOTIFICATION_HANDLE, VM,
+    CallHandle, CommandRelationship, CommandType, CoreVM, DoProgressResponse, Error, Header,
+    HeaderMap, IdentityVerifier, Input, NonEmptyValue, ResponseHead, RetryPolicy, RunExitResult,
+    SendHandle, TakeOutputResult, Target, TerminalFailure, VMOptions, Value,
+    CANCEL_NOTIFICATION_HANDLE, VM,
 };
 use serde::{Deserialize, Serialize};
 use std::cmp;
@@ -140,7 +141,57 @@ fn log_subscriber(
         .with_filter(LevelFilter::from_level(level));
     Registry::default().with(fmt_layer)
 }
-// Data model
+
+//--- Data model
+
+#[wasm_bindgen]
+pub enum WasmCommandType {
+    Input,
+    Output,
+    GetState,
+    GetStateKeys,
+    SetState,
+    ClearState,
+    ClearAllState,
+    GetPromise,
+    PeekPromise,
+    CompletePromise,
+    Sleep,
+    Call,
+    OneWayCall,
+    SendSignal,
+    Run,
+    AttachInvocation,
+    GetInvocationOutput,
+    CompleteAwakeable,
+    CancelInvocation,
+}
+
+impl From<WasmCommandType> for CommandType {
+    fn from(value: WasmCommandType) -> Self {
+        match value {
+            WasmCommandType::Input => CommandType::Input,
+            WasmCommandType::Output => CommandType::Output,
+            WasmCommandType::GetState => CommandType::GetState,
+            WasmCommandType::GetStateKeys => CommandType::GetStateKeys,
+            WasmCommandType::SetState => CommandType::SetState,
+            WasmCommandType::ClearState => CommandType::ClearState,
+            WasmCommandType::ClearAllState => CommandType::ClearAllState,
+            WasmCommandType::GetPromise => CommandType::GetPromise,
+            WasmCommandType::PeekPromise => CommandType::PeekPromise,
+            WasmCommandType::CompletePromise => CommandType::CompletePromise,
+            WasmCommandType::Sleep => CommandType::Sleep,
+            WasmCommandType::Call => CommandType::Call,
+            WasmCommandType::OneWayCall => CommandType::OneWayCall,
+            WasmCommandType::SendSignal => CommandType::SendSignal,
+            WasmCommandType::Run => CommandType::Run,
+            WasmCommandType::AttachInvocation => CommandType::AttachInvocation,
+            WasmCommandType::GetInvocationOutput => CommandType::GetInvocationOutput,
+            WasmCommandType::CompleteAwakeable => CommandType::CompleteAwakeable,
+            WasmCommandType::CancelInvocation => CommandType::CancelInvocation,
+        }
+    }
+}
 
 #[wasm_bindgen(getter_with_clone)]
 #[derive(Clone)]
@@ -423,6 +474,51 @@ impl WasmVM {
         use_log_dispatcher!(self, |vm| CoreVM::notify_error(vm, e, None))
     }
 
+    pub fn notify_error_for_next_command(
+        &mut self,
+        error_message: String,
+        stacktrace: Option<String>,
+        wasm_command_type: WasmCommandType,
+    ) {
+        let mut e = Error::internal(error_message);
+        if let Some(stacktrace) = stacktrace {
+            e = e.with_stacktrace(stacktrace);
+        }
+
+        use_log_dispatcher!(self, |vm| CoreVM::notify_error(
+            vm,
+            e,
+            Some(CommandRelationship::Next {
+                ty: wasm_command_type.into(),
+                name: None,
+            })
+        ))
+    }
+
+    pub fn notify_error_for_specific_command(
+        &mut self,
+        error_message: String,
+        stacktrace: Option<String>,
+        wasm_command_type: WasmCommandType,
+        command_index: u32,
+        command_name: Option<String>,
+    ) {
+        let mut e = Error::internal(error_message);
+        if let Some(stacktrace) = stacktrace {
+            e = e.with_stacktrace(stacktrace);
+        }
+
+        use_log_dispatcher!(self, |vm| CoreVM::notify_error(
+            vm,
+            e,
+            Some(CommandRelationship::Specific {
+                command_index,
+                ty: wasm_command_type.into(),
+                name: command_name.map(Into::into)
+            })
+        ))
+    }
+
     pub fn take_output(&mut self) -> JsValue {
         match use_log_dispatcher!(self, CoreVM::take_output) {
             TakeOutputResult::Buffer(v) => Uint8Array::from(&*v).into(),
@@ -445,14 +541,7 @@ impl WasmVM {
         Ok(use_log_dispatcher!(self, |vm| CoreVM::do_progress(
             vm,
             handles.into_iter().map(Into::into).collect()
-        ))
-        .map_err(|e| match e {
-            SuspendedOrVMError::Suspended(_) => WasmFailure {
-                code: 599,
-                message: "suspended".to_string(),
-            },
-            SuspendedOrVMError::VM(e) => WasmFailure::from(e),
-        })?
+        ))?
         .into())
     }
 
@@ -461,14 +550,7 @@ impl WasmVM {
         handle: WasmNotificationHandle,
     ) -> Result<WasmAsyncResultValue, WasmFailure> {
         Ok(
-            match use_log_dispatcher!(self, |vm| CoreVM::take_notification(vm, handle.into()))
-                .map_err(|e| match e {
-                    SuspendedOrVMError::Suspended(_) => WasmFailure {
-                        code: 599,
-                        message: "suspended".to_string(),
-                    },
-                    SuspendedOrVMError::VM(e) => WasmFailure::from(e),
-                })? {
+            match use_log_dispatcher!(self, |vm| CoreVM::take_notification(vm, handle.into()))? {
                 None => WasmAsyncResultValue::NotReady,
                 Some(Value::Void) => WasmAsyncResultValue::Empty,
                 Some(Value::Success(b)) => WasmAsyncResultValue::Success(b.to_vec().into()),
@@ -714,7 +796,7 @@ impl WasmVM {
         error_message: String,
         error_stacktrace: Option<String>,
         attempt_duration: u64,
-        config: WasmExponentialRetryConfig,
+        config: Option<WasmExponentialRetryConfig>,
     ) -> Result<(), WasmFailure> {
         use_log_dispatcher!(self, |vm| CoreVM::propose_run_completion(
             vm,
@@ -724,7 +806,9 @@ impl WasmVM {
                 error: Error::internal(error_message)
                     .with_stacktrace(error_stacktrace.unwrap_or_default()),
             },
-            config.into()
+            config
+                .map(|config| config.into())
+                .unwrap_or(RetryPolicy::Infinite)
         ))
         .map_err(Into::into)
     }
@@ -767,6 +851,10 @@ impl WasmVM {
 
     pub fn is_processing(&self) -> bool {
         use_log_dispatcher!(self, CoreVM::is_processing)
+    }
+
+    pub fn last_command_index(&self) -> i32 {
+        use_log_dispatcher!(self, |vm| CoreVM::last_command_index(vm) as i32)
     }
 }
 

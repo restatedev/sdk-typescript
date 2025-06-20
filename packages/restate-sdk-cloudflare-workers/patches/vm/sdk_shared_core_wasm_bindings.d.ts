@@ -16,6 +16,27 @@ export enum LogLevel {
   WARN = 3,
   ERROR = 4,
 }
+export enum WasmCommandType {
+  Input = 0,
+  Output = 1,
+  GetState = 2,
+  GetStateKeys = 3,
+  SetState = 4,
+  ClearState = 5,
+  ClearAllState = 6,
+  GetPromise = 7,
+  PeekPromise = 8,
+  CompletePromise = 9,
+  Sleep = 10,
+  Call = 11,
+  OneWayCall = 12,
+  SendSignal = 13,
+  Run = 14,
+  AttachInvocation = 15,
+  GetInvocationOutput = 16,
+  CompleteAwakeable = 17,
+  CancelInvocation = 18,
+}
 export interface WasmFailure {
     code: number;
     message: string;
@@ -79,6 +100,8 @@ export class WasmVM {
   notify_input(buffer: Uint8Array): void;
   notify_input_closed(): void;
   notify_error(error_message: string, stacktrace?: string | null): void;
+  notify_error_for_next_command(error_message: string, stacktrace: string | null | undefined, wasm_command_type: WasmCommandType): void;
+  notify_error_for_specific_command(error_message: string, stacktrace: string | null | undefined, wasm_command_type: WasmCommandType, command_index: number, command_name?: string | null): void;
   take_output(): any;
   is_ready_to_execute(): boolean;
   is_completed(handle: number): boolean;
@@ -105,10 +128,11 @@ export class WasmVM {
   sys_run(name: string): number;
   propose_run_completion_success(handle: number, buffer: Uint8Array): void;
   propose_run_completion_failure(handle: number, value: WasmFailure): void;
-  propose_run_completion_failure_transient(handle: number, error_message: string, error_stacktrace: string | null | undefined, attempt_duration: bigint, config: WasmExponentialRetryConfig): void;
+  propose_run_completion_failure_transient(handle: number, error_message: string, error_stacktrace: string | null | undefined, attempt_duration: bigint, config?: WasmExponentialRetryConfig | null): void;
   sys_cancel_invocation(target_invocation_id: string): void;
   sys_write_output_success(buffer: Uint8Array): void;
   sys_write_output_failure(value: WasmFailure): void;
   sys_end(): void;
   is_processing(): boolean;
+  last_command_index(): number;
 }
