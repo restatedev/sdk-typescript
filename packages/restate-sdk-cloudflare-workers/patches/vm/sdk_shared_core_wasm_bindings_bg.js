@@ -263,6 +263,30 @@ export const LogLevel = Object.freeze({
     WARN: 3, "3": "WARN",
     ERROR: 4, "4": "ERROR",
 });
+/**
+ * @enum {0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18}
+ */
+export const WasmCommandType = Object.freeze({
+    Input: 0, "0": "Input",
+    Output: 1, "1": "Output",
+    GetState: 2, "2": "GetState",
+    GetStateKeys: 3, "3": "GetStateKeys",
+    SetState: 4, "4": "SetState",
+    ClearState: 5, "5": "ClearState",
+    ClearAllState: 6, "6": "ClearAllState",
+    GetPromise: 7, "7": "GetPromise",
+    PeekPromise: 8, "8": "PeekPromise",
+    CompletePromise: 9, "9": "CompletePromise",
+    Sleep: 10, "10": "Sleep",
+    Call: 11, "11": "Call",
+    OneWayCall: 12, "12": "OneWayCall",
+    SendSignal: 13, "13": "SendSignal",
+    Run: 14, "14": "Run",
+    AttachInvocation: 15, "15": "AttachInvocation",
+    GetInvocationOutput: 16, "16": "GetInvocationOutput",
+    CompleteAwakeable: 17, "17": "CompleteAwakeable",
+    CancelInvocation: 18, "18": "CancelInvocation",
+});
 
 const WasmHeaderFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
@@ -566,6 +590,34 @@ export class WasmVM {
         var ptr1 = isLikeNone(stacktrace) ? 0 : passStringToWasm0(stacktrace, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         var len1 = WASM_VECTOR_LEN;
         wasm.wasmvm_notify_error(this.__wbg_ptr, ptr0, len0, ptr1, len1);
+    }
+    /**
+     * @param {string} error_message
+     * @param {string | null | undefined} stacktrace
+     * @param {WasmCommandType} wasm_command_type
+     */
+    notify_error_for_next_command(error_message, stacktrace, wasm_command_type) {
+        const ptr0 = passStringToWasm0(error_message, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        var ptr1 = isLikeNone(stacktrace) ? 0 : passStringToWasm0(stacktrace, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        var len1 = WASM_VECTOR_LEN;
+        wasm.wasmvm_notify_error_for_next_command(this.__wbg_ptr, ptr0, len0, ptr1, len1, wasm_command_type);
+    }
+    /**
+     * @param {string} error_message
+     * @param {string | null | undefined} stacktrace
+     * @param {WasmCommandType} wasm_command_type
+     * @param {number} command_index
+     * @param {string | null} [command_name]
+     */
+    notify_error_for_specific_command(error_message, stacktrace, wasm_command_type, command_index, command_name) {
+        const ptr0 = passStringToWasm0(error_message, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        var ptr1 = isLikeNone(stacktrace) ? 0 : passStringToWasm0(stacktrace, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        var len1 = WASM_VECTOR_LEN;
+        var ptr2 = isLikeNone(command_name) ? 0 : passStringToWasm0(command_name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        var len2 = WASM_VECTOR_LEN;
+        wasm.wasmvm_notify_error_for_specific_command(this.__wbg_ptr, ptr0, len0, ptr1, len1, wasm_command_type, command_index, ptr2, len2);
     }
     /**
      * @returns {any}
@@ -906,14 +958,14 @@ export class WasmVM {
      * @param {string} error_message
      * @param {string | null | undefined} error_stacktrace
      * @param {bigint} attempt_duration
-     * @param {WasmExponentialRetryConfig} config
+     * @param {WasmExponentialRetryConfig | null} [config]
      */
     propose_run_completion_failure_transient(handle, error_message, error_stacktrace, attempt_duration, config) {
         const ptr0 = passStringToWasm0(error_message, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         var ptr1 = isLikeNone(error_stacktrace) ? 0 : passStringToWasm0(error_stacktrace, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         var len1 = WASM_VECTOR_LEN;
-        const ret = wasm.wasmvm_propose_run_completion_failure_transient(this.__wbg_ptr, handle, ptr0, len0, ptr1, len1, attempt_duration, config);
+        const ret = wasm.wasmvm_propose_run_completion_failure_transient(this.__wbg_ptr, handle, ptr0, len0, ptr1, len1, attempt_duration, isLikeNone(config) ? 0 : addToExternrefTable0(config));
         if (ret[1]) {
             throw takeFromExternrefTable0(ret[0]);
         }
@@ -961,6 +1013,13 @@ export class WasmVM {
     is_processing() {
         const ret = wasm.wasmvm_is_processing(this.__wbg_ptr);
         return ret !== 0;
+    }
+    /**
+     * @returns {number}
+     */
+    last_command_index() {
+        const ret = wasm.wasmvm_last_command_index(this.__wbg_ptr);
+        return ret;
     }
 }
 
