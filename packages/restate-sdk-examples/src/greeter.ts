@@ -9,12 +9,7 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import {
-  service,
-  endpoint,
-  type Context,
-  RestatePromise,
-} from "@restatedev/restate-sdk";
+import { service, endpoint, type Context } from "@restatedev/restate-sdk";
 
 const greeter = service({
   name: "greeter",
