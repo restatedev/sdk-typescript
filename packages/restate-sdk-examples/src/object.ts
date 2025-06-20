@@ -18,9 +18,23 @@ export const counter = restate.object({
      * Add amount to the currently stored count
      */
     add: async (ctx: restate.ObjectContext, amount: number) => {
-      const current = await ctx.get<number>("count");
+      const current = await ctx.get<number>("count", {
+        serialize: function (): Uint8Array {
+          throw new Error("Broken serde.");
+        },
+        deserialize: function (): number {
+          throw new Error("Broken serde.");
+        },
+      });
       const updated = (current ?? 0) + amount;
-      ctx.set("count", updated);
+      ctx.set("count", updated, {
+        serialize: function (): Uint8Array {
+          throw new Error("Broken serde.");
+        },
+        deserialize: function (): number {
+          throw new Error("Broken serde.");
+        },
+      });
       return updated;
     },
 

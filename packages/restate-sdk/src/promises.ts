@@ -404,7 +404,7 @@ export class PromisesExecutor {
       restatePromise.tryComplete();
     } catch (e) {
       // This can happen if either take_notification throws an exception or completer throws an exception.
-      // Both should be programming mistakes of the SDK, but we cover them here.
+      // This could either happen for a deserialization issue, or for an SDK bug, but we cover them here.
       restatePromise[RESTATE_CTX_SYMBOL].handleInvocationEndError(e);
       return Promise.resolve();
     }

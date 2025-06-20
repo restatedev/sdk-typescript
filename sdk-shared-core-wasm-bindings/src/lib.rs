@@ -160,7 +160,7 @@ pub enum WasmCommandType {
     Call,
     OneWayCall,
     SendSignal,
-    RunCommand,
+    Run,
     AttachInvocation,
     GetInvocationOutput,
     CompleteAwakeable,
@@ -184,7 +184,7 @@ impl From<WasmCommandType> for CommandType {
             WasmCommandType::Call => CommandType::Call,
             WasmCommandType::OneWayCall => CommandType::OneWayCall,
             WasmCommandType::SendSignal => CommandType::SendSignal,
-            WasmCommandType::RunCommand => CommandType::RunCommand,
+            WasmCommandType::Run => CommandType::Run,
             WasmCommandType::AttachInvocation => CommandType::AttachInvocation,
             WasmCommandType::GetInvocationOutput => CommandType::GetInvocationOutput,
             WasmCommandType::CompleteAwakeable => CommandType::CompleteAwakeable,
@@ -491,6 +491,30 @@ impl WasmVM {
             Some(CommandRelationship::Next {
                 ty: wasm_command_type.into(),
                 name: None,
+            })
+        ))
+    }
+
+    pub fn notify_error_for_specific_command(
+        &mut self,
+        error_message: String,
+        stacktrace: Option<String>,
+        wasm_command_type: WasmCommandType,
+        command_index: u32,
+        command_name: Option<String>,
+    ) {
+        let mut e = Error::internal(error_message);
+        if let Some(stacktrace) = stacktrace {
+            e = e.with_stacktrace(stacktrace);
+        }
+
+        use_log_dispatcher!(self, |vm| CoreVM::notify_error(
+            vm,
+            e,
+            Some(CommandRelationship::Specific {
+                command_index,
+                ty: wasm_command_type.into(),
+                name: command_name.map(Into::into)
             })
         ))
     }
@@ -827,6 +851,10 @@ impl WasmVM {
 
     pub fn is_processing(&self) -> bool {
         use_log_dispatcher!(self, CoreVM::is_processing)
+    }
+
+    pub fn last_command_index(&self) -> i32 {
+        use_log_dispatcher!(self, |vm| CoreVM::last_command_index(vm) as i32)
     }
 }
 
