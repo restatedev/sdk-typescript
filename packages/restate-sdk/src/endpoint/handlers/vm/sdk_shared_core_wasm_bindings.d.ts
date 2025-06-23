@@ -134,7 +134,7 @@ export class WasmVM {
   sys_set_state(key: string, buffer: Uint8Array): void;
   sys_clear_state(key: string): void;
   sys_clear_all_state(): void;
-  sys_sleep(millis: bigint): number;
+  sys_sleep(millis: bigint, name?: string | null): number;
   sys_attach_invocation(invocation_id: string): number;
   sys_get_invocation_output(invocation_id: string): number;
   sys_call(

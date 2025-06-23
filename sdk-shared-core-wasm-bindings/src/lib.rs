@@ -596,11 +596,15 @@ impl WasmVM {
         use_log_dispatcher!(self, CoreVM::sys_state_clear_all).map_err(Into::into)
     }
 
-    pub fn sys_sleep(&mut self, millis: u64) -> Result<WasmNotificationHandle, WasmFailure> {
+    pub fn sys_sleep(
+        &mut self,
+        millis: u64,
+        name: Option<String>,
+    ) -> Result<WasmNotificationHandle, WasmFailure> {
         let now = now_since_unix_epoch();
         use_log_dispatcher!(self, |vm| CoreVM::sys_sleep(
             vm,
-            Default::default(),
+            name.unwrap_or_default(),
             now + Duration::from_millis(millis),
             Some(now)
         ))

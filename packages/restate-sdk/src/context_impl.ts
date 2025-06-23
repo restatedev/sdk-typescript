@@ -512,7 +512,10 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     );
   }
 
-  public sleep(duration: number | Duration): RestatePromise<void> {
+  public sleep(
+    duration: number | Duration,
+    name?: string
+  ): RestatePromise<void> {
     return this.processCompletableEntry(
       WasmCommandType.Sleep,
       () => {
@@ -527,7 +530,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
         }
         return BigInt(millis);
       },
-      (vm, millis) => vm.sys_sleep(millis),
+      (vm, millis) => vm.sys_sleep(millis, name),
       VoidAsUndefined
     );
   }

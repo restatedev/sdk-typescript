@@ -734,10 +734,13 @@ export class WasmVM {
     }
     /**
      * @param {bigint} millis
+     * @param {string | null} [name]
      * @returns {number}
      */
-    sys_sleep(millis) {
-        const ret = wasm.wasmvm_sys_sleep(this.__wbg_ptr, millis);
+    sys_sleep(millis, name) {
+        var ptr0 = isLikeNone(name) ? 0 : passStringToWasm0(name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        var len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmvm_sys_sleep(this.__wbg_ptr, millis, ptr0, len0);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }
