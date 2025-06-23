@@ -11,8 +11,8 @@
 
 import {
   ensureError,
+  logError,
   RestateError,
-  SUSPENDED_ERROR_CODE,
   TerminalError,
 } from "../../types/errors.js";
 import type { ProtocolMode } from "../../types/discovery.js";
@@ -377,12 +377,7 @@ export class GenericHandler implements RestateHandler {
         })
         .catch((e) => {
           const error = ensureError(e);
-          if (
-            !(error instanceof RestateError) ||
-            error.code !== SUSPENDED_ERROR_CODE
-          ) {
-            vmLogger.warn("Invocation completed with an error.\n", error);
-          }
+          logError(vmLogger, error);
 
           if (error instanceof TerminalError) {
             coreVm.sys_write_output_failure({

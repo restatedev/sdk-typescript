@@ -36,8 +36,8 @@ import {
 import {
   ensureError,
   INTERNAL_ERROR_CODE,
+  logError,
   RestateError,
-  SUSPENDED_ERROR_CODE,
   TerminalError,
   UNKNOWN_ERROR_CODE,
 } from "./types/errors.js";
@@ -125,7 +125,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       ),
       this.outputPump,
       this.runClosuresTracker,
-      this.handleInvocationEndError.bind(this)
+      this.promiseExecutorErrorCallback.bind(this)
     );
   }
 
@@ -696,21 +696,11 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     );
   }
 
-  handleInvocationEndError(
-    e: unknown,
-    notify_vm_error: (vm: vm.WasmVM, error: Error) => void = (vm, error) => {
-      vm.notify_error(error.message, error.stack);
-    }
-  ) {
+  promiseExecutorErrorCallback(e: unknown) {
     if (e instanceof AsyncCompleterError) {
       const cause = ensureError(e.cause);
-
+      logError(this.vmLogger, e.cause);
       // Special handling for this one!
-      this.vmLogger.warn(
-        "Error when processing a Restate context operation.\n",
-        cause
-      );
-
       this.coreVm.notify_error_for_specific_command(
         cause.message,
         cause.stack,
@@ -720,17 +710,26 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       );
     } else {
       const error = ensureError(e);
-      if (
-        !(error instanceof RestateError) ||
-        error.code !== SUSPENDED_ERROR_CODE
-      ) {
-        this.vmLogger.warn(
-          "Error when processing a Restate context operation.\n",
-          error
-        );
+      logError(this.vmLogger, error);
+      if (!(error instanceof RestateError)) {
+        // Notify error
+        this.coreVm.notify_error(error.message, error.stack);
       }
-      notify_vm_error(this.coreVm, error);
     }
+
+    // From now on, no progress will be made.
+    this.invocationEndPromise.resolve();
+  }
+
+  handleInvocationEndError(
+    e: unknown,
+    notify_vm_error: (vm: vm.WasmVM, error: Error) => void = (vm, error) => {
+      vm.notify_error(error.message, error.stack);
+    }
+  ) {
+    const error = ensureError(e);
+    logError(this.vmLogger, error);
+    notify_vm_error(this.coreVm, error);
 
     // From now on, no progress will be made.
     this.invocationEndPromise.resolve();
