@@ -101,7 +101,14 @@ export type {
 } from "@restatedev/restate-sdk-core";
 
 export type { RestateEndpoint, RestateEndpointBase } from "./endpoint.js";
-export { RestateError, TerminalError, TimeoutError } from "./types/errors.js";
+export {
+  /**
+   * @deprecated YOU MUST NOT USE THIS TYPE
+   */
+  RestateError,
+  TerminalError,
+  TimeoutError,
+} from "./types/errors.js";
 export type {
   LoggerTransport,
   LogMetadata,

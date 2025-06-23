@@ -17,6 +17,7 @@ export const CANCEL_ERROR_CODE = 409;
 export const UNKNOWN_ERROR_CODE = 500;
 
 // From shared core!
+export const CLOSED_ERROR_CODE = 598;
 export const SUSPENDED_ERROR_CODE = 599;
 
 export function ensureError(e: unknown): Error {
@@ -38,6 +39,25 @@ export function ensureError(e: unknown): Error {
   }
 
   return new Error("Non-Error value: " + msg);
+}
+
+export function logError(log: Console, e: unknown) {
+  if (e instanceof RestateError) {
+    if (e.code === SUSPENDED_ERROR_CODE) {
+      log.info("Invocation suspended");
+      return;
+    } else if (e.code === CLOSED_ERROR_CODE) {
+      log.error(
+        "DANGER! The invocation is closed, but some related operation is still running. \n" +
+          "This might indicate that a RestatePromise is being awaited on an asynchronous task, outside the handler, or you're awaiting a RestatePromise inside a ctx.run.\n" +
+          "This is dangerous, and can lead the service to deadlock. Please fix the issue.\n" +
+          "Diagnostic: ",
+        e
+      );
+      return;
+    }
+  }
+  log.warn("Error when processing a Restate context operation.\n", e);
 }
 
 export class RestateError extends Error {

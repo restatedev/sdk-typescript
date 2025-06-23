@@ -446,7 +446,7 @@ export class PromisesExecutor {
         }
 
         // Recursion
-        await this.doProgress(restatePromise);
+        await this.doProgressInner(restatePromise);
       } catch (e) {
         // Not good, this is a retryable error.
         this.errorCallback(e);
