@@ -408,12 +408,13 @@ export interface Context extends RestateContext {
   /**
    * Sleep until a timeout has passed.
    * @param duration either Duration type or milliseconds.
+   * @param name Observability name. This will be shown in the UI.
    * This is a lower-bound.
    *
    * @example
    * await ctx.sleep(1000);
    */
-  sleep(duration: Duration | number): RestatePromise<void>;
+  sleep(duration: Duration | number, name?: string): RestatePromise<void>;
 
   /**
    * Makes a type-safe request/response RPC to the specified target service.
