@@ -25,7 +25,7 @@ import {
 } from "./types/errors.js";
 import { CompletablePromise } from "./utils/completable_promise.js";
 import type { ContextImpl, RunClosuresTracker } from "./context_impl.js";
-import { setTimeout } from "node:timers/promises";
+import { setImmediate } from "node:timers/promises";
 import type { InputPump, OutputPump } from "./io.js";
 import type { Duration } from "@restatedev/restate-sdk-core";
 
@@ -415,7 +415,7 @@ export class PromisesExecutor {
     // The reason for this setTimeout is that we need to enqueue the polling after
     // we eventually resolve some promises. This is especially crucial for RestateCombinatorPromise
     // as it flips the completed state using .finally() on the combinator.
-    return setTimeout().then(async () => {
+    return setImmediate().then(async () => {
       try {
         // Invoke do progress on the vm
         const handles = restatePromise.uncompletedLeaves();
@@ -442,7 +442,7 @@ export class PromisesExecutor {
           // We need to execute a run closure
           this.runClosuresTracker.executeRun(doProgressResult.ExecuteRun);
           // Let the run context switch, then come back to this flow.
-          await setTimeout();
+          await setImmediate();
         }
 
         // Recursion
