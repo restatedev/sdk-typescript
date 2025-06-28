@@ -274,6 +274,7 @@ export class GenericHandler implements RestateHandler {
       abortSignal.addEventListener(
         "abort",
         () => {
+          invocationLoggers.delete(loggerId);
           void inputReader.cancel();
         },
         { once: true }
