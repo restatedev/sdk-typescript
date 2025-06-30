@@ -818,6 +818,43 @@ export type ServiceOptions = {
    * otherwise the service discovery will fail.
    */
   ingressPrivate?: boolean;
+
+  /**
+   * By default, Restate will consider any error terminal, that is non retryable, if it's an instance of `TerminalError`.
+   *
+   * By setting this field, you can provide a function to map specific errors in your domain to `TerminalError` (or undefined, if the error should be considered retryable). Once `TerminalError`, these errors won't be retried.
+   *
+   * Note: this will be used both for errors thrown by `ctx.run` closures and by errors thrown in restate handlers.
+   *
+   * Example:
+   *
+   * ```ts
+   * class MyValidationError extends Error {}
+   *
+   * const greeter = restate.service({
+   *   name: "greeter",
+   *   handlers: {
+   *     greet: async (ctx: restate.Context, name: string) => {
+   *       if (name.length === 0) {
+   *         throw new MyValidationError("Length too short");
+   *       }
+   *       return `Hello ${name}`;
+   *     }
+   *   },
+   *   options: {
+   *     asTerminalError: (err) => {
+   *       if (err instanceof MyValidationError) {
+   *         // My validation error is terminal
+   *         return new restate.TerminalError(err.message, {errorCode: 400})
+   *       }
+   *
+   *       // Any other error is retryable
+   *     }
+   *   }
+   * });
+   * ```
+   */
+  asTerminalError?: (error: any) => TerminalError | undefined;
 };
 
 /**
