@@ -70,16 +70,34 @@ export class RestateError extends Error {
   }
 }
 
-// Does not lead to Restate retries
-// Leads to an output message with a failure defined
+/**
+ * Does not lead to Restate retries.
+ *
+ * Leads to an output message with a failure defined.
+ */
 export class TerminalError extends RestateError {
   public name = "TerminalError";
 
-  constructor(message: string, options?: { errorCode?: number; cause?: any }) {
+  constructor(
+    message: string,
+    options?: {
+      /**
+       * Error code. This should be an HTTP status code, and in case the service was invoked from the ingress, this will be propagated back to the caller.
+       */
+      errorCode?: number;
+      /**
+       * @deprecated YOU MUST NOT USE THIS FIELD, AS IT WON'T BE RECORDED AND CAN LEAD TO NON-DETERMINISM! From the next SDK version, the constructor won't accept this field anymore.
+       */
+      cause?: any;
+    }
+  ) {
     super(message, options);
   }
 }
 
+/**
+ * Returned by `RestatePromise.withTimeout` when the timeout is reached.
+ */
 export class TimeoutError extends TerminalError {
   public name = "TimeoutError";
 
@@ -88,6 +106,9 @@ export class TimeoutError extends TerminalError {
   }
 }
 
+/**
+ * Returned when the invocation was cancelled.
+ */
 export class CancelledError extends TerminalError {
   public name = "CancelledError";
 

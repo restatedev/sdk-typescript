@@ -38,7 +38,7 @@ import {
   type Duration,
   serde,
 } from "@restatedev/restate-sdk-core";
-import { TerminalError } from "./errors.js";
+import { ensureError, TerminalError } from "./errors.js";
 
 // ----------- rpc clients -------------------------------------------------------
 
@@ -467,9 +467,9 @@ export class HandlerWrapper {
     try {
       req = this.inputSerde.deserialize(input);
     } catch (e) {
-      throw new TerminalError(`Failed to deserialize input.`, {
+      const error = ensureError(e);
+      throw new TerminalError(`Failed to deserialize input: ${error.message}`, {
         errorCode: 400,
-        cause: e,
       });
     }
     const res: unknown = await this.handler(context, req);
