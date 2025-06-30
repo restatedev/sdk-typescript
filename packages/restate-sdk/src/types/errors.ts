@@ -20,7 +20,19 @@ export const UNKNOWN_ERROR_CODE = 500;
 export const CLOSED_ERROR_CODE = 598;
 export const SUSPENDED_ERROR_CODE = 599;
 
-export function ensureError(e: unknown): Error {
+export function ensureError(
+  e: unknown,
+  asTerminalError?: (error: any) => TerminalError | undefined
+): Error {
+  if (e instanceof TerminalError) {
+    return e;
+  }
+  // Try convert to terminal error
+  const maybeTerminalError = asTerminalError ? asTerminalError(e) : undefined;
+  if (maybeTerminalError) {
+    return maybeTerminalError;
+  }
+
   if (e instanceof Error) {
     return e;
   }
@@ -31,6 +43,7 @@ export function ensureError(e: unknown): Error {
     });
   }
 
+  // None of the types we know
   let msg;
   try {
     msg = JSON.stringify(e);

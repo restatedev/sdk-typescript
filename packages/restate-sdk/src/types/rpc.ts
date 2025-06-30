@@ -452,7 +452,8 @@ export class HandlerWrapper {
     public readonly inactivityTimeout?: Duration | number,
     public readonly abortTimeout?: Duration | number,
     public readonly ingressPrivate?: boolean,
-    public readonly enableLazyState?: boolean
+    public readonly enableLazyState?: boolean,
+    public readonly asTerminalError?: (error: any) => TerminalError | undefined
   ) {
     this.accept = accept ? accept : inputSerde.contentType;
     this.contentType = outputSerde.contentType;

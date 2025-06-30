@@ -13,8 +13,11 @@ import {
   service,
   endpoint,
   handlers,
+  TerminalError,
   type Context,
 } from "@restatedev/restate-sdk";
+
+class MyValidationError extends Error {}
 
 const greeter = service({
   name: "greeter",
@@ -24,12 +27,23 @@ const greeter = service({
         journalRetention: { days: 1 },
       },
       async (ctx: Context, name: string) => {
+        if (name.length === 0) {
+          throw new MyValidationError("Name length is 0");
+        }
         return `Hello ${name}`;
       }
     ),
   },
   options: {
     journalRetention: { days: 2 },
+    asTerminalError: (err) => {
+      if (err instanceof MyValidationError) {
+        // My validation error is terminal
+        return new TerminalError(err.message, { errorCode: 400 });
+      }
+
+      // Any other error is retryable
+    },
   },
 });
 
