@@ -132,7 +132,7 @@ export class NodeEndpoint implements RestateEndpoint {
 
   listen(port?: number): Promise<number> {
     const actualPort = port ?? parseInt(process.env.PORT ?? "9080");
-    this.builder.rlog.info(`Listening on ${actualPort}...`);
+    this.builder.rlog.info(`Restate SDK started listening on ${actualPort}...`);
 
     const server = http2.createServer(this.http2Handler());
 
