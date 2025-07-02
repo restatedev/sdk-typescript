@@ -57,14 +57,16 @@ This library follows [Semantic Versioning](https://semver.org/).
 
 The compatibility with Restate is described in the following table:
 
-| Restate Server\sdk-typescript | 1.0/1.1/1.2/1.3  | 1.4 | 1.5 |
-|-------------------------------|------------------|-----|-----|
-| 1.0                           | ✅                | ❌   | ❌   |
-| 1.1                           | ✅ <sup>(1)</sup> | ✅   | ❌   |
-| 1.2                           | ✅                | ✅   | ❌   |
-| 1.3                           | ✅                | ✅   | ✅   |
+| Restate Server\sdk-typescript | 1.0 - 1.3        | 1.4 | 1.5 - 1.6 | 1.7              |
+|-------------------------------|------------------|-----|-----------|------------------|
+| 1.0                           | ✅                | ❌   | ❌         | ❌                |
+| 1.1                           | ✅ <sup>(1)</sup> | ✅   | ❌         | ❌                |
+| 1.2                           | ✅                | ✅   | ❌         | ❌                |
+| 1.3                           | ✅                | ✅   | ✅         | ✅ <sup>(2)</sup> |
+| 1.4                           | ✅                | ✅   | ✅         | ✅                |
 
 <sup>(1)</sup> **Only** when upgrading from 1.0 to 1.1 you MUST rediscover all the existing deployments using `restate dp register <address> --force`. You don't need to update the SDK, nor change the code.
+<sup>(2)</sup> **Note** the new `options` in service/object/workflow constructors, together with some of the new options in the `handler`s too, work only from Restate 1.4 onward. Check the in-code documentation for more details.
 
 ## Contributing
 
