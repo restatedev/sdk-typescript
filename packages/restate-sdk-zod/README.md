@@ -3,29 +3,42 @@
 [![Discord](https://img.shields.io/discord/1128210118216007792?logo=discord)](https://discord.gg/skW3AZ6uGd)
 [![Twitter](https://img.shields.io/twitter/follow/restatedev.svg?style=social&label=Follow)](https://twitter.com/intent/follow?screen_name=restatedev)
 
-# Restate Typescript SDK
+# Restate Typescript SDK Zod integration
 
-[Restate](https://restate.dev/) is a system for easily building resilient applications using *distributed durable async/await*. This repository contains the Restate SDK for writing services in **Node.js / Typescript**.
+[Restate](https://restate.dev/) is a system for easily building resilient applications using *distributed durable async/await*.
 
-Restate applications are composed of *durably executed, stateful RPC handlers* that can run either
-as part of long-running processes, or as FaaS (AWS Lambda).
+This package contains a zod integration, allowing to define input/output models of your handlers.
 
 ```typescript
 import * as restate from "@restatedev/restate-sdk";
+import { serde } from "@restatedev/restate-sdk-zod";
+import { z } from "zod";
 
-const greeter = restate.service({
-    name: "greeter",
-    handlers: {
-        greet: async (ctx: restate.Context, name: string) => {
-            return `Hello ${name}!`;
-        },
-    },
+const Greeting = z.object({
+  name: z.string(),
 });
 
-restate.endpoint()
-    .bind(greeter)
-    .listen(9080);
+const greeter = restate.service({
+  name: "greeter",
+  handlers: {
+    greet: restate.handlers.handler(
+      {
+        input: serde.zod(Greeting),
+        output: serde.zod(z.string()),
+      },
+      async (ctx, greeting) => {
+        return `Hello ${greeting.name}!`;
+      }
+    ),
+  },
+});
+
+export type Greeter = typeof greeter;
+
+restate.endpoint().bind(greeter).listen();
 ```
+
+For the SDK main package, checkout https://www.npmjs.com/package/@restatedev/restate-sdk.
 
 ## Community
 
@@ -35,29 +48,14 @@ restate.endpoint()
 * 🙋 [Create a GitHub issue](https://github.com/restatedev/sdk-typescript/issues) for requesting a new feature or reporting a problem.
 * 🏠 [Visit our GitHub org](https://github.com/restatedev) for exploring other repositories.
 
-## Using the SDK
+## Using the library
 
-To use this SDK, add the dependency to your project:
-```shell
-npm install @restatedev/restate-sdk
-```
+To use this library, add the dependency to your project:
 
-For brand-new projects, we recommend using the [Restate Node Template](https://github.com/restatedev/node-template-generator):
 ```shell
-npx -y @restatedev/create-app@latest
+npm install --save-dev @restatedev/restate-sdk-zod
 ```
 
 ## Versions
 
 This library follows [Semantic Versioning](https://semver.org/).
-
-The compatibility with Restate is described in the following table:
-
-| Restate Server\sdk-typescript | 1.0/1.1/1.2/1.3  | 1.4 | 1.5 |
-|-------------------------------|------------------|-----|-----|
-| 1.0                           | ✅                | ❌   | ❌   |
-| 1.1                           | ✅ <sup>(1)</sup> | ✅   | ❌   |
-| 1.2                           | ✅                | ✅   | ❌   |
-| 1.3                           | ✅                | ✅   | ✅   |
-
-<sup>(1)</sup> **Only** when upgrading from 1.0 to 1.1 you MUST rediscover all the existing deployments using `restate dp register <address> --force`. You don't need to update the SDK, nor change the code. 

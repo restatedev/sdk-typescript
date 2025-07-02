@@ -3,29 +3,13 @@
 [![Discord](https://img.shields.io/discord/1128210118216007792?logo=discord)](https://discord.gg/skW3AZ6uGd)
 [![Twitter](https://img.shields.io/twitter/follow/restatedev.svg?style=social&label=Follow)](https://twitter.com/intent/follow?screen_name=restatedev)
 
-# Restate Typescript SDK
+# Restate Typescript SDK - Core
 
 [Restate](https://restate.dev/) is a system for easily building resilient applications using *distributed durable async/await*. This repository contains the Restate SDK for writing services in **Node.js / Typescript**.
 
-Restate applications are composed of *durably executed, stateful RPC handlers* that can run either
-as part of long-running processes, or as FaaS (AWS Lambda).
+This package contains the core types used in the several SDK modules.
 
-```typescript
-import * as restate from "@restatedev/restate-sdk";
-
-const greeter = restate.service({
-    name: "greeter",
-    handlers: {
-        greet: async (ctx: restate.Context, name: string) => {
-            return `Hello ${name}!`;
-        },
-    },
-});
-
-restate.endpoint()
-    .bind(greeter)
-    .listen(9080);
-```
+For the SDK main package, checkout https://www.npmjs.com/package/@restatedev/restate-sdk.
 
 ## Community
 
@@ -53,11 +37,13 @@ This library follows [Semantic Versioning](https://semver.org/).
 
 The compatibility with Restate is described in the following table:
 
-| Restate Server\sdk-typescript | 1.0/1.1/1.2/1.3  | 1.4 | 1.5 |
-|-------------------------------|------------------|-----|-----|
-| 1.0                           | ✅                | ❌   | ❌   |
-| 1.1                           | ✅ <sup>(1)</sup> | ✅   | ❌   |
-| 1.2                           | ✅                | ✅   | ❌   |
-| 1.3                           | ✅                | ✅   | ✅   |
+| Restate Server\sdk-typescript | 1.0 - 1.3        | 1.4 | 1.5 - 1.6 | 1.7              |
+|-------------------------------|------------------|-----|-----------|------------------|
+| 1.0                           | ✅                | ❌   | ❌         | ❌                |
+| 1.1                           | ✅ <sup>(1)</sup> | ✅   | ❌         | ❌                |
+| 1.2                           | ✅                | ✅   | ❌         | ❌                |
+| 1.3                           | ✅                | ✅   | ✅         | ✅ <sup>(2)</sup> |
+| 1.4                           | ✅                | ✅   | ✅         | ✅                |
 
-<sup>(1)</sup> **Only** when upgrading from 1.0 to 1.1 you MUST rediscover all the existing deployments using `restate dp register <address> --force`. You don't need to update the SDK, nor change the code. 
+<sup>(1)</sup> **Only** when upgrading from 1.0 to 1.1 you MUST rediscover all the existing deployments using `restate dp register <address> --force`. You don't need to update the SDK, nor change the code.
+<sup>(2)</sup> **Note** the new `options` in service/object/workflow constructors, together with some of the new options in the `handler`s too, work only from Restate 1.4 onward. Check the in-code documentation for more details.

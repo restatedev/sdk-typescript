@@ -26,6 +26,8 @@ const greeter = rs.serviceClient(Greeter);
 const greeting = await greeter.greet(name);
 ```
 
+To build Restate services using Typescript, checkout the SDK main package https://www.npmjs.com/package/@restatedev/restate-sdk.
+
 ## Community
 
 * 🤗️ [Join our online community](https://discord.gg/skW3AZ6uGd) for help, sharing feedback and talking to the community.
