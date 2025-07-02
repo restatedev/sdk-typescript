@@ -9,8 +9,7 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 export * from "./common_api.js";
-import { FetchEndpointImpl, } from "./endpoint/fetch_endpoint.js";
-import { ProtocolMode } from "./types/discovery.js";
+import { FetchEndpointImpl } from "./endpoint/fetch_endpoint.js";
 import { cloudflareWorkersBundlerPatch } from "./endpoint/handlers/vm/sdk_shared_core_wasm_bindings.js"
 /**
  * Create a new {@link RestateEndpoint} in request response protocol mode.
@@ -18,6 +17,6 @@ import { cloudflareWorkersBundlerPatch } from "./endpoint/handlers/vm/sdk_shared
  */
 export function endpoint() {
     cloudflareWorkersBundlerPatch()
-    return new FetchEndpointImpl(ProtocolMode.REQUEST_RESPONSE);
+    return new FetchEndpointImpl("REQUEST_RESPONSE");
 }
 //# sourceMappingURL=fetch.js.map
