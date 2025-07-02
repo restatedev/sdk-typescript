@@ -1,6 +1,6 @@
 {
   "name": "@restatedev/restate-sdk-core",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "description": "Restate Typescript SDK core",
   "author": "Restate Developers",
   "license": "MIT",
