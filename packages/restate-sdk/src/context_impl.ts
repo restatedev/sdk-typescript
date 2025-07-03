@@ -104,7 +104,8 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     private readonly invocationRequest: Request,
     private readonly invocationEndPromise: CompletablePromise<void>,
     inputReader: ReadableStreamDefaultReader<Uint8Array>,
-    outputWriter: WritableStreamDefaultWriter<Uint8Array>
+    outputWriter: WritableStreamDefaultWriter<Uint8Array>,
+    private readonly asTerminalError?: (error: any) => TerminalError | undefined
   ) {
     this.rand = new RandImpl(input.invocation_id, () => {
       // TODO reimplement this check with async context
@@ -422,7 +423,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       try {
         res = await action();
       } catch (e) {
-        err = ensureError(e);
+        err = ensureError(e, this.asTerminalError);
       }
       const attemptDuration = Date.now() - startTime;
 

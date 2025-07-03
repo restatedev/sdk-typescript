@@ -16,7 +16,7 @@ import {
   TerminalError,
 } from "../../types/errors.js";
 import type { ProtocolMode } from "../../types/discovery.js";
-import type { ComponentHandler } from "../../types/components.js";
+import type { Component, ComponentHandler } from "../../types/components.js";
 import { parseUrlComponents } from "../../types/components.js";
 import { X_RESTATE_SERVER } from "../../user_agent.js";
 import type { EndpointBuilder } from "../endpoint_builder.js";
@@ -168,13 +168,13 @@ export class GenericHandler implements RestateHandler {
       this.endpoint.rlog.warn(errorMessage);
       return this.toErrorResponse(415, errorMessage);
     }
-    const method = this.endpoint.componentByName(parsed.componentName);
-    if (!method) {
+    const service = this.endpoint.componentByName(parsed.componentName);
+    if (!service) {
       const msg = `No service found for URL: ${JSON.stringify(parsed)}`;
       this.endpoint.rlog.error(msg);
       return this.toErrorResponse(404, msg);
     }
-    const handler = method?.handlerMatching(parsed);
+    const handler = service?.handlerMatching(parsed);
     if (!handler) {
       const msg = `No service found for URL: ${JSON.stringify(parsed)}`;
       this.endpoint.rlog.error(msg);
@@ -187,6 +187,7 @@ export class GenericHandler implements RestateHandler {
     }
 
     return this.handleInvoke(
+      service,
       handler,
       request.body,
       request.headers,
@@ -225,6 +226,7 @@ export class GenericHandler implements RestateHandler {
   }
 
   private async handleInvoke(
+    service: Component,
     handler: ComponentHandler,
     body: ReadableStream<Uint8Array>,
     headers: Headers,
@@ -365,7 +367,8 @@ export class GenericHandler implements RestateHandler {
         invocationRequest,
         invocationEndPromise,
         inputReader,
-        outputWriter
+        outputWriter,
+        service.options?.asTerminalError
       );
 
       // Finally invoke user handler
@@ -377,7 +380,7 @@ export class GenericHandler implements RestateHandler {
           vmLogger.info("Invocation completed successfully.");
         })
         .catch((e) => {
-          const error = ensureError(e);
+          const error = ensureError(e, service.options?.asTerminalError);
           logError(vmLogger, error);
 
           if (error instanceof TerminalError) {
