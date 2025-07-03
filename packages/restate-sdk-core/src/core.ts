@@ -93,7 +93,7 @@ export type VirtualObject<M> = M extends VirtualObjectDefinition<
   infer O
 >
   ? O
-  : never;
+  : M;
 
 export type VirtualObjectDefinitionFrom<M> = M extends VirtualObjectDefinition<
   string,
