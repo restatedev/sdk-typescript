@@ -111,6 +111,11 @@ export class WasmVM {
   notify_input(buffer: Uint8Array): void;
   notify_input_closed(): void;
   notify_error(error_message: string, stacktrace?: string | null): void;
+  notify_error_with_delay_override(
+    error_message: string,
+    stacktrace?: string | null,
+    delay_override?: bigint | null
+  ): void;
   notify_error_for_next_command(
     error_message: string,
     stacktrace: string | null | undefined,
@@ -170,6 +175,15 @@ export class WasmVM {
     error_stacktrace: string | null | undefined,
     attempt_duration: bigint,
     config?: WasmExponentialRetryConfig | null
+  ): void;
+  propose_run_completion_failure_transient_with_delay_override(
+    handle: number,
+    error_message: string,
+    error_stacktrace: string | null | undefined,
+    attempt_duration: bigint,
+    delay_override?: bigint | null,
+    max_retry_attempts_override?: number | null,
+    max_retry_duration_override?: bigint | null
   ): void;
   sys_cancel_invocation(target_invocation_id: string): void;
   sys_write_output_success(buffer: Uint8Array): void;

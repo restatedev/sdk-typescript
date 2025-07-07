@@ -313,6 +313,11 @@ export interface Context extends RestateContext {
    *     re-executed on replay (the latest, if the failure happened in the small windows
    *     described above).
    *
+   * You can customize retry options by either:
+   *
+   * - Providing retry policy options in {@link RunOptions}
+   * - Throwing {@link RetryableError}, providing `retryAfter` option. This can be especially useful when interacting with HTTP requests returning the `Retry-After` header.
+   *
    * @example
    * ```ts
    * const result = await ctx.run(someExternalAction)
@@ -328,7 +333,7 @@ export interface Context extends RestateContext {
    *        } else if (result.paymentGatewayBusy) {
    *            // restate will retry automatically
    *            // to bound retries, use RunOptions
-   *            throw new Exception("Payment gateway busy");
+   *            throw new Error("Payment gateway busy");
    *        } else {
    *            // success!
    *        }
@@ -341,14 +346,13 @@ export interface Context extends RestateContext {
   run<T>(action: RunAction<T>): RestatePromise<T>;
 
   /**
-   * Run an operation and store the result in Restate. The operation will thus not
-   * be re-run during a later replay, but take the durable result from Restate.
-   *
-   * @param name the action's name
-   * @param action the action to run.
+   * Same as {@link run}, but providing a name, used for observability purposes.
    */
   run<T>(name: string, action: RunAction<T>): RestatePromise<T>;
 
+  /**
+   * See {@link run}
+   */
   run<T>(
     name: string,
     action: RunAction<T>,

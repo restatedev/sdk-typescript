@@ -13,6 +13,7 @@ import {
   ensureError,
   logError,
   RestateError,
+  RetryableError,
   TerminalError,
 } from "../../types/errors.js";
 import type { ProtocolMode } from "../../types/discovery.js";
@@ -37,6 +38,7 @@ import {
   LogSource,
   RestateLogLevel,
 } from "../../logging/logger_transport.js";
+import { millisOrDurationToMillis } from "@restatedev/restate-sdk-core";
 
 export interface Headers {
   [name: string]: string | string[] | undefined;
@@ -389,6 +391,14 @@ export class GenericHandler implements RestateHandler {
               message: error.message,
             });
             coreVm.sys_end();
+          } else if (error instanceof RetryableError) {
+            coreVm.notify_error_with_delay_override(
+              error.message,
+              error.stack,
+              error.retryAfter !== undefined
+                ? BigInt(millisOrDurationToMillis(error.retryAfter))
+                : undefined
+            );
           } else {
             coreVm.notify_error(error.message, error.stack);
           }
