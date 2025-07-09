@@ -38,6 +38,7 @@ import {
   INTERNAL_ERROR_CODE,
   logError,
   RestateError,
+  RetryableError,
   TerminalError,
   UNKNOWN_ERROR_CODE,
 } from "./types/errors.js";
@@ -436,6 +437,22 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
               code: err.code,
               message: err.message,
             });
+          } else if (err instanceof RetryableError) {
+            const maxRetryDuration =
+              options?.maxRetryDuration ?? options?.maxRetryDurationMillis;
+            this.coreVm.propose_run_completion_failure_transient_with_delay_override(
+              handle,
+              err.message,
+              err.stack,
+              BigInt(attemptDuration),
+              err.retryAfter !== undefined
+                ? BigInt(millisOrDurationToMillis(err.retryAfter))
+                : undefined,
+              options?.maxRetryAttempts,
+              maxRetryDuration !== undefined
+                ? BigInt(millisOrDurationToMillis(maxRetryDuration))
+                : undefined
+            );
           } else {
             this.vmLogger.warn(
               `Error when processing ctx.run '${name}'.\n`,

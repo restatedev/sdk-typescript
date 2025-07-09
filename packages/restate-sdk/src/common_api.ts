@@ -108,6 +108,8 @@ export {
   RestateError,
   TerminalError,
   TimeoutError,
+  RetryableError,
+  type RetryableErrorOptions,
 } from "./types/errors.js";
 export type {
   LoggerTransport,

@@ -313,11 +313,22 @@ export interface Context extends RestateContext {
    *     re-executed on replay (the latest, if the failure happened in the small windows
    *     described above).
    *
+   * You can customize retry options by either:
+   *
+   * - Providing retry policy options in {@link RunOptions}
+   * - Throwing {@link RetryableError}, providing `retryAfter` option. This can be especially useful when interacting with HTTP requests returning the `Retry-After` header. You can combine the usage of throwing {@link RetryableError} with the `maxRetryAttempts`/`maxRetryDuration` from {@link RunOptions}.
+   *
    * @example
    * ```ts
    * const result = await ctx.run(someExternalAction)
    *```
-
+   *
+   * @example
+   * ```ts
+   * // Add some retry options
+   * const result = await ctx.run("my action", someExternalAction, { maxRetryAttempts: 10 })
+   * ```
+   *
    * @example
    * ```ts
    *    await ctx.run("payment action", async () => {
@@ -328,12 +339,27 @@ export interface Context extends RestateContext {
    *        } else if (result.paymentGatewayBusy) {
    *            // restate will retry automatically
    *            // to bound retries, use RunOptions
-   *            throw new Exception("Payment gateway busy");
+   *            throw new Error("Payment gateway busy");
    *        } else {
    *            // success!
    *        }
    *   });
    *
+   * @example
+   * ```ts
+   *    await ctx.run("payment action", async () => {
+   *        const res = fetch(...);
+   *        if (!res.ok) {
+   *          // Read Retry-After header
+   *          const retryAfterHeader = res.headers['Retry-After']
+   *
+   *          // Use RetryableError to customize in how long to retry
+   *          throw RetryableError.from(cause, { retryAfter: { seconds: retryAfterHeader } })
+   *        }
+   *   }, {
+   *       // Retry at most ten times
+   *       maxRetryAttempts: 10
+   *   });
    * ```
    *
    * @param action The function to run.
@@ -341,14 +367,13 @@ export interface Context extends RestateContext {
   run<T>(action: RunAction<T>): RestatePromise<T>;
 
   /**
-   * Run an operation and store the result in Restate. The operation will thus not
-   * be re-run during a later replay, but take the durable result from Restate.
-   *
-   * @param name the action's name
-   * @param action the action to run.
+   * Same as {@link run}, but providing a name, used for observability purposes.
    */
   run<T>(name: string, action: RunAction<T>): RestatePromise<T>;
 
+  /**
+   * See {@link run}
+   */
   run<T>(
     name: string,
     action: RunAction<T>,

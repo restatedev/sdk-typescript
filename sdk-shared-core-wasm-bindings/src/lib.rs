@@ -474,6 +474,18 @@ impl WasmVM {
         use_log_dispatcher!(self, |vm| CoreVM::notify_error(vm, e, None))
     }
 
+    pub fn notify_error_with_delay_override(&mut self, error_message: String, stacktrace: Option<String>, delay_override: Option<u64>) {
+        let mut e = Error::internal(error_message);
+        if let Some(stacktrace) = stacktrace {
+            e = e.with_stacktrace(stacktrace);
+        }
+        if let Some(delay_override) = delay_override {
+            e = e.with_next_retry_delay_override(Duration::from_millis(delay_override))
+        }
+
+        use_log_dispatcher!(self, |vm| CoreVM::notify_error(vm, e, None))
+    }
+
     pub fn notify_error_for_next_command(
         &mut self,
         error_message: String,
@@ -815,6 +827,38 @@ impl WasmVM {
                 .unwrap_or(RetryPolicy::Infinite)
         ))
         .map_err(Into::into)
+    }
+
+    pub fn propose_run_completion_failure_transient_with_delay_override(
+        &mut self,
+        handle: WasmNotificationHandle,
+        error_message: String,
+        error_stacktrace: Option<String>,
+        attempt_duration: u64,
+        delay_override: Option<u64>,
+        max_retry_attempts_override: Option<u32>,
+        max_retry_duration_override: Option<u64>
+    ) -> Result<(), WasmFailure> {
+        let retry_policy = if delay_override.is_some() || max_retry_attempts_override.is_some() || max_retry_duration_override.is_some() {
+            RetryPolicy::FixedDelay {
+                interval: delay_override.map(Duration::from_millis),
+                max_attempts: max_retry_attempts_override,
+                max_duration: max_retry_duration_override.map(Duration::from_millis),
+            }
+        } else {
+            RetryPolicy::Infinite
+        };
+        use_log_dispatcher!(self, |vm| CoreVM::propose_run_completion(
+            vm,
+            handle.into(),
+            RunExitResult::RetryableFailure {
+                attempt_duration: Duration::from_millis(attempt_duration),
+                error: Error::internal(error_message)
+                    .with_stacktrace(error_stacktrace.unwrap_or_default()),
+            },
+            retry_policy
+        ))
+            .map_err(Into::into)
     }
 
     pub fn sys_cancel_invocation(

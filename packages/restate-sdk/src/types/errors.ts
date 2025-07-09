@@ -11,6 +11,8 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import type { Duration } from "@restatedev/restate-sdk-core";
+
 export const INTERNAL_ERROR_CODE = 500;
 export const TIMEOUT_ERROR_CODE = 408;
 export const CANCEL_ERROR_CODE = 409;
@@ -127,5 +129,51 @@ export class CancelledError extends TerminalError {
 
   constructor() {
     super("Cancelled", { errorCode: CANCEL_ERROR_CODE });
+  }
+}
+
+export interface RetryableErrorOptions {
+  /**
+   * In how long it should retry.
+   */
+  retryAfter?: Duration | number;
+}
+
+/**
+ * Error that Restate will retry. By using this error type within a `ctx.run` closure,
+ * you can dynamically provide the retry delay specified in {@link RetryableErrorOptions}.
+ *
+ * You can wrap another error using {@link from}.
+ */
+export class RetryableError extends RestateError {
+  public name = "RetryableError";
+
+  readonly retryAfter?: Duration | number;
+
+  constructor(
+    message: string,
+    options?: RetryableErrorOptions & {
+      errorCode?: number;
+      cause?: any;
+    }
+  ) {
+    super(message, {
+      errorCode: options?.errorCode,
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      cause: options?.cause,
+    });
+    this.retryAfter = options?.retryAfter;
+  }
+
+  /**
+   * Create a `RetryableError` from the given cause.
+   */
+  static from(cause: any, options?: RetryableErrorOptions): RetryableError {
+    const error = ensureError(cause);
+    return new RetryableError(error.message, {
+      errorCode: error["errorCode" as keyof typeof error] as number,
+      cause: cause,
+      ...options,
+    });
   }
 }

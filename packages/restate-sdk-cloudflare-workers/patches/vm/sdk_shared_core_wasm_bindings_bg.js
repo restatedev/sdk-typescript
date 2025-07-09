@@ -593,6 +593,18 @@ export class WasmVM {
     }
     /**
      * @param {string} error_message
+     * @param {string | null} [stacktrace]
+     * @param {bigint | null} [delay_override]
+     */
+    notify_error_with_delay_override(error_message, stacktrace, delay_override) {
+        const ptr0 = passStringToWasm0(error_message, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        var ptr1 = isLikeNone(stacktrace) ? 0 : passStringToWasm0(stacktrace, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        var len1 = WASM_VECTOR_LEN;
+        wasm.wasmvm_notify_error_with_delay_override(this.__wbg_ptr, ptr0, len0, ptr1, len1, !isLikeNone(delay_override), isLikeNone(delay_override) ? BigInt(0) : delay_override);
+    }
+    /**
+     * @param {string} error_message
      * @param {string | null | undefined} stacktrace
      * @param {WasmCommandType} wasm_command_type
      */
@@ -969,6 +981,25 @@ export class WasmVM {
         var ptr1 = isLikeNone(error_stacktrace) ? 0 : passStringToWasm0(error_stacktrace, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         var len1 = WASM_VECTOR_LEN;
         const ret = wasm.wasmvm_propose_run_completion_failure_transient(this.__wbg_ptr, handle, ptr0, len0, ptr1, len1, attempt_duration, isLikeNone(config) ? 0 : addToExternrefTable0(config));
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
+    /**
+     * @param {number} handle
+     * @param {string} error_message
+     * @param {string | null | undefined} error_stacktrace
+     * @param {bigint} attempt_duration
+     * @param {bigint | null} [delay_override]
+     * @param {number | null} [max_retry_attempts_override]
+     * @param {bigint | null} [max_retry_duration_override]
+     */
+    propose_run_completion_failure_transient_with_delay_override(handle, error_message, error_stacktrace, attempt_duration, delay_override, max_retry_attempts_override, max_retry_duration_override) {
+        const ptr0 = passStringToWasm0(error_message, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        var ptr1 = isLikeNone(error_stacktrace) ? 0 : passStringToWasm0(error_stacktrace, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        var len1 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmvm_propose_run_completion_failure_transient_with_delay_override(this.__wbg_ptr, handle, ptr0, len0, ptr1, len1, attempt_duration, !isLikeNone(delay_override), isLikeNone(delay_override) ? BigInt(0) : delay_override, isLikeNone(max_retry_attempts_override) ? 0x100000001 : (max_retry_attempts_override) >>> 0, !isLikeNone(max_retry_duration_override), isLikeNone(max_retry_duration_override) ? BigInt(0) : max_retry_duration_override);
         if (ret[1]) {
             throw takeFromExternrefTable0(ret[0]);
         }
