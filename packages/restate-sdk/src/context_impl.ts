@@ -438,6 +438,8 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
               message: err.message,
             });
           } else if (err instanceof RetryableError) {
+            const maxRetryDuration =
+              options?.maxRetryDuration ?? options?.maxRetryDurationMillis;
             this.coreVm.propose_run_completion_failure_transient_with_delay_override(
               handle,
               err.message,
@@ -446,9 +448,9 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
               err.retryAfter !== undefined
                 ? BigInt(millisOrDurationToMillis(err.retryAfter))
                 : undefined,
-              err.maxRetryAttempts,
-              err.maxRetryDuration !== undefined
-                ? BigInt(millisOrDurationToMillis(err.maxRetryDuration))
+              options?.maxRetryAttempts,
+              maxRetryDuration !== undefined
+                ? BigInt(millisOrDurationToMillis(maxRetryDuration))
                 : undefined
             );
           } else {

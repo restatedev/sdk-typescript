@@ -29,9 +29,6 @@ export function ensureError(
   if (e instanceof TerminalError) {
     return e;
   }
-  if (e instanceof RetryableError) {
-    return e;
-  }
   // Try convert to terminal error
   const maybeTerminalError = asTerminalError ? asTerminalError(e) : undefined;
   if (maybeTerminalError) {
@@ -140,27 +137,11 @@ export interface RetryableErrorOptions {
    * In how long it should retry.
    */
   retryAfter?: Duration | number;
-
-  /**
-   * Max number of retry attempts, before giving up. This is ignored when `RetryableError` is thrown outside the `ctx.run` closure.
-   *
-   * When giving up, `ctx.run` will throw a `TerminalError` wrapping the original error message.
-   */
-  maxRetryAttempts?: number;
-
-  /**
-   * Max duration of retries, before giving up. This is ignored when `RetryableError` is thrown outside the `ctx.run` closure.
-   *
-   * When giving up, `ctx.run` will throw a `TerminalError` wrapping the original error message.
-   *
-   * If a number is provided, it will be interpreted as milliseconds.
-   */
-  maxRetryDuration?: Duration | number;
 }
 
 /**
  * Error that Restate will retry. By using this error type within a `ctx.run` closure,
- * you can dynamically provide the retry delay and other parameters specified in {@link RetryableErrorOptions}.
+ * you can dynamically provide the retry delay specified in {@link RetryableErrorOptions}.
  *
  * You can wrap another error using {@link from}.
  */
@@ -168,12 +149,10 @@ export class RetryableError extends RestateError {
   public name = "RetryableError";
 
   readonly retryAfter?: Duration | number;
-  readonly maxRetryAttempts?: number;
-  readonly maxRetryDuration?: Duration | number;
 
   constructor(
     message: string,
-    private readonly options?: RetryableErrorOptions & {
+    options?: RetryableErrorOptions & {
       errorCode?: number;
       cause?: any;
     }
@@ -184,8 +163,6 @@ export class RetryableError extends RestateError {
       cause: options?.cause,
     });
     this.retryAfter = options?.retryAfter;
-    this.maxRetryAttempts = options?.maxRetryAttempts;
-    this.maxRetryDuration = options?.maxRetryDuration;
   }
 
   /**

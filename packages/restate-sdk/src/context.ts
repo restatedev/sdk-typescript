@@ -316,13 +316,19 @@ export interface Context extends RestateContext {
    * You can customize retry options by either:
    *
    * - Providing retry policy options in {@link RunOptions}
-   * - Throwing {@link RetryableError}, providing `retryAfter` option. This can be especially useful when interacting with HTTP requests returning the `Retry-After` header.
+   * - Throwing {@link RetryableError}, providing `retryAfter` option. This can be especially useful when interacting with HTTP requests returning the `Retry-After` header. You can combine the usage of throwing {@link RetryableError} with the `maxRetryAttempts`/`maxRetryDuration` from {@link RunOptions}.
    *
    * @example
    * ```ts
    * const result = await ctx.run(someExternalAction)
    *```
-
+   *
+   * @example
+   * ```ts
+   * // Add some retry options
+   * const result = await ctx.run("my action", someExternalAction, { maxRetryAttempts: 10 })
+   * ```
+   *
    * @example
    * ```ts
    *    await ctx.run("payment action", async () => {
@@ -339,6 +345,21 @@ export interface Context extends RestateContext {
    *        }
    *   });
    *
+   * @example
+   * ```ts
+   *    await ctx.run("payment action", async () => {
+   *        const res = fetch(...);
+   *        if (!res.ok) {
+   *          // Read Retry-After header
+   *          const retryAfterHeader = res.headers['Retry-After']
+   *
+   *          // Use RetryableError to customize in how long to retry
+   *          throw RetryableError.from(cause, { retryAfter: { seconds: retryAfterHeader } })
+   *        }
+   *   }, {
+   *       // Retry at most ten times
+   *       maxRetryAttempts: 10
+   *   });
    * ```
    *
    * @param action The function to run.
