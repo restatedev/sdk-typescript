@@ -19,3 +19,5 @@ test_report
 restate-sdk-test-suite.jar
 
 .restate
+
+docs-out

@@ -28,11 +28,13 @@
   "scripts": {
     "api:extract": "npm run api:extract -ws --if-present",
     "build": "npm run build -ws --if-present",
+    "build-docs": "npm run build && npx typedoc",
     "test": "npm run test -ws --if-present",
     "lint": "npm run lint -ws --if-present",
     "format": "npm run format -ws --if-present",
     "format-check": "npm run format-check -ws --if-present",
-    "verify": "npm run verify -ws --if-present",
+    "verify": "npm run verify -ws --if-present && npm run verify-docs",
+    "verify-docs": "npx typedoc",
     "clean": "rm -rf packages/restate-sdk-zod/dist && rm -rf packages/restate-sdk/dist && rm -rf packages/restate-sdk-cloudflare-workers/dist && rm -rf packages/restate-sdk-examples/dist && rm -rf packages/restate-sdk-ingress/dist && rm -rf packages/restate-e2e-services/dist && rm -rf packages/restate-sdk-core/dist"
   },
   "devDependencies": {
@@ -48,6 +50,7 @@
     "eslint-plugin-require-extensions": "^0.1.3",
     "prettier": "^2.8.4",
     "release-it": "^17.11.0",
+    "typedoc": "^0.28.7",
     "typescript": "^5.4.5",
     "vitest": "^3.0.9",
     "wasm-pack": "^0.0.0",
