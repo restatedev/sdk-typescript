@@ -318,18 +318,15 @@ export interface Context extends RestateContext {
    * - Providing retry policy options in {@link RunOptions}
    * - Throwing {@link RetryableError}, providing `retryAfter` option. This can be especially useful when interacting with HTTP requests returning the `Retry-After` header. You can combine the usage of throwing {@link RetryableError} with the `maxRetryAttempts`/`maxRetryDuration` from {@link RunOptions}.
    *
-   * @example
+   * @example Run some external action and persist its result
    * ```ts
    * const result = await ctx.run(someExternalAction)
    *```
-   *
-   * @example
+   * @example Add some retry options
    * ```ts
-   * // Add some retry options
    * const result = await ctx.run("my action", someExternalAction, { maxRetryAttempts: 10 })
    * ```
-   *
-   * @example
+   * @example Terminal errors and retryable errors
    * ```ts
    *    await ctx.run("payment action", async () => {
    *        const result = await paymentProvider.charge(txId, paymentInfo);
@@ -344,8 +341,7 @@ export interface Context extends RestateContext {
    *            // success!
    *        }
    *   });
-   *
-   * @example
+   * @example Retryable error with custom retry delay
    * ```ts
    *    await ctx.run("payment action", async () => {
    *        const res = fetch(...);
@@ -386,8 +382,7 @@ export interface Context extends RestateContext {
    * @returns
    * - id: the string ID that has to be used to complete the awakaeble by some external service
    * - promise: the Promise that needs to be awaited and that is resolved with the payload that was supplied by the service which completed the awakeable
-   *
-   * @example
+   * @example Retryable errors and terminal errors
    * const awakeable = ctx.awakeable<string>();
    *
    * // send the awakeable ID to some external service that will wake this one back up
@@ -411,8 +406,7 @@ export interface Context extends RestateContext {
    * @param payload the payload to pass to the service that is woken up.
    * The SDK serializes the payload with `Buffer.from(JSON.stringify(payload))`
    * and deserializes it in the receiving service with `JSON.parse(result.toString()) as T`.
-   *
-   * @example
+   * @example Retryable error with custom retry delay
    * // The sleeping service should have sent the awakeableIdentifier string to this service.
    * ctx.resolveAwakeable(awakeableIdentifier, "hello");
    */
@@ -867,8 +861,7 @@ export interface WorkflowSharedContext<TState extends TypedState = UntypedState>
   /**
    * Create a durable promise that can be resolved or rejected during the workflow execution.
    * The promise is bound to the workflow and will be persisted across suspensions and retries.
-   *
-   * @example
+   * @example Add some retry options
    * ```ts
    *        const wf = restate.workflow({
    *              name: "myWorkflow",
