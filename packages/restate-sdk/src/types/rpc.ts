@@ -864,13 +864,13 @@ export type ServiceOptions = {
  * @example Here is an example of how to define a service:
  *
  * ```ts
- *  const greeter = service({
- *    name: "greeter",
- *      handlers: {
- *        greet: async (ctx: Context, name: string) => {
- *          return `Hello ${name}`;
- *        }
- *      }
+ * const greeter = service({
+ *   name: "greeter",
+ *   handlers: {
+ *     greet: async (ctx: Context, name: string) => {
+ *       return `Hello ${name}`;
+ *     }
+ *   }
  * });
  * ```
  *
@@ -891,11 +891,11 @@ export type ServiceOptions = {
  *
  * @example Alternatively to avoid repeating the service name, you can:
  * ```
- *  import type {Greeter} from "./greeter";
- *  const Greeter: Greeter = { name : "greeter"};
+ * import type {Greeter} from "./greeter";
+ * const Greeter: Greeter = { name : "greeter"};
  *
- *  // now you can reference the service like this:
- *  const client = ctx.serviceClient(Greeter);
+ * // now you can reference the service like this:
+ * const client = ctx.serviceClient(Greeter);
  * ```
  *
  * @param name the service name
@@ -1096,14 +1096,14 @@ export type WorkflowOptions = ServiceOptions & {
  *
  * @example Here is an example of how to define a workflow:
  * ```ts
- *      const mywf = workflow({
- *            name: "mywf",
- *            handlers: {
- *                run: async (ctx: WorkflowContext, argument: any) => {
- *                  return "Hello World";
- *                }
- *            }
- *      });
+ * const mywf = workflow({
+ *   name: "mywf",
+ *   handlers: {
+ *     run: async (ctx: WorkflowContext, argument: any) => {
+ *       return "Hello World";
+ *     }
+ *   }
+ * });
  * ```
  *
  * ### Note:
