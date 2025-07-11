@@ -1,5 +1,6 @@
 [![Documentation](https://img.shields.io/badge/doc-reference-blue)](https://docs.restate.dev)
 [![Examples](https://img.shields.io/badge/view-examples-blue)](https://github.com/restatedev/examples)
+[![NPM Version](https://img.shields.io/npm/v/%40restatedev%2Frestate-sdk)](https://www.npmjs.com/package/@restatedev/restate-sdk)
 [![Discord](https://img.shields.io/discord/1128210118216007792?logo=discord)](https://discord.gg/skW3AZ6uGd)
 [![Twitter](https://img.shields.io/twitter/follow/restatedev.svg?style=social&label=Follow)](https://twitter.com/intent/follow?screen_name=restatedev)
 
@@ -46,6 +47,8 @@ For brand-new projects, we recommend using the [Restate Node Template](https://g
 ```shell
 npx -y @restatedev/create-app@latest
 ```
+
+Check the [Quickstart](https://docs.restate.dev/get_started/quickstart) for more info.
 
 ## Versions
 

@@ -1,5 +1,6 @@
 [![Documentation](https://img.shields.io/badge/doc-reference-blue)](https://docs.restate.dev)
 [![Examples](https://img.shields.io/badge/view-examples-blue)](https://github.com/restatedev/examples)
+[![NPM Version](https://img.shields.io/npm/v/%40restatedev%2Frestate-sdk-zod)](https://www.npmjs.com/package/@restatedev/restate-sdk-zod)
 [![Discord](https://img.shields.io/discord/1128210118216007792?logo=discord)](https://discord.gg/skW3AZ6uGd)
 [![Twitter](https://img.shields.io/twitter/follow/restatedev.svg?style=social&label=Follow)](https://twitter.com/intent/follow?screen_name=restatedev)
 
@@ -38,7 +39,7 @@ export type Greeter = typeof greeter;
 restate.endpoint().bind(greeter).listen();
 ```
 
-For the SDK main package, checkout https://www.npmjs.com/package/@restatedev/restate-sdk.
+For the SDK main package, checkout [`@restatedev/restate-sdk`](../restate-sdk).
 
 ## Community
 
