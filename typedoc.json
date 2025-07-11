@@ -1,5 +1,6 @@
 {
   "$schema": "https://typedoc.org/schema.json",
+  "name": "Restate Typescript SDK",
   "entryPoints": [
     "packages/restate-sdk-core",
     "packages/restate-sdk",
@@ -12,7 +13,7 @@
     "entryPoints": [
       "src/public_api.ts"
     ],
-    "tsconfig": "tsconfig.json"
+    "tsconfig": "tsconfig.json",
   },
   "out": "docs-out"
 }

@@ -1,5 +1,6 @@
 [![Documentation](https://img.shields.io/badge/doc-reference-blue)](https://docs.restate.dev)
 [![Examples](https://img.shields.io/badge/view-examples-blue)](https://github.com/restatedev/examples)
+[![NPM Version](https://img.shields.io/npm/v/%40restatedev%2Frestate-sdk-clients)](https://www.npmjs.com/package/@restatedev/restate-sdk-clients)
 [![Discord](https://img.shields.io/discord/1128210118216007792?logo=discord)](https://discord.gg/skW3AZ6uGd)
 [![Twitter](https://img.shields.io/twitter/follow/restatedev.svg?style=social&label=Follow)](https://twitter.com/intent/follow?screen_name=restatedev)
 
@@ -36,7 +37,7 @@ To build Restate services using Typescript, checkout the SDK main package https:
 * 🙋 [Create a GitHub issue](https://github.com/restatedev/sdk-typescript/issues) for requesting a new feature or reporting a problem.
 * 🏠 [Visit our GitHub org](https://github.com/restatedev) for exploring other repositories.
 
-## Using the SDK
+## Using the Restate client
 
 To use this client, add the dependency to your project:
 

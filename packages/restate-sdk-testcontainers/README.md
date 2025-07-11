@@ -1,5 +1,6 @@
 [![Documentation](https://img.shields.io/badge/doc-reference-blue)](https://docs.restate.dev)
 [![Examples](https://img.shields.io/badge/view-examples-blue)](https://github.com/restatedev/examples)
+[![NPM Version](https://img.shields.io/npm/v/%40restatedev%2Frestate-sdk-testcontainers)](https://www.npmjs.com/package/@restatedev/restate-sdk-testcontainers)
 [![Discord](https://img.shields.io/discord/1128210118216007792?logo=discord)](https://discord.gg/skW3AZ6uGd)
 [![Twitter](https://img.shields.io/twitter/follow/restatedev.svg?style=social&label=Follow)](https://twitter.com/intent/follow?screen_name=restatedev)
 
@@ -10,7 +11,7 @@
 This package contains utilities to test Restate SDK services against a Restate server container.
 A usage example can be found in [`restate-sdk-examples/test/testcontainers.test.ts`](https://github.com/restatedev/sdk-typescript/blob/main/packages/restate-sdk-examples/test/testcontainers.test.ts)
 
-For the SDK main package, checkout https://www.npmjs.com/package/@restatedev/restate-sdk.
+For the SDK main package, checkout [`@restatedev/restate-sdk`](../restate-sdk).
 
 ## Community
 
