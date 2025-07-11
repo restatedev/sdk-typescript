@@ -328,34 +328,35 @@ export interface Context extends RestateContext {
    * ```
    * @example Terminal errors and retryable errors
    * ```ts
-   *    await ctx.run("payment action", async () => {
-   *        const result = await paymentProvider.charge(txId, paymentInfo);
-   *        if (result.paymentRejected) {
-   *            // this action will not be retried anymore
-   *            throw new TerminalError("Payment failed");
-   *        } else if (result.paymentGatewayBusy) {
-   *            // restate will retry automatically
-   *            // to bound retries, use RunOptions
-   *            throw new Error("Payment gateway busy");
-   *        } else {
-   *            // success!
-   *        }
-   *   });
+   * await ctx.run("payment action", async () => {
+   *   const result = await paymentProvider.charge(txId, paymentInfo);
+   *   if (result.paymentRejected) {
+   *     // this action will not be retried anymore
+   *     throw new TerminalError("Payment failed");
+   *   } else if (result.paymentGatewayBusy) {
+   *     // restate will retry automatically
+   *     // to bound retries, use RunOptions
+   *     throw new Error("Payment gateway busy");
+   *   } else {
+   *     // success!
+   *   }
+   * });
+   * ```
    * @example Retryable error with custom retry delay
    * ```ts
-   *    await ctx.run("payment action", async () => {
-   *        const res = fetch(...);
-   *        if (!res.ok) {
-   *          // Read Retry-After header
-   *          const retryAfterHeader = res.headers['Retry-After']
+   * await ctx.run("payment action", async () => {
+   *   const res = fetch(...);
+   *   if (!res.ok) {
+   *     // Read Retry-After header
+   *     const retryAfterHeader = res.headers['Retry-After']
    *
-   *          // Use RetryableError to customize in how long to retry
-   *          throw RetryableError.from(cause, { retryAfter: { seconds: retryAfterHeader } })
-   *        }
-   *   }, {
-   *       // Retry at most ten times
-   *       maxRetryAttempts: 10
-   *   });
+   *     // Use RetryableError to customize in how long to retry
+   *     throw RetryableError.from(cause, { retryAfter: { seconds: retryAfterHeader } })
+   *   }
+   * }, {
+   *   // Retry at most ten times
+   *   maxRetryAttempts: 10
+   * });
    * ```
    *
    * @param action The function to run.
@@ -464,7 +465,7 @@ export interface Context extends RestateContext {
    *
    * restate.endpoint().bind(service).listen(9080);
    * ```
-   * **Client side:**
+   * *Client side:*
    * ```ts
    * // option 1: use only types and supply service name separately
    * const result1 = await ctx.serviceClient<Service>({name: "myservice"}).someAction("hello!");
@@ -541,7 +542,7 @@ export interface Context extends RestateContext {
    *
    * restate.endpoint().bind(service).listen(9080);
    * ```
-   * **Client side:**
+   * *Client side:*
    * ```ts
    * // option 1: use only types and supply service name separately
    * ctx.serviceSendClient<MyApi>({name: "myservice"}).someAction("hello!");
@@ -863,21 +864,21 @@ export interface WorkflowSharedContext<TState extends TypedState = UntypedState>
    * The promise is bound to the workflow and will be persisted across suspensions and retries.
    * @example Add some retry options
    * ```ts
-   *        const wf = restate.workflow({
-   *              name: "myWorkflow",
-   *              handlers: {
-   *                 run: async (ctx: restate.WorkflowContext) => {
-   *                        // ... do some work ...
-   *                        const payment = await ctx.promise<Payment>("payment.succeeded");
-   *                         // ... do some more work ...
-   *                },
+   * const wf = restate.workflow({
+   *   name: "myWorkflow",
+   *   handlers: {
+   *     run: async (ctx: restate.WorkflowContext) => {
+   *       // ... do some work ...
+   *       const payment = await ctx.promise<Payment>("payment.succeeded");
+   *       // ... do some more work ...
+   *     },
    *
-   *                onPaymentSucceeded: async (ctx: restate.WorkflowContext, payment) => {
-   *                       // ... handle payment succeeded ...
-   *                        await ctx.promise("payment.succeeded").resolve(payment);
-   *                }
-   *      });
-   *  ```
+   *     onPaymentSucceeded: async (ctx: restate.WorkflowContext, payment) => {
+   *       // ... handle payment succeeded ...
+   *       await ctx.promise("payment.succeeded").resolve(payment);
+   *     }
+   * });
+   * ```
    *
    * @param name the name of the durable promise
    */

@@ -47,20 +47,20 @@ export interface RestateEndpointBase<E> {
    * @example
    * Using console:
    * ```ts
-   *     restate.setLogger((meta, message, ...o) => {console.log(`${meta.level}: `, message, ...o)})
-   *  ```
+   * restate.setLogger((meta, message, ...o) => {console.log(`${meta.level}: `, message, ...o)})
+   * ```
    * @example
    * Using winston:
    * ```ts
-   *     const logger = createLogger({ ... })
-   *     restate.setLogger((meta, message, ...o) => {logger.log(meta.level, {invocationId: meta.context?.invocationId}, [message, ...o].join(' '))})
-   *  ```
+   * const logger = createLogger({ ... })
+   * restate.setLogger((meta, message, ...o) => {logger.log(meta.level, {invocationId: meta.context?.invocationId}, [message, ...o].join(' '))})
+   * ```
    * @example
    * Using pino:
    * ```ts
-   *     const logger = pino()
-   *     restate.setLogger((meta, message, ...o) => {logger[meta.level]({invocationId: meta.context?.invocationId}, [message, ...o].join(' '))})
-   *  ```
+   * const logger = pino()
+   * restate.setLogger((meta, message, ...o) => {logger[meta.level]({invocationId: meta.context?.invocationId}, [message, ...o].join(' '))})
+   * ```
    */
   setLogger(logger: LoggerTransport): E;
 }
