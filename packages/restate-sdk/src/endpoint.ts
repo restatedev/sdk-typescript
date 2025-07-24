@@ -16,6 +16,15 @@ import type {
   WorkflowDefinition,
 } from "@restatedev/restate-sdk-core";
 import type { LoggerTransport } from "./logging/logger_transport.js";
+import type {
+  ObjectOptions,
+  ServiceOptions,
+  WorkflowOptions,
+} from "./types/rpc.js";
+
+export type DefaultServiceOptions = ServiceOptions &
+  ObjectOptions &
+  WorkflowOptions;
 
 export interface RestateEndpointBase<E> {
   /**
@@ -40,6 +49,15 @@ export interface RestateEndpointBase<E> {
    *
    */
   withIdentityV1(...keys: string[]): E;
+
+  /**
+   * Set default service options that will be used by all services bind to this endpoint.
+   *
+   * Options can be overridden on each service/handler.
+   *
+   * @param options
+   */
+  defaultServiceOptions(options: DefaultServiceOptions): E;
 
   /**
    * Replace the default console-based {@link LoggerTransport}
@@ -68,8 +86,9 @@ export interface RestateEndpointBase<E> {
 /**
  * RestateEndpoint encapsulates all the Restate services served by this endpoint.
  *
- * A RestateEndpoint can either be served either as HTTP2 server, using the methods {@link listen} or {@link http2Handler},
- * or as Lambda, using the method {@link lambdaHandler}.
+ * A RestateEndpoint can either be served as HTTP2 server, using the methods {@link RestateEndpoint.listen} or {@link RestateEndpoint.http2Handler}.
+ *
+ * For Lambda, check {@link LambdaEndpoint}
  *
  * @example
  * A typical endpoint served as HTTP server would look like this:
@@ -80,16 +99,6 @@ export interface RestateEndpointBase<E> {
  *   .endpoint()
  *   .bind(myService)
  *   .listen(8000);
- * ```
- * @example
- * A typical endpoint served as AWS Lambda would look like this:
- * ```
- * import * as restate from "@restatedev/restate-sdk/lambda";
- *
- * export const handler = restate
- *   .endpoint()
- *   .bind(myService)
- *   .handler();
  * ```
  */
 export interface RestateEndpoint extends RestateEndpointBase<RestateEndpoint> {
@@ -110,7 +119,7 @@ export interface RestateEndpoint extends RestateEndpointBase<RestateEndpoint> {
    * httpServer.listen(port);
    * ```
    *
-   * If you need to manually control the server lifecycle, we suggest to manually instantiate the http2 server and use {@link http2Handler}.
+   * If you need to manually control the server lifecycle, we suggest to manually instantiate the http2 server and use {@link RestateEndpoint.http2Handler}.
    *
    * @param port The port to listen at. May be undefined (see above).
    * @returns a Promise that resolves with the bound port, or rejects with a failure otherwise.
@@ -118,7 +127,7 @@ export interface RestateEndpoint extends RestateEndpointBase<RestateEndpoint> {
   listen(port?: number): Promise<number>;
 
   /**
-   * Returns an http2 server handler. See {@link listen} for more details.
+   * Returns an http2 server handler. See {@link RestateEndpoint.listen} for more details.
    */
   http2Handler(): (
     request: Http2ServerRequest,

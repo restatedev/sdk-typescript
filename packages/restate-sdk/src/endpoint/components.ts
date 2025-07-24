@@ -19,8 +19,8 @@ import type {
   ObjectOptions,
   ServiceOptions,
   WorkflowOptions,
-} from "./rpc.js";
-import { HandlerKind } from "./rpc.js";
+} from "../types/rpc.js";
+import { HandlerKind } from "../types/rpc.js";
 import { millisOrDurationToMillis } from "@restatedev/restate-sdk-core";
 
 //

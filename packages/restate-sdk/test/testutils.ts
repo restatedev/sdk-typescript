@@ -13,28 +13,28 @@ import type {
   ServiceDefinition,
   VirtualObjectDefinition,
   WorkflowDefinition,
+  DefaultServiceOptions,
 } from "../src/public_api.js";
-import { NodeEndpoint } from "../src/endpoint/node_endpoint.js";
-import type * as d from "../src/types/discovery.js";
-
-/**
- * This class' only purpose is to make certain methods accessible in tests.
- * Those methods are otherwise protected, to reduce the public interface and
- * make it simpler for users to understand what methods are relevant for them,
- * and which ones are not.
- */
-class TestRestateServer extends NodeEndpoint {}
+import type * as discovery from "../src/endpoint/discovery.js";
+import { EndpointBuilder } from "../src/endpoint/endpoint.js";
 
 export function toServiceDiscovery<N extends string, T>(
   definition:
     | ServiceDefinition<N, T>
     | VirtualObjectDefinition<N, T>
-    | WorkflowDefinition<N, T>
-): d.Service {
-  const restateServer = new TestRestateServer();
-  restateServer.bind(definition);
+    | WorkflowDefinition<N, T>,
+  defaultServiceOptions?: DefaultServiceOptions
+): discovery.Service {
+  const endpointBuilder = new EndpointBuilder();
+  endpointBuilder.bind(definition);
+  if (defaultServiceOptions) {
+    endpointBuilder.setDefaultServiceOptions(defaultServiceOptions);
+  }
 
-  const discovery = restateServer.componentByName(definition.name)?.discovery();
+  const endpoint = endpointBuilder.build();
+  const discovery = endpoint.discoveryMetadata.services.find(
+    (s) => s.name === definition.name
+  );
   if (discovery) {
     return discovery;
   }

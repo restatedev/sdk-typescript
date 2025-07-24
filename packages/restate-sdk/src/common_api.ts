@@ -100,7 +100,12 @@ export type {
   WorkflowDefinition,
 } from "@restatedev/restate-sdk-core";
 
-export type { RestateEndpoint, RestateEndpointBase } from "./endpoint.js";
+export type {
+  RestateEndpoint,
+  RestateEndpointBase,
+  DefaultServiceOptions,
+} from "./endpoint.js";
+
 export {
   /**
    * @deprecated YOU MUST NOT USE THIS TYPE
