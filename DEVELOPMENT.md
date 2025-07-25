@@ -40,7 +40,7 @@ E2E tests run automatically with
 ## Re-generating the discovery manifest
 
 ```shell
-npx --package=json-schema-to-typescript json2ts endpoint_manifest_schema.json packages/restate-sdk/src/types/discovery.ts
+npx --package=json-schema-to-typescript json2ts endpoint_manifest_schema.json packages/restate-sdk/src/endpoint/discovery.ts
 ```
 
 ## Releasing the package

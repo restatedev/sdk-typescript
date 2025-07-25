@@ -16,11 +16,10 @@ import {
   RetryableError,
   TerminalError,
 } from "../../types/errors.js";
-import type { ProtocolMode } from "../../types/discovery.js";
-import type { Component, ComponentHandler } from "../../types/components.js";
-import { parseUrlComponents } from "../../types/components.js";
+import type { ProtocolMode } from "../discovery.js";
+import type { Component, ComponentHandler } from "../components.js";
+import { parseUrlComponents } from "../components.js";
 import { X_RESTATE_SERVER } from "../../user_agent.js";
-import type { EndpointBuilder } from "../endpoint_builder.js";
 import { type ReadableStream, TransformStream } from "node:stream/web";
 import { OnceStream } from "../../utils/streams.js";
 import { ContextImpl } from "../../context_impl.js";
@@ -39,6 +38,7 @@ import {
   RestateLogLevel,
 } from "../../logging/logger_transport.js";
 import { millisOrDurationToMillis } from "@restatedev/restate-sdk-core";
+import type { Endpoint } from "../endpoint.js";
 
 export interface Headers {
   [name: string]: string | string[] | undefined;
@@ -89,7 +89,7 @@ export class GenericHandler implements RestateHandler {
   private readonly identityVerifier?: vm.WasmIdentityVerifier;
 
   constructor(
-    readonly endpoint: EndpointBuilder,
+    readonly endpoint: Endpoint,
     private readonly protocolMode: ProtocolMode
   ) {
     // Setup identity verifier
@@ -170,7 +170,7 @@ export class GenericHandler implements RestateHandler {
       this.endpoint.rlog.warn(errorMessage);
       return this.toErrorResponse(415, errorMessage);
     }
-    const service = this.endpoint.componentByName(parsed.componentName);
+    const service = this.endpoint.components.get(parsed.componentName);
     if (!service) {
       const msg = `No service found for URL: ${JSON.stringify(parsed)}`;
       this.endpoint.rlog.error(msg);
@@ -460,7 +460,10 @@ export class GenericHandler implements RestateHandler {
       return this.toErrorResponse(415, errorMessage);
     }
 
-    const discovery = this.endpoint.computeDiscovery(this.protocolMode);
+    const discovery = {
+      ...this.endpoint.discoveryMetadata,
+      protocolMode: this.protocolMode,
+    };
     const body = JSON.stringify(discovery);
 
     // type AllowedNames<T, U> = { [K in keyof T]: T[K] extends U ? K : never; }[keyof T];

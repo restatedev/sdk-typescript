@@ -14,9 +14,11 @@ import type {
   VirtualObjectDefinition,
   WorkflowDefinition,
 } from "@restatedev/restate-sdk-core";
-import type { Component } from "../types/components.js";
-import { EndpointBuilder } from "./endpoint_builder.js";
-import type { RestateEndpointBase } from "../endpoint.js";
+import { EndpointBuilder } from "./endpoint.js";
+import type {
+  DefaultServiceOptions,
+  RestateEndpointBase,
+} from "../endpoint.js";
 import { GenericHandler } from "./handlers/generic.js";
 import { LambdaHandler } from "./handlers/lambda.js";
 import type { LoggerTransport } from "../logging/logger_transport.js";
@@ -43,18 +45,6 @@ export interface LambdaEndpoint extends RestateEndpointBase<LambdaEndpoint> {
 export class LambdaEndpointImpl implements LambdaEndpoint {
   private builder: EndpointBuilder = new EndpointBuilder();
 
-  public get keySet(): string[] {
-    return this.builder.keySet;
-  }
-
-  public componentByName(componentName: string): Component | undefined {
-    return this.builder.componentByName(componentName);
-  }
-
-  public addComponent(component: Component) {
-    this.builder.addComponent(component);
-  }
-
   public bind<P extends string, M>(
     definition:
       | ServiceDefinition<P, M>
@@ -66,7 +56,12 @@ export class LambdaEndpointImpl implements LambdaEndpoint {
   }
 
   public withIdentityV1(...keys: string[]): LambdaEndpoint {
-    this.builder.withIdentityV1(...keys);
+    this.builder.addIdentityKeys(...keys);
+    return this;
+  }
+
+  public defaultServiceOptions(options: DefaultServiceOptions): LambdaEndpoint {
+    this.builder.setDefaultServiceOptions(options);
     return this;
   }
 
@@ -77,7 +72,10 @@ export class LambdaEndpointImpl implements LambdaEndpoint {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   handler(): (event: any, ctx: any) => Promise<any> {
-    const genericHandler = new GenericHandler(this.builder, "REQUEST_RESPONSE");
+    const genericHandler = new GenericHandler(
+      this.builder.build(),
+      "REQUEST_RESPONSE"
+    );
     const lambdaHandler = new LambdaHandler(genericHandler);
     return lambdaHandler.handleRequest.bind(lambdaHandler);
   }
