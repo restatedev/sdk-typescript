@@ -123,3 +123,4 @@ export type {
   LoggerContext,
   LogSource,
 } from "./logging/logger_transport.js";
+export type { EndpointOptions } from "./endpoint/types.js";

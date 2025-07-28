@@ -11,7 +11,7 @@
 
 /* eslint-disable no-console */
 
-import { endpoint, serde } from "@restatedev/restate-sdk";
+import { endpoint, createEndpointHandler } from "@restatedev/restate-sdk";
 import type {
   TypedState,
   UntypedState,
@@ -19,6 +19,7 @@ import type {
   RestateEndpoint,
   VirtualObjectDefinition,
   WorkflowDefinition,
+  EndpointOptions,
 } from "@restatedev/restate-sdk";
 
 import {
@@ -33,14 +34,29 @@ import type * as net from "net";
 
 // Prepare the restate server
 async function prepareRestateEndpoint(
-  mountServicesFn: (server: RestateEndpoint) => void
+  param: (server: RestateEndpoint) => void
+): Promise<http2.Http2Server>;
+async function prepareRestateEndpoint(
+  param: EndpointOptions
+): Promise<http2.Http2Server>;
+async function prepareRestateEndpoint(
+  param: EndpointOptions | ((server: RestateEndpoint) => void)
 ): Promise<http2.Http2Server> {
   // Prepare RestateServer
-  const restateEndpoint = endpoint();
-  mountServicesFn(restateEndpoint);
+  let handler: (
+    request: http2.Http2ServerRequest,
+    response: http2.Http2ServerResponse
+  ) => void;
+  if (typeof param === "function") {
+    const restateEndpoint = endpoint();
+    param(restateEndpoint);
+    handler = restateEndpoint.http2Handler();
+  } else {
+    handler = createEndpointHandler(param);
+  }
 
   // Start HTTP2 server on random port
-  const restateHttpServer = http2.createServer(restateEndpoint.http2Handler());
+  const restateHttpServer = http2.createServer(handler);
   await new Promise((resolve, reject) => {
     restateHttpServer
       .listen(0)
@@ -151,14 +167,31 @@ export class RestateTestEnvironment {
     this.startedRestateHttpServer.close();
   }
 
+  /**
+   *
+   * @deprecated Please use {@link EndpointOptions} instead of this.
+   * @example
+   * ```
+   * RestateTestEnvironment.start({ services: [mysService] })
+   * ```
+   */
   public static async start(
     mountServicesFn: (server: RestateEndpoint) => void,
+    restateContainerFactory?: () => GenericContainer
+  ): Promise<RestateTestEnvironment>;
+  public static async start(
+    options: EndpointOptions,
+    restateContainerFactory?: () => GenericContainer
+  ): Promise<RestateTestEnvironment>;
+  public static async start(
+    param: EndpointOptions | ((server: RestateEndpoint) => void),
     restateContainerFactory: () => GenericContainer = () =>
       new RestateContainer()
   ): Promise<RestateTestEnvironment> {
-    const startedRestateHttpServer = await prepareRestateEndpoint(
-      mountServicesFn
-    );
+    const startedRestateHttpServer =
+      typeof param === "function"
+        ? await prepareRestateEndpoint(param)
+        : await prepareRestateEndpoint(param);
     const startedRestateContainer = await prepareRestateTestContainer(
       (startedRestateHttpServer.address() as net.AddressInfo).port,
       restateContainerFactory
