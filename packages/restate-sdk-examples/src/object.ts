@@ -59,4 +59,4 @@ export const counter = restate.object({
 
 export type Counter = typeof counter;
 
-restate.endpoint().bind(counter).listen();
+restate.serve({ services: [counter] });

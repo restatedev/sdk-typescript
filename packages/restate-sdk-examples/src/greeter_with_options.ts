@@ -11,7 +11,7 @@
 
 import {
   service,
-  endpoint,
+  serve,
   handlers,
   TerminalError,
   type Context,
@@ -49,10 +49,10 @@ const greeter = service({
 
 export type Greeter = typeof greeter;
 
-endpoint()
-  .bind(greeter)
-  .defaultServiceOptions({
+serve({
+  services: [greeter],
+  defaultServiceOptions: {
     // You can configure default service options that will be applied to every service.
     journalRetention: { days: 10 },
-  })
-  .listen();
+  },
+});
