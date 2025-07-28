@@ -173,6 +173,7 @@ export class RestateTestEnvironment {
 
   /**
    *
+   * @deprecated Please use {@link EndpointOptions} instead of this.
    * @example
    * ```
    * RestateTestEnvironment.start({ services: [mysService] })
