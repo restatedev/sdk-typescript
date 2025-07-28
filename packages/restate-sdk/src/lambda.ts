@@ -19,7 +19,7 @@ import type { EndpointOptions } from "./endpoint/types.js";
 import { withOptions } from "./endpoint/withOptions.js";
 
 /**
- * Create a new {@link RestateEndpoint}.
+ * Create a new {@link LambdaEndpoint}.
  * @deprecated Please use {@link createEndpointHandler}
  */
 export function endpoint(): LambdaEndpoint {

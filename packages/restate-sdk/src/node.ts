@@ -41,7 +41,7 @@ export function createEndpointHandler(options: EndpointOptions) {
   ).http2Handler();
 }
 
-interface ServeOptions extends EndpointOptions {
+export interface ServeOptions extends EndpointOptions {
   port?: number;
 }
 

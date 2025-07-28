@@ -11,7 +11,11 @@
 
 /* eslint-disable no-console */
 
-import { endpoint, createEndpointHandler } from "@restatedev/restate-sdk";
+import {
+  endpoint,
+  createEndpointHandler,
+  serde,
+} from "@restatedev/restate-sdk";
 import type {
   TypedState,
   UntypedState,
