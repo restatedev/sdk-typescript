@@ -44,6 +44,7 @@ export function endpoint() {
  *
  */
 export function createEndpointHandler(options) {
+  cloudflareWorkersBundlerPatch();
   return withOptions(
     new FetchEndpointImpl(
       options.bidirectional ? "BIDI_STREAM" : "REQUEST_RESPONSE"
