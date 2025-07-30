@@ -15,7 +15,6 @@ import { cloudflareWorkersBundlerPatch } from "./endpoint/handlers/vm/sdk_shared
 /**
  * Create a new {@link RestateEndpoint} in request response protocol mode.
  * Bidirectional mode (must be served over http2) can be enabled with .enableHttp2()
- * @deprecated Please use {@link createEndpointHandler}
  */
 export function endpoint() {
   cloudflareWorkersBundlerPatch();
