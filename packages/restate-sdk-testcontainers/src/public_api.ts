@@ -32,4 +32,5 @@ export type {
   WorkflowOptions,
   TerminalError,
   RestateError,
+  EndpointOptions,
 } from "@restatedev/restate-sdk";

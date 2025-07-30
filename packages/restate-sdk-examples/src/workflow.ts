@@ -120,4 +120,4 @@ const payment = restate.workflow({
 
 export type PaymentWorkflow = typeof payment;
 
-restate.endpoint().bind(payment).listen();
+restate.serve({ services: [payment] });

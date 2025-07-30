@@ -10,13 +10,46 @@
  */
 export * from "./common_api.js";
 import { FetchEndpointImpl } from "./endpoint/fetch_endpoint.js";
-import { cloudflareWorkersBundlerPatch } from "./endpoint/handlers/vm/sdk_shared_core_wasm_bindings.js"
+import { withOptions } from "./endpoint/withOptions.js";
+import { cloudflareWorkersBundlerPatch } from "./endpoint/handlers/vm/sdk_shared_core_wasm_bindings.js";
 /**
  * Create a new {@link RestateEndpoint} in request response protocol mode.
  * Bidirectional mode (must be served over http2) can be enabled with .enableHttp2()
  */
 export function endpoint() {
-    cloudflareWorkersBundlerPatch()
-    return new FetchEndpointImpl("REQUEST_RESPONSE");
+  cloudflareWorkersBundlerPatch();
+  return new FetchEndpointImpl("REQUEST_RESPONSE");
 }
+
+/**
+ * Creates a Cloudflare worker handler that encapsulates all the Restate services served by this endpoint.
+ *
+ * @param options - Configuration options for the endpoint handler.
+ * @returns A worker handler.
+ *
+ * @example
+ * A typical request-response handler would look like this:
+ * ```
+ * import { createEndpointHandler } from "@restatedev/restate-sdk/restate-sdk-cloudflare-workers";
+ *
+ * export const handler = createEndpointHandler({ services: [myService] })
+ *
+ * @example
+ * A typical bidirectional handler (works with http2 and some http1.1 servers) would look like this:
+ * ```
+ * import { createEndpointHandler } from "@restatedev/restate-sdk/restate-sdk-cloudflare-workers";
+ *
+ * export const handler = createEndpointHandler({ services: [myService], bidirectional: true })
+ *
+ */
+export function createEndpointHandler(options) {
+  cloudflareWorkersBundlerPatch();
+  return withOptions(
+    new FetchEndpointImpl(
+      options.bidirectional ? "BIDI_STREAM" : "REQUEST_RESPONSE"
+    ),
+    options
+  ).handler().fetch;
+}
+
 //# sourceMappingURL=fetch.js.map

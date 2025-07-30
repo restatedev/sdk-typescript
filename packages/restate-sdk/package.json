@@ -28,6 +28,16 @@
         "default": "./dist/cjs/src/public_api.js"
       }
     },
+    "./node": {
+      "import": {
+        "types": "./dist/esm/src/node.d.ts",
+        "default": "./dist/esm/src/node.js"
+      },
+      "require": {
+        "types": "./dist/cjs/src/node.d.ts",
+        "default": "./dist/cjs/src/node.js"
+      }
+    },
     "./fetch": {
       "import": {
         "types": "./dist/esm/src/fetch.d.ts",
@@ -51,6 +61,9 @@
   },
   "typesVersions": {
     "*": {
+      "node": [
+        "dist/cjs/src/node.d.ts"
+      ],
       "fetch": [
         "dist/cjs/src/fetch.d.ts"
       ],

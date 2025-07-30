@@ -463,7 +463,7 @@ export interface Context extends RestateContext {
    * export type Service = typeof service;
    *
    *
-   * restate.endpoint().bind(service).listen(9080);
+   * restate.serve({ services: [service], port: 9080 });
    * ```
    * *Client side:*
    * ```ts
@@ -540,7 +540,7 @@ export interface Context extends RestateContext {
    * // option 2: export the API definition with type and name (name)
    * const MyService: MyApi = { name: "myservice" };
    *
-   * restate.endpoint().bind(service).listen(9080);
+   * restate.serve({ services: [service], port: 9080 });
    * ```
    * *Client side:*
    * ```ts

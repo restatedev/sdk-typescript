@@ -9,14 +9,4 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-export * from "./common_api.js";
-
-import type { RestateEndpoint } from "./endpoint.js";
-import { NodeEndpoint } from "./endpoint/node_endpoint.js";
-
-/**
- * Create a new {@link RestateEndpoint}.
- */
-export function endpoint(): RestateEndpoint {
-  return new NodeEndpoint();
-}
+export * from "./node.js";

@@ -36,7 +36,7 @@ const greeter = restate.service({
 
 export type Greeter = typeof greeter;
 
-restate.endpoint().bind(greeter).listen();
+restate.serve({ services: [greeter], port: 9080 });
 ```
 
 For the SDK main package, checkout [`@restatedev/restate-sdk`](../restate-sdk).
