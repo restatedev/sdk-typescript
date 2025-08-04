@@ -13,8 +13,8 @@ import {
   createObjectHandler,
   createObjectSharedHandler,
   object,
-  ObjectContext,
-  ObjectSharedContext,
+  type ObjectContext,
+  type ObjectSharedContext,
   serde,
   serve,
 } from "@restatedev/restate-sdk";
