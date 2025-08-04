@@ -50,8 +50,7 @@ function handlerInputDiscovery(handler: HandlerWrapper): d.InputPayload {
 
   if (handler.inputSerde.jsonSchema) {
     jsonSchema = handler.inputSerde.jsonSchema;
-    contentType =
-      handler.accept ?? handler.inputSerde.contentType ?? "application/json";
+    contentType = handler.accept ?? handler.inputSerde.contentType;
   } else if (handler.accept) {
     contentType = handler.accept;
   } else if (handler.inputSerde.contentType) {
