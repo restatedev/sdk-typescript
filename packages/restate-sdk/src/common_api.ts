@@ -124,3 +124,13 @@ export type {
   LogSource,
 } from "./logging/logger_transport.js";
 export type { EndpointOptions } from "./endpoint/types.js";
+
+// re-exporting createHandler shortcuts
+
+import { handlers } from "./types/rpc.js";
+
+export const createServiceHandler = handlers.handler;
+export const createObjectHandler = handlers.object.exclusive;
+export const createObjectSharedHandler = handlers.object.shared;
+export const createWorkflowHandler = handlers.workflow.workflow;
+export const createWorkflowSharedHandler = handlers.workflow.shared;
