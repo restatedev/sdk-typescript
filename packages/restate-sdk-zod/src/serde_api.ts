@@ -17,17 +17,20 @@
 
 import type { Serde } from "@restatedev/restate-sdk-core";
 
-import type { z } from "zod";
+import { z, ZodVoid } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
 
 export type { Serde } from "@restatedev/restate-sdk-core";
 
 class ZodSerde<T extends z.ZodType> implements Serde<z.infer<T>> {
-  contentType = "application/json";
+  contentType? = "application/json";
   jsonSchema?: object | undefined;
 
   constructor(private readonly schema: T) {
     this.jsonSchema = zodToJsonSchema(schema);
+    if (schema instanceof ZodVoid || schema instanceof z.ZodUndefined) {
+      this.contentType = undefined;
+    }
   }
 
   serialize(value: T): Uint8Array {

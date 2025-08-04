@@ -455,7 +455,7 @@ export class HandlerWrapper {
     public readonly enableLazyState?: boolean,
     public readonly asTerminalError?: (error: any) => TerminalError | undefined
   ) {
-    this.accept = accept ? accept : inputSerde.contentType;
+    this.accept = accept !== undefined ? accept : inputSerde.contentType;
     this.contentType = outputSerde.contentType;
   }
 
