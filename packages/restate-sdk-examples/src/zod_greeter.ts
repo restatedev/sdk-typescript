@@ -20,7 +20,7 @@ const Greeting = z.object({
 const greeter = restate.service({
   name: "greeter",
   handlers: {
-    greet: restate.handlers.handler(
+    greet: restate.createServiceHandler(
       {
         input: serde.zod(Greeting),
         output: serde.zod(z.string()),
