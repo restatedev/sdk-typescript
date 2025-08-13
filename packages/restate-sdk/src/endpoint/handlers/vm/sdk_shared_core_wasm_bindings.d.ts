@@ -106,7 +106,12 @@ export class WasmResponseHead {
 }
 export class WasmVM {
   free(): void;
-  constructor(headers: WasmHeader[], log_level: LogLevel, logger_id: number);
+  constructor(
+    headers: WasmHeader[],
+    log_level: LogLevel,
+    logger_id: number,
+    disable_payload_checks: boolean
+  );
   get_response_head(): WasmResponseHead;
   notify_input(buffer: Uint8Array): void;
   notify_input_closed(): void;

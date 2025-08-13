@@ -63,6 +63,7 @@ export type {
   WorkflowHandler,
   WorkflowSharedHandler,
   Duration,
+  JournalValueCodec,
 } from "@restatedev/restate-sdk-core";
 export { serde } from "@restatedev/restate-sdk-core";
 

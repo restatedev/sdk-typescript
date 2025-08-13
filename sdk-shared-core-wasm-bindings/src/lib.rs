@@ -1,10 +1,5 @@
 use js_sys::Uint8Array;
-use restate_sdk_shared_core::{
-    CallHandle, CommandRelationship, CommandType, CoreVM, DoProgressResponse, Error, Header,
-    HeaderMap, IdentityVerifier, Input, NonEmptyValue, ResponseHead, RetryPolicy, RunExitResult,
-    SendHandle, TakeOutputResult, Target, TerminalFailure, VMOptions, Value,
-    CANCEL_NOTIFICATION_HANDLE, VM,
-};
+use restate_sdk_shared_core::{CallHandle, CommandRelationship, CommandType, CoreVM, DoProgressResponse, Error, Header, HeaderMap, IdentityVerifier, Input, NonDeterministicChecksOption, NonEmptyValue, ResponseHead, RetryPolicy, RunExitResult, SendHandle, TakeOutputResult, Target, TerminalFailure, VMOptions, Value, CANCEL_NOTIFICATION_HANDLE, VM};
 use serde::{Deserialize, Serialize};
 use std::cmp;
 use std::convert::{Infallible, Into};
@@ -442,11 +437,19 @@ impl WasmVM {
         headers: Vec<WasmHeader>,
         log_level: LogLevel,
         logger_id: u32,
+        disable_payload_checks: bool
     ) -> Result<WasmVM, WasmFailure> {
         let log_dispatcher = Dispatch::new(log_subscriber(log_level, Some(logger_id)));
 
         let vm = tracing::dispatcher::with_default(&log_dispatcher, || {
-            CoreVM::new(WasmHeaderList::from(headers), VMOptions::default())
+            CoreVM::new(WasmHeaderList::from(headers), VMOptions {
+                non_determinism_checks: if disable_payload_checks {
+                    NonDeterministicChecksOption::PayloadChecksDisabled
+                } else {
+                    NonDeterministicChecksOption::Enabled
+                },
+                ..Default::default()
+            })
         })?;
 
         Ok(Self { vm, log_dispatcher })

@@ -51,6 +51,7 @@ import {
 } from "./types/rpc.js";
 import type {
   Duration,
+  JournalValueCodec,
   Serde,
   Service,
   ServiceDefinitionFrom,
@@ -106,6 +107,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     private readonly invocationEndPromise: CompletablePromise<void>,
     inputReader: ReadableStreamDefaultReader<Uint8Array>,
     outputWriter: WritableStreamDefaultWriter<Uint8Array>,
+    readonly journalValueCodec: JournalValueCodec,
     private readonly asTerminalError?: (error: any) => TerminalError | undefined
   ) {
     this.rand = new RandImpl(input.invocation_id, () => {
@@ -144,7 +146,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       WasmCommandType.AttachInvocation,
       () => {},
       (vm) => vm.sys_attach_invocation(invocationId),
-      SuccessWithSerde(serde ?? defaultSerde()),
+      SuccessWithSerde(serde ?? defaultSerde(), this.journalValueCodec),
       Failure
     );
   }
@@ -171,7 +173,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       () => {},
       (vm) => vm.sys_get_state(name),
       VoidAsNull,
-      SuccessWithSerde(serde ?? defaultSerde())
+      SuccessWithSerde(serde ?? defaultSerde(), this.journalValueCodec)
     );
   }
 
@@ -187,7 +189,10 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
   public set<T>(name: string, value: T, serde?: Serde<T>): void {
     this.processNonCompletableEntry(
       WasmCommandType.SetState,
-      () => (serde ?? defaultSerde()).serialize(value),
+      () =>
+        this.journalValueCodec.encode(
+          (serde ?? defaultSerde()).serialize(value)
+        ),
       (vm, bytes) => vm.sys_set_state(name, bytes)
     );
   }
@@ -220,7 +225,9 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
 
     let parameter: Uint8Array;
     try {
-      parameter = requestSerde.serialize(call.parameter);
+      parameter = this.journalValueCodec.encode(
+        requestSerde.serialize(call.parameter)
+      );
     } catch (e) {
       this.handleInvocationEndError(e, (vm, error) =>
         vm.notify_error_for_next_command(
@@ -263,7 +270,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
         completeCommandPromiseUsing(
           WasmCommandType.Call,
           commandIndex,
-          SuccessWithSerde(responseSerde),
+          SuccessWithSerde(responseSerde, this.journalValueCodec),
           Failure
         ),
         invocationIdPromise as RestatePromise<InvocationId>
@@ -282,7 +289,9 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
 
     let parameter: Uint8Array;
     try {
-      parameter = requestSerde.serialize(send.parameter);
+      parameter = this.journalValueCodec.encode(
+        requestSerde.serialize(send.parameter)
+      );
     } catch (e) {
       this.handleInvocationEndError(e, (vm, error) =>
         vm.notify_error_for_next_command(
@@ -500,12 +509,11 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
             );
           }
         } else {
-          this.coreVm.propose_run_completion_success(
-            handle,
-            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-            // @ts-expect-error
-            serde.serialize(res)
-          );
+          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+          // @ts-expect-error
+          const serializedRes = serde.serialize(res);
+          const encodedRes = this.journalValueCodec.encode(serializedRes);
+          this.coreVm.propose_run_completion_success(handle, encodedRes);
         }
       } catch (e) {
         this.handleInvocationEndError(e);
@@ -517,6 +525,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     // Register the run to execute
     this.runClosuresTracker.registerRunClosure(handle, doRun);
 
+    // TODO: here as well
     // Return the promise
     return new RestateSinglePromise(
       this,
@@ -524,7 +533,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       completeCommandPromiseUsing(
         WasmCommandType.Run,
         commandIndex,
-        SuccessWithSerde(serde),
+        SuccessWithSerde(serde, this.journalValueCodec),
         Failure
       )
     );
@@ -577,7 +586,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
         awakeable.handle,
         completeSignalPromiseUsing(
           VoidAsUndefined,
-          SuccessWithSerde(serde),
+          SuccessWithSerde(serde, this.journalValueCodec),
           Failure
         )
       ),
@@ -600,7 +609,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
               ? defaultSerde().serialize(payload)
               : defaultSerde().serialize(null);
         }
-        return value;
+        return this.journalValueCodec.encode(value);
       },
       (vm, bytes) => vm.sys_complete_awakeable_success(id, bytes)
     );
@@ -820,7 +829,7 @@ class DurablePromiseImpl<T> implements DurablePromise<T> {
       WasmCommandType.GetPromise,
       () => {},
       (vm) => vm.sys_get_promise(this.name),
-      SuccessWithSerde(this.serde),
+      SuccessWithSerde(this.serde, this.ctx.journalValueCodec),
       Failure
     );
   }
@@ -831,7 +840,7 @@ class DurablePromiseImpl<T> implements DurablePromise<T> {
       () => {},
       (vm) => vm.sys_peek_promise(this.name),
       VoidAsUndefined,
-      SuccessWithSerde(this.serde),
+      SuccessWithSerde(this.serde, this.ctx.journalValueCodec),
       Failure
     );
   }
@@ -839,7 +848,7 @@ class DurablePromiseImpl<T> implements DurablePromise<T> {
   resolve(value?: T | undefined): Promise<void> {
     return this.ctx.processCompletableEntry(
       WasmCommandType.CompletePromise,
-      () => this.serde.serialize(value as T),
+      () => this.ctx.journalValueCodec.encode(this.serde.serialize(value as T)),
       (vm, bytes) => vm.sys_complete_promise_success(this.name, bytes),
       VoidAsUndefined,
       Failure
@@ -906,7 +915,7 @@ export class RunClosuresTracker {
 type Completer = (
   value: AsyncResultValue,
   prom: CompletablePromise<any>
-) => boolean;
+) => Promise<boolean>;
 
 // This is just a special type we use to propagate completer errors between this function and handleInvocationEndError
 class AsyncCompleterError {
@@ -921,11 +930,11 @@ function completeCommandPromiseUsing<T>(
   commandType: WasmCommandType,
   commandIndex: number,
   ...completers: Array<Completer>
-): (value: AsyncResultValue, prom: CompletablePromise<T>) => void {
-  return (value: AsyncResultValue, prom: CompletablePromise<any>) => {
+): (value: AsyncResultValue, prom: CompletablePromise<T>) => Promise<void> {
+  return async (value: AsyncResultValue, prom: CompletablePromise<any>) => {
     try {
       for (const completer of completers) {
-        if (completer(value, prom)) {
+        if (await completer(value, prom)) {
           return;
         }
       }
@@ -942,10 +951,10 @@ function completeCommandPromiseUsing<T>(
 // This is like the function above, but won't decorate the error with the command metadata
 function completeSignalPromiseUsing<T>(
   ...completers: Array<Completer>
-): (value: AsyncResultValue, prom: CompletablePromise<T>) => void {
-  return (value: AsyncResultValue, prom: CompletablePromise<any>) => {
+): (value: AsyncResultValue, prom: CompletablePromise<T>) => Promise<void> {
+  return async (value: AsyncResultValue, prom: CompletablePromise<any>) => {
     for (const completer of completers) {
-      if (completer(value, prom)) {
+      if (await completer(value, prom)) {
         return;
       }
     }
@@ -959,31 +968,38 @@ function completeSignalPromiseUsing<T>(
 const VoidAsNull: Completer = (value, prom) => {
   if (value === "Empty") {
     prom.resolve(null);
-    return true;
+    return Promise.resolve(true);
   }
-  return false;
+  return Promise.resolve(false);
 };
 const VoidAsUndefined: Completer = (value, prom) => {
   if (value === "Empty") {
     prom.resolve(undefined);
-    return true;
+    return Promise.resolve(true);
   }
-  return false;
+  return Promise.resolve(false);
 };
 
 function SuccessWithSerde<T>(
   serde?: Serde<T>,
+  journalCodec?: JournalValueCodec,
   transform?: <U>(success: T) => U
 ): Completer {
-  return (value, prom) => {
+  return async (value, prom) => {
     if (typeof value !== "object" || !("Success" in value)) {
       return false;
     }
+    let buffer: Uint8Array;
+    if (journalCodec !== undefined) {
+      buffer = await journalCodec.decode(value.Success);
+    } else {
+      buffer = value.Success;
+    }
     let val: T;
     if (serde) {
-      val = serde.deserialize(value.Success);
+      val = serde.deserialize(buffer);
     } else {
-      val = defaultSerde<T>().deserialize(value.Success);
+      val = defaultSerde<T>().deserialize(buffer);
     }
     if (transform) {
       val = transform(val);
@@ -1000,23 +1016,23 @@ const Failure: Completer = (value, prom) => {
         errorCode: value.Failure.code,
       })
     );
-    return true;
+    return Promise.resolve(true);
   }
-  return false;
+  return Promise.resolve(false);
 };
 
 const StateKeys: Completer = (value, prom) => {
   if (typeof value === "object" && "StateKeys" in value) {
     prom.resolve(value.StateKeys);
-    return true;
+    return Promise.resolve(true);
   }
-  return false;
+  return Promise.resolve(false);
 };
 
 const InvocationIdCompleter: Completer = (value, prom) => {
   if (typeof value === "object" && "InvocationId" in value) {
     prom.resolve(value.InvocationId);
-    return true;
+    return Promise.resolve(true);
   }
-  return false;
+  return Promise.resolve(false);
 };

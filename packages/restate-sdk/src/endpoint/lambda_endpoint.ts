@@ -10,6 +10,7 @@
  */
 
 import type {
+  JournalValueCodec,
   ServiceDefinition,
   VirtualObjectDefinition,
   WorkflowDefinition,
@@ -67,6 +68,11 @@ export class LambdaEndpointImpl implements LambdaEndpoint {
 
   public setLogger(logger: LoggerTransport): LambdaEndpoint {
     this.builder.setLogger(logger);
+    return this;
+  }
+
+  journalValueCodec(codec: JournalValueCodec): LambdaEndpoint {
+    this.builder.setJournalValueCodec(codec);
     return this;
   }
 

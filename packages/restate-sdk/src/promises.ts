@@ -50,7 +50,7 @@ export interface InternalRestatePromise<T> extends RestatePromise<T> {
   [RESTATE_CTX_SYMBOL]: ContextImpl;
 
   tryCancel(): void;
-  tryComplete(): void;
+  tryComplete(): Promise<void>;
   uncompletedLeaves(): Array<number>;
   publicPromise(): Promise<T>;
 }
@@ -155,7 +155,7 @@ abstract class AbstractRestatePromise<T> implements InternalRestatePromise<T> {
     this.cancelPromise.reject(new CancelledError());
   }
 
-  abstract tryComplete(): void;
+  abstract tryComplete(): Promise<void>;
 
   abstract uncompletedLeaves(): Array<number>;
 
@@ -174,7 +174,7 @@ export class RestateSinglePromise<T> extends AbstractRestatePromise<T> {
     private readonly completer: (
       value: AsyncResultValue,
       prom: CompletablePromise<T>
-    ) => void
+    ) => Promise<void>
   ) {
     super(ctx);
   }
@@ -183,7 +183,7 @@ export class RestateSinglePromise<T> extends AbstractRestatePromise<T> {
     return this.state === PromiseState.COMPLETED ? [] : [this.handle];
   }
 
-  tryComplete() {
+  async tryComplete(): Promise<void> {
     if (this.state === PromiseState.COMPLETED) {
       return;
     }
@@ -194,7 +194,7 @@ export class RestateSinglePromise<T> extends AbstractRestatePromise<T> {
       return;
     }
     this.state = PromiseState.COMPLETED;
-    this.completer(notification, this.completablePromise);
+    await this.completer(notification, this.completablePromise);
   }
 
   publicPromise(): Promise<T> {
@@ -211,7 +211,10 @@ export class RestateInvocationPromise<T>
   constructor(
     ctx: ContextImpl,
     handle: number,
-    completer: (value: AsyncResultValue, prom: CompletablePromise<T>) => void,
+    completer: (
+      value: AsyncResultValue,
+      prom: CompletablePromise<T>
+    ) => Promise<void>,
     private readonly invocationIdPromise: Promise<InvocationId>
   ) {
     super(ctx, handle, completer);
@@ -245,8 +248,8 @@ export class RestateCombinatorPromise extends AbstractRestatePromise<any> {
       : this.childs.flatMap((p) => p.uncompletedLeaves());
   }
 
-  tryComplete() {
-    this.childs.forEach((c) => c.tryComplete());
+  async tryComplete(): Promise<void> {
+    await Promise.allSettled(this.childs.map((c) => c.tryComplete()));
   }
 
   publicPromise(): Promise<unknown> {
@@ -302,7 +305,7 @@ export class RestatePendingPromise<T> implements InternalRestatePromise<T> {
   }
 
   tryCancel(): void {}
-  tryComplete(): void {}
+  async tryComplete(): Promise<void> {}
   uncompletedLeaves(): number[] {
     return [];
   }
@@ -352,8 +355,8 @@ export class RestateMappedPromise<T, U> extends AbstractRestatePromise<U> {
     };
   }
 
-  tryComplete(): void {
-    this.inner.tryComplete();
+  async tryComplete(): Promise<void> {
+    await this.inner.tryComplete();
   }
 
   uncompletedLeaves(): number[] {
@@ -401,7 +404,7 @@ export class PromisesExecutor {
   ) {
     // Try complete the promise
     try {
-      restatePromise.tryComplete();
+      await restatePromise.tryComplete();
     } catch (e) {
       // This can happen if either take_notification throws an exception or completer throws an exception.
       // This could either happen for a deserialization issue, or for an SDK bug, but we cover them here.

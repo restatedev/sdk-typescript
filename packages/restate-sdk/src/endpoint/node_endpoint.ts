@@ -14,6 +14,7 @@
 
 import type { RestateEndpoint } from "../public_api.js";
 import type {
+  JournalValueCodec,
   ServiceDefinition,
   VirtualObjectDefinition,
   WorkflowDefinition,
@@ -57,6 +58,11 @@ export class NodeEndpoint implements RestateEndpoint {
 
   public setLogger(logger: LoggerTransport): RestateEndpoint {
     this.builder.setLogger(logger);
+    return this;
+  }
+
+  public journalValueCodec(codec: JournalValueCodec): RestateEndpoint {
+    this.builder.setJournalValueCodec(codec);
     return this;
   }
 
