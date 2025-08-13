@@ -84,7 +84,7 @@ interface InterpretRequest {
 
 function createAwakeable(ctx: ObjectContext, awakeableKey: string) {
   const { id, promise } = ctx.awakeable<string>();
-  ctx.set(`awk-${awakeableKey}`, id);
+  ctx.set(`awk-${awakeableKey}`, id).catch(() => {});
   return promise;
 }
 
@@ -213,7 +213,7 @@ const virtualObjectCommandInterpreter = restate.object({
           // Append result
           const results = (await ctx.get<string[]>("results")) ?? [];
           results.push(lastResult);
-          ctx.set("results", results);
+          await ctx.set("results", results);
         }
 
         return lastResult;

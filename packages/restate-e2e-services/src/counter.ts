@@ -29,13 +29,13 @@ const service = restate.object({
 
     async add(ctx: restate.ObjectContext, value: number) {
       const counter = (await ctx.get<number>(COUNTER_KEY)) ?? 0;
-      ctx.set(COUNTER_KEY, counter + value);
+      await ctx.set(COUNTER_KEY, counter + value);
       return { oldValue: counter, newValue: counter + value };
     },
 
     async addThenFail(ctx: restate.ObjectContext, value: number) {
       const counter = (await ctx.get<number>(COUNTER_KEY)) ?? 0;
-      ctx.set(COUNTER_KEY, counter + value);
+      await ctx.set(COUNTER_KEY, counter + value);
       throw new restate.TerminalError(ctx.key);
     },
   },

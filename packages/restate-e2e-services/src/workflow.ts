@@ -14,7 +14,7 @@ const wf = restate.workflow({
   name: "BlockAndWaitWorkflow",
   handlers: {
     run: async (ctx: restate.WorkflowContext, input: string) => {
-      ctx.set("input", input);
+      await ctx.set("input", input);
 
       const output = await ctx.promise("p");
 

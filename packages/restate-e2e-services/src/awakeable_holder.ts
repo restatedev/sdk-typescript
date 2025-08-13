@@ -17,8 +17,8 @@ type Ctx = restate.ObjectContext;
 const service = restate.object({
   name: "AwakeableHolder",
   handlers: {
-    hold(ctx: restate.ObjectContext, id: string) {
-      ctx.set(ID_KEY, id);
+    async hold(ctx: restate.ObjectContext, id: string) {
+      await ctx.set(ID_KEY, id);
       return Promise.resolve();
     },
 

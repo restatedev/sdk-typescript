@@ -19,7 +19,7 @@ const o = restate.object({
     async append(ctx: restate.ObjectContext, request: string): Promise<void> {
       const list = (await ctx.get<string[]>(LIST_KEY)) ?? [];
       list.push(request);
-      ctx.set(LIST_KEY, list);
+      await ctx.set(LIST_KEY, list);
     },
 
     async clear(ctx: restate.ObjectContext) {

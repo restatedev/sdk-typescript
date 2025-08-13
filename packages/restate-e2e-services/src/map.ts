@@ -35,8 +35,11 @@ const o = restate.object({
       return value;
     },
 
-    set(ctx: restate.ObjectContext, request: { key: string; value: string }) {
-      ctx.set(request.key, request.value);
+    async set(
+      ctx: restate.ObjectContext,
+      request: { key: string; value: string }
+    ) {
+      await ctx.set(request.key, request.value);
       return Promise.resolve();
     },
   },

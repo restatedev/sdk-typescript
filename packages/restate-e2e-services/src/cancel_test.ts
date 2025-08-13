@@ -34,7 +34,7 @@ const cancelService = restate.object({
         await ctx.objectClient(BlockingService, ctx.key).block(request);
       } catch (e) {
         if (e instanceof restate.TerminalError && e.code === 409) {
-          ctx.set("canceled", true);
+          await ctx.set("canceled", true);
         } else {
           throw e;
         }

@@ -173,7 +173,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       () => {},
       (vm) => vm.sys_get_state(name),
       VoidAsNull,
-      SuccessWithSerde(serde ?? defaultSerde())
+      SuccessWithSerde(serde ?? defaultSerde(), this.journalEntryCodec)
     );
   }
 
@@ -186,10 +186,14 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     );
   }
 
-  public set<T>(name: string, value: T, serde?: Serde<T>): void {
-    this.processNonCompletableEntry(
+  public async set<T>(name: string, value: T, serde?: Serde<T>) {
+    const journalEntryCodec = this.journalEntryCodec;
+    await this.processNonCompletableEntryWithAsyncPreflight(
       WasmCommandType.SetState,
-      () => (serde ?? defaultSerde()).serialize(value),
+      async () => {
+        const serialized = (serde ?? defaultSerde()).serialize(value);
+        return await journalEntryCodec.encode(serialized);
+      },
       (vm, bytes) => vm.sys_set_state(name, bytes)
     );
   }
@@ -666,6 +670,32 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     let input;
     try {
       input = prepare();
+    } catch (e) {
+      this.handleInvocationEndError(e, (vm, error) =>
+        vm.notify_error_for_next_command(
+          error.message,
+          error.stack,
+          commandType
+        )
+      );
+      return;
+    }
+
+    try {
+      vmCall(this.coreVm, input);
+    } catch (e) {
+      this.handleInvocationEndError(e);
+    }
+  }
+
+  private async processNonCompletableEntryWithAsyncPreflight<T>(
+    commandType: vm.WasmCommandType,
+    prepare: () => Promise<T>,
+    vmCall: (vm: vm.WasmVM, input: T) => void
+  ) {
+    let input;
+    try {
+      input = await prepare();
     } catch (e) {
       this.handleInvocationEndError(e, (vm, error) =>
         vm.notify_error_for_next_command(

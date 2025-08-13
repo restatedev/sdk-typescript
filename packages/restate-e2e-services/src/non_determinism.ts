@@ -61,16 +61,16 @@ const o = restate.object({
 
     async setDifferentKey(ctx: restate.ObjectContext) {
       if (doLeftAction(ctx)) {
-        ctx.set("a", "my-state");
+        await ctx.set("a", "my-state");
       } else {
-        ctx.set("b", "my-state");
+        await ctx.set("b", "my-state");
       }
       await ctx.sleep(100);
       incrementCounter(ctx);
     },
 
     async setDifferentValue(ctx: restate.ObjectContext) {
-      ctx.set("a", uuidv4());
+      await ctx.set("a", uuidv4());
       await ctx.sleep(100);
       incrementCounter(ctx);
     },

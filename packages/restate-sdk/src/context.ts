@@ -119,7 +119,7 @@ export interface KeyValueStore<TState extends TypedState> {
     name: TState extends UntypedState ? string : TKey,
     value: TState extends UntypedState ? TValue : TState[TKey],
     serde?: Serde<TState extends UntypedState ? TValue : TState[TKey]>
-  ): void;
+  ): Promise<void>;
 
   /**
    * Clear/delete state in the Restate runtime.

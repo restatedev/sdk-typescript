@@ -85,7 +85,7 @@ class ProgramInterpreter {
       const command = commands[i];
       switch (command.kind) {
         case CommandType.SET_STATE: {
-          ctx.set(`key-${command.key}`, `value-${command.key}`);
+          await ctx.set(`key-${command.key}`, `value-${command.key}`);
           break;
         }
         case CommandType.GET_STATE: {
@@ -98,7 +98,7 @@ class ProgramInterpreter {
         }
         case CommandType.INCREMENT_STATE_COUNTER: {
           const counter = (await ctx.get<number>(STATE_COUNTER_NAME)) ?? 0;
-          ctx.set(STATE_COUNTER_NAME, counter + 1);
+          await ctx.set(STATE_COUNTER_NAME, counter + 1);
           break;
         }
         case CommandType.SLEEP: {
