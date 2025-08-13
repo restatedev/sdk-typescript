@@ -13,23 +13,32 @@ import {
   createObjectHandler,
   createObjectSharedHandler,
   object,
-  type ObjectContext,
-  type ObjectSharedContext,
-  serde,
   serve,
+  state,
 } from "@restatedev/restate-sdk";
+import { serde } from "@restatedev/restate-sdk-core";
+
+const myState = state<{ count: number; somethingElse?: string }>({ count: 0 });
 
 export const counter = object({
   name: "counter",
+  state: myState,
   handlers: {
     /**
      * Add amount to the currently stored count
      */
-    add: async (ctx: ObjectContext, amount: number) => {
-      const current = await ctx.get<number>("count");
-      const updated = (current ?? 0) + amount;
+    add: async (ctx, amount: number) => {
+      const current = await ctx.get("count");
+      const updated = current + amount;
       ctx.set("count", updated);
       return updated;
+    },
+
+    current: {
+        shared: true,
+        fn: async (ctx) => {
+            return await ctx.get("count");
+        }
     },
 
     /**
@@ -39,11 +48,11 @@ export const counter = object({
      * These handlers can be executed concurrently to the exclusive handlers (i.e. add)
      * But they can not modify the state (set is missing from the ctx).
      */
-    current: createObjectSharedHandler(
-      async (ctx: ObjectSharedContext): Promise<number> => {
-        return (await ctx.get("count")) ?? 0;
-      }
-    ),
+    // current: createObjectSharedHandler<number, void, { count: number; somethingElse?: string }>(
+    //   async (ctx): Promise<number> => {
+    //     return (await ctx.get("count")) ?? 0;
+    //   }
+    // ),
 
     /**
      * Handlers (shared or exclusive) can be configured to bypass JSON serialization,
@@ -52,16 +61,16 @@ export const counter = object({
      * to call that handler with binary data, you can use the following curl command:
      * curl -X POST -H "Content-Type: application/octet-stream" --data-binary 'hello' ${RESTATE_INGRESS_URL}/counter/mykey/binary
      */
-    binary: createObjectHandler(
-      {
-        input: serde.binary,
-        output: serde.binary,
-      },
-      async (ctx: ObjectContext, data: Uint8Array) => {
-        // console.log("Received binary data", data);
-        return data;
-      }
-    ),
+    // binary: createObjectHandler(
+    //   {
+    //     input: serde.binary,
+    //     output: serde.binary,
+    //   },
+    //   async (ctx, data: Uint8Array) => {
+    //     // console.log("Received binary data", data);
+    //     return data;
+    //   }
+    // ),
   },
 });
 

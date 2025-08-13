@@ -31,6 +31,9 @@ export type {
   WorkflowDefinitionFrom,
   ArgType,
   HandlerReturnType,
+    Handler,
+    HandlerCompositeDef,
+    FlattenDef
 } from "./core.js";
 
 export type { Serde } from "./serde_api.js";

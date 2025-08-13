@@ -100,7 +100,7 @@ export interface KeyValueStore<TState extends TypedState> {
   get<TValue, TKey extends keyof TState = string>(
     name: TState extends UntypedState ? string : TKey,
     serde?: Serde<TState extends UntypedState ? TValue : TState[TKey]>
-  ): Promise<(TState extends UntypedState ? TValue : TState[TKey]) | null>;
+  ): Promise<TState extends UntypedState ? TValue | null : TState[TKey]>;
 
   stateKeys(): Promise<Array<string>>;
 
@@ -646,7 +646,7 @@ export interface ObjectSharedContext<TState extends TypedState = UntypedState>
   get<TValue, TKey extends keyof TState = string>(
     name: TState extends UntypedState ? string : TKey,
     serde?: Serde<TState extends UntypedState ? TValue : TState[TKey]>
-  ): Promise<(TState extends UntypedState ? TValue : TState[TKey]) | null>;
+  ): Promise<TState extends UntypedState ? TValue | null : TState[TKey]>;
 
   /**
    * Retrieve all the state keys for this object.

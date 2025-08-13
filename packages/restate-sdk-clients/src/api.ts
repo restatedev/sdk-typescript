@@ -7,6 +7,7 @@ import type {
   WorkflowDefinitionFrom,
   Serde,
   Duration,
+    FlattenDef
 } from "@restatedev/restate-sdk-core";
 import { millisOrDurationToMillis } from "@restatedev/restate-sdk-core";
 
@@ -44,7 +45,7 @@ export interface Ingress {
   objectClient<D>(
     opts: VirtualObjectDefinitionFrom<D>,
     key: string
-  ): IngressClient<VirtualObject<D>>;
+  ): IngressClient<FlattenDef<VirtualObject<D>>>;
 
   /**
    * Create a client from a {@link ServiceDefinition}.

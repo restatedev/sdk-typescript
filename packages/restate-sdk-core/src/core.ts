@@ -88,6 +88,20 @@ export type VirtualObjectDefinition<P extends string, M> = {
   name: P;
 };
 
+export type Handler = ((
+    ctx: any,
+    param: any
+) => Promise<any>) | ((ctx: any) => Promise<any>) | ((ctx: any, param?: any) => Promise<any>);
+
+export type HandlerCompositeDef = {
+    fn: Handler;
+};
+
+export type FlattenDef<M> = {
+    [K in keyof M]: M[K] extends HandlerCompositeDef ?
+        M[K]['fn']: M[K];
+}
+
 export type VirtualObject<M> = M extends VirtualObjectDefinition<
   string,
   infer O

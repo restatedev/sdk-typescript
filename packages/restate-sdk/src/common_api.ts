@@ -82,6 +82,7 @@ export type {
   ServiceOptions,
   ObjectOptions,
   WorkflowOptions,
+  StateDefinition,
 } from "./types/rpc.js";
 export {
   service,
@@ -90,6 +91,7 @@ export {
   handlers,
   Opts,
   SendOpts,
+  state,
 } from "./types/rpc.js";
 
 export { rpc } from "./types/rpc.js";

@@ -33,6 +33,9 @@ const simpleCall = async (name: string) => {
 
 const objectCall = async (name: string) => {
   const counter = ingress.objectClient(Counter, name);
+
+  await counter.add(1);
+
   const count = await counter.current();
 
   console.log(`The count for ${name} is ${count}`);
@@ -157,24 +160,24 @@ const workflow = async (name: string) => {
   console.log(await client.workflowAttach());
 };
 
-const binaryRawCall = async (name: string) => {
-  const counter = ingress.objectClient(Counter, name);
-
-  const buffer = new TextEncoder().encode("hello!");
-
-  const outBuffer = await counter.binary(
-    buffer,
-    restate.rpc.opts({
-      input: restate.serde.binary,
-      output: restate.serde.binary,
-      headers: { "content-type": "application/octet-stream" },
-    })
-  );
-
-  const str = new TextDecoder().decode(outBuffer);
-
-  console.log(`We got a buffer for ${name} : ${str}`);
-};
+// const binaryRawCall = async (name: string) => {
+//   const counter = ingress.objectClient(Counter, name);
+//
+//   const buffer = new TextEncoder().encode("hello!");
+//
+//   const outBuffer = await counter.binary(
+//     buffer,
+//     restate.rpc.opts({
+//       input: restate.serde.binary,
+//       output: restate.serde.binary,
+//       headers: { "content-type": "application/octet-stream" },
+//     })
+//   );
+//
+//   const str = new TextDecoder().decode(outBuffer);
+//
+//   console.log(`We got a buffer for ${name} : ${str}`);
+// };
 
 // Before running this example, make sure
 // to run and register `greeter`, `counter` and `workflow` services.
@@ -198,5 +201,5 @@ Promise.resolve()
   .then(() => globalCustomHeaders("bob"))
   .then(() => customInterface("bob"))
   .then(() => delayedCall("bob"))
-  .then(() => binaryRawCall("bob"))
+  // .then(() => binaryRawCall("bob"))
   .catch((e) => console.error(e));

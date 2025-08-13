@@ -37,8 +37,35 @@ import {
   type Serde,
   type Duration,
   serde,
+  ObjectSharedHandler,
 } from "@restatedev/restate-sdk-core";
 import { ensureError, TerminalError } from "./errors.js";
+
+// State API types
+export interface StateDefinition<T extends Record<string, any>> {
+  readonly __stateType: T;
+  readonly defaults: Partial<T>;
+}
+
+/**
+ * Define state schema and defaults for a virtual object.
+ *
+ * @param defaults Default values for state properties
+ * @returns A state definition that can be used with the object function
+ *
+ * @example
+ * ```ts
+ * const myState = state<{count: number, name?: string}>({count: 0});
+ * ```
+ */
+export function state<T extends Record<string, any>>(
+  defaults: Partial<T>
+): StateDefinition<T> {
+  return {
+    __stateType: {} as T, // This is just for type inference, never used at runtime
+    defaults,
+  };
+}
 
 // ----------- rpc clients -------------------------------------------------------
 
@@ -718,7 +745,7 @@ export namespace handlers {
       TState extends TypedState = UntypedState
     >(
       fn: (ctx: ObjectSharedContext<TState>, input: I) => Promise<O>
-    ): RemoveVoidArgument<typeof fn>;
+    ): ObjectSharedHandler<RemoveVoidArgument<typeof fn>, ObjectSharedContext<TState>>;
 
     /**
      * Creates a shared handler for a virtual Object.
@@ -939,14 +966,11 @@ export const service = <P extends string, M>(service: {
 
 // ----------- objects ----------------------------------------------
 
-export type ObjectOpts<U> = {
-  [K in keyof U]: U[K] extends ObjectHandler<U[K], ObjectContext<any>>
-    ? U[K]
-    : U[K] extends ObjectHandler<U[K], ObjectSharedContext<any>>
-    ? U[K]
-    :
-        | ObjectHandler<U[K], ObjectContext<any>>
-        | ObjectHandler<U[K], ObjectSharedContext<any>>;
+export type ObjectOpts<U, TState extends TypedState = UntypedState> = {
+  [K in keyof U]: ObjectHandler<U[K], ObjectContext<TState>> | {
+      shared: true,
+    fn: ObjectSharedHandler<U[K], ObjectSharedContext<TState>>
+};
 };
 
 export type ObjectOptions = ServiceOptions & {
@@ -1013,13 +1037,34 @@ export type ObjectOptions = ServiceOptions & {
  * @type P the name of the object
  * @type M the handlers for the object
  */
-export const object = <P extends string, M>(object: {
+// Overload for when state is provided - infer the state type
+export function object<P extends string, M, TState extends TypedState>(object: {
   name: P;
-  handlers: ObjectOpts<M> & ThisType<M>;
+  state: StateDefinition<TState>;
+  handlers: M & ObjectOpts<M, TState> & ThisType<M>;
   description?: string;
   metadata?: Record<string, string>;
   options?: ObjectOptions;
-}): VirtualObjectDefinition<P, M> => {
+}): VirtualObjectDefinition<P, M>;
+
+// Overload for when state is not provided - use UntypedState
+export function object<P extends string, M>(object: {
+  name: P;
+  handlers: M & ObjectOpts<M> & ThisType<M>;
+  description?: string;
+  metadata?: Record<string, string>;
+  options?: ObjectOptions;
+}): VirtualObjectDefinition<P, M>;
+
+// Implementation
+export function object<P extends string, M, TState extends TypedState>(object: {
+  name: P;
+  state?: StateDefinition<TState>;
+  handlers: M & ObjectOpts<M, TState> & ThisType<M>;
+  description?: string;
+  metadata?: Record<string, string>;
+  options?: ObjectOptions;
+}): VirtualObjectDefinition<P, M> {
   if (!object.handlers) {
     throw new Error("object options must be defined");
   }
@@ -1045,7 +1090,7 @@ export const object = <P extends string, M>(object: {
     description: object.description,
     options: object.options,
   } as VirtualObjectDefinition<P, M>;
-};
+}
 
 // ----------- workflows ----------------------------------------------
 

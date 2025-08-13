@@ -10,14 +10,14 @@
  */
 
 import {
-  type Service,
-  type ServiceDefinitionFrom,
-  type VirtualObject,
-  type WorkflowDefinitionFrom,
-  type Workflow,
-  type VirtualObjectDefinitionFrom,
-  type Serde,
-  serde,
+    type Service,
+    type ServiceDefinitionFrom,
+    type VirtualObject,
+    type WorkflowDefinitionFrom,
+    type Workflow,
+    type VirtualObjectDefinitionFrom,
+    type Serde,
+    serde, type FlattenDef,
 } from "@restatedev/restate-sdk-core";
 import type {
   ConnectionOpts,
@@ -295,8 +295,8 @@ class HttpIngress implements Ingress {
   objectClient<D>(
     opts: VirtualObjectDefinitionFrom<D>,
     key: string
-  ): IngressClient<VirtualObject<D>> {
-    return this.proxy(opts.name, key) as IngressClient<VirtualObject<D>>;
+  ): IngressClient<FlattenDef<VirtualObject<D>>> {
+    return this.proxy(opts.name, key) as IngressClient<FlattenDef<VirtualObject<D>>>;
   }
 
   workflowClient<D>(
