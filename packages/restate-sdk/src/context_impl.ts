@@ -502,12 +502,11 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
             );
           }
         } else {
-          this.coreVm.propose_run_completion_success(
-            handle,
-            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-            // @ts-expect-error
-            serde.serialize(res)
-          );
+          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+          // @ts-expect-error
+          const serializedRes = serde.serialize(res);
+          const encodedRes = await this.journalEntryCodec.encode(serializedRes);
+          this.coreVm.propose_run_completion_success(handle, encodedRes);
         }
       } catch (e) {
         this.handleInvocationEndError(e);
@@ -519,6 +518,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     // Register the run to execute
     this.runClosuresTracker.registerRunClosure(handle, doRun);
 
+    // TODO: here as well
     // Return the promise
     return new RestateSinglePromise(
       this,
