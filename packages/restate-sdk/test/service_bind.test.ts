@@ -36,38 +36,85 @@ describe("BindService", () => {
   });
 });
 
-const inputBytes = restate.service({
-  name: "acceptBytes",
-  handlers: {
-    greeter: restate.handlers.handler(
-      {
-        input: restate.serde.binary,
-      },
-      // eslint-disable-next-line @typescript-eslint/require-await
-      async (_ctx: restate.Context, audio: Uint8Array) => {
-        return { length: audio.length };
-      }
-    ),
-  },
-});
+describe("AcceptBytes using old handler factory API", () => {
+  const inputBytes = restate.service({
+    name: "acceptBytes",
+    handlers: {
+      greeter: restate.handlers.handler(
+        {
+          input: restate.serde.binary,
+        },
+        // eslint-disable-next-line @typescript-eslint/require-await
+        async (_ctx: restate.Context, audio: Uint8Array) => {
+          return { length: audio.length };
+        }
+      ),
+    },
+  });
 
-const inputBytesWithCustomAccept = restate.service({
-  name: "acceptBytes",
-  handlers: {
-    greeter: restate.handlers.handler(
-      {
-        accept: "application/*",
-        input: restate.serde.binary,
-      },
-      // eslint-disable-next-line @typescript-eslint/require-await
-      async (_ctx: restate.Context, audio: Uint8Array) => {
-        return { length: audio.length };
-      }
-    ),
-  },
+  const inputBytesWithCustomAccept = restate.service({
+    name: "acceptBytes",
+    handlers: {
+      greeter: restate.handlers.handler(
+        {
+          accept: "application/*",
+          input: restate.serde.binary,
+        },
+        // eslint-disable-next-line @typescript-eslint/require-await
+        async (_ctx: restate.Context, audio: Uint8Array) => {
+          return { length: audio.length };
+        }
+      ),
+    },
+  });
+
+  it("should declare accept content type correctly", () => {
+    const svc = toServiceDiscovery(inputBytes);
+
+    expect(svc.handlers[0]?.input?.contentType).toEqual(
+      restate.serde.binary.contentType
+    );
+  });
+
+  it("should declare accept content type correctly when custom accept is provided", () => {
+    const svc = toServiceDiscovery(inputBytesWithCustomAccept);
+
+    expect(svc.handlers[0]?.input?.contentType).toEqual("application/*");
+  });
 });
 
 describe("AcceptBytes", () => {
+  const inputBytes = restate.service({
+    name: "acceptBytes",
+    handlers: {
+      greeter: {
+        // eslint-disable-next-line @typescript-eslint/require-await
+        handler: async (_ctx: restate.Context, audio: Uint8Array) => {
+          return { length: audio.length };
+        },
+        options: {
+          input: restate.serde.binary,
+        },
+      },
+    },
+  });
+
+  const inputBytesWithCustomAccept = restate.service({
+    name: "acceptBytes",
+    handlers: {
+      greeter: {
+        // eslint-disable-next-line @typescript-eslint/require-await
+        handler: async (_ctx: restate.Context, audio: Uint8Array) => {
+          return { length: audio.length };
+        },
+        options: {
+          accept: "application/*",
+          input: restate.serde.binary,
+        },
+      },
+    },
+  });
+
   it("should declare accept content type correctly", () => {
     const svc = toServiceDiscovery(inputBytes);
 
@@ -103,7 +150,7 @@ describe("PropagateConfigOptions", () => {
     expect(svc.journalRetention).toEqual(10 * 1000);
   });
 
-  it("should declare config option on a handler correctly", () => {
+  it("should declare config option on a handler correctly with old handler factory api", () => {
     const svc = toServiceDiscovery(
       restate.service({
         name: "greeter",
@@ -117,6 +164,28 @@ describe("PropagateConfigOptions", () => {
               return req;
             }
           ),
+        },
+      })
+    );
+
+    expect(svc.journalRetention).toBeUndefined();
+    expect(svc.handlers[0]?.journalRetention).toEqual(10 * 1000);
+  });
+
+  it("should declare config option on a handler correctly", () => {
+    const svc = toServiceDiscovery(
+      restate.service({
+        name: "greeter",
+        handlers: {
+          greet: {
+            // eslint-disable-next-line @typescript-eslint/require-await
+            handler: async (ctx, req: string): Promise<string> => {
+              return req;
+            },
+            options: {
+              journalRetention: { seconds: 10 },
+            },
+          },
         },
       })
     );

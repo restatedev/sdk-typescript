@@ -29,12 +29,18 @@ export interface RestateWorkflowContext
 
 // ----------- service -------------------------------------------------------
 
+/**
+ * @deprecated
+ */
 export type ArgType<T> = T extends (ctx: any) => any
   ? void
   : T extends (ctx: any, input: infer I) => any
   ? I
   : never;
 
+/**
+ * @deprecated
+ */
 export type HandlerReturnType<T> = T extends (
   ctx: any,
   input: any
@@ -42,6 +48,9 @@ export type HandlerReturnType<T> = T extends (
   ? R
   : never;
 
+/**
+ * @deprecated
+ */
 export type ServiceHandler<F, C = RestateContext> = F extends (
   ctx: C
 ) => Promise<any>
@@ -65,6 +74,9 @@ export type ServiceDefinitionFrom<M> = M extends ServiceDefinition<
 
 // ----------- object -------------------------------------------------------
 
+/**
+ * @deprecated
+ */
 export type ObjectSharedHandler<
   F,
   SC = RestateObjectSharedContext
@@ -74,6 +86,9 @@ export type ObjectSharedHandler<
   ? F
   : (ctx: SC, param?: any) => Promise<any>;
 
+/**
+ * @deprecated
+ */
 export type ObjectHandler<F, C = RestateObjectContext> = F extends (
   ctx: C,
   param: any
@@ -104,6 +119,9 @@ export type VirtualObjectDefinitionFrom<M> = M extends VirtualObjectDefinition<
 
 // ----------- workflow -------------------------------------------------------
 
+/**
+ * @deprecated
+ */
 export type WorkflowSharedHandler<
   F,
   SC = RestateWorkflowSharedContext
@@ -113,6 +131,9 @@ export type WorkflowSharedHandler<
   ? F
   : (ctx: SC, param?: any) => Promise<any>;
 
+/**
+ * @deprecated
+ */
 export type WorkflowHandler<F, C = RestateWorkflowContext> = F extends (
   ctx: C,
   param: any
@@ -135,3 +156,28 @@ export type WorkflowDefinitionFrom<M> = M extends WorkflowDefinition<
 >
   ? M
   : WorkflowDefinition<string, M>;
+
+// -------- Type manipulation for clients
+
+export type FlattenHandlersDefinition<M> = {
+  [K in keyof M]: M[K] extends {
+    handler:
+      | ((ctx: any, param: any) => Promise<any>)
+      | ((ctx: any) => Promise<any>)
+      | ((ctx: any, param?: any) => Promise<any>);
+  }
+    ? M[K]["handler"]
+    : M[K] extends {
+        sharedHandler:
+          | ((ctx: any, param: any) => Promise<any>)
+          | ((ctx: any) => Promise<any>)
+          | ((ctx: any, param?: any) => Promise<any>);
+      }
+    ? M[K]["sharedHandler"]
+    : M[K] extends
+        | ((ctx: any, param: any) => Promise<any>)
+        | ((ctx: any) => Promise<any>)
+        | ((ctx: any, param?: any) => Promise<any>)
+    ? M[K]
+    : never;
+};
