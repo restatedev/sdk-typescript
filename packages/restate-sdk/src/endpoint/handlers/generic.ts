@@ -359,6 +359,8 @@ export class GenericHandler implements RestateHandler {
       const responseTransformStream = new TransformStream<Uint8Array>();
       const outputWriter = responseTransformStream.writable.getWriter();
 
+      const journalEntryCodec = this.endpoint.defaultJournalEntryCodec;
+
       // Prepare context
       const ctx = new ContextImpl(
         coreVm,
@@ -370,14 +372,17 @@ export class GenericHandler implements RestateHandler {
         invocationEndPromise,
         inputReader,
         outputWriter,
+        journalEntryCodec,
         service.options?.asTerminalError
       );
 
       // Finally invoke user handler
+      const decodedInput = await journalEntryCodec.decode(input.input);
       handler
-        .invoke(ctx, input.input)
-        .then((bytes) => {
-          coreVm.sys_write_output_success(bytes);
+        .invoke(ctx, decodedInput)
+        .then((bytes) => journalEntryCodec.encode(bytes))
+        .then((encodedOutput) => {
+          coreVm.sys_write_output_success(encodedOutput);
           coreVm.sys_end();
           vmLogger.info("Invocation completed successfully.");
         })
