@@ -350,6 +350,7 @@ dependencies = [
 [[package]]
 name = "restate-sdk-shared-core"
 version = "0.4.0"
+source = "git+https://github.com/restatedev/sdk-shared-core.git?branch=issues%2Fdisable-payload-determinism-check#6a636f153ec0fdb6380a3e8497d2e5c01c8506d3"
 dependencies = [
  "base64",
  "bs58",

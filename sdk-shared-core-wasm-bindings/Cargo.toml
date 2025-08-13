@@ -12,7 +12,7 @@ default = ["console_error_panic_hook"]
 
 [dependencies]
 wasm-bindgen = "0.2.100"
-restate-sdk-shared-core = { path = "../../sdk-shared-core", features = ["request_identity"] }
+restate-sdk-shared-core = { git = "https://github.com/restatedev/sdk-shared-core.git", branch = "issues/disable-payload-determinism-check", features = ["request_identity"] }
 console_error_panic_hook = { version = "0.1.7", optional = true }
 serde = { version = "1.0.210", features = ["derive"] }
 serde-wasm-bindgen = "0.6.5"
