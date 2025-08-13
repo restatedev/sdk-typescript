@@ -526,7 +526,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       completeCommandPromiseUsing(
         WasmCommandType.Run,
         commandIndex,
-        SuccessWithSerde(serde),
+        SuccessWithSerde(serde, this.journalEntryCodec),
         Failure
       )
     );
@@ -908,7 +908,7 @@ export class RunClosuresTracker {
 type Completer = (
   value: AsyncResultValue,
   prom: CompletablePromise<any>
-) => boolean;
+) => Promise<boolean>;
 
 // This is just a special type we use to propagate completer errors between this function and handleInvocationEndError
 class AsyncCompleterError {
@@ -923,11 +923,11 @@ function completeCommandPromiseUsing<T>(
   commandType: WasmCommandType,
   commandIndex: number,
   ...completers: Array<Completer>
-): (value: AsyncResultValue, prom: CompletablePromise<T>) => void {
-  return (value: AsyncResultValue, prom: CompletablePromise<any>) => {
+): (value: AsyncResultValue, prom: CompletablePromise<T>) => Promise<void> {
+  return async (value: AsyncResultValue, prom: CompletablePromise<any>) => {
     try {
       for (const completer of completers) {
-        if (completer(value, prom)) {
+        if (await completer(value, prom)) {
           return;
         }
       }
@@ -944,10 +944,10 @@ function completeCommandPromiseUsing<T>(
 // This is like the function above, but won't decorate the error with the command metadata
 function completeSignalPromiseUsing<T>(
   ...completers: Array<Completer>
-): (value: AsyncResultValue, prom: CompletablePromise<T>) => void {
-  return (value: AsyncResultValue, prom: CompletablePromise<any>) => {
+): (value: AsyncResultValue, prom: CompletablePromise<T>) => Promise<void> {
+  return async (value: AsyncResultValue, prom: CompletablePromise<any>) => {
     for (const completer of completers) {
-      if (completer(value, prom)) {
+      if (await completer(value, prom)) {
         return;
       }
     }
@@ -961,31 +961,38 @@ function completeSignalPromiseUsing<T>(
 const VoidAsNull: Completer = (value, prom) => {
   if (value === "Empty") {
     prom.resolve(null);
-    return true;
+    return Promise.resolve(true);
   }
-  return false;
+  return Promise.resolve(false);
 };
 const VoidAsUndefined: Completer = (value, prom) => {
   if (value === "Empty") {
     prom.resolve(undefined);
-    return true;
+    return Promise.resolve(true);
   }
-  return false;
+  return Promise.resolve(false);
 };
 
 function SuccessWithSerde<T>(
   serde?: Serde<T>,
+  journalCodec?: JournalEntryCodec,
   transform?: <U>(success: T) => U
 ): Completer {
-  return (value, prom) => {
+  return async (value, prom) => {
     if (typeof value !== "object" || !("Success" in value)) {
       return false;
     }
+    let buffer: Uint8Array;
+    if (journalCodec !== undefined) {
+      buffer = await journalCodec.decode(value.Success);
+    } else {
+      buffer = value.Success;
+    }
     let val: T;
     if (serde) {
-      val = serde.deserialize(value.Success);
+      val = serde.deserialize(buffer);
     } else {
-      val = defaultSerde<T>().deserialize(value.Success);
+      val = defaultSerde<T>().deserialize(buffer);
     }
     if (transform) {
       val = transform(val);
@@ -1002,23 +1009,23 @@ const Failure: Completer = (value, prom) => {
         errorCode: value.Failure.code,
       })
     );
-    return true;
+    return Promise.resolve(true);
   }
-  return false;
+  return Promise.resolve(false);
 };
 
 const StateKeys: Completer = (value, prom) => {
   if (typeof value === "object" && "StateKeys" in value) {
     prom.resolve(value.StateKeys);
-    return true;
+    return Promise.resolve(true);
   }
-  return false;
+  return Promise.resolve(false);
 };
 
 const InvocationIdCompleter: Completer = (value, prom) => {
   if (typeof value === "object" && "InvocationId" in value) {
     prom.resolve(value.InvocationId);
-    return true;
+    return Promise.resolve(true);
   }
-  return false;
+  return Promise.resolve(false);
 };
