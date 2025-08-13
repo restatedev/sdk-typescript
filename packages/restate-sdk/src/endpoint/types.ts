@@ -4,6 +4,7 @@ import type {
   ServiceDefinition,
   VirtualObjectDefinition,
   WorkflowDefinition,
+  JournalEntryCodec,
 } from "../common_api.js";
 
 /**
@@ -55,4 +56,13 @@ export interface EndpointOptions {
    * ```
    */
   logger?: LoggerTransport;
+
+  /**
+   * Default codec for journal entries.
+   *
+   * This codec will be used for all journal entries created by services bound to this endpoint.
+   * If not provided, a pass-through codec will be used.
+   *
+   */
+  defaultJournalEntryCodec?: JournalEntryCodec;
 }

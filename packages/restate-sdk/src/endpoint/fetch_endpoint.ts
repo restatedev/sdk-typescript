@@ -10,6 +10,7 @@
  */
 
 import type {
+  JournalEntryCodec,
   ServiceDefinition,
   VirtualObjectDefinition,
   WorkflowDefinition,
@@ -86,6 +87,11 @@ export class FetchEndpointImpl implements FetchEndpoint {
 
   public bidirectional(set: boolean = true): FetchEndpoint {
     this.protocolMode = set ? "BIDI_STREAM" : "REQUEST_RESPONSE";
+    return this;
+  }
+
+  defaultJournalEntryCodec(codec: JournalEntryCodec): FetchEndpoint {
+    this.builder.defaultJournalEntryCodec(codec);
     return this;
   }
 

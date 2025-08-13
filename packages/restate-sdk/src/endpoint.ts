@@ -14,6 +14,7 @@ import type {
   VirtualObjectDefinition,
   ServiceDefinition,
   WorkflowDefinition,
+  JournalEntryCodec,
 } from "@restatedev/restate-sdk-core";
 import type { LoggerTransport } from "./logging/logger_transport.js";
 import type {
@@ -81,6 +82,14 @@ export interface RestateEndpointBase<E> {
    * ```
    */
   setLogger(logger: LoggerTransport): E;
+
+  /**
+   * Set a custom codec for journal entries.
+   * This codec will be used to encode and decode journal entries for all services bound to this endpoint.
+   *
+   * @param codec The default codec to use for journal entries. (default: no codec)
+   */
+  defaultJournalEntryCodec(codec: JournalEntryCodec): E;
 }
 
 /**
