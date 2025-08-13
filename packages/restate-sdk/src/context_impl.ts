@@ -51,6 +51,7 @@ import {
 } from "./types/rpc.js";
 import type {
   Duration,
+  JournalEntryCodec,
   Serde,
   Service,
   ServiceDefinitionFrom,
@@ -106,6 +107,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     private readonly invocationEndPromise: CompletablePromise<void>,
     inputReader: ReadableStreamDefaultReader<Uint8Array>,
     outputWriter: WritableStreamDefaultWriter<Uint8Array>,
+    private readonly journalEntryCodec: JournalEntryCodec,
     private readonly asTerminalError?: (error: any) => TerminalError | undefined
   ) {
     this.rand = new RandImpl(input.invocation_id, () => {
