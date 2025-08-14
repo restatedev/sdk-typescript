@@ -236,6 +236,10 @@ export class GenericHandler implements RestateHandler {
     abortSignal: AbortSignal,
     additionalContext: AdditionalContext
   ): Promise<RestateResponse> {
+    const journalValueCodec = this.endpoint.journalValueCodec ?? {
+      encode: (entry) => entry,
+      decode: (entry) => Promise.resolve(entry),
+    };
     const loggerId = Math.floor(Math.random() * 4_294_967_295 /* u32::MAX */);
 
     try {
@@ -249,7 +253,8 @@ export class GenericHandler implements RestateHandler {
       const coreVm = new vm.WasmVM(
         vmHeaders,
         restateLogLevelToWasmLogLevel(DEFAULT_CONSOLE_LOGGER_LOG_LEVEL),
-        loggerId
+        loggerId,
+        this.endpoint.journalValueCodec !== undefined
       );
       const responseHead = coreVm.get_response_head();
       const responseHeaders = responseHead.headers.reduce(
@@ -370,14 +375,31 @@ export class GenericHandler implements RestateHandler {
         invocationEndPromise,
         inputReader,
         outputWriter,
+        journalValueCodec,
         service.options?.asTerminalError
       );
 
-      // Finally invoke user handler
-      handler
-        .invoke(ctx, input.input)
-        .then((bytes) => {
-          coreVm.sys_write_output_success(bytes);
+      (async () => {
+        try {
+          // Decode input. If fails, throw TerminalError to fail the invocation
+          return await journalValueCodec.decode(input.input);
+        } catch (e) {
+          const error = ensureError(e);
+          throw new TerminalError(
+            `Failed to decode input using journal value codec: ${error.message}`,
+            {
+              errorCode: 400,
+            }
+          );
+        }
+      })()
+        .then((decodedInput) =>
+          // Invoke user handler code
+          handler.invoke(ctx, decodedInput)
+        )
+        .then((output) => {
+          // Write output result
+          coreVm.sys_write_output_success(journalValueCodec.encode(output));
           coreVm.sys_end();
           vmLogger.info("Invocation completed successfully.");
         })

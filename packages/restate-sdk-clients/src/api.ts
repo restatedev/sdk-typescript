@@ -7,6 +7,7 @@ import type {
   WorkflowDefinitionFrom,
   Serde,
   Duration,
+  JournalValueCodec,
 } from "@restatedev/restate-sdk-core";
 import { millisOrDurationToMillis } from "@restatedev/restate-sdk-core";
 
@@ -322,4 +323,11 @@ export type ConnectionOpts = {
    * Use this to attach authentication headers.
    */
   headers?: Record<string, string>;
+
+  /**
+   * Codec to use for input/outputs. Check {@link JournalValueCodec} for more details
+   *
+   * @experimental
+   */
+  journalValueCodec?: JournalValueCodec;
 };

@@ -13,6 +13,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import type {
+  JournalValueCodec,
   ServiceDefinition,
   VirtualObjectDefinition,
   WorkflowDefinition,
@@ -82,6 +83,11 @@ export type Endpoint = {
    * All discovery metadata, except protocol mode provided by the node/fetch/lambda endpoint implementations
    */
   discoveryMetadata: Omit<discovery.Endpoint, "protocolMode">;
+
+  /**
+   * Default codec for journal entries.
+   */
+  journalValueCodec?: JournalValueCodec;
 };
 
 export class EndpointBuilder {
@@ -94,6 +100,7 @@ export class EndpointBuilder {
   private loggerTransport: LoggerTransport = defaultLoggerTransport;
   private keySet: string[] = [];
   private defaultServiceOptions: DefaultServiceOptions = {};
+  private journalValueCodec?: JournalValueCodec;
 
   public bind<P extends string, M>(
     definition:
@@ -119,6 +126,10 @@ export class EndpointBuilder {
 
   public setLogger(newLogger: LoggerTransport) {
     this.loggerTransport = newLogger;
+  }
+
+  public setJournalValueCodec(codec: JournalValueCodec) {
+    this.journalValueCodec = codec;
   }
 
   public build(): Endpoint {
@@ -185,6 +196,7 @@ export class EndpointBuilder {
       rlog,
       components,
       discoveryMetadata,
+      journalValueCodec: this.journalValueCodec,
     };
   }
 }

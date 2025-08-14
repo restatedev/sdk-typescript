@@ -4,6 +4,7 @@ import type {
   ServiceDefinition,
   VirtualObjectDefinition,
   WorkflowDefinition,
+  JournalValueCodec,
 } from "../common_api.js";
 
 /**
@@ -55,4 +56,11 @@ export interface EndpointOptions {
    * ```
    */
   logger?: LoggerTransport;
+
+  /**
+   * Codec to use for journal values. Check {@link JournalValueCodec} for more details
+   *
+   * @experimental
+   */
+  journalValueCodec?: JournalValueCodec;
 }

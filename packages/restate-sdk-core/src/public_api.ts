@@ -38,3 +38,5 @@ export { serde } from "./serde_api.js";
 
 export type { Duration } from "./duration.js";
 export { durationToMillis, millisOrDurationToMillis } from "./duration.js";
+
+export type { JournalValueCodec } from "./entry_codec.js";

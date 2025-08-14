@@ -14,6 +14,7 @@ import type {
   VirtualObjectDefinition,
   ServiceDefinition,
   WorkflowDefinition,
+  JournalValueCodec,
 } from "@restatedev/restate-sdk-core";
 import type { LoggerTransport } from "./logging/logger_transport.js";
 import type {
@@ -81,6 +82,13 @@ export interface RestateEndpointBase<E> {
    * ```
    */
   setLogger(logger: LoggerTransport): E;
+
+  /**
+   * Codec to use for journal values. Check {@link JournalValueCodec} for more details
+   *
+   * @experimental
+   */
+  journalValueCodec(codec: JournalValueCodec): E;
 }
 
 /**

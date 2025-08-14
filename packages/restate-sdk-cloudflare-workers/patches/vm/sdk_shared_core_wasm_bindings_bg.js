@@ -550,11 +550,12 @@ export class WasmVM {
      * @param {WasmHeader[]} headers
      * @param {LogLevel} log_level
      * @param {number} logger_id
+     * @param {boolean} disable_payload_checks
      */
-    constructor(headers, log_level, logger_id) {
+    constructor(headers, log_level, logger_id, disable_payload_checks) {
         const ptr0 = passArrayJsValueToWasm0(headers, wasm.__wbindgen_malloc);
         const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.wasmvm_new(ptr0, len0, log_level, logger_id);
+        const ret = wasm.wasmvm_new(ptr0, len0, log_level, logger_id, disable_payload_checks);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }
