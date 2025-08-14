@@ -58,9 +58,10 @@ export interface EndpointOptions {
   logger?: LoggerTransport;
 
   /**
-   * Codec to use for journal values. Check {@link JournalValueCodec} for more details
+   * Provider for the codec to use for journal values. One codec will be instantiated globally for this endpoint.
+   * Check {@link JournalValueCodec} for more details
    *
    * @experimental
    */
-  journalValueCodec?: JournalValueCodec;
+  journalValueCodecProvider?: () => Promise<JournalValueCodec>;
 }

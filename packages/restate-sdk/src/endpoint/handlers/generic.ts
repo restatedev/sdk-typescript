@@ -37,7 +37,10 @@ import {
   LogSource,
   RestateLogLevel,
 } from "../../logging/logger_transport.js";
-import { millisOrDurationToMillis } from "@restatedev/restate-sdk-core";
+import {
+  type JournalValueCodec,
+  millisOrDurationToMillis,
+} from "@restatedev/restate-sdk-core";
 import type { Endpoint } from "../endpoint.js";
 
 export interface Headers {
@@ -236,10 +239,12 @@ export class GenericHandler implements RestateHandler {
     abortSignal: AbortSignal,
     additionalContext: AdditionalContext
   ): Promise<RestateResponse> {
-    const journalValueCodec = this.endpoint.journalValueCodec ?? {
-      encode: (entry) => entry,
-      decode: (entry) => Promise.resolve(entry),
-    };
+    const journalValueCodec: JournalValueCodec = this.endpoint.journalValueCodec
+      ? await this.endpoint.journalValueCodec
+      : {
+          encode: (entry) => entry,
+          decode: (entry) => Promise.resolve(entry),
+        };
     const loggerId = Math.floor(Math.random() * 4_294_967_295 /* u32::MAX */);
 
     try {

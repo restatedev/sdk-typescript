@@ -85,9 +85,9 @@ export type Endpoint = {
   discoveryMetadata: Omit<discovery.Endpoint, "protocolMode">;
 
   /**
-   * Default codec for journal entries.
+   * Codec provider to use for journal values.
    */
-  journalValueCodec?: JournalValueCodec;
+  journalValueCodec?: Promise<JournalValueCodec>;
 };
 
 export class EndpointBuilder {
@@ -100,7 +100,7 @@ export class EndpointBuilder {
   private loggerTransport: LoggerTransport = defaultLoggerTransport;
   private keySet: string[] = [];
   private defaultServiceOptions: DefaultServiceOptions = {};
-  private journalValueCodec?: JournalValueCodec;
+  private journalValueCodecProvider?: () => Promise<JournalValueCodec>;
 
   public bind<P extends string, M>(
     definition:
@@ -128,8 +128,10 @@ export class EndpointBuilder {
     this.loggerTransport = newLogger;
   }
 
-  public setJournalValueCodec(codec: JournalValueCodec) {
-    this.journalValueCodec = codec;
+  public setJournalValueCodecProvider(
+    codecProvider: () => Promise<JournalValueCodec>
+  ) {
+    this.journalValueCodecProvider = codecProvider;
   }
 
   public build(): Endpoint {
@@ -196,7 +198,9 @@ export class EndpointBuilder {
       rlog,
       components,
       discoveryMetadata,
-      journalValueCodec: this.journalValueCodec,
+      journalValueCodec: this.journalValueCodecProvider
+        ? this.journalValueCodecProvider()
+        : undefined,
     };
   }
 }
