@@ -521,9 +521,6 @@ function serializeBodyWithContentType(
   body?: Uint8Array;
   contentType?: string;
 } {
-  if (body === undefined) {
-    return {};
-  }
   let buffer = serde.serialize(body);
   if (journalValueCodec) {
     buffer = journalValueCodec.encode(buffer);
