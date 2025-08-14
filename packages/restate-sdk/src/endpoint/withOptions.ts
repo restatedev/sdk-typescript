@@ -8,7 +8,7 @@ export function withOptions<E extends RestateEndpointBase<E>>(
     defaultServiceOptions,
     logger,
     services,
-    journalValueCodec,
+    journalValueCodecProvider,
   }: EndpointOptions
 ): E {
   let endpointWithOptions = endpoint;
@@ -20,9 +20,10 @@ export function withOptions<E extends RestateEndpointBase<E>>(
       defaultServiceOptions
     );
   }
-  if (journalValueCodec) {
-    endpointWithOptions =
-      endpointWithOptions.journalValueCodec(journalValueCodec);
+  if (journalValueCodecProvider) {
+    endpointWithOptions = endpointWithOptions.journalValueCodecProvider(
+      journalValueCodecProvider
+    );
   }
   if (logger) {
     endpointWithOptions = endpointWithOptions.setLogger(logger);

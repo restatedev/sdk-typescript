@@ -71,8 +71,10 @@ export class LambdaEndpointImpl implements LambdaEndpoint {
     return this;
   }
 
-  journalValueCodec(codec: JournalValueCodec): LambdaEndpoint {
-    this.builder.setJournalValueCodec(codec);
+  public journalValueCodecProvider(
+    codecProvider: () => Promise<JournalValueCodec>
+  ): LambdaEndpoint {
+    this.builder.setJournalValueCodecProvider(codecProvider);
     return this;
   }
 

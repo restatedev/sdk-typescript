@@ -61,8 +61,10 @@ export class NodeEndpoint implements RestateEndpoint {
     return this;
   }
 
-  public journalValueCodec(codec: JournalValueCodec): RestateEndpoint {
-    this.builder.setJournalValueCodec(codec);
+  public journalValueCodecProvider(
+    codecProvider: () => Promise<JournalValueCodec>
+  ): RestateEndpoint {
+    this.builder.setJournalValueCodecProvider(codecProvider);
     return this;
   }
 

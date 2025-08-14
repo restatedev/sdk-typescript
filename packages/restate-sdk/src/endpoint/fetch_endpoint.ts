@@ -90,8 +90,10 @@ export class FetchEndpointImpl implements FetchEndpoint {
     return this;
   }
 
-  public journalValueCodec(codec: JournalValueCodec): FetchEndpoint {
-    this.builder.setJournalValueCodec(codec);
+  public journalValueCodecProvider(
+    codecProvider: () => Promise<JournalValueCodec>
+  ): FetchEndpoint {
+    this.builder.setJournalValueCodecProvider(codecProvider);
     return this;
   }
 
