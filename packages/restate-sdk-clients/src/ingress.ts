@@ -18,6 +18,7 @@ import {
   type VirtualObjectDefinitionFrom,
   type Serde,
   serde,
+  type JournalValueCodec,
 } from "@restatedev/restate-sdk-core";
 import type {
   ConnectionOpts,
@@ -147,7 +148,8 @@ const doComponentInvocation = async <I, O>(
 
   const { body, contentType } = serializeBodyWithContentType(
     params.parameter,
-    inputSerde
+    inputSerde,
+    opts.journalValueCodec
   );
   //
   // headers
@@ -201,12 +203,15 @@ const doComponentInvocation = async <I, O>(
       `Request failed: ${httpResponse.status}\n${body}`
     );
   }
-  const responseBuf = await httpResponse.arrayBuffer();
+  const responseBuf = new Uint8Array(await httpResponse.arrayBuffer());
   if (!params.send) {
+    const decodedBuf = opts.journalValueCodec
+      ? await opts.journalValueCodec.decode(responseBuf)
+      : responseBuf;
     const outputSerde = params.opts?.opts.output ?? serde.json;
-    return outputSerde.deserialize(new Uint8Array(responseBuf)) as O;
+    return outputSerde.deserialize(decodedBuf) as O;
   }
-  const json = serde.json.deserialize(new Uint8Array(responseBuf)) as O;
+  const json = serde.json.deserialize(responseBuf) as O;
   return { ...json, attachable };
 };
 
@@ -252,8 +257,11 @@ const doWorkflowHandleCall = async <O>(
     signal,
   });
   if (httpResponse.ok) {
-    const responseBuf = await httpResponse.arrayBuffer();
-    return outputSerde.deserialize(new Uint8Array(responseBuf)) as O;
+    const responseBuf = new Uint8Array(await httpResponse.arrayBuffer());
+    const decodedBuf = opts.journalValueCodec
+      ? await opts.journalValueCodec.decode(responseBuf)
+      : responseBuf;
+    return outputSerde.deserialize(decodedBuf) as O;
   }
   const body = await httpResponse.text();
   throw new HttpCallError(
@@ -412,7 +420,8 @@ class HttpIngress implements Ingress {
     const url = `${this.opts.url}/restate/a/${id}/resolve`;
     const { body, contentType } = serializeBodyWithContentType(
       payload,
-      payloadSerde ?? serde.json
+      payloadSerde ?? serde.json,
+      this.opts.journalValueCodec
     );
     const headers = {
       ...(this.opts.headers ?? {}),
@@ -481,9 +490,11 @@ class HttpIngress implements Ingress {
       headers,
     });
     if (httpResponse.ok) {
-      const responseBuf = await httpResponse.arrayBuffer();
-      const ser = resultSerde ?? serde.json;
-      return ser.deserialize(new Uint8Array(responseBuf)) as T;
+      const responseBuf = new Uint8Array(await httpResponse.arrayBuffer());
+      const decodedBuf = this.opts.journalValueCodec
+        ? await this.opts.journalValueCodec.decode(responseBuf)
+        : responseBuf;
+      return (resultSerde ?? serde.json).deserialize(decodedBuf) as T;
     }
     const body = await httpResponse.text();
     throw new HttpCallError(
@@ -504,7 +515,8 @@ function computeDelayAsIso(opts: SendOpts): string {
 
 function serializeBodyWithContentType(
   body: unknown,
-  serde: Serde<unknown>
+  serde: Serde<unknown>,
+  journalValueCodec?: JournalValueCodec
 ): {
   body?: Uint8Array;
   contentType?: string;
@@ -512,7 +524,10 @@ function serializeBodyWithContentType(
   if (body === undefined) {
     return {};
   }
-  const buffer = serde.serialize(body);
+  let buffer = serde.serialize(body);
+  if (journalValueCodec) {
+    buffer = journalValueCodec.encode(buffer);
+  }
   return {
     body: buffer,
     contentType: serde.contentType,

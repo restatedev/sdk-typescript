@@ -21,6 +21,7 @@ export type {
   Workflow,
   VirtualObject,
   Duration,
+  JournalValueCodec,
 } from "@restatedev/restate-sdk-core";
 
 export { serde } from "@restatedev/restate-sdk-core";
