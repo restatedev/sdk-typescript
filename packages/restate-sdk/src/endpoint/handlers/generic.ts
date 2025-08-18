@@ -384,20 +384,20 @@ export class GenericHandler implements RestateHandler {
         service.options?.asTerminalError
       );
 
-      (async () => {
-        try {
-          // Decode input. If fails, throw TerminalError to fail the invocation
-          return await journalValueCodec.decode(input.input);
-        } catch (e) {
-          const error = ensureError(e);
-          throw new TerminalError(
-            `Failed to decode input using journal value codec: ${error.message}`,
-            {
-              errorCode: 400,
-            }
-          );
-        }
-      })()
+      journalValueCodec
+        .decode(input.input)
+        .catch((e) =>
+          Promise.reject(
+            new TerminalError(
+              `Failed to decode input using journal value codec: ${
+                ensureError(e).message
+              }`,
+              {
+                errorCode: 400,
+              }
+            )
+          )
+        )
         .then((decodedInput) =>
           // Invoke user handler code
           handler.invoke(ctx, decodedInput)
@@ -409,16 +409,28 @@ export class GenericHandler implements RestateHandler {
           vmLogger.info("Invocation completed successfully.");
         })
         .catch((e) => {
+          // Convert to Error
           const error = ensureError(e, service.options?.asTerminalError);
           logError(vmLogger, error);
 
+          // If TerminalError, handle it here.
+          // NOTE: this can still fail!
           if (error instanceof TerminalError) {
             coreVm.sys_write_output_failure({
               code: error.code,
               message: error.message,
             });
             coreVm.sys_end();
-          } else if (error instanceof RetryableError) {
+            return;
+          }
+
+          // Not a terminal error, have the below catch handle it
+          throw error;
+        })
+        .catch((e) => {
+          // Handle any other error now (retryable errors)
+          const error = ensureError(e);
+          if (error instanceof RetryableError) {
             coreVm.notify_error_with_delay_override(
               error.message,
               error.stack,
