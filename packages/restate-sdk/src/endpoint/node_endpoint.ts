@@ -111,7 +111,7 @@ export class NodeEndpoint implements RestateEndpoint {
 function nodeHttp2Handler(
   endpoint: Endpoint
 ): (request: Http2ServerRequest, response: Http2ServerResponse) => void {
-  const handler = new GenericHandler(endpoint, "BIDI_STREAM");
+  const handler = new GenericHandler(endpoint, "BIDI_STREAM", {});
 
   return (request, response) => {
     (async () => {

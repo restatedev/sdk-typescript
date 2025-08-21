@@ -22,7 +22,18 @@ import { withOptions } from "./endpoint/withOptions.js";
  * Create a new {@link LambdaEndpoint}.
  */
 export function endpoint(): LambdaEndpoint {
-  return new LambdaEndpointImpl();
+  return new LambdaEndpointImpl(false);
+}
+
+interface LambdaEndpointOptions extends EndpointOptions {
+  /**
+   * Enable compression of Lambda requests/responses using zstd.
+   *
+   * NOTE: This feature is supported only from Restate 1.5 onward.
+   *
+   * @default false
+   */
+  enableCompression?: boolean;
 }
 
 /**
@@ -38,9 +49,9 @@ export function endpoint(): LambdaEndpoint {
  *
  * export const handler = createEndpointHandler({ services: [myService] })
  */
-export function createEndpointHandler(options: EndpointOptions) {
+export function createEndpointHandler(options: LambdaEndpointOptions) {
   return withOptions<LambdaEndpoint>(
-    new LambdaEndpointImpl(),
+    new LambdaEndpointImpl(options.enableCompression ?? false),
     options
   ).handler();
 }

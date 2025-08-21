@@ -50,7 +50,7 @@
     "@restatedev/restate-sdk-core": "^1.8.3"
   },
   "engines": {
-    "node": ">= 18.13"
+    "node": ">= 20.19"
   },
   "directories": {
     "test": "test"

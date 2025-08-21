@@ -26,9 +26,15 @@ import { WritableStream, type ReadableStream } from "node:stream/web";
 import { OnceStream } from "../../utils/streams.js";
 import { X_RESTATE_SERVER } from "../../user_agent.js";
 import { ensureError } from "../../types/errors.js";
+import * as zlib from "node:zlib";
 
 export class LambdaHandler {
-  constructor(private readonly handler: GenericHandler) {}
+  constructor(private readonly handler: GenericHandler, compression: boolean) {
+    // If compression is enabled, let's check we're running a node version that supports it
+    if (compression) {
+      checkCompressionSupported();
+    }
+  }
 
   async handleRequest(
     event: APIGatewayProxyEvent | APIGatewayProxyEventV2,
@@ -39,33 +45,69 @@ export class LambdaHandler {
     //
     const path = "path" in event ? event.path : event.rawPath;
 
+    // Deal with content-encoding
+    let requestContentEncoding;
+    let requestAcceptEncoding;
+    for (const [key, value] of Object.entries(event.headers)) {
+      if (
+        key.localeCompare("content-encoding", undefined, {
+          sensitivity: "accent",
+        })
+      ) {
+        requestContentEncoding = value;
+        continue;
+      }
+      if (
+        key.localeCompare("accept-encoding", undefined, {
+          sensitivity: "accent",
+        })
+      ) {
+        requestAcceptEncoding = value;
+      }
+    }
+
     //
     // Convert the request body to a Uint8Array stream
     // Lambda functions receive the body as base64 encoded string
     //
-    let body: ReadableStream<Uint8Array> | null;
+    let bodyStream: ReadableStream<Uint8Array> | null;
     if (!event.body) {
-      body = null;
-    } else if (event.isBase64Encoded) {
-      body = OnceStream(Buffer.from(event.body, "base64"));
+      bodyStream = null;
     } else {
-      body = OnceStream(new TextEncoder().encode(event.body));
+      let bodyBuffer: Buffer | undefined;
+      if (event.isBase64Encoded) {
+        bodyBuffer = Buffer.from(event.body, "base64");
+      } else {
+        bodyBuffer = Buffer.from(new TextEncoder().encode(event.body));
+      }
+
+      // Now decode if needed
+      if (requestContentEncoding && requestContentEncoding.includes("zstd")) {
+        checkCompressionSupported();
+        // Input encoded with zstd, let's decode it!
+        bodyBuffer = (
+          zlib as unknown as { zstdDecompressSync: (b: Buffer) => Buffer }
+        ).zstdDecompressSync(bodyBuffer);
+      }
+
+      // Prep the stream to pass through the endpoint handler
+      bodyStream = OnceStream(bodyBuffer);
     }
 
     const abortController = new AbortController();
 
     const request: RestateRequest = {
-      body,
+      body: bodyStream,
       headers: event.headers,
       url: path,
       extraArgs: [context],
       abortSignal: abortController.signal,
     };
 
-    let resp: RestateResponse;
+    let response: RestateResponse;
 
     try {
-      resp = await this.handler.handle(request, {
+      response = await this.handler.handle(request, {
         AWSRequestId: context.awsRequestId,
       });
     } catch (e) {
@@ -76,7 +118,7 @@ export class LambdaHandler {
     const chunks: Uint8Array[] = [];
 
     try {
-      await resp.body.pipeTo(
+      await response.body.pipeTo(
         new WritableStream<Uint8Array>({
           write: (chunk) => {
             chunks.push(chunk);
@@ -103,11 +145,35 @@ export class LambdaHandler {
       abortController.abort();
     }
 
+    const responseBodyBuffer = Buffer.concat(chunks);
+    let responseBody;
+
+    // Now let's encode if we need to.
+    if (requestAcceptEncoding && requestAcceptEncoding.includes("zstd")) {
+      checkCompressionSupported();
+      response.headers["content-encoding"] = "zstd";
+
+      responseBody = (
+        zlib as unknown as { zstdCompressSync: (b: Buffer) => Buffer }
+      )
+        .zstdCompressSync(responseBodyBuffer)
+        .toString("base64");
+    } else {
+      responseBody = responseBodyBuffer.toString("base64");
+    }
     return {
-      headers: resp.headers,
-      statusCode: resp.statusCode,
+      headers: response.headers,
+      statusCode: response.statusCode,
       isBase64Encoded: true,
-      body: Buffer.concat(chunks).toString("base64"),
+      body: responseBody,
     };
+  }
+}
+
+function checkCompressionSupported() {
+  if (!("zstdDecompressSync" in zlib) || !("zstdCompressSync" in zlib)) {
+    throw new Error(
+      "Compression is enabled, but you're running a node version that doesn't support zstd compression. Please use Node.js >= 22."
+    );
   }
 }
