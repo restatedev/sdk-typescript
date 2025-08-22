@@ -563,10 +563,8 @@ export class GenericHandler implements RestateHandler {
     }
 
     if (manifestVersion < 4) {
-      const error = checkUnsupportedFeature(discovery, "lambdaCompression");
-      if (error !== undefined) {
-        return error;
-      }
+      // Blank the lambda compression field. No need to fail in this case.
+      discovery.lambdaCompression = undefined;
     }
 
     const body = JSON.stringify(discovery);

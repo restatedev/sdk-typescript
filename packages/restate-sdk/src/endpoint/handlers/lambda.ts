@@ -31,12 +31,10 @@ import * as zlib from "node:zlib";
 const RESPONSE_COMPRESSION_THRESHOLD = 3 * 1024 * 1024;
 
 export class LambdaHandler {
-  constructor(private readonly handler: GenericHandler, compression: boolean) {
-    // If compression is enabled, let's check we're running a node version that supports it
-    if (compression) {
-      checkCompressionSupported();
-    }
-  }
+  constructor(
+    private readonly handler: GenericHandler,
+    private readonly compressionSupported: boolean
+  ) {}
 
   async handleRequest(
     event: APIGatewayProxyEvent | APIGatewayProxyEventV2,
@@ -85,7 +83,12 @@ export class LambdaHandler {
 
       // Now decode if needed
       if (requestContentEncoding && requestContentEncoding.includes("zstd")) {
-        checkCompressionSupported();
+        if (!this.compressionSupported) {
+          throw new Error(
+            "The input is compressed using zstd, but this lambda deployment doesn't support compression. Make sure to deploy the Lambda using Node > 22"
+          );
+        }
+
         // Input encoded with zstd, let's decode it!
         bodyBuffer = (
           zlib as unknown as { zstdDecompressSync: (b: Buffer) => Buffer }
@@ -152,11 +155,11 @@ export class LambdaHandler {
 
     // Now let's encode if we need to.
     if (
+      this.compressionSupported &&
       responseBodyBuffer.length > RESPONSE_COMPRESSION_THRESHOLD &&
       requestAcceptEncoding &&
       requestAcceptEncoding.includes("zstd")
     ) {
-      checkCompressionSupported();
       response.headers["content-encoding"] = "zstd";
 
       responseBody = (
@@ -176,10 +179,6 @@ export class LambdaHandler {
   }
 }
 
-function checkCompressionSupported() {
-  if (!("zstdDecompressSync" in zlib) || !("zstdCompressSync" in zlib)) {
-    throw new Error(
-      "Compression is enabled, but you're running a node version that doesn't support zstd compression. Please use Node.js >= 22."
-    );
-  }
+export function isCompressionSupported() {
+  return "zstdDecompressSync" in zlib && "zstdCompressSync" in zlib;
 }

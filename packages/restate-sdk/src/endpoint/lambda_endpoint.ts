@@ -21,7 +21,7 @@ import type {
   RestateEndpointBase,
 } from "../endpoint.js";
 import { GenericHandler } from "./handlers/generic.js";
-import { LambdaHandler } from "./handlers/lambda.js";
+import { isCompressionSupported, LambdaHandler } from "./handlers/lambda.js";
 import type { LoggerTransport } from "../logging/logger_transport.js";
 
 /**
@@ -39,23 +39,12 @@ import type { LoggerTransport } from "../logging/logger_transport.js";
  *   .handler();
  */
 export interface LambdaEndpoint extends RestateEndpointBase<LambdaEndpoint> {
-  /**
-   * Enable compression of Lambda requests/responses using zstd.
-   *
-   * NOTE: This feature is supported only from Restate 1.5 onward.
-   *
-   * @default false
-   */
-  enableCompression(): LambdaEndpoint;
-
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   handler(): (event: any, ctx: any) => Promise<any>;
 }
 
 export class LambdaEndpointImpl implements LambdaEndpoint {
   private builder: EndpointBuilder = new EndpointBuilder();
-
-  constructor(private compression: boolean) {}
 
   public bind<P extends string, M>(
     definition:
@@ -89,23 +78,20 @@ export class LambdaEndpointImpl implements LambdaEndpoint {
     return this;
   }
 
-  public enableCompression(): LambdaEndpoint {
-    this.compression = true;
-    return this;
-  }
-
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   handler(): (event: any, ctx: any) => Promise<any> {
+    const compressionEnabled = isCompressionSupported();
+
     const genericHandler = new GenericHandler(
       this.builder.build(),
       "REQUEST_RESPONSE",
-      this.compression
+      compressionEnabled
         ? {
             lambdaCompression: "zstd",
           }
         : {}
     );
-    const lambdaHandler = new LambdaHandler(genericHandler, this.compression);
+    const lambdaHandler = new LambdaHandler(genericHandler, compressionEnabled);
     return lambdaHandler.handleRequest.bind(lambdaHandler);
   }
 }
