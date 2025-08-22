@@ -17,51 +17,69 @@
 
 import type { Serde } from "@restatedev/restate-sdk-core";
 
-import { z, ZodVoid } from "zod";
+import * as z3 from "zod/v3";
+import * as z4 from "zod/v4/core";
 import { zodToJsonSchema } from "zod-to-json-schema";
 
 export type { Serde } from "@restatedev/restate-sdk-core";
 
-class ZodSerde<T extends z.ZodType> implements Serde<z.infer<T>> {
+type ZodType = z3.ZodTypeAny | z4.$ZodType;
+type output<T> = T extends z3.ZodTypeAny ? z3.infer<T> : z4.infer<T>;
+
+class ZodSerde<T extends ZodType> implements Serde<output<T>> {
   contentType? = "application/json";
   jsonSchema?: object | undefined;
 
   constructor(private readonly schema: T) {
-    this.jsonSchema = zodToJsonSchema(schema);
-    if (schema instanceof ZodVoid || schema instanceof z.ZodUndefined) {
-      this.contentType = undefined;
-    }
+      if ("_zod" in schema) {
+          this.jsonSchema = z4.toJSONSchema(schema);
+      } else if (schema instanceof z3.ZodType) {
+          // zod3 fallback
+          this.jsonSchema = zodToJsonSchema(schema as never);
+      } else {
+          this.jsonSchema = undefined;
+      }
+
+      if (schema instanceof z3.ZodVoid
+          || schema instanceof z3.ZodUndefined
+          || schema instanceof z4.$ZodVoid
+          || schema instanceof z4.$ZodUndefined) {
+          this.contentType = undefined;
+      }
   }
 
-  serialize(value: T): Uint8Array {
+  serialize(value: output<T>): Uint8Array {
     if (value === undefined) {
       return new Uint8Array(0);
     }
     return new TextEncoder().encode(JSON.stringify(value));
   }
 
-  deserialize(data: Uint8Array): T {
+  deserialize(data: Uint8Array): output<T> {
     const js =
       data.length === 0
         ? undefined
         : JSON.parse(new TextDecoder().decode(data));
-
-    const res = this.schema.safeParse(js);
-    if (res.success) {
-      return res.data;
+    if ('safeParse' in this.schema && typeof this.schema.safeParse === 'function') {
+        const res = this.schema.safeParse(js);
+        if (res.success) {
+            return res.data;
+        }
+        throw res.error;
+    } else {
+        throw new TypeError("Unsupported data type. Expected 'safeParse'.");
     }
-    throw res.error;
   }
 }
 
 export namespace serde {
   /**
-   * A Zod based serde.
+   * A Zod-based serde.
    *
-   * @param schema the zod type
+   * @param zodType the zod type
    * @returns a serde that will validate the data with the zod schema
    */
-  export const zod = <T extends z.ZodType>(zodType: T): Serde<z.infer<T>> => {
+  export const zod = <T extends ZodType>(zodType: T): Serde<output<T>> => {
     return new ZodSerde(zodType);
   };
 }

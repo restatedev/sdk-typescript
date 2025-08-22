@@ -55,6 +55,15 @@ To use this library, add the dependency to your project:
 
 ```shell
 npm install --save-dev @restatedev/restate-sdk-zod
+npm install zod # optional if zod isn't already installed
+```
+
+# Zod v3 Users
+As a minimum requirement, `zod` must be at `v3.25.0`. Also, `zod-to-json-schema` is required.
+Add the following additional dependencies to your project:
+
+```shell
+npm install zod-to-json-schema zod@^3.25.0
 ```
 
 ## Versions
