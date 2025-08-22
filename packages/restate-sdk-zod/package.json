@@ -34,11 +34,12 @@
     "dist"
   ],
   "devDependencies": {
-    "@restatedev/restate-sdk-core": "^1.8.3"
+    "@restatedev/restate-sdk-core": "^1.8.3",
+    "vitest": "^3.0.9",
+    "zod": "^3.25.0 || ^4.0.0"
   },
-  "dependencies": {
-    "zod": "^3.24.1",
-    "zod-to-json-schema": "3.24.3"
+  "peerDependencies": {
+    "zod": "^3.25.0 || ^4.0.0"
   },
   "scripts": {
     "api:extract": "api-extractor run --local",

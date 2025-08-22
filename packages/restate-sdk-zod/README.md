@@ -51,11 +51,15 @@ For the SDK main package, checkout [`@restatedev/restate-sdk`](../restate-sdk).
 
 ## Using the library
 
-To use this library, add the dependency to your project:
+To use this library, add the dependency to your project together with `zod`:
 
 ```shell
-npm install --save-dev @restatedev/restate-sdk-zod
+npm install --save zod @restatedev/restate-sdk-zod
 ```
+
+### For Zod v3 users
+
+We recommend Zod v3 users, that can't upgrade yet to Zod v4 yet, to use the module version 1.8.3, which fully supports Zod v3.
 
 ## Versions
 
