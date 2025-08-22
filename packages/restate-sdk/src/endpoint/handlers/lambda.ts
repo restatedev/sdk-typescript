@@ -28,6 +28,8 @@ import { X_RESTATE_SERVER } from "../../user_agent.js";
 import { ensureError } from "../../types/errors.js";
 import * as zlib from "node:zlib";
 
+const RESPONSE_COMPRESSION_THRESHOLD = 3 * 1024 * 1024;
+
 export class LambdaHandler {
   constructor(private readonly handler: GenericHandler, compression: boolean) {
     // If compression is enabled, let's check we're running a node version that supports it
@@ -149,7 +151,11 @@ export class LambdaHandler {
     let responseBody;
 
     // Now let's encode if we need to.
-    if (requestAcceptEncoding && requestAcceptEncoding.includes("zstd")) {
+    if (
+      responseBodyBuffer.length > RESPONSE_COMPRESSION_THRESHOLD &&
+      requestAcceptEncoding &&
+      requestAcceptEncoding.includes("zstd")
+    ) {
       checkCompressionSupported();
       response.headers["content-encoding"] = "zstd";
 
