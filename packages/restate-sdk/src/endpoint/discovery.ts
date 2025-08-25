@@ -25,6 +25,10 @@ export interface Endpoint {
    * Maximum supported protocol version
    */
   maxProtocolVersion: number;
+  /**
+   * Compression used when the endpoint is a Lambda. This is unsupported if the endpoint is a regular HTTP endpoint.
+   */
+  lambdaCompression?: "zstd";
   services: Service[];
 }
 export interface Service {

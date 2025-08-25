@@ -37,7 +37,7 @@ restate.serve({ services: [greeter], port: 9080 });
 ## Using the SDK
 
 Prerequisites:
-- [NodeJS](https://nodejs.org/en/) >= v18.17.1 or [Bun](https://bun.sh/docs/installation) or [Deno](https://deno.land/#installation)
+- [NodeJS](https://nodejs.org/en/) >= v20.19 or [Bun](https://bun.sh/docs/installation) or [Deno](https://deno.land/#installation)
 - [npm CLI](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm) >= 9.6.7
 
 To use this SDK, add the dependency to your project:

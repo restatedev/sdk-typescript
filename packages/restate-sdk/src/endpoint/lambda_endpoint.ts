@@ -21,7 +21,7 @@ import type {
   RestateEndpointBase,
 } from "../endpoint.js";
 import { GenericHandler } from "./handlers/generic.js";
-import { LambdaHandler } from "./handlers/lambda.js";
+import { isCompressionSupported, LambdaHandler } from "./handlers/lambda.js";
 import type { LoggerTransport } from "../logging/logger_transport.js";
 
 /**
@@ -80,11 +80,18 @@ export class LambdaEndpointImpl implements LambdaEndpoint {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   handler(): (event: any, ctx: any) => Promise<any> {
+    const compressionEnabled = isCompressionSupported();
+
     const genericHandler = new GenericHandler(
       this.builder.build(),
-      "REQUEST_RESPONSE"
+      "REQUEST_RESPONSE",
+      compressionEnabled
+        ? {
+            lambdaCompression: "zstd",
+          }
+        : {}
     );
-    const lambdaHandler = new LambdaHandler(genericHandler);
+    const lambdaHandler = new LambdaHandler(genericHandler, compressionEnabled);
     return lambdaHandler.handleRequest.bind(lambdaHandler);
   }
 }
