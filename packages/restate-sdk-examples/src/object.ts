@@ -9,29 +9,17 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import {
-  createObjectHandler,
-  createObjectSharedHandler,
-  object,
-  type ObjectContext,
-  type ObjectSharedContext,
-  serde,
-  serve,
-} from "@restatedev/restate-sdk";
+import { object, serve } from "@restatedev/restate-sdk";
 
 export const counter = object({
   name: "counter",
   handlers: {
-    /**
-     * Add amount to the currently stored count
-     */
-    add: async (ctx: ObjectContext, amount: number) => {
+    add: async (ctx, amount: number) => {
       const current = await ctx.get<number>("count");
       const updated = (current ?? 0) + amount;
       ctx.set("count", updated);
       return updated;
     },
-
     /**
      * Get the current amount.
      *
@@ -39,29 +27,17 @@ export const counter = object({
      * These handlers can be executed concurrently to the exclusive handlers (i.e. add)
      * But they can not modify the state (set is missing from the ctx).
      */
-    current: createObjectSharedHandler(
-      async (ctx: ObjectSharedContext): Promise<number> => {
-        return (await ctx.get("count")) ?? 0;
-      }
-    ),
-
-    /**
-     * Handlers (shared or exclusive) can be configured to bypass JSON serialization,
-     * by specifying the input (accept) and output (contentType) content types.
-     *
-     * to call that handler with binary data, you can use the following curl command:
-     * curl -X POST -H "Content-Type: application/octet-stream" --data-binary 'hello' ${RESTATE_INGRESS_URL}/counter/mykey/binary
-     */
-    binary: createObjectHandler(
-      {
-        input: serde.binary,
-        output: serde.binary,
+    current: {
+      sharedHandler: async (ctx) => {
+        return (await ctx.get<number>("count")) ?? 0;
       },
-      async (ctx: ObjectContext, data: Uint8Array) => {
-        // console.log("Received binary data", data);
-        return data;
-      }
-    ),
+    },
+    clear: {
+      handler: async (ctx) => {
+        ctx.clearAll();
+      },
+      enableLazyState: true,
+    },
   },
 });
 

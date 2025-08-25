@@ -22,6 +22,7 @@ export type {
   VirtualObject,
   Duration,
   JournalValueCodec,
+  FlattenHandlersDefinition,
 } from "@restatedev/restate-sdk-core";
 
 export { serde } from "@restatedev/restate-sdk-core";

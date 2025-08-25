@@ -19,6 +19,7 @@ import {
   type Serde,
   serde,
   type JournalValueCodec,
+  type FlattenHandlersDefinition,
 } from "@restatedev/restate-sdk-core";
 import type {
   ConnectionOpts,
@@ -296,21 +297,27 @@ class HttpIngress implements Ingress {
     );
   }
 
-  serviceClient<D>(opts: ServiceDefinitionFrom<D>): IngressClient<Service<D>> {
-    return this.proxy(opts.name) as IngressClient<Service<D>>;
+  serviceClient<D>(
+    opts: ServiceDefinitionFrom<D>
+  ): IngressClient<FlattenHandlersDefinition<Service<D>>> {
+    return this.proxy(opts.name) as IngressClient<
+      FlattenHandlersDefinition<Service<D>>
+    >;
   }
 
   objectClient<D>(
     opts: VirtualObjectDefinitionFrom<D>,
     key: string
-  ): IngressClient<VirtualObject<D>> {
-    return this.proxy(opts.name, key) as IngressClient<VirtualObject<D>>;
+  ): IngressClient<FlattenHandlersDefinition<VirtualObject<D>>> {
+    return this.proxy(opts.name, key) as IngressClient<
+      FlattenHandlersDefinition<VirtualObject<D>>
+    >;
   }
 
   workflowClient<D>(
     opts: WorkflowDefinitionFrom<D>,
     key: string
-  ): IngressWorkflowClient<Workflow<D>> {
+  ): IngressWorkflowClient<FlattenHandlersDefinition<Workflow<D>>> {
     const component = opts.name;
     const conn = this.opts;
 
@@ -392,23 +399,23 @@ class HttpIngress implements Ingress {
           };
         },
       }
-    ) as IngressWorkflowClient<Workflow<D>>;
+    ) as IngressWorkflowClient<FlattenHandlersDefinition<Workflow<D>>>;
   }
 
   objectSendClient<D>(
     opts: VirtualObjectDefinitionFrom<D>,
     key: string
-  ): IngressSendClient<VirtualObject<D>> {
+  ): IngressSendClient<FlattenHandlersDefinition<VirtualObject<D>>> {
     return this.proxy(opts.name, key, true) as IngressSendClient<
-      VirtualObject<D>
+      FlattenHandlersDefinition<VirtualObject<D>>
     >;
   }
 
   serviceSendClient<D>(
     opts: ServiceDefinitionFrom<D>
-  ): IngressSendClient<Service<D>> {
+  ): IngressSendClient<FlattenHandlersDefinition<Service<D>>> {
     return this.proxy(opts.name, undefined, true) as IngressSendClient<
-      Service<D>
+      FlattenHandlersDefinition<Service<D>>
     >;
   }
 

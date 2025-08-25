@@ -83,6 +83,14 @@ export type {
   ServiceOptions,
   ObjectOptions,
   WorkflowOptions,
+  ServiceHandlers,
+  ObjectHandlers,
+  WorkflowHandlers,
+  ServiceHandlerDefinition,
+  ObjectHandlerDefinition,
+  WorkflowHandlerDefinition,
+  WorkflowSharedHandlerDefinition,
+  Handler,
 } from "./types/rpc.js";
 export {
   service,
@@ -99,6 +107,7 @@ export type {
   ServiceDefinition,
   VirtualObjectDefinition,
   WorkflowDefinition,
+  FlattenHandlersDefinition,
 } from "@restatedev/restate-sdk-core";
 
 export type {
@@ -131,8 +140,23 @@ export type { EndpointOptions } from "./endpoint/types.js";
 
 import { handlers } from "./types/rpc.js";
 
+/**
+ * @deprecated
+ */
 export const createServiceHandler = handlers.handler;
+/**
+ * @deprecated
+ */
 export const createObjectHandler = handlers.object.exclusive;
+/**
+ * @deprecated
+ */
 export const createObjectSharedHandler = handlers.object.shared;
+/**
+ * @deprecated
+ */
 export const createWorkflowHandler = handlers.workflow.workflow;
+/**
+ * @deprecated
+ */
 export const createWorkflowSharedHandler = handlers.workflow.shared;

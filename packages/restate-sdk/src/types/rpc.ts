@@ -27,13 +27,9 @@ import type {
 } from "../context.js";
 
 import {
-  type ServiceHandler,
   type ServiceDefinition,
-  type ObjectHandler,
   type VirtualObjectDefinition,
-  type WorkflowHandler,
   type WorkflowDefinition,
-  type WorkflowSharedHandler,
   type Serde,
   type Duration,
   serde,
@@ -496,6 +492,9 @@ export class HandlerWrapper {
 }
 
 // ----------- handler decorators ----------------------------------------------
+/**
+ * @deprecated
+ */
 export type RemoveVoidArgument<F> = F extends (
   ctx: infer C,
   arg: infer A
@@ -505,12 +504,12 @@ export type RemoveVoidArgument<F> = F extends (
     : F
   : F;
 
+/**
+ * @deprecated
+ */
 export namespace handlers {
   /**
-   * Create a service handler.
-   *
-   * @param opts additional configuration
-   * @param fn the actual handler code to execute
+   * @deprecated To provide options, simply define the handler as
    */
   export function handler<O, I = void>(
     opts: ServiceHandlerOpts<I, O>,
@@ -519,7 +518,13 @@ export namespace handlers {
     return HandlerWrapper.from(HandlerKind.SERVICE, fn, opts).transpose();
   }
 
+  /**
+   * @deprecated
+   */
   export namespace workflow {
+    /**
+     * @deprecated
+     */
     export function workflow<
       O,
       I = void,
@@ -529,6 +534,9 @@ export namespace handlers {
       fn: (ctx: WorkflowContext<TState>, input: I) => Promise<O>
     ): RemoveVoidArgument<typeof fn>;
 
+    /**
+     * @deprecated
+     */
     export function workflow<
       O,
       I = void,
@@ -537,6 +545,9 @@ export namespace handlers {
       fn: (ctx: WorkflowContext<TState>, input: I) => Promise<O>
     ): RemoveVoidArgument<typeof fn>;
 
+    /**
+     * @deprecated
+     */
     export function workflow<O, I = void>(
       optsOrFn:
         | WorkflowHandlerOpts<I, O>
@@ -554,13 +565,7 @@ export namespace handlers {
     }
 
     /**
-     * Creates a shared handler for a workflow.
-     *
-     * A shared handler allows a read-only concurrent execution
-     * for a given key.
-     *
-     * @param opts additional configurations
-     * @param fn the handler to execute
+     * @deprecated
      */
     export function shared<
       O,
@@ -572,13 +577,7 @@ export namespace handlers {
     ): RemoveVoidArgument<typeof fn>;
 
     /**
-     * Creates a shared handler for a workflow.
-     *
-     * A shared handler allows a read-only concurrent execution
-     * for a given key.
-     *
-     * @param opts additional configurations
-     * @param fn the handler to execute
+     * @deprecated
      */
     export function shared<
       O,
@@ -589,13 +588,7 @@ export namespace handlers {
     ): RemoveVoidArgument<typeof fn>;
 
     /**
-     * Creates a shared handler for a workflow
-     *
-     * A shared handler allows a read-only concurrent execution
-     * for a given key.
-     *
-     * @param opts additional configurations
-     * @param fn the handler to execute
+     * @deprecated
      */
     export function shared<O, I = void>(
       optsOrFn:
@@ -614,14 +607,12 @@ export namespace handlers {
     }
   }
 
+  /**
+   * @deprecated
+   */
   export namespace object {
     /**
-     * Creates an exclusive handler for a virtual Object.
-     *
-     * note : This applies only to a virtual object.
-     *
-     * @param opts additional configurations
-     * @param fn the handler to execute
+     * @deprecated
      */
     export function exclusive<
       O,
@@ -633,16 +624,7 @@ export namespace handlers {
     ): RemoveVoidArgument<typeof fn>;
 
     /**
-     * Creates an exclusive handler for a virtual Object.
-     *
-     *
-     * note 1: This applies only to a virtual object.
-     * note 2: This is the default for virtual objects, so if no
-     *         additional reconfiguration is needed, you can simply
-     *         use the handler directly (no need to use exclusive).
-     *         This variant here is only for symmetry/convenance.
-     *
-     * @param fn the handler to execute
+     * @deprecated
      */
     export function exclusive<
       O,
@@ -653,17 +635,7 @@ export namespace handlers {
     ): RemoveVoidArgument<typeof fn>;
 
     /**
-     * Creates an exclusive handler for a virtual Object.
-     *
-     *
-     * note 1: This applies only to a virtual object.
-     * note 2: This is the default for virtual objects, so if no
-     *         additional reconfiguration is needed, you can simply
-     *         use the handler directly (no need to use exclusive).
-     *         This variant here is only for symmetry/convenance.
-     *
-     * @param opts additional configurations
-     * @param fn the handler to execute
+     * @deprecated
      */
     export function exclusive<O, I = void>(
       optsOrFn:
@@ -682,15 +654,7 @@ export namespace handlers {
     }
 
     /**
-     * Creates a shared handler for a virtual Object.
-     *
-     * A shared handler allows a read-only concurrent execution
-     * for a given key.
-     *
-     * note: This applies only to a virtual object.
-     *
-     * @param opts additional configurations
-     * @param fn the handler to execute
+     * @deprecated
      */
     export function shared<
       O,
@@ -702,15 +666,7 @@ export namespace handlers {
     ): RemoveVoidArgument<typeof fn>;
 
     /**
-     * Creates a shared handler for a virtual Object.
-     *
-     * A shared handler allows a read-only concurrent execution
-     * for a given key.
-     *
-     * note: This applies only to a virtual object.
-     *
-     * @param opts additional configurations
-     * @param fn the handler to execute
+     * @deprecated
      */
     export function shared<
       O,
@@ -721,15 +677,7 @@ export namespace handlers {
     ): RemoveVoidArgument<typeof fn>;
 
     /**
-     * Creates a shared handler for a virtual Object.
-     *
-     * A shared handler allows a read-only concurrent execution
-     * for a given key.
-     *
-     * note: This applies only to a virtual object.
-     *
-     * @param opts additional configurations
-     * @param fn the handler to execute
+     * @deprecated
      */
     export function shared<I, O>(
       optsOrFn:
@@ -749,13 +697,33 @@ export namespace handlers {
   }
 }
 
+// ----------- common ----------------------------------------------
+
+export type Handler<F, C, I = any, O = any> = F extends (
+  ctx: C,
+  param: I
+) => Promise<O>
+  ? F
+  : F extends (ctx: C) => Promise<O>
+  ? F
+  : (ctx: C, param?: I) => Promise<O>;
+
 // ----------- services ----------------------------------------------
 
-export type ServiceOpts<U> = {
-  [K in keyof U]: U[K] extends ServiceHandler<U[K], Context>
-    ? U[K]
-    : ServiceHandler<U[K], Context>;
+export type ServiceHandlerDefinition<U, I = any, O = any> =
+  | Handler<U, Context, I, O>
+  | ({
+      handler: Handler<U, Context, I, O>;
+    } & ServiceHandlerOpts<I, O>);
+
+export type ServiceHandlers<U> = {
+  [K in keyof U]: ServiceHandlerDefinition<U>;
 };
+
+/**
+ * @deprecated Use ServiceHandlers instead.
+ */
+export type ServiceOpts<U> = ServiceHandlers<U>;
 
 export type ServiceOptions = {
   /**
@@ -907,7 +875,7 @@ export type ServiceOptions = {
  */
 export const service = <P extends string, M>(service: {
   name: P;
-  handlers: ServiceOpts<M> & ThisType<M>;
+  handlers: M & ServiceHandlers<M> & ThisType<M>;
   description?: string;
   metadata?: Record<string, string>;
   options?: ServiceOptions;
@@ -924,6 +892,23 @@ export const service = <P extends string, M>(service: {
         name,
         HandlerWrapper.from(HandlerKind.SERVICE, handler).transpose(),
       ];
+    } else if (typeof handler === "object") {
+      const handlerDefinition = handler as {
+        handler?: Function;
+      } & ServiceHandlerOpts<any, any>;
+      if (!handlerDefinition || !handlerDefinition?.handler) {
+        throw new TypeError(
+          `Expected handler definition ${name} to contain field 'handler'`
+        );
+      }
+      return [
+        name,
+        HandlerWrapper.from(
+          HandlerKind.SERVICE,
+          handlerDefinition.handler,
+          handlerDefinition
+        ).transpose(),
+      ];
     }
     throw new TypeError(`Unexpected handler type ${name}`);
   });
@@ -939,15 +924,31 @@ export const service = <P extends string, M>(service: {
 
 // ----------- objects ----------------------------------------------
 
-export type ObjectOpts<U> = {
-  [K in keyof U]: U[K] extends ObjectHandler<U[K], ObjectContext<any>>
-    ? U[K]
-    : U[K] extends ObjectHandler<U[K], ObjectSharedContext<any>>
-    ? U[K]
-    :
-        | ObjectHandler<U[K], ObjectContext<any>>
-        | ObjectHandler<U[K], ObjectSharedContext<any>>;
+export type ObjectHandlerDefinition<
+  U,
+  TState extends TypedState = UntypedState,
+  I = any,
+  O = any
+> =
+  | Handler<U, ObjectContext<TState>, I, O>
+  | ({
+      sharedHandler: Handler<U, ObjectSharedContext<TState>, I, O>;
+    } & ObjectHandlerOpts<I, O>)
+  | ({
+      handler: Handler<U, ObjectContext<TState>, I, O>;
+    } & ObjectHandlerOpts<I, O>);
+
+export type ObjectHandlers<U, TState extends TypedState = UntypedState> = {
+  [K in keyof U]: ObjectHandlerDefinition<unknown, TState>;
 };
+
+/**
+ * @deprecated Use ObjectHandlers instead.
+ */
+export type ObjectOpts<
+  U,
+  TState extends TypedState = UntypedState
+> = ObjectHandlers<U, TState>;
 
 export type ObjectOptions = ServiceOptions & {
   /**
@@ -1015,7 +1016,7 @@ export type ObjectOptions = ServiceOptions & {
  */
 export const object = <P extends string, M>(object: {
   name: P;
-  handlers: ObjectOpts<M> & ThisType<M>;
+  handlers: M & ObjectHandlers<M> & ThisType<M>;
   description?: string;
   metadata?: Record<string, string>;
   options?: ObjectOptions;
@@ -1034,6 +1035,39 @@ export const object = <P extends string, M>(object: {
         name,
         HandlerWrapper.from(HandlerKind.EXCLUSIVE, handler).transpose(),
       ];
+    } else if (typeof handler === "object") {
+      const handlerDefinition = handler as {
+        handler?: Function;
+        sharedHandler?: Function;
+      } & ObjectHandlerOpts<any, any>;
+      if (!handlerDefinition) {
+        throw new TypeError(
+          `Expected handler definition ${name} to be non-empty`
+        );
+      }
+      if (handlerDefinition.handler) {
+        return [
+          name,
+          HandlerWrapper.from(
+            HandlerKind.EXCLUSIVE,
+            handlerDefinition.handler,
+            handlerDefinition
+          ).transpose(),
+        ];
+      }
+      if (handlerDefinition.sharedHandler) {
+        return [
+          name,
+          HandlerWrapper.from(
+            HandlerKind.SHARED,
+            handlerDefinition.sharedHandler,
+            handlerDefinition
+          ).transpose(),
+        ];
+      }
+      throw new TypeError(
+        `Expected handler definition ${name} to contain field 'handler' or 'sharedHandler'`
+      );
     }
     throw new TypeError(`Unexpected handler type ${name}`);
   });
@@ -1049,6 +1083,28 @@ export const object = <P extends string, M>(object: {
 
 // ----------- workflows ----------------------------------------------
 
+export type WorkflowHandlerDefinition<
+  U,
+  TState extends TypedState = UntypedState,
+  I = any,
+  O = any
+> =
+  | Handler<U, WorkflowContext<TState>, I, O>
+  | ({
+      handler: Handler<U, WorkflowContext<TState>, I, O>;
+    } & WorkflowHandlerOpts<I, O>);
+
+export type WorkflowSharedHandlerDefinition<
+  U,
+  TState extends TypedState = UntypedState,
+  I = any,
+  O = any
+> =
+  | Handler<U, WorkflowSharedContext<TState>, I, O>
+  | ({
+      handler: Handler<U, WorkflowSharedContext<TState>, I, O>;
+    } & WorkflowHandlerOpts<I, O>);
+
 /**
  * A workflow handlers is a type that describes the handlers for a workflow.
  * The handlers must contain exactly one handler named 'run', and this handler must accept as a first argument a WorkflowContext.
@@ -1056,22 +1112,21 @@ export const object = <P extends string, M>(object: {
  * The handlers can not be named 'workflowSubmit', 'workflowAttach', 'workflowOutput' - as these are reserved.
  * @see {@link workflow} for an example.
  */
-export type WorkflowOpts<U> = {
-  run: (ctx: WorkflowContext<any>, argument: any) => Promise<any>;
-} & {
+export type WorkflowHandlers<U, TState extends TypedState = UntypedState> = {
   [K in keyof U]: K extends
     | "workflowSubmit"
     | "workflowAttach"
     | "workflowOutput"
     ? `${K} is a reserved keyword`
     : K extends "run"
-    ? U[K] extends WorkflowHandler<U[K], WorkflowContext<any>>
-      ? U[K]
-      : "An handler named 'run' must take as a first argument a WorkflowContext, and must return a Promise"
-    : U[K] extends WorkflowSharedHandler<U[K], WorkflowSharedContext<any>>
-    ? U[K]
-    : "An handler other then 'run' must accept as a first argument a WorkflowSharedContext";
-};
+    ? WorkflowHandlerDefinition<U[K], TState>
+    : WorkflowSharedHandlerDefinition<U[K], TState>;
+} & { run: any };
+
+/**
+ * @deprecated Use WorkflowHandlers instead.
+ */
+export type WorkflowOpts<U> = WorkflowHandlers<U>;
 
 export type WorkflowOptions = ServiceOptions & {
   /**
@@ -1132,7 +1187,7 @@ export type WorkflowOptions = ServiceOptions & {
  */
 export const workflow = <P extends string, M>(workflow: {
   name: P;
-  handlers: WorkflowOpts<M> & ThisType<M>;
+  handlers: M & WorkflowHandlers<M> & ThisType<M>;
   description?: string;
   metadata?: Record<string, string>;
   options?: WorkflowOptions;
@@ -1144,7 +1199,10 @@ export const workflow = <P extends string, M>(workflow: {
   //
   // Add the main 'run' handler
   //
-  const runHandler = workflow.handlers["run"];
+  const runHandler = workflow.handlers["run"] as
+    | Function
+    | object
+    | HandlerWrapper;
   let runWrapper: HandlerWrapper;
 
   if (runHandler instanceof HandlerWrapper) {
@@ -1153,6 +1211,20 @@ export const workflow = <P extends string, M>(workflow: {
     runWrapper =
       HandlerWrapper.fromHandler(runHandler) ??
       HandlerWrapper.from(HandlerKind.WORKFLOW, runHandler);
+  } else if (typeof runHandler === "object") {
+    const handlerDefinition = runHandler as {
+      handler?: Function;
+    } & WorkflowHandlerOpts<any, any>;
+    if (!handlerDefinition || !handlerDefinition?.handler) {
+      throw new TypeError(
+        `Expected handler definition run to contain field 'handler'`
+      );
+    }
+    runWrapper = HandlerWrapper.from(
+      HandlerKind.WORKFLOW,
+      handlerDefinition.handler,
+      handlerDefinition
+    );
   } else {
     throw new TypeError(`Missing main workflow handler, named 'run'`);
   }
@@ -1180,6 +1252,20 @@ export const workflow = <P extends string, M>(workflow: {
       wrapper =
         HandlerWrapper.fromHandler(handler) ??
         HandlerWrapper.from(HandlerKind.SHARED, handler);
+    } else if (typeof handler === "object") {
+      const handlerDefinition = handler as {
+        handler?: Function;
+      } & WorkflowHandlerOpts<any, any>;
+      if (!handlerDefinition || !handlerDefinition?.handler) {
+        throw new TypeError(
+          `Expected handler definition ${name} to contain field 'handler'`
+        );
+      }
+      wrapper = HandlerWrapper.from(
+        HandlerKind.SHARED,
+        handlerDefinition.handler,
+        handlerDefinition
+      );
     } else {
       throw new TypeError(`Unexpected handler type ${name}`);
     }

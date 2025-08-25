@@ -51,6 +51,7 @@ import {
 } from "./types/rpc.js";
 import type {
   Duration,
+  FlattenHandlersDefinition,
   JournalValueCodec,
   Serde,
   Service,
@@ -343,28 +344,30 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     }
   }
 
-  serviceClient<D>({ name }: ServiceDefinitionFrom<D>): Client<Service<D>> {
+  serviceClient<D>({
+    name,
+  }: ServiceDefinitionFrom<D>): Client<FlattenHandlersDefinition<Service<D>>> {
     return makeRpcCallProxy((call) => this.genericCall(call), name);
   }
 
   objectClient<D>(
     { name }: VirtualObjectDefinitionFrom<D>,
     key: string
-  ): Client<VirtualObject<D>> {
+  ): Client<FlattenHandlersDefinition<VirtualObject<D>>> {
     return makeRpcCallProxy((call) => this.genericCall(call), name, key);
   }
 
   workflowClient<D>(
     { name }: WorkflowDefinitionFrom<D>,
     key: string
-  ): Client<Workflow<D>> {
+  ): Client<FlattenHandlersDefinition<Workflow<D>>> {
     return makeRpcCallProxy((call) => this.genericCall(call), name, key);
   }
 
   public serviceSendClient<D>(
     { name }: ServiceDefinitionFrom<D>,
     opts?: SendOptions
-  ): SendClient<Service<D>> {
+  ): SendClient<FlattenHandlersDefinition<Service<D>>> {
     return makeRpcSendProxy(
       (send) => this.genericSend(send),
       name,
@@ -377,7 +380,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     { name }: VirtualObjectDefinitionFrom<D>,
     key: string,
     opts?: SendOptions
-  ): SendClient<VirtualObject<D>> {
+  ): SendClient<FlattenHandlersDefinition<VirtualObject<D>>> {
     return makeRpcSendProxy(
       (send) => this.genericSend(send),
       name,
@@ -390,7 +393,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     { name }: WorkflowDefinitionFrom<D>,
     key: string,
     opts?: SendOptions
-  ): SendClient<Workflow<D>> {
+  ): SendClient<FlattenHandlersDefinition<Workflow<D>>> {
     return makeRpcSendProxy(
       (send) => this.genericSend(send),
       name,

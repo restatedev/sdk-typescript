@@ -7,6 +7,7 @@ import type {
   WorkflowDefinitionFrom,
   Serde,
   Duration,
+  FlattenHandlersDefinition,
   JournalValueCodec,
 } from "@restatedev/restate-sdk-core";
 import { millisOrDurationToMillis } from "@restatedev/restate-sdk-core";
@@ -26,7 +27,9 @@ export interface Ingress {
   /**
    * Create a client from a {@link ServiceDefinition}.
    */
-  serviceClient<D>(opts: ServiceDefinitionFrom<D>): IngressClient<Service<D>>;
+  serviceClient<D>(
+    opts: ServiceDefinitionFrom<D>
+  ): IngressClient<FlattenHandlersDefinition<Service<D>>>;
 
   /**
    * Create a client from a {@link WorkflowDefinition}.
@@ -36,7 +39,7 @@ export interface Ingress {
   workflowClient<D>(
     opts: WorkflowDefinitionFrom<D>,
     key: string
-  ): IngressWorkflowClient<Workflow<D>>;
+  ): IngressWorkflowClient<FlattenHandlersDefinition<Workflow<D>>>;
 
   /**
    * Create a client from a {@link VirtualObjectDefinition}.
@@ -45,14 +48,14 @@ export interface Ingress {
   objectClient<D>(
     opts: VirtualObjectDefinitionFrom<D>,
     key: string
-  ): IngressClient<VirtualObject<D>>;
+  ): IngressClient<FlattenHandlersDefinition<VirtualObject<D>>>;
 
   /**
    * Create a client from a {@link ServiceDefinition}.
    */
   serviceSendClient<D>(
     opts: ServiceDefinitionFrom<D>
-  ): IngressSendClient<Service<D>>;
+  ): IngressSendClient<FlattenHandlersDefinition<Service<D>>>;
 
   /**
    * Create a client from a {@link VirtualObjectDefinition}.
@@ -60,7 +63,7 @@ export interface Ingress {
   objectSendClient<D>(
     opts: VirtualObjectDefinitionFrom<D>,
     key: string
-  ): IngressSendClient<VirtualObject<D>>;
+  ): IngressSendClient<FlattenHandlersDefinition<VirtualObject<D>>>;
 
   /**
    * Resolve an awakeable from the ingress client.
