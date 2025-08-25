@@ -52,15 +52,13 @@ export class LambdaHandler {
       if (
         key.localeCompare("content-encoding", undefined, {
           sensitivity: "accent",
-        })
+        }) === 0
       ) {
         requestContentEncoding = value;
-        continue;
-      }
-      if (
+      } else if (
         key.localeCompare("accept-encoding", undefined, {
           sensitivity: "accent",
-        })
+        }) === 0
       ) {
         requestAcceptEncoding = value;
       }
