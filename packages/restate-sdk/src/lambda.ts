@@ -20,6 +20,7 @@ import { withOptions } from "./endpoint/withOptions.js";
 
 /**
  * Create a new {@link LambdaEndpoint}.
+ * @deprecated Please use {@link createEndpointHandler}
  */
 export function endpoint(): LambdaEndpoint {
   return new LambdaEndpointImpl();
