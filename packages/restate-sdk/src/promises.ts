@@ -442,10 +442,6 @@ export class PromisesExecutor {
           restatePromise.tryCancel();
           return;
         } else {
-          // If we're in this branch, there might be a ctx.run command waiting to be flushed
-          // Let's flush it to notify early the runtime we're gonna run a ctx.run
-          await this.outputPump.awaitNextProgress();
-
           // We need to execute a run closure
           this.runClosuresTracker.executeRun(doProgressResult.ExecuteRun);
           // Let the run context switch, then come back to this flow.
