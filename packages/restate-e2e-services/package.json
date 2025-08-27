@@ -1,6 +1,6 @@
 {
   "name": "@restatedev/restate-e2e-services",
-  "version": "1.8.3",
+  "version": "1.8.4",
   "description": "Typescript SDK e2e tests",
   "private": true,
   "author": "Restate Developers",
@@ -30,8 +30,8 @@
     "release": ""
   },
   "dependencies": {
-    "@restatedev/restate-sdk": "^1.8.3",
-    "@restatedev/restate-sdk-clients": "^1.8.3",
+    "@restatedev/restate-sdk": "^1.8.4",
+    "@restatedev/restate-sdk-clients": "^1.8.4",
     "heapdump": "^0.3.15",
     "uuid": "^9.0.0"
   },
