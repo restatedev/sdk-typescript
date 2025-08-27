@@ -24,6 +24,7 @@ import type {
   WorkflowDefinitionFrom,
   Serde,
   Duration,
+  FlattenHandlersDefinition,
 } from "@restatedev/restate-sdk-core";
 import { ContextImpl } from "./context_impl.js";
 import type { TerminalError } from "./types/errors.js";
@@ -100,7 +101,7 @@ export interface KeyValueStore<TState extends TypedState> {
   get<TValue, TKey extends keyof TState = string>(
     name: TState extends UntypedState ? string : TKey,
     serde?: Serde<TState extends UntypedState ? TValue : TState[TKey]>
-  ): Promise<(TState extends UntypedState ? TValue : TState[TKey]) | null>;
+  ): Promise<TState extends UntypedState ? TValue | null : TState[TKey]>;
 
   stateKeys(): Promise<Array<string>>;
 
@@ -475,7 +476,9 @@ export interface Context extends RestateContext {
    * const result2 = await ctx.serviceClient(Service).anotherAction(1337);
    * ```
    */
-  serviceClient<D>(opts: ServiceDefinitionFrom<D>): Client<Service<D>>;
+  serviceClient<D>(
+    opts: ServiceDefinitionFrom<D>
+  ): Client<FlattenHandlersDefinition<Service<D>>>;
 
   /**
    * Same as {@link serviceClient} but for virtual objects.
@@ -486,7 +489,7 @@ export interface Context extends RestateContext {
   objectClient<D>(
     opts: VirtualObjectDefinitionFrom<D>,
     key: string
-  ): Client<VirtualObject<D>>;
+  ): Client<FlattenHandlersDefinition<VirtualObject<D>>>;
 
   /**
    * Same as {@link serviceClient} but for workflows.
@@ -497,7 +500,7 @@ export interface Context extends RestateContext {
   workflowClient<D>(
     opts: WorkflowDefinitionFrom<D>,
     key: string
-  ): Client<Workflow<D>>;
+  ): Client<FlattenHandlersDefinition<Workflow<D>>>;
 
   /**
    * Same as {@link objectSendClient} but for workflows.
@@ -508,7 +511,7 @@ export interface Context extends RestateContext {
   workflowSendClient<D>(
     opts: WorkflowDefinitionFrom<D>,
     key: string
-  ): SendClient<Workflow<D>>;
+  ): SendClient<FlattenHandlersDefinition<Workflow<D>>>;
 
   /**
    * Makes a type-safe one-way RPC to the specified target service. This method effectively behaves
@@ -554,7 +557,7 @@ export interface Context extends RestateContext {
   serviceSendClient<D>(
     service: ServiceDefinitionFrom<D>,
     opts?: SendOptions
-  ): SendClient<Service<D>>;
+  ): SendClient<FlattenHandlersDefinition<Service<D>>>;
 
   /**
    * Same as {@link serviceSendClient} but for virtual objects.
@@ -567,7 +570,7 @@ export interface Context extends RestateContext {
     obj: VirtualObjectDefinitionFrom<D>,
     key: string,
     opts?: SendOptions
-  ): SendClient<VirtualObject<D>>;
+  ): SendClient<FlattenHandlersDefinition<VirtualObject<D>>>;
 
   genericCall<REQ = Uint8Array, RES = Uint8Array>(
     call: GenericCall<REQ, RES>
@@ -646,7 +649,7 @@ export interface ObjectSharedContext<TState extends TypedState = UntypedState>
   get<TValue, TKey extends keyof TState = string>(
     name: TState extends UntypedState ? string : TKey,
     serde?: Serde<TState extends UntypedState ? TValue : TState[TKey]>
-  ): Promise<(TState extends UntypedState ? TValue : TState[TKey]) | null>;
+  ): Promise<TState extends UntypedState ? TValue | null : TState[TKey]>;
 
   /**
    * Retrieve all the state keys for this object.

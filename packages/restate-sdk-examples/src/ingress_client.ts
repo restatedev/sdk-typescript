@@ -16,9 +16,11 @@ import * as restate from "@restatedev/restate-sdk-clients";
 import type { Greeter } from "./greeter.js";
 import type { PaymentWorkflow } from "./workflow.js";
 import type { Counter } from "./object.js";
+import type { RawService } from "./raw.js";
 
 const Greeter: Greeter = { name: "greeter" };
 const Counter: Counter = { name: "counter" };
+const RawService: RawService = { name: "raw" };
 const Workflow: PaymentWorkflow = { name: "payment" };
 
 const ingress = restate.connect({ url: "http://localhost:8080" });
@@ -157,12 +159,12 @@ const workflow = async (name: string) => {
   console.log(await client.workflowAttach());
 };
 
-const binaryRawCall = async (name: string) => {
-  const counter = ingress.objectClient(Counter, name);
+const binaryRawCall = async () => {
+  const rawService = ingress.serviceClient(RawService);
 
   const buffer = new TextEncoder().encode("hello!");
 
-  const outBuffer = await counter.binary(
+  const outBuffer = await rawService.binary(
     buffer,
     restate.rpc.opts({
       input: restate.serde.binary,
@@ -173,7 +175,7 @@ const binaryRawCall = async (name: string) => {
 
   const str = new TextDecoder().decode(outBuffer);
 
-  console.log(`We got a buffer for ${name} : ${str}`);
+  console.log(`We got a buffer : ${str}`);
 };
 
 // Before running this example, make sure
@@ -198,5 +200,5 @@ Promise.resolve()
   .then(() => globalCustomHeaders("bob"))
   .then(() => customInterface("bob"))
   .then(() => delayedCall("bob"))
-  .then(() => binaryRawCall("bob"))
+  .then(() => binaryRawCall())
   .catch((e) => console.error(e));
