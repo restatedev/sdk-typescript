@@ -23,10 +23,17 @@ import { zodToJsonSchema } from "zod-to-json-schema";
 
 export type { Serde } from "@restatedev/restate-sdk-core";
 
-type ZodType = z3.ZodTypeAny | z4.$ZodType;
-type output<T> = T extends z3.ZodTypeAny ? z3.infer<T> : z4.infer<T>;
+export type V3ZodObjectOrWrapped =
+    | z3.ZodObject<any, any>
+    | z3.ZodEffects<z3.ZodObject<any, any>>;
 
-class ZodSerde<T extends ZodType> implements Serde<output<T>> {
+type ZodType = z3.ZodTypeAny | z4.$ZodType
+type ZodObject = V3ZodObjectOrWrapped | z4.$ZodObject
+
+
+type output<T> = T extends z3.ZodTypeAny | V3ZodObjectOrWrapped ? z3.infer<T> : z4.infer<T>;
+
+class ZodSerde<T extends ZodType | ZodObject> implements Serde<output<T>> {
   contentType? = "application/json";
   jsonSchema?: object | undefined;
 
@@ -47,6 +54,8 @@ class ZodSerde<T extends ZodType> implements Serde<output<T>> {
           this.contentType = undefined;
       }
   }
+
+
 
   serialize(value: output<T>): Uint8Array {
     if (value === undefined) {
@@ -79,7 +88,7 @@ export namespace serde {
    * @param zodType the zod type
    * @returns a serde that will validate the data with the zod schema
    */
-  export const zod = <T extends ZodType>(zodType: T): Serde<output<T>> => {
+  export const zod = <T extends ZodType | ZodObject>(zodType: T): Serde<output<T>> => {
     return new ZodSerde(zodType);
   };
 }

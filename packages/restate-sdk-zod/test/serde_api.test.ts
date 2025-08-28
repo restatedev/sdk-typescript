@@ -1,44 +1,85 @@
-import { describe, expect, it } from "vitest";
+import {describe, expect, it} from "vitest";
 import * as z3 from "zod/v3";
 import * as z4 from "zod/v4";
 import { serde } from "../src/serde_api.js";
 import { zodToJsonSchema } from "zod-to-json-schema";
 
-const validData = {
-    id: 1,
-    name: "test",
-    isActive: true,
-}
-const validDataSerialized = new TextEncoder().encode(JSON.stringify(validData));
-const invalidData = {
-    id: -1, // not positive
-    name: "a", // less than 3 characters
-    isActive: "not a boolean",
-}
-const invalidDataSerialized = new TextEncoder().encode(JSON.stringify(invalidData));
+
+/* eslint-disable @typescript-eslint/no-unsafe-call,@typescript-eslint/no-unsafe-member-access */
+
+const typeTestData = {
+    name: "Type Test",
+    validData: {
+        id: 1,
+        name: "test",
+        isActive: true,
+    },
+    invalidData: {
+        id: -1, // not positive
+        name: "a", // less than 3 characters
+        isActive: "not a boolean",
+    },
+};
+
+const z3TypeTestData = {
+    ...typeTestData,
+    name: `v3 ${typeTestData.name}`,
+    zodSchema: z3.object({
+        id: z3.number().int().positive(),
+        name: z3.string().min(3, { message: "Name must be at least 3 characters long" }),
+        isActive: z3.boolean(),
+    }),
+    jsonSchema: undefined,
+};
+z3TypeTestData.jsonSchema = zodToJsonSchema(z3TypeTestData.zodSchema as never)
+
+const z4TypeTestData = {
+    ...typeTestData,
+    name: `v4 ${typeTestData.name}`,
+    zodSchema: z4.object({
+        id: z4.number().int().positive(),
+        name: z4.string().min(3, { message: "Name must be at least 3 characters long" }),
+        isActive: z4.boolean(),
+    }),
+    jsonSchema: undefined,
+};
+z4TypeTestData.jsonSchema = z4.toJSONSchema(z4TypeTestData.zodSchema);
 
 
-const z3Schema = z3.object({
-    id: z3.number().int().positive(),
-    name: z3.string().min(3, { message: "Name must be at least 3 characters long" }),
-    isActive: z3.boolean(),
-});
-const z3Serde = serde.zod(z3Schema);
-const z3JsonSchema = zodToJsonSchema(z3Schema as never);
+const stringTestData = {
+    name: "stringTest",
+    validData: "just a string",
+    invalidData: -1,
+};
 
-const z4Schema = z4.object({
-    id: z4.number().int().positive(),
-    name: z4.string().min(3, { message: "Name must be at least 3 characters long" }),
-    isActive: z4.boolean(),
-});
-const z4Serde = serde.zod(z4Schema);
-const z4JsonSchema = z4.toJSONSchema(z4Schema);
+const z3StringTestData = {
+    ...stringTestData,
+    name: `v3 ${stringTestData.name}`,
+    zodSchema: z3.string(),
+    jsonSchema: undefined,
+};
+z3StringTestData.jsonSchema = zodToJsonSchema(z3StringTestData.zodSchema as never);
+
+const z4StringTestData = {
+    ...stringTestData,
+    name: `v4 ${stringTestData.name}`,
+    zodSchema: z4.string(),
+    jsonSchema: undefined,
+};
+z4StringTestData.jsonSchema = z4.toJSONSchema(z4StringTestData.zodSchema);
+
 
 describe('serde_api', () => {
     describe.each([
-        {ver: 'v3', srd: z3Serde, jsonSchema: z3JsonSchema},
-        {ver: 'v4', srd: z4Serde, jsonSchema: z4JsonSchema},
-    ])("zod $ver", ({ srd, jsonSchema }) => {
+        z3TypeTestData,
+        z4TypeTestData,
+        z3StringTestData,
+        z4StringTestData,
+    ])("zod $name", ({ zodSchema, jsonSchema, validData, invalidData }) => {
+        const validDataSerialized = new TextEncoder().encode(JSON.stringify(validData));
+        const invalidDataSerialized = new TextEncoder().encode(JSON.stringify(invalidData))
+        const srd = serde.zod(zodSchema);
+
         describe('constructor', () => {
             it('converts a valid schema to json', () => {
                 expect(srd.jsonSchema).not.to.be.null;
@@ -55,7 +96,7 @@ describe('serde_api', () => {
         })
         describe('deserialize', () => {
             it('deserializes a valid object', () => {
-                expect(srd.deserialize(validDataSerialized)).to.deep.equal(validData);
+                expect(srd.deserialize(new TextEncoder().encode(JSON.stringify(validData)))).to.deep.equal(validData);
             });
             it('throws an error on an invalid object', () => {
                 expect(() => srd.deserialize(invalidDataSerialized)).throws();
