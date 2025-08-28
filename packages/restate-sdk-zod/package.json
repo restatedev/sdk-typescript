@@ -56,7 +56,7 @@
     "release": "release-it"
   },
   "engines": {
-    "node": ">= 18.13"
+    "node": ">= 20.19"
   },
   "directories": {
     "example": "examples",

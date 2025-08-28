@@ -16,7 +16,10 @@ import {
   RetryableError,
   TerminalError,
 } from "../../types/errors.js";
-import type { ProtocolMode } from "../discovery.js";
+import type {
+  ProtocolMode,
+  Endpoint as EndpointManifest,
+} from "../discovery.js";
 import type { Component, ComponentHandler } from "../components.js";
 import { parseUrlComponents } from "../components.js";
 import { X_RESTATE_SERVER } from "../../user_agent.js";
@@ -78,6 +81,7 @@ export interface RestateHandler {
 
 const ENDPOINT_MANIFEST_V2 = "application/vnd.restate.endpointmanifest.v2+json";
 const ENDPOINT_MANIFEST_V3 = "application/vnd.restate.endpointmanifest.v3+json";
+const ENDPOINT_MANIFEST_V4 = "application/vnd.restate.endpointmanifest.v4+json";
 
 /**
  * This is an internal API to support 'fetch' like handlers.
@@ -93,7 +97,8 @@ export class GenericHandler implements RestateHandler {
 
   constructor(
     readonly endpoint: Endpoint,
-    private readonly protocolMode: ProtocolMode
+    private readonly protocolMode: ProtocolMode,
+    private readonly additionalDiscoveryFields: Partial<EndpointManifest>
   ) {
     // Setup identity verifier
     if (
@@ -489,7 +494,9 @@ export class GenericHandler implements RestateHandler {
 
     // Negotiate version to use
     let manifestVersion;
-    if (acceptVersionsString.includes(ENDPOINT_MANIFEST_V3)) {
+    if (acceptVersionsString.includes(ENDPOINT_MANIFEST_V4)) {
+      manifestVersion = 4;
+    } else if (acceptVersionsString.includes(ENDPOINT_MANIFEST_V3)) {
       manifestVersion = 3;
     } else if (acceptVersionsString.includes(ENDPOINT_MANIFEST_V2)) {
       manifestVersion = 2;
@@ -501,20 +508,9 @@ export class GenericHandler implements RestateHandler {
 
     const discovery = {
       ...this.endpoint.discoveryMetadata,
+      ...this.additionalDiscoveryFields,
       protocolMode: this.protocolMode,
     };
-    const body = JSON.stringify(discovery);
-
-    // type AllowedNames<T, U> = { [K in keyof T]: T[K] extends U ? K : never; }[keyof T];
-    //
-    // const checkUnsupportedFeature =  (obj: Record<string, unknown>, fields: Array<string>)=> {
-    //   for (const field of fields) {
-    //     if (field in obj && obj[field] !== undefined) {
-    //       return this.toErrorResponse(500, `The code uses the new discovery feature '${field}' but the runtime doesn't support it yet. Either remove the usage of this feature, or upgrade the runtime.`);
-    //     }
-    //   }
-    //   return;
-    // }
 
     const checkUnsupportedFeature = <T extends object>(
       obj: T,
@@ -526,7 +522,7 @@ export class GenericHandler implements RestateHandler {
             500,
             `The code uses the new discovery feature '${String(
               field
-            )}' but the runtime doesn't support it yet. Either remove the usage of this feature, or upgrade the runtime.`
+            )}' but the runtime doesn't support it yet (discovery protocol negotiated version ${manifestVersion}). Either remove the usage of this feature, or upgrade the runtime.`
           );
         }
       }
@@ -566,10 +562,20 @@ export class GenericHandler implements RestateHandler {
       }
     }
 
+    if (manifestVersion < 4) {
+      // Blank the lambda compression field. No need to fail in this case.
+      discovery.lambdaCompression = undefined;
+    }
+
+    const body = JSON.stringify(discovery);
     return {
       headers: {
         "content-type":
-          manifestVersion === 2 ? ENDPOINT_MANIFEST_V2 : ENDPOINT_MANIFEST_V3,
+          manifestVersion === 2
+            ? ENDPOINT_MANIFEST_V2
+            : manifestVersion === 3
+            ? ENDPOINT_MANIFEST_V3
+            : ENDPOINT_MANIFEST_V4,
         "x-restate-server": X_RESTATE_SERVER,
       },
       statusCode: 200,

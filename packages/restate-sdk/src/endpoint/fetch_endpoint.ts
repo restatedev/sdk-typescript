@@ -102,7 +102,8 @@ export class FetchEndpointImpl implements FetchEndpoint {
   } {
     const genericHandler = new GenericHandler(
       this.builder.build(),
-      this.protocolMode
+      this.protocolMode,
+      {}
     );
     return fetcher(genericHandler);
   }
