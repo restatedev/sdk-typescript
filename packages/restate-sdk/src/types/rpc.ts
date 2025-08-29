@@ -274,101 +274,99 @@ export enum HandlerKind {
 
 export type ServiceHandlerOpts<I, O> = {
   /**
-   * Define the acceptable content-type for this handler when a request is received at the ingress.
-   * Wildcards can be used, e.g. `application/*` or `* / *`.
+   * Defines which Content-Type values are accepted when this handler is invoked via the ingress.
+   * Wildcards are supported, for example `application/*` or `* / *`.
    *
-   * If not provided, the `input.contentType` will be used instead as default.
+   * If unset, `input.contentType` will be used as the default.
    *
-   * Setting this value has no effect on the input serde.
-   * If you want to customize how to deserialize the input, you still need to provide an `input` serde.
+   * This setting does not affect deserialization. To customize how the input is deserialized,
+   * provide an `input` Serde.
    */
   accept?: string;
 
   /**
-   * The Serde to use for deserializing the input parameter.
-   * defaults to: restate.serde.json
+   * Serde used to deserialize the input parameter.
+   * Defaults to `restate.serde.json`.
    *
-   * Provide a custom Serde if the input is not JSON, or use:
-   * restate.serde.binary the skip serialization/deserialization altogether.
-   * in that case, the input parameter is a Uint8Array.
+   * Provide a custom Serde if the input is not JSON, or use
+   * `restate.serde.binary` to skip serialization/deserialization altogether;
+   * in that case the input parameter is a `Uint8Array`.
    */
   input?: Serde<I>;
 
   /**
-   * The Serde to use for serializing the output.
-   * defaults to: restate.serde.json
+   * Serde used to serialize the output value.
+   * Defaults to `restate.serde.json`.
    *
-   * Provide a custom Serde if the output is not JSON, or use:
-   * restate.serde.binary the skip serialization/deserialization altogether.
-   * in that case, the output parameter is a Uint8Array.
+   * Provide a custom Serde if the output is not JSON, or use
+   * `restate.serde.binary` to skip serialization/deserialization altogether;
+   * in that case the output value is a `Uint8Array`.
    */
   output?: Serde<O>;
 
   /**
-   * An additional description for the handler, for documentation purposes.
+   * Human-readable description of the handler, shown in documentation/admin tools.
    */
   description?: string;
 
   /**
-   * Additional metadata for the handler.
+   * Arbitrary key/value metadata for the handler. Exposed via the Admin API.
    */
   metadata?: Record<string, string>;
 
   /**
    * The retention duration of idempotent requests to this handler.
    *
-   * *NOTE:* You can set this field only if you register this endpoint against restate-server >= 1.4,
-   * otherwise the service discovery will fail.
+   * Note: Available only when registering this endpoint with restate-server v1.4 or newer; otherwise service discovery will fail.
    */
   idempotencyRetention?: Duration | number;
 
   /**
    * The journal retention for invocations to this handler.
    *
-   * In case the request has an idempotency key, the `idempotencyRetention` caps the journal retention time.
+   * When a request has an idempotency key, `idempotencyRetention` caps the journal retention time.
    *
-   * *NOTE:* You can set this field only if you register this endpoint against restate-server >= 1.4,
-   * otherwise the service discovery will fail.
+   * Note: Available only when registering this endpoint with restate-server v1.4 or newer; otherwise service discovery will fail.
    */
   journalRetention?: Duration | number;
 
   /**
-   * This timer guards against stalled invocations. Once it expires, Restate triggers a graceful
-   * termination by asking the invocation to suspend (which preserves intermediate progress).
+   * Guards against stalled invocations. Once this timeout expires, Restate requests a graceful
+   * suspension of the invocation (preserving intermediate progress).
    *
-   * The `abortTimeout` is used to abort the invocation, in case it doesn't react to the request to
-   * suspend.
+   * If the invocation does not react to the suspension request, `abortTimeout` is used to abort it.
    *
-   * This overrides the inactivity timeout set for the service and the default set in restate-server.
+   * Overrides the inactivity timeout set at the service level and the default configured in the Restate server.
    *
-   * *NOTE:* You can set this field only if you register this endpoint against restate-server >= 1.4,
-   * otherwise the service discovery will fail.
+   * Note: Available only when registering this endpoint with restate-server v1.4 or newer; otherwise service discovery will fail.
    */
   inactivityTimeout?: Duration | number;
 
   /**
-   * This timer guards against stalled invocations that are supposed to terminate. The abort timeout
-   * is started after the [inactivityTimeout] has expired and the invocation has been asked to
-   * gracefully terminate. Once the timer expires, it will abort the invocation.
+   * Guards against invocations that fail to terminate after inactivity.
+   * The abort timeout starts after `inactivityTimeout` expires and a graceful termination was requested.
+   * When this timer expires, the invocation is aborted.
    *
-   * This timer potentially *interrupts* user code. If the user code needs longer to gracefully
-   * terminate, then this value needs to be set accordingly.
+   * This timer may interrupt user code. If more time is needed for graceful termination, increase this value.
    *
-   * This overrides the abort timeout set for the service and the default set in restate-server.
+   * Overrides the abort timeout set at the service level and the default configured in the Restate server.
    *
-   * *NOTE:* You can set this field only if you register this endpoint against restate-server >= 1.4,
-   * otherwise the service discovery will fail.
+   * Note: Available only when registering this endpoint with restate-server v1.4 or newer; otherwise service discovery will fail.
    */
   abortTimeout?: Duration | number;
 
   /**
-   * When set to `true` this handler cannot be invoked from the restate-server HTTP and Kafka ingress,
-   * but only from other services.
+   * When set to `true`, this handler cannot be invoked via the Restate server HTTP or Kafka ingress;
+   * it can only be called from other services.
    *
-   * *NOTE:* You can set this field only if you register this endpoint against restate-server >= 1.4,
-   * otherwise the service discovery will fail.
+   * Note: Available only when registering this endpoint with restate-server v1.4 or newer; otherwise service discovery will fail.
    */
   ingressPrivate?: boolean;
+
+  /**
+   * Retry policy to apply to all requests to this handler. For each unspecified field, the default value configured in the service or, if absent, in the restate-server configuration file, will be applied instead.
+   */
+  retryPolicy?: RetryPolicy;
 };
 
 export type ObjectHandlerOpts<I, O> = ServiceHandlerOpts<I, O> & {
@@ -427,7 +425,8 @@ export class HandlerWrapper {
       opts?.ingressPrivate,
       opts !== undefined && "enableLazyState" in opts
         ? opts?.enableLazyState
-        : undefined
+        : undefined,
+      opts?.retryPolicy
     );
   }
 
@@ -453,6 +452,7 @@ export class HandlerWrapper {
     public readonly abortTimeout?: Duration | number,
     public readonly ingressPrivate?: boolean,
     public readonly enableLazyState?: boolean,
+    public readonly retryPolicy?: RetryPolicy,
     public readonly asTerminalError?: (error: any) => TerminalError | undefined
   ) {
     this.accept = accept !== undefined ? accept : inputSerde.contentType;
@@ -757,75 +757,105 @@ export type ServiceOpts<U> = {
     : ServiceHandler<U[K], Context>;
 };
 
+export type RetryPolicy = {
+  /**
+   * Max number of retry attempts. When reached, the behavior specified in {@link onMaxAttempts} will be applied.
+   */
+  maxAttempts?: number;
+
+  /**
+   * What to do when max attempts are reached.
+   *
+   * If `pause`, the invocation will enter the paused state and can be manually resumed from the CLI/UI.
+   *
+   * If `kill`, the invocation will get automatically killed.
+   */
+  onMaxAttempts?: "pause" | "kill";
+
+  /**
+   * Initial interval for the first retry attempt.
+   * Retry interval will grow by a factor specified in `exponentiationFactor`.
+   *
+   * If a number is provided, it will be interpreted as milliseconds.
+   */
+  initialInterval?: Duration | number;
+
+  /**
+   * Max interval between retries.
+   * Retry interval will grow by a factor specified in `exponentiationFactor`.
+   *
+   * If a number is provided, it will be interpreted as milliseconds.
+   */
+  maxInterval?: Duration | number;
+
+  /**
+   * Exponentiation factor to use when computing the next retry delay.
+   */
+  exponentiationFactor?: number;
+};
+
 export type ServiceOptions = {
   /**
    * The retention duration of idempotent requests to this service.
    *
-   * *NOTE:* You can set this field only if you register this endpoint against restate-server >= 1.4,
-   * otherwise the service discovery will fail.
+   * Note: Available only when registering this endpoint with restate-server v1.4 or newer; otherwise service discovery will fail.
    */
   idempotencyRetention?: Duration | number;
 
   /**
-   * The journal retention. When set, this applies to all requests to all handlers of this service.
+   * Journal retention applied to all requests to all handlers of this service.
    *
-   * In case the request has an idempotency key, the `idempotencyRetention` caps the journal retention
-   * time.
+   * When a request includes an idempotency key, `idempotencyRetention` caps the journal retention time.
    *
-   * *NOTE:* You can set this field only if you register this endpoint against restate-server >= 1.4,
-   * otherwise the service discovery will fail.
-   *
-   * @return this
+   * Note: Available only when registering this endpoint with restate-server v1.4 or newer; otherwise service discovery will fail.
    */
   journalRetention?: Duration | number;
 
   /**
-   * This timer guards against stalled invocations. Once it expires, Restate triggers a graceful
-   * termination by asking the invocation to suspend (which preserves intermediate progress).
+   * Guards against stalled invocations. Once this timeout expires, Restate requests a graceful
+   * suspension of the invocation (preserving intermediate progress).
    *
-   * The `abortTimeout` is used to abort the invocation, in case it doesn't react to the request to
-   * suspend.
+   * If the invocation does not react to the suspension request, `abortTimeout` is used to abort it.
    *
-   * This overrides the default inactivity timeout configured in the restate-server for all
-   * invocations to this service.
+   * Overrides the default inactivity timeout configured in the Restate server for all invocations to this service.
    *
-   * *NOTE:* You can set this field only if you register this endpoint against restate-server >= 1.4,
-   * otherwise the service discovery will fail.
+   * Note: Available only when registering this endpoint with restate-server v1.4 or newer; otherwise service discovery will fail.
    */
   inactivityTimeout?: Duration | number;
 
   /**
-   * This timer guards against stalled service/handler invocations that are supposed to terminate. The
-   * abort timeout is started after the `inactivityTimeout` has expired and the service/handler
-   * invocation has been asked to gracefully terminate. Once the timer expires, it will abort the
-   * service/handler invocation.
+   * Guards against invocations that fail to terminate after inactivity.
+   * The abort timeout starts after `inactivityTimeout` expires and a graceful termination was requested.
+   * When this timer expires, the invocation is aborted.
    *
-   * This timer potentially *interrupts* user code. If the user code needs longer to gracefully
-   * terminate, then this value needs to be set accordingly.
+   * This timer may interrupt user code. If more time is needed for graceful termination, increase this value.
    *
-   * This overrides the default abort timeout configured in the restate-server for all invocations to
-   * this service.
+   * Overrides the default abort timeout configured in the Restate server for invocations to this service.
    *
-   * *NOTE:* You can set this field only if you register this endpoint against restate-server >= 1.4,
-   * otherwise the service discovery will fail.
+   * Note: Available only when registering this endpoint with restate-server v1.4 or newer; otherwise service discovery will fail.
    */
   abortTimeout?: Duration | number;
 
   /**
-   * When set to `true` this service, with all its handlers, cannot be invoked from the restate-server
-   * HTTP and Kafka ingress, but only from other services.
+   * When set to `true`, this service (and all its handlers) cannot be invoked via the Restate server
+   * HTTP or Kafka ingress; it can only be called from other services.
    *
-   * *NOTE:* You can set this field only if you register this endpoint against restate-server >= 1.4,
-   * otherwise the service discovery will fail.
+   * Note: Available only when registering this endpoint with restate-server v1.4 or newer; otherwise service discovery will fail.
    */
   ingressPrivate?: boolean;
 
   /**
-   * By default, Restate will consider any error terminal, that is non retryable, if it's an instance of `TerminalError`.
+   * Retry policy to apply to all requests to this service. For each unspecified field, the default value configured in the restate-server configuration file will be applied instead.
+   */
+  retryPolicy?: RetryPolicy;
+
+  /**
+   * By default, Restate treats errors as terminal (non-retryable) only when they are instances of `TerminalError`.
    *
-   * By setting this field, you can provide a function to map specific errors in your domain to `TerminalError` (or undefined, if the error should be considered retryable). Once `TerminalError`, these errors won't be retried.
+   * Use this hook to map domain-specific errors to `TerminalError` (or return `undefined` to keep them retryable).
+   * When mapped to `TerminalError`, the error will not be retried.
    *
-   * Note: this will be used both for errors thrown by `ctx.run` closures and by errors thrown in restate handlers.
+   * Note: This applies to errors thrown inside `ctx.run` closures as well as errors thrown by Restate handlers.
    *
    * Example:
    *
@@ -846,7 +876,7 @@ export type ServiceOptions = {
    *     asTerminalError: (err) => {
    *       if (err instanceof MyValidationError) {
    *         // My validation error is terminal
-   *         return new restate.TerminalError(err.message, {errorCode: 400})
+   *         return new restate.TerminalError(err.message, { errorCode: 400 });
    *       }
    *
    *       // Any other error is retryable

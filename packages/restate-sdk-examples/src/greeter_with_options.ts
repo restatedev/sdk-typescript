@@ -54,5 +54,10 @@ serve({
   defaultServiceOptions: {
     // You can configure default service options that will be applied to every service.
     journalRetention: { days: 10 },
+    retryPolicy: {
+      initialInterval: { milliseconds: 100 },
+      onMaxAttempts: "pause",
+      maxAttempts: 10,
+    },
   },
 });
