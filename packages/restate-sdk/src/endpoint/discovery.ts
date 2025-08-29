@@ -11,6 +11,14 @@ export type ServiceType = "VIRTUAL_OBJECT" | "SERVICE" | "WORKFLOW";
  * If unspecified, defaults to EXCLUSIVE for Virtual Object or WORKFLOW for Workflows. This should be unset for Services.
  */
 export type HandlerType = "WORKFLOW" | "EXCLUSIVE" | "SHARED";
+/**
+ * Retry policy behavior on max attempts.
+ */
+export type RetryPolicyOnMaxAttempts = "PAUSE" | "KILL";
+/**
+ * Retry policy behavior on max attempts.
+ */
+export type RetryPolicyOnMaxAttempts1 = "PAUSE" | "KILL";
 
 /**
  * Restate endpoint manifest v3
@@ -64,6 +72,23 @@ export interface Service {
    */
   ingressPrivate?: boolean;
   /**
+   * Retry policy initial interval, expressed in milliseconds.
+   */
+  retryPolicyInitialInterval?: number;
+  /**
+   * Retry policy max interval, expressed in milliseconds.
+   */
+  retryPolicyMaxInterval?: number;
+  /**
+   * Retry policy max attempts.
+   */
+  retryPolicyMaxAttempts?: number;
+  /**
+   * Retry policy exponentiation factor.
+   */
+  retryPolicyExponentiationFactor?: number;
+  retryPolicyOnMaxAttempts?: RetryPolicyOnMaxAttempts1;
+  /**
    * Custom metadata of this service definition. This metadata is shown on the Admin API when querying the service definition.
    */
   metadata?: {
@@ -107,6 +132,23 @@ export interface Handler {
    * If true, the service cannot be invoked from the HTTP nor Kafka ingress.
    */
   ingressPrivate?: boolean;
+  /**
+   * Retry policy initial interval, expressed in milliseconds.
+   */
+  retryPolicyInitialInterval?: number;
+  /**
+   * Retry policy max interval, expressed in milliseconds.
+   */
+  retryPolicyMaxInterval?: number;
+  /**
+   * Retry policy max attempts.
+   */
+  retryPolicyMaxAttempts?: number;
+  /**
+   * Retry policy exponentiation factor.
+   */
+  retryPolicyExponentiationFactor?: number;
+  retryPolicyOnMaxAttempts?: RetryPolicyOnMaxAttempts;
   /**
    * Custom metadata of this handler definition. This metadata is shown on the Admin API when querying the service/handler definition.
    */

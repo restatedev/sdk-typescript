@@ -341,7 +341,7 @@ export function parseUrlComponents(urlPath?: string): PathComponents {
 
 function commonServiceOptions(
   options?: ServiceOptions | ObjectOptions | WorkflowOptions
-) {
+): Partial<d.Service> {
   return {
     journalRetention:
       options?.journalRetention !== undefined
@@ -364,6 +364,21 @@ function commonServiceOptions(
       options !== undefined && "enableLazyState" in options
         ? options.enableLazyState
         : undefined,
+    retryPolicyExponentiationFactor: options?.retryPolicy?.exponentiationFactor,
+    retryPolicyInitialInterval:
+      options?.retryPolicy?.initialInterval !== undefined
+        ? millisOrDurationToMillis(options?.retryPolicy?.initialInterval)
+        : undefined,
+    retryPolicyMaxInterval:
+      options?.retryPolicy?.maxInterval !== undefined
+        ? millisOrDurationToMillis(options?.retryPolicy?.maxInterval)
+        : undefined,
+    retryPolicyMaxAttempts: options?.retryPolicy?.maxAttempts,
+    retryPolicyOnMaxAttempts: (options?.retryPolicy?.onMaxAttempts === "kill"
+      ? "KILL"
+      : options?.retryPolicy?.onMaxAttempts === "pause"
+      ? "PAUSE"
+      : undefined) as d.RetryPolicyOnMaxAttempts,
   };
 }
 
@@ -389,6 +404,22 @@ function commonHandlerOptions(wrapper: HandlerWrapper) {
         : undefined,
     ingressPrivate: wrapper.ingressPrivate,
     enableLazyState: wrapper.enableLazyState,
+    retryPolicyExponentiationFactor: wrapper.retryPolicy?.exponentiationFactor,
+    retryPolicyInitialInterval:
+      wrapper.retryPolicy?.initialInterval !== undefined
+        ? millisOrDurationToMillis(wrapper.retryPolicy?.initialInterval)
+        : undefined,
+    retryPolicyMaxInterval:
+      wrapper.retryPolicy?.maxInterval !== undefined
+        ? millisOrDurationToMillis(wrapper.retryPolicy?.maxInterval)
+        : undefined,
+    retryPolicyMaxAttempts: wrapper.retryPolicy?.maxAttempts,
+    retryPolicyOnMaxAttempts: (wrapper.retryPolicy?.onMaxAttempts === "kill"
+      ? "KILL"
+      : wrapper.retryPolicy?.onMaxAttempts === "pause"
+      ? "PAUSE"
+      : undefined) as d.RetryPolicyOnMaxAttempts1,
+
     documentation: wrapper.description,
     metadata: wrapper.metadata,
   };
