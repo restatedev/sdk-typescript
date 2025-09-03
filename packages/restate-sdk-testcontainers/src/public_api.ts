@@ -33,4 +33,5 @@ export type {
   TerminalError,
   RestateError,
   EndpointOptions,
+  RetryPolicy,
 } from "@restatedev/restate-sdk";

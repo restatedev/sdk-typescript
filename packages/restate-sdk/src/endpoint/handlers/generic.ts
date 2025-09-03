@@ -565,6 +565,32 @@ export class GenericHandler implements RestateHandler {
     if (manifestVersion < 4) {
       // Blank the lambda compression field. No need to fail in this case.
       discovery.lambdaCompression = undefined;
+      for (const service of discovery.services) {
+        const error = checkUnsupportedFeature(
+          service,
+          "retryPolicyExponentiationFactor",
+          "retryPolicyInitialInterval",
+          "retryPolicyMaxAttempts",
+          "retryPolicyMaxInterval",
+          "retryPolicyOnMaxAttempts"
+        );
+        if (error !== undefined) {
+          return error;
+        }
+        for (const handler of service.handlers) {
+          const error = checkUnsupportedFeature(
+            handler,
+            "retryPolicyExponentiationFactor",
+            "retryPolicyInitialInterval",
+            "retryPolicyMaxAttempts",
+            "retryPolicyMaxInterval",
+            "retryPolicyOnMaxAttempts"
+          );
+          if (error !== undefined) {
+            return error;
+          }
+        }
+      }
     }
 
     const body = JSON.stringify(discovery);
