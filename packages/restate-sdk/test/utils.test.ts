@@ -13,26 +13,24 @@ import { RandImpl } from "../src/utils/rand.js";
 import { describe, expect, it } from "vitest";
 
 describe("rand", () => {
-  it("correctly hashes invocation ids", () => {
-    const rand = new RandImpl(
-      "f311f1fdcb9863f0018bd3400ecd7d69b547204e776218b2"
-    );
+  it("accepts seed", () => {
+    const rand = new RandImpl(11111111111111111n);
 
     const actual: bigint[] = Array.from(Array(10)).map(() => rand.u64());
 
     // These values were produced with the reference implementation:
     // http://xoshiro.di.unimi.it/xoshiro256plusplus.c
     const expected = [
-      6221017497105640564n,
-      6390535423083911304n,
-      6450107027926477268n,
-      6892944322147831477n,
-      11902315545316364308n,
-      11803614765068293030n,
-      3688900223715244673n,
-      16180860676245615018n,
-      14289837324736329951n,
-      5956009879523072622n,
+      14993938765686767826n,
+      8187951856952496553n,
+      10221716037851679518n,
+      5009267449921186858n,
+      2939623319151797546n,
+      6400458020329377757n,
+      10216112085426431330n,
+      17690642664638642265n,
+      13201164171824029981n,
+      18315010504635656422n,
     ];
 
     expect(actual).toStrictEqual(expected);

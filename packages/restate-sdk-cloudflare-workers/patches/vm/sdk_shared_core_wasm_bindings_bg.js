@@ -484,6 +484,13 @@ export class WasmInput {
         const ret = wasm.__wbg_get_wasminput_input(this.__wbg_ptr);
         return ret;
     }
+    /**
+     * @returns {bigint}
+     */
+    get random_seed() {
+        const ret = wasm.__wbg_get_wasminput_random_seed(this.__wbg_ptr);
+        return BigInt.asUintN(64, ret);
+    }
 }
 
 const WasmResponseHeadFinalization = (typeof FinalizationRegistry === 'undefined')
