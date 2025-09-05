@@ -110,7 +110,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     readonly journalValueCodec: JournalValueCodec,
     private readonly asTerminalError?: (error: any) => TerminalError | undefined
   ) {
-    this.rand = new RandImpl(input.invocation_id, () => {
+    this.rand = new RandImpl(input.random_seed, () => {
       // TODO reimplement this check with async context
       // if (coreVm.is_inside_run()) {
       //   throw new Error(

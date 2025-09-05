@@ -97,6 +97,7 @@ export class WasmInput {
   readonly key: string;
   readonly headers: WasmHeader[];
   readonly input: Uint8Array;
+  readonly random_seed: bigint;
 }
 export class WasmResponseHead {
   private constructor();

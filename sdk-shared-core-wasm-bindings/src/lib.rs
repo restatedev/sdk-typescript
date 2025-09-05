@@ -328,6 +328,8 @@ pub struct WasmInput {
     pub headers: Vec<WasmHeader>,
     #[wasm_bindgen(readonly)]
     pub input: Uint8Array,
+    #[wasm_bindgen(readonly)]
+    pub random_seed: u64,
 }
 
 impl From<Input> for WasmInput {
@@ -337,6 +339,7 @@ impl From<Input> for WasmInput {
             key: value.key,
             headers: value.headers.into_iter().map(Into::into).collect(),
             input: (&*value.input).into(),
+            random_seed: value.random_seed,
         }
     }
 }
