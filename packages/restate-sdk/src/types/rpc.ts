@@ -759,7 +759,8 @@ export type ServiceOpts<U> = {
 
 export type RetryPolicy = {
   /**
-   * Max number of retry attempts. When reached, the behavior specified in {@link onMaxAttempts} will be applied.
+   * Max number of retry attempts (including the initial).
+   * When reached, the behavior specified in {@link onMaxAttempts} will be applied.
    */
   maxAttempts?: number;
 

@@ -171,7 +171,7 @@ export type RunOptions<T> = {
   serde?: Serde<T>;
 
   /**
-   * Max number of retry attempts, before giving up.
+   * Max number of attempts (including the initial), before giving up.
    *
    * When giving up, `ctx.run` will throw a `TerminalError` wrapping the original error message.
    */
