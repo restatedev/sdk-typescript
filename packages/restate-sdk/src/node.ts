@@ -17,6 +17,7 @@ import { withOptions } from "./endpoint/withOptions.js";
 
 /**
  * Create a new {@link RestateEndpoint}.
+ * @deprecated Please use {@link createEndpointHandler}
  */
 export function endpoint(): RestateEndpoint {
   return new NodeEndpoint();
