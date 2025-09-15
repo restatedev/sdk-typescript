@@ -11,7 +11,7 @@
 
 import * as restate from "@restatedev/restate-sdk";
 import { serde } from "@restatedev/restate-sdk-zod";
-import { z } from "zod";
+import { z } from "zod/v3";
 
 const Greeting = z.object({
   name: z.string(),

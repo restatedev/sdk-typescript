@@ -9,59 +9,93 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-namespace */
-/* eslint-disable @typescript-eslint/ban-types */
-/* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 
 import type { Serde } from "@restatedev/restate-sdk-core";
 
-import { z, ZodVoid } from "zod";
-import { zodToJsonSchema } from "zod-to-json-schema";
+import * as z3 from "zod/v3";
+import * as z4 from "zod/v4/core";
 
 export type { Serde } from "@restatedev/restate-sdk-core";
 
-class ZodSerde<T extends z.ZodType> implements Serde<z.infer<T>> {
+let zod3WarningPrinted = false;
+function printZod3Warning() {
+  if (!zod3WarningPrinted) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      "Detected usage of Zod V3, JSON schemas won't be correctly generated. Please update to Zod V4, or downgrade restate-sdk-zod to 1.8.3"
+    );
+    zod3WarningPrinted = true;
+  }
+}
+
+class ZodSerde<T extends z3.ZodTypeAny | z4.$ZodType>
+  implements Serde<T extends z3.ZodTypeAny ? z3.infer<T> : z4.infer<T>>
+{
   contentType? = "application/json";
   jsonSchema?: object | undefined;
 
   constructor(private readonly schema: T) {
-    this.jsonSchema = zodToJsonSchema(schema);
-    if (schema instanceof ZodVoid || schema instanceof z.ZodUndefined) {
+    if ("_zod" in schema) {
+      this.jsonSchema = z4.toJSONSchema(schema);
+    } else if (schema instanceof z3.ZodType) {
+      printZod3Warning();
+      this.jsonSchema = undefined;
+    }
+
+    if (
+      schema instanceof z3.ZodVoid ||
+      schema instanceof z3.ZodUndefined ||
+      schema instanceof z4.$ZodVoid ||
+      schema instanceof z4.$ZodUndefined
+    ) {
       this.contentType = undefined;
     }
   }
 
-  serialize(value: T): Uint8Array {
+  serialize(
+    value: T extends z3.ZodTypeAny ? z3.infer<T> : z4.infer<T>
+  ): Uint8Array {
     if (value === undefined) {
       return new Uint8Array(0);
     }
     return new TextEncoder().encode(JSON.stringify(value));
   }
 
-  deserialize(data: Uint8Array): T {
+  deserialize(
+    data: Uint8Array
+  ): T extends z3.ZodTypeAny ? z3.infer<T> : z4.infer<T> {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const js =
       data.length === 0
         ? undefined
         : JSON.parse(new TextDecoder().decode(data));
-
-    const res = this.schema.safeParse(js);
-    if (res.success) {
-      return res.data;
+    if (
+      "safeParse" in this.schema &&
+      typeof this.schema.safeParse === "function"
+    ) {
+      const res = this.schema.safeParse(js);
+      if (res.success) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+        return res.data;
+      }
+      throw res.error;
+    } else {
+      throw new TypeError("Unsupported data type. Expected 'safeParse'.");
     }
-    throw res.error;
   }
 }
 
 export namespace serde {
   /**
-   * A Zod based serde.
+   * A Zod-based serde.
    *
-   * @param schema the zod type
+   * @param zodType the zod type
    * @returns a serde that will validate the data with the zod schema
    */
-  export const zod = <T extends z.ZodType>(zodType: T): Serde<z.infer<T>> => {
+  export const zod = <T extends z3.ZodTypeAny | z4.$ZodType>(
+    zodType: T
+  ): Serde<T extends z3.ZodTypeAny ? z3.infer<T> : z4.infer<T>> => {
     return new ZodSerde(zodType);
   };
 }
