@@ -1,6 +1,6 @@
 {
   "name": "@restatedev/restate-sdk-testcontainers",
-  "version": "1.8.3",
+  "version": "1.9.0",
   "description": "Utils for testing services against a Restate container",
   "author": "Restate Developers",
   "license": "MIT",
@@ -47,8 +47,8 @@
     "release": "release-it"
   },
   "dependencies": {
-    "@restatedev/restate-sdk": "^1.8.3",
-    "@restatedev/restate-sdk-clients": "^1.8.3",
+    "@restatedev/restate-sdk": "^1.9.0",
+    "@restatedev/restate-sdk-clients": "^1.9.0",
     "apache-arrow": "^18.0.0",
     "testcontainers": "^10.24.1"
   },
