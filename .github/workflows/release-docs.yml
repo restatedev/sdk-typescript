@@ -21,7 +21,7 @@ concurrency:
 jobs:
   build:
     if: github.repository_owner == 'restatedev'
-    name: Build Javadocs/KtDocs
+    name: Build TSDocs
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
