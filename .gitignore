@@ -21,3 +21,6 @@ restate-sdk-test-suite.jar
 .restate
 
 docs-out
+
+.wrangler
+.next

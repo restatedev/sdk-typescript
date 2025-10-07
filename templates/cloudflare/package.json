@@ -1,0 +1,24 @@
+{
+  "name": "restate-cloudflare-worker-template",
+  "type": "module",
+  "version": "0.0.1",
+  "scripts": {
+    "build": "tsc --noEmitOnError",
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev --port 9080",
+    "start": "wrangler dev --port 9080",
+    "format": "prettier --write \"src/*.+(js|ts|json)\""
+  },
+  "dependencies": {
+    "@restatedev/restate-sdk-cloudflare-workers": "*",
+    "@restatedev/restate-sdk-zod": "*",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240605.0",
+    "prettier": "^3.3.2",
+    "typescript": "^5.4.5",
+    "wrangler": "^4.38.0",
+    "@restatedev/restate": "^1.5.0"
+  }
+}
