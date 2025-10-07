@@ -14,3 +14,7 @@ minify = false
 # Enable NodeJS compatibility (used by the SDK for the Node Buffer API)
 compatibility_date = "2024-05-13"
 compatibility_flags = [ "nodejs_compat" ]
+
+[dev]
+port = 9080
+local_protocol = "http"

@@ -37,7 +37,7 @@ jobs:
       - name: Start Next.js service
         working-directory: templates/nextjs
         run: |
-          npm start &
+          npm build && npm start &
           echo $! > service.pid
           sleep 10
 
