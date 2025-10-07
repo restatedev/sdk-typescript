@@ -45,7 +45,7 @@ jobs:
         run: |
           curl -X POST http://localhost:9070/deployments \
             -H 'content-type: application/json' \
-            -d '{"uri": "http://host.docker.internal:9080"}'
+            -d '{"uri": "http://host.docker.internal:9080", "use_http_11": true}'
 
       - name: Test Next.js template
         run: |
