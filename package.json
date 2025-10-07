@@ -22,7 +22,9 @@
     "packages/restate-sdk-zod",
     "packages/restate-sdk-examples",
     "packages/restate-sdk-testcontainers",
-    "packages/restate-e2e-services"
+    "packages/restate-e2e-services",
+    "templates/node",
+    "templates/deno"
   ],
   "type": "module",
   "scripts": {
