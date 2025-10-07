@@ -1,0 +1,86 @@
+name: Test Bun Template
+
+on:
+  workflow_call:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      restate:
+        image: docker.restate.dev/restatedev/restate:latest
+        ports:
+          - 8080:8080
+          - 9070:9070
+        options: >-
+          --health-cmd "curl -f http://localhost:9070/health || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+          --add-host=host.docker.internal:host-gateway
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build packages
+        run: npm run build
+
+      - name: Start Bun service
+        working-directory: templates/bun
+        run: |
+          bun start &
+          echo $! > service.pid
+          sleep 5
+
+      - name: Register with Restate
+        run: |
+          curl -X POST http://localhost:9070/deployments \
+            -H 'content-type: application/json' \
+            -d '{"uri": "http://host.docker.internal:9080"}'
+
+      - name: Test Bun template
+        run: |
+          echo "Testing Greeter service..."
+          RESPONSE=$(curl -s localhost:8080/Greeter/greet --json '{"name": "Bun"}')
+          echo "Response: $RESPONSE"
+
+          # Check if response contains expected message
+          if echo "$RESPONSE" | grep -q "You said hi to Bun!"; then
+            echo "✅ Test passed!"
+          else
+            echo "❌ Test failed! Expected: { result: You said hi to Bun! }"
+            exit 1
+          fi
+
+      - name: Show logs on failure
+        if: failure()
+        run: |
+          echo "=== Restate logs ==="
+          docker logs $(docker ps -q --filter ancestor=docker.restate.dev/restatedev/restate:latest)
+
+          echo "=== Service logs ==="
+          if [ -f templates/bun/service.pid ]; then
+            ps aux | grep bun || true
+          fi
+
+      - name: Cleanup
+        if: always()
+        working-directory: templates/bun
+        run: |
+          if [ -f service.pid ]; then
+            kill $(cat service.pid) || true
+          fi

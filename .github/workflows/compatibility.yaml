@@ -13,3 +13,12 @@ jobs:
 
   test-deno-template:
     uses: ./.github/workflows/_test-deno-template.yml
+
+  test-bun-template:
+    uses: ./.github/workflows/_test-bun-template.yml
+
+  test-cloudflare-template:
+    uses: ./.github/workflows/_test-cloudflare-template.yml
+
+  test-nextjs-template:
+    uses: ./.github/workflows/_test-vercel-template.yml
