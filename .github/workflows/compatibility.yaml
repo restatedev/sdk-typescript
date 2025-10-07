@@ -1,0 +1,17 @@
+name: Integration
+
+# Controls when the workflow will run
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  test-node-template:
+    needs: build
+    uses: ./.github/workflows/_test-node-template.yml
+
+  test-deno-template:
+    needs: build
+    uses: ./.github/workflows/_test-deno-template.yml
