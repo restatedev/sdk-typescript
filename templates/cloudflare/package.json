@@ -5,8 +5,8 @@
   "scripts": {
     "build": "tsc --noEmitOnError",
     "deploy": "wrangler deploy",
-    "dev": "wrangler dev --port 9080",
-    "start": "wrangler dev --port 9080",
+    "dev": "wrangler dev",
+    "start": "wrangler dev",
     "format": "prettier --write \"src/*.+(js|ts|json)\""
   },
   "dependencies": {
