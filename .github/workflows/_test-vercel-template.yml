@@ -26,7 +26,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
 
       - name: Install dependencies
         run: npm install
@@ -68,13 +68,13 @@ jobs:
           docker logs $(docker ps -q --filter ancestor=docker.restate.dev/restatedev/restate:latest)
 
           echo "=== Next.js logs ==="
-          if [ -f templates/nextjs/service.pid ]; then
+          if [ -f templates/vercel/service.pid ]; then
             ps aux | grep next || true
           fi
 
       - name: Cleanup
         if: always()
-        working-directory: templates/nextjs
+        working-directory: templates/vercel
         run: |
           if [ -f service.pid ]; then
             kill $(cat service.pid) || true
