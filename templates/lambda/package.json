@@ -5,7 +5,6 @@
     "lambda-ts-cdk": "bin/lambda-ts-cdk.js"
   },
   "scripts": {
-    "lint": "eslint --ignore-path .eslintignore --ext .ts .",
     "prebuild": "rm -rf dist",
     "build": "esbuild lib/lambda/handler.ts --bundle --minify --sourcemap --platform=node --format=esm --target=es2020 --outfile=dist/index.mjs",
     "prebundle": "npm run build",

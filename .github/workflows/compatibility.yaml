@@ -8,20 +8,17 @@ on:
       - main
 
 jobs:
-  node:
-    uses: ./.github/workflows/_test-node-template.yml
+  test:
+    name: ${{ matrix.template }} / test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        template: [node, deno, bun, cloudflare, vercel, lambda]
 
-  deno:
-    uses: ./.github/workflows/_test-deno-template.yml
+    steps:
+      - uses: actions/checkout@v4
 
-  bun:
-    uses: ./.github/workflows/_test-bun-template.yml
-
-  cloudflare:
-    uses: ./.github/workflows/_test-cloudflare-template.yml
-
-  vercel:
-    uses: ./.github/workflows/_test-vercel-template.yml
-
-  lambda:
-    uses: ./.github/workflows/_test-lambda-template.yml
+      # Call the appropriate workflow based on matrix value
+      - name: Test ${{ matrix.template }} template
+        uses: ./.github/workflows/_test-${{ matrix.template }}-template.yml@${{ github.ref }}
