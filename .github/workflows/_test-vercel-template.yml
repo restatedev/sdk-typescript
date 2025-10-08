@@ -37,7 +37,7 @@ jobs:
       - name: Start Next.js service
         working-directory: templates/nextjs
         run: |
-          npm build && npm start &
+          npm run build && npm start &
           echo $! > service.pid
           sleep 10
 
@@ -45,7 +45,7 @@ jobs:
         run: |
           curl -X POST http://localhost:9070/deployments \
             -H 'content-type: application/json' \
-            -d '{"uri": "http://host.docker.internal:9080", "use_http_11": true}'
+            -d '{"uri": "http://host.docker.internal:9080/restate", "use_http_11": true}'
 
       - name: Test Next.js template
         run: |
