@@ -18,7 +18,7 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-          --add-host=host.docker.internal:host-gateway
+          --net=host
 
     steps:
       - uses: actions/checkout@v4
@@ -45,7 +45,7 @@ jobs:
         run: |
           curl -X POST http://localhost:9070/deployments \
             -H 'content-type: application/json' \
-            -d '{"uri": "http://host.docker.internal:9080", "use_http_11": true}'
+            -d '{"uri": "http://localhost:9080", "use_http_11": true}'
 
       - name: Test Cloudflare Worker template
         run: |

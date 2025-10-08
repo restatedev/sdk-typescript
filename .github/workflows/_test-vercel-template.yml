@@ -35,7 +35,7 @@ jobs:
         run: npm run build
 
       - name: Start Next.js service
-        working-directory: templates/nextjs
+        working-directory: templates/vercel
         run: |
           npm run build && npm start &
           echo $! > service.pid
