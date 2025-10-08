@@ -29,7 +29,7 @@ jobs:
         ports:
           - 4566:4566
         env:
-          SERVICES: lambda,iam,sts,logs,cloudformation,s3
+          SERVICES: lambda,iam,sts,logs,cloudformation,s3,ssm
           DEBUG: 1
           LAMBDA_EXECUTOR: local
           DOCKER_HOST: unix:///var/run/docker.sock
