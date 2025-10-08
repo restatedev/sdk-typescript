@@ -75,14 +75,7 @@ jobs:
 
       - name: Create Lambda deployment package
         working-directory: templates/lambda
-        run: |
-          mkdir -p dist
-          # Copy built code
-          cp -r build/* dist/
-          # Copy production dependencies
-          cp -r node_modules dist/
-          # Create zip
-          cd dist && zip -r ../lambda.zip . && cd ..
+        run: npm run bundle
 
       - name: Create IAM roles in LocalStack
         run: |
@@ -128,7 +121,7 @@ jobs:
         run: |
           FUNCTION_ARN=$(awslocal lambda create-function \
             --function-name restate-greeter \
-            --runtime nodejs20.x \
+            --runtime nodejs22.x \
             --handler index.handler \
             --role arn:aws:iam::000000000000:role/lambda-execution-role \
             --zip-file fileb://lambda.zip \

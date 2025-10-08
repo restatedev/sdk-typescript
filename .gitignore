@@ -26,3 +26,4 @@ docs-out
 .next
 .cdk.staging
 cdk.out
+lambda.zip
