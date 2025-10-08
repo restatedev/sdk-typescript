@@ -87,6 +87,7 @@ jobs:
         run: |
           npx cdk deploy \
             --require-approval never \
+            --hotswap \
             --outputs-file outputs.json \
             --context stackName=${{ env.STACK_NAME }}
 
