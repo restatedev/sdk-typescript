@@ -6,8 +6,7 @@
     "build": "tsc --noEmitOnError",
     "deploy": "wrangler deploy",
     "dev": "wrangler dev",
-    "start": "wrangler dev",
-    "format": "prettier --write \"src/*.+(js|ts|json)\""
+    "start": "wrangler dev"
   },
   "dependencies": {
     "@restatedev/restate-sdk-cloudflare-workers": "*",

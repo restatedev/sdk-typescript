@@ -5,8 +5,7 @@
   "scripts": {
     "build": "bun build --target bun --outdir dist src/index.ts",
     "dev": "bun run --watch src/index.ts",
-    "start": "bun run src/index.ts",
-    "format": "prettier --write \"src/*.+(js|ts|json)\""
+    "start": "bun run src/index.ts"
   },
   "dependencies": {
     "@restatedev/restate-sdk": "*",
