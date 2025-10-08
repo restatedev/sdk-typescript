@@ -141,14 +141,14 @@ jobs:
           docker logs $(docker ps -q --filter ancestor=localstack/localstack:latest)
 
           echo "=== CDK outputs ==="
-          cat templates/lambda/cdk/outputs.json || true
+          cat templates/lambda/outputs.json || true
 
           echo "=== Lambda logs ==="
           awslocal logs tail /aws/lambda/$(echo ${{ env.FUNCTION_ARN }} | rev | cut -d: -f1 | rev) --since 30m || true
 
       - name: Destroy CDK stack
         if: always()
-        working-directory: templates/lambda/cdk
+        working-directory: templates/lambda
         env:
           AWS_ENDPOINT_URL: http://localhost:4566
         run: |
