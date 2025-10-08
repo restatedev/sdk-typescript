@@ -27,7 +27,8 @@
     "templates/deno",
     "templates/bun",
     "templates/vercel",
-    "templates/cloudflare"
+    "templates/cloudflare",
+    "templates/lambda"
   ],
   "type": "module",
   "scripts": {

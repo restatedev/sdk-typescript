@@ -22,3 +22,6 @@ jobs:
 
   vercel:
     uses: ./.github/workflows/_test-vercel-template.yml
+
+  lambda:
+    uses: ./.github/workflows/_test-lambda-template.yml

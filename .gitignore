@@ -24,3 +24,5 @@ docs-out
 
 .wrangler
 .next
+.cdk.staging
+cdk.out

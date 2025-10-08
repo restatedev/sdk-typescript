@@ -1,0 +1,130 @@
+name: Test Lambda Template (AWS CDK)
+
+on:
+  workflow_call:
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      AWS_REGION:
+        required: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    env:
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      STACK_NAME: restate-lambda-test-${{ github.run_id }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Start Restate with AWS credentials
+        run: |
+          docker run -d \
+            --name restate_test \
+            -p 8080:8080 \
+            -p 9070:9070 \
+            -e AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} \
+            -e AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} \
+            -e AWS_REGION=${{ secrets.AWS_REGION }} \
+            docker.restate.dev/restatedev/restate:latest
+
+      - name: Wait for Restate
+        run: |
+          timeout 60 bash -c 'until curl -f http://localhost:9070/health; do sleep 2; done'
+          echo "Restate is ready!"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build packages
+        run: npm run build
+
+      - name: CDK Deploy
+        working-directory: templates/lambda/cdk
+        run: |
+          npm run build && npx cdk deploy \
+            --require-approval never \
+            --outputs-file outputs.json \
+            --context stackName=${{ env.STACK_NAME }}
+
+      - name: Get Lambda ARNs and Invoker Role from CDK outputs
+        working-directory: templates/lambda/cdk
+        run: |
+          FUNCTION_VERSION_ARN=$(jq -r '.["${{ env.STACK_NAME }}"].FunctionVersionArn' outputs.json)
+          INVOKER_ROLE_ARN=$(jq -r '.["${{ env.STACK_NAME }}"].InvokerRoleArn' outputs.json)
+
+          echo "Lambda Version ARN: $FUNCTION_VERSION_ARN"
+          echo "Invoker Role ARN: $INVOKER_ROLE_ARN"
+
+          echo "LAMBDA_VERSION_ARN=$FUNCTION_VERSION_ARN" >> $GITHUB_ENV
+          echo "INVOKER_ROLE_ARN=$INVOKER_ROLE_ARN" >> $GITHUB_ENV
+
+      - name: Register Lambda with Restate
+        run: |
+          curl -X POST http://localhost:9070/deployments \
+            -H 'content-type: application/json' \
+            -d "{
+              \"arn\": \"${{ env.LAMBDA_VERSION_ARN }}\",
+              \"assume_role_arn\": \"${{ env.INVOKER_ROLE_ARN }}\"
+            }"
+
+      - name: Wait for registration
+        run: sleep 5
+
+      - name: Test Lambda template
+        run: |
+          echo "Testing Greeter service..."
+          RESPONSE=$(curl -s localhost:8080/Greeter/greet --json '{"name": "Lambda-AWS"}')
+          echo "Response: $RESPONSE"
+
+          # Check if response contains expected message
+          if echo "$RESPONSE" | grep -q "You said hi to Lambda-AWS!"; then
+            echo "✅ Test passed!"
+          else
+            echo "❌ Test failed! Expected: { result: You said hi to Lambda-AWS! }"
+            exit 1
+          fi
+
+      - name: Show logs on failure
+        if: failure()
+        run: |
+          echo "=== Restate logs ==="
+          docker logs restate_test
+
+          echo "=== CDK outputs ==="
+          cat templates/lambda/cdk/outputs.json || true
+
+          echo "=== Lambda logs ==="
+          FUNCTION_NAME=$(aws cloudformation describe-stack-resources \
+            --stack-name ${{ env.STACK_NAME }} \
+            --query "StackResources[?ResourceType=='AWS::Lambda::Function'].PhysicalResourceId" \
+            --output text)
+          aws logs tail /aws/lambda/$FUNCTION_NAME --since 30m || true
+
+      - name: Stop Restate
+        if: always()
+        run: docker stop restate_test || true
+
+      - name: CDK Destroy
+        if: always()
+        working-directory: templates/lambda/cdk
+        run: |
+          npx cdk destroy \
+            --force \
+            --context stackName=${{ env.STACK_NAME }} || true
