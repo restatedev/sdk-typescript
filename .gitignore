@@ -1,5 +1,5 @@
-node_modules/*
-dist/*
+node_modules
+dist
 
 src/generated/*
 buf.lock
@@ -21,3 +21,9 @@ restate-sdk-test-suite.jar
 .restate
 
 docs-out
+
+.wrangler
+.next
+.cdk.staging
+cdk.out
+lambda.zip

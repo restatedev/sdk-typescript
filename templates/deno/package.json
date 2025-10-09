@@ -1,0 +1,6 @@
+{
+  "name": "restate-deno-template",
+  "version": "0.0.1",
+  "description": "Template for Deno services running with Restate (https://github.com/restatedev/) ",
+  "type": "module"
+}
