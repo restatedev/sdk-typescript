@@ -26,7 +26,7 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm run verify
-      - run: npm pack --workspaces true --include-workspace-root false
+      - run: npm pack --workspaces true --workspace=./packages --include-workspace-root false
       - run: find -type f -name "restatedev-restate-sdk-[0-9.]*\.tgz" | xargs -I {} mv {} restatedev-restate-sdk.tgz
       - run: find -type f -name "restatedev-restate-sdk-clients-[0-9.]*\.tgz" | xargs -I {} mv {} restatedev-restate-sdk-clients.tgz
       - run: find -type f -name "restatedev-restate-sdk-core-[0-9.]*\.tgz" | xargs -I {} mv {} restatedev-restate-sdk-core.tgz
@@ -71,8 +71,9 @@ jobs:
           set "@restatedev/restate-sdk-cloudflare-workers"
           set "@restatedev/restate-sdk-clients"
           set "@restatedev/restate-sdk-testcontainers"
+          set "@restatedev/restate-sdk-zod"
           npm --workspaces update
           # We use dist-tag dev for the snapshot releases, see https://docs.npmjs.com/cli/v9/commands/npm-dist-tag for more info
           # A snapshot MUST not be published with latest tag (omitting --tag defaults to latest) to avoid users to install snapshot releases
           # when using npm install
-          npm publish --workspaces true --tag dev --access public --include-workspace-root false
+          npm publish --workspaces true --workspace=./packages --tag dev --access public --include-workspace-root false

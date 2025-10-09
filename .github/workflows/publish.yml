@@ -17,6 +17,6 @@ jobs:
           registry-url: "https://registry.npmjs.org"
       - run: npm ci
       - run: npm run build
-      - run: npm publish --workspaces true --tag latest --access public --include-workspace-root false
+      - run: npm publish --workspaces true --workspace=./packages --tag latest --access public --include-workspace-root false
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
