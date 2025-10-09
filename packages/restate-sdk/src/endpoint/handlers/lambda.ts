@@ -22,6 +22,7 @@ import type {
   RestateRequest,
   RestateResponse,
 } from "./generic.js";
+import { tryCreateContextualLogger } from "./generic.js";
 import { WritableStream, type ReadableStream } from "node:stream/web";
 import { OnceStream } from "../../utils/streams.js";
 import { X_RESTATE_SERVER } from "../../user_agent.js";
@@ -131,7 +132,13 @@ export class LambdaHandler {
     } catch (e) {
       // unlike in the streaming case, we can actually catch errors in the response body and form a nicer error
       const error = ensureError(e);
-      this.handler.endpoint.rlog.error(
+      (
+        tryCreateContextualLogger(
+          this.handler.endpoint.loggerTransport,
+          request.url,
+          request.headers
+        ) ?? this.handler.endpoint.rlog
+      ).error(
         "Error while collecting invocation response: " +
           (error.stack ?? error.message)
       );

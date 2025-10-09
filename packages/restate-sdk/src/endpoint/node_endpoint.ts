@@ -24,7 +24,10 @@ import type { Http2ServerRequest, Http2ServerResponse } from "http2";
 import * as http2 from "http2";
 import type { Endpoint } from "./endpoint.js";
 import { EndpointBuilder } from "./endpoint.js";
-import { GenericHandler } from "./handlers/generic.js";
+import {
+  GenericHandler,
+  tryCreateContextualLogger,
+} from "./handlers/generic.js";
 import { Readable, Writable } from "node:stream";
 import type { WritableStream } from "node:stream/web";
 import { ensureError } from "../types/errors.js";
@@ -155,9 +158,30 @@ function nodeHttp2Handler(
         await resp.body.pipeTo(responseWeb);
       } catch (e) {
         const error = ensureError(e);
-        endpoint.rlog.error(
-          "Error while handling connection: " + (error.stack ?? error.message)
-        );
+
+        const logger =
+          tryCreateContextualLogger(
+            endpoint.loggerTransport,
+            request.url,
+            request.headers
+          ) ?? endpoint.rlog;
+        if (error.name === "AbortError") {
+          logger.error(
+            "Got abort error from connection: " +
+              error.message +
+              "\n" +
+              "This might indicate that:\n" +
+              "* The restate-server aborted the connection after hitting the 'abort-timeout'\n" +
+              "* The connection with the restate-server was lost\n" +
+              "\n" +
+              "Please check the invocation in the Restate UI for more details."
+          );
+        } else {
+          logger.error(
+            "Error while handling request: " + (error.stack ?? error.message)
+          );
+        }
+
         response.destroy(error);
         abortController.abort();
       }
