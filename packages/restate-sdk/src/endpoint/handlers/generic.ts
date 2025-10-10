@@ -17,8 +17,8 @@ import {
   TerminalError,
 } from "../../types/errors.js";
 import type {
-  ProtocolMode,
   Endpoint as EndpointManifest,
+  ProtocolMode,
 } from "../discovery.js";
 import type { Component, ComponentHandler } from "../components.js";
 import { parseUrlComponents } from "../components.js";
@@ -37,6 +37,7 @@ import {
 } from "../../logging/console_logger_transport.js";
 import {
   LoggerContext,
+  type LoggerTransport,
   LogSource,
   RestateLogLevel,
 } from "../../logging/logger_transport.js";
@@ -82,6 +83,47 @@ export interface RestateHandler {
 const ENDPOINT_MANIFEST_V2 = "application/vnd.restate.endpointmanifest.v2+json";
 const ENDPOINT_MANIFEST_V3 = "application/vnd.restate.endpointmanifest.v3+json";
 const ENDPOINT_MANIFEST_V4 = "application/vnd.restate.endpointmanifest.v4+json";
+
+export function tryCreateContextualLogger(
+  loggerTransport: LoggerTransport,
+  url: string,
+  headers: Headers,
+  additionalContext?: { [name: string]: string }
+): Logger | undefined {
+  try {
+    const path = new URL(url, "https://example.com").pathname;
+    const parsed = parseUrlComponents(path);
+    if (parsed.type !== "invoke") {
+      return undefined;
+    }
+    const invocationId = invocationIdFromHeaders(headers);
+    return createLogger(
+      loggerTransport,
+      LogSource.SYSTEM,
+      new LoggerContext(
+        invocationId,
+        parsed.componentName,
+        parsed.handlerName,
+        undefined,
+        undefined,
+        additionalContext
+      )
+    );
+  } catch (e) {
+    return undefined;
+  }
+}
+
+function invocationIdFromHeaders(headers: Headers) {
+  const invocationIdHeader = headers["x-restate-invocation-id"];
+  const invocationId =
+    typeof invocationIdHeader === "string"
+      ? invocationIdHeader
+      : Array.isArray(invocationIdHeader)
+      ? invocationIdHeader[0] ?? "unknown id"
+      : "unknown id";
+  return invocationId;
+}
 
 /**
  * This is an internal API to support 'fetch' like handlers.
@@ -130,8 +172,14 @@ export class GenericHandler implements RestateHandler {
       return await this._handle(request, context);
     } catch (e) {
       const error = ensureError(e);
-      this.endpoint.rlog.error(
-        "Error while handling invocation: " + (error.stack ?? error.message)
+      (
+        tryCreateContextualLogger(
+          this.endpoint.loggerTransport,
+          request.url,
+          request.headers
+        ) ?? this.endpoint.rlog
+      ).error(
+        "Error while handling request: " + (error.stack ?? error.message)
       );
       return this.toErrorResponse(
         error instanceof RestateError ? error.code : 500,
@@ -285,7 +333,14 @@ export class GenericHandler implements RestateHandler {
         createLogger(
           this.endpoint.loggerTransport,
           LogSource.JOURNAL,
-          undefined
+          new LoggerContext(
+            invocationIdFromHeaders(headers),
+            service.name(),
+            handler.name(),
+            undefined,
+            undefined,
+            additionalContext
+          )
         )
       );
 
