@@ -36,7 +36,6 @@ import {
   type WorkflowSharedHandler,
   type Serde,
   type Duration,
-  serde,
 } from "@restatedev/restate-sdk-core";
 import { ensureError, TerminalError } from "./errors.js";
 
@@ -168,12 +167,9 @@ function optsFromArgs(args: unknown[]): {
   };
 }
 
-export const defaultSerde = <T>(): Serde<T> => {
-  return serde.json as Serde<T>;
-};
-
 export const makeRpcCallProxy = <T>(
   genericCall: (call: GenericCall<unknown, unknown>) => Promise<unknown>,
+  defaultSerde: Serde<any>,
   service: string,
   key?: string
 ): T => {
@@ -184,10 +180,10 @@ export const makeRpcCallProxy = <T>(
         const method = prop as string;
         return (...args: unknown[]) => {
           const { parameter, opts } = optsFromArgs(args);
-          const requestSerde = opts?.input ?? defaultSerde();
+          const requestSerde = opts?.input ?? defaultSerde;
           const responseSerde =
             (opts as ClientCallOptions<unknown, unknown> | undefined)?.output ??
-            defaultSerde();
+            defaultSerde;
           return genericCall({
             service,
             method,
@@ -208,6 +204,7 @@ export const makeRpcCallProxy = <T>(
 
 export const makeRpcSendProxy = <T>(
   genericSend: (send: GenericSend<unknown>) => void,
+  defaultSerde: Serde<any>,
   service: string,
   key?: string,
   legacyDelay?: number
@@ -219,7 +216,7 @@ export const makeRpcSendProxy = <T>(
         const method = prop as string;
         return (...args: unknown[]) => {
           const { parameter, opts } = optsFromArgs(args);
-          const requestSerde = opts?.input ?? defaultSerde();
+          const requestSerde = opts?.input ?? defaultSerde;
           const delay =
             legacyDelay ??
             (opts as ClientSendOptions<unknown> | undefined)?.delay;
@@ -400,9 +397,6 @@ export class HandlerWrapper {
       | ObjectHandlerOpts<unknown, unknown>
       | WorkflowHandlerOpts<unknown, unknown>
   ): HandlerWrapper {
-    const inputSerde: Serde<unknown> = opts?.input ?? defaultSerde();
-    const outputSerde: Serde<unknown> = opts?.output ?? defaultSerde();
-
     // we must create here a copy of the handler
     // to be able to reuse the original handler in other places.
     // like for example the same logic but under different routes.
@@ -413,8 +407,8 @@ export class HandlerWrapper {
     return new HandlerWrapper(
       kind,
       handlerCopy,
-      inputSerde,
-      outputSerde,
+      opts?.input,
+      opts?.output,
       opts?.accept,
       opts?.description,
       opts?.metadata,
@@ -435,15 +429,12 @@ export class HandlerWrapper {
     return handler[HANDLER_SYMBOL] as HandlerWrapper | undefined;
   }
 
-  public readonly accept?: string;
-  public readonly contentType?: string;
-
   private constructor(
     public readonly kind: HandlerKind,
     private handler: Function,
-    public readonly inputSerde: Serde<unknown>,
-    public readonly outputSerde: Serde<unknown>,
-    accept?: string,
+    public readonly inputSerde?: Serde<unknown>,
+    public readonly outputSerde?: Serde<unknown>,
+    public readonly accept?: string,
     public readonly description?: string,
     public readonly metadata?: Record<string, string>,
     public readonly idempotencyRetention?: Duration | number,
@@ -454,19 +445,16 @@ export class HandlerWrapper {
     public readonly enableLazyState?: boolean,
     public readonly retryPolicy?: RetryPolicy,
     public readonly asTerminalError?: (error: any) => TerminalError | undefined
-  ) {
-    this.accept = accept !== undefined ? accept : inputSerde.contentType;
-    this.contentType = outputSerde.contentType;
-  }
+  ) {}
 
   bindInstance(t: unknown) {
     this.handler = this.handler.bind(t) as Function;
   }
 
-  async invoke(context: unknown, input: Uint8Array) {
+  async invoke(context: { defaultSerde: Serde<any> }, input: Uint8Array) {
     let req: unknown;
     try {
-      req = this.inputSerde.deserialize(input);
+      req = (this.inputSerde ?? context.defaultSerde).deserialize(input);
     } catch (e) {
       const error = ensureError(e);
       throw new TerminalError(`Failed to deserialize input: ${error.message}`, {
@@ -474,7 +462,7 @@ export class HandlerWrapper {
       });
     }
     const res: unknown = await this.handler(context, req);
-    return this.outputSerde.serialize(res);
+    return (this.outputSerde ?? context.defaultSerde).serialize(res);
   }
 
   /**
@@ -887,6 +875,13 @@ export type ServiceOptions = {
    * ```
    */
   asTerminalError?: (error: any) => TerminalError | undefined;
+
+  /**
+   * Default serde to use for requests, responses, state, side effects, awakeables, promises. Used when no other serde is specified.
+   *
+   * If not provided, defaults to `serde.json`.
+   */
+  defaultSerde?: Serde<any>;
 };
 
 /**
