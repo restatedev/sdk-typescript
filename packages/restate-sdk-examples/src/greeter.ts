@@ -10,21 +10,13 @@
  */
 
 import { service, serve, type Context } from "@restatedev/restate-sdk";
-import { setTimeout } from "node:timers/promises";
 
 const greeter = service({
   name: "greeter",
   handlers: {
     greet: async (ctx: Context, name: string) => {
-      await setTimeout(5000);
-      throw new Error("Bla");
-
       return `Hello ${name}`;
     },
-  },
-  options: {
-    inactivityTimeout: { seconds: 1 },
-    abortTimeout: { seconds: 1 },
   },
 });
 
