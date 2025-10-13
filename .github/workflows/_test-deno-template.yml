@@ -13,6 +13,8 @@ jobs:
         ports:
           - 8080:8080
           - 9070:9070
+        env:
+          DO_NOT_TRACK: true
         options: >-
           --health-cmd "curl -f http://localhost:9070/health || exit 1"
           --health-interval 10s

@@ -18,6 +18,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: test
           AWS_REGION: us-east-1
           AWS_ENDPOINT_URL: http://localstack:4566
+          DO_NOT_TRACK: true
         options: >-
           --health-cmd "curl -f http://localhost:9070/health || exit 1"
           --health-interval 10s
