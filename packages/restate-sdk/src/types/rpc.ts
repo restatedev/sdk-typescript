@@ -881,7 +881,7 @@ export type ServiceOptions = {
    *
    * If not provided, defaults to `serde.json`.
    */
-  defaultSerde?: Serde<any>;
+  serde?: Serde<any>;
 };
 
 /**

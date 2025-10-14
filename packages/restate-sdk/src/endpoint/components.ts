@@ -124,7 +124,7 @@ export class ServiceComponent implements Component {
           name,
           ...commonHandlerOptions(
             handler.handlerWrapper,
-            this.options?.defaultSerde ?? serde.json
+            this.options?.serde ?? serde.json
           ),
         } satisfies d.Handler;
       }
@@ -199,7 +199,7 @@ export class VirtualObjectComponent implements Component {
           ty: handler.kind() === HandlerKind.EXCLUSIVE ? "EXCLUSIVE" : "SHARED",
           ...commonHandlerOptions(
             handler.handlerWrapper,
-            this.options?.defaultSerde ?? serde.json
+            this.options?.serde ?? serde.json
           ),
         } satisfies d.Handler;
       }
@@ -277,7 +277,7 @@ export class WorkflowComponent implements Component {
               : undefined,
           ...commonHandlerOptions(
             handler.handlerWrapper,
-            this.options?.defaultSerde ?? serde.json
+            this.options?.serde ?? serde.json
           ),
         } satisfies d.Handler;
       }
