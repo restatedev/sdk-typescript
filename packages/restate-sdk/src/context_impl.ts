@@ -44,7 +44,6 @@ import {
 } from "./types/errors.js";
 import type { Client, SendClient } from "./types/rpc.js";
 import {
-  defaultSerde,
   HandlerKind,
   makeRpcCallProxy,
   makeRpcSendProxy,
@@ -96,6 +95,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
   private readonly outputPump: OutputPump;
   private readonly runClosuresTracker: RunClosuresTracker;
   readonly promisesExecutor: PromisesExecutor;
+  readonly defaultSerde: Serde<any>;
 
   constructor(
     readonly coreVm: vm.WasmVM,
@@ -108,6 +108,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     inputReader: ReadableStreamDefaultReader<Uint8Array>,
     outputWriter: WritableStreamDefaultWriter<Uint8Array>,
     readonly journalValueCodec: JournalValueCodec,
+    defaultSerde?: Serde<any>,
     private readonly asTerminalError?: (error: any) => TerminalError | undefined
   ) {
     this.rand = new RandImpl(input.random_seed, () => {
@@ -131,6 +132,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       this.runClosuresTracker,
       this.promiseExecutorErrorCallback.bind(this)
     );
+    this.defaultSerde = defaultSerde ?? serde.json;
   }
 
   cancel(invocationId: InvocationId): void {
@@ -146,7 +148,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       WasmCommandType.AttachInvocation,
       () => {},
       (vm) => vm.sys_attach_invocation(invocationId),
-      SuccessWithSerde(serde ?? defaultSerde(), this.journalValueCodec),
+      SuccessWithSerde(serde ?? this.defaultSerde, this.journalValueCodec),
       Failure
     );
   }
@@ -173,7 +175,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       () => {},
       (vm) => vm.sys_get_state(name),
       VoidAsNull,
-      SuccessWithSerde(serde ?? defaultSerde(), this.journalValueCodec)
+      SuccessWithSerde(serde ?? this.defaultSerde, this.journalValueCodec)
     );
   }
 
@@ -191,7 +193,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       WasmCommandType.SetState,
       () =>
         this.journalValueCodec.encode(
-          (serde ?? defaultSerde()).serialize(value)
+          (serde ?? this.defaultSerde).serialize(value)
         ),
       (vm, bytes) => vm.sys_set_state(name, bytes)
     );
@@ -344,21 +346,36 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
   }
 
   serviceClient<D>({ name }: ServiceDefinitionFrom<D>): Client<Service<D>> {
-    return makeRpcCallProxy((call) => this.genericCall(call), name);
+    return makeRpcCallProxy(
+      (call) => this.genericCall(call),
+      this.defaultSerde,
+
+      name
+    );
   }
 
   objectClient<D>(
     { name }: VirtualObjectDefinitionFrom<D>,
     key: string
   ): Client<VirtualObject<D>> {
-    return makeRpcCallProxy((call) => this.genericCall(call), name, key);
+    return makeRpcCallProxy(
+      (call) => this.genericCall(call),
+      this.defaultSerde,
+      name,
+      key
+    );
   }
 
   workflowClient<D>(
     { name }: WorkflowDefinitionFrom<D>,
     key: string
   ): Client<Workflow<D>> {
-    return makeRpcCallProxy((call) => this.genericCall(call), name, key);
+    return makeRpcCallProxy(
+      (call) => this.genericCall(call),
+      this.defaultSerde,
+      name,
+      key
+    );
   }
 
   public serviceSendClient<D>(
@@ -367,6 +384,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
   ): SendClient<Service<D>> {
     return makeRpcSendProxy(
       (send) => this.genericSend(send),
+      this.defaultSerde,
       name,
       undefined,
       opts?.delay
@@ -380,6 +398,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
   ): SendClient<VirtualObject<D>> {
     return makeRpcSendProxy(
       (send) => this.genericSend(send),
+      this.defaultSerde,
       name,
       key,
       opts?.delay
@@ -393,6 +412,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
   ): SendClient<Workflow<D>> {
     return makeRpcSendProxy(
       (send) => this.genericSend(send),
+      this.defaultSerde,
       name,
       key,
       opts?.delay
@@ -412,7 +432,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       nameOrAction,
       actionSecondParameter
     );
-    const serde = options?.serde ?? defaultSerde();
+    const serde = options?.serde ?? this.defaultSerde ?? this.defaultSerde;
 
     // Prepare the handle
     let handle: number;
@@ -586,7 +606,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
         awakeable.handle,
         completeSignalPromiseUsing(
           VoidAsUndefined,
-          SuccessWithSerde(serde, this.journalValueCodec),
+          SuccessWithSerde(serde ?? this.defaultSerde, this.journalValueCodec),
           Failure
         )
       ),
@@ -606,8 +626,8 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
         } else {
           value =
             payload !== undefined
-              ? defaultSerde().serialize(payload)
-              : defaultSerde().serialize(null);
+              ? this.defaultSerde.serialize(payload)
+              : this.defaultSerde.serialize(null);
         }
         return this.journalValueCodec.encode(value);
       },
@@ -793,7 +813,7 @@ class DurablePromiseImpl<T> implements DurablePromise<T> {
     private readonly name: string,
     serde?: Serde<T>
   ) {
-    this.serde = serde ?? defaultSerde();
+    this.serde = serde ?? (this.ctx.defaultSerde as unknown as Serde<T>);
   }
 
   then<TResult1 = T, TResult2 = never>(
@@ -981,7 +1001,7 @@ const VoidAsUndefined: Completer = (value, prom) => {
 };
 
 function SuccessWithSerde<T>(
-  serde?: Serde<T>,
+  serde: Serde<T>,
   journalCodec?: JournalValueCodec,
   transform?: <U>(success: T) => U
 ): Completer {
@@ -995,12 +1015,7 @@ function SuccessWithSerde<T>(
     } else {
       buffer = value.Success;
     }
-    let val: T;
-    if (serde) {
-      val = serde.deserialize(buffer);
-    } else {
-      val = defaultSerde<T>().deserialize(buffer);
-    }
+    let val = serde.deserialize(buffer);
     if (transform) {
       val = transform(val);
     }

@@ -21,7 +21,8 @@ import type {
   WorkflowOptions,
 } from "../types/rpc.js";
 import { HandlerKind } from "../types/rpc.js";
-import { millisOrDurationToMillis } from "@restatedev/restate-sdk-core";
+import type { Serde } from "@restatedev/restate-sdk-core";
+import { millisOrDurationToMillis, serde } from "@restatedev/restate-sdk-core";
 
 //
 // Interfaces
@@ -44,17 +45,22 @@ export interface ComponentHandler {
 // Service
 //
 
-function handlerInputDiscovery(handler: HandlerWrapper): d.InputPayload {
+function handlerInputDiscovery(
+  handler: HandlerWrapper,
+  defaultSerde: Serde<any>
+): d.InputPayload {
+  const serde = handler.inputSerde ?? defaultSerde;
+
   let contentType = undefined;
   let jsonSchema = undefined;
 
-  if (handler.inputSerde.jsonSchema) {
-    jsonSchema = handler.inputSerde.jsonSchema;
-    contentType = handler.accept ?? handler.inputSerde.contentType;
+  if (serde.jsonSchema) {
+    jsonSchema = serde.jsonSchema;
+    contentType = handler.accept ?? serde.contentType;
   } else if (handler.accept) {
     contentType = handler.accept;
-  } else if (handler.inputSerde.contentType) {
-    contentType = handler.inputSerde.contentType;
+  } else if (serde.contentType) {
+    contentType = serde.contentType;
   } else {
     // no input information
     return {};
@@ -67,20 +73,20 @@ function handlerInputDiscovery(handler: HandlerWrapper): d.InputPayload {
   };
 }
 
-function handlerOutputDiscovery(handler: HandlerWrapper): d.OutputPayload {
+function handlerOutputDiscovery(
+  handler: HandlerWrapper,
+  defaultSerde: Serde<any>
+): d.OutputPayload {
+  const serde = handler.outputSerde ?? defaultSerde;
+
   let contentType = undefined;
   let jsonSchema = undefined;
 
-  if (handler.outputSerde.jsonSchema) {
-    jsonSchema = handler.outputSerde.jsonSchema;
-    contentType =
-      handler.contentType ??
-      handler.outputSerde.contentType ??
-      "application/json";
-  } else if (handler.contentType) {
-    contentType = handler.contentType;
-  } else if (handler.outputSerde.contentType) {
-    contentType = handler.outputSerde.contentType;
+  if (serde.jsonSchema) {
+    jsonSchema = serde.jsonSchema;
+    contentType = serde.contentType ?? "application/json";
+  } else if (serde.contentType) {
+    contentType = serde.contentType;
   } else {
     // no input information
     return { setContentTypeIfEmpty: false };
@@ -116,7 +122,10 @@ export class ServiceComponent implements Component {
       ([name, handler]) => {
         return {
           name,
-          ...commonHandlerOptions(handler.handlerWrapper),
+          ...commonHandlerOptions(
+            handler.handlerWrapper,
+            this.options?.serde ?? serde.json
+          ),
         } satisfies d.Handler;
       }
     );
@@ -188,7 +197,10 @@ export class VirtualObjectComponent implements Component {
         return {
           name,
           ty: handler.kind() === HandlerKind.EXCLUSIVE ? "EXCLUSIVE" : "SHARED",
-          ...commonHandlerOptions(handler.handlerWrapper),
+          ...commonHandlerOptions(
+            handler.handlerWrapper,
+            this.options?.serde ?? serde.json
+          ),
         } satisfies d.Handler;
       }
     );
@@ -263,7 +275,10 @@ export class WorkflowComponent implements Component {
             this.options?.workflowRetention !== undefined
               ? millisOrDurationToMillis(this.options?.workflowRetention)
               : undefined,
-          ...commonHandlerOptions(handler.handlerWrapper),
+          ...commonHandlerOptions(
+            handler.handlerWrapper,
+            this.options?.serde ?? serde.json
+          ),
         } satisfies d.Handler;
       }
     );
@@ -382,10 +397,13 @@ function commonServiceOptions(
   };
 }
 
-function commonHandlerOptions(wrapper: HandlerWrapper) {
+function commonHandlerOptions(
+  wrapper: HandlerWrapper,
+  defaultSerde: Serde<any>
+) {
   return {
-    input: handlerInputDiscovery(wrapper),
-    output: handlerOutputDiscovery(wrapper),
+    input: handlerInputDiscovery(wrapper, defaultSerde),
+    output: handlerOutputDiscovery(wrapper, defaultSerde),
     journalRetention:
       wrapper.journalRetention !== undefined
         ? millisOrDurationToMillis(wrapper.journalRetention)

@@ -441,6 +441,7 @@ export class GenericHandler implements RestateHandler {
         inputReader,
         outputWriter,
         journalValueCodec,
+        service.options?.serde,
         service.options?.asTerminalError
       );
 
