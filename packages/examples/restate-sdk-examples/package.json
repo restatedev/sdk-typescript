@@ -24,7 +24,13 @@
     "clean": "rm -rf dist *.tsbuildinfo .turbo",
     "check:types": "turbo run _check:types --filter={.}...",
     "_check:types": "tsc --noEmit --project tsconfig.build.json",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "object": "RESTATE_LOGGING=debug tsx ./src/object.ts",
+    "greeter": "RESTATE_LOGGING=debug tsx ./src/greeter.ts",
+    "zgreeter": "RESTATE_LOGGING=debug tsx ./src/zod_greeter.ts",
+    "workflow": "RESTATE_LOGGING=debug tsx ./src/workflow.ts",
+    "workflow_client": "RESTATE_LOGGING=debug tsx ./src/workflow_client.ts",
+    "ingress": "RESTATE_LOGGING=debug tsx ./src/ingress_client.ts"
   },
   "dependencies": {
     "@restatedev/restate-sdk": "workspace:*",
