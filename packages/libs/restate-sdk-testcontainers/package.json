@@ -1,6 +1,18 @@
 {
   "name": "@restatedev/restate-sdk-testcontainers",
-  "version": "0.0.0",
+  "version": "1.9.0",
+  "description": "Utils for testing services against a Restate container",
+  "author": "Restate Developers",
+  "license": "MIT",
+  "email": "code@restate.dev",
+  "homepage": "https://github.com/restatedev/sdk-typescript#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/restatedev/sdk-typescript.git"
+  },
+  "bugs": {
+    "url": "https://github.com/restatedev/sdk-typescript/issues"
+  },
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -33,6 +45,10 @@
     "_check:api": "api-extractor run --local",
     "prepublishOnly": "pnpm -w verify"
   },
-  "dependencies": {},
-  "devDependencies": {}
+  "dependencies": {
+    "@restatedev/restate-sdk": "workspace:*",
+    "@restatedev/restate-sdk-clients": "workspace:*",
+    "apache-arrow": "^18.1.0",
+    "testcontainers": "^10.28.0"
+  }
 }
