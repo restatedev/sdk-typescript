@@ -1,15 +1,13 @@
-# @restatedev/restate-sdk-core
+[![Documentation](https://img.shields.io/badge/doc-reference-blue)](https://docs.restate.dev)
+[![Examples](https://img.shields.io/badge/view-examples-blue)](https://github.com/restatedev/examples)
+[![NPM Version](https://img.shields.io/npm/v/%40restatedev%2Frestate-sdk-core)](https://www.npmjs.com/package/@restatedev/restate-sdk-core)
+[![Discord](https://img.shields.io/discord/1128210118216007792?logo=discord)](https://discord.gg/skW3AZ6uGd)
+[![Twitter](https://img.shields.io/twitter/follow/restatedev.svg?style=social&label=Follow)](https://twitter.com/intent/follow?screen_name=restatedev)
 
-## Installation
+# Restate Typescript SDK - Core
 
-```bash
-npm install @restatedev/restate-sdk-core
-```
+[Restate](https://restate.dev/) is a system for easily building resilient applications using *distributed durable async/await*. This repository contains the Restate SDK for writing services in **Node.js / Typescript**.
 
-## Usage
+This package contains the core types used in the several SDK modules.
 
-```typescript
-import { hello } from "@restatedev/restate-sdk-core";
-
-console.log(hello("World"));
-```
+For the SDK main package, checkout [`@restatedev/restate-sdk`](../restate-sdk).
