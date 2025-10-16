@@ -5,7 +5,12 @@ import json from "@eslint/json";
 
 export default [
   {
-    ignores: ["**/dist/**", "**/node_modules/**", ".turbo/**"],
+    ignores: [
+      "**/dist/**",
+      "**/node_modules/**",
+      ".turbo/**",
+      "**/next-env.d.ts",
+    ],
   },
 
   {
@@ -35,6 +40,13 @@ export default [
         "error",
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
+      "@typescript-eslint/no-empty-object-type": [
+        "error",
+        { allowInterfaces: "always" },
+      ],
+      "@typescript-eslint/require-await": "off",
+      "@typescript-eslint/no-floating-promises": "off",
+      "@typescript-eslint/no-duplicate-type-constituents": "off",
     },
   },
 

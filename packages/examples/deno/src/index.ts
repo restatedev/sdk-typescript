@@ -1,3 +1,4 @@
+// deno-lint-ignore-file no-unused-vars require-await
 import * as restate from "@restatedev/restate-sdk/fetch";
 import { serde } from "@restatedev/restate-sdk-zod";
 

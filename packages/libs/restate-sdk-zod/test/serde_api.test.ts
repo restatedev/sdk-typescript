@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 import { describe, expect, it } from "vitest";
 import * as z3 from "zod/v3";
 import * as z4 from "zod/v4";
@@ -42,7 +45,7 @@ const z4TypeTestData = {
       .min(3, { message: "Name must be at least 3 characters long" }),
     isActive: z4.boolean(),
   }),
-  jsonSchema: undefined,
+  jsonSchema: undefined as any,
 };
 z4TypeTestData.jsonSchema = z4.toJSONSchema(z4TypeTestData.zodSchema);
 
@@ -63,7 +66,7 @@ const z4StringTestData = {
   ...stringTestData,
   name: `v4 ${stringTestData.name}`,
   zodSchema: z4.string(),
-  jsonSchema: undefined,
+  jsonSchema: undefined as any,
 };
 z4StringTestData.jsonSchema = z4.toJSONSchema(z4StringTestData.zodSchema);
 
@@ -84,7 +87,7 @@ describe("serde_api", () => {
 
     describe("constructor", () => {
       it("converts a valid schema to json", () => {
-        expect(srd.jsonSchema).not.to.be.null;
+        expect(srd.jsonSchema).not.toBeNull();
         expect(srd.jsonSchema).to.deep.equal(jsonSchema);
       });
     });
@@ -93,7 +96,7 @@ describe("serde_api", () => {
         expect(srd.serialize(validData)).to.deep.equal(validDataSerialized);
       });
       it("gives an empty response for undefined", () => {
-        expect(srd.serialize(undefined)).to.be.empty;
+        expect(srd.serialize(undefined as any)).toHaveLength(0);
       });
     });
     describe("deserialize", () => {
