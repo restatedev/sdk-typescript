@@ -1,0 +1,7 @@
+packages:
+  - packages/libs/*
+  - packages/tests/*
+  - packages/examples/*
+
+catalog:
+  zod: ^4.1.12

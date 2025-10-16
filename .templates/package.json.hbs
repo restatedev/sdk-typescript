@@ -1,0 +1,81 @@
+{
+  "name": "@restatedev/{{dashCase name}}",
+  "version": "0.0.0",
+{{#if private}}
+  "private": true,
+{{/if}}
+  "type": "module",
+{{#if (eq type "lib")}}
+{{#if private}}
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+{{else}}
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.cts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+{{/if}}
+{{else}}
+  "private": true,
+{{/if}}
+  "scripts": {
+{{#if (eq type "lib")}}
+{{#if private}}
+    "dev": "tsc --noEmit --watch",
+    "clean": "rm -rf *.tsbuildinfo .turbo",
+    "check:types": "tsc --noEmit",
+    "lint": "eslint ."
+{{else}}
+    "build": "turbo run _build --filter={.}...",
+    "_build": "tsc --noEmit && tsdown",
+    "dev": "tsc --noEmit --watch",
+    "clean": "rm -rf dist *.tsbuildinfo .turbo",
+    "check:types": "turbo run _check:types --filter={.}...",
+    "_check:types": "tsc --noEmit --project tsconfig.build.json",
+    "lint": "eslint .",
+    "check:exports": "turbo run _check:exports --filter={.}...",
+    "_check:exports": "attw --pack .",
+    "check:api": "turbo run _check:api --filter={.}...",
+    "_check:api": "api-extractor run --local",
+    "prepublishOnly": "pnpm -w verify"
+{{/if}}
+{{/if}}
+{{#if (eq type "test")}}
+    "test": "turbo run _test --filter={.}...",
+    "_test": "vitest run",
+    "test:watch": "vitest watch",
+    "clean": "rm -rf dist *.tsbuildinfo .turbo",
+    "check:types": "turbo run _check:types --filter={.}...",
+    "_check:types": "tsc --noEmit --project tsconfig.test.json",
+    "lint": "eslint ."
+{{/if}}
+{{#if (eq type "example")}}
+    "build": "turbo run _build --filter={.}...",
+    "_build": "tsc --project tsconfig.build.json",
+    "dev": "tsx watch --tsconfig ./tsconfig.json ./src/index.ts",
+    "start": "turbo run _start --filter={.}...",
+    "_start": "node ./dist/index.js",
+    "clean": "rm -rf dist *.tsbuildinfo .turbo",
+    "check:types": "turbo run _check:types --filter={.}...",
+    "_check:types": "tsc --noEmit --project tsconfig.build.json",
+    "lint": "eslint ."
+{{/if}}
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

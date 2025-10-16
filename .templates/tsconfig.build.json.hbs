@@ -1,0 +1,21 @@
+{{#if (eq type "lib")}}
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "composite": true
+  },
+  "include": ["src/**/*"]
+}
+{{/if}}
+{{#if (eq type "example")}}
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "composite": false
+  },
+  "include": ["src/**/*"]
+}
+{{/if}}

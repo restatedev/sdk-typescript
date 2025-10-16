@@ -1,0 +1,69 @@
+name: Release and Publish
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  check-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      should_publish: ${{ steps.check.outputs.create_release }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+
+      - name: Check for new versions
+        id: check
+        run: |
+          git fetch --tags
+
+          for package in packages/libs/*/package.json; do
+            if [ -f "$package" ]; then
+              NAME=$(jq -r '.name' "$package")
+              VERSION=$(jq -r '.version' "$package")
+              PRIVATE=$(jq -r '.private // false' "$package")
+              
+              if [ "$PRIVATE" = "false" ]; then
+                if ! git rev-parse "v$VERSION" >/dev/null 2>&1; then
+                  echo "New version detected: $NAME@$VERSION"
+                  echo "create_release=true" >> "$GITHUB_OUTPUT"
+                  echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+                  break
+                fi
+              fi
+            fi
+          done
+
+      - name: Create and Push Tag
+        if: steps.check.outputs.create_release == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "v${{ steps.check.outputs.version }}"
+          git push origin "v${{ steps.check.outputs.version }}"
+
+      - name: Create Release
+        if: steps.check.outputs.create_release == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "v${{ steps.check.outputs.version }}" \
+            --title "Release v${{ steps.check.outputs.version }}" \
+            --generate-notes
+
+  publish:
+    needs: check-and-release
+    if: needs.check-and-release.outputs.should_publish == 'true'
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/publish.yml
+    secrets: inherit
