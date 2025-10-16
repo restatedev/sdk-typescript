@@ -1,9 +1,19 @@
 {
   "name": "@restatedev/restate-e2e-services",
-  "version": "0.0.0",
+  "version": "1.9.0",
+  "description": "Typescript SDK e2e tests",
   "private": true,
-  "type": "module",
-  "private": true,
+  "author": "Restate Developers",
+  "license": "MIT",
+  "email": "code@restate.dev",
+  "homepage": "https://github.com/restatedev/sdk-typescript#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/restatedev/sdk-typescript.git"
+  },
+  "bugs": {
+    "url": "https://github.com/restatedev/sdk-typescript/issues"
+  },
   "scripts": {
     "build": "turbo run _build --filter={.}...",
     "_build": "tsc --project tsconfig.build.json",
@@ -15,6 +25,14 @@
     "_check:types": "tsc --noEmit --project tsconfig.build.json",
     "lint": "eslint ."
   },
-  "dependencies": {},
-  "devDependencies": {}
+  "dependencies": {
+    "@restatedev/restate-sdk": "workspace:*",
+    "@restatedev/restate-sdk-clients": "workspace:*",
+    "heapdump": "^0.3.15",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/heapdump": "^0.3.4",
+    "@types/uuid": "^10.0.0"
+  }
 }
