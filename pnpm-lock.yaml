@@ -162,7 +162,11 @@ importers:
         specifier: workspace:*
         version: link:../restate-sdk-core
 
-  packages/libs/restate-sdk-cloudflare-workers: {}
+  packages/libs/restate-sdk-cloudflare-workers:
+    dependencies:
+      '@restatedev/restate-sdk-core':
+        specifier: workspace:*
+        version: link:../restate-sdk-core
 
   packages/libs/restate-sdk-core: {}
 

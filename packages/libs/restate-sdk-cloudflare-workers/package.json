@@ -1,6 +1,17 @@
 {
-  "name": "@restatedev/restate-sdk-cloudflare-workers",
-  "version": "0.0.0",
+  "version": "1.9.0",
+  "description": "Typescript SDK for Restate",
+  "author": "Restate Developers",
+  "license": "MIT",
+  "email": "code@restate.dev",
+  "homepage": "https://github.com/restatedev/sdk-typescript#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/restatedev/sdk-typescript.git"
+  },
+  "bugs": {
+    "url": "https://github.com/restatedev/sdk-typescript/issues"
+  },
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -25,20 +36,11 @@
   },
   "scripts": {
     "build": "turbo run _build --filter={.}...",
-    "_build": "tsc --noEmit && tsdown",
-    "dev": "tsc --noEmit --watch",
-    "clean": "rm -rf dist *.tsbuildinfo .turbo",
-    "check:types": "turbo run _check:types --filter={.}...",
-    "_check:types": "tsc --noEmit --project tsconfig.build.json",
-    "lint": "eslint .",
-    "check:exports": "turbo run _check:exports --filter={.}...",
-    "_check:exports": "attw --pack .",
-    "check:api": "turbo run _check:api --filter={.}...",
-    "_check:api": "api-extractor run --local && api-extractor run --local --config api-extractor.fetch.json",
-    "prepublishOnly": "pnpm -w verify"
+    "_build": "./patch_sdk_cf_workers.sh"
   },
-  "dependencies": {},
-  "devDependencies": {},
+  "dependencies": {
+    "@restatedev/restate-sdk-core": "workspace:*"
+  },
   "typesVersions": {
     "*": {
       "fetch": [
