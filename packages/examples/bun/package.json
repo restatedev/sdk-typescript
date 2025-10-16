@@ -1,20 +1,25 @@
 {
-  "name": "@restatedev/bun",
+  "name": "@restatedev/bun-template",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "private": true,
   "scripts": {
     "build": "turbo run _build --filter={.}...",
-    "_build": "tsc --project tsconfig.build.json",
-    "dev": "tsx watch --tsconfig ./tsconfig.json ./src/index.ts",
+    "_build": "bun build --target bun --outdir dist src/index.ts",
+    "dev": "bun run --watch src/index.ts",
     "start": "turbo run _start --filter={.}...",
-    "_start": "node ./dist/index.js",
+    "_start": "bun run src/index.ts",
     "clean": "rm -rf dist *.tsbuildinfo .turbo",
     "check:types": "turbo run _check:types --filter={.}...",
     "_check:types": "tsc --noEmit --project tsconfig.build.json",
     "lint": "eslint ."
   },
-  "dependencies": {},
-  "devDependencies": {}
+  "dependencies": {
+    "@restatedev/restate-sdk": "workspace:*",
+    "@restatedev/restate-sdk-zod": "workspace:*",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.1.5"
+  }
 }
