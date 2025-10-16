@@ -12,6 +12,7 @@
     "clean": "rm -rf dist *.tsbuildinfo .turbo",
     "check:types": "turbo run _check:types --filter={.}...",
     "_check:types": "tsc --noEmit --project tsconfig.build.json",
+    "prelint": "deno install",
     "lint": "eslint ."
   },
   "dependencies": {},
