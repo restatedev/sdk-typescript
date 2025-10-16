@@ -1,0 +1,20 @@
+{
+  "name": "@restatedev/cloudflare",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "turbo run _build --filter={.}...",
+    "_build": "tsc --project tsconfig.build.json",
+    "dev": "tsx watch --tsconfig ./tsconfig.json ./src/index.ts",
+    "start": "turbo run _start --filter={.}...",
+    "_start": "node ./dist/index.js",
+    "clean": "rm -rf dist *.tsbuildinfo .turbo",
+    "check:types": "turbo run _check:types --filter={.}...",
+    "_check:types": "tsc --noEmit --project tsconfig.build.json",
+    "lint": "eslint ."
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

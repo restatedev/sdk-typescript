@@ -3,7 +3,78 @@
   "compilerOptions": {
     "composite": false,
     "baseUrl": ".",
-    "paths": {}
+    "paths": {
+      "@restatedev/restate-sdk": ["packages/libs/restate-sdk/src/index.ts"],
+      "@restatedev/restate-sdk/node": ["packages/libs/restate-sdk/src/node.ts"],
+      "@restatedev/restate-sdk/fetch": [
+        "packages/libs/restate-sdk/src/fetch.ts"
+      ],
+      "@restatedev/restate-sdk/lambda": [
+        "packages/libs/restate-sdk/src/lambda.ts"
+      ],
+      "@restatedev/restate-sdk-clients": [
+        "packages/libs/restate-sdk-clients/src/index.ts"
+      ],
+      "@restatedev/restate-sdk-cloudflare-workers": [
+        "packages/libs/restate-sdk-cloudflare-workers/src/index.ts"
+      ],
+      "@restatedev/restate-sdk-cloudflare-workers/fetch": [
+        "packages/libs/restate-sdk-cloudflare-workers/src/fetch.ts"
+      ],
+      "@restatedev/restate-sdk-core": [
+        "packages/libs/restate-sdk-core/src/index.ts"
+      ],
+      "@restatedev/restate-sdk-testcontainers": [
+        "packages/libs/restate-sdk-testcontainers/src/index.ts"
+      ],
+      "@restatedev/restate-sdk-zod": [
+        "packages/libs/restate-sdk-zod/src/index.ts"
+      ]
+    }
   },
-  "files": []
+  "files": [],
+  "references": [
+    {
+      "path": "packages/libs/restate-sdk"
+    },
+    {
+      "path": "packages/libs/restate-sdk-clients"
+    },
+    {
+      "path": "packages/libs/restate-sdk-cloudflare-workers"
+    },
+    {
+      "path": "packages/libs/restate-sdk-core"
+    },
+    {
+      "path": "packages/libs/restate-sdk-testcontainers"
+    },
+    {
+      "path": "packages/libs/restate-sdk-zod"
+    },
+    {
+      "path": "packages/examples/bun"
+    },
+    {
+      "path": "packages/examples/cloudflare"
+    },
+    {
+      "path": "packages/examples/deno"
+    },
+    {
+      "path": "packages/examples/lambda"
+    },
+    {
+      "path": "packages/examples/node"
+    },
+    {
+      "path": "packages/examples/restate-e2e-services"
+    },
+    {
+      "path": "packages/examples/restate-sdk-examples"
+    },
+    {
+      "path": "packages/examples/vercel"
+    }
+  ]
 }

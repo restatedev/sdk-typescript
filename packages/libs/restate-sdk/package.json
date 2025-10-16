@@ -1,0 +1,63 @@
+{
+  "name": "@restatedev/restate-sdk",
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.cts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./package.json": "./package.json",
+    "./node": {
+      "import": "./dist/node.js",
+      "require": "./dist/node.cjs"
+    },
+    "./fetch": {
+      "import": "./dist/fetch.js",
+      "require": "./dist/fetch.cjs"
+    },
+    "./lambda": {
+      "import": "./dist/lambda.js",
+      "require": "./dist/lambda.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "turbo run _build --filter={.}...",
+    "_build": "tsc --noEmit && tsdown",
+    "dev": "tsc --noEmit --watch",
+    "clean": "rm -rf dist *.tsbuildinfo .turbo",
+    "check:types": "turbo run _check:types --filter={.}...",
+    "_check:types": "tsc --noEmit --project tsconfig.build.json",
+    "lint": "eslint .",
+    "check:exports": "turbo run _check:exports --filter={.}...",
+    "_check:exports": "attw --pack .",
+    "check:api": "turbo run _check:api --filter={.}...",
+    "_check:api": "api-extractor run --local && api-extractor run --local --config api-extractor.node.json && api-extractor run --local --config api-extractor.fetch.json && api-extractor run --local --config api-extractor.lambda.json",
+    "prepublishOnly": "pnpm -w verify"
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  "typesVersions": {
+    "*": {
+      "node": [
+        "./dist/node.d.ts"
+      ],
+      "fetch": [
+        "./dist/fetch.d.ts"
+      ],
+      "lambda": [
+        "./dist/lambda.d.ts"
+      ]
+    }
+  }
+}
