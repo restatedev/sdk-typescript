@@ -156,7 +156,11 @@ importers:
         specifier: ^8.10.156
         version: 8.10.156
 
-  packages/libs/restate-sdk-clients: {}
+  packages/libs/restate-sdk-clients:
+    dependencies:
+      '@restatedev/restate-sdk-core':
+        specifier: workspace:*
+        version: link:../restate-sdk-core
 
   packages/libs/restate-sdk-cloudflare-workers: {}
 
