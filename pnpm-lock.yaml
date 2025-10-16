@@ -152,7 +152,17 @@ importers:
         specifier: ^2.155.0
         version: 2.1030.0
 
-  packages/examples/node: {}
+  packages/examples/node:
+    dependencies:
+      '@restatedev/restate-sdk':
+        specifier: workspace:*
+        version: link:../../libs/restate-sdk
+      '@restatedev/restate-sdk-zod':
+        specifier: workspace:*
+        version: link:../../libs/restate-sdk-zod
+      zod:
+        specifier: 'catalog:'
+        version: 4.1.12
 
   packages/examples/restate-e2e-services:
     dependencies:

@@ -1,1 +1,29 @@
-console.log("Example: node");
+import * as restate from "@restatedev/restate-sdk/node";
+import { serde } from "@restatedev/restate-sdk-zod";
+
+import { z } from "zod";
+
+const Greeting = z.object({
+  name: z.string(),
+});
+
+const GreetingResponse = z.object({
+  result: z.string(),
+});
+
+const greeter = restate.service({
+  name: "Greeter",
+  handlers: {
+    greet: restate.createServiceHandler(
+      { input: serde.zod(Greeting), output: serde.zod(GreetingResponse) },
+      async (ctx: restate.Context, { name }) => {
+        return { result: `You said hi to ${name}!` };
+      }
+    ),
+  },
+});
+
+restate.serve({
+  services: [greeter],
+  port: 9080,
+});
