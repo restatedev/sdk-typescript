@@ -185,7 +185,14 @@ importers:
         specifier: ^10.28.0
         version: 10.28.0
 
-  packages/libs/restate-sdk-zod: {}
+  packages/libs/restate-sdk-zod:
+    devDependencies:
+      '@restatedev/restate-sdk-core':
+        specifier: workspace:*
+        version: link:../restate-sdk-core
+      zod:
+        specifier: 'catalog:'
+        version: 4.1.12
 
 packages:
 
