@@ -1,9 +1,20 @@
 {
   "name": "@restatedev/restate-sdk-examples",
-  "version": "0.0.0",
+  "version": "1.9.0",
+  "description": "Typescript SDK examples",
   "private": true,
+  "author": "Restate Developers",
+  "license": "MIT",
+  "email": "code@restate.dev",
+  "homepage": "https://github.com/restatedev/sdk-typescript#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/restatedev/sdk-typescript.git"
+  },
+  "bugs": {
+    "url": "https://github.com/restatedev/sdk-typescript/issues"
+  },
   "type": "module",
-  "private": true,
   "scripts": {
     "build": "turbo run _build --filter={.}...",
     "_build": "tsc --project tsconfig.build.json",
@@ -15,6 +26,13 @@
     "_check:types": "tsc --noEmit --project tsconfig.build.json",
     "lint": "eslint ."
   },
-  "dependencies": {},
-  "devDependencies": {}
+  "dependencies": {
+    "@restatedev/restate-sdk": "workspace:*",
+    "@restatedev/restate-sdk-clients": "workspace:*",
+    "@restatedev/restate-sdk-zod": "workspace:*",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@restatedev/restate-sdk-testcontainers": "workspace:*"
+  }
 }

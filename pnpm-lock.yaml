@@ -4,6 +4,12 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+catalogs:
+  default:
+    zod:
+      specifier: ^4.1.12
+      version: 4.1.12
+
 importers:
 
   .:
@@ -119,7 +125,24 @@ importers:
         specifier: ^10.0.0
         version: 10.0.0
 
-  packages/examples/restate-sdk-examples: {}
+  packages/examples/restate-sdk-examples:
+    dependencies:
+      '@restatedev/restate-sdk':
+        specifier: workspace:*
+        version: link:../../libs/restate-sdk
+      '@restatedev/restate-sdk-clients':
+        specifier: workspace:*
+        version: link:../../libs/restate-sdk-clients
+      '@restatedev/restate-sdk-zod':
+        specifier: workspace:*
+        version: link:../../libs/restate-sdk-zod
+      zod:
+        specifier: 'catalog:'
+        version: 4.1.12
+    devDependencies:
+      '@restatedev/restate-sdk-testcontainers':
+        specifier: workspace:*
+        version: link:../../libs/restate-sdk-testcontainers
 
   packages/examples/vercel: {}
 
@@ -3780,6 +3803,9 @@ packages:
   yoctocolors-cjs@2.1.3:
     resolution: {integrity: sha512-U/PBtDf35ff0D8X8D0jfdzHYEPFxAI7jJlxZXwCSez5M3190m+QobIfh+sWDWSHMCWWJN2AWamkegn6vr6YBTw==}
     engines: {node: '>=18'}
+
+  zod@4.1.12:
+    resolution: {integrity: sha512-JInaHOamG8pt5+Ey8kGmdcAcg3OL9reK8ltczgHTAwNhMys/6ThXHityHxVV2p3fkw/c+MAvBHFVYHFZDmjMCQ==}
 
 snapshots:
 
@@ -7699,3 +7725,5 @@ snapshots:
   yocto-queue@0.1.0: {}
 
   yoctocolors-cjs@2.1.3: {}
+
+  zod@4.1.12: {}
