@@ -146,7 +146,15 @@ importers:
 
   packages/examples/vercel: {}
 
-  packages/libs/restate-sdk: {}
+  packages/libs/restate-sdk:
+    dependencies:
+      '@restatedev/restate-sdk-core':
+        specifier: workspace:*
+        version: link:../restate-sdk-core
+    devDependencies:
+      '@types/aws-lambda':
+        specifier: ^8.10.156
+        version: 8.10.156
 
   packages/libs/restate-sdk-clients: {}
 
@@ -918,6 +926,9 @@ packages:
 
   '@types/argparse@1.0.38':
     resolution: {integrity: sha512-ebDJ9b0e702Yr7pWgB0jzm+CX4Srzz8RcXtLJDJB+BSccqMa36uyH/zUsSYao5+BD1ytv3k3rPYCq4mAE1hsXA==}
+
+  '@types/aws-lambda@8.10.156':
+    resolution: {integrity: sha512-LElQP+QliVWykC7OF8dNr04z++HJCMO2lF7k9HuKoSDARqhcjHq8MzbrRwujCSDeBHIlvaimbuY/tVZL36KXFQ==}
 
   '@types/chai@5.2.2':
     resolution: {integrity: sha512-8kB30R7Hwqf40JPiKhVzodJs2Qc1ZJ5zuT3uzw5Hq/dhNCl3G3l83jfpdI1e20BP348+fV7VIL/+FxaXkqBmWg==}
@@ -4578,6 +4589,8 @@ snapshots:
     optional: true
 
   '@types/argparse@1.0.38': {}
+
+  '@types/aws-lambda@8.10.156': {}
 
   '@types/chai@5.2.2':
     dependencies:

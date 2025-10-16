@@ -9,4 +9,13 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-export * from "./node.js";
+import { ReadableStream } from "node:stream/web";
+
+export function OnceStream<T>(once: T): ReadableStream<T> {
+  return new ReadableStream<T>({
+    pull: (controller) => {
+      controller.enqueue(once);
+      controller.close();
+    },
+  });
+}

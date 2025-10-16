@@ -1,7 +1,18 @@
 {
   "name": "@restatedev/restate-sdk",
-  "version": "0.0.0",
-  "type": "module",
+  "version": "1.9.0",
+  "description": "Typescript SDK for Restate",
+  "author": "Restate Developers",
+  "license": "MIT",
+  "email": "code@restate.dev",
+  "homepage": "https://github.com/restatedev/sdk-typescript#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/restatedev/sdk-typescript.git"
+  },
+  "bugs": {
+    "url": "https://github.com/restatedev/sdk-typescript/issues"
+  },
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.cts",
@@ -32,6 +43,7 @@
     "access": "public"
   },
   "scripts": {
+    "gen:version": "node ./scripts/version.mjs",
     "build": "turbo run _build --filter={.}...",
     "_build": "tsc --noEmit && tsdown",
     "dev": "tsc --noEmit --watch",
@@ -43,10 +55,12 @@
     "_check:exports": "attw --pack .",
     "check:api": "turbo run _check:api --filter={.}...",
     "_check:api": "api-extractor run --local && api-extractor run --local --config api-extractor.node.json && api-extractor run --local --config api-extractor.fetch.json && api-extractor run --local --config api-extractor.lambda.json",
-    "prepublishOnly": "pnpm -w verify"
+    "prepublishOnly": "pnpm -w verify",
+    "pretest": "npm run gen:version"
   },
-  "dependencies": {},
-  "devDependencies": {},
+  "dependencies": {
+    "@restatedev/restate-sdk-core": "workspace:*"
+  },
   "typesVersions": {
     "*": {
       "node": [
@@ -59,5 +73,8 @@
         "./dist/lambda.d.ts"
       ]
     }
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.156"
   }
 }
