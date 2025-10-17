@@ -3,7 +3,8 @@
   "tasks": {
     "_build": {
       "dependsOn": ["^_build"],
-      "outputs": ["dist/**", "*.tsbuildinfo"]
+      "outputs": ["dist/**", "*.tsbuildinfo"],
+      "outputLogs": "errors-only"
     },
     "clean": {
       "cache": false

@@ -46,6 +46,7 @@
     "gen:version": "node ./scripts/version.mjs",
     "build": "turbo run _build --filter={.}...",
     "_build": "tsc --noEmit && tsdown",
+    "_test": "vitest run",
     "dev": "tsc --noEmit --watch",
     "clean": "rm -rf dist *.tsbuildinfo .turbo",
     "check:types": "turbo run _check:types --filter={.}...",

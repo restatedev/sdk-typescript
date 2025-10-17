@@ -18,6 +18,7 @@
   "scripts": {
     "build": "turbo run _build --filter={.}...",
     "_build": "tsc --project tsconfig.build.json",
+    "_test": "vitest run",
     "dev": "tsx watch --tsconfig ./tsconfig.json ./src/index.ts",
     "start": "turbo run _start --filter={.}...",
     "_start": "node ./dist/index.js",
