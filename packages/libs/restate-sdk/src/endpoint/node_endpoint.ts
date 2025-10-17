@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/prefer-promise-reject-errors */
 /*
  * Copyright (c) 2023-2024 - Restate Software, Inc., Restate GmbH
  *
@@ -12,7 +13,7 @@
 /* eslint-disable @typescript-eslint/no-restricted-types */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import type { RestateEndpoint } from "../public_api.js";
+import type { RestateEndpoint } from "../index.js";
 import type {
   JournalValueCodec,
   ServiceDefinition,

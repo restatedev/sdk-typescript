@@ -23,14 +23,15 @@ export function fetcher(handler: GenericHandler) {
       const request: RestateRequest = {
         url,
         headers,
-        body: event.body,
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any
+        body: event.body as any,
         extraArgs,
         abortSignal: event.signal,
       };
 
       const resp = await handler.handle(request);
 
-      return new Response(resp.body, {
+      return new Response(resp.body as BodyInit | null | undefined, {
         status: resp.statusCode,
         headers: resp.headers,
       });

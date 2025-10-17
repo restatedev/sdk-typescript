@@ -10,6 +10,7 @@ export default [
       "**/node_modules/**",
       ".turbo/**",
       "**/next-env.d.ts",
+      "**/sdk_shared_core_wasm_bindings.js",
     ],
   },
 

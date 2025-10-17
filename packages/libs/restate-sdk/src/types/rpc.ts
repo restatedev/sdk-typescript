@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-function-type */
 /*
  * Copyright (c) 2023-2024 - Restate Software, Inc., Restate GmbH
  *

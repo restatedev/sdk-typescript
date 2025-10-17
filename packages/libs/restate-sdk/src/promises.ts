@@ -134,8 +134,8 @@ abstract class AbstractRestatePromise<T> implements InternalRestatePromise<T> {
       this[RESTATE_CTX_SYMBOL],
       ([thisPromise, sleepPromise]) => {
         return new Promise((resolve, reject) => {
-          thisPromise.then(resolve, reject);
-          sleepPromise.then(() => {
+          thisPromise!.then(resolve, reject);
+          sleepPromise!.then(() => {
             reject(new TimeoutError());
           }, reject);
         });

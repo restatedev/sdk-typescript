@@ -47,7 +47,7 @@ export class HttpCallError extends Error {
   constructor(
     public readonly status: number,
     public readonly responseText: string,
-    public readonly message: string
+    public override readonly message: string
   ) {
     super(message);
   }
@@ -192,7 +192,7 @@ const doComponentInvocation = async <I, O>(
   const httpResponse = await fetch(url, {
     method: params.method ?? "POST",
     headers,
-    body,
+    body: body as BodyInit | null | undefined,
     signal,
   });
   if (!httpResponse.ok) {
@@ -432,7 +432,7 @@ class HttpIngress implements Ingress {
     const httpResponse = await fetch(url, {
       method: "POST",
       headers,
-      body,
+      body: body as BodyInit | null | undefined,
     });
     if (!httpResponse.ok) {
       const body = await httpResponse.text();

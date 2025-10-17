@@ -9,7 +9,7 @@
 
 import * as restate from "@restatedev/restate-sdk";
 import { REGISTRY } from "./services.js";
-import { CounterApi } from "./counter.js";
+import type { CounterApi } from "./counter.js";
 
 const EventHandlerFQN = "EventHandler";
 

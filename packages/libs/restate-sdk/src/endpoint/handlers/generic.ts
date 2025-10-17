@@ -109,7 +109,7 @@ export function tryCreateContextualLogger(
         additionalContext
       )
     );
-  } catch (e) {
+  } catch {
     return undefined;
   }
 }
@@ -152,7 +152,7 @@ export class GenericHandler implements RestateHandler {
       );
     } else {
       this.endpoint.rlog.info(
-        `Validating requests using signing keys [${this.endpoint.keySet}]`
+        `Validating requests using signing keys [${this.endpoint.keySet.toString()}]`
       );
       this.identityVerifier = new vm.WasmIdentityVerifier(this.endpoint.keySet);
     }
@@ -268,7 +268,7 @@ export class GenericHandler implements RestateHandler {
       .filter(([, v]) => v !== undefined)
       .map(
         ([k, v]) =>
-          new vm.WasmHeader(k, v instanceof Array ? v[0] : (v as string))
+          new vm.WasmHeader(k, v instanceof Array ? v[0]! : (v as string))
       );
 
     try {
@@ -306,7 +306,7 @@ export class GenericHandler implements RestateHandler {
         .filter(([, v]) => v !== undefined)
         .map(
           ([k, v]) =>
-            new vm.WasmHeader(k, v instanceof Array ? v[0] : (v as string))
+            new vm.WasmHeader(k, v instanceof Array ? v[0]! : (v as string))
         );
       const coreVm = new vm.WasmVM(
         vmHeaders,
@@ -656,8 +656,8 @@ export class GenericHandler implements RestateHandler {
           manifestVersion === 2
             ? ENDPOINT_MANIFEST_V2
             : manifestVersion === 3
-            ? ENDPOINT_MANIFEST_V3
-            : ENDPOINT_MANIFEST_V4,
+              ? ENDPOINT_MANIFEST_V3
+              : ENDPOINT_MANIFEST_V4,
         "x-restate-server": X_RESTATE_SERVER,
       },
       statusCode: 200,

@@ -83,7 +83,7 @@ class ProgramInterpreter {
     const commands = program.commands;
     for (let i = 0; i < commands.length; i++) {
       const command = commands[i];
-      switch (command.kind) {
+      switch (command?.kind) {
         case CommandType.SET_STATE: {
           ctx.set(`key-${command.key}`, `value-${command.key}`);
           break;

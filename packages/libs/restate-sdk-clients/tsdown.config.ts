@@ -7,4 +7,6 @@ export default defineConfig({
   format: ["esm", "cjs"],
   dts: true,
   ignoreWatch: ["dist", ".turbo", "*.tsbuildinfo"],
+  unbundle: true,
+  external: ["@restatedev/restate-sdk-core"],
 });

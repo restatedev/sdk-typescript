@@ -246,7 +246,7 @@ export class StateProxy<TState extends TypedState> {
     }
 
     // eslint-disable-next-line @typescript-eslint/await-thenable
-    const table = (await tableFromIPC(res.body)).toArray() as {
+    const table = (await tableFromIPC(res.body!)).toArray() as {
       key: string;
       value: Uint8Array;
     }[];
@@ -255,7 +255,7 @@ export class StateProxy<TState extends TypedState> {
       return null;
     }
 
-    return serde.deserialize(table[0].value);
+    return serde.deserialize(table[0]!.value);
   }
 
   // Read all values from state under a given Virtual Object or Workflow key
@@ -294,7 +294,7 @@ export class StateProxy<TState extends TypedState> {
     }
 
     // eslint-disable-next-line @typescript-eslint/await-thenable
-    const table = (await tableFromIPC(res.body)).toArray() as {
+    const table = (await tableFromIPC(res.body!)).toArray() as {
       key: string;
       value: Uint8Array;
     }[];

@@ -3,7 +3,8 @@
     "build": "deno check src/index.ts",
     "dev": "deno run --allow-net --allow-env --watch src/index.ts",
     "start": "deno run --allow-net --allow-env src/index.ts",
-    "lint": "deno lint src/index.ts"
+    "lint": "deno lint src/index.ts",
+    "check": "deno check src/index.ts"
   },
   "imports": {
     "@restatedev/restate-sdk": "npm:@restatedev/restate-sdk@*",

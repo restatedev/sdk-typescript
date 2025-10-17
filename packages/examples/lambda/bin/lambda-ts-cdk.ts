@@ -13,7 +13,7 @@
 
 import "source-map-support/register";
 import * as cdk from "aws-cdk-lib";
-import { LambdaTsCdkStack } from "../lib/lambda-ts-cdk-stack";
+import { LambdaTsCdkStack } from "../src/lambda-ts-cdk-stack.js";
 
 const app = new cdk.App();
 new LambdaTsCdkStack(app, "LambdaTsCdkStack", {

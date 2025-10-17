@@ -44,7 +44,7 @@ export const defaultLoggerTransport: LoggerTransport = (
     case RestateLogLevel.ERROR:
       return console.error(p, message, ...optionalParams);
     default:
-      throw new TypeError(`unset or unknown log level ${params.level}`);
+      throw new TypeError(`unset or unknown log level ${String(params.level)}`);
   }
 };
 

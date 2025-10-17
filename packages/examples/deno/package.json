@@ -5,13 +5,13 @@
   "type": "module",
   "scripts": {
     "build": "turbo run _build --filter={.}...",
-    "_build": "deno task build",
+    "_build": "deno install && deno task build",
     "dev": "deno task dev",
     "start": "turbo run _start --filter={.}...",
     "_start": "deno task start",
     "clean": "rm -rf dist *.tsbuildinfo .turbo",
     "check:types": "turbo run _check:types --filter={.}...",
-    "_check:types": "tsc --noEmit --project tsconfig.build.json",
+    "_check:types": "deno install && deno task check",
     "lint": "deno task lint"
   },
   "dependencies": {},

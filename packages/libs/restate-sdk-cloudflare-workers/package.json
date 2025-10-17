@@ -42,6 +42,9 @@
   "dependencies": {
     "@restatedev/restate-sdk-core": "workspace:*"
   },
+  "devDependencies": {
+    "@restatedev/restate-sdk": "workspace:*"
+  },
   "typesVersions": {
     "*": {
       "fetch": [
