@@ -14,8 +14,8 @@
 import type {
   ContextDate,
   DurablePromise,
-  GenericCall,
-  GenericSend,
+  Call,
+  Send,
   InvocationHandle,
   InvocationId,
   InvocationPromise,
@@ -217,13 +217,11 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
 
   // --- Calls, background calls, etc
   //
-  public genericCall<REQ = Uint8Array, RES = Uint8Array>(
-    call: GenericCall<REQ, RES>
-  ): InvocationPromise<RES> {
+  public call<REQ, RES>(call: Call<REQ, RES>): InvocationPromise<RES> {
     const requestSerde: Serde<REQ> =
-      call.inputSerde ?? (serde.binary as Serde<REQ>);
+      call.inputSerde ?? (serde.json as Serde<REQ>);
     const responseSerde: Serde<RES> =
-      call.outputSerde ?? (serde.binary as Serde<RES>);
+      call.outputSerde ?? (serde.json as Serde<RES>);
 
     let parameter: Uint8Array;
     try {
@@ -284,10 +282,8 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     }
   }
 
-  public genericSend<REQ = Uint8Array>(
-    send: GenericSend<REQ>
-  ): InvocationHandle {
-    const requestSerde = send.inputSerde ?? (serde.binary as Serde<REQ>);
+  public send<REQ>(send: Send<REQ>): InvocationHandle {
+    const requestSerde = send.inputSerde ?? (serde.json as Serde<REQ>);
 
     let parameter: Uint8Array;
     try {
@@ -345,13 +341,27 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     }
   }
 
-  serviceClient<D>({ name }: ServiceDefinitionFrom<D>): Client<Service<D>> {
-    return makeRpcCallProxy(
-      (call) => this.genericCall(call),
-      this.defaultSerde,
+  public genericCall<REQ = Uint8Array, RES = Uint8Array>(
+    call: Call<REQ, RES>
+  ): InvocationPromise<RES> {
+    return this.call({
+      ...call,
+      // Just different defaults here.
+      inputSerde: call.inputSerde ?? (serde.binary as Serde<REQ>),
+      outputSerde: call.outputSerde ?? (serde.binary as Serde<RES>),
+    });
+  }
 
-      name
-    );
+  public genericSend<REQ = Uint8Array>(send: Send<REQ>): InvocationHandle {
+    return this.send({
+      ...send,
+      // Just different defaults here.
+      inputSerde: send.inputSerde ?? (serde.binary as Serde<REQ>),
+    });
+  }
+
+  serviceClient<D>({ name }: ServiceDefinitionFrom<D>): Client<Service<D>> {
+    return makeRpcCallProxy((call) => this.call(call), this.defaultSerde, name);
   }
 
   objectClient<D>(
@@ -359,7 +369,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     key: string
   ): Client<VirtualObject<D>> {
     return makeRpcCallProxy(
-      (call) => this.genericCall(call),
+      (call) => this.call(call),
       this.defaultSerde,
       name,
       key
@@ -371,7 +381,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     key: string
   ): Client<Workflow<D>> {
     return makeRpcCallProxy(
-      (call) => this.genericCall(call),
+      (call) => this.call(call),
       this.defaultSerde,
       name,
       key
@@ -383,7 +393,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     opts?: SendOptions
   ): SendClient<Service<D>> {
     return makeRpcSendProxy(
-      (send) => this.genericSend(send),
+      (send) => this.send(send),
       this.defaultSerde,
       name,
       undefined,
@@ -397,7 +407,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     opts?: SendOptions
   ): SendClient<VirtualObject<D>> {
     return makeRpcSendProxy(
-      (send) => this.genericSend(send),
+      (send) => this.send(send),
       this.defaultSerde,
       name,
       key,
@@ -411,7 +421,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     opts?: SendOptions
   ): SendClient<Workflow<D>> {
     return makeRpcSendProxy(
-      (send) => this.genericSend(send),
+      (send) => this.send(send),
       this.defaultSerde,
       name,
       key,

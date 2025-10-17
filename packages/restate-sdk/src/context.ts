@@ -234,7 +234,7 @@ export type RunOptions<T> = {
  * This is a generic mechanism to invoke handlers directly by only knowing
  * the service and handler name, (or key in the case of objects or workflows)
  */
-export type GenericCall<REQ, RES> = {
+export type Call<REQ, RES> = {
   service: string;
   method: string;
   parameter: REQ;
@@ -246,11 +246,16 @@ export type GenericCall<REQ, RES> = {
 };
 
 /**
+ * @deprecated use {@link Call}
+ */
+export type GenericCall<REQ, RES> = Call<REQ, RES>;
+
+/**
  * Send a message to an handler directly avoiding restate's type safety checks.
  * This is a generic mechanism to invoke handlers directly by only knowing
  * the service and handler name, (or key in the case of objects or workflows)
  */
-export type GenericSend<REQ> = {
+export type Send<REQ> = {
   service: string;
   method: string;
   parameter: REQ;
@@ -260,6 +265,11 @@ export type GenericSend<REQ> = {
   delay?: Duration | number;
   idempotencyKey?: string;
 };
+
+/**
+ * @deprecated use {@link Send}
+ */
+export type GenericSend<REQ> = Send<REQ>;
 
 /**
  * The context that gives access to all Restate-backed operations, for example
@@ -569,11 +579,21 @@ export interface Context extends RestateContext {
     opts?: SendOptions
   ): SendClient<VirtualObject<D>>;
 
+  /**
+   * @deprecated use {@link call} instead
+   */
   genericCall<REQ = Uint8Array, RES = Uint8Array>(
-    call: GenericCall<REQ, RES>
+    call: Call<REQ, RES>
   ): InvocationPromise<RES>;
 
-  genericSend<REQ = Uint8Array>(call: GenericSend<REQ>): InvocationHandle;
+  /**
+   * @deprecated use {@link send} instead
+   */
+  genericSend<REQ = Uint8Array>(call: Send<REQ>): InvocationHandle;
+
+  call<REQ, RES>(call: Call<REQ, RES>): InvocationPromise<RES>;
+
+  send<REQ>(call: Send<REQ>): InvocationHandle;
 
   /**
    * Returns the raw request that triggered that handler.
