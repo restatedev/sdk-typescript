@@ -34,4 +34,9 @@ export type {
   RestateError,
   EndpointOptions,
   RetryPolicy,
+  ServiceDefinition,
+  VirtualObjectDefinition,
+  WorkflowDefinition,
+  JournalValueCodec,
+  Duration,
 } from "@restatedev/restate-sdk";

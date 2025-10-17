@@ -27,7 +27,7 @@ export function endpoint(): FetchEndpoint {
   return new FetchEndpointImpl("REQUEST_RESPONSE");
 }
 
-interface FetchEndpointOptions extends EndpointOptions {
+export interface FetchEndpointOptions extends EndpointOptions {
   /**
    * Enables bidirectional communication for the handler.
    *
@@ -68,3 +68,5 @@ export function createEndpointHandler(options: FetchEndpointOptions) {
     options
   ).handler().fetch;
 }
+
+export { type FetchEndpoint } from "./endpoint/fetch_endpoint.js";

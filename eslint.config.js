@@ -8,6 +8,8 @@ export default [
     ignores: [
       "**/dist/**",
       "**/node_modules/**",
+      "**/.next/**",
+      "**/.wrangler/**",
       ".turbo/**",
       "**/next-env.d.ts",
       "**/sdk_shared_core_wasm_bindings.js",

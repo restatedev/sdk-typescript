@@ -75,7 +75,8 @@ describe("ExampleObject", () => {
       {
         count: new Uint8Array([49, 50]), // 12
       },
-      core.serde.binary
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
+      core.serde.binary as any
     );
     expect(
       await state.getAll<{ count: Uint8Array }>(core.serde.binary)

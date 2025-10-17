@@ -45,3 +45,4 @@ export function createEndpointHandler(options: EndpointOptions) {
     options
   ).handler();
 }
+export { type LambdaEndpoint } from "./endpoint/lambda_endpoint.js";

@@ -147,6 +147,9 @@ importers:
       source-map-support:
         specifier: ^0.5.21
         version: 0.5.21
+      zod:
+        specifier: 'catalog:'
+        version: 4.1.12
     devDependencies:
       aws-cdk:
         specifier: ^2.155.0
@@ -201,6 +204,9 @@ importers:
         specifier: 'catalog:'
         version: 4.1.12
     devDependencies:
+      '@restatedev/restate-sdk-core':
+        specifier: workspace:*
+        version: link:../../libs/restate-sdk-core
       '@restatedev/restate-sdk-testcontainers':
         specifier: workspace:*
         version: link:../../libs/restate-sdk-testcontainers
@@ -245,6 +251,10 @@ importers:
       '@restatedev/restate-sdk-core':
         specifier: workspace:*
         version: link:../restate-sdk-core
+    devDependencies:
+      '@restatedev/restate-sdk':
+        specifier: workspace:*
+        version: link:../restate-sdk
 
   packages/libs/restate-sdk-core: {}
 

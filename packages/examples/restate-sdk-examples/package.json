@@ -39,6 +39,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@restatedev/restate-sdk-testcontainers": "workspace:*"
+    "@restatedev/restate-sdk-testcontainers": "workspace:*",
+    "@restatedev/restate-sdk-core": "workspace:*"
   }
 }
