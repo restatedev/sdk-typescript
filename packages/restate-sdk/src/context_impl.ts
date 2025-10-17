@@ -219,9 +219,9 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
   //
   public call<REQ, RES>(call: Call<REQ, RES>): InvocationPromise<RES> {
     const requestSerde: Serde<REQ> =
-      call.inputSerde ?? (serde.json as Serde<REQ>);
+      call.inputSerde ?? (this.defaultSerde as Serde<REQ>);
     const responseSerde: Serde<RES> =
-      call.outputSerde ?? (serde.json as Serde<RES>);
+      call.outputSerde ?? (this.defaultSerde as Serde<RES>);
 
     let parameter: Uint8Array;
     try {
@@ -283,7 +283,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
   }
 
   public send<REQ>(send: Send<REQ>): InvocationHandle {
-    const requestSerde = send.inputSerde ?? (serde.json as Serde<REQ>);
+    const requestSerde = send.inputSerde ?? (this.defaultSerde as Serde<REQ>);
 
     let parameter: Uint8Array;
     try {

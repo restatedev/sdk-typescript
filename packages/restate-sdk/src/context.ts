@@ -591,9 +591,40 @@ export interface Context extends RestateContext {
    */
   genericSend<REQ = Uint8Array>(call: Send<REQ>): InvocationHandle;
 
+  /**
+   * Make a request/response RPC to the specified target service.
+   *
+   * The RPC goes through Restate and is guaranteed to be reliably delivered. The RPC is also
+   * journaled for durable execution and will thus not be duplicated when the handler is re-invoked
+   * for retries or after suspending.
+   *
+   * This call will return the result produced by the target handler, or the TerminalError, if the target
+   * handler finishes with a Terminal Error.
+   *
+   * This call is a suspension point: The handler might suspend while awaiting the response and
+   * resume once the response is available.
+   *
+   * @param call send target and options
+   */
   call<REQ, RES>(call: Call<REQ, RES>): InvocationPromise<RES>;
 
-  send<REQ>(call: Send<REQ>): InvocationHandle;
+  /**
+   * Send a request to the specified target service. This method effectively behaves
+   * like enqueuing the message in a message queue.
+   *
+   * The message goes through Restate and is guaranteed to be reliably delivered. The RPC is also
+   * journaled for durable execution and will thus not be duplicated when the handler is re-invoked
+   * for retries or after suspending.
+   *
+   * This returns immediately; the message sending happens asynchronously in the background.
+   * Despite that, the message is guaranteed to be sent, because the completion of the invocation that
+   * triggers the send (calls this function) happens logically after the sending. That means that any
+   * failure where the message does not reach Restate also cannot complete this invocation, and will
+   * hence recover this handler and (through the durable execution) recover the message to be sent.
+   *
+   * @param send send target and options
+   */
+  send<REQ>(send: Send<REQ>): InvocationHandle;
 
   /**
    * Returns the raw request that triggered that handler.
