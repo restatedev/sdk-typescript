@@ -73,6 +73,7 @@ export default defineConfig({
     exclude: ["**/node_modules/**", "**/dist/**"],
     passWithNoTests: true,
   },
+
   ...(isWatch && {
     resolve: {
       alias: getLibAliases(),

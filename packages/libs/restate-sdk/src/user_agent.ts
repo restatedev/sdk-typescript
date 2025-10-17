@@ -8,7 +8,7 @@
  * directory of this repository or package, or at
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
+import pkg from "../package.json";
 
-import { SDK_VERSION } from "./generated/version.js";
-
-export const X_RESTATE_SERVER = `restate-sdk-typescript/${SDK_VERSION}`;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+export const X_RESTATE_SERVER = `restate-sdk-typescript/${pkg.version}`;
