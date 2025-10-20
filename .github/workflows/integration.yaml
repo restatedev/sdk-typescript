@@ -20,6 +20,11 @@ on:
         required: false
         default: "ghcr.io/restatedev/restate:main"
         type: string
+      serviceImage:
+        description: "service image, if provided it will skip building the image from sdk main branch"
+        required: false
+        default: ""
+        type: string
   workflow_call:
     inputs:
       restateCommit:
@@ -31,6 +36,11 @@ on:
         description: 'restate image, superseded by restate commit'
         required: false
         default: 'ghcr.io/restatedev/restate:main'
+        type: string
+      serviceImage:
+        description: "service image, if provided it will skip building the image from sdk main branch"
+        required: false
+        default: ""
         type: string
       envVars:
         required: false
@@ -101,6 +111,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build Typescript test-services image
+        if: ${{ inputs.serviceImage == '' }}
         id: build
         uses: docker/build-push-action@v6
         with:
@@ -116,7 +127,7 @@ jobs:
         uses: restatedev/sdk-test-suite@v3.2
         with:
           restateContainerImage: ${{ inputs.restateCommit != '' && 'localhost/restatedev/restate-commit-download:latest' || (inputs.restateImage != '' && inputs.restateImage || 'ghcr.io/restatedev/restate:main') }}
-          serviceContainerImage: "restatedev/typescript-test-services"
+          serviceContainerImage: ${{ inputs.serviceImage != '' && inputs.serviceImage || 'restatedev/typescript-test-services' }}
           exclusionsFile: "packages/restate-e2e-services/exclusions.yaml"
           envVars: ${{ inputs.envVars }}
           testArtifactOutput: ${{ inputs.testArtifactOutput != '' && inputs.testArtifactOutput || 'sdk-typescript-integration-test-report' }}
