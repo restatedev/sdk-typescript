@@ -234,7 +234,7 @@ export type RunOptions<T> = {
  * This is a generic mechanism to invoke handlers directly by only knowing
  * the service and handler name, (or key in the case of objects or workflows)
  */
-export type GenericCall<REQ, RES> = {
+export type Call<REQ, RES> = {
   service: string;
   method: string;
   parameter: REQ;
@@ -246,11 +246,16 @@ export type GenericCall<REQ, RES> = {
 };
 
 /**
+ * @deprecated use {@link Call}
+ */
+export type GenericCall<REQ, RES> = Call<REQ, RES>;
+
+/**
  * Send a message to an handler directly avoiding restate's type safety checks.
  * This is a generic mechanism to invoke handlers directly by only knowing
  * the service and handler name, (or key in the case of objects or workflows)
  */
-export type GenericSend<REQ> = {
+export type Send<REQ> = {
   service: string;
   method: string;
   parameter: REQ;
@@ -260,6 +265,11 @@ export type GenericSend<REQ> = {
   delay?: Duration | number;
   idempotencyKey?: string;
 };
+
+/**
+ * @deprecated use {@link Send}
+ */
+export type GenericSend<REQ> = Send<REQ>;
 
 /**
  * The context that gives access to all Restate-backed operations, for example
@@ -569,11 +579,52 @@ export interface Context extends RestateContext {
     opts?: SendOptions
   ): SendClient<VirtualObject<D>>;
 
+  /**
+   * @deprecated use {@link call} instead
+   */
   genericCall<REQ = Uint8Array, RES = Uint8Array>(
-    call: GenericCall<REQ, RES>
+    call: Call<REQ, RES>
   ): InvocationPromise<RES>;
 
-  genericSend<REQ = Uint8Array>(call: GenericSend<REQ>): InvocationHandle;
+  /**
+   * @deprecated use {@link send} instead
+   */
+  genericSend<REQ = Uint8Array>(call: Send<REQ>): InvocationHandle;
+
+  /**
+   * Make a request/response RPC to the specified target service.
+   *
+   * The RPC goes through Restate and is guaranteed to be reliably delivered. The RPC is also
+   * journaled for durable execution and will thus not be duplicated when the handler is re-invoked
+   * for retries or after suspending.
+   *
+   * This call will return the result produced by the target handler, or the TerminalError, if the target
+   * handler finishes with a Terminal Error.
+   *
+   * This call is a suspension point: The handler might suspend while awaiting the response and
+   * resume once the response is available.
+   *
+   * @param call send target and options
+   */
+  call<REQ, RES>(call: Call<REQ, RES>): InvocationPromise<RES>;
+
+  /**
+   * Send a request to the specified target service. This method effectively behaves
+   * like enqueuing the message in a message queue.
+   *
+   * The message goes through Restate and is guaranteed to be reliably delivered. The RPC is also
+   * journaled for durable execution and will thus not be duplicated when the handler is re-invoked
+   * for retries or after suspending.
+   *
+   * This returns immediately; the message sending happens asynchronously in the background.
+   * Despite that, the message is guaranteed to be sent, because the completion of the invocation that
+   * triggers the send (calls this function) happens logically after the sending. That means that any
+   * failure where the message does not reach Restate also cannot complete this invocation, and will
+   * hence recover this handler and (through the durable execution) recover the message to be sent.
+   *
+   * @param send send target and options
+   */
+  send<REQ>(send: Send<REQ>): InvocationHandle;
 
   /**
    * Returns the raw request that triggered that handler.
