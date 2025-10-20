@@ -432,7 +432,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       nameOrAction,
       actionSecondParameter
     );
-    const serde = options?.serde ?? this.defaultSerde ?? this.defaultSerde;
+    const serde = options?.serde ?? this.defaultSerde;
 
     // Prepare the handle
     let handle: number;
