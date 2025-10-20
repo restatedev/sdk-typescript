@@ -110,6 +110,12 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # Pre-emptively pull the test-services image, to avoid affecting execution time
+      - name: Pull test services image
+        if: ${{ inputs.serviceImage != '' }}
+        shell: bash
+        run: docker pull ${{ inputs.serviceImage }}
+
       - name: Build Typescript test-services image
         if: ${{ inputs.serviceImage == '' }}
         id: build
