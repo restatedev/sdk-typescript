@@ -9,7 +9,7 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-/* eslint-disable no-console */
+ 
 
 import {
   endpoint,
@@ -207,7 +207,7 @@ export class RestateTestEnvironment {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 
 export class RestateContainer extends GenericContainer {
   constructor(version = "latest") {

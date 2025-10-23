@@ -11,7 +11,6 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-namespace */
-/* eslint-disable @typescript-eslint/ban-types */
 
 export interface Serde<T> {
   contentType?: string;

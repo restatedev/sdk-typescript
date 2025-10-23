@@ -22,7 +22,7 @@
   ],
   "scripts": {
     "build": "tsc -b",
-    "lint": "eslint --ignore-path .eslintignore --max-warnings=0 --ext .ts .",
+    "lint": "eslint --max-warnings=0 .",
     "format": "prettier --ignore-path .eslintignore --write \"**/*.+(js|ts|json)\"",
     "format-check": "prettier --ignore-path .eslintignore --check \"**/*.+(js|ts|json)\"",
     "test": "vitest run --silent",

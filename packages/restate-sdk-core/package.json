@@ -38,7 +38,7 @@
     "build": "npm run build:cjs && npm run build:esm",
     "build:cjs": "tsc --module commonjs --verbatimModuleSyntax false --moduleResolution node10 --outDir ./dist/cjs --declaration --declarationDir ./dist/cjs && echo >./dist/cjs/package.json '{\"type\":\"commonjs\"}'",
     "build:esm": "tsc --outDir ./dist/esm --declaration --declarationDir ./dist/esm",
-    "lint": "eslint --ignore-path .eslintignore --max-warnings=0 --ext .ts .",
+    "lint": "eslint --max-warnings=0 .",
     "format": "prettier --ignore-path .eslintignore --write \"**/*.+(js|ts|json)\"",
     "format-check": "prettier --ignore-path .eslintignore --check \"**/*.+(js|ts|json)\"",
     "attw": "attw --pack",

@@ -85,7 +85,7 @@
     "build:esm": "tsc --outDir ./dist/esm --declaration --declarationDir ./dist/esm",
     "pretest": "npm run gen:version",
     "test": "vitest run --silent",
-    "lint": "eslint --ignore-path .eslintignore --max-warnings=0 --ext .ts .",
+    "lint": "eslint --max-warnings=0 .",
     "format": "prettier --ignore-path .eslintignore --write \"**/*.+(js|ts|json)\"",
     "format-check": "prettier --ignore-path .eslintignore --check \"**/*.+(js|ts|json)\"",
     "attw": "attw --pack",

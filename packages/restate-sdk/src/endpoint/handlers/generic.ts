@@ -109,7 +109,7 @@ export function tryCreateContextualLogger(
         additionalContext
       )
     );
-  } catch (e) {
+  } catch {
     return undefined;
   }
 }

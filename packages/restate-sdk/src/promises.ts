@@ -31,7 +31,7 @@ import type { Duration } from "@restatedev/restate-sdk-core";
 
 // A promise that is never completed
 export function pendingPromise<T>(): Promise<T> {
-  // eslint-disable-next-line @typescript-eslint/no-empty-function
+   
   return new Promise<T>(() => {});
 }
 
@@ -62,7 +62,7 @@ export type AsyncResultValue =
   | { StateKeys: string[] }
   | { InvocationId: string };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 export function extractContext(n: any): ContextImpl | undefined {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
   return n[RESTATE_CTX_SYMBOL] as ContextImpl | undefined;
