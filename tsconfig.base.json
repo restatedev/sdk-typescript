@@ -2,8 +2,9 @@
   "compilerOptions": {
     "composite": true,
     "baseUrl": ".",
-    "target": "esnext",
-    "module": "nodenext",
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "lib": ["esnext"],
     "declaration": true,
     "declarationMap": true,
@@ -15,6 +16,11 @@
     "forceConsistentCasingInFileNames": true,
     "allowSyntheticDefaultImports": true,
     "noImplicitThis": true,
+    "resolveJsonModule": true,
+    "moduleDetection": "force",
+    "isolatedModules": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
     "paths": {
       "@restatedev/restate-sdk-core": [
         "./packages/restate-sdk-core/src/public_api.ts"
@@ -23,7 +29,9 @@
       "@restatedev/restate-sdk-clients": [
         "./packages/restate-sdk-clients/src/public_api.ts"
       ],
-      "@restatedev/restate-sdk-zod": ["./packages/restate-sdk-zod/src/public_api.ts"]
+      "@restatedev/restate-sdk-zod": [
+        "./packages/restate-sdk-zod/src/public_api.ts"
+      ]
     }
   }
 }

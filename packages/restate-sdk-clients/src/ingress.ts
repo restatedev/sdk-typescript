@@ -47,7 +47,7 @@ export class HttpCallError extends Error {
   constructor(
     public readonly status: number,
     public readonly responseText: string,
-    public readonly message: string
+    public override readonly message: string
   ) {
     super(message);
   }

@@ -46,9 +46,9 @@
     "build": "npm run build:cjs && npm run build:esm",
     "build:cjs": "tsc --module commonjs --verbatimModuleSyntax false --moduleResolution node10 --outDir ./dist/cjs --declaration --declarationDir ./dist/cjs && echo >./dist/cjs/package.json '{\"type\":\"commonjs\"}'",
     "build:esm": "tsc --outDir ./dist/esm --declaration --declarationDir ./dist/esm",
-    "lint": "eslint --ignore-path .eslintignore --max-warnings=0 --ext .ts .",
-    "format": "prettier --ignore-path .eslintignore --write \"**/*.+(js|ts|json)\"",
-    "format-check": "prettier --ignore-path .eslintignore --check \"**/*.+(js|ts|json)\"",
+    "lint": "eslint --max-warnings=0 .",
+    "format": "prettier --ignore-path ../../.prettierignore --write \"**/*.+(js|ts|json)\"",
+    "format-check": "prettier --ignore-path ../../.prettierignore --check \"**/*.+(js|ts|json)\"",
     "attw": "attw --pack",
     "verify": "npm run format-check && npm run lint && npm run build && npm run attw && npm run api:extract",
     "release": "release-it"
