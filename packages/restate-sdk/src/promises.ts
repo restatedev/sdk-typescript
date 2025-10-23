@@ -31,7 +31,6 @@ import type { Duration } from "@restatedev/restate-sdk-core";
 
 // A promise that is never completed
 export function pendingPromise<T>(): Promise<T> {
-   
   return new Promise<T>(() => {});
 }
 
@@ -62,7 +61,6 @@ export type AsyncResultValue =
   | { StateKeys: string[] }
   | { InvocationId: string };
 
- 
 export function extractContext(n: any): ContextImpl | undefined {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
   return n[RESTATE_CTX_SYMBOL] as ContextImpl | undefined;
@@ -134,8 +132,8 @@ abstract class AbstractRestatePromise<T> implements InternalRestatePromise<T> {
       this[RESTATE_CTX_SYMBOL],
       ([thisPromise, sleepPromise]) => {
         return new Promise((resolve, reject) => {
-          thisPromise.then(resolve, reject);
-          sleepPromise.then(() => {
+          thisPromise!.then(resolve, reject);
+          sleepPromise!.then(() => {
             reject(new TimeoutError());
           }, reject);
         });

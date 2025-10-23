@@ -82,7 +82,7 @@ class ProgramInterpreter {
     const promises = new Map<number, Await>();
     const commands = program.commands;
     for (let i = 0; i < commands.length; i++) {
-      const command = commands[i];
+      const command = commands[i]!;
       switch (command.kind) {
         case CommandType.SET_STATE: {
           ctx.set(`key-${command.key}`, `value-${command.key}`);
