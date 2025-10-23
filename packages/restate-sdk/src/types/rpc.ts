@@ -147,10 +147,8 @@ function optsFromArgs(args: unknown[]): {
     case 2: {
       parameter = args[0];
       if (args[1] instanceof Opts) {
-         
         opts = args[1].getOpts();
       } else if (args[1] instanceof SendOpts) {
-         
         opts = args[1].getOpts();
       } else {
         throw new TypeError(
@@ -463,7 +461,7 @@ export class HandlerWrapper {
         errorCode: 400,
       });
     }
-     
+
     const res: unknown = await this.handler(context, req);
     return (this.outputSerde ?? context.defaultSerde).serialize(res);
   }

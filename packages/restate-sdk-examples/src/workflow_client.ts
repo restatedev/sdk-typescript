@@ -9,8 +9,6 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
- 
-
 import * as restate from "@restatedev/restate-sdk-clients";
 
 import type { PaymentWorkflow } from "./workflow.js";
