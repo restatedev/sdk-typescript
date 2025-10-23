@@ -48,7 +48,7 @@
     "@eslint/eslintrc": "^3.3.1",
     "@eslint/js": "^9.38.0",
     "@eslint/json": "^0.13.2",
-    "@microsoft/api-extractor": "^7.52.8",
+    "@microsoft/api-extractor": "^7.53.2",
     "@release-it-plugins/workspaces": "^4.2.0",
     "@types/node": "^20.19.11",
     "@typescript-eslint/eslint-plugin": "^8.46.2",
