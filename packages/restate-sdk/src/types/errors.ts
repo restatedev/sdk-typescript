@@ -49,7 +49,7 @@ export function ensureError(
   let msg;
   try {
     msg = JSON.stringify(e);
-  } catch (x) {
+  } catch {
     msg = "(no JSON representation)";
   }
 
