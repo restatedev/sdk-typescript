@@ -86,8 +86,8 @@
     "pretest": "npm run gen:version",
     "test": "vitest run --silent",
     "lint": "eslint --max-warnings=0 .",
-    "format": "prettier --ignore-path .eslintignore --write \"**/*.+(js|ts|json)\"",
-    "format-check": "prettier --ignore-path .eslintignore --check \"**/*.+(js|ts|json)\"",
+    "format": "prettier --ignore-path ../../.prettierignore --write \"**/*.+(js|ts|json)\"",
+    "format-check": "prettier --ignore-path ../../.prettierignore --check \"**/*.+(js|ts|json)\"",
     "attw": "attw --pack",
     "verify": "npm run format-check && npm run gen:version && npm run lint && npm run test && npm run build && npm run attw && npm run api:extract",
     "release": "release-it"
