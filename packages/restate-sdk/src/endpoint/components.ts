@@ -9,7 +9,6 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import type * as d from "./discovery.js";
@@ -341,8 +340,8 @@ export function parseUrlComponents(urlPath?: string): PathComponents {
   if (fragments.length >= 3 && fragments[fragments.length - 3] === "invoke") {
     return {
       type: "invoke",
-      componentName: fragments[fragments.length - 2],
-      handlerName: fragments[fragments.length - 1],
+      componentName: fragments[fragments.length - 2]!,
+      handlerName: fragments[fragments.length - 1]!,
     };
   }
   if (fragments.length > 0 && fragments[fragments.length - 1] === "discover") {

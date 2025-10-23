@@ -9,8 +9,6 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
- 
-
 import {
   endpoint,
   createEndpointHandler,
@@ -207,8 +205,6 @@ export class RestateTestEnvironment {
   }
 }
 
- 
-
 export class RestateContainer extends GenericContainer {
   constructor(version = "latest") {
     super(`docker.io/restatedev/restate:${version}`);
@@ -255,7 +251,7 @@ export class StateProxy<TState extends TypedState> {
       return null;
     }
 
-    return serde.deserialize(table[0].value);
+    return serde.deserialize(table[0]!.value);
   }
 
   // Read all values from state under a given Virtual Object or Workflow key
