@@ -9,7 +9,6 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import type {
