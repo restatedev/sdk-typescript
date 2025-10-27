@@ -47,7 +47,7 @@ export class HttpCallError extends Error {
   constructor(
     public readonly status: number,
     public readonly responseText: string,
-    public readonly message: string
+    public override readonly message: string
   ) {
     super(message);
   }
@@ -414,7 +414,7 @@ class HttpIngress implements Ingress {
 
   async resolveAwakeable<T>(
     id: string,
-    payload?: T | undefined,
+    payload?: T,
     payloadSerde?: Serde<T>
   ): Promise<void> {
     const url = `${this.opts.url}/restate/a/${id}/resolve`;

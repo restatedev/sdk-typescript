@@ -9,8 +9,6 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-/* eslint-disable @typescript-eslint/no-unused-vars */
-
 import * as restate from "@restatedev/restate-sdk";
 
 interface PaymentRequest {

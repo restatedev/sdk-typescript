@@ -31,15 +31,11 @@ import path from "path";
 // Optional: trigger a heap snapshot on signal
 process.on("SIGUSR2", () => {
   const filename = path.join("/opt", `heap-${Date.now()}.heapsnapshot`);
-  // eslint-disable-next-line no-console
   console.log(`Writing snapshot to ${filename}...`);
   heapdump.writeSnapshot(filename, (err, filename) => {
     if (err) {
-      // eslint-disable-next-line no-console
       console.error(err);
-    }
-    // eslint-disable-next-line no-console
-    else console.log(`Heap snapshot written to ${filename}`);
+    } else console.log(`Heap snapshot written to ${filename}`);
   });
 });
 
@@ -101,11 +97,9 @@ server.on("session", (session) => {
 });
 
 setInterval(() => {
-  // eslint-disable-next-line no-console
   console.log(
     `${new Date().toISOString()}: Inflight requests: ${INFLIGHT_REQUESTS}`
   );
-  // eslint-disable-next-line no-console
   console.table(
     Array.from(sessions.values()).map((set: Set<string>) => ({
       "#streams": set.size,

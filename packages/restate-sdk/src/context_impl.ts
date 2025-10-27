@@ -817,28 +817,19 @@ class DurablePromiseImpl<T> implements DurablePromise<T> {
   }
 
   then<TResult1 = T, TResult2 = never>(
-    onfulfilled?:
-      | ((value: T) => TResult1 | PromiseLike<TResult1>)
-      | null
-      | undefined,
-    onrejected?:
-      | ((reason: any) => TResult2 | PromiseLike<TResult2>)
-      | null
-      | undefined
+    onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null
   ): Promise<TResult1 | TResult2> {
     return this.get().then(onfulfilled, onrejected);
   }
 
   catch<TResult = never>(
-    onrejected?:
-      | ((reason: any) => TResult | PromiseLike<TResult>)
-      | null
-      | undefined
+    onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null
   ): Promise<T | TResult> {
     return this.get().catch(onrejected);
   }
 
-  finally(onfinally?: (() => void) | null | undefined): Promise<T> {
+  finally(onfinally?: (() => void) | null): Promise<T> {
     return this.get().finally(onfinally);
   }
 
@@ -865,7 +856,7 @@ class DurablePromiseImpl<T> implements DurablePromise<T> {
     );
   }
 
-  resolve(value?: T | undefined): Promise<void> {
+  resolve(value?: T): Promise<void> {
     return this.ctx.processCompletableEntry(
       WasmCommandType.CompletePromise,
       () => this.ctx.journalValueCodec.encode(this.serde.serialize(value as T)),
@@ -959,6 +950,7 @@ function completeCommandPromiseUsing<T>(
         }
       }
     } catch (e) {
+      // eslint-disable-next-line @typescript-eslint/only-throw-error
       throw new AsyncCompleterError(e, commandType, commandIndex);
     }
 

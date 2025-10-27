@@ -109,7 +109,7 @@ export function tryCreateContextualLogger(
         additionalContext
       )
     );
-  } catch (e) {
+  } catch {
     return undefined;
   }
 }
@@ -268,7 +268,7 @@ export class GenericHandler implements RestateHandler {
       .filter(([, v]) => v !== undefined)
       .map(
         ([k, v]) =>
-          new vm.WasmHeader(k, v instanceof Array ? v[0] : (v as string))
+          new vm.WasmHeader(k, v instanceof Array ? v[0]! : (v as string))
       );
 
     try {
@@ -306,7 +306,7 @@ export class GenericHandler implements RestateHandler {
         .filter(([, v]) => v !== undefined)
         .map(
           ([k, v]) =>
-            new vm.WasmHeader(k, v instanceof Array ? v[0] : (v as string))
+            new vm.WasmHeader(k, v instanceof Array ? v[0]! : (v as string))
         );
       const coreVm = new vm.WasmVM(
         vmHeaders,
