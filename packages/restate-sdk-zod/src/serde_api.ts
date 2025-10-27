@@ -21,6 +21,7 @@ export type { Serde } from "@restatedev/restate-sdk-core";
 let zod3WarningPrinted = false;
 function printZod3Warning() {
   if (!zod3WarningPrinted) {
+    // eslint-disable-next-line no-console
     console.warn(
       "Detected usage of Zod V3, JSON schemas won't be correctly generated. Please update to Zod V4, or downgrade restate-sdk-zod to 1.8.3"
     );

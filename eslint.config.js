@@ -59,6 +59,17 @@ export default [
           allowArray: true,
         },
       ],
+      "no-console": "error",
+    },
+  },
+  {
+    files: [
+      "**/packages/restate-sdk-examples/**/*.ts",
+      "**/packages/restate-e2e-services/**/*.ts",
+      "**/packages/restate-sdk-testcontainers/**/*.ts",
+    ],
+    rules: {
+      "no-console": "off",
     },
   },
   {

@@ -27,3 +27,4 @@ docs-out
 .cdk.staging
 cdk.out
 lambda.zip
+.DS_Store
