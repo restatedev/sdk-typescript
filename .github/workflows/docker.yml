@@ -2,9 +2,10 @@ name: Build docker image
 
 on:
   push:
-    branches: [main]
+    branches: [main, release-**]
     tags:
       - v**
+  workflow_dispatch:
 
 env:
   REPOSITORY_OWNER: ${{ github.repository_owner }}
