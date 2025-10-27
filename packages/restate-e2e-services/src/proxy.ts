@@ -32,7 +32,7 @@ function rawCall(
   ctx: restate.Context,
   request: ProxyRequest
 ): Promise<Uint8Array> {
-  return ctx.genericCall({
+  return ctx.call({
     service: request.serviceName,
     method: request.handlerName,
     key: request.virtualObjectKey,
@@ -44,7 +44,7 @@ function rawCall(
 }
 
 function rawSend(ctx: restate.Context, request: ProxyRequest): Promise<string> {
-  const handle = ctx.genericSend({
+  const handle = ctx.send({
     service: request.serviceName,
     method: request.handlerName,
     key: request.virtualObjectKey,
