@@ -1,6 +1,6 @@
 {
   "name": "@restatedev/restate-sdk-zod",
-  "version": "1.9.0",
+  "version": "1.9.1",
   "description": "Restate Typescript SDK Zod",
   "author": "Restate Developers",
   "license": "MIT",
@@ -34,7 +34,7 @@
     "dist"
   ],
   "devDependencies": {
-    "@restatedev/restate-sdk-core": "^1.9.0",
+    "@restatedev/restate-sdk-core": "^1.9.1",
     "vitest": "^3.0.9",
     "zod": "^3.25.0 || ^4.0.0"
   },
