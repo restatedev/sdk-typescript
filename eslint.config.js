@@ -47,11 +47,6 @@ export default [
         "error",
         { allowInterfaces: "always" },
       ],
-      "@typescript-eslint/require-await": "off",
-      "@typescript-eslint/no-floating-promises": "off",
-      "@typescript-eslint/no-duplicate-type-constituents": "off",
-      "@typescript-eslint/only-throw-error": "off",
-      "@typescript-eslint/no-empty-function": "off",
       "@typescript-eslint/restrict-template-expressions": [
         "error",
         {
@@ -70,6 +65,8 @@ export default [
     ],
     rules: {
       "no-console": "off",
+      "@typescript-eslint/require-await": "off",
+      "@typescript-eslint/no-floating-promises": "off",
     },
   },
   {

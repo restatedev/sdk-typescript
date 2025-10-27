@@ -81,11 +81,11 @@ abstract class AbstractRestatePromise<T> implements InternalRestatePromise<T> {
     onfulfilled?:
       | ((value: T) => TResult1 | PromiseLike<TResult1>)
       | null
-      | undefined,
+       ,
     onrejected?:
       | ((reason: any) => TResult2 | PromiseLike<TResult2>)
       | null
-      | undefined
+       
   ): Promise<TResult1 | TResult2> {
     this.pollingPromise =
       this.pollingPromise ||
@@ -99,7 +99,7 @@ abstract class AbstractRestatePromise<T> implements InternalRestatePromise<T> {
     onrejected?:
       | ((reason: any) => TResult | PromiseLike<TResult>)
       | null
-      | undefined
+       
   ): Promise<T | TResult> {
     this.pollingPromise =
       this.pollingPromise ||
@@ -109,7 +109,7 @@ abstract class AbstractRestatePromise<T> implements InternalRestatePromise<T> {
     return this.publicPromiseOrCancelPromise().catch(onrejected);
   }
 
-  finally(onfinally?: (() => void) | null | undefined): Promise<T> {
+  finally(onfinally?: (() => void) | null  ): Promise<T> {
     this.pollingPromise =
       this.pollingPromise ||
       this[RESTATE_CTX_SYMBOL].promisesExecutor
@@ -270,11 +270,11 @@ export class RestatePendingPromise<T> implements InternalRestatePromise<T> {
     onfulfilled?:
       | ((value: T) => TResult1 | PromiseLike<TResult1>)
       | null
-      | undefined,
+       ,
     onrejected?:
       | ((reason: any) => TResult2 | PromiseLike<TResult2>)
       | null
-      | undefined
+       
   ): Promise<TResult1 | TResult2> {
     return pendingPromise<T>().then(onfulfilled, onrejected);
   }
@@ -283,12 +283,12 @@ export class RestatePendingPromise<T> implements InternalRestatePromise<T> {
     onrejected?:
       | ((reason: any) => TResult | PromiseLike<TResult>)
       | null
-      | undefined
+       
   ): Promise<T | TResult> {
     return pendingPromise<T>().catch(onrejected);
   }
 
-  finally(onfinally?: (() => void) | null | undefined): Promise<T> {
+  finally(onfinally?: (() => void) | null  ): Promise<T> {
     return pendingPromise<T>().finally(onfinally);
   }
 
