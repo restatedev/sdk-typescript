@@ -37,7 +37,9 @@ class ZodSerde<T extends z3.ZodTypeAny | z4.$ZodType>
 
   constructor(private readonly schema: T) {
     if ("_zod" in schema) {
-      this.jsonSchema = z4.toJSONSchema(schema);
+      this.jsonSchema = z4.toJSONSchema(schema, {
+        unrepresentable: "any",
+      });
     } else if (schema instanceof z3.ZodType) {
       printZod3Warning();
       this.jsonSchema = undefined;
