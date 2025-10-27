@@ -414,7 +414,7 @@ class HttpIngress implements Ingress {
 
   async resolveAwakeable<T>(
     id: string,
-    payload?: T  ,
+    payload?: T,
     payloadSerde?: Serde<T>
   ): Promise<void> {
     const url = `${this.opts.url}/restate/a/${id}/resolve`;

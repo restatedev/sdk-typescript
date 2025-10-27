@@ -78,14 +78,8 @@ abstract class AbstractRestatePromise<T> implements InternalRestatePromise<T> {
   // --- Promise methods
 
   then<TResult1 = T, TResult2 = never>(
-    onfulfilled?:
-      | ((value: T) => TResult1 | PromiseLike<TResult1>)
-      | null
-       ,
-    onrejected?:
-      | ((reason: any) => TResult2 | PromiseLike<TResult2>)
-      | null
-       
+    onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null
   ): Promise<TResult1 | TResult2> {
     this.pollingPromise =
       this.pollingPromise ||
@@ -96,10 +90,7 @@ abstract class AbstractRestatePromise<T> implements InternalRestatePromise<T> {
   }
 
   catch<TResult = never>(
-    onrejected?:
-      | ((reason: any) => TResult | PromiseLike<TResult>)
-      | null
-       
+    onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null
   ): Promise<T | TResult> {
     this.pollingPromise =
       this.pollingPromise ||
@@ -109,7 +100,7 @@ abstract class AbstractRestatePromise<T> implements InternalRestatePromise<T> {
     return this.publicPromiseOrCancelPromise().catch(onrejected);
   }
 
-  finally(onfinally?: (() => void) | null  ): Promise<T> {
+  finally(onfinally?: (() => void) | null): Promise<T> {
     this.pollingPromise =
       this.pollingPromise ||
       this[RESTATE_CTX_SYMBOL].promisesExecutor
@@ -267,28 +258,19 @@ export class RestatePendingPromise<T> implements InternalRestatePromise<T> {
   // --- Promise methods
 
   then<TResult1 = T, TResult2 = never>(
-    onfulfilled?:
-      | ((value: T) => TResult1 | PromiseLike<TResult1>)
-      | null
-       ,
-    onrejected?:
-      | ((reason: any) => TResult2 | PromiseLike<TResult2>)
-      | null
-       
+    onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null
   ): Promise<TResult1 | TResult2> {
     return pendingPromise<T>().then(onfulfilled, onrejected);
   }
 
   catch<TResult = never>(
-    onrejected?:
-      | ((reason: any) => TResult | PromiseLike<TResult>)
-      | null
-       
+    onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null
   ): Promise<T | TResult> {
     return pendingPromise<T>().catch(onrejected);
   }
 
-  finally(onfinally?: (() => void) | null  ): Promise<T> {
+  finally(onfinally?: (() => void) | null): Promise<T> {
     return pendingPromise<T>().finally(onfinally);
   }
 
