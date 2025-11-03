@@ -572,7 +572,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
         const millis = millisOrDurationToMillis(duration);
         if (millis < 0) {
           throw new Error(
-            `Invalid duration. The sleep function only accepts non-negative values. Received: ${millis}ms.`
+            `Invalid negative sleep duration: ${millis}ms.\nIf this duration is computed from a desired wake up time, make sure to record 'now' using 'wakeUpTime - ctx.date.now()'.`
           );
         }
         return BigInt(millis);
