@@ -49,7 +49,7 @@ export function ensureError(
   let msg;
   try {
     msg = JSON.stringify(e);
-  } catch (x) {
+  } catch {
     msg = "(no JSON representation)";
   }
 
@@ -77,7 +77,7 @@ export function logError(log: Console, e: unknown) {
 
 export class RestateError extends Error {
   public readonly code: number;
-  public name = "RestateError";
+  public override name = "RestateError";
 
   constructor(message: string, options?: { errorCode?: number; cause?: any }) {
     super(message, { cause: options?.cause });
@@ -91,7 +91,7 @@ export class RestateError extends Error {
  * Leads to an output message with a failure defined.
  */
 export class TerminalError extends RestateError {
-  public name = "TerminalError";
+  public override name = "TerminalError";
 
   constructor(
     message: string,
@@ -114,7 +114,7 @@ export class TerminalError extends RestateError {
  * Returned by `RestatePromise.withTimeout` when the timeout is reached.
  */
 export class TimeoutError extends TerminalError {
-  public name = "TimeoutError";
+  public override name = "TimeoutError";
 
   constructor() {
     super("Timeout occurred", { errorCode: TIMEOUT_ERROR_CODE });
@@ -125,7 +125,7 @@ export class TimeoutError extends TerminalError {
  * Returned when the invocation was cancelled.
  */
 export class CancelledError extends TerminalError {
-  public name = "CancelledError";
+  public override name = "CancelledError";
 
   constructor() {
     super("Cancelled", { errorCode: CANCEL_ERROR_CODE });
@@ -146,7 +146,7 @@ export interface RetryableErrorOptions {
  * You can wrap another error using {@link from}.
  */
 export class RetryableError extends RestateError {
-  public name = "RetryableError";
+  public override name = "RetryableError";
 
   readonly retryAfter?: Duration | number;
 

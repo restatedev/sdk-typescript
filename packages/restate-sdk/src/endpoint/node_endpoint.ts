@@ -9,9 +9,6 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-/* eslint-disable @typescript-eslint/ban-types */
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import type { RestateEndpoint } from "../public_api.js";
 import type {
   JournalValueCodec,
@@ -88,7 +85,7 @@ export class NodeEndpoint implements RestateEndpoint {
 
     return new Promise((resolve, reject) => {
       let failed = false;
-      server.once("error", (e) => {
+      server.once("error", (e: Error) => {
         failed = true;
         reject(e);
       });
