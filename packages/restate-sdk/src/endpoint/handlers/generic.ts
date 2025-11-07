@@ -120,8 +120,8 @@ function invocationIdFromHeaders(headers: Headers) {
     typeof invocationIdHeader === "string"
       ? invocationIdHeader
       : Array.isArray(invocationIdHeader)
-      ? invocationIdHeader[0] ?? "unknown id"
-      : "unknown id";
+        ? (invocationIdHeader[0] ?? "unknown id")
+        : "unknown id";
   return invocationId;
 }
 
@@ -656,8 +656,8 @@ export class GenericHandler implements RestateHandler {
           manifestVersion === 2
             ? ENDPOINT_MANIFEST_V2
             : manifestVersion === 3
-            ? ENDPOINT_MANIFEST_V3
-            : ENDPOINT_MANIFEST_V4,
+              ? ENDPOINT_MANIFEST_V3
+              : ENDPOINT_MANIFEST_V4,
         "x-restate-server": X_RESTATE_SERVER,
       },
       statusCode: 200,

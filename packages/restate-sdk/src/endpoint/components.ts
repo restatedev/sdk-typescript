@@ -391,8 +391,8 @@ function commonServiceOptions(
     retryPolicyOnMaxAttempts: (options?.retryPolicy?.onMaxAttempts === "kill"
       ? "KILL"
       : options?.retryPolicy?.onMaxAttempts === "pause"
-      ? "PAUSE"
-      : undefined) as d.RetryPolicyOnMaxAttempts,
+        ? "PAUSE"
+        : undefined) as d.RetryPolicyOnMaxAttempts,
   };
 }
 
@@ -434,8 +434,8 @@ function commonHandlerOptions(
     retryPolicyOnMaxAttempts: (wrapper.retryPolicy?.onMaxAttempts === "kill"
       ? "KILL"
       : wrapper.retryPolicy?.onMaxAttempts === "pause"
-      ? "PAUSE"
-      : undefined) as d.RetryPolicyOnMaxAttempts1,
+        ? "PAUSE"
+        : undefined) as d.RetryPolicyOnMaxAttempts1,
 
     documentation: wrapper.description,
     metadata: wrapper.metadata,
