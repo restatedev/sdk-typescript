@@ -9,7 +9,7 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import type { RestateEndpoint } from "../public_api.js";
+import type { RestateEndpoint } from "../index.js";
 import type {
   JournalValueCodec,
   ServiceDefinition,

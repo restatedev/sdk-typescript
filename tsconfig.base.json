@@ -23,15 +23,13 @@
     "noImplicitOverride": true,
     "paths": {
       "@restatedev/restate-sdk-core": [
-        "./packages/restate-sdk-core/src/public_api.ts"
+        "./packages/restate-sdk-core/src/index.ts"
       ],
-      "@restatedev/restate-sdk": ["./packages/restate-sdk/src/public_api.ts"],
+      "@restatedev/restate-sdk": ["./packages/restate-sdk/src/index.ts"],
       "@restatedev/restate-sdk-clients": [
-        "./packages/restate-sdk-clients/src/public_api.ts"
+        "./packages/restate-sdk-clients/src/index.ts"
       ],
-      "@restatedev/restate-sdk-zod": [
-        "./packages/restate-sdk-zod/src/public_api.ts"
-      ]
+      "@restatedev/restate-sdk-zod": ["./packages/restate-sdk-zod/src/index.ts"]
     }
   }
 }

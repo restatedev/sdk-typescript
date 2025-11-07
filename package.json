@@ -33,7 +33,7 @@
   "type": "module",
   "scripts": {
     "api:extract": "npm run api:extract -ws --if-present",
-    "build": "npm run --workspace packages build --if-present",
+    "build": "turbo run build --filter=\"./packages/*\"",
     "build-docs": "npm run build && npx typedoc",
     "test": "npm run test -ws --if-present",
     "lint": "npm run lint -ws --if-present",
@@ -60,6 +60,8 @@
     "globals": "^16.4.0",
     "prettier": "^2.8.4",
     "release-it": "^17.11.0",
+    "tsdown": "^0.16.0",
+    "turbo": "^2.6.0",
     "typedoc": "^0.28.10",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.46.2",
