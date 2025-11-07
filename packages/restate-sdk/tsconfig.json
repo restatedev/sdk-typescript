@@ -4,6 +4,6 @@
     "outDir": "./dist",
     "paths": {}
   },
-  "include": ["src/**/*.ts", "src/**/*.js"],
+  "include": ["src/**/*.ts", "src/**/*.js", "./package.json"],
   "references": [{ "path": "../restate-sdk-core" }]
 }

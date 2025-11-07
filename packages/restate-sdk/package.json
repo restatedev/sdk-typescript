@@ -55,10 +55,7 @@
   ],
   "scripts": {
     "api:extract": "api-extractor run --local",
-    "gen:version": "node ./scripts/version.mjs",
-    "prebuild": "npm run gen:version",
     "build": "tsc --noEmit && tsdown",
-    "pretest": "npm run gen:version",
     "test": "vitest run --silent",
     "lint": "eslint --max-warnings=0 .",
     "format": "prettier --ignore-path ../../.prettierignore --write \"**/*.+(js|ts|json)\"",
