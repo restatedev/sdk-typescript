@@ -16,6 +16,7 @@ export default [
       "**/*.mjs",
       "**/test/**",
       "**/api-extractor.json",
+      "**/src/generated/**",
     ],
   },
   {

@@ -9,5 +9,14 @@ export default defineConfig({
   ignoreWatch: ["dist", ".turbo", "*.tsbuildinfo"],
   unbundle: true,
   clean: true,
-  external: ["@restatedev/restate-sdk-core"],
+  external: [
+    "@restatedev/restate-sdk-core",
+    // Node.js built-in modules
+    "http2",
+    "node:stream",
+    "node:stream/web",
+    "node:buffer",
+    "node:timers/promises",
+    "node:zlib",
+  ],
 });
