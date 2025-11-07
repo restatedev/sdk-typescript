@@ -1,25 +1,20 @@
-/*
- * Copyright (c) 2023-2024 - Restate Software, Inc., Restate GmbH
- *
- * This file is part of the Restate SDK for Node.js/TypeScript,
- * which is released under the MIT license.
- *
- * You can find a copy of the license in file LICENSE in the root
- * directory of this repository or package, or at
- * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
- */
-export * from "./common_api.js";
+import { CancelledError, RestateError, RetryableError, TerminalError, TimeoutError } from "./types/errors.js";
+import { Opts, SendOpts, handlers, object, rpc, service, workflow } from "./types/rpc.js";
+import { InvocationIdParser, RestatePromise } from "./context.js";
+import { CombineablePromise, createObjectHandler, createObjectSharedHandler, createServiceHandler, createWorkflowHandler, createWorkflowSharedHandler, serde } from "./common_api.js";
 import { FetchEndpointImpl } from "./endpoint/fetch_endpoint.js";
 import { withOptions } from "./endpoint/withOptions.js";
 import { cloudflareWorkersBundlerPatch } from "./endpoint/handlers/vm/sdk_shared_core_wasm_bindings.js";
+
+//#region src/fetch.ts
 /**
- * Create a new {@link RestateEndpoint} in request response protocol mode.
- * Bidirectional mode (must be served over http2) can be enabled with .enableHttp2()
- * @deprecated Please use {@link createEndpointHandler}
- */
-export function endpoint() {
+* Create a new {@link RestateEndpoint} in request response protocol mode.
+* Bidirectional mode (must be served over http2) can be enabled with .enableHttp2()
+* @deprecated Please use {@link createEndpointHandler}
+*/
+function endpoint() {
   cloudflareWorkersBundlerPatch();
-  return new FetchEndpointImpl("REQUEST_RESPONSE");
+	return new FetchEndpointImpl("REQUEST_RESPONSE");
 }
 
 /**
@@ -43,7 +38,7 @@ export function endpoint() {
  * export const handler = createEndpointHandler({ services: [myService], bidirectional: true })
  *
  */
-export function createEndpointHandler(options) {
+function createEndpointHandler(options) {
   cloudflareWorkersBundlerPatch();
   return withOptions(
     new FetchEndpointImpl(
@@ -53,4 +48,6 @@ export function createEndpointHandler(options) {
   ).handler().fetch;
 }
 
+//#endregion
+export { CancelledError, CombineablePromise, InvocationIdParser, Opts, RestateError, RestatePromise, RetryableError, SendOpts, TerminalError, TimeoutError, createEndpointHandler, createObjectHandler, createObjectSharedHandler, createServiceHandler, createWorkflowHandler, createWorkflowSharedHandler, endpoint, handlers, object, rpc, serde, service, workflow };
 //# sourceMappingURL=fetch.js.map
