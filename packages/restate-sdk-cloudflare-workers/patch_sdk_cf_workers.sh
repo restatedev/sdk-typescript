@@ -11,7 +11,7 @@ cp -r ../restate-sdk/dist .
 cp patches/fetch.js dist/fetch.js
 
 # Copy vm
-# rm -r dist/endpoint/handlers/vm
+rm -r dist/endpoint/handlers/vm
 cp -r patches/vm dist/endpoint/handlers
 
 # Copy vm entrypoint
