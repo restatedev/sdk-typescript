@@ -512,7 +512,7 @@ export namespace handlers {
     export function workflow<
       O,
       I = void,
-      TState extends TypedState = UntypedState
+      TState extends TypedState = UntypedState,
     >(
       opts: WorkflowHandlerOpts<I, O>,
       fn: (ctx: WorkflowContext<TState>, input: I) => Promise<O>
@@ -521,7 +521,7 @@ export namespace handlers {
     export function workflow<
       O,
       I = void,
-      TState extends TypedState = UntypedState
+      TState extends TypedState = UntypedState,
     >(
       fn: (ctx: WorkflowContext<TState>, input: I) => Promise<O>
     ): RemoveVoidArgument<typeof fn>;
@@ -554,7 +554,7 @@ export namespace handlers {
     export function shared<
       O,
       I = void,
-      TState extends TypedState = UntypedState
+      TState extends TypedState = UntypedState,
     >(
       opts: WorkflowHandlerOpts<I, O>,
       fn: (ctx: WorkflowSharedContext<TState>, input: I) => Promise<O>
@@ -572,7 +572,7 @@ export namespace handlers {
     export function shared<
       O,
       I = void,
-      TState extends TypedState = UntypedState
+      TState extends TypedState = UntypedState,
     >(
       fn: (ctx: WorkflowSharedContext<TState>, input: I) => Promise<O>
     ): RemoveVoidArgument<typeof fn>;
@@ -615,7 +615,7 @@ export namespace handlers {
     export function exclusive<
       O,
       I = void,
-      TState extends TypedState = UntypedState
+      TState extends TypedState = UntypedState,
     >(
       opts: ObjectHandlerOpts<I, O>,
       fn: (ctx: ObjectContext<TState>, input: I) => Promise<O>
@@ -636,7 +636,7 @@ export namespace handlers {
     export function exclusive<
       O,
       I = void,
-      TState extends TypedState = UntypedState
+      TState extends TypedState = UntypedState,
     >(
       fn: (ctx: ObjectContext<TState>, input: I) => Promise<O>
     ): RemoveVoidArgument<typeof fn>;
@@ -684,7 +684,7 @@ export namespace handlers {
     export function shared<
       O,
       I = void,
-      TState extends TypedState = UntypedState
+      TState extends TypedState = UntypedState,
     >(
       opts: ObjectHandlerOpts<I, O>,
       fn: (ctx: ObjectSharedContext<TState>, input: I) => Promise<O>
@@ -704,7 +704,7 @@ export namespace handlers {
     export function shared<
       O,
       I = void,
-      TState extends TypedState = UntypedState
+      TState extends TypedState = UntypedState,
     >(
       fn: (ctx: ObjectSharedContext<TState>, input: I) => Promise<O>
     ): RemoveVoidArgument<typeof fn>;
@@ -970,10 +970,10 @@ export type ObjectOpts<U> = {
   [K in keyof U]: U[K] extends ObjectHandler<U[K], ObjectContext<any>>
     ? U[K]
     : U[K] extends ObjectHandler<U[K], ObjectSharedContext<any>>
-    ? U[K]
-    :
-        | ObjectHandler<U[K], ObjectContext<any>>
-        | ObjectHandler<U[K], ObjectSharedContext<any>>;
+      ? U[K]
+      :
+          | ObjectHandler<U[K], ObjectContext<any>>
+          | ObjectHandler<U[K], ObjectSharedContext<any>>;
 };
 
 export type ObjectOptions = ServiceOptions & {
@@ -1092,12 +1092,12 @@ export type WorkflowOpts<U> = {
     | "workflowOutput"
     ? `${K} is a reserved keyword`
     : K extends "run"
-    ? U[K] extends WorkflowHandler<U[K], WorkflowContext<any>>
-      ? U[K]
-      : "An handler named 'run' must take as a first argument a WorkflowContext, and must return a Promise"
-    : U[K] extends WorkflowSharedHandler<U[K], WorkflowSharedContext<any>>
-    ? U[K]
-    : "An handler other then 'run' must accept as a first argument a WorkflowSharedContext";
+      ? U[K] extends WorkflowHandler<U[K], WorkflowContext<any>>
+        ? U[K]
+        : "An handler named 'run' must take as a first argument a WorkflowContext, and must return a Promise"
+      : U[K] extends WorkflowSharedHandler<U[K], WorkflowSharedContext<any>>
+        ? U[K]
+        : "An handler other then 'run' must accept as a first argument a WorkflowSharedContext";
 };
 
 export type WorkflowOptions = ServiceOptions & {

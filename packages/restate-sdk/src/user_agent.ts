@@ -9,6 +9,6 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { SDK_VERSION } from "./generated/version.js";
+import pkg from "../package.json" with { type: "json" };
 
-export const X_RESTATE_SERVER = `restate-sdk-typescript/${SDK_VERSION}`;
+export const X_RESTATE_SERVER = `restate-sdk-typescript/${pkg.version}`;

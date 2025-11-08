@@ -14,7 +14,7 @@ import type {
   VirtualObjectDefinition,
   WorkflowDefinition,
   DefaultServiceOptions,
-} from "../src/public_api.js";
+} from "../src/index.js";
 import type * as discovery from "../src/endpoint/discovery.js";
 import { EndpointBuilder } from "../src/endpoint/endpoint.js";
 

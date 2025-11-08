@@ -10,10 +10,8 @@
   ],
   "entryPointStrategy": "packages",
   "packageOptions": {
-    "entryPoints": [
-      "src/public_api.ts"
-    ],
-    "tsconfig": "tsconfig.json",
+    "entryPoints": ["src/index.ts"],
+    "tsconfig": "tsconfig.json"
   },
   "out": "docs-out"
 }

@@ -10,7 +10,7 @@
  */
 
 import { toServiceDiscovery } from "./testutils.js";
-import * as restate from "../src/public_api.js";
+import * as restate from "../src/index.js";
 import { describe, expect, it } from "vitest";
 
 const greeterFoo = restate.service({

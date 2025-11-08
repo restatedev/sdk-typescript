@@ -29,8 +29,8 @@ export interface RestateWorkflowContext
 export type ArgType<T> = T extends (ctx: any) => any
   ? void
   : T extends (ctx: any, input: infer I) => any
-  ? I
-  : never;
+    ? I
+    : never;
 
 export type HandlerReturnType<T> = T extends (
   ctx: any,
@@ -44,8 +44,8 @@ export type ServiceHandler<F, C = RestateContext> = F extends (
 ) => Promise<any>
   ? F
   : F extends (ctx: C, input: any) => Promise<any>
-  ? F
-  : (ctx: C, input?: any) => Promise<any>;
+    ? F
+    : (ctx: C, input?: any) => Promise<any>;
 
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
 export type ServiceDefinition<P extends string, M> = {
@@ -53,23 +53,21 @@ export type ServiceDefinition<P extends string, M> = {
 };
 
 export type Service<M> = M extends ServiceDefinition<string, infer S> ? S : M;
-export type ServiceDefinitionFrom<M> = M extends ServiceDefinition<
-  string,
-  unknown
->
-  ? M
-  : ServiceDefinition<string, M>;
+export type ServiceDefinitionFrom<M> =
+  M extends ServiceDefinition<string, unknown>
+    ? M
+    : ServiceDefinition<string, M>;
 
 // ----------- object -------------------------------------------------------
 
 export type ObjectSharedHandler<
   F,
-  SC = RestateObjectSharedContext
+  SC = RestateObjectSharedContext,
 > = F extends (ctx: SC, param: any) => Promise<any>
   ? F
   : F extends (ctx: SC) => Promise<any>
-  ? F
-  : (ctx: SC, param?: any) => Promise<any>;
+    ? F
+    : (ctx: SC, param?: any) => Promise<any>;
 
 export type ObjectHandler<F, C = RestateObjectContext> = F extends (
   ctx: C,
@@ -77,38 +75,32 @@ export type ObjectHandler<F, C = RestateObjectContext> = F extends (
 ) => Promise<any>
   ? F
   : F extends (ctx: C) => Promise<any>
-  ? F
-  : (ctx: C, param?: any) => Promise<any>;
+    ? F
+    : (ctx: C, param?: any) => Promise<any>;
 
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
 export type VirtualObjectDefinition<P extends string, M> = {
   name: P;
 };
 
-export type VirtualObject<M> = M extends VirtualObjectDefinition<
-  string,
-  infer O
->
-  ? O
-  : M;
+export type VirtualObject<M> =
+  M extends VirtualObjectDefinition<string, infer O> ? O : M;
 
-export type VirtualObjectDefinitionFrom<M> = M extends VirtualObjectDefinition<
-  string,
-  unknown
->
-  ? M
-  : VirtualObjectDefinition<string, M>;
+export type VirtualObjectDefinitionFrom<M> =
+  M extends VirtualObjectDefinition<string, unknown>
+    ? M
+    : VirtualObjectDefinition<string, M>;
 
 // ----------- workflow -------------------------------------------------------
 
 export type WorkflowSharedHandler<
   F,
-  SC = RestateWorkflowSharedContext
+  SC = RestateWorkflowSharedContext,
 > = F extends (ctx: SC, param: any) => Promise<any>
   ? F
   : F extends (ctx: SC) => Promise<any>
-  ? F
-  : (ctx: SC, param?: any) => Promise<any>;
+    ? F
+    : (ctx: SC, param?: any) => Promise<any>;
 
 export type WorkflowHandler<F, C = RestateWorkflowContext> = F extends (
   ctx: C,
@@ -116,8 +108,8 @@ export type WorkflowHandler<F, C = RestateWorkflowContext> = F extends (
 ) => Promise<any>
   ? F
   : F extends (ctx: C) => Promise<any>
-  ? F
-  : (ctx: C, param?: any) => Promise<any>;
+    ? F
+    : (ctx: C, param?: any) => Promise<any>;
 
 /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
 export type WorkflowDefinition<P extends string, M> = {
@@ -126,9 +118,7 @@ export type WorkflowDefinition<P extends string, M> = {
 
 export type Workflow<M> = M extends WorkflowDefinition<string, infer W> ? W : M;
 
-export type WorkflowDefinitionFrom<M> = M extends WorkflowDefinition<
-  string,
-  unknown
->
-  ? M
-  : WorkflowDefinition<string, M>;
+export type WorkflowDefinitionFrom<M> =
+  M extends WorkflowDefinition<string, unknown>
+    ? M
+    : WorkflowDefinition<string, M>;
