@@ -30,7 +30,7 @@ const greeter = restate.service({
       async (ctx: restate.Context, { name }) => {
         // Respond to caller
         return { result: `You said hi to ${name}!` };
-      },
+      }
     ),
   },
 });
