@@ -38,12 +38,12 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build packages
-        run: pnpm run build
+        run: pnpm build
 
       - name: Start Cloudflare Worker (wrangler dev)
         working-directory: packages/examples/cloudflare
         run: |
-          pnpm run start &
+          pnpm start &
           echo $! > service.pid
           sleep 10
 

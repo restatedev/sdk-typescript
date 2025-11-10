@@ -38,12 +38,12 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build packages
-        run: pnpm run build
+        run: pnpm build
 
       - name: Start Node service
         working-directory: packages/examples/node
         run: |
-          pnpm run bundle && pnpm run start &
+          pnpm start &
           echo $! > service.pid
           sleep 5
 

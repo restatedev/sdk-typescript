@@ -72,15 +72,15 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build packages
-        run: pnpm run build
+        run: pnpm build
 
       - name: Build Lambda code
         working-directory: packages/examples/lambda
-        run: pnpm run build
+        run: pnpm build
 
       - name: Create Lambda deployment package
         working-directory: packages/examples/lambda
-        run: pnpm run bundle
+        run: pnpm bundle
 
       - name: Create IAM roles in LocalStack
         run: |

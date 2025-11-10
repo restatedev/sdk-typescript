@@ -43,7 +43,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build packages
-        run: pnpm run build
+        run: pnpm build
 
       - name: Start Bun service
         working-directory: packages/examples/bun

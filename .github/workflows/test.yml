@@ -27,8 +27,8 @@ jobs:
         with:
           version: 10.13.1
       - run: pnpm install --frozen-lockfile
-      - run: pnpm run build
-      - run: pnpm run verify
+      - run: pnpm build
+      - run: pnpm verify
       - run: pnpm pack --filter "./packages/libs/**" --pack-destination .
       - run: find -type f -name "restatedev-restate-sdk-[0-9.]*\.tgz" | xargs -I {} mv {} restatedev-restate-sdk.tgz
       - run: find -type f -name "restatedev-restate-sdk-clients-[0-9.]*\.tgz" | xargs -I {} mv {} restatedev-restate-sdk-clients.tgz

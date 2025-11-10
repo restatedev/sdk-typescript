@@ -9,7 +9,7 @@
   "scripts": {
     "build": "turbo run _build --filter={.}...",
     "_build": "tsdown src/index.ts --format esm --minify --target es2020 --out-dir dist --platform node",
-    "prebundle": "npm run build",
+    "prebundle": "pnpm build",
     "bundle": "cd dist && zip -r ../lambda.zip index.mjs*",
     "deploy": "npx cdk deploy",
     "destroy": "npx cdk destroy",

@@ -38,12 +38,12 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build packages
-        run: pnpm run build
+        run: pnpm build
 
       - name: Start Next.js service
         working-directory: packages/examples/vercel
         run: |
-          pnpm run build && pnpm start &
+          pnpm build && pnpm start &
           echo $! > service.pid
           sleep 10
 
