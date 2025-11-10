@@ -4,6 +4,9 @@ name = "restate-cloudflare-worker"
 # Entrypoint
 main = "./src/index.ts"
 
+# Use tsconfig.build.json to resolve from dist (not source via path mappings)
+tsconfig = "./tsconfig.build.json"
+
 # Preview URLs are used to register to Restate
 preview_urls = true
 
