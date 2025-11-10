@@ -1,18 +1,46 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "tasks": {
-    "build": {
-      "dependsOn": ["^build"],
-      "outputs": ["dist/**"]
+    "_build": {
+      "dependsOn": ["^_build"],
+      "outputs": ["dist/**", "*.tsbuildinfo"],
+      "outputLogs": "errors-only"
     },
-    "test": {
-      "dependsOn": ["build"]
+    "clean": {
+      "cache": false
     },
-    "lint": {},
-    "format": {},
-    "format-check": {},
-    "verify": {
-      "dependsOn": ["format-check", "lint", "test", "build"]
+    "_test": {
+      "dependsOn": ["^_build"]
+    },
+    "lint": {
+      "outputs": []
+    },
+    "_check:types": {
+      "dependsOn": ["^_build"],
+      "outputs": []
+    },
+    "_check:exports": {
+      "dependsOn": ["_build"],
+      "outputs": []
+    },
+    "_check:api": {
+      "dependsOn": ["_build"],
+      "outputs": []
+    },
+    "check:format": {
+      "outputs": []
+    },
+    "dev": {
+      "dependsOn": ["^_build"],
+      "cache": false,
+      "persistent": true,
+      "outputs": []
+    },
+    "_start": {
+      "dependsOn": ["^_build", "_build"],
+      "cache": false,
+      "persistent": true,
+      "outputs": []
     }
   }
 }

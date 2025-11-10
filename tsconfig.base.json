@@ -1,35 +1,24 @@
 {
   "compilerOptions": {
-    "composite": true,
-    "baseUrl": ".",
-    "target": "ES2022",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
-    "lib": ["esnext"],
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
-    "strict": true,
-    "allowJs": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "allowSyntheticDefaultImports": true,
-    "noImplicitThis": true,
+    "target": "ES2022",
+    "lib": ["esnext"],
+    "allowJs": true,
     "resolveJsonModule": true,
     "moduleDetection": "force",
     "isolatedModules": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
-    "paths": {
-      "@restatedev/restate-sdk-core": [
-        "./packages/restate-sdk-core/src/index.ts"
-      ],
-      "@restatedev/restate-sdk": ["./packages/restate-sdk/src/index.ts"],
-      "@restatedev/restate-sdk-clients": [
-        "./packages/restate-sdk-clients/src/index.ts"
-      ],
-      "@restatedev/restate-sdk-zod": ["./packages/restate-sdk-zod/src/index.ts"]
-    }
+    "composite": true,
+    "sourceMap": true,
+    "declarationMap": true,
+    "declaration": true,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "allowSyntheticDefaultImports": true,
+    "noImplicitThis": true
   }
 }

@@ -2,11 +2,11 @@
   "$schema": "https://typedoc.org/schema.json",
   "name": "Restate Typescript SDK",
   "entryPoints": [
-    "packages/restate-sdk-core",
-    "packages/restate-sdk",
-    "packages/restate-sdk-clients",
-    "packages/restate-sdk-testcontainers",
-    "packages/restate-sdk-zod"
+    "packages/libs/restate-sdk-core",
+    "packages/libs/restate-sdk",
+    "packages/libs/restate-sdk-clients",
+    "packages/libs/restate-sdk-testcontainers",
+    "packages/libs/restate-sdk-zod"
   ],
   "entryPointStrategy": "packages",
   "packageOptions": {

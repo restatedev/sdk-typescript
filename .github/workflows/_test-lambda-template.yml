@@ -71,11 +71,11 @@ jobs:
         run: npm run build
 
       - name: Build Lambda code
-        working-directory: templates/lambda
+        working-directory: packages/examples/lambda
         run: npm run build
 
       - name: Create Lambda deployment package
-        working-directory: templates/lambda
+        working-directory: packages/examples/lambda
         run: npm run bundle
 
       - name: Create IAM roles in LocalStack
@@ -118,7 +118,7 @@ jobs:
             }'
 
       - name: Deploy Lambda to LocalStack
-        working-directory: templates/lambda
+        working-directory: packages/examples/lambda
         run: |
           FUNCTION_ARN=$(awslocal lambda create-function \
             --function-name restate-greeter \

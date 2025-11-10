@@ -1,0 +1,23 @@
+{
+  "name": "@restatedev/node",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "turbo run _build --filter={.}...",
+    "_build": "tsdown src/index.ts --format cjs --minify --target es2020 --out-dir dist --platform node",
+    "dev": "tsx watch --tsconfig ./tsconfig.json ./src/index.ts",
+    "start": "turbo run _start --filter={.}...",
+    "_start": "node ./dist/index.js",
+    "clean": "rm -rf dist *.tsbuildinfo .turbo",
+    "check:types": "turbo run _check:types --filter={.}...",
+    "_check:types": "tsc --noEmit --project tsconfig.build.json",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@restatedev/restate-sdk": "workspace:*",
+    "@restatedev/restate-sdk-zod": "workspace:*",
+    "zod": "catalog:"
+  },
+  "devDependencies": {}
+}

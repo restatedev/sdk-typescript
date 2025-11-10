@@ -37,7 +37,7 @@ jobs:
         run: npm run build
 
       - name: Start Cloudflare Worker (wrangler dev)
-        working-directory: templates/cloudflare
+        working-directory: packages/examples/cloudflare
         run: |
           npm run start &
           echo $! > service.pid
@@ -70,13 +70,13 @@ jobs:
           docker logs $(docker ps -q --filter ancestor=docker.restate.dev/restatedev/restate:latest)
 
           echo "=== Wrangler logs ==="
-          if [ -f templates/cloudflare/service.pid ]; then
+          if [ -f packages/examples/cloudflare/service.pid ]; then
             ps aux | grep wrangler || true
           fi
 
       - name: Cleanup
         if: always()
-        working-directory: templates/cloudflare
+        working-directory: packages/examples/cloudflare
         run: |
           if [ -f service.pid ]; then
             kill $(cat service.pid) || true

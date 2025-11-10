@@ -42,7 +42,7 @@ jobs:
         run: npm run build
 
       - name: Start Deno service
-        working-directory: templates/deno
+        working-directory: packages/examples/deno
         run: |
           deno task start &
           echo $! > service.pid
@@ -75,13 +75,13 @@ jobs:
           docker logs $(docker ps -q --filter ancestor=docker.restate.dev/restatedev/restate:latest)
 
           echo "=== Service logs ==="
-          if [ -f templates/deno/service.pid ]; then
+          if [ -f packages/examples/deno/service.pid ]; then
             ps aux | grep deno || true
           fi
 
       - name: Cleanup
         if: always()
-        working-directory: templates/deno
+        working-directory: packages/examples/deno
         run: |
           if [ -f service.pid ]; then
             kill $(cat service.pid) || true

@@ -1,0 +1,27 @@
+{{#if (eq type "lib")}}
+{
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": {
+    "composite": false
+  },
+  "include": ["src/**/*"]
+}
+{{/if}}
+{{#if (eq type "test")}}
+{
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": {
+    "composite": false
+  },
+  "include": ["src/**/*"]
+}
+{{/if}}
+{{#if (eq type "example")}}
+{
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": {
+    "composite": false
+  },
+  "include": ["src/**/*"]
+}
+{{/if}}

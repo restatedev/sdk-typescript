@@ -32,9 +32,9 @@ on:
         default: ""
         type: string
       restateImage:
-        description: 'restate image, superseded by restate commit'
+        description: "restate image, superseded by restate commit"
         required: false
-        default: 'ghcr.io/restatedev/restate:main'
+        default: "ghcr.io/restatedev/restate:main"
         type: string
       serviceImage:
         description: "service image, if provided it will skip building the image from sdk main branch"
@@ -121,7 +121,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: "packages/restate-e2e-services/Dockerfile"
+          file: "packages/tests/restate-e2e-services/Dockerfile"
           push: false
           load: true
           tags: restatedev/typescript-test-services
@@ -133,7 +133,7 @@ jobs:
         with:
           restateContainerImage: ${{ inputs.restateCommit != '' && 'localhost/restatedev/restate-commit-download:latest' || (inputs.restateImage != '' && inputs.restateImage || 'ghcr.io/restatedev/restate:main') }}
           serviceContainerImage: ${{ inputs.serviceImage != '' && inputs.serviceImage || 'restatedev/typescript-test-services' }}
-          exclusionsFile: "packages/restate-e2e-services/exclusions.yaml"
+          exclusionsFile: "packages/tests/restate-e2e-services/exclusions.yaml"
           envVars: ${{ inputs.envVars }}
           testArtifactOutput: ${{ inputs.testArtifactOutput != '' && inputs.testArtifactOutput || 'sdk-typescript-integration-test-report' }}
-          serviceContainerEnvFile: "packages/restate-e2e-services/.env"
+          serviceContainerEnvFile: "packages/tests/restate-e2e-services/.env"
