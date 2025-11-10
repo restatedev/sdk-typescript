@@ -109,4 +109,7 @@ setInterval(() => {
 
 server.updateSettings(settings);
 
-server.listen(parseInt(process.env.PORT || "9080"));
+const port = parseInt(process.env.PORT || "9080");
+server.listen(port, "0.0.0.0", () => {
+  console.log(`Server listening on 0.0.0.0:${port}`);
+});
