@@ -30,13 +30,16 @@
       "ae-missing-release-tag": {
         "logLevel": "none"
       },
+      "ae-unresolved-link": {
+        "logLevel": "none"
+      },
       "ae-forgotten-export": {
         "logLevel": "error"
       }
     },
     "tsdocMessageReporting": {
       "default": {
-        "logLevel": "warning"
+        "logLevel": "none"
       }
     }
   }
