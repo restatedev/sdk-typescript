@@ -26,6 +26,10 @@ jobs:
       - uses: pnpm/action-setup@v4
         with:
           version: 10.13.1
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v2.x
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: pnpm verify
