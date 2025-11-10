@@ -1,17 +1,21 @@
 FROM node:20
 
+# Install pnpm
+RUN corepack enable && corepack prepare pnpm@9 --activate
+
 WORKDIR /usr/src/app
 
 COPY . .
 
-RUN npm install
+RUN pnpm install --frozen-lockfile
 
-RUN npm run build
-RUN npm rebuild heapdump
+# Build all packages (libs + tests)
+RUN pnpm run build:all
+RUN pnpm --filter restate-e2e-services rebuild heapdump
 
 # Install Tini
 RUN apt-get update && apt-get -y install tini
 
 EXPOSE 8080
 ENTRYPOINT ["tini", "--"]
-CMD ["node", "/usr/src/app/packages/restate-e2e-services/dist/src/app.js"]
+CMD ["node", "/usr/src/app/packages/tests/restate-e2e-services/dist/src/app.js"]
