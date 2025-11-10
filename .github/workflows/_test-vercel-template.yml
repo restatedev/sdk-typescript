@@ -30,16 +30,20 @@ jobs:
         with:
           node-version: "22"
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.13
+
       - name: Install dependencies
-        run: npm install
+        run: pnpm install --frozen-lockfile
 
       - name: Build packages
-        run: npm run build
+        run: pnpm run build
 
       - name: Start Next.js service
         working-directory: packages/examples/vercel
         run: |
-          npm run build && npm start &
+          pnpm run build && pnpm start &
           echo $! > service.pid
           sleep 10
 

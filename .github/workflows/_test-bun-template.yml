@@ -35,11 +35,15 @@ jobs:
         with:
           bun-version: latest
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.13
+
       - name: Install dependencies
-        run: npm install
+        run: pnpm install --frozen-lockfile
 
       - name: Build packages
-        run: npm run build
+        run: pnpm run build
 
       - name: Start Bun service
         working-directory: packages/examples/bun
