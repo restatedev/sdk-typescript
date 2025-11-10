@@ -27,6 +27,12 @@ RUN echo "=== Looking for app.js ===" && find /usr/src/app/packages/tests/restat
 # Verify app.js exists
 RUN test -f /usr/src/app/packages/tests/restate-e2e-services/dist/app.js || (echo "ERROR: app.js not found at expected location!" && ls -R /usr/src/app/packages/tests/restate-e2e-services/dist/ && exit 1)
 
+# Debug: Test Node can load the module
+RUN echo "=== Testing if app.js can be loaded ===" && node --check /usr/src/app/packages/tests/restate-e2e-services/dist/app.js && echo "✅ Syntax check passed"
+
+# Debug: Check module resolution
+RUN echo "=== Checking SDK package resolution ===" && cd /usr/src/app/packages/tests/restate-e2e-services && node --input-type=module -e "console.log('Checking SDK...'); await import('@restatedev/restate-sdk'); console.log('✅ SDK loaded successfully')" || echo "❌ SDK failed to load"
+
 RUN pnpm --filter restate-e2e-services rebuild heapdump
 
 # Install Tini
