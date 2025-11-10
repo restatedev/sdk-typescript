@@ -13,7 +13,7 @@
     "bundle": "cd dist && zip -r ../lambda.zip index.mjs*",
     "deploy": "npx cdk deploy",
     "destroy": "npx cdk destroy",
-    "clean": "rm -rf dist *.tsbuildinfo .turbo node_modules",
+    "clean": "rm -rf dist *.tsbuildinfo .turbo",
     "check:types": "turbo run _check:types --filter={.}...",
     "_check:types": "tsc --noEmit --project tsconfig.build.json",
     "lint": "eslint ."

@@ -9,7 +9,7 @@
     "dev": "tsx watch --tsconfig ./tsconfig.json ./src/index.ts",
     "start": "turbo run _start --filter={.}...",
     "_start": "node ./dist/index.cjs",
-    "clean": "rm -rf dist *.tsbuildinfo .turbo node_modules",
+    "clean": "rm -rf dist *.tsbuildinfo .turbo",
     "check:types": "turbo run _check:types --filter={.}...",
     "_check:types": "tsc --noEmit --project tsconfig.build.json",
     "lint": "eslint ."

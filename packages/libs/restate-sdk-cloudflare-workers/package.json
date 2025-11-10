@@ -37,7 +37,7 @@
   "scripts": {
     "build": "turbo run _build --filter={.}...",
     "_build": "./patch_sdk_cf_workers.sh",
-    "clean": "rm -rf dist *.tsbuildinfo .turbo node_modules",
+    "clean": "rm -rf dist *.tsbuildinfo .turbo",
     "check:exports": "turbo run _check:exports --filter={.}...",
     "_check:exports": "attw --pack .",
     "check:api": "turbo run _check:api --filter={.}...",
