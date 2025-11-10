@@ -11,6 +11,7 @@ RUN pnpm install --frozen-lockfile
 
 # Build all packages (libs + tests)
 RUN pnpm build
+RUN pnpm --filter restate-e2e-services build
 RUN pnpm --filter restate-e2e-services rebuild heapdump
 
 # Install Tini
