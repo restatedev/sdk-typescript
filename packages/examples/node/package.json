@@ -8,7 +8,7 @@
     "_build": "tsdown src/index.ts --format cjs --minify --target es2020 --out-dir dist --platform node",
     "dev": "tsx watch --tsconfig ./tsconfig.json ./src/index.ts",
     "start": "turbo run _start --filter={.}...",
-    "_start": "node ./dist/index.js",
+    "_start": "node ./dist/index.cjs",
     "clean": "rm -rf dist *.tsbuildinfo .turbo node_modules",
     "check:types": "turbo run _check:types --filter={.}...",
     "_check:types": "tsc --noEmit --project tsconfig.build.json",
