@@ -1,7 +1,7 @@
 FROM node:20
 
 # Install pnpm
-RUN corepack enable && corepack prepare pnpm@9 --activate
+RUN corepack enable && corepack prepare pnpm@10.13.1 --activate
 
 WORKDIR /usr/src/app
 
