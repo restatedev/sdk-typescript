@@ -1,12 +1,16 @@
 FROM node:20
 
+WORKDIR /usr/src/app
+
+# Install Tini (node:20 already includes python3, make, g++ for native modules)
+RUN apt-get update && apt-get install -y tini
+
 # Install pnpm
 RUN corepack enable && corepack prepare pnpm@10.13.1 --activate
 
-WORKDIR /usr/src/app
-
 COPY . .
 
+# Install dependencies (heapdump will build automatically via onlyBuiltDependencies)
 RUN pnpm install --frozen-lockfile
 
 # Build SDK libraries
@@ -14,12 +18,6 @@ RUN pnpm build
 
 # Build e2e-services test package
 RUN pnpm --filter restate-e2e-services build
-
-# Install build tools needed for native modules and Tini
-RUN apt-get update && apt-get install -y python3 make g++ tini
-
-# Rebuild heapdump native module
-RUN cd /usr/src/app/node_modules/.pnpm/heapdump@0.3.15/node_modules/heapdump && npm rebuild
 
 EXPOSE 8080
 ENTRYPOINT ["tini", "--"]
