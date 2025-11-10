@@ -9,7 +9,7 @@
     "dev": "bun run --watch src/index.ts",
     "start": "turbo run _start --filter={.}...",
     "_start": "bun run src/index.ts",
-    "clean": "rm -rf dist *.tsbuildinfo .turbo",
+    "clean": "rm -rf dist *.tsbuildinfo .turbo node_modules",
     "check:types": "turbo run _check:types --filter={.}...",
     "_check:types": "tsc --noEmit --project tsconfig.build.json",
     "lint": "eslint ."

@@ -45,6 +45,10 @@ jobs:
       - name: Build packages
         run: pnpm build
 
+      - name: Install Deno dependencies
+        working-directory: packages/examples/deno
+        run: deno install
+
       - name: Start Deno service
         working-directory: packages/examples/deno
         run: |
