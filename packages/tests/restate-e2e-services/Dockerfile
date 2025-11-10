@@ -33,6 +33,15 @@ RUN echo "=== Testing if app.js can be loaded ===" && node --check /usr/src/app/
 # Debug: Check module resolution
 RUN echo "=== Checking SDK package resolution ===" && cd /usr/src/app/packages/tests/restate-e2e-services && node --input-type=module -e "console.log('Checking SDK...'); await import('@restatedev/restate-sdk'); console.log('✅ SDK loaded successfully')" || echo "❌ SDK failed to load"
 
+# Debug: Check how packages are linked
+RUN echo "=== Checking node_modules structure ===" && ls -la /usr/src/app/packages/tests/restate-e2e-services/node_modules/@restatedev/ && readlink /usr/src/app/packages/tests/restate-e2e-services/node_modules/@restatedev/restate-sdk || echo "Not a symlink"
+
+# Debug: Check if SDK has dist folder in Docker
+RUN echo "=== Checking SDK dist in node_modules ===" && ls -la /usr/src/app/packages/tests/restate-e2e-services/node_modules/@restatedev/restate-sdk/ | head -20
+
+# Debug: Try to actually run the app for a few seconds
+RUN echo "=== Testing app startup ===" && timeout 5 node /usr/src/app/packages/tests/restate-e2e-services/dist/app.js || echo "App test completed (timeout expected)"
+
 RUN pnpm --filter restate-e2e-services rebuild heapdump
 
 # Install Tini
