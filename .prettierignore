@@ -18,3 +18,4 @@ lambda.zip
 pnpm-lock.yaml
 .changeset
 *.hbs
+packages/libs/restate-sdk-cloudflare-workers/**
