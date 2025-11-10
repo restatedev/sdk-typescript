@@ -36,14 +36,17 @@ RUN echo "=== Checking SDK package resolution ===" && cd /usr/src/app/packages/t
 # Install build tools needed for native modules and Tini
 RUN apt-get update && apt-get install -y python3 make g++ tini
 
-# Rebuild heapdump native module (must be done before running the app)
-RUN echo "=== Rebuilding heapdump ===" && pnpm rebuild heapdump
+# Debug: Show heapdump location
+RUN echo "=== Finding heapdump ===" && find /usr/src/app -name "heapdump" -type d
+
+# Try different rebuild approaches
+RUN echo "=== Rebuilding heapdump with verbose output ===" && cd /usr/src/app/node_modules/.pnpm/heapdump@0.3.15/node_modules/heapdump && npm rebuild --verbose
 
 # Debug: Check if heapdump was built
 RUN echo "=== Checking heapdump build ===" && ls -la /usr/src/app/node_modules/.pnpm/heapdump@0.3.15/node_modules/heapdump/build/ || echo "No build folder found"
 
-# Debug: Try to actually run the app for a few seconds
-RUN echo "=== Testing app startup ===" && timeout 5 node /usr/src/app/packages/tests/restate-e2e-services/dist/app.js || echo "App test completed (timeout expected)"
+# Debug: Try to actually run the app for a few seconds  
+RUN echo "=== Testing app startup ===" && timeout 5 node /usr/src/app/packages/tests/restate-e2e-services/dist/app.js && echo "✅ App started successfully" || echo "⚠️ App test completed (timeout or error - check logs above)"
 
 EXPOSE 8080
 ENTRYPOINT ["tini", "--"]
