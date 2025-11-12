@@ -71,6 +71,7 @@ jobs:
       - name: Set up Docker containerd snapshotter
         uses: docker/setup-docker-action@v4
         with:
+          version: "v28.5.2"
           set-host: true
           daemon-config: |
             {
