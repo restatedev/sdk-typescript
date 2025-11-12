@@ -1,5 +1,6 @@
 [![Documentation](https://img.shields.io/badge/doc-reference-blue)](https://docs.restate.dev)
 [![Examples](https://img.shields.io/badge/view-examples-blue)](https://github.com/restatedev/examples)
+[![NPM Version](https://img.shields.io/npm/v/%40restatedev%2Frestate-sdk)](https://www.npmjs.com/package/@restatedev/restate-sdk)
 [![Discord](https://img.shields.io/discord/1128210118216007792?logo=discord)](https://discord.gg/skW3AZ6uGd)
 [![Twitter](https://img.shields.io/twitter/follow/restatedev.svg?style=social&label=Follow)](https://twitter.com/intent/follow?screen_name=restatedev)
 
@@ -22,9 +23,7 @@ const greeter = restate.service({
     },
 });
 
-restate.endpoint()
-    .bind(greeter)
-    .listen(9080);
+restate.serve({ services: [greeter], port: 9080 });
 ```
 
 ## Community
@@ -38,7 +37,7 @@ restate.endpoint()
 ## Using the SDK
 
 Prerequisites:
-- [NodeJS](https://nodejs.org/en/) >= v18.17.1 or [Bun](https://bun.sh/docs/installation) or [Deno](https://deno.land/#installation)
+- [NodeJS](https://nodejs.org/en/) >= v20.19 or [Bun](https://bun.sh/docs/installation) or [Deno](https://deno.land/#installation)
 - [npm CLI](https://docs.npmjs.com/downloading-and-installing-node-js-and-npm) >= 9.6.7
 
 To use this SDK, add the dependency to your project:
@@ -51,20 +50,26 @@ For brand-new projects, we recommend using the [Restate Node Template](https://g
 npx -y @restatedev/create-app@latest
 ```
 
+Check the [Quickstart](https://docs.restate.dev/get_started/quickstart) for more info.
+
 ## Versions
 
 This library follows [Semantic Versioning](https://semver.org/).
 
 The compatibility with Restate is described in the following table:
 
-| Restate Server\sdk-typescript | 1.0/1.1/1.2/1.3  | 1.4 | 1.5 |
-|-------------------------------|------------------|-----|-----|
-| 1.0                           | ✅                | ❌   | ❌   |
-| 1.1                           | ✅ <sup>(1)</sup> | ✅   | ❌   |
-| 1.2                           | ✅                | ✅   | ❌   |
-| 1.3                           | ✅                | ✅   | ✅   |
+| Restate Server\sdk-typescript | <= 1.4           | 1.5 - 1.6 | 1.7 - 1.8        | 1.9              |
+|-------------------------------|------------------|-----------|------------------|------------------|
+| <= 1.2                        | ✅                | ❌         | ❌                | ❌                |
+| 1.3                           | ✅                | ✅         | ✅ <sup>(1)</sup> | ✅ <sup>(2)</sup> |
+| 1.4                           | ✅                | ✅         | ✅                | ✅ <sup>(2)</sup> |
+| 1.5                           | ⚠ <sup>(3)</sup> | ✅         | ✅                | ✅                |
 
-<sup>(1)</sup> **Only** when upgrading from 1.0 to 1.1 you MUST rediscover all the existing deployments using `restate dp register <address> --force`. You don't need to update the SDK, nor change the code.
+<sup>(1)</sup> **Note** the new `options` in service/object/workflow constructors, together with some of the new options in the `handler`s too, work only from Restate 1.4 onward. Check the in-code documentation for more details.
+
+<sup>(2)</sup> **Note** the new `options.retryPolicy` work only from Restate 1.5 onward. Check the in-code documentation for more details.
+
+<sup>(3)</sup> **Warning** SDK versions <= 1.4 are deprecated, and cannot be registered anymore. Check the [Restate 1.5 release notes](https://github.com/restatedev/restate/releases/tag/v1.5.0) for more info.
 
 ## Contributing
 
@@ -72,69 +77,4 @@ We’re excited if you join the Restate community and start contributing!
 Whether it is feature requests, bug reports, ideas & feedback or PRs, we appreciate any and all contributions.
 We know that your time is precious and, therefore, deeply value any effort to contribute!
 
-### Building the SDK
-
-#### Prerequisites
-- [NodeJS (and npm)](https://nodejs.org) installed
-
-Install the dependencies and transpile the TypeScript code:
-```shell
-npm install
-npm run build
-```
-
-If everything goes well, the artifact would be created at `dist/`.
-
-### Testing Changes
-
-Run the tests via
-```shell
-npm run test
-```
-
-Run the formatter and linter via
-```shell
-npm run format
-npm run lint
-```
-
-Launch a sample program (requires no build)
-```shell
-npm run -w packages/restate-sdk-examples greeter
-npm run -w packages/restate-sdk-examples object
-npm run -w packages/restate-sdk-examples workflow
-```
-
-### Testing end-to-end with Restate Server
-
-See https://github.com/restatedev/e2e/ for more details.
-
-## Releasing the package
-
-### Releasing via release-it
-
-Releasing a new npm package from this repo requires:
-
-* [SSH access configured for Github](https://docs.github.com/en/authentication/connecting-to-github-with-ssh) in order to push commits and tags to GitHub
-* A GitHub personal access token with access to https://github.com/restatedev/sdk-typescript in your environment as `GITHUB_TOKEN` in order to create a Github release
-
-```bash
-release-it
-```
-
-The actual `npm publish` is run by GitHub actions once a GitHub release is created.
-
-### Releasing manually
-
-1. Bump the version field in package.json to `X.Y.Z`
-2. Create and push a tag of the form `vX.Y.Z` to the upstream repository
-3. [Create a new GitHub release](https://github.com/restatedev/sdk-typescript/releases)
-
-Creating the GitHub release will trigger `npm publish` via GitHub actions.
-
-After having created a new SDK release, you need to:
-
-1. [Update and release the tour of Restate](https://github.com/restatedev/tour-of-restate-typescript#upgrading-typescript-sdk)
-2. [Update the Typescript SDK and Tour version in the documentation and release it](https://github.com/restatedev/documentation#upgrading-typescript-sdk-version)
-3. [Update and release the Node template generator](https://github.com/restatedev/node-template-generator#upgrading-typescript-sdk)
-4. [Update the examples](https://github.com/restatedev/examples#upgrading-the-sdk-dependency-for-restate-developers)
+For more info about developing the SDK, check the [development guide](DEVELOPMENT.md).

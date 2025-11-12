@@ -9,11 +9,9 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-/* eslint-disable @typescript-eslint/ban-types */
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
-import type { RestateEndpoint } from "../public_api.js";
+import type { RestateEndpoint } from "../index.js";
 import type {
+  JournalValueCodec,
   ServiceDefinition,
   VirtualObjectDefinition,
   WorkflowDefinition,
@@ -21,30 +19,20 @@ import type {
 
 import type { Http2ServerRequest, Http2ServerResponse } from "http2";
 import * as http2 from "http2";
-import { LambdaHandler } from "./handlers/lambda.js";
-import type { Component } from "../types/components.js";
-import { EndpointBuilder } from "./endpoint_builder.js";
-import { GenericHandler } from "./handlers/generic.js";
+import type { Endpoint } from "./endpoint.js";
+import { EndpointBuilder } from "./endpoint.js";
+import {
+  GenericHandler,
+  tryCreateContextualLogger,
+} from "./handlers/generic.js";
 import { Readable, Writable } from "node:stream";
 import type { WritableStream } from "node:stream/web";
-import { ProtocolMode } from "../types/discovery.js";
 import { ensureError } from "../types/errors.js";
 import type { LoggerTransport } from "../logging/logger_transport.js";
+import type { DefaultServiceOptions } from "../endpoint.js";
 
 export class NodeEndpoint implements RestateEndpoint {
   private builder: EndpointBuilder = new EndpointBuilder();
-
-  public get keySet(): string[] {
-    return this.builder.keySet;
-  }
-
-  public componentByName(componentName: string): Component | undefined {
-    return this.builder.componentByName(componentName);
-  }
-
-  public addComponent(component: Component) {
-    this.builder.addComponent(component);
-  }
 
   public bind<P extends string, M>(
     definition:
@@ -57,7 +45,14 @@ export class NodeEndpoint implements RestateEndpoint {
   }
 
   public withIdentityV1(...keys: string[]): RestateEndpoint {
-    this.builder.withIdentityV1(...keys);
+    this.builder.addIdentityKeys(...keys);
+    return this;
+  }
+
+  public defaultServiceOptions(
+    options: DefaultServiceOptions
+  ): RestateEndpoint {
+    this.builder.setDefaultServiceOptions(options);
     return this;
   }
 
@@ -66,70 +61,31 @@ export class NodeEndpoint implements RestateEndpoint {
     return this;
   }
 
+  public journalValueCodecProvider(
+    codecProvider: () => Promise<JournalValueCodec>
+  ): RestateEndpoint {
+    this.builder.setJournalValueCodecProvider(codecProvider);
+    return this;
+  }
+
   http2Handler(): (
     request: Http2ServerRequest,
     response: Http2ServerResponse
   ) => void {
-    const handler = new GenericHandler(this.builder, ProtocolMode.BIDI_STREAM);
-
-    return (request, response) => {
-      (async () => {
-        const abortController = new AbortController();
-        request.once("aborted", () => {
-          abortController.abort();
-        });
-        request.once("close", () => {
-          abortController.abort();
-        });
-        request.once("error", () => {
-          abortController.abort();
-        });
-        try {
-          const url = request.url;
-          const resp = await handler.handle({
-            url,
-            headers: request.headers,
-            body: Readable.toWeb(request),
-            extraArgs: [],
-            abortSignal: abortController.signal,
-          });
-          response.writeHead(resp.statusCode, resp.headers);
-          const responseWeb = Writable.toWeb(
-            response
-          ) as WritableStream<Uint8Array>;
-          await resp.body.pipeTo(responseWeb);
-          await new Promise<void>((resolve) => response.end(resolve));
-        } catch (e) {
-          const error = ensureError(e);
-          this.builder.rlog.error(
-            "Error while handling connection: " + (error.stack ?? error.message)
-          );
-          response.destroy(error);
-          abortController.abort();
-        }
-      })().catch(() => {});
-    };
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  lambdaHandler(): (event: any, ctx: any) => Promise<any> {
-    const genericHandler = new GenericHandler(
-      this.builder,
-      ProtocolMode.REQUEST_RESPONSE
-    );
-    const handler = new LambdaHandler(genericHandler);
-    return handler.handleRequest.bind(handler);
+    return nodeHttp2Handler(this.builder.build());
   }
 
   listen(port?: number): Promise<number> {
-    const actualPort = port ?? parseInt(process.env.PORT ?? "9080");
-    this.builder.rlog.info(`Listening on ${actualPort}...`);
+    const endpoint = this.builder.build();
 
-    const server = http2.createServer(this.http2Handler());
+    const actualPort = port ?? parseInt(process.env.PORT ?? "9080");
+    endpoint.rlog.info(`Restate SDK started listening on ${actualPort}...`);
+
+    const server = http2.createServer(nodeHttp2Handler(endpoint));
 
     return new Promise((resolve, reject) => {
       let failed = false;
-      server.once("error", (e) => {
+      server.once("error", (e: Error) => {
         failed = true;
         reject(e);
       });
@@ -150,4 +106,82 @@ export class NodeEndpoint implements RestateEndpoint {
       });
     });
   }
+}
+
+function nodeHttp2Handler(
+  endpoint: Endpoint
+): (request: Http2ServerRequest, response: Http2ServerResponse) => void {
+  const handler = new GenericHandler(endpoint, "BIDI_STREAM", {});
+
+  return (request, response) => {
+    (async () => {
+      const abortController = new AbortController();
+
+      request.once("aborted", () => {
+        abortController.abort();
+      });
+      request.once("close", () => {
+        abortController.abort();
+      });
+      request.once("error", () => {
+        abortController.abort();
+      });
+
+      if (request.destroyed || request.aborted) {
+        endpoint.rlog.error("Client disconnected");
+        abortController.abort();
+      }
+
+      try {
+        const url = request.url;
+        const webRequestBody = Readable.toWeb(request);
+
+        const resp = await handler.handle({
+          url,
+          headers: request.headers,
+          body: webRequestBody,
+          extraArgs: [],
+          abortSignal: abortController.signal,
+        });
+
+        if (response.destroyed) {
+          return;
+        }
+
+        response.writeHead(resp.statusCode, resp.headers);
+        const responseWeb = Writable.toWeb(
+          response
+        ) as WritableStream<Uint8Array>;
+        await resp.body.pipeTo(responseWeb);
+      } catch (e) {
+        const error = ensureError(e);
+
+        const logger =
+          tryCreateContextualLogger(
+            endpoint.loggerTransport,
+            request.url,
+            request.headers
+          ) ?? endpoint.rlog;
+        if (error.name === "AbortError") {
+          logger.error(
+            "Got abort error from connection: " +
+              error.message +
+              "\n" +
+              "This might indicate that:\n" +
+              "* The restate-server aborted the connection after hitting the 'abort-timeout'\n" +
+              "* The connection with the restate-server was lost\n" +
+              "\n" +
+              "Please check the invocation in the Restate UI for more details."
+          );
+        } else {
+          logger.error(
+            "Error while handling request: " + (error.stack ?? error.message)
+          );
+        }
+
+        response.destroy(error);
+        abortController.abort();
+      }
+    })().catch(() => {});
+  };
 }

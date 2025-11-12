@@ -9,8 +9,6 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-/* eslint-disable no-console */
-
 import * as restate from "@restatedev/restate-sdk-clients";
 
 import type { Greeter } from "./greeter.js";
@@ -91,7 +89,7 @@ const delayedCall = async (name: string) => {
 
   const greeting = await ingress
     .serviceSendClient(Greeter)
-    .greet(name, restate.rpc.sendOpts({ delay: 1000 }));
+    .greet(name, restate.rpc.sendOpts({ delay: { seconds: 1 } }));
 
   console.log(greeting);
 };

@@ -82,7 +82,7 @@ class ProgramInterpreter {
     const promises = new Map<number, Await>();
     const commands = program.commands;
     for (let i = 0; i < commands.length; i++) {
-      const command = commands[i];
+      const command = commands[i]!;
       switch (command.kind) {
         case CommandType.SET_STATE: {
           ctx.set(`key-${command.key}`, `value-${command.key}`);
@@ -116,8 +116,11 @@ class ProgramInterpreter {
         }
         case CommandType.INCREMENT_VIA_DELAYED_CALL: {
           ctx
-            .serviceSendClient(Service, { delay: command.duration })
-            .incrementIndirectly(this.interpreterId);
+            .serviceSendClient(Service)
+            .incrementIndirectly(
+              this.interpreterId,
+              restate.rpc.sendOpts({ delay: command.duration })
+            );
           break;
         }
         case CommandType.CALL_SLOW_SERVICE: {
@@ -169,14 +172,19 @@ class ProgramInterpreter {
           break;
         }
         case CommandType.RECOVER_TERMINAL_MAYBE_UN_AWAITED: {
-          const promise = ctx.serviceClient(Service).terminalFailure();
+          const promise = ctx
+            .serviceClient(Service)
+            .terminalFailure()
+            .map((_v, f) => {
+              if (f) {
+                return "terminal";
+              } else {
+                throw new restate.TerminalError("unexpectedly succeeded");
+              }
+            });
           promises.set(i, {
-            thunk: () => promise.catch(() => "terminal"),
+            thunk: () => promise,
             expected: "terminal",
-          });
-          // failed and unchained promises in Node will cause the process to exit.
-          promise.catch(() => {
-            /* safety */
           });
           break;
         }
@@ -229,13 +237,16 @@ class ProgramInterpreter {
         }
         case CommandType.REJECT_AWAKEABLE: {
           const { id, promise } = ctx.awakeable<string>();
-          promises.set(i, {
-            thunk: () => promise.catch(() => "rejected"),
-            expected: "rejected",
+          const mapped = promise.map((_v, f) => {
+            if (f) {
+              return "rejected";
+            } else {
+              throw new restate.TerminalError("unexpectedly succeeded");
+            }
           });
-          // failed and unchained promises in Node will cause the process to exit.
-          promise.catch(() => {
-            /* safety */
+          promises.set(i, {
+            thunk: () => mapped,
+            expected: "rejected",
           });
           ctx.serviceSendClient(Service).rejectAwakeable(id);
           break;
@@ -264,7 +275,7 @@ class ProgramInterpreter {
           promises.set(i, { thunk: () => promise });
           // safety: we must at least add a catch handler otherwise if the call results with a terminal exception propagated
           // and Node will cause this process to exit.
-          promise.catch(() => {});
+          // promise.catch(() => {});
           break;
         }
       }

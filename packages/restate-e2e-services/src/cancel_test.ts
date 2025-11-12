@@ -8,7 +8,7 @@
 // https://github.com/restatedev/e2e/blob/main/LICENSE
 
 import * as restate from "@restatedev/restate-sdk";
-import { AwakeableHolder } from "./awakeable_holder.js";
+import { type AwakeableHolder } from "./awakeable_holder.js";
 import { REGISTRY } from "./services.js";
 
 export const CancelTestServiceFQN = "CancelTestRunner";

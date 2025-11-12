@@ -10,8 +10,10 @@
  */
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-unsafe-function-type */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-namespace */
-/* eslint-disable @typescript-eslint/ban-types */
+
 import type {
   Context,
   GenericCall,
@@ -35,9 +37,9 @@ import {
   type WorkflowDefinition,
   type WorkflowSharedHandler,
   type Serde,
-  serde,
+  type Duration,
 } from "@restatedev/restate-sdk-core";
-import { TerminalError } from "./errors.js";
+import { ensureError, TerminalError } from "./errors.js";
 
 // ----------- rpc clients -------------------------------------------------------
 
@@ -67,7 +69,32 @@ export class Opts<I, O> {
 
 export type ClientSendOptions<I> = {
   input?: Serde<I>;
-  delay?: number;
+  /**
+   * Makes a type-safe one-way RPC to the specified target service, after a delay specified by the
+   * milliseconds' argument.
+   * This method is like setting up a fault-tolerant cron job that enqueues the message in a
+   * message queue.
+   * The handler calling this function does not have to stay active for the delay time.
+   *
+   * Both the delay timer and the message are durably stored in Restate and guaranteed to be reliably
+   * delivered. The delivery happens no earlier than specified through the delay, but may happen
+   * later, if the target service is down, or backpressuring the system.
+   *
+   * The delay message is journaled for durable execution and will thus not be duplicated when the
+   * handler is re-invoked for retries or after suspending.
+   *
+   * This call will return immediately; the message sending happens asynchronously in the background.
+   * Despite that, the message is guaranteed to be sent, because the completion of the invocation that
+   * triggers the send (calls this function) happens logically after the sending. That means that any
+   * failure where the message does not reach Restate also cannot complete this invocation, and will
+   * hence recover this handler and (through the durable execution) recover the message to be sent.
+   *
+   * @example
+   * ```ts
+   * ctx.serviceSendClient(Service).anotherAction(1337, { delay: { seconds: 60 } });
+   * ```
+   */
+  delay?: Duration | number;
   headers?: Record<string, string>;
   idempotencyKey?: string;
 };
@@ -120,10 +147,8 @@ function optsFromArgs(args: unknown[]): {
     case 2: {
       parameter = args[0];
       if (args[1] instanceof Opts) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         opts = args[1].getOpts();
       } else if (args[1] instanceof SendOpts) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         opts = args[1].getOpts();
       } else {
         throw new TypeError(
@@ -142,12 +167,9 @@ function optsFromArgs(args: unknown[]): {
   };
 }
 
-export const defaultSerde = <T>(): Serde<T> => {
-  return serde.json as Serde<T>;
-};
-
 export const makeRpcCallProxy = <T>(
   genericCall: (call: GenericCall<unknown, unknown>) => Promise<unknown>,
+  defaultSerde: Serde<any>,
   service: string,
   key?: string
 ): T => {
@@ -158,10 +180,10 @@ export const makeRpcCallProxy = <T>(
         const method = prop as string;
         return (...args: unknown[]) => {
           const { parameter, opts } = optsFromArgs(args);
-          const requestSerde = opts?.input ?? defaultSerde();
+          const requestSerde = opts?.input ?? defaultSerde;
           const responseSerde =
             (opts as ClientCallOptions<unknown, unknown> | undefined)?.output ??
-            defaultSerde();
+            defaultSerde;
           return genericCall({
             service,
             method,
@@ -182,6 +204,7 @@ export const makeRpcCallProxy = <T>(
 
 export const makeRpcSendProxy = <T>(
   genericSend: (send: GenericSend<unknown>) => void,
+  defaultSerde: Serde<any>,
   service: string,
   key?: string,
   legacyDelay?: number
@@ -193,7 +216,7 @@ export const makeRpcSendProxy = <T>(
         const method = prop as string;
         return (...args: unknown[]) => {
           const { parameter, opts } = optsFromArgs(args);
-          const requestSerde = opts?.input ?? defaultSerde();
+          const requestSerde = opts?.input ?? defaultSerde;
           const delay =
             legacyDelay ??
             (opts as ClientSendOptions<unknown> | undefined)?.delay;
@@ -248,125 +271,119 @@ export enum HandlerKind {
 
 export type ServiceHandlerOpts<I, O> = {
   /**
-   * Define the acceptable content-type. Wildcards can be used, e.g. `application/*` or `* / *`.
-   * If not provided, the `input.contentType` will be used instead.
+   * Defines which Content-Type values are accepted when this handler is invoked via the ingress.
+   * Wildcards are supported, for example `application/*` or `* / *`.
    *
-   * Setting this value has no effect on the input serde.
-   * If you want to customize how to deserialize the input, you still need to provide an `input` serde.
+   * If unset, `input.contentType` will be used as the default.
+   *
+   * This setting does not affect deserialization. To customize how the input is deserialized,
+   * provide an `input` Serde.
    */
   accept?: string;
 
   /**
-   * The Serde to use for deserializing the input parameter.
-   * defaults to: restate.serde.json
+   * Serde used to deserialize the input parameter.
+   * Defaults to `restate.serde.json`.
    *
-   * Provide a custom Serde if the input is not JSON, or use:
-   * restate.serde.binary the skip serialization/deserialization altogether.
-   * in that case, the input parameter is a Uint8Array.
+   * Provide a custom Serde if the input is not JSON, or use
+   * `restate.serde.binary` to skip serialization/deserialization altogether;
+   * in that case the input parameter is a `Uint8Array`.
    */
   input?: Serde<I>;
 
   /**
-   * The Serde to use for serializing the output.
-   * defaults to: restate.serde.json
+   * Serde used to serialize the output value.
+   * Defaults to `restate.serde.json`.
    *
-   * Provide a custom Serde if the output is not JSON, or use:
-   * restate.serde.binary the skip serialization/deserialization altogether.
-   * in that case, the output parameter is a Uint8Array.
+   * Provide a custom Serde if the output is not JSON, or use
+   * `restate.serde.binary` to skip serialization/deserialization altogether;
+   * in that case the output value is a `Uint8Array`.
    */
   output?: Serde<O>;
 
   /**
-   * An additional description for the handler, for documentation purposes.
+   * Human-readable description of the handler, shown in documentation/admin tools.
    */
   description?: string;
 
   /**
-   * Additional metadata for the handler.
+   * Arbitrary key/value metadata for the handler. Exposed via the Admin API.
    */
   metadata?: Record<string, string>;
+
+  /**
+   * The retention duration of idempotent requests to this handler.
+   *
+   * Note: Available only when registering this endpoint with restate-server v1.4 or newer; otherwise service discovery will fail.
+   */
+  idempotencyRetention?: Duration | number;
+
+  /**
+   * The journal retention for invocations to this handler.
+   *
+   * When a request has an idempotency key, `idempotencyRetention` caps the journal retention time.
+   *
+   * Note: Available only when registering this endpoint with restate-server v1.4 or newer; otherwise service discovery will fail.
+   */
+  journalRetention?: Duration | number;
+
+  /**
+   * Guards against stalled invocations. Once this timeout expires, Restate requests a graceful
+   * suspension of the invocation (preserving intermediate progress).
+   *
+   * If the invocation does not react to the suspension request, `abortTimeout` is used to abort it.
+   *
+   * Overrides the inactivity timeout set at the service level and the default configured in the Restate server.
+   *
+   * Note: Available only when registering this endpoint with restate-server v1.4 or newer; otherwise service discovery will fail.
+   */
+  inactivityTimeout?: Duration | number;
+
+  /**
+   * Guards against invocations that fail to terminate after inactivity.
+   * The abort timeout starts after `inactivityTimeout` expires and a graceful termination was requested.
+   * When this timer expires, the invocation is aborted.
+   *
+   * This timer may interrupt user code. If more time is needed for graceful termination, increase this value.
+   *
+   * Overrides the abort timeout set at the service level and the default configured in the Restate server.
+   *
+   * Note: Available only when registering this endpoint with restate-server v1.4 or newer; otherwise service discovery will fail.
+   */
+  abortTimeout?: Duration | number;
+
+  /**
+   * When set to `true`, this handler cannot be invoked via the Restate server HTTP or Kafka ingress;
+   * it can only be called from other services.
+   *
+   * Note: Available only when registering this endpoint with restate-server v1.4 or newer; otherwise service discovery will fail.
+   */
+  ingressPrivate?: boolean;
+
+  /**
+   * Retry policy to apply to all requests to this handler. For each unspecified field, the default value configured in the service or, if absent, in the restate-server configuration file, will be applied instead.
+   */
+  retryPolicy?: RetryPolicy;
 };
 
-export type ObjectHandlerOpts<I, O> = {
+export type ObjectHandlerOpts<I, O> = ServiceHandlerOpts<I, O> & {
   /**
-   * Define the acceptable content-type. Wildcards can be used, e.g. `application/*` or `* / *`.
-   * If not provided, the `input.contentType` will be used instead.
+   * When set to `true`, lazy state will be enabled for all invocations to this handler.
    *
-   * Setting this value has no effect on the input serde.
-   * If you want to customize how to deserialize the input, you still need to provide an `input` serde.
+   * *NOTE:* You can set this field only if you register this endpoint against restate-server >= 1.4,
+   * otherwise the service discovery will fail.
    */
-  accept?: string;
-
-  /**
-   * The Serde to use for deserializing the input parameter.
-   * defaults to: restate.serde.json
-   *
-   * Provide a custom Serde if the input is not JSON, or use:
-   * restate.serde.binary the skip serialization/deserialization altogether.
-   * in that case, the input parameter is a Uint8Array.
-   */
-  input?: Serde<I>;
-
-  /**
-   * The Serde to use for serializing the output.
-   * defaults to: restate.serde.json
-   *
-   * Provide a custom Serde if the output is not JSON, or use:
-   * restate.serde.binary the skip serialization/deserialization altogether.
-   * in that case, the output parameter is a Uint8Array.
-   */
-  output?: Serde<O>;
-
-  /**
-   * An additional description for the handler, for documentation purposes.
-   */
-  description?: string;
-
-  /**
-   * Additional metadata for the handler.
-   */
-  metadata?: Record<string, string>;
+  enableLazyState?: boolean;
 };
 
-export type WorkflowHandlerOpts<I, O> = {
+export type WorkflowHandlerOpts<I, O> = ServiceHandlerOpts<I, O> & {
   /**
-   * Define the acceptable content-type. Wildcards can be used, e.g. `application/*` or `* / *`.
-   * If not provided, the `input.contentType` will be used instead.
+   * When set to `true`, lazy state will be enabled for all invocations to this handler.
    *
-   * Setting this value has no effect on the input serde.
-   * If you want to customize how to deserialize the input, you still need to provide an `input` serde.
+   * *NOTE:* You can set this field only if you register this endpoint against restate-server >= 1.4,
+   * otherwise the service discovery will fail.
    */
-  accept?: string;
-
-  /**
-   * The Serde to use for deserializing the input parameter.
-   * defaults to: restate.serde.json
-   *
-   * Provide a custom Serde if the input is not JSON, or use:
-   * restate.serde.binary the skip serialization/deserialization altogether.
-   * in that case, the input parameter is a Uint8Array.
-   */
-  input?: Serde<I>;
-
-  /**
-   * The Serde to use for serializing the output.
-   * defaults to: restate.serde.json
-   *
-   * Provide a custom Serde if the output is not JSON, or use:
-   * restate.serde.binary the skip serialization/deserialization altogether.
-   * in that case, the output parameter is a Uint8Array.
-   */
-  output?: Serde<O>;
-
-  /**
-   * An additional description for the handler, for documentation purposes.
-   */
-  description?: string;
-
-  /**
-   * Additional metadata for the handler.
-   */
-  metadata?: Record<string, string>;
+  enableLazyState?: boolean;
 };
 
 const HANDLER_SYMBOL = Symbol("Handler");
@@ -380,9 +397,6 @@ export class HandlerWrapper {
       | ObjectHandlerOpts<unknown, unknown>
       | WorkflowHandlerOpts<unknown, unknown>
   ): HandlerWrapper {
-    const inputSerde: Serde<unknown> = opts?.input ?? defaultSerde();
-    const outputSerde: Serde<unknown> = opts?.output ?? defaultSerde();
-
     // we must create here a copy of the handler
     // to be able to reuse the original handler in other places.
     // like for example the same logic but under different routes.
@@ -393,11 +407,20 @@ export class HandlerWrapper {
     return new HandlerWrapper(
       kind,
       handlerCopy,
-      inputSerde,
-      outputSerde,
+      opts?.input,
+      opts?.output,
       opts?.accept,
       opts?.description,
-      opts?.metadata
+      opts?.metadata,
+      opts?.idempotencyRetention,
+      opts?.journalRetention,
+      opts?.inactivityTimeout,
+      opts?.abortTimeout,
+      opts?.ingressPrivate,
+      opts !== undefined && "enableLazyState" in opts
+        ? opts?.enableLazyState
+        : undefined,
+      opts?.retryPolicy
     );
   }
 
@@ -406,38 +429,41 @@ export class HandlerWrapper {
     return handler[HANDLER_SYMBOL] as HandlerWrapper | undefined;
   }
 
-  public readonly accept?: string;
-  public readonly contentType?: string;
-
   private constructor(
     public readonly kind: HandlerKind,
     private handler: Function,
-    public readonly inputSerde: Serde<unknown>,
-    public readonly outputSerde: Serde<unknown>,
-    accept?: string,
+    public readonly inputSerde?: Serde<unknown>,
+    public readonly outputSerde?: Serde<unknown>,
+    public readonly accept?: string,
     public readonly description?: string,
-    public readonly metadata?: Record<string, string>
-  ) {
-    this.accept = accept ? accept : inputSerde.contentType;
-    this.contentType = outputSerde.contentType;
-  }
+    public readonly metadata?: Record<string, string>,
+    public readonly idempotencyRetention?: Duration | number,
+    public readonly journalRetention?: Duration | number,
+    public readonly inactivityTimeout?: Duration | number,
+    public readonly abortTimeout?: Duration | number,
+    public readonly ingressPrivate?: boolean,
+    public readonly enableLazyState?: boolean,
+    public readonly retryPolicy?: RetryPolicy,
+    public readonly asTerminalError?: (error: any) => TerminalError | undefined
+  ) {}
 
   bindInstance(t: unknown) {
     this.handler = this.handler.bind(t) as Function;
   }
 
-  async invoke(context: unknown, input: Uint8Array) {
+  async invoke(context: { defaultSerde: Serde<any> }, input: Uint8Array) {
     let req: unknown;
     try {
-      req = this.inputSerde.deserialize(input);
+      req = (this.inputSerde ?? context.defaultSerde).deserialize(input);
     } catch (e) {
-      throw new TerminalError(`Failed to deserialize input.`, {
+      const error = ensureError(e);
+      throw new TerminalError(`Failed to deserialize input: ${error.message}`, {
         errorCode: 400,
-        cause: e,
       });
     }
+
     const res: unknown = await this.handler(context, req);
-    return this.outputSerde.serialize(res);
+    return (this.outputSerde ?? context.defaultSerde).serialize(res);
   }
 
   /**
@@ -486,7 +512,7 @@ export namespace handlers {
     export function workflow<
       O,
       I = void,
-      TState extends TypedState = UntypedState
+      TState extends TypedState = UntypedState,
     >(
       opts: WorkflowHandlerOpts<I, O>,
       fn: (ctx: WorkflowContext<TState>, input: I) => Promise<O>
@@ -495,7 +521,7 @@ export namespace handlers {
     export function workflow<
       O,
       I = void,
-      TState extends TypedState = UntypedState
+      TState extends TypedState = UntypedState,
     >(
       fn: (ctx: WorkflowContext<TState>, input: I) => Promise<O>
     ): RemoveVoidArgument<typeof fn>;
@@ -528,7 +554,7 @@ export namespace handlers {
     export function shared<
       O,
       I = void,
-      TState extends TypedState = UntypedState
+      TState extends TypedState = UntypedState,
     >(
       opts: WorkflowHandlerOpts<I, O>,
       fn: (ctx: WorkflowSharedContext<TState>, input: I) => Promise<O>
@@ -546,7 +572,7 @@ export namespace handlers {
     export function shared<
       O,
       I = void,
-      TState extends TypedState = UntypedState
+      TState extends TypedState = UntypedState,
     >(
       fn: (ctx: WorkflowSharedContext<TState>, input: I) => Promise<O>
     ): RemoveVoidArgument<typeof fn>;
@@ -589,7 +615,7 @@ export namespace handlers {
     export function exclusive<
       O,
       I = void,
-      TState extends TypedState = UntypedState
+      TState extends TypedState = UntypedState,
     >(
       opts: ObjectHandlerOpts<I, O>,
       fn: (ctx: ObjectContext<TState>, input: I) => Promise<O>
@@ -610,7 +636,7 @@ export namespace handlers {
     export function exclusive<
       O,
       I = void,
-      TState extends TypedState = UntypedState
+      TState extends TypedState = UntypedState,
     >(
       fn: (ctx: ObjectContext<TState>, input: I) => Promise<O>
     ): RemoveVoidArgument<typeof fn>;
@@ -658,7 +684,7 @@ export namespace handlers {
     export function shared<
       O,
       I = void,
-      TState extends TypedState = UntypedState
+      TState extends TypedState = UntypedState,
     >(
       opts: ObjectHandlerOpts<I, O>,
       fn: (ctx: ObjectSharedContext<TState>, input: I) => Promise<O>
@@ -678,7 +704,7 @@ export namespace handlers {
     export function shared<
       O,
       I = void,
-      TState extends TypedState = UntypedState
+      TState extends TypedState = UntypedState,
     >(
       fn: (ctx: ObjectSharedContext<TState>, input: I) => Promise<O>
     ): RemoveVoidArgument<typeof fn>;
@@ -720,19 +746,158 @@ export type ServiceOpts<U> = {
     : ServiceHandler<U[K], Context>;
 };
 
+export type RetryPolicy = {
+  /**
+   * Max number of retry attempts (including the initial).
+   * When reached, the behavior specified in {@link onMaxAttempts} will be applied.
+   */
+  maxAttempts?: number;
+
+  /**
+   * What to do when max attempts are reached.
+   *
+   * If `pause`, the invocation will enter the paused state and can be manually resumed from the CLI/UI.
+   *
+   * If `kill`, the invocation will get automatically killed.
+   */
+  onMaxAttempts?: "pause" | "kill";
+
+  /**
+   * Initial interval for the first retry attempt.
+   * Retry interval will grow by a factor specified in `exponentiationFactor`.
+   *
+   * If a number is provided, it will be interpreted as milliseconds.
+   */
+  initialInterval?: Duration | number;
+
+  /**
+   * Max interval between retries.
+   * Retry interval will grow by a factor specified in `exponentiationFactor`.
+   *
+   * If a number is provided, it will be interpreted as milliseconds.
+   */
+  maxInterval?: Duration | number;
+
+  /**
+   * Exponentiation factor to use when computing the next retry delay.
+   */
+  exponentiationFactor?: number;
+};
+
+export type ServiceOptions = {
+  /**
+   * The retention duration of idempotent requests to this service.
+   *
+   * Note: Available only when registering this endpoint with restate-server v1.4 or newer; otherwise service discovery will fail.
+   */
+  idempotencyRetention?: Duration | number;
+
+  /**
+   * Journal retention applied to all requests to all handlers of this service.
+   *
+   * When a request includes an idempotency key, `idempotencyRetention` caps the journal retention time.
+   *
+   * Note: Available only when registering this endpoint with restate-server v1.4 or newer; otherwise service discovery will fail.
+   */
+  journalRetention?: Duration | number;
+
+  /**
+   * Guards against stalled invocations. Once this timeout expires, Restate requests a graceful
+   * suspension of the invocation (preserving intermediate progress).
+   *
+   * If the invocation does not react to the suspension request, `abortTimeout` is used to abort it.
+   *
+   * Overrides the default inactivity timeout configured in the Restate server for all invocations to this service.
+   *
+   * Note: Available only when registering this endpoint with restate-server v1.4 or newer; otherwise service discovery will fail.
+   */
+  inactivityTimeout?: Duration | number;
+
+  /**
+   * Guards against invocations that fail to terminate after inactivity.
+   * The abort timeout starts after `inactivityTimeout` expires and a graceful termination was requested.
+   * When this timer expires, the invocation is aborted.
+   *
+   * This timer may interrupt user code. If more time is needed for graceful termination, increase this value.
+   *
+   * Overrides the default abort timeout configured in the Restate server for invocations to this service.
+   *
+   * Note: Available only when registering this endpoint with restate-server v1.4 or newer; otherwise service discovery will fail.
+   */
+  abortTimeout?: Duration | number;
+
+  /**
+   * When set to `true`, this service (and all its handlers) cannot be invoked via the Restate server
+   * HTTP or Kafka ingress; it can only be called from other services.
+   *
+   * Note: Available only when registering this endpoint with restate-server v1.4 or newer; otherwise service discovery will fail.
+   */
+  ingressPrivate?: boolean;
+
+  /**
+   * Retry policy to apply to all requests to this service. For each unspecified field, the default value configured in the restate-server configuration file will be applied instead.
+   */
+  retryPolicy?: RetryPolicy;
+
+  /**
+   * By default, Restate treats errors as terminal (non-retryable) only when they are instances of `TerminalError`.
+   *
+   * Use this hook to map domain-specific errors to `TerminalError` (or return `undefined` to keep them retryable).
+   * When mapped to `TerminalError`, the error will not be retried.
+   *
+   * Note: This applies to errors thrown inside `ctx.run` closures as well as errors thrown by Restate handlers.
+   *
+   * Example:
+   *
+   * ```ts
+   * class MyValidationError extends Error {}
+   *
+   * const greeter = restate.service({
+   *   name: "greeter",
+   *   handlers: {
+   *     greet: async (ctx: restate.Context, name: string) => {
+   *       if (name.length === 0) {
+   *         throw new MyValidationError("Length too short");
+   *       }
+   *       return `Hello ${name}`;
+   *     }
+   *   },
+   *   options: {
+   *     asTerminalError: (err) => {
+   *       if (err instanceof MyValidationError) {
+   *         // My validation error is terminal
+   *         return new restate.TerminalError(err.message, { errorCode: 400 });
+   *       }
+   *
+   *       // Any other error is retryable
+   *     }
+   *   }
+   * });
+   * ```
+   */
+  asTerminalError?: (error: any) => TerminalError | undefined;
+
+  /**
+   * Default serde to use for requests, responses, state, side effects, awakeables, promises. Used when no other serde is specified.
+   *
+   * If not provided, defaults to `serde.json`.
+   */
+  serde?: Serde<any>;
+};
+
 /**
  * Define a Restate service.
  *
  * @example Here is an example of how to define a service:
  *
  * ```ts
- *  const greeter = service({
- *    name: "greeter",
- *      handlers: {
- *        greet: async (ctx: Context, name: string) => {
- *          return `Hello ${name}`;
- *        }
- *      }
+ * const greeter = service({
+ *   name: "greeter",
+ *   handlers: {
+ *     greet: async (ctx: Context, name: string) => {
+ *       return `Hello ${name}`;
+ *     }
+ *   }
  * });
  * ```
  *
@@ -753,11 +918,11 @@ export type ServiceOpts<U> = {
  *
  * @example Alternatively to avoid repeating the service name, you can:
  * ```
- *  import type {Greeter} from "./greeter";
- *  const Greeter: Greeter = { name : "greeter"};
+ * import type {Greeter} from "./greeter";
+ * const Greeter: Greeter = { name : "greeter"};
  *
- *  // now you can reference the service like this:
- *  const client = ctx.serviceClient(Greeter);
+ * // now you can reference the service like this:
+ * const client = ctx.serviceClient(Greeter);
  * ```
  *
  * @param name the service name
@@ -772,6 +937,7 @@ export const service = <P extends string, M>(service: {
   handlers: ServiceOpts<M> & ThisType<M>;
   description?: string;
   metadata?: Record<string, string>;
+  options?: ServiceOptions;
 }): ServiceDefinition<P, M> => {
   if (!service.handlers) {
     throw new Error("service must be defined");
@@ -794,6 +960,7 @@ export const service = <P extends string, M>(service: {
     service: Object.fromEntries(handlers) as object,
     metadata: service.metadata,
     description: service.description,
+    options: service.options,
   } as ServiceDefinition<P, M>;
 };
 
@@ -803,10 +970,20 @@ export type ObjectOpts<U> = {
   [K in keyof U]: U[K] extends ObjectHandler<U[K], ObjectContext<any>>
     ? U[K]
     : U[K] extends ObjectHandler<U[K], ObjectSharedContext<any>>
-    ? U[K]
-    :
-        | ObjectHandler<U[K], ObjectContext<any>>
-        | ObjectHandler<U[K], ObjectSharedContext<any>>;
+      ? U[K]
+      :
+          | ObjectHandler<U[K], ObjectContext<any>>
+          | ObjectHandler<U[K], ObjectSharedContext<any>>;
+};
+
+export type ObjectOptions = ServiceOptions & {
+  /**
+   * When set to `true`, lazy state will be enabled for all invocations to this service.
+   *
+   * *NOTE:* You can set this field only if you register this endpoint against restate-server >= 1.4,
+   * otherwise the service discovery will fail.
+   */
+  enableLazyState?: boolean;
 };
 
 /**
@@ -868,6 +1045,7 @@ export const object = <P extends string, M>(object: {
   handlers: ObjectOpts<M> & ThisType<M>;
   description?: string;
   metadata?: Record<string, string>;
+  options?: ObjectOptions;
 }): VirtualObjectDefinition<P, M> => {
   if (!object.handlers) {
     throw new Error("object options must be defined");
@@ -892,6 +1070,7 @@ export const object = <P extends string, M>(object: {
     object: Object.fromEntries(handlers) as object,
     metadata: object.metadata,
     description: object.description,
+    options: object.options,
   } as VirtualObjectDefinition<P, M>;
 };
 
@@ -913,12 +1092,29 @@ export type WorkflowOpts<U> = {
     | "workflowOutput"
     ? `${K} is a reserved keyword`
     : K extends "run"
-    ? U[K] extends WorkflowHandler<U[K], WorkflowContext<any>>
-      ? U[K]
-      : "An handler named 'run' must take as a first argument a WorkflowContext, and must return a Promise"
-    : U[K] extends WorkflowSharedHandler<U[K], WorkflowSharedContext<any>>
-    ? U[K]
-    : "An handler other then 'run' must accept as a first argument a WorkflowSharedContext";
+      ? U[K] extends WorkflowHandler<U[K], WorkflowContext<any>>
+        ? U[K]
+        : "An handler named 'run' must take as a first argument a WorkflowContext, and must return a Promise"
+      : U[K] extends WorkflowSharedHandler<U[K], WorkflowSharedContext<any>>
+        ? U[K]
+        : "An handler other then 'run' must accept as a first argument a WorkflowSharedContext";
+};
+
+export type WorkflowOptions = ServiceOptions & {
+  /**
+   * The retention duration for this workflow.
+   *
+   * *NOTE:* You can set this field only if you register this endpoint against restate-server >= 1.4,
+   * otherwise the service discovery will fail.
+   */
+  workflowRetention?: Duration | number;
+  /**
+   * When set to `true`, lazy state will be enabled for all invocations to this service.
+   *
+   * *NOTE:* You can set this field only if you register this endpoint against restate-server >= 1.4,
+   * otherwise the service discovery will fail.
+   */
+  enableLazyState?: boolean;
 };
 
 /**
@@ -927,14 +1123,14 @@ export type WorkflowOpts<U> = {
  *
  * @example Here is an example of how to define a workflow:
  * ```ts
- *      const mywf = workflow({
- *            name: "mywf",
- *            handlers: {
- *                run: async (ctx: WorkflowContext, argument: any) => {
- *                  return "Hello World";
- *                }
- *            }
- *      });
+ * const mywf = workflow({
+ *   name: "mywf",
+ *   handlers: {
+ *     run: async (ctx: WorkflowContext, argument: any) => {
+ *       return "Hello World";
+ *     }
+ *   }
+ * });
  * ```
  *
  * ### Note:
@@ -966,6 +1162,7 @@ export const workflow = <P extends string, M>(workflow: {
   handlers: WorkflowOpts<M> & ThisType<M>;
   description?: string;
   metadata?: Record<string, string>;
+  options?: WorkflowOptions;
 }): WorkflowDefinition<P, M> => {
   if (!workflow.handlers) {
     throw new Error("workflow must contain handlers");
@@ -1026,5 +1223,6 @@ export const workflow = <P extends string, M>(workflow: {
     workflow: Object.fromEntries(handlers) as object,
     metadata: workflow.metadata,
     description: workflow.description,
+    options: workflow.options,
   } as WorkflowDefinition<P, M>;
 };

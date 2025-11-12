@@ -14,8 +14,18 @@ import type {
   VirtualObjectDefinition,
   ServiceDefinition,
   WorkflowDefinition,
+  JournalValueCodec,
 } from "@restatedev/restate-sdk-core";
 import type { LoggerTransport } from "./logging/logger_transport.js";
+import type {
+  ObjectOptions,
+  ServiceOptions,
+  WorkflowOptions,
+} from "./types/rpc.js";
+
+export type DefaultServiceOptions = ServiceOptions &
+  ObjectOptions &
+  WorkflowOptions;
 
 export interface RestateEndpointBase<E> {
   /**
@@ -42,34 +52,52 @@ export interface RestateEndpointBase<E> {
   withIdentityV1(...keys: string[]): E;
 
   /**
+   * Set default service options that will be used by all services bind to this endpoint.
+   *
+   * Options can be overridden on each service/handler.
+   *
+   * @param options
+   */
+  defaultServiceOptions(options: DefaultServiceOptions): E;
+
+  /**
    * Replace the default console-based {@link LoggerTransport}
    * @param logger
    * @example
    * Using console:
    * ```ts
-   *     restate.setLogger((meta, message, ...o) => {console.log(`${meta.level}: `, message, ...o)})
-   *  ```
+   * restate.setLogger((meta, message, ...o) => {console.log(`${meta.level}: `, message, ...o)})
+   * ```
    * @example
    * Using winston:
    * ```ts
-   *     const logger = createLogger({ ... })
-   *     restate.setLogger((meta, message, ...o) => {logger.log(meta.level, {invocationId: meta.context?.invocationId}, [message, ...o].join(' '))})
-   *  ```
+   * const logger = createLogger({ ... })
+   * restate.setLogger((meta, message, ...o) => {logger.log(meta.level, {invocationId: meta.context?.invocationId}, [message, ...o].join(' '))})
+   * ```
    * @example
    * Using pino:
    * ```ts
-   *     const logger = pino()
-   *     restate.setLogger((meta, message, ...o) => {logger[meta.level]({invocationId: meta.context?.invocationId}, [message, ...o].join(' '))})
-   *  ```
+   * const logger = pino()
+   * restate.setLogger((meta, message, ...o) => {logger[meta.level]({invocationId: meta.context?.invocationId}, [message, ...o].join(' '))})
+   * ```
    */
   setLogger(logger: LoggerTransport): E;
+
+  /**
+   * Provider for the codec to use for journal values. One codec will be instantiated globally for this endpoint.
+   * Check {@link JournalValueCodec} for more details
+   *
+   * @experimental
+   */
+  journalValueCodecProvider(codecProvider: () => Promise<JournalValueCodec>): E;
 }
 
 /**
  * RestateEndpoint encapsulates all the Restate services served by this endpoint.
  *
- * A RestateEndpoint can either be served either as HTTP2 server, using the methods {@link listen} or {@link http2Handler},
- * or as Lambda, using the method {@link lambdaHandler}.
+ * A RestateEndpoint can either be served as HTTP2 server, using the methods {@link RestateEndpoint.listen} or {@link RestateEndpoint.http2Handler}.
+ *
+ * For Lambda, check {@link LambdaEndpoint}
  *
  * @example
  * A typical endpoint served as HTTP server would look like this:
@@ -80,16 +108,6 @@ export interface RestateEndpointBase<E> {
  *   .endpoint()
  *   .bind(myService)
  *   .listen(8000);
- * ```
- * @example
- * A typical endpoint served as AWS Lambda would look like this:
- * ```
- * import * as restate from "@restatedev/restate-sdk/lambda";
- *
- * export const handler = restate
- *   .endpoint()
- *   .bind(myService)
- *   .handler();
  * ```
  */
 export interface RestateEndpoint extends RestateEndpointBase<RestateEndpoint> {
@@ -110,7 +128,7 @@ export interface RestateEndpoint extends RestateEndpointBase<RestateEndpoint> {
    * httpServer.listen(port);
    * ```
    *
-   * If you need to manually control the server lifecycle, we suggest to manually instantiate the http2 server and use {@link http2Handler}.
+   * If you need to manually control the server lifecycle, we suggest to manually instantiate the http2 server and use {@link RestateEndpoint.http2Handler}.
    *
    * @param port The port to listen at. May be undefined (see above).
    * @returns a Promise that resolves with the bound port, or rejects with a failure otherwise.
@@ -118,7 +136,7 @@ export interface RestateEndpoint extends RestateEndpointBase<RestateEndpoint> {
   listen(port?: number): Promise<number>;
 
   /**
-   * Returns an http2 server handler. See {@link listen} for more details.
+   * Returns an http2 server handler. See {@link RestateEndpoint.listen} for more details.
    */
   http2Handler(): (
     request: Http2ServerRequest,

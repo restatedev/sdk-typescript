@@ -22,13 +22,20 @@ import type {
   RestateRequest,
   RestateResponse,
 } from "./generic.js";
+import { tryCreateContextualLogger } from "./generic.js";
 import { WritableStream, type ReadableStream } from "node:stream/web";
 import { OnceStream } from "../../utils/streams.js";
 import { X_RESTATE_SERVER } from "../../user_agent.js";
 import { ensureError } from "../../types/errors.js";
+import * as zlib from "node:zlib";
+
+const RESPONSE_COMPRESSION_THRESHOLD = 3 * 1024 * 1024;
 
 export class LambdaHandler {
-  constructor(private readonly handler: GenericHandler) {}
+  constructor(
+    private readonly handler: GenericHandler,
+    private readonly compressionSupported: boolean
+  ) {}
 
   async handleRequest(
     event: APIGatewayProxyEvent | APIGatewayProxyEventV2,
@@ -39,33 +46,72 @@ export class LambdaHandler {
     //
     const path = "path" in event ? event.path : event.rawPath;
 
+    // Deal with content-encoding
+    let requestContentEncoding;
+    let requestAcceptEncoding;
+    for (const [key, value] of Object.entries(event.headers)) {
+      if (
+        key.localeCompare("content-encoding", undefined, {
+          sensitivity: "accent",
+        }) === 0
+      ) {
+        requestContentEncoding = value;
+      } else if (
+        key.localeCompare("accept-encoding", undefined, {
+          sensitivity: "accent",
+        }) === 0
+      ) {
+        requestAcceptEncoding = value;
+      }
+    }
+
     //
     // Convert the request body to a Uint8Array stream
     // Lambda functions receive the body as base64 encoded string
     //
-    let body: ReadableStream<Uint8Array> | null;
+    let bodyStream: ReadableStream<Uint8Array> | null;
     if (!event.body) {
-      body = null;
-    } else if (event.isBase64Encoded) {
-      body = OnceStream(Buffer.from(event.body, "base64"));
+      bodyStream = null;
     } else {
-      body = OnceStream(new TextEncoder().encode(event.body));
+      let bodyBuffer: Buffer | undefined;
+      if (event.isBase64Encoded) {
+        bodyBuffer = Buffer.from(event.body, "base64");
+      } else {
+        bodyBuffer = Buffer.from(new TextEncoder().encode(event.body));
+      }
+
+      // Now decode if needed
+      if (requestContentEncoding && requestContentEncoding.includes("zstd")) {
+        if (!this.compressionSupported) {
+          throw new Error(
+            "The input is compressed using zstd, but this lambda deployment doesn't support compression. Make sure to deploy the Lambda using Node > 22"
+          );
+        }
+
+        // Input encoded with zstd, let's decode it!
+        bodyBuffer = (
+          zlib as unknown as { zstdDecompressSync: (b: Buffer) => Buffer }
+        ).zstdDecompressSync(bodyBuffer);
+      }
+
+      // Prep the stream to pass through the endpoint handler
+      bodyStream = OnceStream(bodyBuffer);
     }
 
     const abortController = new AbortController();
 
     const request: RestateRequest = {
-      body,
+      body: bodyStream,
       headers: event.headers,
       url: path,
       extraArgs: [context],
       abortSignal: abortController.signal,
     };
 
-    let resp: RestateResponse;
+    let response: RestateResponse;
 
     try {
-      resp = await this.handler.handle(request, {
+      response = await this.handler.handle(request, {
         AWSRequestId: context.awsRequestId,
       });
     } catch (e) {
@@ -76,7 +122,7 @@ export class LambdaHandler {
     const chunks: Uint8Array[] = [];
 
     try {
-      await resp.body.pipeTo(
+      await response.body.pipeTo(
         new WritableStream<Uint8Array>({
           write: (chunk) => {
             chunks.push(chunk);
@@ -86,7 +132,13 @@ export class LambdaHandler {
     } catch (e) {
       // unlike in the streaming case, we can actually catch errors in the response body and form a nicer error
       const error = ensureError(e);
-      this.handler.endpoint.rlog.error(
+      (
+        tryCreateContextualLogger(
+          this.handler.endpoint.loggerTransport,
+          request.url,
+          request.headers
+        ) ?? this.handler.endpoint.rlog
+      ).error(
         "Error while collecting invocation response: " +
           (error.stack ?? error.message)
       );
@@ -103,11 +155,35 @@ export class LambdaHandler {
       abortController.abort();
     }
 
+    const responseBodyBuffer = Buffer.concat(chunks);
+    let responseBody;
+
+    // Now let's encode if we need to.
+    if (
+      this.compressionSupported &&
+      responseBodyBuffer.length > RESPONSE_COMPRESSION_THRESHOLD &&
+      requestAcceptEncoding &&
+      requestAcceptEncoding.includes("zstd")
+    ) {
+      response.headers["content-encoding"] = "zstd";
+
+      responseBody = (
+        zlib as unknown as { zstdCompressSync: (b: Buffer) => Buffer }
+      )
+        .zstdCompressSync(responseBodyBuffer)
+        .toString("base64");
+    } else {
+      responseBody = responseBodyBuffer.toString("base64");
+    }
     return {
-      headers: resp.headers,
-      statusCode: resp.statusCode,
+      headers: response.headers,
+      statusCode: response.statusCode,
       isBase64Encoded: true,
-      body: Buffer.concat(chunks).toString("base64"),
+      body: responseBody,
     };
   }
+}
+
+export function isCompressionSupported() {
+  return "zstdDecompressSync" in zlib && "zstdCompressSync" in zlib;
 }

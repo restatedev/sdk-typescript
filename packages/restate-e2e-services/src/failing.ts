@@ -76,7 +76,7 @@ const service = restate.object({
             throw new Error("Failed at attempt: " + currentAttempt);
           }
         },
-        { retryIntervalFactor: 1, initialRetryIntervalMillis: 10 }
+        { retryIntervalFactor: 1, initialRetryInterval: { milliseconds: 10 } }
       );
     },
 
@@ -96,7 +96,7 @@ const service = restate.object({
           {
             maxRetryAttempts: retryPolicyMaxRetryCount,
             retryIntervalFactor: 1,
-            initialRetryIntervalMillis: 10,
+            initialRetryInterval: { milliseconds: 10 },
           }
         );
       } catch (e) {

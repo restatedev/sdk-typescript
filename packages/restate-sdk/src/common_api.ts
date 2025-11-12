@@ -62,6 +62,8 @@ export type {
   ObjectHandler,
   WorkflowHandler,
   WorkflowSharedHandler,
+  Duration,
+  JournalValueCodec,
 } from "@restatedev/restate-sdk-core";
 export { serde } from "@restatedev/restate-sdk-core";
 
@@ -78,6 +80,10 @@ export type {
   ServiceOpts,
   ObjectOpts,
   WorkflowOpts,
+  ServiceOptions,
+  ObjectOptions,
+  WorkflowOptions,
+  RetryPolicy,
 } from "./types/rpc.js";
 export {
   service,
@@ -96,8 +102,23 @@ export type {
   WorkflowDefinition,
 } from "@restatedev/restate-sdk-core";
 
-export type { RestateEndpoint, RestateEndpointBase } from "./endpoint.js";
-export { RestateError, TerminalError, TimeoutError } from "./types/errors.js";
+export type {
+  RestateEndpoint,
+  RestateEndpointBase,
+  DefaultServiceOptions,
+} from "./endpoint.js";
+
+export {
+  /**
+   * @deprecated YOU MUST NOT USE THIS TYPE
+   */
+  RestateError,
+  TerminalError,
+  TimeoutError,
+  RetryableError,
+  CancelledError,
+  type RetryableErrorOptions,
+} from "./types/errors.js";
 export type {
   LoggerTransport,
   LogMetadata,
@@ -105,3 +126,14 @@ export type {
   LoggerContext,
   LogSource,
 } from "./logging/logger_transport.js";
+export type { EndpointOptions } from "./endpoint/types.js";
+
+// re-exporting createHandler shortcuts
+
+import { handlers } from "./types/rpc.js";
+
+export const createServiceHandler = handlers.handler;
+export const createObjectHandler = handlers.object.exclusive;
+export const createObjectSharedHandler = handlers.object.shared;
+export const createWorkflowHandler = handlers.workflow.workflow;
+export const createWorkflowSharedHandler = handlers.workflow.shared;

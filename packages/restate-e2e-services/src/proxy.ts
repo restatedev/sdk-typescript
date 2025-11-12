@@ -50,7 +50,7 @@ function rawSend(ctx: restate.Context, request: ProxyRequest): Promise<string> {
     key: request.virtualObjectKey,
     inputSerde: restate.serde.binary,
     parameter: new Uint8Array(request.message),
-    delay: request.delayMillis,
+    delay: { milliseconds: request.delayMillis },
     idempotencyKey: request.idempotencyKey,
   });
   return handle.invocationId;

@@ -1,6 +1,6 @@
 {
   "name": "@restatedev/restate-sdk-cloudflare-workers",
-  "version": "1.6.0",
+  "version": "1.9.0",
   "description": "Typescript SDK for Restate",
   "author": "Restate Developers",
   "license": "MIT",
@@ -15,51 +15,27 @@
   },
   "type": "module",
   "sideEffects": false,
-  "main": "./dist/cjs/src/public_api.js",
-  "module": "./dist/esm/src/public_api.js",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
   "exports": {
     ".": {
-      "import": {
-        "types": "./dist/esm/src/public_api.d.ts",
-        "default": "./dist/esm/src/public_api.js"
-      },
-      "require": {
-        "types": "./dist/cjs/src/public_api.d.ts",
-        "default": "./dist/cjs/src/public_api.js"
-      }
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
     },
+    "./package.json": "./package.json",
     "./fetch": {
-      "import": {
-        "types": "./dist/esm/src/fetch.d.ts",
-        "default": "./dist/esm/src/fetch.js"
-      },
-      "require": {
-        "types": "./dist/cjs/src/fetch.d.ts",
-        "default": "./dist/cjs/src/fetch.js"
-      }
-    },
-    "./lambda": {
-      "import": {
-        "types": "./dist/esm/src/lambda.d.ts",
-        "default": "./dist/esm/src/lambda.js"
-      },
-      "require": {
-        "types": "./dist/cjs/src/lambda.d.ts",
-        "default": "./dist/cjs/src/lambda.js"
-      }
+      "import": "./dist/fetch.js",
+      "require": "./dist/fetch.cjs"
     }
   },
   "typesVersions": {
     "*": {
       "fetch": [
-        "dist/cjs/src/fetch.d.ts"
-      ],
-      "lambda": [
-        "dist/cjs/src/lambda.d.ts"
+        "./dist/fetch.d.ts"
       ]
     }
   },
-  "types": "./dist/cjs/src/public_api.d.ts",
+  "types": "./dist/index.d.cts",
   "files": [
     "dist"
   ],
@@ -68,13 +44,14 @@
     "release": "release-it"
   },
   "dependencies": {
-    "@restatedev/restate-sdk-core": "^1.6.0"
+    "@restatedev/restate-sdk-core": "^1.9.0"
   },
   "devDependencies": {
-    "@types/aws-lambda": "^8.10.115"
+    "@types/aws-lambda": "^8.10.115",
+    "@restatedev/restate-sdk": "*"
   },
   "engines": {
-    "node": ">= 18.13"
+    "node": ">= 20.19"
   },
   "publishConfig": {
     "@restatedev:registry": "https://registry.npmjs.org"

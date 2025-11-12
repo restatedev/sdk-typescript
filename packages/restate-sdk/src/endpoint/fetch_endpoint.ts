@@ -10,17 +10,20 @@
  */
 
 import type {
+  JournalValueCodec,
   ServiceDefinition,
   VirtualObjectDefinition,
   WorkflowDefinition,
 } from "@restatedev/restate-sdk-core";
-import type { Component } from "../types/components.js";
-import { EndpointBuilder } from "./endpoint_builder.js";
-import type { RestateEndpointBase } from "../endpoint.js";
+import { EndpointBuilder } from "./endpoint.js";
+import type {
+  DefaultServiceOptions,
+  RestateEndpointBase,
+} from "../endpoint.js";
 import { GenericHandler } from "./handlers/generic.js";
 import { fetcher } from "./handlers/fetch.js";
-import { ProtocolMode } from "../types/discovery.js";
 import type { LoggerTransport } from "../logging/logger_transport.js";
+import type { ProtocolMode } from "./discovery.js";
 
 /**
  * Generic Fetch encapsulates all the Restate services served by this endpoint.
@@ -57,18 +60,6 @@ export class FetchEndpointImpl implements FetchEndpoint {
   constructor(private protocolMode: ProtocolMode) {}
   private builder: EndpointBuilder = new EndpointBuilder();
 
-  public get keySet(): string[] {
-    return this.builder.keySet;
-  }
-
-  public componentByName(componentName: string): Component | undefined {
-    return this.builder.componentByName(componentName);
-  }
-
-  public addComponent(component: Component) {
-    this.builder.addComponent(component);
-  }
-
   public bind<P extends string, M>(
     definition:
       | ServiceDefinition<P, M>
@@ -80,7 +71,12 @@ export class FetchEndpointImpl implements FetchEndpoint {
   }
 
   public withIdentityV1(...keys: string[]): FetchEndpoint {
-    this.builder.withIdentityV1(...keys);
+    this.builder.addIdentityKeys(...keys);
+    return this;
+  }
+
+  public defaultServiceOptions(options: DefaultServiceOptions): FetchEndpoint {
+    this.builder.setDefaultServiceOptions(options);
     return this;
   }
 
@@ -90,16 +86,25 @@ export class FetchEndpointImpl implements FetchEndpoint {
   }
 
   public bidirectional(set: boolean = true): FetchEndpoint {
-    this.protocolMode = set
-      ? ProtocolMode.BIDI_STREAM
-      : ProtocolMode.REQUEST_RESPONSE;
+    this.protocolMode = set ? "BIDI_STREAM" : "REQUEST_RESPONSE";
+    return this;
+  }
+
+  public journalValueCodecProvider(
+    codecProvider: () => Promise<JournalValueCodec>
+  ): FetchEndpoint {
+    this.builder.setJournalValueCodecProvider(codecProvider);
     return this;
   }
 
   handler(): {
     fetch: (request: Request, ...extraArgs: unknown[]) => Promise<Response>;
   } {
-    const genericHandler = new GenericHandler(this.builder, this.protocolMode);
+    const genericHandler = new GenericHandler(
+      this.builder.build(),
+      this.protocolMode,
+      {}
+    );
     return fetcher(genericHandler);
   }
 }

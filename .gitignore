@@ -1,5 +1,5 @@
-node_modules/*
-dist/*
+node_modules
+dist
 
 src/generated/*
 buf.lock
@@ -14,3 +14,19 @@ packages/*/buf.lock
 
 .api/*
 !.api/.gitkeep
+
+test_report
+restate-sdk-test-suite.jar
+
+.restate
+
+docs-out
+
+.wrangler
+.next
+.cdk.staging
+cdk.out
+lambda.zip
+.DS_Store
+
+.turbo

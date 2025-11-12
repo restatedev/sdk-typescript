@@ -13,27 +13,29 @@
 //! License MIT
 
 import type { Rand } from "../context.js";
-import { createHash } from "node:crypto";
 import { Buffer } from "node:buffer";
-import { readBigUInt64LE } from "./buffer.js";
 
 export class RandImpl implements Rand {
   private randstate256: [bigint, bigint, bigint, bigint];
 
   constructor(
-    id: string | [bigint, bigint, bigint, bigint],
+    id: bigint | [bigint, bigint, bigint, bigint],
     private readonly checkState: (state: string) => void = () => undefined
   ) {
-    if (typeof id === "string") {
-      // hash the invocation ID, which is known to contain 74 bits of entropy
-      const hash = createHash("sha256").update(id).digest();
-
-      this.randstate256 = [
-        readBigUInt64LE(hash, 0),
-        readBigUInt64LE(hash, 8),
-        readBigUInt64LE(hash, 16),
-        readBigUInt64LE(hash, 24),
-      ];
+    if (typeof id === "bigint") {
+      // Seed SplitMix64 with the provided 64-bit seed and expand to 256 bits
+      let x = id & RandImpl.U64_MASK;
+      const next = (): bigint => {
+        x = (x + 0x9e3779b97f4a7c15n) & RandImpl.U64_MASK;
+        let z = x;
+        z ^= z >> 30n;
+        z = (z * 0xbf58476d1ce4e5b9n) & RandImpl.U64_MASK;
+        z ^= z >> 27n;
+        z = (z * 0x94d049bb133111ebn) & RandImpl.U64_MASK;
+        z ^= z >> 31n;
+        return z & RandImpl.U64_MASK;
+      };
+      this.randstate256 = [next(), next(), next(), next()];
     } else {
       this.randstate256 = id;
     }
@@ -88,8 +90,8 @@ export class RandImpl implements Rand {
     buf.writeBigUInt64LE(this.u64(), 0);
     buf.writeBigUInt64LE(this.u64(), 8);
     // Per 4.4, set bits for version and `clock_seq_hi_and_reserved`
-    buf[6] = (buf[6] & 0x0f) | 0x40;
-    buf[8] = (buf[8] & 0x3f) | 0x80;
+    buf[6] = (buf[6]! & 0x0f) | 0x40;
+    buf[8] = (buf[8]! & 0x3f) | 0x80;
     return uuidStringify(buf);
   }
 }
@@ -111,25 +113,25 @@ function uuidStringify(arr: Buffer, offset = 0) {
   // Note to future-self: No, you can't remove the `toLowerCase()` call.
   // REF: https://github.com/uuidjs/uuid/pull/677#issuecomment-1757351351
   return (
-    byteToHex[arr[offset + 0]] +
-    byteToHex[arr[offset + 1]] +
-    byteToHex[arr[offset + 2]] +
-    byteToHex[arr[offset + 3]] +
+    byteToHex[arr[offset + 0]!]! +
+    byteToHex[arr[offset + 1]!]! +
+    byteToHex[arr[offset + 2]!]! +
+    byteToHex[arr[offset + 3]!]! +
     "-" +
-    byteToHex[arr[offset + 4]] +
-    byteToHex[arr[offset + 5]] +
+    byteToHex[arr[offset + 4]!]! +
+    byteToHex[arr[offset + 5]!]! +
     "-" +
-    byteToHex[arr[offset + 6]] +
-    byteToHex[arr[offset + 7]] +
+    byteToHex[arr[offset + 6]!]! +
+    byteToHex[arr[offset + 7]!]! +
     "-" +
-    byteToHex[arr[offset + 8]] +
-    byteToHex[arr[offset + 9]] +
+    byteToHex[arr[offset + 8]!]! +
+    byteToHex[arr[offset + 9]!]! +
     "-" +
-    byteToHex[arr[offset + 10]] +
-    byteToHex[arr[offset + 11]] +
-    byteToHex[arr[offset + 12]] +
-    byteToHex[arr[offset + 13]] +
-    byteToHex[arr[offset + 14]] +
-    byteToHex[arr[offset + 15]]
+    byteToHex[arr[offset + 10]!]! +
+    byteToHex[arr[offset + 11]!]! +
+    byteToHex[arr[offset + 12]!]! +
+    byteToHex[arr[offset + 13]!]! +
+    byteToHex[arr[offset + 14]!]! +
+    byteToHex[arr[offset + 15]!]!
   ).toLowerCase();
 }

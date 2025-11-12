@@ -4,8 +4,7 @@ name: Integration
 on:
   pull_request:
   push:
-    branches:
-      - main
+    branches: [main, release-**]
   schedule:
     - cron: "0 */6 * * *" # Every 6 hours
   workflow_dispatch:
@@ -20,6 +19,11 @@ on:
         required: false
         default: "ghcr.io/restatedev/restate:main"
         type: string
+      serviceImage:
+        description: "service image, if provided it will skip building the image from sdk main branch"
+        required: false
+        default: ""
+        type: string
   workflow_call:
     inputs:
       restateCommit:
@@ -28,10 +32,23 @@ on:
         default: ""
         type: string
       restateImage:
-        description: "restate image, superseded by restate commit"
+        description: 'restate image, superseded by restate commit'
         required: false
-        default: "ghcr.io/restatedev/restate:main"
+        default: 'ghcr.io/restatedev/restate:main'
         type: string
+      serviceImage:
+        description: "service image, if provided it will skip building the image from sdk main branch"
+        required: false
+        default: ""
+        type: string
+      envVars:
+        required: false
+        type: string
+        description: list of vars and values used when running the test tool
+      testArtifactOutput:
+        required: false
+        type: string
+        description: name of the test artifact output
 
 jobs:
   sdk-test-suite:
@@ -52,7 +69,7 @@ jobs:
 
       # support importing oci-format restate.tar
       - name: Set up Docker containerd snapshotter
-        uses: crazy-max/ghaction-setup-docker@v3
+        uses: docker/setup-docker-action@v4
         with:
           set-host: true
           daemon-config: |
@@ -92,7 +109,14 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # Pre-emptively pull the test-services image, to avoid affecting execution time
+      - name: Pull test services image
+        if: ${{ inputs.serviceImage != '' }}
+        shell: bash
+        run: docker pull ${{ inputs.serviceImage }}
+
       - name: Build Typescript test-services image
+        if: ${{ inputs.serviceImage == '' }}
         id: build
         uses: docker/build-push-action@v6
         with:
@@ -105,10 +129,11 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ github.workflow }}
 
       - name: Run test tool
-        uses: restatedev/sdk-test-suite@v3.0
+        uses: restatedev/sdk-test-suite@v3.2
         with:
           restateContainerImage: ${{ inputs.restateCommit != '' && 'localhost/restatedev/restate-commit-download:latest' || (inputs.restateImage != '' && inputs.restateImage || 'ghcr.io/restatedev/restate:main') }}
-          serviceContainerImage: "restatedev/typescript-test-services"
+          serviceContainerImage: ${{ inputs.serviceImage != '' && inputs.serviceImage || 'restatedev/typescript-test-services' }}
           exclusionsFile: "packages/restate-e2e-services/exclusions.yaml"
-          testArtifactOutput: "sdk-typescript-integration-test-report"
+          envVars: ${{ inputs.envVars }}
+          testArtifactOutput: ${{ inputs.testArtifactOutput != '' && inputs.testArtifactOutput || 'sdk-typescript-integration-test-report' }}
           serviceContainerEnvFile: "packages/restate-e2e-services/.env"

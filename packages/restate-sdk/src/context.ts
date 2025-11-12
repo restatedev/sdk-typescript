@@ -23,6 +23,7 @@ import type {
   Workflow,
   WorkflowDefinitionFrom,
   Serde,
+  Duration,
 } from "@restatedev/restate-sdk-core";
 import { ContextImpl } from "./context_impl.js";
 import type { TerminalError } from "./types/errors.js";
@@ -140,31 +141,12 @@ export interface KeyValueStore<TState extends TypedState> {
   clearAll(): void;
 }
 
+/**
+ * @deprecated SendOptions on the client factory are deprecated, please use `restate.rpc.sendOpts` instead
+ */
 export interface SendOptions {
   /**
-   * Makes a type-safe one-way RPC to the specified target service, after a delay specified by the
-   * milliseconds' argument.
-   * This method is like setting up a fault-tolerant cron job that enqueues the message in a
-   * message queue.
-   * The handler calling this function does not have to stay active for the delay time.
-   *
-   * Both the delay timer and the message are durably stored in Restate and guaranteed to be reliably
-   * delivered. The delivery happens no earlier than specified through the delay, but may happen
-   * later, if the target service is down, or backpressuring the system.
-   *
-   * The delay message is journaled for durable execution and will thus not be duplicated when the
-   * handler is re-invoked for retries or after suspending.
-   *
-   * This call will return immediately; the message sending happens asynchronously in the background.
-   * Despite that, the message is guaranteed to be sent, because the completion of the invocation that
-   * triggers the send (calls this function) happens logically after the sending. That means that any
-   * failure where the message does not reach Restate also cannot complete this invocation, and will
-   * hence recover this handler and (through the durable execution) recover the message to be sent.
-   *
-   * @example
-   * ```ts
-   * ctx.serviceSendClient(Service, {delay: 60_000}).anotherAction(1337);
-   * ```
+   * @deprecated SendOptions on the client factory are deprecated, please use `restate.rpc.sendOpts` instead
    */
   delay?: number;
 }
@@ -189,34 +171,55 @@ export type RunOptions<T> = {
   serde?: Serde<T>;
 
   /**
-   * Max number of retry attempts, before giving up.
+   * Max number of attempts (including the initial), before giving up.
    *
    * When giving up, `ctx.run` will throw a `TerminalError` wrapping the original error message.
    */
   maxRetryAttempts?: number;
 
   /**
+   * @deprecated Use `maxRetryDuration` instead.
+   */
+  maxRetryDurationMillis?: number;
+
+  /**
    * Max duration of retries, before giving up.
    *
    * When giving up, `ctx.run` will throw a `TerminalError` wrapping the original error message.
+   *
+   * If a number is provided, it will be interpreted as milliseconds.
    */
-  maxRetryDurationMillis?: number;
+  maxRetryDuration?: Duration | number;
+
+  /**
+   * @deprecated Use `initialRetryInterval` instead.
+   */
+  initialRetryIntervalMillis?: number;
 
   /**
    * Initial interval for the first retry attempt.
    * Retry interval will grow by a factor specified in `retryIntervalFactor`.
    *
    * The default is 50 milliseconds.
+   *
+   * If a number is provided, it will be interpreted as milliseconds.
    */
-  initialRetryIntervalMillis?: number;
+  initialRetryInterval?: Duration | number;
+
+  /**
+   * @deprecated Use `maxRetryInterval` instead.
+   */
+  maxRetryIntervalMillis?: number;
 
   /**
    * Max interval between retries.
    * Retry interval will grow by a factor specified in `retryIntervalFactor`.
    *
    * The default is 10 seconds.
+   *
+   * If a number is provided, it will be interpreted as milliseconds.
    */
-  maxRetryIntervalMillis?: number;
+  maxRetryInterval?: Duration | number;
 
   /**
    * Exponentiation factor to use when computing the next retry delay.
@@ -244,7 +247,7 @@ export type GenericCall<REQ, RES> = {
 
 /**
  * Send a message to an handler directly avoiding restate's type safety checks.
- * This is a generic machnisim to invoke handlers directly by only knowing
+ * This is a generic mechanism to invoke handlers directly by only knowing
  * the service and handler name, (or key in the case of objects or workflows)
  */
 export type GenericSend<REQ> = {
@@ -254,7 +257,7 @@ export type GenericSend<REQ> = {
   key?: string;
   headers?: Record<string, string>;
   inputSerde?: Serde<REQ>;
-  delay?: number;
+  delay?: Duration | number;
   idempotencyKey?: string;
 };
 
@@ -310,27 +313,50 @@ export interface Context extends RestateContext {
    *     re-executed on replay (the latest, if the failure happened in the small windows
    *     described above).
    *
-   * @example
+   * You can customize retry options by either:
+   *
+   * - Providing retry policy options in {@link RunOptions}
+   * - Throwing {@link RetryableError}, providing `retryAfter` option. This can be especially useful when interacting with HTTP requests returning the `Retry-After` header. You can combine the usage of throwing {@link RetryableError} with the `maxRetryAttempts`/`maxRetryDuration` from {@link RunOptions}.
+   *
+   * @example Run some external action and persist its result
    * ```ts
    * const result = await ctx.run(someExternalAction)
    *```
-
-   * @example
+   * @example Add some retry options
    * ```ts
-   *    await ctx.run("payment action", async () => {
-   *        const result = await paymentProvider.charge(txId, paymentInfo);
-   *        if (result.paymentRejected) {
-   *            // this action will not be retried anymore
-   *            throw new TerminalError("Payment failed");
-   *        } else if (result.paymentGatewayBusy) {
-   *            // restate will retry automatically
-   *            // to bound retries, use RunOptions
-   *            throw new Exception("Payment gateway busy");
-   *        } else {
-   *            // success!
-   *        }
-   *   });
+   * const result = await ctx.run("my action", someExternalAction, { maxRetryAttempts: 10 })
+   * ```
+   * @example Terminal errors and retryable errors
+   * ```ts
+   * await ctx.run("payment action", async () => {
+   *   const result = await paymentProvider.charge(txId, paymentInfo);
+   *   if (result.paymentRejected) {
+   *     // this action will not be retried anymore
+   *     throw new TerminalError("Payment failed");
+   *   } else if (result.paymentGatewayBusy) {
+   *     // restate will retry automatically
+   *     // to bound retries, use RunOptions
+   *     throw new Error("Payment gateway busy");
+   *   } else {
+   *     // success!
+   *   }
+   * });
+   * ```
+   * @example Retryable error with custom retry delay
+   * ```ts
+   * await ctx.run("payment action", async () => {
+   *   const res = fetch(...);
+   *   if (!res.ok) {
+   *     // Read Retry-After header
+   *     const retryAfterHeader = res.headers['Retry-After']
    *
+   *     // Use RetryableError to customize in how long to retry
+   *     throw RetryableError.from(cause, { retryAfter: { seconds: retryAfterHeader } })
+   *   }
+   * }, {
+   *   // Retry at most ten times
+   *   maxRetryAttempts: 10
+   * });
    * ```
    *
    * @param action The function to run.
@@ -338,14 +364,13 @@ export interface Context extends RestateContext {
   run<T>(action: RunAction<T>): RestatePromise<T>;
 
   /**
-   * Run an operation and store the result in Restate. The operation will thus not
-   * be re-run during a later replay, but take the durable result from Restate.
-   *
-   * @param name the action's name
-   * @param action the action to run.
+   * Same as {@link run}, but providing a name, used for observability purposes.
    */
   run<T>(name: string, action: RunAction<T>): RestatePromise<T>;
 
+  /**
+   * See {@link run}
+   */
   run<T>(
     name: string,
     action: RunAction<T>,
@@ -358,8 +383,7 @@ export interface Context extends RestateContext {
    * @returns
    * - id: the string ID that has to be used to complete the awakaeble by some external service
    * - promise: the Promise that needs to be awaited and that is resolved with the payload that was supplied by the service which completed the awakeable
-   *
-   * @example
+   * @example Retryable errors and terminal errors
    * const awakeable = ctx.awakeable<string>();
    *
    * // send the awakeable ID to some external service that will wake this one back up
@@ -383,8 +407,7 @@ export interface Context extends RestateContext {
    * @param payload the payload to pass to the service that is woken up.
    * The SDK serializes the payload with `Buffer.from(JSON.stringify(payload))`
    * and deserializes it in the receiving service with `JSON.parse(result.toString()) as T`.
-   *
-   * @example
+   * @example Retryable error with custom retry delay
    * // The sleeping service should have sent the awakeableIdentifier string to this service.
    * ctx.resolveAwakeable(awakeableIdentifier, "hello");
    */
@@ -404,13 +427,14 @@ export interface Context extends RestateContext {
 
   /**
    * Sleep until a timeout has passed.
-   * @param millis duration of the sleep in millis.
+   * @param duration either Duration type or milliseconds.
+   * @param name Observability name. This will be shown in the UI.
    * This is a lower-bound.
    *
    * @example
    * await ctx.sleep(1000);
    */
-  sleep(millis: number): RestatePromise<void>;
+  sleep(duration: Duration | number, name?: string): RestatePromise<void>;
 
   /**
    * Makes a type-safe request/response RPC to the specified target service.
@@ -439,9 +463,9 @@ export interface Context extends RestateContext {
    * export type Service = typeof service;
    *
    *
-   * restate.endpoint().bind(service).listen(9080);
+   * restate.serve({ services: [service], port: 9080 });
    * ```
-   * **Client side:**
+   * *Client side:*
    * ```ts
    * // option 1: use only types and supply service name separately
    * const result1 = await ctx.serviceClient<Service>({name: "myservice"}).someAction("hello!");
@@ -516,9 +540,9 @@ export interface Context extends RestateContext {
    * // option 2: export the API definition with type and name (name)
    * const MyService: MyApi = { name: "myservice" };
    *
-   * restate.endpoint().bind(service).listen(9080);
+   * restate.serve({ services: [service], port: 9080 });
    * ```
-   * **Client side:**
+   * *Client side:*
    * ```ts
    * // option 1: use only types and supply service name separately
    * ctx.serviceSendClient<MyApi>({name: "myservice"}).someAction("hello!");
@@ -655,7 +679,7 @@ export type RestatePromise<T> = Promise<T> & {
    * @param millis duration of the sleep in millis.
    * This is a lower-bound.
    */
-  orTimeout(millis: number): RestatePromise<T>;
+  orTimeout(millis: Duration | number): RestatePromise<T>;
 
   /**
    * Creates a new {@link RestatePromise} that maps the result of this promise with
@@ -838,24 +862,23 @@ export interface WorkflowSharedContext<TState extends TypedState = UntypedState>
   /**
    * Create a durable promise that can be resolved or rejected during the workflow execution.
    * The promise is bound to the workflow and will be persisted across suspensions and retries.
-   *
-   * @example
+   * @example Add some retry options
    * ```ts
-   *        const wf = restate.workflow({
-   *              name: "myWorkflow",
-   *              handlers: {
-   *                 run: async (ctx: restate.WorkflowContext) => {
-   *                        // ... do some work ...
-   *                        const payment = await ctx.promise<Payment>("payment.succeeded");
-   *                         // ... do some more work ...
-   *                },
+   * const wf = restate.workflow({
+   *   name: "myWorkflow",
+   *   handlers: {
+   *     run: async (ctx: restate.WorkflowContext) => {
+   *       // ... do some work ...
+   *       const payment = await ctx.promise<Payment>("payment.succeeded");
+   *       // ... do some more work ...
+   *     },
    *
-   *                onPaymentSucceeded: async (ctx: restate.WorkflowContext, payment) => {
-   *                       // ... handle payment succeeded ...
-   *                        await ctx.promise("payment.succeeded").resolve(payment);
-   *                }
-   *      });
-   *  ```
+   *     onPaymentSucceeded: async (ctx: restate.WorkflowContext, payment) => {
+   *       // ... handle payment succeeded ...
+   *       await ctx.promise("payment.succeeded").resolve(payment);
+   *     }
+   * });
+   * ```
    *
    * @param name the name of the durable promise
    */

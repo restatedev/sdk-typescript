@@ -25,12 +25,12 @@ import {
 } from "./types/errors.js";
 import { CompletablePromise } from "./utils/completable_promise.js";
 import type { ContextImpl, RunClosuresTracker } from "./context_impl.js";
-import { setTimeout } from "node:timers/promises";
+import { setImmediate } from "node:timers/promises";
 import type { InputPump, OutputPump } from "./io.js";
+import type { Duration } from "@restatedev/restate-sdk-core";
 
 // A promise that is never completed
 export function pendingPromise<T>(): Promise<T> {
-  // eslint-disable-next-line @typescript-eslint/no-empty-function
   return new Promise<T>(() => {});
 }
 
@@ -49,7 +49,7 @@ export interface InternalRestatePromise<T> extends RestatePromise<T> {
   [RESTATE_CTX_SYMBOL]: ContextImpl;
 
   tryCancel(): void;
-  tryComplete(): void;
+  tryComplete(): Promise<void>;
   uncompletedLeaves(): Array<number>;
   publicPromise(): Promise<T>;
 }
@@ -61,7 +61,6 @@ export type AsyncResultValue =
   | { StateKeys: string[] }
   | { InvocationId: string };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function extractContext(n: any): ContextImpl | undefined {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
   return n[RESTATE_CTX_SYMBOL] as ContextImpl | undefined;
@@ -79,14 +78,8 @@ abstract class AbstractRestatePromise<T> implements InternalRestatePromise<T> {
   // --- Promise methods
 
   then<TResult1 = T, TResult2 = never>(
-    onfulfilled?:
-      | ((value: T) => TResult1 | PromiseLike<TResult1>)
-      | null
-      | undefined,
-    onrejected?:
-      | ((reason: any) => TResult2 | PromiseLike<TResult2>)
-      | null
-      | undefined
+    onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null
   ): Promise<TResult1 | TResult2> {
     this.pollingPromise =
       this.pollingPromise ||
@@ -97,10 +90,7 @@ abstract class AbstractRestatePromise<T> implements InternalRestatePromise<T> {
   }
 
   catch<TResult = never>(
-    onrejected?:
-      | ((reason: any) => TResult | PromiseLike<TResult>)
-      | null
-      | undefined
+    onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null
   ): Promise<T | TResult> {
     this.pollingPromise =
       this.pollingPromise ||
@@ -110,7 +100,7 @@ abstract class AbstractRestatePromise<T> implements InternalRestatePromise<T> {
     return this.publicPromiseOrCancelPromise().catch(onrejected);
   }
 
-  finally(onfinally?: (() => void) | null | undefined): Promise<T> {
+  finally(onfinally?: (() => void) | null): Promise<T> {
     this.pollingPromise =
       this.pollingPromise ||
       this[RESTATE_CTX_SYMBOL].promisesExecutor
@@ -126,22 +116,22 @@ abstract class AbstractRestatePromise<T> implements InternalRestatePromise<T> {
     ]);
   }
 
-  // --- Combineable Promise methods
+  // --- RestatePromise methods
 
-  orTimeout(millis: number): RestatePromise<T> {
+  orTimeout(duration: number | Duration): RestatePromise<T> {
     return new RestateCombinatorPromise(
       this[RESTATE_CTX_SYMBOL],
       ([thisPromise, sleepPromise]) => {
         return new Promise((resolve, reject) => {
-          thisPromise.then(resolve, reject);
-          sleepPromise.then(() => {
+          thisPromise!.then(resolve, reject);
+          sleepPromise!.then(() => {
             reject(new TimeoutError());
           }, reject);
         });
       },
       [
         this,
-        this[RESTATE_CTX_SYMBOL].sleep(millis) as InternalRestatePromise<any>,
+        this[RESTATE_CTX_SYMBOL].sleep(duration) as InternalRestatePromise<any>,
       ]
     ) as RestatePromise<T>;
   }
@@ -154,7 +144,7 @@ abstract class AbstractRestatePromise<T> implements InternalRestatePromise<T> {
     this.cancelPromise.reject(new CancelledError());
   }
 
-  abstract tryComplete(): void;
+  abstract tryComplete(): Promise<void>;
 
   abstract uncompletedLeaves(): Array<number>;
 
@@ -173,7 +163,7 @@ export class RestateSinglePromise<T> extends AbstractRestatePromise<T> {
     private readonly completer: (
       value: AsyncResultValue,
       prom: CompletablePromise<T>
-    ) => void
+    ) => Promise<void>
   ) {
     super(ctx);
   }
@@ -182,7 +172,7 @@ export class RestateSinglePromise<T> extends AbstractRestatePromise<T> {
     return this.state === PromiseState.COMPLETED ? [] : [this.handle];
   }
 
-  tryComplete() {
+  async tryComplete(): Promise<void> {
     if (this.state === PromiseState.COMPLETED) {
       return;
     }
@@ -193,7 +183,7 @@ export class RestateSinglePromise<T> extends AbstractRestatePromise<T> {
       return;
     }
     this.state = PromiseState.COMPLETED;
-    this.completer(notification, this.completablePromise);
+    await this.completer(notification, this.completablePromise);
   }
 
   publicPromise(): Promise<T> {
@@ -210,7 +200,10 @@ export class RestateInvocationPromise<T>
   constructor(
     ctx: ContextImpl,
     handle: number,
-    completer: (value: AsyncResultValue, prom: CompletablePromise<T>) => void,
+    completer: (
+      value: AsyncResultValue,
+      prom: CompletablePromise<T>
+    ) => Promise<void>,
     private readonly invocationIdPromise: Promise<InvocationId>
   ) {
     super(ctx, handle, completer);
@@ -244,8 +237,8 @@ export class RestateCombinatorPromise extends AbstractRestatePromise<any> {
       : this.childs.flatMap((p) => p.uncompletedLeaves());
   }
 
-  tryComplete() {
-    this.childs.forEach((c) => c.tryComplete());
+  async tryComplete(): Promise<void> {
+    await Promise.allSettled(this.childs.map((c) => c.tryComplete()));
   }
 
   publicPromise(): Promise<unknown> {
@@ -265,28 +258,19 @@ export class RestatePendingPromise<T> implements InternalRestatePromise<T> {
   // --- Promise methods
 
   then<TResult1 = T, TResult2 = never>(
-    onfulfilled?:
-      | ((value: T) => TResult1 | PromiseLike<TResult1>)
-      | null
-      | undefined,
-    onrejected?:
-      | ((reason: any) => TResult2 | PromiseLike<TResult2>)
-      | null
-      | undefined
+    onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null
   ): Promise<TResult1 | TResult2> {
     return pendingPromise<T>().then(onfulfilled, onrejected);
   }
 
   catch<TResult = never>(
-    onrejected?:
-      | ((reason: any) => TResult | PromiseLike<TResult>)
-      | null
-      | undefined
+    onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null
   ): Promise<T | TResult> {
     return pendingPromise<T>().catch(onrejected);
   }
 
-  finally(onfinally?: (() => void) | null | undefined): Promise<T> {
+  finally(onfinally?: (() => void) | null): Promise<T> {
     return pendingPromise<T>().finally(onfinally);
   }
 
@@ -301,7 +285,7 @@ export class RestatePendingPromise<T> implements InternalRestatePromise<T> {
   }
 
   tryCancel(): void {}
-  tryComplete(): void {}
+  async tryComplete(): Promise<void> {}
   uncompletedLeaves(): number[] {
     return [];
   }
@@ -351,8 +335,8 @@ export class RestateMappedPromise<T, U> extends AbstractRestatePromise<U> {
     };
   }
 
-  tryComplete(): void {
-    this.inner.tryComplete();
+  async tryComplete(): Promise<void> {
+    await this.inner.tryComplete();
   }
 
   uncompletedLeaves(): number[] {
@@ -400,10 +384,10 @@ export class PromisesExecutor {
   ) {
     // Try complete the promise
     try {
-      restatePromise.tryComplete();
+      await restatePromise.tryComplete();
     } catch (e) {
       // This can happen if either take_notification throws an exception or completer throws an exception.
-      // Both should be programming mistakes of the SDK, but we cover them here.
+      // This could either happen for a deserialization issue, or for an SDK bug, but we cover them here.
       restatePromise[RESTATE_CTX_SYMBOL].handleInvocationEndError(e);
       return Promise.resolve();
     }
@@ -414,7 +398,7 @@ export class PromisesExecutor {
     // The reason for this setTimeout is that we need to enqueue the polling after
     // we eventually resolve some promises. This is especially crucial for RestateCombinatorPromise
     // as it flips the completed state using .finally() on the combinator.
-    return setTimeout().then(async () => {
+    return setImmediate().then(async () => {
       try {
         // Invoke do progress on the vm
         const handles = restatePromise.uncompletedLeaves();
@@ -441,11 +425,11 @@ export class PromisesExecutor {
           // We need to execute a run closure
           this.runClosuresTracker.executeRun(doProgressResult.ExecuteRun);
           // Let the run context switch, then come back to this flow.
-          await setTimeout();
+          await setImmediate();
         }
 
         // Recursion
-        await this.doProgress(restatePromise);
+        await this.doProgressInner(restatePromise);
       } catch (e) {
         // Not good, this is a retryable error.
         this.errorCallback(e);

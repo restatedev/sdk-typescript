@@ -26,9 +26,9 @@ describe("ExampleObject", () => {
 
   // Deploy Restate and the Service endpoint once for all the tests in this suite
   beforeAll(async () => {
-    restateTestEnvironment = await RestateTestEnvironment.start(
-      (restateServer) => restateServer.bind(counter)
-    );
+    restateTestEnvironment = await RestateTestEnvironment.start({
+      services: [counter],
+    });
     rs = clients.connect({ url: restateTestEnvironment.baseUrl() });
   }, 20_000);
 
@@ -127,7 +127,7 @@ describe("Custom testcontainer config", () => {
   // Deploy Restate and the Service endpoint once for all the tests in this suite
   beforeAll(async () => {
     restateTestEnvironment = await RestateTestEnvironment.start(
-      (restateServer) => restateServer.bind(counter),
+      { services: [counter] },
       () =>
         new RestateContainer()
           .withEnvironment({ RESTATE_LOG_FORMAT: "json" })

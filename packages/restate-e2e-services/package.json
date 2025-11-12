@@ -1,6 +1,6 @@
 {
   "name": "@restatedev/restate-e2e-services",
-  "version": "1.6.0",
+  "version": "1.9.0",
   "description": "Typescript SDK e2e tests",
   "private": true,
   "author": "Restate Developers",
@@ -22,26 +22,26 @@
   ],
   "scripts": {
     "build": "tsc -b",
-    "lint": "eslint --ignore-path .eslintignore --max-warnings=0 --ext .ts .",
-    "format": "prettier --ignore-path .eslintignore --write \"**/*.+(js|ts|json)\"",
-    "format-check": "prettier --ignore-path .eslintignore --check \"**/*.+(js|ts|json)\"",
+    "lint": "eslint --max-warnings=0 .",
+    "format": "prettier --ignore-path ../../.prettierignore --write \"**/*.+(js|ts|json)\"",
+    "format-check": "prettier --ignore-path ../../.prettierignore --check \"**/*.+(js|ts|json)\"",
     "test": "vitest run --silent --passWithNoTests",
     "verify": "npm run format-check && npm run lint && npm run build",
     "release": ""
   },
   "dependencies": {
-    "@restatedev/restate-sdk": "^1.6.0",
-    "@restatedev/restate-sdk-clients": "^1.6.0",
+    "@restatedev/restate-sdk": "^1.9.0",
+    "@restatedev/restate-sdk-clients": "^1.9.0",
     "heapdump": "^0.3.15",
     "uuid": "^9.0.0"
   },
   "devDependencies": {
     "@types/heapdump": "^0.3.4",
-    "@types/node": "^20.17.4",
+    "@types/node": "^20.19.11",
     "@types/uuid": "^10.0.0",
     "tsx": "^4.15.7"
   },
   "engines": {
-    "node": ">= 18.13"
+    "node": ">= 20.19"
   }
 }

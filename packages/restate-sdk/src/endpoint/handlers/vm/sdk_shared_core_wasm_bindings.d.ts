@@ -17,6 +17,27 @@ export enum LogLevel {
   ERROR = 4,
   FATAL = 5,
 }
+export enum WasmCommandType {
+  Input = 0,
+  Output = 1,
+  GetState = 2,
+  GetStateKeys = 3,
+  SetState = 4,
+  ClearState = 5,
+  ClearAllState = 6,
+  GetPromise = 7,
+  PeekPromise = 8,
+  CompletePromise = 9,
+  Sleep = 10,
+  Call = 11,
+  OneWayCall = 12,
+  SendSignal = 13,
+  Run = 14,
+  AttachInvocation = 15,
+  GetInvocationOutput = 16,
+  CompleteAwakeable = 17,
+  CancelInvocation = 18,
+}
 export interface WasmFailure {
   code: number;
   message: string;
@@ -77,6 +98,7 @@ export class WasmInput {
   readonly key: string;
   readonly headers: WasmHeader[];
   readonly input: Uint8Array;
+  readonly random_seed: bigint;
 }
 export class WasmResponseHead {
   private constructor();
@@ -86,11 +108,33 @@ export class WasmResponseHead {
 }
 export class WasmVM {
   free(): void;
-  constructor(headers: WasmHeader[], log_level: LogLevel, logger_id: number);
+  constructor(
+    headers: WasmHeader[],
+    log_level: LogLevel,
+    logger_id: number,
+    disable_payload_checks: boolean
+  );
   get_response_head(): WasmResponseHead;
   notify_input(buffer: Uint8Array): void;
   notify_input_closed(): void;
   notify_error(error_message: string, stacktrace?: string | null): void;
+  notify_error_with_delay_override(
+    error_message: string,
+    stacktrace?: string | null,
+    delay_override?: bigint | null
+  ): void;
+  notify_error_for_next_command(
+    error_message: string,
+    stacktrace: string | null | undefined,
+    wasm_command_type: WasmCommandType
+  ): void;
+  notify_error_for_specific_command(
+    error_message: string,
+    stacktrace: string | null | undefined,
+    wasm_command_type: WasmCommandType,
+    command_index: number,
+    command_name?: string | null
+  ): void;
   take_output(): any;
   is_ready_to_execute(): boolean;
   is_completed(handle: number): boolean;
@@ -102,7 +146,7 @@ export class WasmVM {
   sys_set_state(key: string, buffer: Uint8Array): void;
   sys_clear_state(key: string): void;
   sys_clear_all_state(): void;
-  sys_sleep(millis: bigint): number;
+  sys_sleep(millis: bigint, name?: string | null): number;
   sys_attach_invocation(invocation_id: string): number;
   sys_get_invocation_output(invocation_id: string): number;
   sys_call(
@@ -137,11 +181,21 @@ export class WasmVM {
     error_message: string,
     error_stacktrace: string | null | undefined,
     attempt_duration: bigint,
-    config: WasmExponentialRetryConfig
+    config?: WasmExponentialRetryConfig | null
+  ): void;
+  propose_run_completion_failure_transient_with_delay_override(
+    handle: number,
+    error_message: string,
+    error_stacktrace: string | null | undefined,
+    attempt_duration: bigint,
+    delay_override?: bigint | null,
+    max_retry_attempts_override?: number | null,
+    max_retry_duration_override?: bigint | null
   ): void;
   sys_cancel_invocation(target_invocation_id: string): void;
   sys_write_output_success(buffer: Uint8Array): void;
   sys_write_output_failure(value: WasmFailure): void;
   sys_end(): void;
   is_processing(): boolean;
+  last_command_index(): number;
 }

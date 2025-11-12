@@ -11,7 +11,7 @@
 
 import * as restate from "@restatedev/restate-sdk";
 import { serde } from "@restatedev/restate-sdk-zod";
-import { z } from "zod";
+import { z } from "zod/v3";
 
 const Greeting = z.object({
   name: z.string(),
@@ -20,7 +20,7 @@ const Greeting = z.object({
 const greeter = restate.service({
   name: "greeter",
   handlers: {
-    greet: restate.handlers.handler(
+    greet: restate.createServiceHandler(
       {
         input: serde.zod(Greeting),
         output: serde.zod(z.string()),
@@ -34,4 +34,4 @@ const greeter = restate.service({
 
 export type Greeter = typeof greeter;
 
-restate.endpoint().bind(greeter).listen();
+restate.serve({ services: [greeter] });

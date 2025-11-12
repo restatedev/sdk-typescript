@@ -1,0 +1,17 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "name": "Restate Typescript SDK",
+  "entryPoints": [
+    "packages/restate-sdk-core",
+    "packages/restate-sdk",
+    "packages/restate-sdk-clients",
+    "packages/restate-sdk-testcontainers",
+    "packages/restate-sdk-zod"
+  ],
+  "entryPointStrategy": "packages",
+  "packageOptions": {
+    "entryPoints": ["src/index.ts"],
+    "tsconfig": "tsconfig.json"
+  },
+  "out": "docs-out"
+}

@@ -1,6 +1,6 @@
 {
   "name": "@restatedev/restate-sdk-examples",
-  "version": "1.6.0",
+  "version": "1.9.0",
   "description": "Typescript SDK examples",
   "private": true,
   "author": "Restate Developers",
@@ -22,9 +22,9 @@
   ],
   "scripts": {
     "build": "tsc -b",
-    "lint": "eslint --ignore-path .eslintignore --max-warnings=0 --ext .ts .",
-    "format": "prettier --ignore-path .eslintignore --write \"**/*.+(js|ts|json)\"",
-    "format-check": "prettier --ignore-path .eslintignore --check \"**/*.+(js|ts|json)\"",
+    "lint": "eslint --max-warnings=0 .",
+    "format": "prettier --ignore-path ../../.prettierignore --write \"**/*.+(js|ts|json)\"",
+    "format-check": "prettier --ignore-path ../../.prettierignore --check \"**/*.+(js|ts|json)\"",
     "test": "vitest run --silent",
     "verify": "npm run format-check && npm run lint && npm run build",
     "release": "",
@@ -36,14 +36,16 @@
     "ingress": "RESTATE_LOGGING=debug tsx ./src/ingress_client.ts"
   },
   "dependencies": {
-    "@restatedev/restate-sdk": "^1.6.0",
-    "@restatedev/restate-sdk-clients": "^1.6.0"
+    "@restatedev/restate-sdk": "^1.9.0",
+    "@restatedev/restate-sdk-zod": "^1.9.0",
+    "@restatedev/restate-sdk-clients": "^1.9.0",
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "tsx": "^4.15.7",
-    "@restatedev/restate-sdk-testcontainers": "^1.6.0"
+    "@restatedev/restate-sdk-testcontainers": "^1.9.0"
   },
   "engines": {
-    "node": ">= 18.13"
+    "node": ">= 22.15"
   }
 }

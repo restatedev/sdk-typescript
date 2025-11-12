@@ -1,0 +1,16 @@
+node_modules
+dist
+**/src/generated/**
+buf.lock
+.idea
+.api
+!.api/.gitkeep
+test_report
+restate-sdk-test-suite.jar
+.restate
+docs-out
+.wrangler
+.next
+.cdk.staging
+cdk.out
+lambda.zip

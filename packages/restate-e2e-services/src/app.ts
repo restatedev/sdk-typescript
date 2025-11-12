@@ -31,15 +31,11 @@ import path from "path";
 // Optional: trigger a heap snapshot on signal
 process.on("SIGUSR2", () => {
   const filename = path.join("/opt", `heap-${Date.now()}.heapsnapshot`);
-  // eslint-disable-next-line no-console
   console.log(`Writing snapshot to ${filename}...`);
   heapdump.writeSnapshot(filename, (err, filename) => {
     if (err) {
-      // eslint-disable-next-line no-console
       console.error(err);
-    }
-    // eslint-disable-next-line no-console
-    else console.log(`Heap snapshot written to ${filename}`);
+    } else console.log(`Heap snapshot written to ${filename}`);
   });
 });
 
@@ -62,6 +58,8 @@ if (process.env.E2E_REQUEST_SIGNING) {
 }
 
 let INFLIGHT_REQUESTS = 0;
+let ACTIVE_SESSIONS = 0;
+const sessions = new Map();
 
 const handler = endpoint.http2Handler();
 const server = http2.createServer((req, res) => {
@@ -72,10 +70,40 @@ const server = http2.createServer((req, res) => {
   handler(req, res);
 });
 
+server.on("session", (session) => {
+  const sessionId = ACTIVE_SESSIONS++;
+  const streams = new Set();
+  sessions.set(sessionId, streams);
+
+  const handleCloseSession = () => {
+    sessions.delete(sessionId);
+  };
+
+  session.on("close", handleCloseSession);
+  session.on("error", handleCloseSession);
+
+  session.on("stream", (stream) => {
+    streams.add(`${sessionId}_${stream.id}`);
+
+    const handleCloseStream = () => {
+      streams.delete(`${sessionId}_${stream.id}`);
+    };
+
+    stream.on("close", handleCloseStream);
+    stream.on("error", handleCloseStream);
+  });
+
+  return undefined;
+});
+
 setInterval(() => {
-  // eslint-disable-next-line no-console
   console.log(
     `${new Date().toISOString()}: Inflight requests: ${INFLIGHT_REQUESTS}`
+  );
+  console.table(
+    Array.from(sessions.values()).map((set: Set<string>) => ({
+      "#streams": set.size,
+    }))
   );
 }, 30 * 1000);
 

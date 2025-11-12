@@ -11,15 +11,18 @@
 
 import {
   ensureError,
+  logError,
   RestateError,
-  SUSPENDED_ERROR_CODE,
+  RetryableError,
   TerminalError,
 } from "../../types/errors.js";
-import type { ProtocolMode } from "../../types/discovery.js";
-import type { ComponentHandler } from "../../types/components.js";
-import { parseUrlComponents } from "../../types/components.js";
+import type {
+  Endpoint as EndpointManifest,
+  ProtocolMode,
+} from "../discovery.js";
+import type { Component, ComponentHandler } from "../components.js";
+import { parseUrlComponents } from "../components.js";
 import { X_RESTATE_SERVER } from "../../user_agent.js";
-import type { EndpointBuilder } from "../endpoint_builder.js";
 import { type ReadableStream, TransformStream } from "node:stream/web";
 import { OnceStream } from "../../utils/streams.js";
 import { ContextImpl } from "../../context_impl.js";
@@ -34,9 +37,15 @@ import {
 } from "../../logging/console_logger_transport.js";
 import {
   LoggerContext,
+  type LoggerTransport,
   LogSource,
   RestateLogLevel,
 } from "../../logging/logger_transport.js";
+import {
+  type JournalValueCodec,
+  millisOrDurationToMillis,
+} from "@restatedev/restate-sdk-core";
+import type { Endpoint } from "../endpoint.js";
 
 export interface Headers {
   [name: string]: string | string[] | undefined;
@@ -71,6 +80,51 @@ export interface RestateHandler {
   ): Promise<RestateResponse>;
 }
 
+const ENDPOINT_MANIFEST_V2 = "application/vnd.restate.endpointmanifest.v2+json";
+const ENDPOINT_MANIFEST_V3 = "application/vnd.restate.endpointmanifest.v3+json";
+const ENDPOINT_MANIFEST_V4 = "application/vnd.restate.endpointmanifest.v4+json";
+
+export function tryCreateContextualLogger(
+  loggerTransport: LoggerTransport,
+  url: string,
+  headers: Headers,
+  additionalContext?: { [name: string]: string }
+): Logger | undefined {
+  try {
+    const path = new URL(url, "https://example.com").pathname;
+    const parsed = parseUrlComponents(path);
+    if (parsed.type !== "invoke") {
+      return undefined;
+    }
+    const invocationId = invocationIdFromHeaders(headers);
+    return createLogger(
+      loggerTransport,
+      LogSource.SYSTEM,
+      new LoggerContext(
+        invocationId,
+        parsed.componentName,
+        parsed.handlerName,
+        undefined,
+        undefined,
+        additionalContext
+      )
+    );
+  } catch {
+    return undefined;
+  }
+}
+
+function invocationIdFromHeaders(headers: Headers) {
+  const invocationIdHeader = headers["x-restate-invocation-id"];
+  const invocationId =
+    typeof invocationIdHeader === "string"
+      ? invocationIdHeader
+      : Array.isArray(invocationIdHeader)
+        ? (invocationIdHeader[0] ?? "unknown id")
+        : "unknown id";
+  return invocationId;
+}
+
 /**
  * This is an internal API to support 'fetch' like handlers.
  * It supports both request-reply mode and bidirectional streaming mode.
@@ -84,8 +138,9 @@ export class GenericHandler implements RestateHandler {
   private readonly identityVerifier?: vm.WasmIdentityVerifier;
 
   constructor(
-    readonly endpoint: EndpointBuilder,
-    private readonly protocolMode: ProtocolMode
+    readonly endpoint: Endpoint,
+    private readonly protocolMode: ProtocolMode,
+    private readonly additionalDiscoveryFields: Partial<EndpointManifest>
   ) {
     // Setup identity verifier
     if (
@@ -117,8 +172,14 @@ export class GenericHandler implements RestateHandler {
       return await this._handle(request, context);
     } catch (e) {
       const error = ensureError(e);
-      this.endpoint.rlog.error(
-        "Error while handling invocation: " + (error.stack ?? error.message)
+      (
+        tryCreateContextualLogger(
+          this.endpoint.loggerTransport,
+          request.url,
+          request.headers
+        ) ?? this.endpoint.rlog
+      ).error(
+        "Error while handling request: " + (error.stack ?? error.message)
       );
       return this.toErrorResponse(
         error instanceof RestateError ? error.code : 500,
@@ -165,13 +226,13 @@ export class GenericHandler implements RestateHandler {
       this.endpoint.rlog.warn(errorMessage);
       return this.toErrorResponse(415, errorMessage);
     }
-    const method = this.endpoint.componentByName(parsed.componentName);
-    if (!method) {
+    const service = this.endpoint.components.get(parsed.componentName);
+    if (!service) {
       const msg = `No service found for URL: ${JSON.stringify(parsed)}`;
       this.endpoint.rlog.error(msg);
       return this.toErrorResponse(404, msg);
     }
-    const handler = method?.handlerMatching(parsed);
+    const handler = service?.handlerMatching(parsed);
     if (!handler) {
       const msg = `No service found for URL: ${JSON.stringify(parsed)}`;
       this.endpoint.rlog.error(msg);
@@ -184,6 +245,7 @@ export class GenericHandler implements RestateHandler {
     }
 
     return this.handleInvoke(
+      service,
       handler,
       request.body,
       request.headers,
@@ -206,7 +268,7 @@ export class GenericHandler implements RestateHandler {
       .filter(([, v]) => v !== undefined)
       .map(
         ([k, v]) =>
-          new vm.WasmHeader(k, v instanceof Array ? v[0] : (v as string))
+          new vm.WasmHeader(k, v instanceof Array ? v[0]! : (v as string))
       );
 
     try {
@@ -222,6 +284,7 @@ export class GenericHandler implements RestateHandler {
   }
 
   private async handleInvoke(
+    service: Component,
     handler: ComponentHandler,
     body: ReadableStream<Uint8Array>,
     headers: Headers,
@@ -229,6 +292,12 @@ export class GenericHandler implements RestateHandler {
     abortSignal: AbortSignal,
     additionalContext: AdditionalContext
   ): Promise<RestateResponse> {
+    const journalValueCodec: JournalValueCodec = this.endpoint.journalValueCodec
+      ? await this.endpoint.journalValueCodec
+      : {
+          encode: (entry) => entry,
+          decode: (entry) => Promise.resolve(entry),
+        };
     const loggerId = Math.floor(Math.random() * 4_294_967_295 /* u32::MAX */);
 
     try {
@@ -237,12 +306,13 @@ export class GenericHandler implements RestateHandler {
         .filter(([, v]) => v !== undefined)
         .map(
           ([k, v]) =>
-            new vm.WasmHeader(k, v instanceof Array ? v[0] : (v as string))
+            new vm.WasmHeader(k, v instanceof Array ? v[0]! : (v as string))
         );
       const coreVm = new vm.WasmVM(
         vmHeaders,
         restateLogLevelToWasmLogLevel(DEFAULT_CONSOLE_LOGGER_LOG_LEVEL),
-        loggerId
+        loggerId,
+        this.endpoint.journalValueCodec !== undefined
       );
       const responseHead = coreVm.get_response_head();
       const responseHeaders = responseHead.headers.reduce(
@@ -263,11 +333,26 @@ export class GenericHandler implements RestateHandler {
         createLogger(
           this.endpoint.loggerTransport,
           LogSource.JOURNAL,
-          undefined
+          new LoggerContext(
+            invocationIdFromHeaders(headers),
+            service.name(),
+            handler.name(),
+            undefined,
+            undefined,
+            additionalContext
+          )
         )
       );
 
       const inputReader = body.getReader();
+      abortSignal.addEventListener(
+        "abort",
+        () => {
+          invocationLoggers.delete(loggerId);
+          void inputReader.cancel();
+        },
+        { once: true }
+      );
 
       // Now buffer input entries
       while (!coreVm.is_ready_to_execute()) {
@@ -354,32 +439,66 @@ export class GenericHandler implements RestateHandler {
         invocationRequest,
         invocationEndPromise,
         inputReader,
-        outputWriter
+        outputWriter,
+        journalValueCodec,
+        service.options?.serde,
+        service.options?.asTerminalError
       );
 
-      // Finally invoke user handler
-      handler
-        .invoke(ctx, input.input)
-        .then((bytes) => {
-          coreVm.sys_write_output_success(bytes);
+      journalValueCodec
+        .decode(input.input)
+        .catch((e) =>
+          Promise.reject(
+            new TerminalError(
+              `Failed to decode input using journal value codec: ${
+                ensureError(e).message
+              }`,
+              {
+                errorCode: 400,
+              }
+            )
+          )
+        )
+        .then((decodedInput) =>
+          // Invoke user handler code
+          handler.invoke(ctx, decodedInput)
+        )
+        .then((output) => {
+          // Write output result
+          coreVm.sys_write_output_success(journalValueCodec.encode(output));
           coreVm.sys_end();
           vmLogger.info("Invocation completed successfully.");
         })
         .catch((e) => {
-          const error = ensureError(e);
-          if (
-            !(error instanceof RestateError) ||
-            error.code !== SUSPENDED_ERROR_CODE
-          ) {
-            vmLogger.warn("Invocation completed with an error.\n", error);
-          }
+          // Convert to Error
+          const error = ensureError(e, service.options?.asTerminalError);
+          logError(vmLogger, error);
 
+          // If TerminalError, handle it here.
+          // NOTE: this can still fail!
           if (error instanceof TerminalError) {
             coreVm.sys_write_output_failure({
               code: error.code,
               message: error.message,
             });
             coreVm.sys_end();
+            return;
+          }
+
+          // Not a terminal error, have the below catch handle it
+          throw error;
+        })
+        .catch((e) => {
+          // Handle any other error now (retryable errors)
+          const error = ensureError(e);
+          if (error instanceof RetryableError) {
+            coreVm.notify_error_with_delay_override(
+              error.message,
+              error.stack,
+              error.retryAfter !== undefined
+                ? BigInt(millisOrDurationToMillis(error.retryAfter))
+                : undefined
+            );
           } else {
             coreVm.notify_error(error.message, error.stack);
           }
@@ -429,22 +548,116 @@ export class GenericHandler implements RestateHandler {
       return this.toErrorResponse(415, errorMessage);
     }
 
-    if (
-      !acceptVersionsString.includes(
-        "application/vnd.restate.endpointmanifest.v1+json"
-      )
-    ) {
+    // Negotiate version to use
+    let manifestVersion;
+    if (acceptVersionsString.includes(ENDPOINT_MANIFEST_V4)) {
+      manifestVersion = 4;
+    } else if (acceptVersionsString.includes(ENDPOINT_MANIFEST_V3)) {
+      manifestVersion = 3;
+    } else if (acceptVersionsString.includes(ENDPOINT_MANIFEST_V2)) {
+      manifestVersion = 2;
+    } else {
       const errorMessage = `Unsupported service discovery protocol version '${acceptVersionsString}'`;
       this.endpoint.rlog.warn(errorMessage);
       return this.toErrorResponse(415, errorMessage);
     }
 
-    const discovery = this.endpoint.computeDiscovery(this.protocolMode);
-    const body = JSON.stringify(discovery);
+    const discovery = {
+      ...this.endpoint.discoveryMetadata,
+      ...this.additionalDiscoveryFields,
+      protocolMode: this.protocolMode,
+    };
 
+    const checkUnsupportedFeature = <T extends object>(
+      obj: T,
+      ...fields: Array<keyof T>
+    ) => {
+      for (const field of fields) {
+        if (field in obj && obj[field] !== undefined) {
+          return this.toErrorResponse(
+            500,
+            `The code uses the new discovery feature '${String(
+              field
+            )}' but the runtime doesn't support it yet (discovery protocol negotiated version ${manifestVersion}). Either remove the usage of this feature, or upgrade the runtime.`
+          );
+        }
+      }
+      return;
+    };
+
+    // Verify none of the manifest v3 configuration options are used.
+    if (manifestVersion < 3) {
+      for (const service of discovery.services) {
+        const error = checkUnsupportedFeature(
+          service,
+          "journalRetention",
+          "idempotencyRetention",
+          "inactivityTimeout",
+          "abortTimeout",
+          "enableLazyState",
+          "ingressPrivate"
+        );
+        if (error !== undefined) {
+          return error;
+        }
+        for (const handler of service.handlers) {
+          const error = checkUnsupportedFeature(
+            handler,
+            "journalRetention",
+            "idempotencyRetention",
+            "workflowCompletionRetention",
+            "inactivityTimeout",
+            "abortTimeout",
+            "enableLazyState",
+            "ingressPrivate"
+          );
+          if (error !== undefined) {
+            return error;
+          }
+        }
+      }
+    }
+
+    if (manifestVersion < 4) {
+      // Blank the lambda compression field. No need to fail in this case.
+      discovery.lambdaCompression = undefined;
+      for (const service of discovery.services) {
+        const error = checkUnsupportedFeature(
+          service,
+          "retryPolicyExponentiationFactor",
+          "retryPolicyInitialInterval",
+          "retryPolicyMaxAttempts",
+          "retryPolicyMaxInterval",
+          "retryPolicyOnMaxAttempts"
+        );
+        if (error !== undefined) {
+          return error;
+        }
+        for (const handler of service.handlers) {
+          const error = checkUnsupportedFeature(
+            handler,
+            "retryPolicyExponentiationFactor",
+            "retryPolicyInitialInterval",
+            "retryPolicyMaxAttempts",
+            "retryPolicyMaxInterval",
+            "retryPolicyOnMaxAttempts"
+          );
+          if (error !== undefined) {
+            return error;
+          }
+        }
+      }
+    }
+
+    const body = JSON.stringify(discovery);
     return {
       headers: {
-        "content-type": "application/vnd.restate.endpointmanifest.v1+json",
+        "content-type":
+          manifestVersion === 2
+            ? ENDPOINT_MANIFEST_V2
+            : manifestVersion === 3
+              ? ENDPOINT_MANIFEST_V3
+              : ENDPOINT_MANIFEST_V4,
         "x-restate-server": X_RESTATE_SERVER,
       },
       statusCode: 200,
