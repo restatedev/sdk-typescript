@@ -16,8 +16,8 @@
 
 import type {
   Context,
-  GenericCall,
-  GenericSend,
+  Call,
+  Send,
   InvocationHandle,
   InvocationPromise,
   ObjectContext,
@@ -168,7 +168,7 @@ function optsFromArgs(args: unknown[]): {
 }
 
 export const makeRpcCallProxy = <T>(
-  genericCall: (call: GenericCall<unknown, unknown>) => Promise<unknown>,
+  genericCall: (call: Call<unknown, unknown>) => Promise<unknown>,
   defaultSerde: Serde<any>,
   service: string,
   key?: string
@@ -203,7 +203,7 @@ export const makeRpcCallProxy = <T>(
 };
 
 export const makeRpcSendProxy = <T>(
-  genericSend: (send: GenericSend<unknown>) => void,
+  genericSend: (send: Send<unknown>) => void,
   defaultSerde: Serde<any>,
   service: string,
   key?: string,
