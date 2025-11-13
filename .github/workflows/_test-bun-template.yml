@@ -35,14 +35,18 @@ jobs:
         with:
           bun-version: latest
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+
       - name: Install dependencies
-        run: npm install
+        run: pnpm install --frozen-lockfile
 
       - name: Build packages
-        run: npm run build
+        run: pnpm build
 
       - name: Start Bun service
-        working-directory: templates/bun
+        working-directory: packages/examples/bun
         run: |
           bun start &
           echo $! > service.pid
@@ -75,13 +79,13 @@ jobs:
           docker logs $(docker ps -q --filter ancestor=docker.restate.dev/restatedev/restate:latest)
 
           echo "=== Service logs ==="
-          if [ -f templates/bun/service.pid ]; then
+          if [ -f packages/examples/bun/service.pid ]; then
             ps aux | grep bun || true
           fi
 
       - name: Cleanup
         if: always()
-        working-directory: templates/bun
+        working-directory: packages/examples/bun
         run: |
           if [ -f service.pid ]; then
             kill $(cat service.pid) || true

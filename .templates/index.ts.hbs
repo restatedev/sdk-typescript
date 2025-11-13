@@ -1,0 +1,28 @@
+/*
+ * Copyright (c) TODO: Add copyright holder
+ *
+ * This file is part of TODO: Add project name,
+ * which is released under the MIT license.
+ *
+ * You can find a copy of the license in file LICENSE in the root
+ * directory of this repository or package, or at
+ * TODO: Add repository URL
+ */
+
+{{#if (eq type "lib")}}
+export function hello(name: string): string {
+  return `Hello, ${name}!`;
+}
+{{/if}}
+{{#if (eq type "test")}}
+import { describe, it, expect } from "vitest";
+
+describe("{{name}}", () => {
+  it("should work", () => {
+    expect(true).toBe(true);
+  });
+});
+{{/if}}
+{{#if (eq type "example")}}
+console.log("Example: {{name}}");
+{{/if}}

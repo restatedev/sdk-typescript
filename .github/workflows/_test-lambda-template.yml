@@ -64,19 +64,23 @@ jobs:
           timeout 60 bash -c 'until curl -f http://localhost:4566/_localstack/health; do sleep 2; done'
           echo "LocalStack is ready!"
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+
       - name: Install dependencies
-        run: npm install
+        run: pnpm install --frozen-lockfile
 
       - name: Build packages
-        run: npm run build
+        run: pnpm build
 
       - name: Build Lambda code
-        working-directory: templates/lambda
-        run: npm run build
+        working-directory: packages/examples/lambda
+        run: pnpm build
 
       - name: Create Lambda deployment package
-        working-directory: templates/lambda
-        run: npm run bundle
+        working-directory: packages/examples/lambda
+        run: pnpm bundle
 
       - name: Create IAM roles in LocalStack
         run: |
@@ -118,7 +122,7 @@ jobs:
             }'
 
       - name: Deploy Lambda to LocalStack
-        working-directory: templates/lambda
+        working-directory: packages/examples/lambda
         run: |
           FUNCTION_ARN=$(awslocal lambda create-function \
             --function-name restate-greeter \

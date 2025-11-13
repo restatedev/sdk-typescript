@@ -23,11 +23,21 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           registry-url: "https://registry.npmjs.org"
-      - run: npm run clean
-      - run: npm ci
-      - run: npm run build
-      - run: npm run verify
-      - run: npm pack --workspaces true --workspace=./packages --include-workspace-root false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v2.x
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm verify
+      - run: pnpm pack --filter "./packages/libs/**" --pack-destination .
       - run: find -type f -name "restatedev-restate-sdk-[0-9.]*\.tgz" | xargs -I {} mv {} restatedev-restate-sdk.tgz
       - run: find -type f -name "restatedev-restate-sdk-clients-[0-9.]*\.tgz" | xargs -I {} mv {} restatedev-restate-sdk-clients.tgz
       - run: find -type f -name "restatedev-restate-sdk-core-[0-9.]*\.tgz" | xargs -I {} mv {} restatedev-restate-sdk-core.tgz
@@ -58,23 +68,14 @@ jobs:
           # We're using 0.0.0 to avoid this version to be higher than released versions.
           # To use it:
           # "@restatedev/restate-sdk": "^0.0.0-SNAPSHOT"
-          # Hack around the fact that npm version simply doesn't update dependants -_-"
-          # see https://github.com/npm/cli/pull/4588
           VERSION="0.0.0-SNAPSHOT-$(date '+%Y%m%d%H%M%S')"
-          npm --workspaces version $VERSION --no-git-tag-version --no-workspaces-update
-          set() {
-            npm --workspaces pkg get "dependencies.$1" |
-              jq -r 'with_entries(select(.value != {})) | keys[]' |
-              xargs -I% npm --workspace % pkg set "dependencies.$1=$VERSION"
-          }
-          set "@restatedev/restate-sdk-core"
-          set "@restatedev/restate-sdk"
-          set "@restatedev/restate-sdk-cloudflare-workers"
-          set "@restatedev/restate-sdk-clients"
-          set "@restatedev/restate-sdk-testcontainers"
-          set "@restatedev/restate-sdk-zod"
-          npm --workspaces update
+          # Update all lib package versions using jq
+          for pkg in packages/libs/*/package.json; do
+            jq --arg ver "$VERSION" '.version = $ver' "$pkg" > "$pkg.tmp" && mv "$pkg.tmp" "$pkg"
+          done
+          # Update workspace protocol dependencies to use the snapshot version
+          pnpm install --no-frozen-lockfile
           # We use dist-tag dev for the snapshot releases, see https://docs.npmjs.com/cli/v9/commands/npm-dist-tag for more info
           # A snapshot MUST not be published with latest tag (omitting --tag defaults to latest) to avoid users to install snapshot releases
-          # when using npm install
-          npm publish --workspaces true --workspace=./packages --tag dev --access public --include-workspace-root false
+          # when using pnpm install
+          pnpm --filter "./packages/libs/**" publish --tag dev --access public --no-git-checks

@@ -48,7 +48,7 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           context: .
-          file: packages/restate-e2e-services/Dockerfile
+          file: packages/tests/restate-e2e-services/Dockerfile
           push: true
           platforms: linux/arm64,linux/amd64
           tags: ${{ steps.meta.outputs.tags }}

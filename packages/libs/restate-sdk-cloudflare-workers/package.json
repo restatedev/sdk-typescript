@@ -1,0 +1,61 @@
+{
+  "name": "@restatedev/restate-sdk-cloudflare-workers",
+  "version": "1.9.0",
+  "description": "Typescript SDK for Restate",
+  "author": "Restate Developers",
+  "email": "code@restate.dev",
+  "license": "MIT",
+  "homepage": "https://github.com/restatedev/sdk-typescript#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/restatedev/sdk-typescript.git"
+  },
+  "bugs": {
+    "url": "https://github.com/restatedev/sdk-typescript/issues"
+  },
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.cts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./fetch": {
+      "import": "./dist/fetch.js",
+      "require": "./dist/fetch.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "turbo run _build --filter={.}...",
+    "_build": "./patch_sdk_cf_workers.sh",
+    "clean": "rm -rf dist *.tsbuildinfo .turbo",
+    "check:exports": "turbo run _check:exports --filter={.}...",
+    "_check:exports": "attw --pack .",
+    "check:api": "turbo run _check:api --filter={.}...",
+    "_check:api": "api-extractor run --local && api-extractor run --local --config api-extractor.fetch.json",
+    "prepublishOnly": "pnpm -w verify"
+  },
+  "dependencies": {
+    "@restatedev/restate-sdk-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.115",
+    "@restatedev/restate-sdk": "workspace:*"
+  },
+  "typesVersions": {
+    "*": {
+      "fetch": [
+        "./dist/fetch.d.ts"
+      ]
+    }
+  }
+}

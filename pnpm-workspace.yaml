@@ -1,0 +1,17 @@
+packages:
+  - packages/libs/*
+  - packages/tests/*
+  - packages/examples/*
+
+catalog:
+  zod: ^4.1.12
+
+onlyBuiltDependencies:
+  - cpu-features
+  - esbuild
+  - heapdump
+  - protobufjs
+  - sharp
+  - ssh2
+  - unrs-resolver
+  - workerd

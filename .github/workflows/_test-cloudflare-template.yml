@@ -30,16 +30,20 @@ jobs:
         with:
           node-version: "22"
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+
       - name: Install dependencies
-        run: npm install
+        run: pnpm install --frozen-lockfile
 
       - name: Build packages
-        run: npm run build
+        run: pnpm build
 
       - name: Start Cloudflare Worker (wrangler dev)
-        working-directory: templates/cloudflare
+        working-directory: packages/examples/cloudflare
         run: |
-          npm run start &
+          pnpm start &
           echo $! > service.pid
           sleep 10
 
@@ -70,13 +74,13 @@ jobs:
           docker logs $(docker ps -q --filter ancestor=docker.restate.dev/restatedev/restate:latest)
 
           echo "=== Wrangler logs ==="
-          if [ -f templates/cloudflare/service.pid ]; then
+          if [ -f packages/examples/cloudflare/service.pid ]; then
             ps aux | grep wrangler || true
           fi
 
       - name: Cleanup
         if: always()
-        working-directory: templates/cloudflare
+        working-directory: packages/examples/cloudflare
         run: |
           if [ -f service.pid ]; then
             kill $(cat service.pid) || true
