@@ -69,8 +69,9 @@ jobs:
 
       # support importing oci-format restate.tar
       - name: Set up Docker containerd snapshotter
-        uses: crazy-max/ghaction-setup-docker@v3
+        uses: docker/setup-docker-action@v4
         with:
+          version: "v28.5.2"
           set-host: true
           daemon-config: |
             {
@@ -129,7 +130,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ github.workflow }}
 
       - name: Run test tool
-        uses: restatedev/sdk-test-suite@v3.2
+        uses: restatedev/sdk-test-suite@v3.4
         with:
           restateContainerImage: ${{ inputs.restateCommit != '' && 'localhost/restatedev/restate-commit-download:latest' || (inputs.restateImage != '' && inputs.restateImage || 'ghcr.io/restatedev/restate:main') }}
           serviceContainerImage: ${{ inputs.serviceImage != '' && inputs.serviceImage || 'restatedev/typescript-test-services' }}
