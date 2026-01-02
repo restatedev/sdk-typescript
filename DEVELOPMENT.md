@@ -298,9 +298,15 @@ When the release is published, GitHub Actions automatically publishes packages t
 
 ## Re-generating the Discovery Manifest
 
-```bash
-npx --package=json-schema-to-typescript json2ts endpoint_manifest_schema.json packages/libs/restate-sdk/src/endpoint/discovery.ts
-```
+The discovery manifest types in `packages/libs/restate-sdk/src/endpoint/discovery.ts` are auto-generated from the JSON Schema defined in the Restate server repository. These types define the structure that SDK endpoints return during service discovery.
+
+To regenerate after a protocol update:
+
+1. Download the latest schema from the [Restate server repo](https://github.com/restatedev/restate/blob/main/service-protocol/endpoint_manifest_schema.json)
+2. Run:
+   ```bash
+   npx --package=json-schema-to-typescript json2ts endpoint_manifest_schema.json packages/libs/restate-sdk/src/endpoint/discovery.ts
+   ```
 
 ## After Releasing
 
