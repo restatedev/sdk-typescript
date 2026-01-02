@@ -348,4 +348,23 @@ Path mappings are auto-generated when packages are created/deleted.
 - **Private packages** are source-only and get bundled into public packages automatically
 - Only non-private packages in `packages/libs/` are published
 
+### Building the Shared Core (WASM)
+
+The SDK includes Rust/WASM bindings in `sdk-shared-core-wasm-bindings/`. Most contributors don't need to rebuild this, but if you're modifying the shared core:
+
+```bash
+pnpm build:core
+```
+
+**Prerequisites:**
+- [Rust](https://www.rust-lang.org/tools/install) (version specified in `rust-toolchain.toml`)
+- [wasm-pack](https://rustwasm.github.io/wasm-pack/installer/) - install via `cargo install wasm-pack`
+
+**macOS Note:** If you encounter C compiler errors (from the `ring` crate), install LLVM via Homebrew and set the compiler paths:
+
+```bash
+brew install llvm
+CC=/opt/homebrew/opt/llvm/bin/clang AR=/opt/homebrew/opt/llvm/bin/llvm-ar pnpm build:core
+```
+
 For more detailed information about the monorepo structure and advanced features, see the [template documentation](https://github.com/restatedev/typescript-monorepo-template).
