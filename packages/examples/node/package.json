@@ -4,11 +4,19 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test": "turbo run _test --filter={.}...",
+    "_test": "vitest run",
     "build": "turbo run _build --filter={.}...",
-    "_build": "tsdown src/index.ts --format cjs --minify --target es2020 --out-dir dist --platform node",
-    "dev": "tsx watch --tsconfig ./tsconfig.json ./src/index.ts",
+    "_build": "tsc --project tsconfig.build.json",
+    "dev": "RESTATE_LOGGING=debug tsx --tsconfig ./tsconfig.json ./src/zod_greeter.ts",
+    "object": "RESTATE_LOGGING=debug tsx --tsconfig ./tsconfig.json ./src/object.ts",
+    "greeter": "RESTATE_LOGGING=debug tsx --tsconfig ./tsconfig.json ./src/greeter.ts",
+    "zgreeter": "RESTATE_LOGGING=debug tsx --tsconfig ./tsconfig.json ./src/zod_greeter.ts",
+    "workflow": "RESTATE_LOGGING=debug tsx --tsconfig ./tsconfig.json ./src/workflow.ts",
+    "workflow_client": "RESTATE_LOGGING=debug tsx --tsconfig ./tsconfig.json ./src/workflow_client.ts",
+    "ingress": "RESTATE_LOGGING=debug tsx ./src/ingress_client.ts",
     "start": "turbo run _start --filter={.}...",
-    "_start": "node ./dist/index.cjs",
+    "_start": "node ./dist/zod_greeter.js",
     "clean": "rm -rf dist *.tsbuildinfo .turbo",
     "check:types": "turbo run _check:types --filter={.}...",
     "_check:types": "tsc --noEmit --project tsconfig.build.json",
@@ -16,7 +24,10 @@
   },
   "dependencies": {
     "@restatedev/restate-sdk": "workspace:*",
+    "@restatedev/restate-sdk-core": "workspace:*",
     "@restatedev/restate-sdk-zod": "workspace:*",
+    "@restatedev/restate-sdk-clients": "workspace:*",
+    "@restatedev/restate-sdk-testcontainers": "workspace:*",
     "zod": "catalog:"
   },
   "devDependencies": {}

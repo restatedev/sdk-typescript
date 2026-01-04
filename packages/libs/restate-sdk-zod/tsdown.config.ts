@@ -6,5 +6,7 @@ export default defineConfig({
   exports: true,
   format: ["esm", "cjs"],
   dts: true,
+  clean: true,
+  unbundle: true,
   ignoreWatch: ["dist", ".turbo", "*.tsbuildinfo"],
 });

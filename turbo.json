@@ -20,8 +20,8 @@
       "outputs": []
     },
     "_check:exports": {
-      "dependsOn": ["_build"],
-      "outputs": []
+      "dependsOn": ["_build", "_check:api"],
+      "outputs": []    
     },
     "_check:api": {
       "dependsOn": ["_build"],

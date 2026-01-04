@@ -71,9 +71,6 @@
       "path": "packages/examples/node"
     },
     {
-      "path": "packages/examples/restate-sdk-examples"
-    },
-    {
       "path": "packages/examples/vercel"
     }
   ]
