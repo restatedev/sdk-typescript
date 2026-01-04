@@ -1,12 +1,11 @@
 {
-  "name": "root",
+  "name": "@restatedev/sdk-typescript",
   "version": "1.9.0",
   "description": "Typescript SDK for Restate",
   "author": "Restate Developers",
-  "license": "MIT",
   "email": "code@restate.dev",
+  "license": "MIT",
   "homepage": "https://github.com/restatedev/sdk-typescript#readme",
-  "private": true,
   "repository": {
     "type": "git",
     "url": "git+https://github.com/restatedev/sdk-typescript.git"
@@ -14,79 +13,66 @@
   "bugs": {
     "url": "https://github.com/restatedev/sdk-typescript/issues"
   },
-  "workspaces": [
-    "packages/restate-sdk-core",
-    "packages/restate-sdk",
-    "packages/restate-sdk-cloudflare-workers",
-    "packages/restate-sdk-clients",
-    "packages/restate-sdk-zod",
-    "packages/restate-sdk-examples",
-    "packages/restate-sdk-testcontainers",
-    "packages/restate-e2e-services",
-    "templates/node",
-    "templates/deno",
-    "templates/bun",
-    "templates/vercel",
-    "templates/cloudflare",
-    "templates/lambda"
-  ],
+  "private": true,
   "type": "module",
   "scripts": {
-    "api:extract": "npm run api:extract -ws --if-present",
-    "build": "turbo run build --filter=\"./packages/*\"",
-    "build-docs": "npm run build && npx typedoc",
-    "test": "npm run test -ws --if-present",
-    "lint": "npm run lint -ws --if-present",
-    "format": "npm run format -ws --if-present",
-    "format-check": "npm run format-check -ws --if-present",
-    "verify": "npm run verify -ws --if-present && npm run verify-docs",
+    "preinstall": "npx only-allow pnpm",
+    "clean": "turbo run clean && rm -rf .turbo",
+    "clean:cache": "turbo daemon stop; sleep 1; rm -rf .turbo node_modules/.cache",
+    "build": "turbo run _build --filter=\"./packages/libs/*\"",
+    "build:all": "turbo run _build",
+    "dev": "pnpm --filter \"./packages/libs/*\" --parallel dev",
+    "test": "turbo run _test",
+    "test:watch": "vitest watch",
+    "lint": "turbo run lint",
+    "format": "prettier --write .",
+    "check:format": "prettier --check .",
+    "check:types": "turbo run _check:types",
+    "check:exports": "turbo run _check:exports",
+    "check:api": "turbo run _check:api",
+    "verify": "turbo run check:format lint _check:types _build _check:exports _check:api _test",
     "verify-docs": "npx typedoc",
-    "clean": "find packages templates -type d -name \"dist\" -exec rm -rf {} +"
+    "build-docs": "pnpm build && npx typedoc",
+    "examples:dev": "bash -c 'pnpm --filter \"./packages/examples/${1:-node}\" dev' --",
+    "examples:start": "bash -c 'turbo run _start --filter=\"./packages/examples/${1:-node}...\"' --",
+    "changeset": "changeset",
+    "version": "changeset version",
+    "release": "pnpm build && pnpm changeset publish",
+    "new": "plop package",
+    "delete": "plop delete-package",
+    "add-entry": "plop add-entry",
+    "generate:configs": "node scripts/generate-example-configs.mjs",
+    "deps:check": "pnpm outdated",
+    "deps:update": "pnpm update --latest --recursive",
+    "build:core": "./.tools/build_core.sh",
+    "postbuild:core": "pnpm format"
   },
   "devDependencies": {
-    "@arethetypeswrong/cli": "^0.15.3",
-    "@eslint/eslintrc": "^3.3.1",
-    "@eslint/js": "^9.38.0",
+    "@arethetypeswrong/cli": "^0.18.2",
+    "@changesets/cli": "^2.29.7",
+    "@eslint/js": "^9.37.0",
     "@eslint/json": "^0.13.2",
-    "@microsoft/api-extractor": "^7.53.2",
-    "@release-it-plugins/workspaces": "^4.2.0",
-    "@types/node": "^20.19.11",
-    "@typescript-eslint/eslint-plugin": "^8.46.2",
-    "@typescript-eslint/parser": "^8.46.2",
-    "eslint": "^9.38.0",
-    "eslint-import-resolver-typescript": "^3.6.1",
+    "@microsoft/api-extractor": "^7.53.1",
+    "@types/node": "^24.7.2",
+    "eslint": "^9.37.0",
+    "eslint-import-resolver-typescript": "^3.10.1",
     "eslint-plugin-import": "^2.32.0",
-    "eslint-plugin-require-extensions": "^0.1.3",
     "globals": "^16.4.0",
+    "plop": "^4.0.4",
     "prettier": "^3.6.2",
-    "release-it": "^17.11.0",
-    "tsdown": "^0.16.0",
-    "turbo": "^2.6.0",
+    "tsdown": "^0.15.6",
+    "tsx": "^4.20.6",
+    "turbo": "^2.5.8",
     "typedoc": "^0.28.10",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.46.2",
-    "vitest": "^3.0.9",
+    "typescript-eslint": "^8.46.0",
+    "vitest": "^3.2.4",
     "wasm-pack": "^0.0.0",
     "wasm-pack-inline": "^0.1.2"
   },
+  "packageManager": "pnpm@10.13.1",
   "engines": {
-    "node": ">= 20.19"
-  },
-  "publishConfig": {
-    "@restatedev:registry": "https://registry.npmjs.org",
-    "include-workspace-root": false
-  },
-  "release-it": {
-    "plugins": {
-      "@release-it-plugins/workspaces": true
-    },
-    "git": {
-      "pushRepo": "https://github.com/restatedev/sdk-typescript.git"
-    },
-    "github": {
-      "release": true
-    },
-    "npm": false
-  },
-  "packageManager": "npm@10.2.4"
+    "node": ">=20",
+    "pnpm": ">=10"
+  }
 }

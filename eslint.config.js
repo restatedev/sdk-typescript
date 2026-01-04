@@ -2,6 +2,7 @@ import js from "@eslint/js";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 import json from "@eslint/json";
+import importPlugin from "eslint-plugin-import";
 
 export default [
   {
@@ -59,15 +60,47 @@ export default [
     },
   },
   {
+    files: ["**/*.{ts,tsx,mts,cts}"],
+    plugins: {
+      import: importPlugin,
+    },
+    settings: {
+      "import/resolver": {
+        typescript: {
+          alwaysTryTypes: true,
+          project: "./tsconfig.json",
+        },
+      },
+    },
+    rules: {
+      "import/order": [
+        "off",
+        {
+          groups: [
+            "builtin",
+            "external",
+            "internal",
+            "parent",
+            "sibling",
+            "index",
+          ],
+          "newlines-between": "never",
+          alphabetize: { order: "asc" },
+        },
+      ],
+    },
+  },
+  {
     files: [
-      "**/packages/restate-sdk-examples/**/*.ts",
-      "**/packages/restate-e2e-services/**/*.ts",
-      "**/packages/restate-sdk-testcontainers/**/*.ts",
+      "./packages/examples/**/*.ts",
+      "./packages/tests/restate-e2e-services/**/*.ts",
+      "./packages/libs/restate-sdk-testcontainers/**/*.ts",
     ],
     rules: {
       "no-console": "off",
       "@typescript-eslint/require-await": "off",
       "@typescript-eslint/no-floating-promises": "off",
+      "import/order": "off",
     },
   },
   {

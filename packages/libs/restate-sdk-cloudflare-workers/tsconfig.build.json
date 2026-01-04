@@ -1,0 +1,19 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "composite": true
+  },
+  "include": [
+    "src/**/*"
+  ],
+  "references": [
+    {
+      "path": "../restate-sdk-core/tsconfig.build.json"
+    },
+    {
+      "path": "../restate-sdk/tsconfig.build.json"
+    }
+  ]
+}

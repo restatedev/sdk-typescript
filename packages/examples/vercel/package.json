@@ -1,0 +1,26 @@
+{
+  "name": "@restatedev/vercel",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "turbo run _build --filter={.}...",
+    "_build": "next build",
+    "dev": "next dev",
+    "start": "turbo run _start --filter={.}...",
+    "_start": "next start --port 9080",
+    "clean": "rm -rf dist *.tsbuildinfo .turbo",
+    "check:types": "turbo run _check:types --filter={.}...",
+    "_check:types": "tsc --noEmit --project tsconfig.build.json",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "next": "^16.0.0",
+    "@restatedev/restate-sdk": "workspace:*",
+    "@restatedev/restate-sdk-zod": "workspace:*",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/react": "^19"
+  }
+}

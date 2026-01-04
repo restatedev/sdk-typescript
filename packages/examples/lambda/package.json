@@ -1,0 +1,32 @@
+{
+  "name": "@restatedev/lambda",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "lambda-ts-cdk": "bin/lambda-ts-cdk.js"
+  },
+  "scripts": {
+    "build": "turbo run _build --filter={.}...",
+    "_build": "tsdown",
+    "prebundle": "pnpm build",
+    "bundle": "cd dist && zip -r ../lambda.zip index.mjs*",
+    "deploy": "npx cdk deploy",
+    "destroy": "npx cdk destroy",
+    "clean": "rm -rf dist *.tsbuildinfo .turbo",
+    "check:types": "turbo run _check:types --filter={.}...",
+    "_check:types": "tsc --noEmit --project tsconfig.build.json",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@restatedev/restate-sdk": "workspace:*",
+    "@restatedev/restate-sdk-zod": "workspace:*",
+    "aws-cdk-lib": "^2.155.0",
+    "constructs": "^10.3.0",
+    "source-map-support": "^0.5.21",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "aws-cdk": "^2.155.0"
+  }
+}

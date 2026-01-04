@@ -31,14 +31,16 @@ jobs:
         with:
           node-version: 22.x
           registry-url: "https://registry.npmjs.org"
-      - run: npm run clean
-      - run: npm ci
-      - run: npm run build-docs
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build-docs
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: 'docs-out'
+          path: "docs-out"
 
   # Deployment job
   deploy:

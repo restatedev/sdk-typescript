@@ -1,11 +1,11 @@
 node_modules
 dist
+*.tsbuildinfo
 
 src/generated/*
 buf.lock
 
 .idea
-
 
 packages/*/node_modules/*
 packages/*/dist/*
