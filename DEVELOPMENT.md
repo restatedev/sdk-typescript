@@ -24,7 +24,6 @@ packages/
 │   ├── vercel/
 │   ├── lambda/
 │   ├── cloudflare/
-│   └── restate-sdk-examples/
 └── tests/
     └── restate-e2e-services/      # E2E test services
 ```
