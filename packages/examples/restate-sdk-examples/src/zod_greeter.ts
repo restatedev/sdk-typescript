@@ -9,29 +9,32 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import * as restate from "@restatedev/restate-sdk";
+import * as restate from "@restatedev/restate-sdk/node";
 import { serde } from "@restatedev/restate-sdk-zod";
-import { z } from "zod/v3";
+
+import { z } from "zod";
 
 const Greeting = z.object({
   name: z.string(),
 });
 
+const GreetingResponse = z.object({
+  result: z.string(),
+});
+
 const greeter = restate.service({
-  name: "greeter",
+  name: "Greeter",
   handlers: {
     greet: restate.createServiceHandler(
-      {
-        input: serde.zod(Greeting),
-        output: serde.zod(z.string()),
-      },
-      async (ctx, greeting) => {
-        return `Hello ${greeting.name}!`;
+      { input: serde.zod(Greeting), output: serde.zod(GreetingResponse) },
+      async (ctx: restate.Context, { name }) => {
+        return { result: `You said hi to ${name}!` };
       }
     ),
   },
 });
 
-export type Greeter = typeof greeter;
-
-restate.serve({ services: [greeter] });
+void restate.serve({
+  services: [greeter],
+  port: 9080,
+});
