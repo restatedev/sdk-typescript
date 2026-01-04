@@ -62,11 +62,11 @@ For development, you can use watch mode which provides instant type checking wit
 # Watch all lib packages (type checking only)
 pnpm dev
 
-# In another terminal, run examples in dev mode (uses source directly)
+# In another terminal, run the node example in dev mode (uses source directly)
 pnpm examples:dev
 
 # Or run a specific example
-pnpm examples:dev node
+pnpm examples:dev bun
 ```
 
 ### Testing Changes
@@ -120,12 +120,12 @@ This runs:
 Run examples without building:
 
 ```bash
-pnpm examples:dev              # Run all examples
-pnpm examples:dev node         # Run Node.js example
-pnpm examples:dev restate-sdk-examples  # Run SDK examples
+pnpm examples:dev              # Run Node.js example (default)
+pnpm examples:dev bun          # Run Bun example
+pnpm examples:dev cloudflare   # Run Cloudflare example
 ```
 
-Available examples: `node`, `bun`, `deno`, `vercel`, `lambda`, `cloudflare`, `restate-sdk-examples`
+Available examples: `node` (default), `bun`, `deno`, `vercel`, `lambda`, `cloudflare`
 
 ### Production Mode (Uses Built Output)
 
@@ -133,7 +133,8 @@ Run examples with built packages:
 
 ```bash
 pnpm build                     # Build packages first
-pnpm examples:start node       # Run with built packages
+pnpm examples:start            # Run node example with built packages
+pnpm examples:start bun        # Run bun example with built packages
 ```
 
 ## Package Management
@@ -184,7 +185,7 @@ pnpm clean:cache        # Clear turbo cache
 
 # Development
 pnpm dev                # Watch libs (type checking)
-pnpm examples:dev       # Run all examples (dev mode)
+pnpm examples:dev       # Run node example (dev mode)
 pnpm test:watch         # Test in watch mode
 
 # Quality checks

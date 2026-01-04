@@ -9,7 +9,7 @@
 [Restate](https://restate.dev/) is a system for easily building resilient applications using *distributed durable async/await*.
 
 This package contains utilities to test Restate SDK services against a Restate server container.
-A usage example can be found in [`restate-sdk-examples/test/testcontainers.test.ts`](https://github.com/restatedev/sdk-typescript/blob/main/packages/restate-sdk-examples/test/testcontainers.test.ts)
+A usage example can be found in [`packages/examples/node/test/testcontainers.test.ts`](https://github.com/restatedev/sdk-typescript/blob/main/packages/examples/node/test/testcontainers.test.ts)
 
 For the SDK main package, checkout [`@restatedev/restate-sdk`](../restate-sdk).
 
