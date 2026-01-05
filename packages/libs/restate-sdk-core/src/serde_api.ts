@@ -112,21 +112,39 @@ class StandardSchemaSerde<
     // Standard Schema validate can return a Promise, but Serde must be synchronous
     if (result && typeof result === "object" && "then" in result) {
       throw new TypeError(
-        "Async validation is not supported in Serde. The schema must support synchronous validation."
+        "Async validation is not supported in Serde. Restate SDK supports only synchronous validation."
       );
     }
 
     if (result.issues) {
       const errorMessages = result.issues
-        .map((issue: StandardSchemaV1.Issue) => issue.message)
-        .join(", ");
+        .map(formatStandardSchemaIssue)
+        .join("\n");
       throw new TypeError(
-        `Standard schema validation failed: [${errorMessages}]`
+        `Standard schema validation failed:\n${errorMessages}`
       );
     }
 
     return result.value as StandardSchemaV1.InferOutput<T>;
   }
+}
+
+function formatStandardSchemaIssue(issue: StandardSchemaV1.Issue): string {
+  if (issue.path && issue.path.length > 0) {
+    const jsonPointer =
+      "/" +
+      issue.path
+        .map((p) => {
+          // Handle both PathSegment objects and primitive PropertyKey values
+          if (typeof p === "object" && p !== null && "key" in p) {
+            return String(p.key);
+          }
+          return String(p);
+        })
+        .join("/");
+    return `* (at ${jsonPointer}) ${issue.message}`;
+  }
+  return `* ${issue.message}`;
 }
 
 function isStandardJSONSchemaV1(standard: StandardSchemaV1.Props): boolean {
