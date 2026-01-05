@@ -15,7 +15,7 @@
 import type {
   StandardJSONSchemaV1,
   StandardSchemaV1,
-} from "@standard-schema/spec";
+} from "./standard_schema.js";
 
 export interface Serde<T> {
   contentType?: string;
