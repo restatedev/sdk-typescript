@@ -18,11 +18,9 @@ export interface RestateObjectContext {}
 export interface RestateObjectSharedContext {}
 
 // workflow
-export interface RestateWorkflowSharedContext
-  extends RestateObjectSharedContext {}
+export interface RestateWorkflowSharedContext extends RestateObjectSharedContext {}
 export interface RestateWorkflowContext
-  extends RestateObjectContext,
-    RestateWorkflowSharedContext {}
+  extends RestateObjectContext, RestateWorkflowSharedContext {}
 
 // ----------- service -------------------------------------------------------
 

@@ -12,7 +12,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-namespace */
 
-import type {StandardJSONSchemaV1, StandardSchemaV1} from "@standard-schema/spec";
+import type {
+  StandardJSONSchemaV1,
+  StandardSchemaV1,
+} from "@standard-schema/spec";
 
 export interface Serde<T> {
   contentType?: string;
@@ -52,20 +55,25 @@ class VoidSerde implements Serde<void> {
 
 class StandardSchemaSerde<
   T extends { "~standard": StandardSchemaV1.Props },
-> implements Serde<StandardSchemaV1.InferOutput<T>>
-{
+> implements Serde<StandardSchemaV1.InferOutput<T>> {
   contentType? = "application/json";
   jsonSchema?: object | undefined;
 
-  constructor(private readonly schema: T, private readonly validateOptions?: Record<string, unknown>, jsonSchemaOptions?: Record<string, unknown>) {
+  constructor(
+    private readonly schema: T,
+    private readonly validateOptions?: Record<string, unknown>,
+    jsonSchemaOptions?: Record<string, unknown>
+  ) {
     // Extract JSON schema if available
     const standard = schema["~standard"];
     if (isStandardJSONSchemaV1(standard)) {
       try {
-        this.jsonSchema = (standard as unknown as StandardJSONSchemaV1.Props).jsonSchema.output({
+        this.jsonSchema = (
+          standard as unknown as StandardJSONSchemaV1.Props
+        ).jsonSchema.output({
           target: "draft-2020-12",
-          libraryOptions: jsonSchemaOptions
-        })
+          libraryOptions: jsonSchemaOptions,
+        });
       } catch {
         // If JSON schema generation fails, leave it undefined
         this.jsonSchema = undefined;
@@ -112,23 +120,23 @@ class StandardSchemaSerde<
       const errorMessages = result.issues
         .map((issue: StandardSchemaV1.Issue) => issue.message)
         .join(", ");
-      throw new TypeError(`Standard schema validation failed: [${errorMessages}]`);
+      throw new TypeError(
+        `Standard schema validation failed: [${errorMessages}]`
+      );
     }
 
     return result.value as StandardSchemaV1.InferOutput<T>;
   }
 }
 
-function isStandardJSONSchemaV1(
-    standard: StandardSchemaV1.Props
-): boolean {
+function isStandardJSONSchemaV1(standard: StandardSchemaV1.Props): boolean {
   return (
-      standard != undefined &&
-      "jsonSchema" in standard &&
-      typeof standard.jsonSchema === "object" &&
-      standard.jsonSchema !== null &&
-      "output" in standard.jsonSchema &&
-      typeof standard.jsonSchema.output === "function"
+    standard != undefined &&
+    "jsonSchema" in standard &&
+    typeof standard.jsonSchema === "object" &&
+    standard.jsonSchema !== null &&
+    "output" in standard.jsonSchema &&
+    typeof standard.jsonSchema.output === "function"
   );
 }
 
@@ -169,12 +177,10 @@ export namespace serde {
    * @param jsonSchemaOptions options passed to `StandardJsonSchemaV1.Options.libraryOptions` for code generation
    * @returns a serde that will validate the data with the standard schema
    */
-  export const schema = <
-      T extends { "~standard": StandardSchemaV1.Props },
-  >(
-      schema: T,
-      validateOptions?: Record<string, unknown>,
-      jsonSchemaOptions?: Record<string, unknown>
+  export const schema = <T extends { "~standard": StandardSchemaV1.Props }>(
+    schema: T,
+    validateOptions?: Record<string, unknown>,
+    jsonSchemaOptions?: Record<string, unknown>
   ): Serde<StandardSchemaV1.InferOutput<T>> => {
     return new StandardSchemaSerde(schema, jsonSchemaOptions);
   };

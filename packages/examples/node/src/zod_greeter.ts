@@ -25,7 +25,10 @@ const greeter = restate.service({
   name: "Greeter",
   handlers: {
     greet: restate.createServiceHandler(
-      { input: restate.serde.schema(Greeting), output: restate.serde.schema(GreetingResponse) },
+      {
+        input: restate.serde.schema(Greeting),
+        output: restate.serde.schema(GreetingResponse),
+      },
       async (ctx: restate.Context, { name }) => {
         return { result: `You said hi to ${name}!` };
       }

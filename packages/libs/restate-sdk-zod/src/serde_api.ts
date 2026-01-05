@@ -29,9 +29,9 @@ function printZod3Warning() {
   }
 }
 
-class ZodSerde<T extends z3.ZodTypeAny | z4.$ZodType>
-  implements Serde<T extends z3.ZodTypeAny ? z3.infer<T> : z4.infer<T>>
-{
+class ZodSerde<T extends z3.ZodTypeAny | z4.$ZodType> implements Serde<
+  T extends z3.ZodTypeAny ? z3.infer<T> : z4.infer<T>
+> {
   contentType? = "application/json";
   jsonSchema?: object | undefined;
 
