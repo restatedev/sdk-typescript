@@ -18,6 +18,11 @@ jobs:
           node-version: 20
           registry-url: "https://registry.npmjs.org"
 
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v2.x
+
       - uses: pnpm/action-setup@v4
         with:
           version: 10.13.1
