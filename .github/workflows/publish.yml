@@ -23,6 +23,11 @@ jobs:
         with:
           deno-version: v2.x
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
       - uses: pnpm/action-setup@v4
         with:
           version: 10.13.1
