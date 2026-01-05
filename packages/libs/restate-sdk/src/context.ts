@@ -610,9 +610,7 @@ export interface Context extends RestateContext {
  *
  */
 export interface ObjectContext<TState extends TypedState = UntypedState>
-  extends Context,
-    KeyValueStore<TState>,
-    RestateObjectContext {
+  extends Context, KeyValueStore<TState>, RestateObjectContext {
   key: string;
 }
 
@@ -628,8 +626,7 @@ export interface ObjectContext<TState extends TypedState = UntypedState>
  *
  */
 export interface ObjectSharedContext<TState extends TypedState = UntypedState>
-  extends Context,
-    RestateObjectSharedContext {
+  extends Context, RestateObjectSharedContext {
   key: string;
 
   /**
@@ -857,8 +854,7 @@ export type DurablePromise<T> = Promise<T> & {
 };
 
 export interface WorkflowSharedContext<TState extends TypedState = UntypedState>
-  extends ObjectSharedContext<TState>,
-    RestateWorkflowSharedContext {
+  extends ObjectSharedContext<TState>, RestateWorkflowSharedContext {
   /**
    * Create a durable promise that can be resolved or rejected during the workflow execution.
    * The promise is bound to the workflow and will be persisted across suspensions and retries.
@@ -886,6 +882,7 @@ export interface WorkflowSharedContext<TState extends TypedState = UntypedState>
 }
 
 export interface WorkflowContext<TState extends TypedState = UntypedState>
-  extends WorkflowSharedContext<TState>,
+  extends
+    WorkflowSharedContext<TState>,
     ObjectContext<TState>,
     RestateWorkflowContext {}

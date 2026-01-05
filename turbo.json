@@ -21,7 +21,7 @@
     },
     "_check:exports": {
       "dependsOn": ["_build", "_check:api"],
-      "outputs": []    
+      "outputs": []
     },
     "_check:api": {
       "dependsOn": ["_build"],
