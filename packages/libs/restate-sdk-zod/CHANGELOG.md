@@ -1,5 +1,12 @@
 # @restatedev/restate-sdk-zod
 
+## 1.10.2
+
+### Patch Changes
+
+- Fix error stacktrace propagation on ctx.run failures
+- Fix restate.serde.schema config propagation
+
 ## 1.10.1
 
 ### Patch Changes
