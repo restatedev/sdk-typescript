@@ -37,9 +37,15 @@ export enum WasmCommandType {
   CompleteAwakeable = 17,
   CancelInvocation = 18,
 }
+export interface WasmFailureMetadata {
+  key: string;
+  value: string;
+}
+
 export interface WasmFailure {
   code: number;
   message: string;
+  metadata: WasmFailureMetadata[];
 }
 
 export interface WasmExponentialRetryConfig {
