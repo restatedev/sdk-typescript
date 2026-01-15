@@ -1093,6 +1093,11 @@ export function __wbg_crypto_ed58b8e10a292839(arg0) {
     return ret;
 };
 
+export function __wbg_done_769e5ede4b31c67b(arg0) {
+    const ret = arg0.done;
+    return ret;
+};
+
 export function __wbg_error_7534b8e9a36f1ab4(arg0, arg1) {
     let deferred0_0;
     let deferred0_1;
@@ -1116,6 +1121,16 @@ export function __wbg_getRandomValues_bcb4912f16000dc4() { return handleError(fu
 
 export function __wbg_getTime_46267b1c24877e30(arg0) {
     const ret = arg0.getTime();
+    return ret;
+};
+
+export function __wbg_get_67b2ba62fc30de12() { return handleError(function (arg0, arg1) {
+    const ret = Reflect.get(arg0, arg1);
+    return ret;
+}, arguments) };
+
+export function __wbg_get_b9b93047fe3cf45b(arg0, arg1) {
+    const ret = arg0[arg1 >>> 0];
     return ret;
 };
 
@@ -1146,12 +1161,27 @@ export function __wbg_instanceof_Uint8Array_17156bcf118086a9(arg0) {
     return ret;
 };
 
+export function __wbg_isArray_a1eab7e0d067391b(arg0) {
+    const ret = Array.isArray(arg0);
+    return ret;
+};
+
 export function __wbg_isSafeInteger_343e2beeeece1bb0(arg0) {
     const ret = Number.isSafeInteger(arg0);
     return ret;
 };
 
+export function __wbg_iterator_9a24c88df860dc65() {
+    const ret = Symbol.iterator;
+    return ret;
+};
+
 export function __wbg_length_a446193dc22c12f8(arg0) {
+    const ret = arg0.length;
+    return ret;
+};
+
+export function __wbg_length_e2d2a49132c1b256(arg0) {
     const ret = arg0.length;
     return ret;
 };
@@ -1200,6 +1230,16 @@ export function __wbg_newwithlength_a381634e90c276d4(arg0) {
     const ret = new Uint8Array(arg0 >>> 0);
     return ret;
 };
+
+export function __wbg_next_25feadfc0913fea9(arg0) {
+    const ret = arg0.next;
+    return ret;
+};
+
+export function __wbg_next_6574e1a8a62d1055() { return handleError(function (arg0) {
+    const ret = arg0.next();
+    return ret;
+}, arguments) };
 
 export function __wbg_node_02999533c4ea02e3(arg0) {
     const ret = arg0.node;
@@ -1271,6 +1311,11 @@ export function __wbg_static_accessor_WINDOW_5de37043a91a9c40() {
 
 export function __wbg_subarray_aa9065fa9dc5df96(arg0, arg1, arg2) {
     const ret = arg0.subarray(arg1 >>> 0, arg2 >>> 0);
+    return ret;
+};
+
+export function __wbg_value_cd1ffa7b1ab794f1(arg0) {
+    const ret = arg0.value;
     return ret;
 };
 

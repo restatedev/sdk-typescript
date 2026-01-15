@@ -480,6 +480,7 @@ export class GenericHandler implements RestateHandler {
             coreVm.sys_write_output_failure({
               code: error.code,
               message: error.message,
+              metadata: [],
             });
             coreVm.sys_end();
             return;

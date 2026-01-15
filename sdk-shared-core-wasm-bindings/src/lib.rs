@@ -1,5 +1,10 @@
 use js_sys::Uint8Array;
-use restate_sdk_shared_core::{CallHandle, CommandRelationship, CommandType, CoreVM, DoProgressResponse, Error, Header, HeaderMap, IdentityVerifier, Input, NonDeterministicChecksOption, NonEmptyValue, ResponseHead, RetryPolicy, RunExitResult, SendHandle, TakeOutputResult, Target, TerminalFailure, VMOptions, Value, CANCEL_NOTIFICATION_HANDLE, VM};
+use restate_sdk_shared_core::{
+    CallHandle, CommandRelationship, CommandType, CoreVM, DoProgressResponse, Error, Header,
+    HeaderMap, IdentityVerifier, Input, NonDeterministicChecksOption, NonEmptyValue, ResponseHead,
+    RetryPolicy, RunExitResult, SendHandle, TakeOutputResult, Target, TerminalFailure, VMOptions,
+    Value, CANCEL_NOTIFICATION_HANDLE, VM,
+};
 use serde::{Deserialize, Serialize};
 use std::cmp;
 use std::convert::{Infallible, Into};
@@ -250,9 +255,17 @@ type WasmNotificationHandle = u32;
 
 #[derive(Tsify, Serialize, Deserialize)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct WasmFailureMetadata {
+    pub key: String,
+    pub value: String,
+}
+
+#[derive(Tsify, Serialize, Deserialize)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct WasmFailure {
     pub code: u16,
     pub message: String,
+    pub metadata: Vec<WasmFailureMetadata>,
 }
 
 impl From<Error> for WasmFailure {
@@ -260,6 +273,7 @@ impl From<Error> for WasmFailure {
         WasmFailure {
             code: value.code(),
             message: value.to_string(),
+            metadata: vec![],
         }
     }
 }
@@ -297,6 +311,11 @@ impl From<TerminalFailure> for WasmFailure {
         WasmFailure {
             code: value.code,
             message: value.message,
+            metadata: value
+                .metadata
+                .into_iter()
+                .map(|(k, v)| WasmFailureMetadata { key: k, value: v })
+                .collect(),
         }
     }
 }
@@ -306,6 +325,11 @@ impl From<WasmFailure> for TerminalFailure {
         TerminalFailure {
             code: value.code,
             message: value.message,
+            metadata: value
+                .metadata
+                .into_iter()
+                .map(|metadata| (metadata.key, metadata.value))
+                .collect(),
         }
     }
 }
@@ -440,19 +464,22 @@ impl WasmVM {
         headers: Vec<WasmHeader>,
         log_level: LogLevel,
         logger_id: u32,
-        disable_payload_checks: bool
+        disable_payload_checks: bool,
     ) -> Result<WasmVM, WasmFailure> {
         let log_dispatcher = Dispatch::new(log_subscriber(log_level, Some(logger_id)));
 
         let vm = tracing::dispatcher::with_default(&log_dispatcher, || {
-            CoreVM::new(WasmHeaderList::from(headers), VMOptions {
-                non_determinism_checks: if disable_payload_checks {
-                    NonDeterministicChecksOption::PayloadChecksDisabled
-                } else {
-                    NonDeterministicChecksOption::Enabled
+            CoreVM::new(
+                WasmHeaderList::from(headers),
+                VMOptions {
+                    non_determinism_checks: if disable_payload_checks {
+                        NonDeterministicChecksOption::PayloadChecksDisabled
+                    } else {
+                        NonDeterministicChecksOption::Enabled
+                    },
+                    ..Default::default()
                 },
-                ..Default::default()
-            })
+            )
         })?;
 
         Ok(Self { vm, log_dispatcher })
@@ -480,7 +507,12 @@ impl WasmVM {
         use_log_dispatcher!(self, |vm| CoreVM::notify_error(vm, e, None))
     }
 
-    pub fn notify_error_with_delay_override(&mut self, error_message: String, stacktrace: Option<String>, delay_override: Option<u64>) {
+    pub fn notify_error_with_delay_override(
+        &mut self,
+        error_message: String,
+        stacktrace: Option<String>,
+        delay_override: Option<u64>,
+    ) {
         let mut e = Error::internal(error_message);
         if let Some(stacktrace) = stacktrace {
             e = e.with_stacktrace(stacktrace);
@@ -590,9 +622,13 @@ impl WasmVM {
     }
 
     pub fn sys_get_state(&mut self, key: String) -> Result<WasmNotificationHandle, WasmFailure> {
-        use_log_dispatcher!(self, |vm| CoreVM::sys_state_get(vm, key))
-            .map(Into::into)
-            .map_err(Into::into)
+        use_log_dispatcher!(self, |vm| CoreVM::sys_state_get(
+            vm,
+            key,
+            Default::default()
+        ))
+        .map(Into::into)
+        .map_err(Into::into)
     }
 
     pub fn sys_get_state_keys(&mut self) -> Result<WasmNotificationHandle, WasmFailure> {
@@ -602,8 +638,13 @@ impl WasmVM {
     }
 
     pub fn sys_set_state(&mut self, key: String, buffer: Vec<u8>) -> Result<(), WasmFailure> {
-        use_log_dispatcher!(self, |vm| CoreVM::sys_state_set(vm, key, buffer.into()))
-            .map_err(Into::into)
+        use_log_dispatcher!(self, |vm| CoreVM::sys_state_set(
+            vm,
+            key,
+            buffer.into(),
+            Default::default()
+        ))
+        .map_err(Into::into)
     }
 
     pub fn sys_clear_state(&mut self, key: String) -> Result<(), WasmFailure> {
@@ -670,7 +711,8 @@ impl WasmVM {
                 idempotency_key,
                 headers: headers.into_iter().map(Header::from).collect(),
             },
-            buffer.to_vec().into()
+            buffer.to_vec().into(),
+            Default::default()
         ))
         .map(Into::into)
         .map_err(Into::into)
@@ -698,6 +740,7 @@ impl WasmVM {
             },
             buffer.to_vec().into(),
             delay.map(|delay| now_since_unix_epoch() + Duration::from_millis(delay)),
+            Default::default()
         ))
         .map(Into::into)
         .map_err(Into::into)
@@ -720,7 +763,8 @@ impl WasmVM {
         use_log_dispatcher!(self, |vm| CoreVM::sys_complete_awakeable(
             vm,
             id,
-            NonEmptyValue::Success(buffer.to_vec().into())
+            NonEmptyValue::Success(buffer.to_vec().into()),
+            Default::default()
         ))
         .map_err(Into::into)
     }
@@ -733,7 +777,8 @@ impl WasmVM {
         use_log_dispatcher!(self, |vm| CoreVM::sys_complete_awakeable(
             vm,
             id,
-            NonEmptyValue::Failure(value.into())
+            NonEmptyValue::Failure(value.into()),
+            Default::default()
         ))
         .map_err(Into::into)
     }
@@ -758,7 +803,8 @@ impl WasmVM {
         use_log_dispatcher!(self, |vm| CoreVM::sys_complete_promise(
             vm,
             key,
-            NonEmptyValue::Success(buffer.to_vec().into())
+            NonEmptyValue::Success(buffer.to_vec().into()),
+            Default::default()
         ))
         .map(Into::into)
         .map_err(Into::into)
@@ -772,7 +818,8 @@ impl WasmVM {
         use_log_dispatcher!(self, |vm| CoreVM::sys_complete_promise(
             vm,
             key,
-            NonEmptyValue::Failure(value.into())
+            NonEmptyValue::Failure(value.into()),
+            Default::default()
         ))
         .map(Into::into)
         .map_err(Into::into)
@@ -843,9 +890,12 @@ impl WasmVM {
         attempt_duration: u64,
         delay_override: Option<u64>,
         max_retry_attempts_override: Option<u32>,
-        max_retry_duration_override: Option<u64>
+        max_retry_duration_override: Option<u64>,
     ) -> Result<(), WasmFailure> {
-        let retry_policy = if delay_override.is_some() || max_retry_attempts_override.is_some() || max_retry_duration_override.is_some() {
+        let retry_policy = if delay_override.is_some()
+            || max_retry_attempts_override.is_some()
+            || max_retry_duration_override.is_some()
+        {
             RetryPolicy::FixedDelay {
                 interval: delay_override.map(Duration::from_millis),
                 max_attempts: max_retry_attempts_override,
@@ -864,7 +914,7 @@ impl WasmVM {
             },
             retry_policy
         ))
-            .map_err(Into::into)
+        .map_err(Into::into)
     }
 
     pub fn sys_cancel_invocation(
@@ -882,7 +932,8 @@ impl WasmVM {
     pub fn sys_write_output_success(&mut self, buffer: Vec<u8>) -> Result<(), WasmFailure> {
         use_log_dispatcher!(self, |vm| CoreVM::sys_write_output(
             vm,
-            NonEmptyValue::Success(buffer.to_vec().into())
+            NonEmptyValue::Success(buffer.to_vec().into()),
+            Default::default()
         ))
         .map(Into::into)
         .map_err(Into::into)
@@ -891,7 +942,8 @@ impl WasmVM {
     pub fn sys_write_output_failure(&mut self, value: WasmFailure) -> Result<(), WasmFailure> {
         use_log_dispatcher!(self, |vm| CoreVM::sys_write_output(
             vm,
-            NonEmptyValue::Failure(value.into())
+            NonEmptyValue::Failure(value.into()),
+            Default::default()
         ))
         .map(Into::into)
         .map_err(Into::into)

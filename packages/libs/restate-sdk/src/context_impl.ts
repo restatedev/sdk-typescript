@@ -465,6 +465,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
             this.coreVm.propose_run_completion_failure(handle, {
               code: err.code,
               message: err.message,
+              metadata: [],
             });
           } else if (err instanceof RetryableError) {
             const maxRetryDuration =
@@ -643,6 +644,7 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
         vm.sys_complete_awakeable_failure(id, {
           code: UNKNOWN_ERROR_CODE,
           message: reason,
+          metadata: [],
         });
       }
     );
@@ -874,6 +876,7 @@ class DurablePromiseImpl<T> implements DurablePromise<T> {
         vm.sys_complete_promise_failure(this.name, {
           code: INTERNAL_ERROR_CODE,
           message: errorMsg,
+          metadata: [],
         }),
       VoidAsUndefined,
       Failure
