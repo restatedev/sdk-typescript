@@ -200,6 +200,6 @@ export namespace serde {
     validateOptions?: Record<string, unknown>,
     jsonSchemaOptions?: Record<string, unknown>
   ): Serde<StandardSchemaV1.InferOutput<T>> => {
-    return new StandardSchemaSerde(schema, jsonSchemaOptions);
+    return new StandardSchemaSerde(schema, validateOptions, jsonSchemaOptions);
   };
 }
