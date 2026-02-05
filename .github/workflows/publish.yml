@@ -2,6 +2,12 @@ name: Publish to NPM
 
 on:
   workflow_call:
+    inputs:
+      snapshot:
+        description: "Publish as snapshot with dev tag"
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   publish:
@@ -15,7 +21,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           registry-url: "https://registry.npmjs.org"
 
       - name: Setup Deno
@@ -38,7 +44,31 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Set snapshot version
+        if: ${{ inputs.snapshot }}
+        run: |
+          # We're using 0.0.0 to avoid this version to be higher than released versions.
+          # To use it:
+          # "@restatedev/restate-sdk": "^0.0.0-SNAPSHOT"
+          VERSION="0.0.0-SNAPSHOT-$(date '+%Y%m%d%H%M%S')"
+          # Update all lib package versions using jq
+          for pkg in packages/libs/*/package.json; do
+            jq --arg ver "$VERSION" '.version = $ver' "$pkg" > "$pkg.tmp" && mv "$pkg.tmp" "$pkg"
+          done
+          # Update workspace protocol dependencies to use the snapshot version
+          pnpm install --no-frozen-lockfile
+
       - name: Publish to npm
-        run: pnpm -r --filter='./packages/libs/**' publish --access public --no-git-checks
+        if: ${{ !inputs.snapshot }}
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ""
+        run: pnpm -r --filter='./packages/libs/**' publish --access public --no-git-checks --provenance
+
+      - name: Publish snapshot to npm
+        if: ${{ inputs.snapshot }}
+        env:
+          NODE_AUTH_TOKEN: ""
+        # We use dist-tag dev for the snapshot releases, see https://docs.npmjs.com/cli/v9/commands/npm-dist-tag for more info
+        # A snapshot MUST not be published with latest tag (omitting --tag defaults to latest) to avoid users to install snapshot releases
+        # when using pnpm install
+        run: pnpm -r --filter='./packages/libs/**' publish --tag dev --access public --no-git-checks --provenance
