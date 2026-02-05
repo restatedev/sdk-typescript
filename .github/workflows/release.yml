@@ -58,12 +58,7 @@ jobs:
           gh release create "v${{ steps.check.outputs.version }}" \
             --title "Release v${{ steps.check.outputs.version }}" \
             --generate-notes
-
-  publish:
-    needs: check-and-release
-    if: needs.check-and-release.outputs.should_publish == 'true'
-    permissions:
-      contents: read
-      id-token: write
-    uses: ./.github/workflows/publish.yml
-    secrets: inherit
+          # Publishing is handled by publish.yml which uses workflow_run to trigger
+          # after this workflow completes. We don't call it directly because npm trusted
+          # publishing validates the calling workflow, and we want publish.yml to be the
+          # single trusted publisher.
