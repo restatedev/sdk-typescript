@@ -1,26 +1,71 @@
-name: Release and Publish
+name: Release
 
 on:
   push:
-    branches: [main]
+    branches: [main, release-**]
+  workflow_dispatch:
 
 jobs:
-  check-and-release:
+  test:
+    uses: ./.github/workflows/test.yml
+
+  release:
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    outputs:
-      should_publish: ${{ steps.check.outputs.create_release }}
+      id-token: write
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v2.x
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
       - uses: pnpm/action-setup@v4
         with:
           version: 10.13.1
 
-      - name: Check for new versions
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Publish snapshot
+        if: github.ref == 'refs/heads/main'
+        run: |
+          # We're using 0.0.0 to avoid this version to be higher than released versions.
+          # To use it:
+          # "@restatedev/restate-sdk": "^0.0.0-SNAPSHOT"
+          VERSION="0.0.0-SNAPSHOT-$(date '+%Y%m%d%H%M%S')"
+          # Update all lib package versions using jq
+          for pkg in packages/libs/*/package.json; do
+            jq --arg ver "$VERSION" '.version = $ver' "$pkg" > "$pkg.tmp" && mv "$pkg.tmp" "$pkg"
+          done
+          # Update workspace protocol dependencies to use the snapshot version
+          pnpm install --no-frozen-lockfile
+          # We use dist-tag dev for the snapshot releases, see https://docs.npmjs.com/cli/v9/commands/npm-dist-tag for more info
+          # A snapshot MUST not be published with latest tag (omitting --tag defaults to latest) to avoid users to install snapshot releases
+          # when using pnpm install
+          pnpm --filter "./packages/libs/**" publish --tag dev --access public --no-git-checks --provenance
+          git checkout .
+
+      - name: Check for new version
         id: check
         run: |
           git fetch --tags
@@ -58,7 +103,7 @@ jobs:
           gh release create "v${{ steps.check.outputs.version }}" \
             --title "Release v${{ steps.check.outputs.version }}" \
             --generate-notes
-          # Publishing is handled by publish.yml which uses workflow_run to trigger
-          # after this workflow completes. We don't call it directly because npm trusted
-          # publishing validates the calling workflow, and we want publish.yml to be the
-          # single trusted publisher.
+
+      - name: Publish release to npm
+        if: steps.check.outputs.create_release == 'true'
+        run: pnpm -r --filter='./packages/libs/**' publish --access public --no-git-checks --provenance

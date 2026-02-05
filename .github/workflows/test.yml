@@ -1,10 +1,9 @@
 name: Build and test
 
 on:
-  push:
-    branches: [main, release-**]
   pull_request:
     branches: [main, release-**]
+  workflow_call:
   workflow_dispatch:
 
 jobs:
@@ -59,7 +58,3 @@ jobs:
           path: restatedev-restate-sdk-core.tgz
           retention-days: 1
           if-no-files-found: error
-      # Snapshot publishing is handled by publish.yml which uses workflow_run to
-      # trigger after this workflow passes on main. We don't call it directly because
-      # npm trusted publishing validates the calling workflow, and we want publish.yml
-      # to be the single trusted publisher.
