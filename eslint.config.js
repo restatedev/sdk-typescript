@@ -18,6 +18,7 @@ export default [
       "**/test/**",
       "**/api-extractor.json",
       "**/src/generated/**",
+      "**/cdk.out/**",
     ],
   },
   {
