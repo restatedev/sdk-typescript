@@ -29,10 +29,81 @@ import {
   type StartedTestContainer,
   TestContainers,
   Wait,
+  type WaitStrategy,
+  type BoundPorts,
+  getContainerRuntimeClient,
 } from "testcontainers";
 import { tableFromIPC } from "apache-arrow";
 import * as http2 from "http2";
 import type * as net from "net";
+
+/**
+ * Custom wait strategy that waits for Restate partitions to be ready by
+ * executing a SQL query against the admin API. This ensures all partitions
+ * are initialized and queryable before the container is considered ready.
+ */
+class PartitionsReadyWaitStrategy implements WaitStrategy {
+  private startupTimeoutMs = 60_000;
+  private startupTimeoutSet = false;
+  private readonly port: number;
+  private readonly pollIntervalMs: number;
+
+  constructor(port = 9070, pollIntervalMs = 200) {
+    this.port = port;
+    this.pollIntervalMs = pollIntervalMs;
+  }
+
+  public withStartupTimeout(startupTimeoutMs: number): this {
+    this.startupTimeoutMs = startupTimeoutMs;
+    this.startupTimeoutSet = true;
+    return this;
+  }
+
+  public isStartupTimeoutSet(): boolean {
+    return this.startupTimeoutSet;
+  }
+
+  public getStartupTimeout(): number {
+    return this.startupTimeoutMs;
+  }
+
+  public async waitUntilReady(
+    container: { id: string },
+    boundPorts: BoundPorts
+  ): Promise<void> {
+    const client = await getContainerRuntimeClient();
+    const host = client.info.containerRuntime.host;
+    const mappedPort = boundPorts.getBinding(this.port);
+    const adminUrl = `http://${host}:${mappedPort}`;
+
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < this.startupTimeoutMs) {
+      try {
+        const res = await fetch(`${adminUrl}/query`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: "SELECT count(1) FROM sys_invocation",
+          }),
+        });
+
+        if (res.ok) {
+          // Partitions are ready
+          return;
+        }
+      } catch {
+        // Ignore errors, keep polling
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, this.pollIntervalMs));
+    }
+
+    throw new Error(
+      `Restate partitions not ready after ${this.startupTimeoutMs}ms`
+    );
+  }
+}
 
 // Prepare the restate server
 async function prepareRestateEndpoint(
@@ -80,11 +151,12 @@ async function prepareRestateTestContainer(
   const restateContainer = restateContainerFactory()
     // Expose ports
     .withExposedPorts(8080, 9070)
-    // Wait start on health checks
+    // Wait start on health checks and partition readiness
     .withWaitStrategy(
       Wait.forAll([
         Wait.forHttp("/restate/health", 8080),
         Wait.forHttp("/health", 9070),
+        new PartitionsReadyWaitStrategy(),
       ])
     );
 
