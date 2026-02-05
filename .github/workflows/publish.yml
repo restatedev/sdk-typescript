@@ -60,14 +60,10 @@ jobs:
 
       - name: Publish to npm
         if: ${{ !inputs.snapshot }}
-        env:
-          NODE_AUTH_TOKEN: ""
         run: pnpm -r --filter='./packages/libs/**' publish --access public --no-git-checks --provenance
 
       - name: Publish snapshot to npm
         if: ${{ inputs.snapshot }}
-        env:
-          NODE_AUTH_TOKEN: ""
         # We use dist-tag dev for the snapshot releases, see https://docs.npmjs.com/cli/v9/commands/npm-dist-tag for more info
         # A snapshot MUST not be published with latest tag (omitting --tag defaults to latest) to avoid users to install snapshot releases
         # when using pnpm install
