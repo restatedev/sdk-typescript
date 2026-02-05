@@ -59,13 +59,7 @@ jobs:
           path: restatedev-restate-sdk-core.tgz
           retention-days: 1
           if-no-files-found: error
-
-  publish-snapshot:
-    needs: build
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
-    permissions:
-      contents: read
-      id-token: write
-    uses: ./.github/workflows/publish.yml
-    with:
-      snapshot: true
+      # Snapshot publishing is handled by publish.yml which uses workflow_run to
+      # trigger after this workflow passes on main. We don't call it directly because
+      # npm trusted publishing validates the calling workflow, and we want publish.yml
+      # to be the single trusted publisher.

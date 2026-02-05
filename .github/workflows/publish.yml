@@ -1,22 +1,41 @@
 name: Publish to NPM
 
 on:
-  workflow_call:
+  # Manual trigger
+  workflow_dispatch:
     inputs:
       snapshot:
         description: "Publish as snapshot with dev tag"
         required: false
         default: false
         type: boolean
+  # Triggered after other workflows complete on main
+  # - "Release and Publish" -> publish release
+  # - "Build and test" -> publish snapshot
+  # We use workflow_run instead of workflow_call because npm trusted publishing
+  # validates the calling workflow, and we want this to be the single trusted publisher.
+  workflow_run:
+    workflows: ["Release and Publish", "Build and test"]
+    types: [completed]
+    branches: [main]
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+    # Only run if:
+    # - workflow_dispatch (always publish)
+    # - workflow_run completed successfully
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     permissions:
       contents: read
       id-token: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          # For workflow_run, checkout the exact commit that triggered the workflow
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -45,7 +64,7 @@ jobs:
         run: pnpm build
 
       - name: Set snapshot version
-        if: ${{ inputs.snapshot }}
+        if: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.name == 'Build and test') || (github.event_name == 'workflow_dispatch' && inputs.snapshot) }}
         run: |
           # We're using 0.0.0 to avoid this version to be higher than released versions.
           # To use it:
@@ -59,11 +78,11 @@ jobs:
           pnpm install --no-frozen-lockfile
 
       - name: Publish to npm
-        if: ${{ !inputs.snapshot }}
+        if: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.name == 'Release and Publish') || (github.event_name == 'workflow_dispatch' && !inputs.snapshot) }}
         run: pnpm -r --filter='./packages/libs/**' publish --access public --no-git-checks --provenance
 
       - name: Publish snapshot to npm
-        if: ${{ inputs.snapshot }}
+        if: ${{ (github.event_name == 'workflow_run' && github.event.workflow_run.name == 'Build and test') || (github.event_name == 'workflow_dispatch' && inputs.snapshot) }}
         # We use dist-tag dev for the snapshot releases, see https://docs.npmjs.com/cli/v9/commands/npm-dist-tag for more info
         # A snapshot MUST not be published with latest tag (omitting --tag defaults to latest) to avoid users to install snapshot releases
         # when using pnpm install
