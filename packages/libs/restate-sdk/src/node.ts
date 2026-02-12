@@ -24,18 +24,55 @@ export function endpoint(): RestateEndpoint {
 }
 
 /**
- * Creates an HTTP/2 request handler for the provided services.
+ * Options for creating a Node.js endpoint handler.
  *
- * @example
+ * Extends {@link EndpointOptions} with Node.js-specific options for controlling
+ * the protocol mode.
+ */
+export interface NodeEndpointOptions extends EndpointOptions {
+  /**
+   * Controls the protocol mode used by the handler.
+   *
+   * - `undefined` (default): auto-detect based on HTTP version.
+   *   HTTP/2+ uses bidirectional streaming (`BIDI_STREAM`),
+   *   HTTP/1.1 uses request-response mode (`REQUEST_RESPONSE`).
+   * - `true`: force `BIDI_STREAM` for all requests.
+   * - `false`: force `REQUEST_RESPONSE` for all requests.
+   */
+  bidirectional?: boolean;
+}
+
+/**
+ * Creates a request handler for the provided services.
+ *
+ * The returned handler auto-detects the HTTP protocol version per request:
+ * - HTTP/2+ requests use bidirectional streaming (`BIDI_STREAM`)
+ * - HTTP/1.1 requests use request-response mode (`REQUEST_RESPONSE`) by default
+ *
+ * Set `bidirectional: true` to force `BIDI_STREAM` for all requests, or
+ * `bidirectional: false` to force `REQUEST_RESPONSE` for all requests.
+ *
+ * @example HTTP/2 server
  * ```
  * const httpServer = http2.createServer(createEndpointHandler({ services: [myService] }));
  * httpServer.listen(port);
  * ```
- * @param {EndpointOptions} options - Configuration options for the endpoint handler.
- * @returns An HTTP/2 request handler function.
+ *
+ * @example HTTP/1.1 server
+ * ```
+ * const httpServer = http.createServer(createEndpointHandler({ services: [myService] }));
+ * httpServer.listen(port);
+ * ```
+ *
+ * @param {NodeEndpointOptions} options - Configuration options for the endpoint handler.
+ * @returns A request handler function compatible with both HTTP/1.1 and HTTP/2 servers.
  */
-export function createEndpointHandler(options: EndpointOptions) {
-  return withOptions<RestateEndpoint>(new NodeEndpoint(), options).handler();
+export function createEndpointHandler(options: NodeEndpointOptions) {
+  const { bidirectional, ...endpointOptions } = options;
+  return withOptions<RestateEndpoint>(
+    new NodeEndpoint(),
+    endpointOptions
+  ).handler({ bidirectional });
 }
 
 export interface ServeOptions extends EndpointOptions {

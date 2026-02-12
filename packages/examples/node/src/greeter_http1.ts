@@ -28,7 +28,7 @@ const greeter = service({
 const port = parseInt(process.env.PORT ?? "9080");
 
 const server = http.createServer(
-  createEndpointHandler({ services: [greeter] })
+  createEndpointHandler({ services: [greeter], bidirectional: true })
 );
 
 server.listen(port, () => {

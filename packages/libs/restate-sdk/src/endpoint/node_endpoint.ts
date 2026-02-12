@@ -70,17 +70,19 @@ export class NodeEndpoint implements RestateEndpoint {
     return this;
   }
 
-  http2Handler(): (
-    request: Http2ServerRequest,
-    response: Http2ServerResponse
-  ) => void {
-    return nodeHandler(this.builder.build(), "BIDI_STREAM");
+  http2Handler(options?: {
+    bidirectional?: boolean;
+  }): (request: Http2ServerRequest, response: Http2ServerResponse) => void {
+    return nodeHttp2Handler(
+      this.builder.build(),
+      options?.bidirectional === false ? "REQUEST_RESPONSE" : "BIDI_STREAM"
+    );
   }
 
   http1Handler(options?: {
     bidirectional?: boolean;
   }): (request: IncomingMessage, response: ServerResponse) => void {
-    return nodeHandler(
+    return nodeHttp1Handler(
       this.builder.build(),
       options?.bidirectional ? "BIDI_STREAM" : "REQUEST_RESPONSE"
     );
@@ -91,19 +93,26 @@ export class NodeEndpoint implements RestateEndpoint {
     (request: Http2ServerRequest, response: Http2ServerResponse): void;
   } {
     const endpoint = this.builder.build();
-    const bidiHandler = nodeHandler(endpoint, "BIDI_STREAM");
-    const reqResHandler = options?.bidirectional
-      ? bidiHandler
-      : nodeHandler(endpoint, "REQUEST_RESPONSE");
+    const h2Handler = nodeHttp2Handler(
+      endpoint,
+      options?.bidirectional === false ? "REQUEST_RESPONSE" : "BIDI_STREAM"
+    );
+    const h1Handler = nodeHttp1Handler(
+      endpoint,
+      options?.bidirectional ? "BIDI_STREAM" : "REQUEST_RESPONSE"
+    );
 
     return ((
       request: IncomingMessage | Http2ServerRequest,
       response: ServerResponse | Http2ServerResponse
     ) => {
       if (request.httpVersionMajor >= 2) {
-        bidiHandler(request, response);
+        h2Handler(
+          request as Http2ServerRequest,
+          response as Http2ServerResponse
+        );
       } else {
-        reqResHandler(request, response);
+        h1Handler(request as IncomingMessage, response as ServerResponse);
       }
     }) as {
       (request: IncomingMessage, response: ServerResponse): void;
@@ -117,7 +126,9 @@ export class NodeEndpoint implements RestateEndpoint {
     const actualPort = port ?? parseInt(process.env.PORT ?? "9080");
     endpoint.rlog.info(`Restate SDK started listening on ${actualPort}...`);
 
-    const server = http2.createServer(nodeHandler(endpoint, "BIDI_STREAM"));
+    const server = http2.createServer(
+      nodeHttp2Handler(endpoint, "BIDI_STREAM")
+    );
 
     return new Promise((resolve, reject) => {
       let failed = false;
@@ -144,7 +155,21 @@ export class NodeEndpoint implements RestateEndpoint {
   }
 }
 
-function nodeHandler(
+function nodeHttp1Handler(
+  endpoint: Endpoint,
+  protocolMode: ProtocolMode
+): (request: IncomingMessage, response: ServerResponse) => void {
+  return nodeHandlerImpl(endpoint, protocolMode);
+}
+
+function nodeHttp2Handler(
+  endpoint: Endpoint,
+  protocolMode: ProtocolMode
+): (request: Http2ServerRequest, response: Http2ServerResponse) => void {
+  return nodeHandlerImpl(endpoint, protocolMode);
+}
+
+function nodeHandlerImpl(
   endpoint: Endpoint,
   protocolMode: ProtocolMode
 ): (
