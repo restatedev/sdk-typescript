@@ -25,11 +25,13 @@
   },
   "dependencies": {
     "@restatedev/restate-sdk": "workspace:*",
-    "@restatedev/restate-sdk-core": "workspace:*",
-    "@restatedev/restate-sdk-zod": "workspace:*",
     "@restatedev/restate-sdk-clients": "workspace:*",
+    "@restatedev/restate-sdk-core": "workspace:*",
     "@restatedev/restate-sdk-testcontainers": "workspace:*",
+    "@restatedev/restate-sdk-zod": "workspace:*",
     "zod": "catalog:"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "testcontainers": "^10.24.1"
+  }
 }
