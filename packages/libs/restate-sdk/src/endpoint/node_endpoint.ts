@@ -16,8 +16,9 @@ import type {
   VirtualObjectDefinition,
   WorkflowDefinition,
 } from "@restatedev/restate-sdk-core";
-import { Http2ServerRequest, Http2ServerResponse } from "http2";
-import * as http2 from "http2";
+import type { IncomingMessage, ServerResponse } from "node:http";
+import { Http2ServerRequest, Http2ServerResponse } from "node:http2";
+import * as http2 from "node:http2";
 import type { Endpoint } from "./endpoint.js";
 import { EndpointBuilder } from "./endpoint.js";
 import { createRestateHandler } from "./handlers/generic.js";
@@ -25,7 +26,8 @@ import { ensureError } from "../types/errors.js";
 import type { LoggerTransport } from "../logging/logger_transport.js";
 import type { DefaultServiceOptions } from "../endpoint.js";
 import { tryCreateContextualLogger } from "./handlers/utils.js";
-import { InputReader, OutputWriter } from "./handlers/types.js";
+import type { InputReader, OutputWriter } from "./handlers/types.js";
+import type { ProtocolMode } from "./discovery.js";
 
 export class NodeEndpoint implements RestateEndpoint {
   private builder: EndpointBuilder = new EndpointBuilder();
@@ -68,7 +70,41 @@ export class NodeEndpoint implements RestateEndpoint {
     request: Http2ServerRequest,
     response: Http2ServerResponse
   ) => void {
-    return nodeHttp2Handler(this.builder.build());
+    return nodeHandler(this.builder.build(), "BIDI_STREAM");
+  }
+
+  http1Handler(options?: {
+    bidirectional?: boolean;
+  }): (request: IncomingMessage, response: ServerResponse) => void {
+    return nodeHandler(
+      this.builder.build(),
+      options?.bidirectional ? "BIDI_STREAM" : "REQUEST_RESPONSE"
+    );
+  }
+
+  handler(options?: { bidirectional?: boolean }): {
+    (request: IncomingMessage, response: ServerResponse): void;
+    (request: Http2ServerRequest, response: Http2ServerResponse): void;
+  } {
+    const endpoint = this.builder.build();
+    const bidiHandler = nodeHandler(endpoint, "BIDI_STREAM");
+    const reqResHandler = options?.bidirectional
+      ? bidiHandler
+      : nodeHandler(endpoint, "REQUEST_RESPONSE");
+
+    return ((
+      request: IncomingMessage | Http2ServerRequest,
+      response: ServerResponse | Http2ServerResponse
+    ) => {
+      if (request.httpVersionMajor >= 2) {
+        bidiHandler(request, response);
+      } else {
+        reqResHandler(request, response);
+      }
+    }) as {
+      (request: IncomingMessage, response: ServerResponse): void;
+      (request: Http2ServerRequest, response: Http2ServerResponse): void;
+    };
   }
 
   listen(port?: number): Promise<number> {
@@ -77,7 +113,7 @@ export class NodeEndpoint implements RestateEndpoint {
     const actualPort = port ?? parseInt(process.env.PORT ?? "9080");
     endpoint.rlog.info(`Restate SDK started listening on ${actualPort}...`);
 
-    const server = http2.createServer(nodeHttp2Handler(endpoint));
+    const server = http2.createServer(nodeHandler(endpoint, "BIDI_STREAM"));
 
     return new Promise((resolve, reject) => {
       let failed = false;
@@ -104,10 +140,14 @@ export class NodeEndpoint implements RestateEndpoint {
   }
 }
 
-function nodeHttp2Handler(
-  endpoint: Endpoint
-): (request: Http2ServerRequest, response: Http2ServerResponse) => void {
-  const handler = createRestateHandler(endpoint, "BIDI_STREAM", {});
+function nodeHandler(
+  endpoint: Endpoint,
+  protocolMode: ProtocolMode
+): (
+  request: Http2ServerRequest | IncomingMessage,
+  response: Http2ServerResponse | ServerResponse
+) => void {
+  const handler = createRestateHandler(endpoint, protocolMode, {});
 
   return (httpRequest, httpResponse) => {
     const url = httpRequest.url;
@@ -115,7 +155,6 @@ function nodeHttp2Handler(
     // Abort controller used to cleanup resources at the end of this stream lifecycle
     const abortController = new AbortController();
     httpRequest.on("close", () => {
-      // The 'close' event is emitted when the Http2Stream is destroyed.
       abortController.abort();
     });
 
@@ -147,11 +186,15 @@ function nodeHttp2Handler(
   };
 }
 
-function inputReaderAdapter(request: Http2ServerRequest): InputReader {
-  return request[Symbol.asyncIterator]();
+function inputReaderAdapter(
+  request: Http2ServerRequest | IncomingMessage
+): InputReader {
+  return (request as AsyncIterable<Uint8Array>)[Symbol.asyncIterator]();
 }
 
-function outputWriterAdapter(response: Http2ServerResponse): OutputWriter {
+function outputWriterAdapter(
+  response: Http2ServerResponse | ServerResponse
+): OutputWriter {
   return {
     write: function (value: Uint8Array): Promise<void> {
       return new Promise((resolve, reject) => {
