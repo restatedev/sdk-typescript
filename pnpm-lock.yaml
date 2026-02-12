@@ -160,6 +160,10 @@ importers:
       zod:
         specifier: 'catalog:'
         version: 4.3.5
+    devDependencies:
+      testcontainers:
+        specifier: ^10.24.1
+        version: 10.28.0
 
   packages/examples/vercel:
     dependencies:
