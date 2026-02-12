@@ -162,12 +162,16 @@ export interface RestateEndpoint extends RestateEndpointBase<RestateEndpoint> {
   listen(port?: number): Promise<number>;
 
   /**
-   * Returns an http2 server handler. See {@link RestateEndpoint.listen} for more details.
+   * Returns an http2 server handler.
+   *
+   * By default, this handler uses bidirectional streaming (`BIDI_STREAM`).
+   * Set `bidirectional: false` to use request-response mode (`REQUEST_RESPONSE`).
+   *
+   * See {@link RestateEndpoint.listen} for more details.
    */
-  http2Handler(): (
-    request: Http2ServerRequest,
-    response: Http2ServerResponse
-  ) => void;
+  http2Handler(options?: {
+    bidirectional?: boolean;
+  }): (request: Http2ServerRequest, response: Http2ServerResponse) => void;
 
   /**
    * Returns an http1 server handler.
@@ -194,9 +198,12 @@ export interface RestateEndpoint extends RestateEndpointBase<RestateEndpoint> {
    * Returns a combined request handler that auto-detects HTTP/1 vs HTTP/2
    * requests and dispatches to the appropriate internal handler.
    *
-   * HTTP/2 requests always use bidirectional streaming (`BIDI_STREAM`).
-   * HTTP/1 requests use request-response mode (`REQUEST_RESPONSE`) by default.
-   * Set `bidirectional: true` to enable bidirectional streaming for HTTP/1 requests as well.
+   * By default (when `bidirectional` is omitted), HTTP/2+ requests use
+   * bidirectional streaming (`BIDI_STREAM`) and HTTP/1 requests use
+   * request-response mode (`REQUEST_RESPONSE`).
+   *
+   * Set `bidirectional: true` to force `BIDI_STREAM` for all requests,
+   * or `bidirectional: false` to force `REQUEST_RESPONSE` for all requests.
    *
    * This is useful with `http2.createSecureServer({ allowHTTP1: true })`, where
    * the same server handles both HTTP/1.1 and HTTP/2 connections.
