@@ -35,10 +35,7 @@ export function endpoint(): RestateEndpoint {
  * @returns An HTTP/2 request handler function.
  */
 export function createEndpointHandler(options: EndpointOptions) {
-  return withOptions<RestateEndpoint>(
-    new NodeEndpoint(),
-    options
-  ).http2Handler();
+  return withOptions<RestateEndpoint>(new NodeEndpoint(), options).handler();
 }
 
 export interface ServeOptions extends EndpointOptions {
