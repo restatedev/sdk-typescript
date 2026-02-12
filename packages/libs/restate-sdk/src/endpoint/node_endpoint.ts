@@ -17,8 +17,9 @@ import type {
   WorkflowDefinition,
 } from "@restatedev/restate-sdk-core";
 
-import type { Http2ServerRequest, Http2ServerResponse } from "http2";
-import * as http2 from "http2";
+import type { IncomingMessage, ServerResponse } from "node:http";
+import type { Http2ServerRequest, Http2ServerResponse } from "node:http2";
+import * as http2 from "node:http2";
 import type { Endpoint } from "./endpoint.js";
 import { EndpointBuilder } from "./endpoint.js";
 import {
@@ -26,10 +27,11 @@ import {
   tryCreateContextualLogger,
 } from "./handlers/generic.js";
 import { Readable, Writable } from "node:stream";
-import type { WritableStream } from "node:stream/web";
+import type { ReadableStream, WritableStream } from "node:stream/web";
 import { ensureError } from "../types/errors.js";
 import type { LoggerTransport } from "../logging/logger_transport.js";
 import type { DefaultServiceOptions } from "../endpoint.js";
+import type { ProtocolMode } from "./discovery.js";
 
 export class NodeEndpoint implements RestateEndpoint {
   private builder: EndpointBuilder = new EndpointBuilder();
@@ -68,11 +70,54 @@ export class NodeEndpoint implements RestateEndpoint {
     return this;
   }
 
-  http2Handler(): (
-    request: Http2ServerRequest,
-    response: Http2ServerResponse
-  ) => void {
-    return nodeHttp2Handler(this.builder.build());
+  http2Handler(options?: {
+    bidirectional?: boolean;
+  }): (request: Http2ServerRequest, response: Http2ServerResponse) => void {
+    return nodeHttp2Handler(
+      this.builder.build(),
+      options?.bidirectional === false ? "REQUEST_RESPONSE" : "BIDI_STREAM"
+    );
+  }
+
+  http1Handler(options?: {
+    bidirectional?: boolean;
+  }): (request: IncomingMessage, response: ServerResponse) => void {
+    return nodeHttp1Handler(
+      this.builder.build(),
+      options?.bidirectional ? "BIDI_STREAM" : "REQUEST_RESPONSE"
+    );
+  }
+
+  handler(options?: { bidirectional?: boolean }): {
+    (request: IncomingMessage, response: ServerResponse): void;
+    (request: Http2ServerRequest, response: Http2ServerResponse): void;
+  } {
+    const endpoint = this.builder.build();
+    const h2Handler = nodeHttp2Handler(
+      endpoint,
+      options?.bidirectional === false ? "REQUEST_RESPONSE" : "BIDI_STREAM"
+    );
+    const h1Handler = nodeHttp1Handler(
+      endpoint,
+      options?.bidirectional ? "BIDI_STREAM" : "REQUEST_RESPONSE"
+    );
+
+    return ((
+      request: IncomingMessage | Http2ServerRequest,
+      response: ServerResponse | Http2ServerResponse
+    ) => {
+      if (request.httpVersionMajor >= 2) {
+        h2Handler(
+          request as Http2ServerRequest,
+          response as Http2ServerResponse
+        );
+      } else {
+        h1Handler(request as IncomingMessage, response as ServerResponse);
+      }
+    }) as {
+      (request: IncomingMessage, response: ServerResponse): void;
+      (request: Http2ServerRequest, response: Http2ServerResponse): void;
+    };
   }
 
   listen(port?: number): Promise<number> {
@@ -81,7 +126,9 @@ export class NodeEndpoint implements RestateEndpoint {
     const actualPort = port ?? parseInt(process.env.PORT ?? "9080");
     endpoint.rlog.info(`Restate SDK started listening on ${actualPort}...`);
 
-    const server = http2.createServer(nodeHttp2Handler(endpoint));
+    const server = http2.createServer(
+      nodeHttp2Handler(endpoint, "BIDI_STREAM")
+    );
 
     return new Promise((resolve, reject) => {
       let failed = false;
@@ -108,10 +155,28 @@ export class NodeEndpoint implements RestateEndpoint {
   }
 }
 
+function nodeHttp1Handler(
+  endpoint: Endpoint,
+  protocolMode: ProtocolMode
+): (request: IncomingMessage, response: ServerResponse) => void {
+  return nodeHandlerImpl(endpoint, protocolMode);
+}
+
 function nodeHttp2Handler(
-  endpoint: Endpoint
+  endpoint: Endpoint,
+  protocolMode: ProtocolMode
 ): (request: Http2ServerRequest, response: Http2ServerResponse) => void {
-  const handler = new GenericHandler(endpoint, "BIDI_STREAM", {});
+  return nodeHandlerImpl(endpoint, protocolMode);
+}
+
+function nodeHandlerImpl(
+  endpoint: Endpoint,
+  protocolMode: ProtocolMode
+): (
+  request: Http2ServerRequest | IncomingMessage,
+  response: Http2ServerResponse | ServerResponse
+) => void {
+  const handler = new GenericHandler(endpoint, protocolMode, {});
 
   return (request, response) => {
     (async () => {
@@ -127,14 +192,19 @@ function nodeHttp2Handler(
         abortController.abort();
       });
 
-      if (request.destroyed || request.aborted) {
+      if (request.destroyed || ("aborted" in request && request.aborted)) {
         endpoint.rlog.error("Client disconnected");
         abortController.abort();
       }
 
       try {
-        const url = request.url;
-        const webRequestBody = Readable.toWeb(request);
+        // request.url is always defined for incoming HTTP requests;
+        // it is only typed as string | undefined on IncomingMessage
+        // because the property is technically writable.
+        const url = request.url!;
+        const webRequestBody = Readable.toWeb(
+          request as Readable
+        ) as ReadableStream<Uint8Array>;
 
         const resp = await handler.handle({
           url,
@@ -148,7 +218,7 @@ function nodeHttp2Handler(
           return;
         }
 
-        response.writeHead(resp.statusCode, resp.headers);
+        (response as ServerResponse).writeHead(resp.statusCode, resp.headers);
         const responseWeb = Writable.toWeb(
           response
         ) as WritableStream<Uint8Array>;
@@ -159,7 +229,7 @@ function nodeHttp2Handler(
         const logger =
           tryCreateContextualLogger(
             endpoint.loggerTransport,
-            request.url,
+            String(request.url),
             request.headers
           ) ?? endpoint.rlog;
         if (error.name === "AbortError") {

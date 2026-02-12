@@ -8,7 +8,7 @@ import type {
 } from "../common_api.js";
 
 /**
- * Options for creating an endpoint handler for Node.js HTTP/2 servers.
+ * Options for creating an endpoint handler.
  */
 export interface EndpointOptions {
   /**
