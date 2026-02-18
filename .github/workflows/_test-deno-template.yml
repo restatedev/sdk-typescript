@@ -3,24 +3,12 @@ name: Test Deno Template
 on:
   workflow_call:
 
+env:
+  RESTATE_IDENTITY_KEYS: "publickeyv1_8yHkhqyKeDaLytykZnKqrEQK27wF5A569edCqc5Vq2VH"
+
 jobs:
   test:
     runs-on: ubuntu-latest
-
-    services:
-      restate:
-        image: docker.restate.dev/restatedev/restate:latest
-        ports:
-          - 8080:8080
-          - 9070:9070
-        env:
-          DO_NOT_TRACK: true
-        options: >-
-          --health-cmd "curl -f http://localhost:9070/health || exit 1"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-          --add-host=host.docker.internal:host-gateway
 
     steps:
       - uses: actions/checkout@v4
@@ -45,6 +33,20 @@ jobs:
       - name: Build packages
         run: pnpm build
 
+      - name: Start Restate
+        run: |
+          docker run -d --name restate \
+            -p 8080:8080 -p 9070:9070 \
+            -v ${{ github.workspace }}/test/fixtures/request-signing:/etc/restate-signing:ro \
+            -e RESTATE_REQUEST_IDENTITY_PRIVATE_KEY_PEM_FILE=/etc/restate-signing/private.pem \
+            -e DO_NOT_TRACK=true \
+            --add-host=host.docker.internal:host-gateway \
+            docker.restate.dev/restatedev/restate:latest
+
+          # Wait for Restate to be healthy
+          timeout 60 bash -c 'until curl -sf http://localhost:9070/health; do sleep 2; done'
+          echo "Restate is ready!"
+
       - name: Install Deno dependencies
         working-directory: packages/examples/deno
         run: deno install
@@ -64,7 +66,7 @@ jobs:
 
       - name: Test Deno template
         run: |
-          echo "Testing Greeter service..."
+          echo "Testing Greeter service (with request signing)..."
           RESPONSE=$(curl -s localhost:8080/Greeter/greet --json '{"name": "Deno"}')
           echo "Response: $RESPONSE"
 
@@ -80,7 +82,7 @@ jobs:
         if: failure()
         run: |
           echo "=== Restate logs ==="
-          docker logs $(docker ps -q --filter ancestor=docker.restate.dev/restatedev/restate:latest)
+          docker logs restate
 
           echo "=== Service logs ==="
           if [ -f packages/examples/deno/service.pid ]; then
@@ -89,8 +91,9 @@ jobs:
 
       - name: Cleanup
         if: always()
-        working-directory: packages/examples/deno
         run: |
-          if [ -f service.pid ]; then
-            kill $(cat service.pid) || true
+          if [ -f packages/examples/deno/service.pid ]; then
+            kill $(cat packages/examples/deno/service.pid) || true
           fi
+          docker stop restate || true
+          docker rm restate || true

@@ -24,7 +24,10 @@ const greeter = restate.service({
   },
 });
 
+const identityKeys =
+  process.env.RESTATE_IDENTITY_KEYS?.split(",").filter(Boolean);
+
 Bun.serve({
-  fetch: restate.createEndpointHandler({ services: [greeter] }),
+  fetch: restate.createEndpointHandler({ services: [greeter], identityKeys }),
   port: 9080,
 });

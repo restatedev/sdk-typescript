@@ -24,6 +24,9 @@ const greeter = restate.service({
   },
 });
 
+const identityKeys =
+  globalThis.process?.env?.RESTATE_IDENTITY_KEYS?.split(",").filter(Boolean);
+
 export default {
-  fetch: restate.createEndpointHandler({ services: [greeter] }),
+  fetch: restate.createEndpointHandler({ services: [greeter], identityKeys }),
 };

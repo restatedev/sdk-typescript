@@ -27,9 +27,15 @@ export const greeter = restate.service({
   },
 });
 
+const identityKeys = Deno.env
+  .get("RESTATE_IDENTITY_KEYS")
+  ?.split(",")
+  .filter(Boolean);
+
 const handler = restate.createEndpointHandler({
   services: [greeter],
   bidirectional: true,
+  identityKeys,
 });
 
 Deno.serve({ port: 9080 }, handler);

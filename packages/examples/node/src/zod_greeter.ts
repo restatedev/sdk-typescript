@@ -36,7 +36,11 @@ const greeter = restate.service({
   },
 });
 
+const identityKeys =
+  process.env.RESTATE_IDENTITY_KEYS?.split(",").filter(Boolean);
+
 void restate.serve({
   services: [greeter],
   port: 9080,
+  identityKeys,
 });
