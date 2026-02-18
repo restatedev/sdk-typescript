@@ -701,6 +701,7 @@ impl WasmVM {
         key: Option<String>,
         headers: Vec<WasmHeader>,
         idempotency_key: Option<String>,
+        name: Option<String>
     ) -> Result<WasmCallHandle, WasmFailure> {
         use_log_dispatcher!(self, |vm| CoreVM::sys_call(
             vm,
@@ -712,7 +713,8 @@ impl WasmVM {
                 headers: headers.into_iter().map(Header::from).collect(),
             },
             buffer.to_vec().into(),
-            Default::default()
+            name,
+            Default::default(),
         ))
         .map(Into::into)
         .map_err(Into::into)
@@ -728,6 +730,7 @@ impl WasmVM {
         headers: Vec<WasmHeader>,
         delay: Option<u64>,
         idempotency_key: Option<String>,
+        name: Option<String>
     ) -> Result<WasmSendHandle, WasmFailure> {
         use_log_dispatcher!(self, |vm| CoreVM::sys_send(
             vm,
@@ -740,6 +743,7 @@ impl WasmVM {
             },
             buffer.to_vec().into(),
             delay.map(|delay| now_since_unix_epoch() + Duration::from_millis(delay)),
+            name,
             Default::default()
         ))
         .map(Into::into)
