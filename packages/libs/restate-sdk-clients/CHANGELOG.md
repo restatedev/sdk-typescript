@@ -1,5 +1,17 @@
 # @restatedev/restate-sdk-clients
 
+## 1.10.3
+
+### Patch Changes
+
+- 4b477f6: Add rpc.opts({name})/rpc.sendOpts({name}) to propagate entry name for call. This allows tagging from caller perspective a request.
+- ef1cc48: Added new journal incompatibility assertion to shared-core, to detect if an await was added mutating code in-place.
+- 4b477f6: Update the shared core to 0.8.0
+- Updated dependencies [4b477f6]
+- Updated dependencies [ef1cc48]
+- Updated dependencies [4b477f6]
+  - @restatedev/restate-sdk-core@1.10.3
+
 ## 1.10.2
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@restatedev/restate-sdk-cloudflare-workers",
-  "version": "1.10.2",
+  "version": "1.10.3",
   "description": "Typescript SDK for Restate",
   "author": "Restate Developers",
   "email": "code@restate.dev",
