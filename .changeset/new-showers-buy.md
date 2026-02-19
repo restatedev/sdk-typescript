@@ -7,4 +7,4 @@
 "@restatedev/restate-sdk-zod": patch
 ---
 
-Added new journal incompatibility assertion to shared-core, to detect if an await was added mutating code in-place.
+Add rpc.opts({name})/rpc.sendOpts({name}) to propagate entry name for call. This allows tagging from caller perspective a request.
