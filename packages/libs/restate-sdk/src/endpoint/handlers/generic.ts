@@ -480,7 +480,9 @@ export class GenericHandler implements RestateHandler {
             coreVm.sys_write_output_failure({
               code: error.code,
               message: error.message,
-              metadata: [],
+              metadata: Object.entries(error.metadata ?? {}).map(
+                ([key, value]) => ({ key, value })
+              ),
             });
             coreVm.sys_end();
             return;

@@ -467,7 +467,9 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
             this.coreVm.propose_run_completion_failure(handle, {
               code: err.code,
               message: err.message,
-              metadata: [],
+              metadata: Object.entries(err.metadata ?? {}).map(
+                ([key, value]) => ({ key, value })
+              ),
             });
           } else if (err instanceof RetryableError) {
             const maxRetryDuration =
@@ -1023,9 +1025,17 @@ function SuccessWithSerde<T>(
 
 const Failure: Completer = (value, prom) => {
   if (typeof value === "object" && "Failure" in value) {
+    const metadata = (value.Failure.metadata ?? []).reduce(
+      (acc: Record<string, string>, { key, value: v }: { key: string; value: string }) => {
+        acc[key] = v;
+        return acc;
+      },
+      {} as Record<string, string>
+    );
     prom.reject(
       new TerminalError(value.Failure.message, {
         errorCode: value.Failure.code,
+        metadata,
       })
     );
     return Promise.resolve(true);
