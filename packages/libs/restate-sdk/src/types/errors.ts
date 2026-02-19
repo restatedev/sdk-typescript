@@ -92,6 +92,7 @@ export class RestateError extends Error {
  */
 export class TerminalError extends RestateError {
   public override name = "TerminalError";
+  public readonly metadata: Record<string, string>;
 
   constructor(
     message: string,
@@ -104,9 +105,15 @@ export class TerminalError extends RestateError {
        * @deprecated YOU MUST NOT USE THIS FIELD, AS IT WON'T BE RECORDED AND CAN LEAD TO NON-DETERMINISM! From the next SDK version, the constructor won't accept this field anymore.
        */
       cause?: any;
+      /**
+       * Metadata key-value pairs to attach to the terminal error.
+       * These are propagated through the Restate protocol (requires service protocol v6+).
+       */
+      metadata?: Record<string, string>;
     }
   ) {
     super(message, options);
+    this.metadata = options?.metadata ?? {};
   }
 }
 
