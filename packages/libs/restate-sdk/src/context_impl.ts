@@ -252,7 +252,8 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
               ([key, value]) => new WasmHeader(key, value)
             )
           : [],
-        call.idempotencyKey
+        call.idempotencyKey,
+        call.name
       );
       const commandIndex = this.coreVm.last_command_index();
 
@@ -322,7 +323,8 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
             )
           : [],
         delay !== undefined && delay > 0 ? BigInt(delay) : undefined,
-        send.idempotencyKey
+        send.idempotencyKey,
+        send.name
       );
       const commandIndex = this.coreVm.last_command_index();
 

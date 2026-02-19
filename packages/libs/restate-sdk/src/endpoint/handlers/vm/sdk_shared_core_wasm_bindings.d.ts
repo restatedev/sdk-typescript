@@ -160,7 +160,8 @@ export class WasmVM {
     buffer: Uint8Array,
     key: string | null | undefined,
     headers: WasmHeader[],
-    idempotency_key?: string | null
+    idempotency_key?: string | null,
+    name?: string | null
   ): WasmCallHandle;
   sys_send(
     service: string,
@@ -169,7 +170,8 @@ export class WasmVM {
     key: string | null | undefined,
     headers: WasmHeader[],
     delay?: bigint | null,
-    idempotency_key?: string | null
+    idempotency_key?: string | null,
+    name?: string | null
   ): WasmSendHandle;
   sys_awakeable(): WasmAwakeable;
   sys_complete_awakeable_success(id: string, buffer: Uint8Array): void;

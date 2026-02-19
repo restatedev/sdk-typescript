@@ -799,9 +799,10 @@ export class WasmVM {
      * @param {string | null | undefined} key
      * @param {WasmHeader[]} headers
      * @param {string | null} [idempotency_key]
+     * @param {string | null} [name]
      * @returns {WasmCallHandle}
      */
-    sys_call(service, handler, buffer, key, headers, idempotency_key) {
+    sys_call(service, handler, buffer, key, headers, idempotency_key, name) {
         const ptr0 = passStringToWasm0(service, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ptr1 = passStringToWasm0(handler, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
@@ -814,7 +815,9 @@ export class WasmVM {
         const len4 = WASM_VECTOR_LEN;
         var ptr5 = isLikeNone(idempotency_key) ? 0 : passStringToWasm0(idempotency_key, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         var len5 = WASM_VECTOR_LEN;
-        const ret = wasm.wasmvm_sys_call(this.__wbg_ptr, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, ptr4, len4, ptr5, len5);
+        var ptr6 = isLikeNone(name) ? 0 : passStringToWasm0(name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        var len6 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmvm_sys_call(this.__wbg_ptr, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, ptr4, len4, ptr5, len5, ptr6, len6);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }
@@ -828,9 +831,10 @@ export class WasmVM {
      * @param {WasmHeader[]} headers
      * @param {bigint | null} [delay]
      * @param {string | null} [idempotency_key]
+     * @param {string | null} [name]
      * @returns {WasmSendHandle}
      */
-    sys_send(service, handler, buffer, key, headers, delay, idempotency_key) {
+    sys_send(service, handler, buffer, key, headers, delay, idempotency_key, name) {
         const ptr0 = passStringToWasm0(service, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ptr1 = passStringToWasm0(handler, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
@@ -843,7 +847,9 @@ export class WasmVM {
         const len4 = WASM_VECTOR_LEN;
         var ptr5 = isLikeNone(idempotency_key) ? 0 : passStringToWasm0(idempotency_key, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         var len5 = WASM_VECTOR_LEN;
-        const ret = wasm.wasmvm_sys_send(this.__wbg_ptr, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, ptr4, len4, !isLikeNone(delay), isLikeNone(delay) ? BigInt(0) : delay, ptr5, len5);
+        var ptr6 = isLikeNone(name) ? 0 : passStringToWasm0(name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        var len6 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmvm_sys_send(this.__wbg_ptr, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, ptr4, len4, !isLikeNone(delay), isLikeNone(delay) ? BigInt(0) : delay, ptr5, len5, ptr6, len6);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }

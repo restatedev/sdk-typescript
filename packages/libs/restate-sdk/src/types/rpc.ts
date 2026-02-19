@@ -48,6 +48,11 @@ export type ClientCallOptions<I, O> = {
   output?: Serde<O>;
   headers?: Record<string, string>;
   idempotencyKey?: string;
+
+  /**
+   * Observability name, recorded in the Restate journal.
+   */
+  name?: string;
 };
 
 export class Opts<I, O> {
@@ -97,6 +102,11 @@ export type ClientSendOptions<I> = {
   delay?: Duration | number;
   headers?: Record<string, string>;
   idempotencyKey?: string;
+
+  /**
+   * Observability name, recorded in the Restate journal.
+   */
+  name?: string;
 };
 
 export class SendOpts<I> {
@@ -193,6 +203,7 @@ export const makeRpcCallProxy = <T>(
             inputSerde: requestSerde,
             outputSerde: responseSerde,
             idempotencyKey: opts?.idempotencyKey,
+            name: opts?.name,
           });
         };
       },
@@ -229,6 +240,7 @@ export const makeRpcSendProxy = <T>(
             delay,
             inputSerde: requestSerde,
             idempotencyKey: opts?.idempotencyKey,
+            name: opts?.name,
           });
         };
       },

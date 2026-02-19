@@ -243,6 +243,10 @@ export type GenericCall<REQ, RES> = {
   inputSerde?: Serde<REQ>;
   outputSerde?: Serde<RES>;
   idempotencyKey?: string;
+  /**
+   * Observability name, recorded in the Restate journal.
+   */
+  name?: string;
 };
 
 /**
@@ -259,6 +263,10 @@ export type GenericSend<REQ> = {
   inputSerde?: Serde<REQ>;
   delay?: Duration | number;
   idempotencyKey?: string;
+  /**
+   * Observability name, recorded in the Restate journal.
+   */
+  name?: string;
 };
 
 /**
