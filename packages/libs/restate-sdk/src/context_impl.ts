@@ -34,6 +34,7 @@ import {
   WasmHeader,
 } from "./endpoint/handlers/vm/sdk_shared_core_wasm_bindings.js";
 import {
+  CancelledError,
   ensureError,
   INTERNAL_ERROR_CODE,
   logError,
@@ -68,6 +69,7 @@ import type {
 import { CompletablePromise } from "./utils/completable_promise.js";
 import type { AsyncResultValue, InternalRestatePromise } from "./promises.js";
 import {
+  CancellationWatcherPromise,
   extractContext,
   InvocationPendingPromise,
   pendingPromise,
@@ -109,7 +111,10 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
     outputWriter: WritableStreamDefaultWriter<Uint8Array>,
     readonly journalValueCodec: JournalValueCodec,
     defaultSerde?: Serde<any>,
-    private readonly asTerminalError?: (error: any) => TerminalError | undefined
+    private readonly asTerminalError?: (
+      error: any
+    ) => TerminalError | undefined,
+    cancellationController?: AbortController
   ) {
     this.rand = new RandImpl(input.random_seed, () => {
       // TODO reimplement this check with async context
@@ -133,6 +138,18 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       this.promiseExecutorErrorCallback.bind(this)
     );
     this.defaultSerde = defaultSerde ?? serde.json;
+
+    if (cancellationController) {
+      const cancelWatcher = new CancellationWatcherPromise(this, () => {
+        if (!cancellationController.signal.aborted) {
+          cancellationController.abort(new CancelledError());
+        }
+      });
+      void cancelWatcher.then(
+        () => {},
+        () => {}
+      );
+    }
   }
 
   cancel(invocationId: InvocationId): void {

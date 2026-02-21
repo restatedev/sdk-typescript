@@ -16,6 +16,7 @@ import "./event_handler.js";
 import "./list.js";
 import "./map.js";
 import "./cancel_test.js";
+import "./cancel_signal_test.js";
 import "./non_determinism.js";
 import "./failing.js";
 import "./side_effect.js";

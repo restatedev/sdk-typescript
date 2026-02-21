@@ -76,6 +76,15 @@ export interface Request {
    * than cleanup any external resources that might be shared across attempts (e.g. database connections).
    */
   readonly attemptCompletedSignal: AbortSignal;
+
+  /**
+   * Signal that is aborted when the invocation is cancelled by the Restate runtime.
+   * Unlike {@link attemptCompletedSignal}, this signal specifically indicates cancellation
+   * and can be used to abort in-flight operations (e.g., fetch calls, database queries).
+   *
+   * The signal's reason will be a {@link CancelledError}.
+   */
+  readonly cancellationSignal: AbortSignal;
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
