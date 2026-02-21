@@ -145,6 +145,10 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
           cancellationController.abort(new CancelledError());
         }
       });
+      invocationEndPromise.promise.then(
+        () => cancelWatcher.stop(),
+        () => cancelWatcher.stop()
+      );
       void cancelWatcher.then(
         () => {},
         () => {}

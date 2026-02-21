@@ -126,4 +126,52 @@ describe("CancellationWatcherPromise", () => {
 
     expect(watcher[RESTATE_CTX_SYMBOL]).toBe(ctx);
   });
+
+  it("stop resolves publicPromise without firing callback", async () => {
+    const callback = vi.fn();
+    const ctx = createMockCtx(() => false);
+
+    const watcher = new CancellationWatcherPromise(ctx, callback);
+
+    watcher.stop();
+    expect(callback).not.toHaveBeenCalled();
+
+    await expect(watcher.publicPromise()).resolves.toBeUndefined();
+    expect(watcher.uncompletedLeaves()).toEqual([]);
+  });
+
+  it("stop after tryCancel does not fire callback again", () => {
+    const callback = vi.fn();
+    const ctx = createMockCtx(() => false);
+
+    const watcher = new CancellationWatcherPromise(ctx, callback);
+
+    watcher.tryCancel();
+    expect(callback).toHaveBeenCalledOnce();
+
+    watcher.stop();
+    expect(callback).toHaveBeenCalledOnce();
+  });
+
+  it("tryCancel after stop does not fire callback", () => {
+    const callback = vi.fn();
+    const ctx = createMockCtx(() => false);
+
+    const watcher = new CancellationWatcherPromise(ctx, callback);
+
+    watcher.stop();
+    watcher.tryCancel();
+    expect(callback).not.toHaveBeenCalled();
+  });
+
+  it("tryComplete after stop does not fire callback", async () => {
+    const callback = vi.fn();
+    const ctx = createMockCtx(() => true);
+
+    const watcher = new CancellationWatcherPromise(ctx, callback);
+
+    watcher.stop();
+    await watcher.tryComplete();
+    expect(callback).not.toHaveBeenCalled();
+  });
 });

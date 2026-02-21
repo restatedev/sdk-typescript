@@ -394,6 +394,17 @@ export class CancellationWatcherPromise extends AbstractRestatePromise<void> {
     this.completablePromise.resolve();
   }
 
+  /**
+   * Stop watching without triggering the cancellation callback.
+   * Used to cleanly shut down the watcher when the invocation ends
+   * (for any reason), preventing interaction with a closed VM.
+   */
+  stop() {
+    if (this.completed) return;
+    this.completed = true;
+    this.completablePromise.resolve();
+  }
+
   publicPromise(): Promise<void> {
     return this.completablePromise.promise;
   }
