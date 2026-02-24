@@ -1,5 +1,15 @@
 # @restatedev/restate-sdk-clients
 
+## 1.10.4
+
+### Patch Changes
+
+- 4e46eef: Add ContextInternal interface
+- 4e46eef: Fix issue with CloudRun and big non-completable journal entries
+- Updated dependencies [4e46eef]
+- Updated dependencies [4e46eef]
+  - @restatedev/restate-sdk-core@1.10.4
+
 ## 1.10.3
 
 ### Patch Changes
