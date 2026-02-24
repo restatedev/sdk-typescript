@@ -520,9 +520,23 @@ export class GenericHandler implements RestateHandler {
             await outputWriter.write(nextOutput);
             nextOutput = coreVm.take_output() as Uint8Array | null | undefined;
           }
+
+          // --- After this point, we should have flushed the shared core internal buffer
+
+          // Let's make sure we properly close the request stream before closing the response stream
+          let inputClosed = false;
+          while (!inputClosed) {
+            try {
+              const res = await inputReader.read();
+              inputClosed = res.done;
+              // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            } catch (e) {
+              inputClosed = true;
+            }
+          }
+
+          // Close the response stream
           await outputWriter.close();
-          // Let's cancel the input reader, if it's still here
-          inputReader.cancel().catch(() => {});
         })
         .finally(() => {
           invocationLoggers.delete(loggerId);
