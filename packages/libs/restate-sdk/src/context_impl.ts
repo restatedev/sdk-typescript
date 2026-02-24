@@ -78,8 +78,11 @@ import {
   RestateSinglePromise,
 } from "./promises.js";
 import { InputPump, OutputPump } from "./io.js";
+import type { ContextInternal } from "./internal.js";
 
-export class ContextImpl implements ObjectContext, WorkflowContext {
+export class ContextImpl
+  implements ObjectContext, WorkflowContext, ContextInternal
+{
   public readonly rand: Rand;
 
   public readonly date: ContextDate = {
@@ -133,6 +136,10 @@ export class ContextImpl implements ObjectContext, WorkflowContext {
       this.promiseExecutorErrorCallback.bind(this)
     );
     this.defaultSerde = defaultSerde ?? serde.json;
+  }
+
+  isProcessing(): boolean {
+    return this.coreVm.is_processing();
   }
 
   cancel(invocationId: InvocationId): void {

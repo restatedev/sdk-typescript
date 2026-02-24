@@ -137,3 +137,6 @@ export const createObjectHandler = handlers.object.exclusive;
 export const createObjectSharedHandler = handlers.object.shared;
 export const createWorkflowHandler = handlers.workflow.workflow;
 export const createWorkflowSharedHandler = handlers.workflow.shared;
+
+// Internal APIs
+export * as internal from "./internal.js";
