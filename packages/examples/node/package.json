@@ -11,6 +11,7 @@
     "dev": "RESTATE_LOGGING=debug tsx --tsconfig ./tsconfig.json ./src/zod_greeter.ts",
     "object": "RESTATE_LOGGING=debug tsx --tsconfig ./tsconfig.json ./src/object.ts",
     "greeter": "RESTATE_LOGGING=debug tsx --tsconfig ./tsconfig.json ./src/greeter.ts",
+    "greeter_http1": "RESTATE_LOGGING=debug tsx --tsconfig ./tsconfig.json ./src/greeter_http1.ts",
     "zgreeter": "RESTATE_LOGGING=debug tsx --tsconfig ./tsconfig.json ./src/zod_greeter.ts",
     "workflow": "RESTATE_LOGGING=debug tsx --tsconfig ./tsconfig.json ./src/workflow.ts",
     "workflow_client": "RESTATE_LOGGING=debug tsx --tsconfig ./tsconfig.json ./src/workflow_client.ts",
@@ -24,11 +25,13 @@
   },
   "dependencies": {
     "@restatedev/restate-sdk": "workspace:*",
-    "@restatedev/restate-sdk-core": "workspace:*",
-    "@restatedev/restate-sdk-zod": "workspace:*",
     "@restatedev/restate-sdk-clients": "workspace:*",
+    "@restatedev/restate-sdk-core": "workspace:*",
     "@restatedev/restate-sdk-testcontainers": "workspace:*",
+    "@restatedev/restate-sdk-zod": "workspace:*",
     "zod": "catalog:"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "testcontainers": "^10.24.1"
+  }
 }
