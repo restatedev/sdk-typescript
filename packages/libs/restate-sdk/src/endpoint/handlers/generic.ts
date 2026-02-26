@@ -71,6 +71,14 @@ export interface RestateResponse {
   readonly headers: ResponseHeaders;
   readonly statusCode: number;
   readonly body: ReadableStream<Uint8Array>;
+  // Workaround for a race condition where the runtime closes the HTTP/2
+  // stream after receiving the full response but before the SDK finishes
+  // its stream close handshake. This surfaces especially behind load
+  // balancers (e.g. Cloud Run) that buffer HTTP/2 frames. The caller uses
+  // this flag to distinguish a benign AbortError (invocation already
+  // completed) from a real one (e.g. abort-timeout). This will be properly
+  // fixed in a future release.
+  readonly invocationCompleted?: { value: boolean };
 }
 
 export interface RestateHandler {
@@ -508,6 +516,8 @@ export class GenericHandler implements RestateHandler {
           invocationEndPromise.resolve();
         });
 
+      const invocationCompleted = { value: false };
+
       // Let's wire up invocationEndPromise with consuming all the output and closing the streams.
       invocationEndPromise.promise
         .then(async () => {
@@ -520,6 +530,8 @@ export class GenericHandler implements RestateHandler {
             await outputWriter.write(nextOutput);
             nextOutput = coreVm.take_output() as Uint8Array | null | undefined;
           }
+
+          invocationCompleted.value = true;
 
           // --- After this point, we should have flushed the shared core internal buffer
 
@@ -547,6 +559,7 @@ export class GenericHandler implements RestateHandler {
         headers: responseHeaders,
         statusCode: responseHead.status_code,
         body: responseTransformStream.readable as ReadableStream<Uint8Array>,
+        invocationCompleted,
       };
     } catch (error) {
       invocationLoggers.delete(loggerId);

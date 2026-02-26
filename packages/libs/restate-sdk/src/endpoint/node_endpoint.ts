@@ -132,11 +132,12 @@ function nodeHttp2Handler(
         abortController.abort();
       }
 
+      let resp;
       try {
         const url = request.url;
         const webRequestBody = Readable.toWeb(request);
 
-        const resp = await handler.handle({
+        resp = await handler.handle({
           url,
           headers: request.headers,
           body: webRequestBody,
@@ -155,6 +156,15 @@ function nodeHttp2Handler(
         await resp.body.pipeTo(responseWeb);
       } catch (e) {
         const error = ensureError(e);
+
+        // If the invocation already completed and the shared core buffer was
+        // flushed, an AbortError is benign — see the comment on
+        // invocationCompleted in generic.ts for details.
+        if (error.name === "AbortError" && resp?.invocationCompleted?.value) {
+          // Runtime dropped the response side before we could close it on the SDK side.
+          // This is benign and can be ignored
+          return;
+        }
 
         const logger =
           tryCreateContextualLogger(
