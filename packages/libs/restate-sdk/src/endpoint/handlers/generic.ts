@@ -10,6 +10,7 @@
  */
 
 import {
+  CancelledError,
   ensureError,
   logError,
   RestateError,
@@ -369,6 +370,11 @@ export class GenericHandler implements RestateHandler {
       // Get input
       const input = coreVm.sys_input();
 
+      const cancellationController = new AbortController();
+      if (coreVm.is_completed(vm.cancel_handle())) {
+        cancellationController.abort(new CancelledError());
+      }
+
       const invocationRequest: Request = {
         id: input.invocation_id,
         headers: input.headers.reduce((headers, { key, value }) => {
@@ -387,6 +393,7 @@ export class GenericHandler implements RestateHandler {
         body: input.input,
         extraArgs,
         attemptCompletedSignal: abortSignal,
+        cancellationSignal: cancellationController.signal,
       };
 
       // Prepare logger
@@ -442,7 +449,8 @@ export class GenericHandler implements RestateHandler {
         outputWriter,
         journalValueCodec,
         service.options?.serde,
-        service.options?.asTerminalError
+        service.options?.asTerminalError,
+        cancellationController
       );
 
       journalValueCodec

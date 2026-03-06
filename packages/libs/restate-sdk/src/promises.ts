@@ -17,6 +17,7 @@ import type {
   InvocationPromise,
 } from "./context.js";
 import type * as vm from "./endpoint/handlers/vm/sdk_shared_core_wasm_bindings.js";
+import { cancel_handle } from "./endpoint/handlers/vm/sdk_shared_core_wasm_bindings.js";
 import {
   CancelledError,
   RestateError,
@@ -359,6 +360,56 @@ export class RestateMappedPromise<T, U> extends AbstractRestatePromise<U> {
   }
 
   readonly [Symbol.toStringTag] = "RestateMappedPromise";
+}
+
+export class CancellationWatcherPromise extends AbstractRestatePromise<void> {
+  private completed = false;
+  private readonly completablePromise = new CompletablePromise<void>();
+
+  constructor(
+    ctx: ContextImpl,
+    private readonly onCancellation: () => void
+  ) {
+    super(ctx);
+  }
+
+  uncompletedLeaves(): number[] {
+    return this.completed ? [] : [cancel_handle()];
+  }
+
+  tryComplete(): Promise<void> {
+    if (this.completed) return Promise.resolve();
+    if (this[RESTATE_CTX_SYMBOL].coreVm.is_completed(cancel_handle())) {
+      this.completed = true;
+      this.onCancellation();
+      this.completablePromise.resolve();
+    }
+    return Promise.resolve();
+  }
+
+  override tryCancel() {
+    if (this.completed) return;
+    this.completed = true;
+    this.onCancellation();
+    this.completablePromise.resolve();
+  }
+
+  /**
+   * Stop watching without triggering the cancellation callback.
+   * Used to cleanly shut down the watcher when the invocation ends
+   * (for any reason), preventing interaction with a closed VM.
+   */
+  stop() {
+    if (this.completed) return;
+    this.completed = true;
+    this.completablePromise.resolve();
+  }
+
+  publicPromise(): Promise<void> {
+    return this.completablePromise.promise;
+  }
+
+  readonly [Symbol.toStringTag] = "CancellationWatcherPromise";
 }
 
 /**
