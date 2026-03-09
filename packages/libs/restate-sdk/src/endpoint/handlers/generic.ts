@@ -20,7 +20,7 @@ import type {
   Endpoint as EndpointManifest,
   ProtocolMode,
 } from "../discovery.js";
-import { InvokePathComponents } from "../components.js";
+import {Component, ComponentHandler, InvokePathComponents} from "../components.js";
 import { parseUrlComponents } from "../components.js";
 import { X_RESTATE_SERVER } from "../../user_agent.js";
 import { ReadableStream, type WritableStream } from "node:stream/web";
@@ -45,6 +45,7 @@ import {
   millisOrDurationToMillis,
 } from "@restatedev/restate-sdk-core";
 import type { Endpoint } from "../endpoint.js";
+import {WasmVM} from "./vm/sdk_shared_core_wasm_bindings.js";
 
 export interface Headers {
   [name: string]: string | string[] | undefined;
@@ -265,13 +266,15 @@ export class GenericHandler implements RestateHandler {
     extraArgs: unknown[],
     additionalContext: AdditionalContext
   ): RestateResponse {
-    // Parse the things we need to feed
+    // Check if we support this protocol version
     const serviceProtocolVersionString = headers["content-type"];
     if (typeof serviceProtocolVersionString !== "string") {
       const errorMessage = "Missing content-type header";
       this.endpoint.rlog.warn(errorMessage);
       return this.toErrorResponse(415, errorMessage);
     }
+
+    // Resolve service and handler
     const service = this.endpoint.components.get(
       invokePathComponent.componentName
     );
@@ -360,7 +363,7 @@ export class GenericHandler implements RestateHandler {
 
         // This promise is used to signal the end of the computation,
         // which can be either the user returns a value,
-        // or an exception gets catched, or the state machine fails/suspends.
+        // or an exception gets caught, or the state machine fails/suspends.
         //
         // The last case is handled internally within the ContextImpl.
         const invocationEndPromise = new CompletablePromise<void>();
@@ -368,21 +371,11 @@ export class GenericHandler implements RestateHandler {
         let ctx: ContextImpl;
 
         try {
-          // Buffer input journal inside shared core
-          while (!coreVm.is_ready_to_execute()) {
-            const nextValue = await inputReader.read();
-            if (nextValue.value !== undefined) {
-              coreVm.notify_input(nextValue.value);
-            }
-            if (nextValue.done) {
-              coreVm.notify_input_closed();
-              break;
-            }
-          }
+          // Buffer journal inside shared core
+          await bufferJournalReplayInCoreVm(coreVm, inputReader);
 
-          // Get input
+          // Get input from coreVm to build the request object
           input = coreVm.sys_input();
-
           const invocationRequest: Request = {
             id: input.invocation_id,
             headers: input.headers.reduce((headers, { key, value }) => {
@@ -418,7 +411,7 @@ export class GenericHandler implements RestateHandler {
             loggerContext,
             () => !coreVm.is_processing()
           );
-          // Override the vmLogger with more info!
+          // Override the vmLogger created before with more info!
           vmLogger = createLogger(
             endpoint.loggerTransport,
             LogSource.JOURNAL,
@@ -451,77 +444,20 @@ export class GenericHandler implements RestateHandler {
           );
         } catch (e) {
           // That's "preflight" failure cases, where stuff fails before running user code
+          // In this scenario, we close the coreVm, then flush and close
           const error = ensureError(e);
           coreVm.notify_error(error.message, error.message);
           await flushAndClose(coreVm, vmLogger, inputReader, outputWriter);
           return;
         }
 
-        // From here onward, we're gonna run the user code
-        journalValueCodec
-          .decode(input.input)
-          .catch((e) =>
-            Promise.reject(
-              new TerminalError(
-                `Failed to decode input using journal value codec: ${
-                  ensureError(e).message
-                }`,
-                {
-                  errorCode: 400,
-                }
-              )
-            )
-          )
-          .then((decodedInput) =>
-            // Invoke user handler code
-            handler.invoke(ctx, decodedInput)
-          )
-          .then((output) => {
-            // Write output result
-            coreVm.sys_write_output_success(journalValueCodec.encode(output));
-            coreVm.sys_end();
-            vmLogger.info("Invocation completed successfully.");
-          })
-          .catch((e) => {
-            // Convert to Error
-            const error = ensureError(e, service.options?.asTerminalError);
-            logError(vmLogger, error);
-
-            // If TerminalError, handle it here.
-            // NOTE: this can still fail!
-            if (error instanceof TerminalError) {
-              coreVm.sys_write_output_failure({
-                code: error.code,
-                message: error.message,
-                metadata: [],
-              });
-              coreVm.sys_end();
-              return;
-            }
-
-            // Not a terminal error, have the below catch handle it
-            throw error;
-          })
-          .catch((e) => {
-            // Handle any other error now (retryable errors)
-            const error = ensureError(e);
-            if (error instanceof RetryableError) {
-              coreVm.notify_error_with_delay_override(
-                error.message,
-                error.stack,
-                error.retryAfter !== undefined
-                  ? BigInt(millisOrDurationToMillis(error.retryAfter))
-                  : undefined
-              );
-            } else {
-              coreVm.notify_error(error.message, error.stack);
-            }
-          })
-          .finally(() => {
-            invocationEndPromise.resolve();
-          });
-
-        // Wait for the invocation end
+        // Start the user code but don't await it directly.
+        // We await invocationEndPromise instead, which works as follows:
+        // * In the happy path, that is no errors, invocationEndPromise gets resolved by the line below in this finally branch
+        // * In the transient error case that happens within the handler, invocationEndPromise gets resolved by the ContextImpl itself, unblocking the await line below
+        void startUserHandler(ctx, service, handler, journalValueCodec).finally(() => {
+          invocationEndPromise.resolve();
+        });
         await invocationEndPromise.promise;
 
         // Then flush and close
@@ -694,6 +630,85 @@ function staticResponse(
   };
 }
 
+async function bufferJournalReplayInCoreVm(coreVm: vm.WasmVM, inputReader: ReadableStreamDefaultReader<Uint8Array>) {
+  while (!coreVm.is_ready_to_execute()) {
+    const nextValue = await inputReader.read();
+    if (nextValue.value !== undefined) {
+      coreVm.notify_input(nextValue.value);
+    }
+    if (nextValue.done) {
+      coreVm.notify_input_closed();
+      break;
+    }
+  }
+}
+
+async function startUserHandler(ctx: ContextImpl, service: Component, handler: ComponentHandler, journalValueCodec: JournalValueCodec) {
+  try {
+    try {
+      const decodedInput = await journalValueCodec
+          .decode(ctx.request().body)
+          .catch((e) =>
+              // Re-throw as terminal error, to fail on input errors
+              Promise.reject(
+                  new TerminalError(
+                      `Failed to decode input using journal value codec: ${
+                          ensureError(e).message
+                      }`,
+                      {
+                        errorCode: 400,
+                      }
+                  )
+              )
+          );
+
+      // Then run user code
+      const output = await handler.invoke(ctx, decodedInput);
+
+      // Encode user code output
+      const encodedOutput = journalValueCodec.encode(output);
+
+      // Write out and end
+      ctx.coreVm.sys_write_output_success(encodedOutput);
+      ctx.coreVm.sys_end();
+      ctx.vmLogger.info("Invocation completed successfully.");
+    } catch (e) {
+      // Convert to Error
+      const error = ensureError(e, service.options?.asTerminalError);
+      logError(ctx.vmLogger, error);
+
+      // If TerminalError, handle it here.
+      // NOTE: this can still fail, that's why the double catch!
+      if (error instanceof TerminalError) {
+        ctx.coreVm.sys_write_output_failure({
+          code: error.code,
+          message: error.message,
+          metadata: [],
+        });
+        ctx.coreVm.sys_end();
+        return;
+      }
+
+      // Not a terminal error, have the below catch handle it
+      throw error;
+    }
+  } catch (e) {
+    // Handle any other error now (retryable errors)
+    const error = ensureError(e);
+    if (error instanceof RetryableError) {
+      ctx.coreVm.notify_error_with_delay_override(
+          error.message,
+          error.stack,
+          error.retryAfter !== undefined
+              ? BigInt(millisOrDurationToMillis(error.retryAfter))
+              : undefined
+      );
+    } else {
+      ctx.coreVm.notify_error(error.message, error.stack);
+    }
+  }
+}
+
 async function flushAndClose(
   coreVm: vm.WasmVM,
   vmLogger: Logger,
@@ -737,6 +752,7 @@ async function flushAndClose(
       // Because we closed the input already,
       // these errors are benign and are caused by
       // synchronization issues wrt closing the response stream in the runtime
+      // This will be fixed in the runtime with https://github.com/restatedev/restate/issues/4456
       return;
     }
 

@@ -99,13 +99,14 @@ export class ContextImpl
   private readonly runClosuresTracker: RunClosuresTracker;
   readonly promisesExecutor: PromisesExecutor;
   readonly defaultSerde: Serde<any>;
+  private readonly serviceKey: string
 
   constructor(
     readonly coreVm: vm.WasmVM,
-    readonly input: vm.WasmInput,
+    input: vm.WasmInput,
     public readonly console: Console,
     public readonly handlerKind: HandlerKind,
-    private readonly vmLogger: Console,
+    readonly vmLogger: Console,
     private readonly invocationRequest: Request,
     private readonly invocationEndPromise: CompletablePromise<void>,
     inputReader: ReadableStreamDefaultReader<Uint8Array>,
@@ -136,6 +137,7 @@ export class ContextImpl
       this.promiseExecutorErrorCallback.bind(this)
     );
     this.defaultSerde = defaultSerde ?? serde.json;
+    this.serviceKey = input.key;
   }
 
   isProcessing(): boolean {
@@ -165,7 +167,7 @@ export class ContextImpl
       case HandlerKind.EXCLUSIVE:
       case HandlerKind.SHARED:
       case HandlerKind.WORKFLOW: {
-        return this.input.key;
+        return this.serviceKey;
       }
       default:
         throw new TerminalError("this handler type doesn't support key()");
