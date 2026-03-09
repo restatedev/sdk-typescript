@@ -9,31 +9,49 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import type { GenericHandler, RestateRequest } from "./generic.js";
+import { GenericHandler, tryCreateContextualLogger } from "./generic.js";
+import { ensureError } from "../../types/errors.js";
 
 export function fetcher(handler: GenericHandler) {
   return {
-    fetch: async (
-      event: Request,
-      ...extraArgs: unknown[]
-    ): Promise<Response> => {
+    fetch: (event: Request, ...extraArgs: unknown[]): Promise<Response> => {
       const url = event.url;
       const headers = Object.fromEntries(event.headers.entries());
 
-      const request: RestateRequest = {
+      const transformStream = new TransformStream<Uint8Array>();
+      const outputStream = transformStream.writable;
+
+      const response = handler.handle({
         url,
         headers,
-        body: event.body,
         extraArgs,
-        abortSignal: event.signal,
-      };
-
-      const resp = await handler.handle(request);
-
-      return new Response(resp.body, {
-        status: resp.statusCode,
-        headers: resp.headers,
       });
+
+      // Start processing, then return back the response
+      response
+        .process({
+          inputStream: event.body ?? undefined,
+          outputStream,
+          abortSignal: event.signal,
+        })
+        .catch((e) => {
+          // handle should never throw
+          const error = ensureError(e);
+          const logger =
+            tryCreateContextualLogger(
+              handler.endpoint.loggerTransport,
+              url,
+              headers
+            ) ?? handler.endpoint.rlog;
+          logger.error("Unexpected error: " + (error.stack ?? error.message));
+        });
+
+      return Promise.resolve(
+        new Response(transformStream.readable, {
+          status: response.statusCode,
+          headers: response.headers,
+        })
+      );
     },
   };
 }

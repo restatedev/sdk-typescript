@@ -20,11 +20,10 @@ import type {
   Endpoint as EndpointManifest,
   ProtocolMode,
 } from "../discovery.js";
-import type { Component, ComponentHandler } from "../components.js";
+import { InvokePathComponents } from "../components.js";
 import { parseUrlComponents } from "../components.js";
 import { X_RESTATE_SERVER } from "../../user_agent.js";
-import { type ReadableStream, TransformStream } from "node:stream/web";
-import { OnceStream } from "../../utils/streams.js";
+import { ReadableStream, type WritableStream } from "node:stream/web";
 import { ContextImpl } from "../../context_impl.js";
 import type { Request } from "../../context.js";
 import * as vm from "./vm/sdk_shared_core_wasm_bindings.js";
@@ -62,22 +61,25 @@ export interface AdditionalContext {
 export interface RestateRequest {
   readonly url: string;
   readonly headers: Headers;
-  readonly body: ReadableStream<Uint8Array> | null;
   readonly extraArgs: unknown[];
-  readonly abortSignal: AbortSignal;
 }
 
 export interface RestateResponse {
   readonly headers: ResponseHeaders;
   readonly statusCode: number;
-  readonly body: ReadableStream<Uint8Array>;
+
+  // Promise resolved when the request has been fully processed,
+  // the last message has been written out,
+  // and outputStream has been closed.
+  process(value: {
+    inputStream?: ReadableStream<Uint8Array>;
+    outputStream: WritableStream<Uint8Array>;
+    abortSignal: AbortSignal;
+  }): Promise<void>;
 }
 
 export interface RestateHandler {
-  handle(
-    request: RestateRequest,
-    context?: AdditionalContext
-  ): Promise<RestateResponse>;
+  handle(request: RestateRequest, context?: AdditionalContext): RestateResponse;
 }
 
 const ENDPOINT_MANIFEST_V2 = "application/vnd.restate.endpointmanifest.v2+json";
@@ -164,12 +166,12 @@ export class GenericHandler implements RestateHandler {
   }
 
   // handle does not throw.
-  public async handle(
+  public handle(
     request: RestateRequest,
     context?: AdditionalContext
-  ): Promise<RestateResponse> {
+  ): RestateResponse {
     try {
-      return await this._handle(request, context);
+      return this._handle(request, context);
     } catch (e) {
       const error = ensureError(e);
       (
@@ -188,10 +190,10 @@ export class GenericHandler implements RestateHandler {
     }
   }
 
-  private async _handle(
+  private _handle(
     request: RestateRequest,
     context?: AdditionalContext
-  ): Promise<RestateResponse> {
+  ): RestateResponse {
     // this is the recommended way to get the relative path from a url that may be relative or absolute
     const path = new URL(request.url, "https://example.com").pathname;
     const parsed = parseUrlComponents(path);
@@ -201,18 +203,18 @@ export class GenericHandler implements RestateHandler {
       this.endpoint.rlog.trace(msg);
       return this.toErrorResponse(404, msg);
     }
-
     if (parsed.type === "health") {
-      return {
-        body: OnceStream(new TextEncoder().encode("OK")),
-        headers: {
+      return staticResponse(
+        200,
+        {
           "content-type": "application/text",
           "x-restate-server": X_RESTATE_SERVER,
         },
-        statusCode: 200,
-      };
+        new TextEncoder().encode("OK")
+      );
     }
 
+    // Discovery and handling invocations require identity verification
     const error = this.validateConnectionSignature(path, request.headers);
     if (error !== null) {
       return error;
@@ -220,37 +222,11 @@ export class GenericHandler implements RestateHandler {
     if (parsed.type === "discover") {
       return this.handleDiscovery(request.headers["accept"]);
     }
-    const serviceProtocolVersionString = request.headers["content-type"];
-    if (typeof serviceProtocolVersionString !== "string") {
-      const errorMessage = "Missing content-type header";
-      this.endpoint.rlog.warn(errorMessage);
-      return this.toErrorResponse(415, errorMessage);
-    }
-    const service = this.endpoint.components.get(parsed.componentName);
-    if (!service) {
-      const msg = `No service found for URL: ${JSON.stringify(parsed)}`;
-      this.endpoint.rlog.error(msg);
-      return this.toErrorResponse(404, msg);
-    }
-    const handler = service?.handlerMatching(parsed);
-    if (!handler) {
-      const msg = `No service found for URL: ${JSON.stringify(parsed)}`;
-      this.endpoint.rlog.error(msg);
-      return this.toErrorResponse(404, msg);
-    }
-    if (!request.body) {
-      const msg = "The incoming message body was null";
-      this.endpoint.rlog.error(msg);
-      return this.toErrorResponse(400, msg);
-    }
 
     return this.handleInvoke(
-      service,
-      handler,
-      request.body,
+      parsed,
       request.headers,
       request.extraArgs,
-      request.abortSignal,
       context ?? {}
     );
   }
@@ -283,275 +259,275 @@ export class GenericHandler implements RestateHandler {
     }
   }
 
-  private async handleInvoke(
-    service: Component,
-    handler: ComponentHandler,
-    body: ReadableStream<Uint8Array>,
+  private handleInvoke(
+    invokePathComponent: InvokePathComponents,
     headers: Headers,
     extraArgs: unknown[],
-    abortSignal: AbortSignal,
     additionalContext: AdditionalContext
-  ): Promise<RestateResponse> {
-    const journalValueCodec: JournalValueCodec = this.endpoint.journalValueCodec
-      ? await this.endpoint.journalValueCodec
-      : {
-          encode: (entry) => entry,
-          decode: (entry) => Promise.resolve(entry),
-        };
+  ): RestateResponse {
+    // Parse the things we need to feed
+    const serviceProtocolVersionString = headers["content-type"];
+    if (typeof serviceProtocolVersionString !== "string") {
+      const errorMessage = "Missing content-type header";
+      this.endpoint.rlog.warn(errorMessage);
+      return this.toErrorResponse(415, errorMessage);
+    }
+    const service = this.endpoint.components.get(
+      invokePathComponent.componentName
+    );
+    if (!service) {
+      const msg = `No service found for URL: ${JSON.stringify(invokePathComponent)}`;
+      this.endpoint.rlog.error(msg);
+      return this.toErrorResponse(404, msg);
+    }
+    const handler = service?.handlerMatching(invokePathComponent);
+    if (!handler) {
+      const msg = `No service found for URL: ${JSON.stringify(invokePathComponent)}`;
+      this.endpoint.rlog.error(msg);
+      return this.toErrorResponse(404, msg);
+    }
+
     const loggerId = Math.floor(Math.random() * 4_294_967_295 /* u32::MAX */);
+    const isJournalCodecDefined = this.endpoint.journalValueCodec !== undefined;
 
-    try {
-      // Instantiate core vm and prepare response headers
-      const vmHeaders = Object.entries(headers)
-        .filter(([, v]) => v !== undefined)
-        .map(
-          ([k, v]) =>
-            new vm.WasmHeader(k, v instanceof Array ? v[0]! : (v as string))
-        );
-      const coreVm = new vm.WasmVM(
-        vmHeaders,
-        restateLogLevelToWasmLogLevel(DEFAULT_CONSOLE_LOGGER_LOG_LEVEL),
-        loggerId,
-        this.endpoint.journalValueCodec !== undefined
+    // Instantiate core vm and prepare response headers
+    const vmHeaders = Object.entries(headers)
+      .filter(([, v]) => v !== undefined)
+      .map(
+        ([k, v]) =>
+          new vm.WasmHeader(k, v instanceof Array ? v[0]! : (v as string))
       );
-      const responseHead = coreVm.get_response_head();
-      const responseHeaders = responseHead.headers.reduce(
-        (headers, { key, value }) => ({
-          [key]: value,
-          ...headers,
-        }),
-        {
-          "x-restate-server": X_RESTATE_SERVER,
-        }
-      );
-
-      // Use a default logger that still respects the endpoint custom logger
-      // We will override this later with a logger that has a LoggerContext
-      // See vm_log below for more details
-      invocationLoggers.set(
-        loggerId,
-        createLogger(
-          this.endpoint.loggerTransport,
-          LogSource.JOURNAL,
-          new LoggerContext(
-            invocationIdFromHeaders(headers),
-            service.name(),
-            handler.name(),
-            undefined,
-            undefined,
-            additionalContext
-          )
-        )
-      );
-
-      const inputReader = body.getReader();
-      abortSignal.addEventListener(
-        "abort",
-        () => {
-          invocationLoggers.delete(loggerId);
-          void inputReader.cancel();
-        },
-        { once: true }
-      );
-
-      // Now buffer input entries
-      while (!coreVm.is_ready_to_execute()) {
-        const nextValue = await inputReader.read();
-        if (nextValue.value !== undefined) {
-          coreVm.notify_input(nextValue.value);
-        }
-        if (nextValue.done) {
-          coreVm.notify_input_closed();
-          break;
-        }
+    const coreVm = new vm.WasmVM(
+      vmHeaders,
+      restateLogLevelToWasmLogLevel(DEFAULT_CONSOLE_LOGGER_LOG_LEVEL),
+      loggerId,
+      isJournalCodecDefined
+    );
+    const responseHead = coreVm.get_response_head();
+    const responseHeaders = responseHead.headers.reduce(
+      (headers, { key, value }) => ({
+        [key]: value,
+        ...headers,
+      }),
+      {
+        "x-restate-server": X_RESTATE_SERVER,
       }
-
-      // Get input
-      const input = coreVm.sys_input();
-
-      const invocationRequest: Request = {
-        id: input.invocation_id,
-        headers: input.headers.reduce((headers, { key, value }) => {
-          headers.set(key, value);
-          return headers;
-        }, new Map()),
-        attemptHeaders: Object.entries(headers).reduce(
-          (headers, [key, value]) => {
-            if (value !== undefined) {
-              headers.set(key, value instanceof Array ? value[0] : value);
-            }
-            return headers;
-          },
-          new Map()
-        ),
-        body: input.input,
-        extraArgs,
-        attemptCompletedSignal: abortSignal,
-      };
-
-      // Prepare logger
-      const loggerContext = new LoggerContext(
-        input.invocation_id,
-        handler.component().name(),
+    );
+    let vmLogger = createLogger(
+      this.endpoint.loggerTransport,
+      LogSource.JOURNAL,
+      new LoggerContext(
+        invocationIdFromHeaders(headers),
+        service.name(),
         handler.name(),
-        handler.kind() === HandlerKind.SERVICE ? undefined : input.key,
-        invocationRequest,
+        undefined,
+        undefined,
         additionalContext
-      );
-      const ctxLogger = createLogger(
-        this.endpoint.loggerTransport,
-        LogSource.USER,
-        loggerContext,
-        () => !coreVm.is_processing()
-      );
-      const vmLogger = createLogger(
-        this.endpoint.loggerTransport,
-        LogSource.JOURNAL,
-        loggerContext
-        // Filtering is done within the shared core
-      );
-      // See vm_log below for more details
-      invocationLoggers.set(loggerId, vmLogger);
-      if (!coreVm.is_processing()) {
-        vmLogger.info("Replaying invocation.");
-      } else {
-        vmLogger.info("Starting invocation.");
-      }
+      )
+    );
 
-      // This promise is used to signal the end of the computation,
-      // which can be either the user returns a value,
-      // or an exception gets catched, or the state machine fails/suspends.
-      //
-      // The last case is handled internally within the ContextImpl.
-      const invocationEndPromise = new CompletablePromise<void>();
+    const endpoint = this.endpoint;
 
-      // Prepare response stream
-      const responseTransformStream = new TransformStream<Uint8Array>();
-      const outputWriter = responseTransformStream.writable.getWriter();
+    return {
+      headers: responseHeaders,
+      statusCode: responseHead.status_code,
+      async process({ inputStream, outputStream, abortSignal }): Promise<void> {
+        abortSignal.addEventListener(
+          "abort",
+          () => {
+            // In any case, on abort remove the invocation logger to avoid memory leaks
+            invocationLoggers.delete(loggerId);
+          },
+          { once: true }
+        );
+        // Use a default logger that still respects the endpoint custom logger
+        // We will override this later with a logger that has a LoggerContext
+        // See vm_log below for more details
+        invocationLoggers.set(loggerId, vmLogger);
 
-      // Prepare context
-      const ctx = new ContextImpl(
-        coreVm,
-        input,
-        ctxLogger,
-        handler.kind(),
-        vmLogger,
-        invocationRequest,
-        invocationEndPromise,
-        inputReader,
-        outputWriter,
-        journalValueCodec,
-        service.options?.serde,
-        service.options?.asTerminalError
-      );
+        const journalValueCodec: JournalValueCodec = endpoint.journalValueCodec
+          ? await endpoint.journalValueCodec
+          : {
+              encode: (entry) => entry,
+              decode: (entry) => Promise.resolve(entry),
+            };
 
-      journalValueCodec
-        .decode(input.input)
-        .catch((e) =>
-          Promise.reject(
-            new TerminalError(
-              `Failed to decode input using journal value codec: ${
-                ensureError(e).message
-              }`,
-              {
-                errorCode: 400,
-              }
+        const inputReader =
+          inputStream !== undefined
+            ? inputStream.getReader()
+            : new ReadableStream<Uint8Array>().getReader();
+        const outputWriter = outputStream.getWriter();
+
+        // This promise is used to signal the end of the computation,
+        // which can be either the user returns a value,
+        // or an exception gets catched, or the state machine fails/suspends.
+        //
+        // The last case is handled internally within the ContextImpl.
+        const invocationEndPromise = new CompletablePromise<void>();
+        let input: vm.WasmInput;
+        let ctx: ContextImpl;
+
+        try {
+          // Buffer input journal inside shared core
+          while (!coreVm.is_ready_to_execute()) {
+            const nextValue = await inputReader.read();
+            if (nextValue.value !== undefined) {
+              coreVm.notify_input(nextValue.value);
+            }
+            if (nextValue.done) {
+              coreVm.notify_input_closed();
+              break;
+            }
+          }
+
+          // Get input
+          input = coreVm.sys_input();
+
+          const invocationRequest: Request = {
+            id: input.invocation_id,
+            headers: input.headers.reduce((headers, { key, value }) => {
+              headers.set(key, value);
+              return headers;
+            }, new Map()),
+            attemptHeaders: Object.entries(headers).reduce(
+              (headers, [key, value]) => {
+                if (value !== undefined) {
+                  headers.set(key, value instanceof Array ? value[0] : value);
+                }
+                return headers;
+              },
+              new Map()
+            ),
+            body: input.input,
+            extraArgs,
+            attemptCompletedSignal: abortSignal,
+          };
+
+          // Prepare logger
+          const loggerContext = new LoggerContext(
+            input.invocation_id,
+            handler.component().name(),
+            handler.name(),
+            handler.kind() === HandlerKind.SERVICE ? undefined : input.key,
+            invocationRequest,
+            additionalContext
+          );
+          const ctxLogger = createLogger(
+            endpoint.loggerTransport,
+            LogSource.USER,
+            loggerContext,
+            () => !coreVm.is_processing()
+          );
+          // Override the vmLogger with more info!
+          vmLogger = createLogger(
+            endpoint.loggerTransport,
+            LogSource.JOURNAL,
+            loggerContext
+            // Filtering is done within the shared core
+          );
+
+          // See vm_log below for more details
+          invocationLoggers.set(loggerId, vmLogger);
+          if (!coreVm.is_processing()) {
+            vmLogger.info("Replaying invocation.");
+          } else {
+            vmLogger.info("Starting invocation.");
+          }
+
+          // Prepare context
+          ctx = new ContextImpl(
+            coreVm,
+            input,
+            ctxLogger,
+            handler.kind(),
+            vmLogger,
+            invocationRequest,
+            invocationEndPromise,
+            inputReader,
+            outputWriter,
+            journalValueCodec,
+            service.options?.serde,
+            service.options?.asTerminalError
+          );
+        } catch (e) {
+          // That's "preflight" failure cases, where stuff fails before running user code
+          const error = ensureError(e);
+          coreVm.notify_error(error.message, error.message);
+          await flushAndClose(coreVm, vmLogger, inputReader, outputWriter);
+          return;
+        }
+
+        // From here onward, we're gonna run the user code
+        journalValueCodec
+          .decode(input.input)
+          .catch((e) =>
+            Promise.reject(
+              new TerminalError(
+                `Failed to decode input using journal value codec: ${
+                  ensureError(e).message
+                }`,
+                {
+                  errorCode: 400,
+                }
+              )
             )
           )
-        )
-        .then((decodedInput) =>
-          // Invoke user handler code
-          handler.invoke(ctx, decodedInput)
-        )
-        .then((output) => {
-          // Write output result
-          coreVm.sys_write_output_success(journalValueCodec.encode(output));
-          coreVm.sys_end();
-          vmLogger.info("Invocation completed successfully.");
-        })
-        .catch((e) => {
-          // Convert to Error
-          const error = ensureError(e, service.options?.asTerminalError);
-          logError(vmLogger, error);
-
-          // If TerminalError, handle it here.
-          // NOTE: this can still fail!
-          if (error instanceof TerminalError) {
-            coreVm.sys_write_output_failure({
-              code: error.code,
-              message: error.message,
-              metadata: [],
-            });
+          .then((decodedInput) =>
+            // Invoke user handler code
+            handler.invoke(ctx, decodedInput)
+          )
+          .then((output) => {
+            // Write output result
+            coreVm.sys_write_output_success(journalValueCodec.encode(output));
             coreVm.sys_end();
-            return;
-          }
+            vmLogger.info("Invocation completed successfully.");
+          })
+          .catch((e) => {
+            // Convert to Error
+            const error = ensureError(e, service.options?.asTerminalError);
+            logError(vmLogger, error);
 
-          // Not a terminal error, have the below catch handle it
-          throw error;
-        })
-        .catch((e) => {
-          // Handle any other error now (retryable errors)
-          const error = ensureError(e);
-          if (error instanceof RetryableError) {
-            coreVm.notify_error_with_delay_override(
-              error.message,
-              error.stack,
-              error.retryAfter !== undefined
-                ? BigInt(millisOrDurationToMillis(error.retryAfter))
-                : undefined
-            );
-          } else {
-            coreVm.notify_error(error.message, error.stack);
-          }
-        })
-        .finally(() => {
-          invocationEndPromise.resolve();
-        });
-
-      // Let's wire up invocationEndPromise with consuming all the output and closing the streams.
-      invocationEndPromise.promise
-        .then(async () => {
-          // Consume output till the end, write it out, then close the stream
-          let nextOutput = coreVm.take_output() as
-            | Uint8Array
-            | null
-            | undefined;
-          while (nextOutput !== null && nextOutput !== undefined) {
-            await outputWriter.write(nextOutput);
-            nextOutput = coreVm.take_output() as Uint8Array | null | undefined;
-          }
-
-          // --- After this point, we should have flushed the shared core internal buffer
-
-          // Let's make sure we properly close the request stream before closing the response stream
-          let inputClosed = false;
-          while (!inputClosed) {
-            try {
-              const res = await inputReader.read();
-              inputClosed = res.done;
-              // eslint-disable-next-line @typescript-eslint/no-unused-vars
-            } catch (e) {
-              inputClosed = true;
+            // If TerminalError, handle it here.
+            // NOTE: this can still fail!
+            if (error instanceof TerminalError) {
+              coreVm.sys_write_output_failure({
+                code: error.code,
+                message: error.message,
+                metadata: [],
+              });
+              coreVm.sys_end();
+              return;
             }
-          }
 
-          // Close the response stream
-          await outputWriter.close();
-        })
-        .finally(() => {
-          invocationLoggers.delete(loggerId);
-        })
-        .catch(() => {});
+            // Not a terminal error, have the below catch handle it
+            throw error;
+          })
+          .catch((e) => {
+            // Handle any other error now (retryable errors)
+            const error = ensureError(e);
+            if (error instanceof RetryableError) {
+              coreVm.notify_error_with_delay_override(
+                error.message,
+                error.stack,
+                error.retryAfter !== undefined
+                  ? BigInt(millisOrDurationToMillis(error.retryAfter))
+                  : undefined
+              );
+            } else {
+              coreVm.notify_error(error.message, error.stack);
+            }
+          })
+          .finally(() => {
+            invocationEndPromise.resolve();
+          });
 
-      return {
-        headers: responseHeaders,
-        statusCode: responseHead.status_code,
-        body: responseTransformStream.readable as ReadableStream<Uint8Array>,
-      };
-    } catch (error) {
-      invocationLoggers.delete(loggerId);
-      throw error;
-    }
+        // Wait for the invocation end
+        await invocationEndPromise.promise;
+
+        // Then flush and close
+        await flushAndClose(coreVm, vmLogger, inputReader, outputWriter);
+      },
+    };
   }
 
   private handleDiscovery(
@@ -665,8 +641,9 @@ export class GenericHandler implements RestateHandler {
     }
 
     const body = JSON.stringify(discovery);
-    return {
-      headers: {
+    return staticResponse(
+      200,
+      {
         "content-type":
           manifestVersion === 2
             ? ENDPOINT_MANIFEST_V2
@@ -675,20 +652,110 @@ export class GenericHandler implements RestateHandler {
               : ENDPOINT_MANIFEST_V4,
         "x-restate-server": X_RESTATE_SERVER,
       },
-      statusCode: 200,
-      body: OnceStream(new TextEncoder().encode(body)),
-    };
+      new TextEncoder().encode(body)
+    );
   }
 
   private toErrorResponse(code: number, message: string): RestateResponse {
-    return {
-      headers: {
+    return staticResponse(
+      code,
+      {
         "content-type": "application/json",
         "x-restate-server": X_RESTATE_SERVER,
       },
-      statusCode: code,
-      body: OnceStream(new TextEncoder().encode(JSON.stringify({ message }))),
-    };
+      new TextEncoder().encode(JSON.stringify({ message }))
+    );
+  }
+}
+
+function staticResponse(
+  statusCode: number,
+  headers: ResponseHeaders,
+  body: Uint8Array
+): RestateResponse {
+  return {
+    headers,
+    statusCode,
+    async process({ inputStream, outputStream }): Promise<void> {
+      if (inputStream !== undefined) {
+        // Drain the input stream
+        const reader = inputStream.getReader();
+        while (true) {
+          const { done } = await reader.read();
+          if (done) break;
+        }
+      }
+
+      const writer = outputStream.getWriter();
+      await writer.write(body);
+      // This closes both the writer and the stream!!!
+      await writer.close();
+    },
+  };
+}
+
+async function flushAndClose(
+  coreVm: vm.WasmVM,
+  vmLogger: Logger,
+  inputReader: ReadableStreamDefaultReader<Uint8Array>,
+  outputWriter: WritableStreamDefaultWriter<Uint8Array>
+): Promise<void> {
+  let inputClosed = false;
+  try {
+    // Consume output till the end, write it out, then close the stream
+    let nextOutput = coreVm.take_output() as Uint8Array | null | undefined;
+    while (nextOutput !== null && nextOutput !== undefined) {
+      await outputWriter.write(nextOutput);
+      nextOutput = coreVm.take_output() as Uint8Array | null | undefined;
+    }
+
+    // --- After this point, we should have flushed the shared core internal buffer
+
+    // Let's make sure we properly close the request stream before closing the response stream
+    while (!inputClosed) {
+      try {
+        const res = await inputReader.read();
+        inputClosed = res.done;
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      } catch (e) {
+        inputClosed = true;
+      }
+    }
+
+    // Close the response stream
+    await outputWriter.close();
+  } catch (e) {
+    // In case of failure, we can do little here except just logging stuff out,
+    // because outputWriter is not usable here.
+    const error = ensureError(e);
+
+    if (
+      inputClosed &&
+      (error.name === "AbortError" ||
+        error.message === "Invalid state: WritableStream is closed")
+    ) {
+      // Because we closed the input already,
+      // these errors are benign and are caused by
+      // synchronization issues wrt closing the response stream in the runtime
+      return;
+    }
+
+    if (error.name === "AbortError") {
+      vmLogger.error(
+        "Got abort error from connection: " +
+          error.message +
+          "\n" +
+          "This might indicate that:\n" +
+          "* The restate-server aborted the connection after hitting the 'abort-timeout'\n" +
+          "* The connection with the restate-server was lost\n" +
+          "\n" +
+          "Please check the invocation in the Restate UI for more details."
+      );
+    } else {
+      vmLogger.error(
+        "Error while handling request: " + (error.stack ?? error.message)
+      );
+    }
   }
 }
 
