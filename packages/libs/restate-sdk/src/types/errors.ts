@@ -92,7 +92,7 @@ export class RestateError extends Error {
  */
 export class TerminalError extends RestateError {
   public override name = "TerminalError";
-  public readonly metadata: Record<string, string>;
+  public readonly metadata?: Record<string, string>;
 
   constructor(
     message: string,
