@@ -99,7 +99,7 @@ export class ContextImpl
   private readonly runClosuresTracker: RunClosuresTracker;
   readonly promisesExecutor: PromisesExecutor;
   readonly defaultSerde: Serde<any>;
-  private readonly serviceKey: string
+  private readonly serviceKey: string;
 
   constructor(
     readonly coreVm: vm.WasmVM,

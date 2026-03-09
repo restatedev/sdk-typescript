@@ -37,7 +37,7 @@ pub enum LogLevel {
     ERROR = 4,
 }
 
-#[wasm_bindgen(raw_module = "../generic.js")]
+#[wasm_bindgen(raw_module = "../core_logging.js")]
 extern "C" {
     #[wasm_bindgen]
     fn vm_log(level: LogLevel, s: &[u8], logger_id: Option<u32>);

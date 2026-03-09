@@ -17,18 +17,18 @@ import type {
   Context,
 } from "aws-lambda";
 import { Buffer } from "node:buffer";
-import type { GenericHandler } from "./generic.js";
-import { tryCreateContextualLogger } from "./generic.js";
 import { WritableStream, ReadableStream } from "node:stream/web";
 import { X_RESTATE_SERVER } from "../../user_agent.js";
 import { ensureError } from "../../types/errors.js";
 import * as zlib from "node:zlib";
+import { RestateHandler } from "./types.js";
+import { tryCreateContextualLogger } from "./utils.js";
 
 const RESPONSE_COMPRESSION_THRESHOLD = 3 * 1024 * 1024;
 
 export class LambdaHandler {
   constructor(
-    private readonly handler: GenericHandler,
+    private readonly handler: RestateHandler,
     private readonly compressionSupported: boolean
   ) {}
 

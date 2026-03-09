@@ -9,10 +9,11 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { GenericHandler, tryCreateContextualLogger } from "./generic.js";
 import { ensureError } from "../../types/errors.js";
+import type { RestateHandler } from "./types.js";
+import { tryCreateContextualLogger } from "./utils.js";
 
-export function fetcher(handler: GenericHandler) {
+export function fetcher(handler: RestateHandler) {
   return {
     fetch: (event: Request, ...extraArgs: unknown[]): Promise<Response> => {
       const url = event.url;

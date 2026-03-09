@@ -20,15 +20,13 @@ import { Http2ServerRequest, Http2ServerResponse } from "http2";
 import * as http2 from "http2";
 import type { Endpoint } from "./endpoint.js";
 import { EndpointBuilder } from "./endpoint.js";
-import {
-  GenericHandler,
-  tryCreateContextualLogger,
-} from "./handlers/generic.js";
+import { createRestateHandler } from "./handlers/generic.js";
 import { Readable, Writable } from "node:stream";
 import { WritableStream } from "node:stream/web";
 import { ensureError } from "../types/errors.js";
 import type { LoggerTransport } from "../logging/logger_transport.js";
 import type { DefaultServiceOptions } from "../endpoint.js";
+import { tryCreateContextualLogger } from "./handlers/utils.js";
 
 export class NodeEndpoint implements RestateEndpoint {
   private builder: EndpointBuilder = new EndpointBuilder();
@@ -110,7 +108,7 @@ export class NodeEndpoint implements RestateEndpoint {
 function nodeHttp2Handler(
   endpoint: Endpoint
 ): (request: Http2ServerRequest, response: Http2ServerResponse) => void {
-  const handler = new GenericHandler(endpoint, "BIDI_STREAM", {});
+  const handler = createRestateHandler(endpoint, "BIDI_STREAM", {});
 
   return (httpRequest, httpResponse) => {
     const url = httpRequest.url;

@@ -20,7 +20,7 @@ import type {
   DefaultServiceOptions,
   RestateEndpointBase,
 } from "../endpoint.js";
-import { GenericHandler } from "./handlers/generic.js";
+import { createRestateHandler } from "./handlers/generic.js";
 import { isCompressionSupported, LambdaHandler } from "./handlers/lambda.js";
 import type { LoggerTransport } from "../logging/logger_transport.js";
 
@@ -82,7 +82,7 @@ export class LambdaEndpointImpl implements LambdaEndpoint {
   handler(): (event: any, ctx: any) => Promise<any> {
     const compressionEnabled = isCompressionSupported();
 
-    const genericHandler = new GenericHandler(
+    const genericHandler = createRestateHandler(
       this.builder.build(),
       "REQUEST_RESPONSE",
       compressionEnabled

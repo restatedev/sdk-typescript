@@ -20,23 +20,23 @@ import type {
   Endpoint as EndpointManifest,
   ProtocolMode,
 } from "../discovery.js";
-import {Component, ComponentHandler, InvokePathComponents} from "../components.js";
+import {
+  Component,
+  ComponentHandler,
+  InvokePathComponents,
+} from "../components.js";
 import { parseUrlComponents } from "../components.js";
 import { X_RESTATE_SERVER } from "../../user_agent.js";
-import { ReadableStream, type WritableStream } from "node:stream/web";
+import { ReadableStream } from "node:stream/web";
 import { ContextImpl } from "../../context_impl.js";
 import type { Request } from "../../context.js";
 import * as vm from "./vm/sdk_shared_core_wasm_bindings.js";
 import { CompletablePromise } from "../../utils/completable_promise.js";
 import { HandlerKind } from "../../types/rpc.js";
 import { createLogger, type Logger } from "../../logging/logger.js";
-import {
-  DEFAULT_CONSOLE_LOGGER_LOG_LEVEL,
-  defaultLoggerTransport,
-} from "../../logging/console_logger_transport.js";
+import { DEFAULT_CONSOLE_LOGGER_LOG_LEVEL } from "../../logging/console_logger_transport.js";
 import {
   LoggerContext,
-  type LoggerTransport,
   LogSource,
   RestateLogLevel,
 } from "../../logging/logger_transport.js";
@@ -45,99 +45,38 @@ import {
   millisOrDurationToMillis,
 } from "@restatedev/restate-sdk-core";
 import type { Endpoint } from "../endpoint.js";
-import {WasmVM} from "./vm/sdk_shared_core_wasm_bindings.js";
+import {
+  type RestateHandler,
+  type Headers,
+  type RestateRequest,
+  type AdditionalContext,
+  type RestateResponse,
+} from "./types.js";
+import { handleDiscovery } from "./discovery.js";
+import {
+  errorResponse,
+  invocationIdFromHeaders,
+  simpleResponse,
+  tryCreateContextualLogger,
+} from "./utils.js";
+import { destroyLogger, registerLogger } from "./core_logging.js";
 
-export interface Headers {
-  [name: string]: string | string[] | undefined;
-}
-
-export interface ResponseHeaders {
-  [name: string]: string;
-}
-
-export interface AdditionalContext {
-  [name: string]: string;
-}
-
-export interface RestateRequest {
-  readonly url: string;
-  readonly headers: Headers;
-  readonly extraArgs: unknown[];
-}
-
-export interface RestateResponse {
-  readonly headers: ResponseHeaders;
-  readonly statusCode: number;
-
-  // Promise resolved when the request has been fully processed,
-  // the last message has been written out,
-  // and outputStream has been closed.
-  process(value: {
-    inputStream?: ReadableStream<Uint8Array>;
-    outputStream: WritableStream<Uint8Array>;
-    abortSignal: AbortSignal;
-  }): Promise<void>;
-}
-
-export interface RestateHandler {
-  handle(request: RestateRequest, context?: AdditionalContext): RestateResponse;
-}
-
-const ENDPOINT_MANIFEST_V2 = "application/vnd.restate.endpointmanifest.v2+json";
-const ENDPOINT_MANIFEST_V3 = "application/vnd.restate.endpointmanifest.v3+json";
-const ENDPOINT_MANIFEST_V4 = "application/vnd.restate.endpointmanifest.v4+json";
-
-export function tryCreateContextualLogger(
-  loggerTransport: LoggerTransport,
-  url: string,
-  headers: Headers,
-  additionalContext?: { [name: string]: string }
-): Logger | undefined {
-  try {
-    const path = new URL(url, "https://example.com").pathname;
-    const parsed = parseUrlComponents(path);
-    if (parsed.type !== "invoke") {
-      return undefined;
-    }
-    const invocationId = invocationIdFromHeaders(headers);
-    return createLogger(
-      loggerTransport,
-      LogSource.SYSTEM,
-      new LoggerContext(
-        invocationId,
-        parsed.componentName,
-        parsed.handlerName,
-        undefined,
-        undefined,
-        additionalContext
-      )
-    );
-  } catch {
-    return undefined;
-  }
-}
-
-function invocationIdFromHeaders(headers: Headers) {
-  const invocationIdHeader = headers["x-restate-invocation-id"];
-  const invocationId =
-    typeof invocationIdHeader === "string"
-      ? invocationIdHeader
-      : Array.isArray(invocationIdHeader)
-        ? (invocationIdHeader[0] ?? "unknown id")
-        : "unknown id";
-  return invocationId;
+export function createRestateHandler(
+  endpoint: Endpoint,
+  protocolMode: ProtocolMode,
+  additionalDiscoveryFields: Partial<EndpointManifest>
+): RestateHandler {
+  return new RestateHandlerImpl(
+    endpoint,
+    protocolMode,
+    additionalDiscoveryFields
+  );
 }
 
 /**
- * This is an internal API to support 'fetch' like handlers.
- * It supports both request-reply mode and bidirectional streaming mode.
- *
- * An individual handler will have to convert the shape of the incoming request
- * to a RestateRequest, and then pass it to this handler, and eventually convert back
- * the response.
- * Different runtimes have slightly different shapes of the incoming request, and responses.
+ * This is the RestateHandler implementation
  */
-export class GenericHandler implements RestateHandler {
+class RestateHandlerImpl implements RestateHandler {
   private readonly identityVerifier?: vm.WasmIdentityVerifier;
 
   constructor(
@@ -184,7 +123,7 @@ export class GenericHandler implements RestateHandler {
       ).error(
         "Error while handling request: " + (error.stack ?? error.message)
       );
-      return this.toErrorResponse(
+      return errorResponse(
         error instanceof RestateError ? error.code : 500,
         error.message
       );
@@ -202,10 +141,10 @@ export class GenericHandler implements RestateHandler {
     if (parsed.type === "unknown") {
       const msg = `Invalid path. Allowed are /health, or /discover, or /invoke/SvcName/handlerName, but was: ${path}`;
       this.endpoint.rlog.trace(msg);
-      return this.toErrorResponse(404, msg);
+      return errorResponse(404, msg);
     }
     if (parsed.type === "health") {
-      return staticResponse(
+      return simpleResponse(
         200,
         {
           "content-type": "application/text",
@@ -221,7 +160,12 @@ export class GenericHandler implements RestateHandler {
       return error;
     }
     if (parsed.type === "discover") {
-      return this.handleDiscovery(request.headers["accept"]);
+      return handleDiscovery(
+        this.endpoint,
+        this.protocolMode,
+        this.additionalDiscoveryFields,
+        request.headers["accept"]
+      );
     }
 
     return this.handleInvoke(
@@ -256,7 +200,7 @@ export class GenericHandler implements RestateHandler {
         // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
         `Rejecting request as its JWT did not validate: ${e}`
       );
-      return this.toErrorResponse(401, "Unauthorized");
+      return errorResponse(401, "Unauthorized");
     }
   }
 
@@ -271,7 +215,7 @@ export class GenericHandler implements RestateHandler {
     if (typeof serviceProtocolVersionString !== "string") {
       const errorMessage = "Missing content-type header";
       this.endpoint.rlog.warn(errorMessage);
-      return this.toErrorResponse(415, errorMessage);
+      return errorResponse(415, errorMessage);
     }
 
     // Resolve service and handler
@@ -281,13 +225,13 @@ export class GenericHandler implements RestateHandler {
     if (!service) {
       const msg = `No service found for URL: ${JSON.stringify(invokePathComponent)}`;
       this.endpoint.rlog.error(msg);
-      return this.toErrorResponse(404, msg);
+      return errorResponse(404, msg);
     }
     const handler = service?.handlerMatching(invokePathComponent);
     if (!handler) {
       const msg = `No service found for URL: ${JSON.stringify(invokePathComponent)}`;
       this.endpoint.rlog.error(msg);
-      return this.toErrorResponse(404, msg);
+      return errorResponse(404, msg);
     }
 
     const loggerId = Math.floor(Math.random() * 4_294_967_295 /* u32::MAX */);
@@ -339,14 +283,14 @@ export class GenericHandler implements RestateHandler {
           "abort",
           () => {
             // In any case, on abort remove the invocation logger to avoid memory leaks
-            invocationLoggers.delete(loggerId);
+            destroyLogger(loggerId);
           },
           { once: true }
         );
         // Use a default logger that still respects the endpoint custom logger
         // We will override this later with a logger that has a LoggerContext
         // See vm_log below for more details
-        invocationLoggers.set(loggerId, vmLogger);
+        registerLogger(loggerId, vmLogger);
 
         const journalValueCodec: JournalValueCodec = endpoint.journalValueCodec
           ? await endpoint.journalValueCodec
@@ -420,7 +364,7 @@ export class GenericHandler implements RestateHandler {
           );
 
           // See vm_log below for more details
-          invocationLoggers.set(loggerId, vmLogger);
+          registerLogger(loggerId, vmLogger);
           if (!coreVm.is_processing()) {
             vmLogger.info("Replaying invocation.");
           } else {
@@ -455,9 +399,11 @@ export class GenericHandler implements RestateHandler {
         // We await invocationEndPromise instead, which works as follows:
         // * In the happy path, that is no errors, invocationEndPromise gets resolved by the line below in this finally branch
         // * In the transient error case that happens within the handler, invocationEndPromise gets resolved by the ContextImpl itself, unblocking the await line below
-        void startUserHandler(ctx, service, handler, journalValueCodec).finally(() => {
-          invocationEndPromise.resolve();
-        });
+        void startUserHandler(ctx, service, handler, journalValueCodec).finally(
+          () => {
+            invocationEndPromise.resolve();
+          }
+        );
         await invocationEndPromise.promise;
 
         // Then flush and close
@@ -465,172 +411,12 @@ export class GenericHandler implements RestateHandler {
       },
     };
   }
-
-  private handleDiscovery(
-    acceptVersionsString: string | string[] | undefined
-  ): RestateResponse {
-    if (typeof acceptVersionsString !== "string") {
-      const errorMessage = "Missing accept header";
-      this.endpoint.rlog.warn(errorMessage);
-      return this.toErrorResponse(415, errorMessage);
-    }
-
-    // Negotiate version to use
-    let manifestVersion;
-    if (acceptVersionsString.includes(ENDPOINT_MANIFEST_V4)) {
-      manifestVersion = 4;
-    } else if (acceptVersionsString.includes(ENDPOINT_MANIFEST_V3)) {
-      manifestVersion = 3;
-    } else if (acceptVersionsString.includes(ENDPOINT_MANIFEST_V2)) {
-      manifestVersion = 2;
-    } else {
-      const errorMessage = `Unsupported service discovery protocol version '${acceptVersionsString}'`;
-      this.endpoint.rlog.warn(errorMessage);
-      return this.toErrorResponse(415, errorMessage);
-    }
-
-    const discovery = {
-      ...this.endpoint.discoveryMetadata,
-      ...this.additionalDiscoveryFields,
-      protocolMode: this.protocolMode,
-    };
-
-    const checkUnsupportedFeature = <T extends object>(
-      obj: T,
-      ...fields: Array<keyof T>
-    ) => {
-      for (const field of fields) {
-        if (field in obj && obj[field] !== undefined) {
-          return this.toErrorResponse(
-            500,
-            `The code uses the new discovery feature '${String(
-              field
-            )}' but the runtime doesn't support it yet (discovery protocol negotiated version ${manifestVersion}). Either remove the usage of this feature, or upgrade the runtime.`
-          );
-        }
-      }
-      return;
-    };
-
-    // Verify none of the manifest v3 configuration options are used.
-    if (manifestVersion < 3) {
-      for (const service of discovery.services) {
-        const error = checkUnsupportedFeature(
-          service,
-          "journalRetention",
-          "idempotencyRetention",
-          "inactivityTimeout",
-          "abortTimeout",
-          "enableLazyState",
-          "ingressPrivate"
-        );
-        if (error !== undefined) {
-          return error;
-        }
-        for (const handler of service.handlers) {
-          const error = checkUnsupportedFeature(
-            handler,
-            "journalRetention",
-            "idempotencyRetention",
-            "workflowCompletionRetention",
-            "inactivityTimeout",
-            "abortTimeout",
-            "enableLazyState",
-            "ingressPrivate"
-          );
-          if (error !== undefined) {
-            return error;
-          }
-        }
-      }
-    }
-
-    if (manifestVersion < 4) {
-      // Blank the lambda compression field. No need to fail in this case.
-      discovery.lambdaCompression = undefined;
-      for (const service of discovery.services) {
-        const error = checkUnsupportedFeature(
-          service,
-          "retryPolicyExponentiationFactor",
-          "retryPolicyInitialInterval",
-          "retryPolicyMaxAttempts",
-          "retryPolicyMaxInterval",
-          "retryPolicyOnMaxAttempts"
-        );
-        if (error !== undefined) {
-          return error;
-        }
-        for (const handler of service.handlers) {
-          const error = checkUnsupportedFeature(
-            handler,
-            "retryPolicyExponentiationFactor",
-            "retryPolicyInitialInterval",
-            "retryPolicyMaxAttempts",
-            "retryPolicyMaxInterval",
-            "retryPolicyOnMaxAttempts"
-          );
-          if (error !== undefined) {
-            return error;
-          }
-        }
-      }
-    }
-
-    const body = JSON.stringify(discovery);
-    return staticResponse(
-      200,
-      {
-        "content-type":
-          manifestVersion === 2
-            ? ENDPOINT_MANIFEST_V2
-            : manifestVersion === 3
-              ? ENDPOINT_MANIFEST_V3
-              : ENDPOINT_MANIFEST_V4,
-        "x-restate-server": X_RESTATE_SERVER,
-      },
-      new TextEncoder().encode(body)
-    );
-  }
-
-  private toErrorResponse(code: number, message: string): RestateResponse {
-    return staticResponse(
-      code,
-      {
-        "content-type": "application/json",
-        "x-restate-server": X_RESTATE_SERVER,
-      },
-      new TextEncoder().encode(JSON.stringify({ message }))
-    );
-  }
 }
 
-function staticResponse(
-  statusCode: number,
-  headers: ResponseHeaders,
-  body: Uint8Array
-): RestateResponse {
-  return {
-    headers,
-    statusCode,
-    async process({ inputStream, outputStream }): Promise<void> {
-      if (inputStream !== undefined) {
-        // Drain the input stream
-        const reader = inputStream.getReader();
-        while (true) {
-          const { done } = await reader.read();
-          if (done) break;
-        }
-      }
-
-      const writer = outputStream.getWriter();
-      await writer.write(body);
-      // This closes both the writer and the stream!!!
-      await writer.close();
-    },
-  };
-}
-
-async function bufferJournalReplayInCoreVm(coreVm: vm.WasmVM, inputReader: ReadableStreamDefaultReader<Uint8Array>) {
+async function bufferJournalReplayInCoreVm(
+  coreVm: vm.WasmVM,
+  inputReader: ReadableStreamDefaultReader<Uint8Array>
+) {
   while (!coreVm.is_ready_to_execute()) {
     const nextValue = await inputReader.read();
     if (nextValue.value !== undefined) {
@@ -643,24 +429,29 @@ async function bufferJournalReplayInCoreVm(coreVm: vm.WasmVM, inputReader: Reada
   }
 }
 
-async function startUserHandler(ctx: ContextImpl, service: Component, handler: ComponentHandler, journalValueCodec: JournalValueCodec) {
+async function startUserHandler(
+  ctx: ContextImpl,
+  service: Component,
+  handler: ComponentHandler,
+  journalValueCodec: JournalValueCodec
+) {
   try {
     try {
       const decodedInput = await journalValueCodec
-          .decode(ctx.request().body)
-          .catch((e) =>
-              // Re-throw as terminal error, to fail on input errors
-              Promise.reject(
-                  new TerminalError(
-                      `Failed to decode input using journal value codec: ${
-                          ensureError(e).message
-                      }`,
-                      {
-                        errorCode: 400,
-                      }
-                  )
-              )
-          );
+        .decode(ctx.request().body)
+        .catch((e) =>
+          // Re-throw as terminal error, to fail on input errors
+          Promise.reject(
+            new TerminalError(
+              `Failed to decode input using journal value codec: ${
+                ensureError(e).message
+              }`,
+              {
+                errorCode: 400,
+              }
+            )
+          )
+        );
 
       // Then run user code
       const output = await handler.invoke(ctx, decodedInput);
@@ -697,11 +488,11 @@ async function startUserHandler(ctx: ContextImpl, service: Component, handler: C
     const error = ensureError(e);
     if (error instanceof RetryableError) {
       ctx.coreVm.notify_error_with_delay_override(
-          error.message,
-          error.stack,
-          error.retryAfter !== undefined
-              ? BigInt(millisOrDurationToMillis(error.retryAfter))
-              : undefined
+        error.message,
+        error.stack,
+        error.retryAfter !== undefined
+          ? BigInt(millisOrDurationToMillis(error.retryAfter))
+          : undefined
       );
     } else {
       ctx.coreVm.notify_error(error.message, error.stack);
@@ -772,63 +563,6 @@ async function flushAndClose(
         "Error while handling request: " + (error.stack ?? error.message)
       );
     }
-  }
-}
-
-// See vm_log below for more details
-const invocationLoggers: Map<number, Logger> = new Map<number, Logger>();
-const logsTextDecoder = new TextDecoder("utf-8", { fatal: false });
-
-/**
- * The shared core propagates logs to the SDK invoking this method.
- * When possible it provides an invocationId, which is used to access the registered invocationLoggers, that should contain the logger per invocation id.
- */
-export function vm_log(
-  level: vm.LogLevel,
-  strBytes: Uint8Array,
-  loggerId?: number
-) {
-  try {
-    const logger = (loggerId && invocationLoggers.get(loggerId)) || undefined;
-    const str = logsTextDecoder.decode(strBytes);
-    if (logger !== undefined) {
-      logger.logForLevel(wasmLogLevelToRestateLogLevel(level), str);
-    } else {
-      defaultLoggerTransport(
-        {
-          level: wasmLogLevelToRestateLogLevel(level),
-          replaying: false,
-          source: LogSource.JOURNAL,
-        },
-        str
-      );
-    }
-  } catch (e) {
-    // This function CAN'T EVER propagate an error,
-    // because otherwise it will cause an awesome error in the shared core due to concurrent usage of it.
-    defaultLoggerTransport(
-      {
-        level: RestateLogLevel.ERROR,
-        replaying: false,
-        source: LogSource.SYSTEM,
-      },
-      "Unexpected error thrown while trying to log: " + e?.toString()
-    );
-  }
-}
-
-function wasmLogLevelToRestateLogLevel(level: vm.LogLevel): RestateLogLevel {
-  switch (level) {
-    case vm.LogLevel.TRACE:
-      return RestateLogLevel.TRACE;
-    case vm.LogLevel.DEBUG:
-      return RestateLogLevel.DEBUG;
-    case vm.LogLevel.INFO:
-      return RestateLogLevel.INFO;
-    case vm.LogLevel.WARN:
-      return RestateLogLevel.WARN;
-    case vm.LogLevel.ERROR:
-      return RestateLogLevel.ERROR;
   }
 }
 
