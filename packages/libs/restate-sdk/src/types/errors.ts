@@ -107,7 +107,9 @@ export class TerminalError extends RestateError {
       cause?: any;
       /**
        * Metadata key-value pairs to attach to the terminal error.
-       * These are propagated through the Restate protocol (requires service protocol v6+).
+       * These will be recorded together with error message and code. 
+       * 
+       * **Note **: requires Restate 1.6+.
        */
       metadata?: Record<string, string>;
     }
