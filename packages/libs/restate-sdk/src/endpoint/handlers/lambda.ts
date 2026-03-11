@@ -17,12 +17,11 @@ import type {
   Context,
 } from "aws-lambda";
 import { Buffer } from "node:buffer";
-import { WritableStream, ReadableStream } from "node:stream/web";
 import { X_RESTATE_SERVER } from "../../user_agent.js";
 import { ensureError } from "../../types/errors.js";
 import * as zlib from "node:zlib";
-import { RestateHandler } from "./types.js";
-import { tryCreateContextualLogger } from "./utils.js";
+import { InputReader, OutputWriter, RestateHandler } from "./types.js";
+import { emptyInputReader, tryCreateContextualLogger } from "./utils.js";
 
 const RESPONSE_COMPRESSION_THRESHOLD = 3 * 1024 * 1024;
 
@@ -66,9 +65,9 @@ export class LambdaHandler {
       // Convert the request body to a Uint8Array stream
       // Lambda functions receive the body as base64 encoded string
       //
-      let bodyStream: ReadableStream<Uint8Array>;
+      let inputReader: InputReader;
       if (!event.body) {
-        bodyStream = ReadableStream.from([]);
+        inputReader = emptyInputReader();
       } else {
         let bodyBuffer: Buffer | undefined;
         if (event.isBase64Encoded) {
@@ -92,15 +91,22 @@ export class LambdaHandler {
         }
 
         // Prep the stream to pass through the endpoint handler
-        bodyStream = ReadableStream.from([bodyBuffer]);
+        // eslint-disable-next-line @typescript-eslint/require-await
+        inputReader = (async function* () {
+          yield bodyBuffer as Uint8Array;
+        })()[Symbol.asyncIterator]();
       }
 
       const chunks: Uint8Array[] = [];
-      const writeableStream = new WritableStream<Uint8Array>({
-        write: (chunk) => {
-          chunks.push(chunk);
+      const outputWriter: OutputWriter = {
+        write: function (value: Uint8Array): Promise<void> {
+          chunks.push(value);
+          return Promise.resolve();
         },
-      });
+        close: function (): Promise<void> {
+          return Promise.resolve();
+        },
+      };
 
       const response = this.handler.handle(
         {
@@ -115,8 +121,8 @@ export class LambdaHandler {
 
       try {
         await response.process({
-          inputStream: bodyStream,
-          outputStream: writeableStream,
+          inputReader,
+          outputWriter,
           abortSignal: abortController.signal,
         });
       } catch (e) {

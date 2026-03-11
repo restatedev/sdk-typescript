@@ -12,12 +12,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import type * as vm from "./endpoint/handlers/vm/sdk_shared_core_wasm_bindings.js";
-import type {
-  ReadableStreamDefaultReader,
-  WritableStreamDefaultWriter,
-} from "node:stream/web";
-import type { ReadableStreamReadResult } from "stream/web";
 import { pendingPromise } from "./promises.js";
+import { InputReader, OutputWriter } from "./endpoint/handlers/types.js";
 
 /**
  * Adapter between input stream and vm. It moves forward when [awaitNextProgress] is invoked.
@@ -27,7 +23,7 @@ export class InputPump {
 
   constructor(
     private readonly coreVm: vm.WasmVM,
-    private readonly inputReader: ReadableStreamDefaultReader<Uint8Array>,
+    private readonly inputReader: InputReader,
     private readonly errorCallback: (e: any) => void
   ) {}
 
@@ -48,18 +44,17 @@ export class InputPump {
 
   private async readNext(): Promise<void> {
     // Take input, and notify it to the vm
-    let nextValue: ReadableStreamReadResult<Uint8Array>;
+    let nextValue;
     try {
-      nextValue = await this.inputReader.read();
+      nextValue = await this.inputReader.next();
     } catch (e) {
       this.errorCallback(e);
       return pendingPromise<void>();
     }
-    if (nextValue.value !== undefined) {
-      this.coreVm.notify_input(nextValue.value);
-    }
     if (nextValue.done) {
       this.coreVm.notify_input_closed();
+    } else if (nextValue.value !== undefined) {
+      this.coreVm.notify_input(nextValue.value);
     }
   }
 }
@@ -70,7 +65,7 @@ export class InputPump {
 export class OutputPump {
   constructor(
     private readonly coreVm: vm.WasmVM,
-    private readonly outputWriter: WritableStreamDefaultWriter<Uint8Array>
+    private readonly outputWriter: OutputWriter
   ) {}
 
   async awaitNextProgress() {

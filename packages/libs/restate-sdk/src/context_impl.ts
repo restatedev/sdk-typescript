@@ -61,10 +61,6 @@ import type {
 } from "@restatedev/restate-sdk-core";
 import { millisOrDurationToMillis, serde } from "@restatedev/restate-sdk-core";
 import { RandImpl } from "./utils/rand.js";
-import type {
-  ReadableStreamDefaultReader,
-  WritableStreamDefaultWriter,
-} from "node:stream/web";
 import { CompletablePromise } from "./utils/completable_promise.js";
 import type { AsyncResultValue, InternalRestatePromise } from "./promises.js";
 import {
@@ -79,6 +75,7 @@ import {
 } from "./promises.js";
 import { InputPump, OutputPump } from "./io.js";
 import type { ContextInternal } from "./internal.js";
+import { InputReader, OutputWriter } from "./endpoint/handlers/types.js";
 
 export class ContextImpl
   implements ObjectContext, WorkflowContext, ContextInternal
@@ -109,8 +106,8 @@ export class ContextImpl
     readonly vmLogger: Console,
     private readonly invocationRequest: Request,
     private readonly invocationEndPromise: CompletablePromise<void>,
-    inputReader: ReadableStreamDefaultReader<Uint8Array>,
-    outputWriter: WritableStreamDefaultWriter<Uint8Array>,
+    inputReader: InputReader,
+    outputWriter: OutputWriter,
     readonly journalValueCodec: JournalValueCodec,
     defaultSerde?: Serde<any>,
     private readonly asTerminalError?: (error: any) => TerminalError | undefined

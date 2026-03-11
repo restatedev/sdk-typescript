@@ -3,7 +3,12 @@ import {
   LogSource,
   LoggerTransport,
 } from "../../logging/logger_transport.js";
-import type { Headers, ResponseHeaders, RestateResponse } from "./types.js";
+import type {
+  Headers,
+  InputReader,
+  ResponseHeaders,
+  RestateResponse,
+} from "./types.js";
 import { createLogger, Logger } from "../../logging/logger.js";
 import { parseUrlComponents } from "../components.js";
 import { X_RESTATE_SERVER } from "../../user_agent.js";
@@ -68,20 +73,22 @@ export function simpleResponse(
   return {
     headers,
     statusCode,
-    async process({ inputStream, outputStream }): Promise<void> {
-      if (inputStream !== undefined) {
+    async process({ inputReader, outputWriter }): Promise<void> {
+      if (inputReader !== undefined) {
         // Drain the input stream
-        const reader = inputStream.getReader();
         while (true) {
-          const { done } = await reader.read();
+          const { done } = await inputReader.next();
           if (done) break;
         }
       }
 
-      const writer = outputStream.getWriter();
-      await writer.write(body);
+      await outputWriter.write(body);
       // This closes both the writer and the stream!!!
-      await writer.close();
+      await outputWriter.close();
     },
   };
+}
+
+export function emptyInputReader(): InputReader {
+  return (async function* () {})()[Symbol.asyncIterator]();
 }

@@ -1,4 +1,3 @@
-import { ReadableStream, type WritableStream } from "node:stream/web";
 import type { Endpoint } from "../endpoint.js";
 
 export interface Headers {
@@ -19,6 +18,18 @@ export interface RestateRequest {
   readonly extraArgs: unknown[];
 }
 
+export type InputReaderNextResult =
+  | { done: false | undefined; value: Uint8Array }
+  | { done: true; value: undefined };
+
+export type InputReader = AsyncIterator<Uint8Array>;
+
+export interface OutputWriter {
+  // Returns when data is flushed
+  write(value: Uint8Array): Promise<void>;
+  close(): Promise<void>;
+}
+
 export interface RestateResponse {
   readonly headers: ResponseHeaders;
   readonly statusCode: number;
@@ -27,8 +38,8 @@ export interface RestateResponse {
   // the last message has been written out,
   // and outputStream has been closed.
   process(value: {
-    inputStream?: ReadableStream<Uint8Array>;
-    outputStream: WritableStream<Uint8Array>;
+    inputReader: InputReader;
+    outputWriter: OutputWriter;
     abortSignal: AbortSignal;
   }): Promise<void>;
 }

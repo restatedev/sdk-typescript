@@ -21,12 +21,11 @@ import * as http2 from "http2";
 import type { Endpoint } from "./endpoint.js";
 import { EndpointBuilder } from "./endpoint.js";
 import { createRestateHandler } from "./handlers/generic.js";
-import { Readable, Writable } from "node:stream";
-import { WritableStream } from "node:stream/web";
 import { ensureError } from "../types/errors.js";
 import type { LoggerTransport } from "../logging/logger_transport.js";
 import type { DefaultServiceOptions } from "../endpoint.js";
 import { tryCreateContextualLogger } from "./handlers/utils.js";
+import { InputReader, OutputWriter } from "./handlers/types.js";
 
 export class NodeEndpoint implements RestateEndpoint {
   private builder: EndpointBuilder = new EndpointBuilder();
@@ -120,12 +119,6 @@ function nodeHttp2Handler(
       abortController.abort();
     });
 
-    // Prepare streams to pass to generic handler
-    const webInputStream = Readable.toWeb(httpRequest);
-    const webOutputStream = Writable.toWeb(
-      httpResponse
-    ) as unknown as WritableStream<Uint8Array>;
-
     const restateResponse = handler.handle({
       url,
       headers: httpRequest.headers,
@@ -136,8 +129,8 @@ function nodeHttp2Handler(
 
     restateResponse
       .process({
-        inputStream: webInputStream,
-        outputStream: webOutputStream,
+        inputReader: inputReaderAdapter(httpRequest),
+        outputWriter: outputWriterAdapter(httpResponse),
         abortSignal: abortController.signal,
       })
       .catch((e) => {
@@ -151,5 +144,30 @@ function nodeHttp2Handler(
           ) ?? endpoint.rlog;
         logger.error("Unexpected error: " + (error.stack ?? error.message));
       });
+  };
+}
+
+function inputReaderAdapter(request: Http2ServerRequest): InputReader {
+  return request[Symbol.asyncIterator]();
+}
+
+function outputWriterAdapter(response: Http2ServerResponse): OutputWriter {
+  return {
+    write: function (value: Uint8Array): Promise<void> {
+      return new Promise((resolve, reject) => {
+        response.write(value, (err) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve();
+          }
+        });
+      });
+    },
+    close: function (): Promise<void> {
+      return new Promise((resolve) => {
+        response.end(() => resolve());
+      });
+    },
   };
 }

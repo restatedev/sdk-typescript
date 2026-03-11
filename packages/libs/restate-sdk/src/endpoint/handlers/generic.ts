@@ -27,7 +27,6 @@ import {
 } from "../components.js";
 import { parseUrlComponents } from "../components.js";
 import { X_RESTATE_SERVER } from "../../user_agent.js";
-import { ReadableStream } from "node:stream/web";
 import { ContextImpl } from "../../context_impl.js";
 import type { Request } from "../../context.js";
 import * as vm from "./vm/sdk_shared_core_wasm_bindings.js";
@@ -53,6 +52,8 @@ import {
   type AdditionalContext,
   type RestateResponse,
   ResponseHeaders,
+  InputReader,
+  OutputWriter,
 } from "./types.js";
 import { handleDiscovery } from "./discovery.js";
 import {
@@ -62,7 +63,6 @@ import {
   tryCreateContextualLogger,
 } from "./utils.js";
 import { destroyLogger, registerLogger } from "./core_logging.js";
-import { WritableStream } from "stream/web";
 
 export function createRestateHandler(
   endpoint: Endpoint,
@@ -310,12 +310,12 @@ class RestateInvokeResponse implements RestateResponse {
   }
 
   async process({
-    inputStream,
-    outputStream,
+    inputReader,
+    outputWriter,
     abortSignal,
   }: {
-    inputStream?: ReadableStream<Uint8Array>;
-    outputStream: WritableStream<Uint8Array>;
+    inputReader: InputReader;
+    outputWriter: OutputWriter;
     abortSignal: AbortSignal;
   }): Promise<void> {
     abortSignal.addEventListener(
@@ -337,12 +337,6 @@ class RestateInvokeResponse implements RestateResponse {
           encode: (entry) => entry,
           decode: (entry) => Promise.resolve(entry),
         };
-
-    const inputReader =
-      inputStream !== undefined
-        ? inputStream.getReader()
-        : new ReadableStream<Uint8Array>().getReader();
-    const outputWriter = outputStream.getWriter();
 
     // This promise is used to signal the end of the computation,
     // which can be either the user returns a value,
@@ -463,16 +457,16 @@ class RestateInvokeResponse implements RestateResponse {
 
 async function bufferJournalReplayInCoreVm(
   coreVm: vm.WasmVM,
-  inputReader: ReadableStreamDefaultReader<Uint8Array>
+  inputReader: InputReader
 ) {
   while (!coreVm.is_ready_to_execute()) {
-    const nextValue = await inputReader.read();
-    if (nextValue.value !== undefined) {
-      coreVm.notify_input(nextValue.value);
-    }
+    const nextValue = await inputReader.next();
     if (nextValue.done) {
       coreVm.notify_input_closed();
       break;
+    }
+    if (nextValue.value !== undefined) {
+      coreVm.notify_input(nextValue.value);
     }
   }
 }
@@ -551,8 +545,8 @@ async function startUserHandler(
 async function flushAndClose(
   coreVm: vm.WasmVM,
   vmLogger: Logger,
-  inputReader: ReadableStreamDefaultReader<Uint8Array>,
-  outputWriter: WritableStreamDefaultWriter<Uint8Array>
+  inputReader: InputReader,
+  outputWriter: OutputWriter
 ): Promise<void> {
   let inputClosed = false;
   try {
@@ -568,8 +562,8 @@ async function flushAndClose(
     // Let's make sure we properly close the request stream before closing the response stream
     while (!inputClosed) {
       try {
-        const res = await inputReader.read();
-        inputClosed = res.done;
+        const res = await inputReader.next();
+        inputClosed = res.done ?? false;
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
       } catch (e) {
         inputClosed = true;
