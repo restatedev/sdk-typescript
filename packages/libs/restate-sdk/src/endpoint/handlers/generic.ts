@@ -576,12 +576,9 @@ async function flushAndClose(
     // In case of failure, we can do little here except just logging stuff out,
     // because outputWriter is not usable here.
     const error = ensureError(e);
+    const abortErrorOnWrite = isAbortErrorOnWrite(error);
 
-    if (
-      inputClosed &&
-      (error.name === "AbortError" ||
-        error.message === "Invalid state: WritableStream is closed")
-    ) {
+    if (inputClosed && abortErrorOnWrite) {
       // Because we closed the input already,
       // these errors are benign and are caused by
       // synchronization issues wrt closing the response stream in the runtime
@@ -589,7 +586,7 @@ async function flushAndClose(
       return;
     }
 
-    if (error.name === "AbortError") {
+    if (abortErrorOnWrite) {
       vmLogger.error(
         "Got abort error from connection: " +
           error.message +
@@ -606,6 +603,17 @@ async function flushAndClose(
       );
     }
   }
+}
+
+function isAbortErrorOnWrite(error: Error) {
+  return (
+    error.name === "AbortError" ||
+    error.message === "Invalid state: WritableStream is closed" ||
+    /**
+     * Node stream closed error thrown on writes
+     */
+    (error as { code?: string }).code === "ERR_HTTP2_INVALID_STREAM"
+  );
 }
 
 function restateLogLevelToWasmLogLevel(level: RestateLogLevel): vm.LogLevel {
