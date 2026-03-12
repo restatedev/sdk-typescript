@@ -516,7 +516,9 @@ async function startUserHandler(
         ctx.coreVm.sys_write_output_failure({
           code: error.code,
           message: error.message,
-          metadata: [],
+          metadata: Object.entries(error.metadata ?? {}).map(
+            ([key, value]) => ({ key, value })
+          ),
         });
         ctx.coreVm.sys_end();
         return;
