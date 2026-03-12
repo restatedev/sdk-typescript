@@ -1032,7 +1032,10 @@ function SuccessWithSerde<T>(
 const Failure: Completer = (value, prom) => {
   if (typeof value === "object" && "Failure" in value) {
     const metadata = (value.Failure.metadata ?? []).reduce(
-      (acc: Record<string, string>, { key, value: v }: { key: string; value: string }) => {
+      (
+        acc: Record<string, string>,
+        { key, value: v }: { key: string; value: string }
+      ) => {
         acc[key] = v;
         return acc;
       },
