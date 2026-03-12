@@ -1,5 +1,12 @@
 # @restatedev/restate-sdk-core
 
+## 1.11.0
+
+### Minor Changes
+
+- Re-design the internal endpoint abstration, to better handle incorrect h2 stream closure and similar issues
+- Added TerminalError.metadata field, to add structured data to error values
+
 ## 1.10.4
 
 ### Patch Changes
