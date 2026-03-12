@@ -1,4 +1,4 @@
-import { vm_log } from '../generic.js';
+import { vm_log } from '../core_logging.js';
 
 let wasm;
 export function __wbg_set_wasm(val) {
@@ -181,6 +181,28 @@ function debugString(val) {
     // TODO we could test for more things here, like `Set`s and `Map`s.
     return className;
 }
+/**
+ * @returns {number}
+ */
+export function cancel_handle() {
+    const ret = wasm.cancel_handle();
+    return ret >>> 0;
+}
+
+/**
+ * This will set the log level of the overall log subscriber.
+ * @param {LogLevel} level
+ */
+export function set_log_level(level) {
+    wasm.set_log_level(level);
+}
+
+/**
+ * Setups the WASM module
+ */
+export function start() {
+    wasm.start();
+}
 
 function getArrayJsValueFromWasm0(ptr, len) {
     ptr = ptr >>> 0;
@@ -191,28 +213,6 @@ function getArrayJsValueFromWasm0(ptr, len) {
     }
     wasm.__externref_drop_slice(ptr, len);
     return result;
-}
-/**
- * This will set the log level of the overall log subscriber.
- * @param {LogLevel} level
- */
-export function set_log_level(level) {
-    wasm.set_log_level(level);
-}
-
-/**
- * @returns {number}
- */
-export function cancel_handle() {
-    const ret = wasm.cancel_handle();
-    return ret >>> 0;
-}
-
-/**
- * Setups the WASM module
- */
-export function start() {
-    wasm.start();
 }
 
 function passArrayJsValueToWasm0(array, malloc) {
@@ -1330,7 +1330,7 @@ export function __wbg_versions_4e31226f5e8dc909(arg0) {
     return ret;
 };
 
-export function __wbg_vmlog_4e1bd90ac3b7b4c0(arg0, arg1, arg2, arg3) {
+export function __wbg_vmlog_e24d27eb6bf17053(arg0, arg1, arg2, arg3) {
     vm_log(arg0, getArrayU8FromWasm0(arg1, arg2), arg3 === 0x100000001 ? undefined : arg3);
 };
 

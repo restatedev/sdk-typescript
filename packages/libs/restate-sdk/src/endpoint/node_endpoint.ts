@@ -16,20 +16,16 @@ import type {
   VirtualObjectDefinition,
   WorkflowDefinition,
 } from "@restatedev/restate-sdk-core";
-
-import type { Http2ServerRequest, Http2ServerResponse } from "http2";
+import { Http2ServerRequest, Http2ServerResponse } from "http2";
 import * as http2 from "http2";
 import type { Endpoint } from "./endpoint.js";
 import { EndpointBuilder } from "./endpoint.js";
-import {
-  GenericHandler,
-  tryCreateContextualLogger,
-} from "./handlers/generic.js";
-import { Readable, Writable } from "node:stream";
-import type { WritableStream } from "node:stream/web";
+import { createRestateHandler } from "./handlers/generic.js";
 import { ensureError } from "../types/errors.js";
 import type { LoggerTransport } from "../logging/logger_transport.js";
 import type { DefaultServiceOptions } from "../endpoint.js";
+import { tryCreateContextualLogger } from "./handlers/utils.js";
+import { InputReader, OutputWriter } from "./handlers/types.js";
 
 export class NodeEndpoint implements RestateEndpoint {
   private builder: EndpointBuilder = new EndpointBuilder();
@@ -111,77 +107,67 @@ export class NodeEndpoint implements RestateEndpoint {
 function nodeHttp2Handler(
   endpoint: Endpoint
 ): (request: Http2ServerRequest, response: Http2ServerResponse) => void {
-  const handler = new GenericHandler(endpoint, "BIDI_STREAM", {});
+  const handler = createRestateHandler(endpoint, "BIDI_STREAM", {});
 
-  return (request, response) => {
-    (async () => {
-      const abortController = new AbortController();
+  return (httpRequest, httpResponse) => {
+    const url = httpRequest.url;
 
-      request.once("aborted", () => {
-        abortController.abort();
-      });
-      request.once("close", () => {
-        abortController.abort();
-      });
-      request.once("error", () => {
-        abortController.abort();
-      });
+    // Abort controller used to cleanup resources at the end of this stream lifecycle
+    const abortController = new AbortController();
+    httpRequest.on("close", () => {
+      // The 'close' event is emitted when the Http2Stream is destroyed.
+      abortController.abort();
+    });
 
-      if (request.destroyed || request.aborted) {
-        endpoint.rlog.error("Client disconnected");
-        abortController.abort();
-      }
+    const restateResponse = handler.handle({
+      url,
+      headers: httpRequest.headers,
+      extraArgs: [],
+    });
 
-      try {
-        const url = request.url;
-        const webRequestBody = Readable.toWeb(request);
+    httpResponse.writeHead(restateResponse.statusCode, restateResponse.headers);
 
-        const resp = await handler.handle({
-          url,
-          headers: request.headers,
-          body: webRequestBody,
-          extraArgs: [],
-          abortSignal: abortController.signal,
-        });
-
-        if (response.destroyed) {
-          return;
-        }
-
-        response.writeHead(resp.statusCode, resp.headers);
-        const responseWeb = Writable.toWeb(
-          response
-        ) as WritableStream<Uint8Array>;
-        await resp.body.pipeTo(responseWeb);
-      } catch (e) {
+    restateResponse
+      .process({
+        inputReader: inputReaderAdapter(httpRequest),
+        outputWriter: outputWriterAdapter(httpResponse),
+        abortSignal: abortController.signal,
+      })
+      .catch((e) => {
+        // handle should never throw
         const error = ensureError(e);
-
         const logger =
           tryCreateContextualLogger(
             endpoint.loggerTransport,
-            request.url,
-            request.headers
+            url,
+            httpRequest.headers
           ) ?? endpoint.rlog;
-        if (error.name === "AbortError") {
-          logger.error(
-            "Got abort error from connection: " +
-              error.message +
-              "\n" +
-              "This might indicate that:\n" +
-              "* The restate-server aborted the connection after hitting the 'abort-timeout'\n" +
-              "* The connection with the restate-server was lost\n" +
-              "\n" +
-              "Please check the invocation in the Restate UI for more details."
-          );
-        } else {
-          logger.error(
-            "Error while handling request: " + (error.stack ?? error.message)
-          );
-        }
+        logger.error("Unexpected error: " + (error.stack ?? error.message));
+      });
+  };
+}
 
-        response.destroy(error);
-        abortController.abort();
-      }
-    })().catch(() => {});
+function inputReaderAdapter(request: Http2ServerRequest): InputReader {
+  return request[Symbol.asyncIterator]();
+}
+
+function outputWriterAdapter(response: Http2ServerResponse): OutputWriter {
+  return {
+    write: function (value: Uint8Array): Promise<void> {
+      return new Promise((resolve, reject) => {
+        response.write(value, (err) => {
+          if (err) {
+            reject(err);
+          } else {
+            resolve();
+          }
+        });
+      });
+    },
+    close: function (): Promise<void> {
+      return new Promise((resolve) => {
+        response.end(() => resolve());
+      });
+    },
   };
 }

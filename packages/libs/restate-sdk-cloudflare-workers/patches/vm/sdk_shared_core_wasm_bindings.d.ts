@@ -1,10 +1,10 @@
 /* tslint:disable */
 /* eslint-disable */
+export function cancel_handle(): number;
 /**
  * This will set the log level of the overall log subscriber.
  */
 export function set_log_level(level: LogLevel): void;
-export function cancel_handle(): number;
 /**
  * Setups the WASM module
  */
@@ -45,27 +45,11 @@ export interface WasmExponentialRetryConfig {
     max_duration: number | undefined;
 }
 
-export interface WasmSendHandle {
-    invocation_id_completion_id: number;
-}
-
-export interface WasmAwakeable {
-    id: string;
-    handle: number;
-}
-
 export interface WasmFailure {
     code: number;
     message: string;
     metadata: WasmFailureMetadata[];
 }
-
-export interface WasmFailureMetadata {
-    key: string;
-    value: string;
-}
-
-export type WasmDoProgressResult = "AnyCompleted" | "ReadFromInput" | "WaitingPendingRun" | { ExecuteRun: number } | "CancelSignalReceived";
 
 export interface WasmCallHandle {
     invocation_id_completion_id: number;
@@ -73,6 +57,22 @@ export interface WasmCallHandle {
 }
 
 export type WasmAsyncResultValue = "NotReady" | "Empty" | { Success: Uint8Array } | { Failure: WasmFailure } | { StateKeys: string[] } | { InvocationId: string };
+
+export interface WasmAwakeable {
+    id: string;
+    handle: number;
+}
+
+export type WasmDoProgressResult = "AnyCompleted" | "ReadFromInput" | "WaitingPendingRun" | { ExecuteRun: number } | "CancelSignalReceived";
+
+export interface WasmFailureMetadata {
+    key: string;
+    value: string;
+}
+
+export interface WasmSendHandle {
+    invocation_id_completion_id: number;
+}
 
 export class WasmHeader {
   free(): void;

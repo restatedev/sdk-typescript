@@ -20,7 +20,7 @@ import type {
   DefaultServiceOptions,
   RestateEndpointBase,
 } from "../endpoint.js";
-import { GenericHandler } from "./handlers/generic.js";
+import { createRestateHandler } from "./handlers/generic.js";
 import { fetcher } from "./handlers/fetch.js";
 import type { LoggerTransport } from "../logging/logger_transport.js";
 import type { ProtocolMode } from "./discovery.js";
@@ -100,7 +100,7 @@ export class FetchEndpointImpl implements FetchEndpoint {
   handler(): {
     fetch: (request: Request, ...extraArgs: unknown[]) => Promise<Response>;
   } {
-    const genericHandler = new GenericHandler(
+    const genericHandler = createRestateHandler(
       this.builder.build(),
       this.protocolMode,
       {}
