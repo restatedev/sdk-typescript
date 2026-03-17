@@ -51,7 +51,7 @@
     "@restatedev/restate-sdk": "workspace:*",
     "@restatedev/restate-sdk-clients": "workspace:*",
     "apache-arrow": "^18.0.0",
-    "testcontainers": "^10.24.1"
+    "testcontainers": "^11.12.0"
   },
   "devDependencies": {}
 }
