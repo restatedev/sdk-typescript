@@ -1,5 +1,13 @@
 # @restatedev/restate-sdk-cloudflare-workers
 
+## 1.11.1
+
+### Patch Changes
+
+- Updated testcontainers version
+- Updated dependencies
+  - @restatedev/restate-sdk-core@1.11.1
+
 ## 1.11.0
 
 ### Minor Changes
