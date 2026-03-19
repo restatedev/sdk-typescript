@@ -10,7 +10,7 @@ jobs:
   build:
     # prevent from running on forks
     if: github.repository_owner == 'restatedev'
-    runs-on: ubuntu-latest
+    runs-on: warp-ubuntu-latest-x64-4x
     strategy:
       matrix:
         node-version: [20.x]
