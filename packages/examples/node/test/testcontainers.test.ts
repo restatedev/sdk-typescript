@@ -162,10 +162,11 @@ describe("Always replay", () => {
   let rs: clients.Ingress;
 
   beforeAll(async () => {
-    restateTestEnvironment = await RestateTestEnvironment.start(
-      { services: [nonDeterministic] },
-      () => new RestateContainer().alwaysReplay().disableRetries()
-    );
+    restateTestEnvironment = await RestateTestEnvironment.start({
+      services: [nonDeterministic],
+      alwaysReplay: true,
+      disableRetries: true,
+    });
     rs = clients.connect({ url: restateTestEnvironment.baseUrl() });
   }, 20_000);
 
@@ -189,10 +190,10 @@ describe("Disable retries", () => {
   let rs: clients.Ingress;
 
   beforeAll(async () => {
-    restateTestEnvironment = await RestateTestEnvironment.start(
-      { services: [failOnceService] },
-      () => new RestateContainer().disableRetries()
-    );
+    restateTestEnvironment = await RestateTestEnvironment.start({
+      services: [failOnceService],
+      disableRetries: true,
+    });
     rs = clients.connect({ url: restateTestEnvironment.baseUrl() });
   }, 20_000);
 

@@ -14,6 +14,7 @@ export {
   RestateContainer,
   StateProxy,
 } from "./restate_test_environment.js";
+export type { TestEnvironmentOptions } from "./restate_test_environment.js";
 export type {
   TypedState,
   UntypedState,
