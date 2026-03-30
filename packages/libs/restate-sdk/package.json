@@ -63,7 +63,8 @@
     "@restatedev/restate-sdk-core": "workspace:*"
   },
   "devDependencies": {
-    "@types/aws-lambda": "^8.10.115"
+    "@types/aws-lambda": "^8.10.115",
+    "@opentelemetry/api": "^1.9.0"
   },
   "typesVersions": {
     "*": {

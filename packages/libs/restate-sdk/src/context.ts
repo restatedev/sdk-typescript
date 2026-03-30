@@ -28,6 +28,12 @@ import type {
 import { ContextImpl } from "./context_impl.js";
 import type { TerminalError } from "./types/errors.js";
 
+export interface Target {
+  service: string;
+  handler: string;
+  key?: string;
+}
+
 /**
  * Represents the original request as sent to this handler.
  *
@@ -35,6 +41,8 @@ import type { TerminalError } from "./types/errors.js";
  * request body.
  */
 export interface Request {
+  readonly target: Target;
+
   /**
    * The unique id that identifies the current function invocation. This id is guaranteed to be
    * unique across invocations, but constant across reties and suspensions.
