@@ -208,6 +208,22 @@ async function prepareRestateTestContainer(
   }
 }
 
+export interface TestEnvironmentOptions extends EndpointOptions {
+  /**
+   * Forces restate-server to always replay on a suspension point.
+   * This is useful to hunt non-deterministic bugs that might prevent
+   * your code from replaying correctly.
+   */
+  alwaysReplay?: boolean;
+
+  /**
+   * Disables retries in the restate-server invoker.
+   * This is useful in tests so that failures surface immediately
+   * instead of hanging through retry backoff.
+   */
+  disableRetries?: boolean;
+}
+
 export class RestateTestEnvironment {
   constructor(
     readonly startedRestateHttpServer: http2.Http2Server,
@@ -243,7 +259,7 @@ export class RestateTestEnvironment {
 
   /**
    *
-   * @deprecated Please use {@link EndpointOptions} instead of this.
+   * @deprecated Please use {@link TestEnvironmentOptions} instead of this.
    * @example
    * ```
    * RestateTestEnvironment.start({ services: [mysService] })
@@ -254,21 +270,38 @@ export class RestateTestEnvironment {
     restateContainerFactory?: () => GenericContainer
   ): Promise<RestateTestEnvironment>;
   public static async start(
-    options: EndpointOptions,
+    options: TestEnvironmentOptions,
     restateContainerFactory?: () => GenericContainer
   ): Promise<RestateTestEnvironment>;
   public static async start(
-    param: EndpointOptions | ((server: RestateEndpoint) => void),
-    restateContainerFactory: () => GenericContainer = () =>
-      new RestateContainer()
+    param: TestEnvironmentOptions | ((server: RestateEndpoint) => void),
+    restateContainerFactory?: () => GenericContainer
   ): Promise<RestateTestEnvironment> {
+    let containerFactory: () => GenericContainer;
+    if (restateContainerFactory) {
+      containerFactory = restateContainerFactory;
+    } else if (typeof param !== "function") {
+      containerFactory = () => {
+        const container = new RestateContainer();
+        if (param.alwaysReplay) {
+          container.alwaysReplay();
+        }
+        if (param.disableRetries) {
+          container.disableRetries();
+        }
+        return container;
+      };
+    } else {
+      containerFactory = () => new RestateContainer();
+    }
+
     const startedRestateHttpServer =
       typeof param === "function"
         ? await prepareRestateEndpoint(param)
         : await prepareRestateEndpoint(param);
     const startedRestateContainer = await prepareRestateTestContainer(
       (startedRestateHttpServer.address() as net.AddressInfo).port,
-      restateContainerFactory
+      containerFactory
     );
     return new RestateTestEnvironment(
       startedRestateHttpServer,
@@ -280,6 +313,31 @@ export class RestateTestEnvironment {
 export class RestateContainer extends GenericContainer {
   constructor(version = "latest") {
     super(`docker.io/restatedev/restate:${version}`);
+  }
+
+  /**
+   * Forces restate-server to always replay on a suspension point.
+   * This is useful to hunt non-deterministic bugs that might prevent
+   * your code from replaying correctly.
+   */
+  alwaysReplay(): this {
+    this.withEnvironment({
+      RESTATE_WORKER__INVOKER__INACTIVITY_TIMEOUT: "0s",
+    });
+    return this;
+  }
+
+  /**
+   * Disables retries in the restate-server invoker.
+   * This is useful in tests so that failures surface immediately
+   * instead of hanging through retry backoff.
+   */
+  disableRetries(): this {
+    this.withEnvironment({
+      RESTATE_DEFAULT_RETRY_POLICY__MAX_ATTEMPTS: "1",
+      RESTATE_DEFAULT_RETRY_POLICY__ON_MAX_ATTEMPTS: "kill",
+    });
+    return this;
   }
 }
 export class StateProxy<TState extends TypedState> {
