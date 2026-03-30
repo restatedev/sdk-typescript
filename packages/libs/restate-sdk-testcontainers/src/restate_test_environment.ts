@@ -281,6 +281,31 @@ export class RestateContainer extends GenericContainer {
   constructor(version = "latest") {
     super(`docker.io/restatedev/restate:${version}`);
   }
+
+  /**
+   * Forces restate-server to always replay on a suspension point.
+   * This is useful to hunt non-deterministic bugs that might prevent
+   * your code from replaying correctly.
+   */
+  alwaysReplay(): this {
+    this.withEnvironment({
+      RESTATE_WORKER__INVOKER__INACTIVITY_TIMEOUT: "0s",
+    });
+    return this;
+  }
+
+  /**
+   * Disables retries in the restate-server invoker.
+   * This is useful in tests so that failures surface immediately
+   * instead of hanging through retry backoff.
+   */
+  disableRetries(): this {
+    this.withEnvironment({
+      RESTATE_DEFAULT_RETRY_POLICY__MAX_ATTEMPTS: "1",
+      RESTATE_DEFAULT_RETRY_POLICY__ON_MAX_ATTEMPTS: "kill",
+    });
+    return this;
+  }
 }
 export class StateProxy<TState extends TypedState> {
   constructor(

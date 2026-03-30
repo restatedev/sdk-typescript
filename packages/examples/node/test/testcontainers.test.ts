@@ -16,7 +16,43 @@ import {
 import { counter } from "../src/object.js";
 import * as clients from "@restatedev/restate-sdk-clients";
 import * as core from "@restatedev/restate-sdk-core";
+import {
+  object,
+  service,
+  type ObjectContext,
+  type Context,
+} from "@restatedev/restate-sdk";
 import { describe, it, beforeAll, afterAll, expect } from "vitest";
+
+// Non-deterministic handler: sets state to a random value then sleeps.
+// On replay, Math.random() produces a different value, causing a journal mismatch.
+// With alwaysReplay, this is caught. Without it, the handler completes in one shot.
+const nonDeterministic = object({
+  name: "nonDeterministic",
+  handlers: {
+    run: async (ctx: ObjectContext) => {
+      ctx.set("value", Math.random());
+      await ctx.sleep(100);
+      return "completed";
+    },
+  },
+});
+
+// Fails on first attempt, succeeds on retry. With retries disabled, the
+// invocation fails. With retries enabled, it succeeds on the second attempt.
+let failOnceAttempts = 0;
+const failOnceService = service({
+  name: "failOnce",
+  handlers: {
+    run: async (_ctx: Context): Promise<string> => {
+      failOnceAttempts++;
+      if (failOnceAttempts === 1) {
+        throw new Error("first attempt fails");
+      }
+      return "success";
+    },
+  },
+});
 
 describe("ExampleObject", () => {
   let restateTestEnvironment: RestateTestEnvironment;
@@ -119,6 +155,60 @@ describe("ExampleObject", () => {
     // await state.get("foo");
     // (await state.get("count")) satisfies string;
   });
+});
+
+describe("Always replay", () => {
+  let restateTestEnvironment: RestateTestEnvironment;
+  let rs: clients.Ingress;
+
+  beforeAll(async () => {
+    restateTestEnvironment = await RestateTestEnvironment.start(
+      { services: [nonDeterministic] },
+      () => new RestateContainer().alwaysReplay().disableRetries()
+    );
+    rs = clients.connect({ url: restateTestEnvironment.baseUrl() });
+  }, 20_000);
+
+  afterAll(async () => {
+    if (restateTestEnvironment !== undefined) {
+      await restateTestEnvironment.stop();
+    }
+  });
+
+  it("Catches non-deterministic behavior on replay", async () => {
+    const client = rs.objectClient(nonDeterministic, "test-key");
+    // The handler sets state to Math.random() then sleeps.
+    // With alwaysReplay, the sleep causes a replay where Math.random()
+    // produces a different value, triggering a journal mismatch error.
+    await expect(client.run()).rejects.toThrow();
+  }, 15_000);
+});
+
+describe("Disable retries", () => {
+  let restateTestEnvironment: RestateTestEnvironment;
+  let rs: clients.Ingress;
+
+  beforeAll(async () => {
+    restateTestEnvironment = await RestateTestEnvironment.start(
+      { services: [failOnceService] },
+      () => new RestateContainer().disableRetries()
+    );
+    rs = clients.connect({ url: restateTestEnvironment.baseUrl() });
+  }, 20_000);
+
+  afterAll(async () => {
+    if (restateTestEnvironment !== undefined) {
+      await restateTestEnvironment.stop();
+    }
+  });
+
+  it("Fails instead of retrying", async () => {
+    const client = rs.serviceClient(failOnceService);
+    // Handler fails on first attempt, succeeds on retry.
+    // With retries disabled, the invocation fails immediately.
+    // If retries were enabled, the retry would succeed and this assertion would fail.
+    await expect(client.run()).rejects.toThrow();
+  }, 10_000);
 });
 
 describe("Custom testcontainer config", () => {
