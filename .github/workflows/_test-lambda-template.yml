@@ -30,6 +30,7 @@ jobs:
         ports:
           - 4566:4566
         env:
+          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
           SERVICES: lambda,iam,sts,logs
           DEBUG: 1
           LAMBDA_EXECUTOR: local

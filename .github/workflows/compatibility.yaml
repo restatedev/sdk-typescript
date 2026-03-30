@@ -25,3 +25,4 @@ jobs:
 
   lambda:
     uses: ./.github/workflows/_test-lambda-template.yml
+    secrets: inherit
