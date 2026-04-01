@@ -215,10 +215,7 @@ function nodeHandlerImpl(
 // We use it to avoid TS union overload incompatibilities.
 interface NodeWritableResponse {
   writeHead(statusCode: number, headers: Record<string, string>): void;
-  write(
-    chunk: Uint8Array,
-    callback: (err?: Error | null) => void
-  ): boolean;
+  write(chunk: Uint8Array, callback: (err?: Error | null) => void): boolean;
   end(callback: () => void): void;
 }
 
