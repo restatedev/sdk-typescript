@@ -32,6 +32,6 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "testcontainers": "^10.24.1"
+    "testcontainers": "^11.12.0"
   }
 }
