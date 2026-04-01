@@ -22,6 +22,7 @@ import type {
 import { HandlerKind } from "../types/rpc.js";
 import type { Serde } from "@restatedev/restate-sdk-core";
 import { millisOrDurationToMillis, serde } from "@restatedev/restate-sdk-core";
+import type { HooksProvider } from "../hooks.js";
 
 //
 // Interfaces
@@ -38,6 +39,7 @@ export interface ComponentHandler {
   component(): Component;
   invoke(context: ContextImpl, input: Uint8Array): Promise<Uint8Array>;
   kind(): HandlerKind;
+  hooksProviders(): HooksProvider[];
 }
 
 //
@@ -166,6 +168,13 @@ export class ServiceHandler implements ComponentHandler {
   invoke(context: ContextImpl, input: Uint8Array): Promise<Uint8Array> {
     return this.handlerWrapper.invoke(context, input);
   }
+
+  hooksProviders(): HooksProvider[] {
+    return [
+      ...(this.parent.options?.hooks ?? []),
+      ...(this.handlerWrapper.hooks ?? []),
+    ];
+  }
 }
 
 //
@@ -240,6 +249,13 @@ export class VirtualObjectHandler implements ComponentHandler {
 
   invoke(context: ContextImpl, input: Uint8Array): Promise<Uint8Array> {
     return this.handlerWrapper.invoke(context, input);
+  }
+
+  hooksProviders(): HooksProvider[] {
+    return [
+      ...(this.parent.options?.hooks ?? []),
+      ...(this.handlerWrapper.hooks ?? []),
+    ];
   }
 }
 
@@ -317,6 +333,13 @@ export class WorkflowHandler implements ComponentHandler {
 
   invoke(context: ContextImpl, input: Uint8Array): Promise<Uint8Array> {
     return this.handlerWrapper.invoke(context, input);
+  }
+
+  hooksProviders(): HooksProvider[] {
+    return [
+      ...(this.parent.options?.hooks ?? []),
+      ...(this.handlerWrapper.hooks ?? []),
+    ];
   }
 }
 

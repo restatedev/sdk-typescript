@@ -97,6 +97,7 @@ export class ContextImpl
   readonly promisesExecutor: PromisesExecutor;
   readonly defaultSerde: Serde<any>;
   private readonly serviceKey: string;
+  private wrapRun: (name: string, runner: () => Promise<void>) => Promise<void>;
 
   constructor(
     readonly coreVm: vm.WasmVM,
@@ -135,6 +136,14 @@ export class ContextImpl
     );
     this.defaultSerde = defaultSerde ?? serde.json;
     this.serviceKey = input.key;
+    // Identity wrapper by default; replaced by startUserHandler after hooks are instantiated
+    this.wrapRun = (_name, runner) => runner();
+  }
+
+  setWrapRun(
+    wrapRun: (name: string, runner: () => Promise<void>) => Promise<void>
+  ) {
+    this.wrapRun = wrapRun;
   }
 
   isProcessing(): boolean {
@@ -454,12 +463,14 @@ export class ContextImpl
 
     // Now prepare the run task
     const doRun: () => Promise<any> = async () => {
-      // Execute the user code
+      // Execute the user code, wrapping with wrapRun hooks
       const startTime = Date.now();
       let res: T;
       let err;
       try {
-        res = await action();
+        await this.wrapRun(name ?? "", async () => {
+          res = await action();
+        });
       } catch (e) {
         err = ensureError(e, this.asTerminalError);
       }

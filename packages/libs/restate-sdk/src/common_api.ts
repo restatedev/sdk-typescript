@@ -127,6 +127,7 @@ export type {
   LogSource,
 } from "./logging/logger_transport.js";
 export type { EndpointOptions } from "./endpoint/types.js";
+export type { Hooks, HooksProvider, AttemptResult } from "./hooks.js";
 
 // re-exporting createHandler shortcuts
 

@@ -1,7 +1,7 @@
 import {TerminalError} from "./types/errors.js";
 import {Request} from "./context.js";
 
-type AttemptResult = {
+export type AttemptResult = {
     type: "success"
 } | {
     type: "retryableError"

@@ -40,6 +40,7 @@ import {
   type Duration,
 } from "@restatedev/restate-sdk-core";
 import { ensureError, TerminalError } from "./errors.js";
+import type { HooksProvider } from "../hooks.js";
 
 // ----------- rpc clients -------------------------------------------------------
 
@@ -376,6 +377,14 @@ export type ServiceHandlerOpts<I, O> = {
    * Retry policy to apply to all requests to this handler. For each unspecified field, the default value configured in the service or, if absent, in the restate-server configuration file, will be applied instead.
    */
   retryPolicy?: RetryPolicy;
+
+  /**
+   * Hooks providers for this handler. Hooks allow wrapping handler execution and ctx.run closures,
+   * useful for propagating async context (e.g. OpenTelemetry tracing).
+   *
+   * Handler-level hooks wrap innermost (after service-level hooks).
+   */
+  hooks?: HooksProvider[];
 };
 
 export type ObjectHandlerOpts<I, O> = ServiceHandlerOpts<I, O> & {
@@ -432,7 +441,8 @@ export class HandlerWrapper {
       opts !== undefined && "enableLazyState" in opts
         ? opts?.enableLazyState
         : undefined,
-      opts?.retryPolicy
+      opts?.retryPolicy,
+      opts?.hooks
     );
   }
 
@@ -456,6 +466,7 @@ export class HandlerWrapper {
     public readonly ingressPrivate?: boolean,
     public readonly enableLazyState?: boolean,
     public readonly retryPolicy?: RetryPolicy,
+    public readonly hooks?: HooksProvider[],
     public readonly asTerminalError?: (error: any) => TerminalError | undefined
   ) {}
 
@@ -895,6 +906,14 @@ export type ServiceOptions = {
    * If not provided, defaults to `serde.json`.
    */
   serde?: Serde<any>;
+
+  /**
+   * Hooks providers for this service. Hooks allow wrapping handler execution and ctx.run closures,
+   * useful for propagating async context (e.g. OpenTelemetry tracing).
+   *
+   * Service-level hooks wrap outermost (before handler-level hooks).
+   */
+  hooks?: HooksProvider[];
 };
 
 /**
