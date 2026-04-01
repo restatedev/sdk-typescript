@@ -20,7 +20,10 @@ const service = restate.object({
   handlers: {
     terminallyFailingCall: (
       _ctx: restate.Context,
-      failureToPropagate: { errorMessage: string; metadata?: Record<string, string> }
+      failureToPropagate: {
+        errorMessage: string;
+        metadata?: Record<string, string>;
+      }
     ): Promise<void> => {
       throw new restate.TerminalError(failureToPropagate.errorMessage, {
         metadata: failureToPropagate.metadata,
@@ -29,11 +32,16 @@ const service = restate.object({
 
     callTerminallyFailingCall: async (
       ctx: restate.ObjectContext,
-      failureToPropagate: { errorMessage: string; metadata?: Record<string, string> }
+      failureToPropagate: {
+        errorMessage: string;
+        metadata?: Record<string, string>;
+      }
     ): Promise<void> => {
       const uuid = ctx.rand.uuidv4();
 
-      await ctx.objectClient(Failing, uuid).terminallyFailingCall(failureToPropagate);
+      await ctx
+        .objectClient(Failing, uuid)
+        .terminallyFailingCall(failureToPropagate);
 
       throw new Error("This should be unreachable");
     },
@@ -52,7 +60,10 @@ const service = restate.object({
 
     terminallyFailingSideEffect: async (
       ctx: restate.ObjectContext,
-      failureToPropagate: { errorMessage: string; metadata?: Record<string, string> }
+      failureToPropagate: {
+        errorMessage: string;
+        metadata?: Record<string, string>;
+      }
     ) => {
       await ctx.run(() => {
         throw new restate.TerminalError(failureToPropagate.errorMessage, {
