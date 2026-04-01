@@ -16,7 +16,7 @@ import type {
   VirtualObjectDefinition,
   WorkflowDefinition,
 } from "@restatedev/restate-sdk-core";
-import type { IncomingMessage, ServerResponse } from "node:http";
+import { IncomingMessage, ServerResponse } from "node:http";
 import { Http2ServerRequest, Http2ServerResponse } from "node:http2";
 import * as http2 from "node:http2";
 import type { Endpoint } from "./endpoint.js";
@@ -175,7 +175,7 @@ function nodeHandlerImpl(
   const handler = createRestateHandler(endpoint, protocolMode, {});
 
   return (httpRequest, httpResponse) => {
-    const url = httpRequest.url;
+    const url = httpRequest.url!;
 
     // Abort controller used to cleanup resources at the end of this stream lifecycle
     const abortController = new AbortController();
@@ -188,8 +188,8 @@ function nodeHandlerImpl(
       headers: httpRequest.headers,
       extraArgs: [],
     });
-
-    httpResponse.writeHead(restateResponse.statusCode, restateResponse.headers);
+    const res = httpResponse as NodeWritableResponse;
+    res.writeHead(restateResponse.statusCode, restateResponse.headers);
 
     restateResponse
       .process({
@@ -211,6 +211,17 @@ function nodeHandlerImpl(
   };
 }
 
+// Both ServerResponse and Http2ServerResponse satisfy this interface.
+// We use it to avoid TS union overload incompatibilities.
+interface NodeWritableResponse {
+  writeHead(statusCode: number, headers: Record<string, string>): void;
+  write(
+    chunk: Uint8Array,
+    callback: (err?: Error | null) => void
+  ): boolean;
+  end(callback: () => void): void;
+}
+
 function inputReaderAdapter(
   request: Http2ServerRequest | IncomingMessage
 ): InputReader {
@@ -220,21 +231,16 @@ function inputReaderAdapter(
 function outputWriterAdapter(
   response: Http2ServerResponse | ServerResponse
 ): OutputWriter {
+  const res = response as NodeWritableResponse;
   return {
     write: function (value: Uint8Array): Promise<void> {
       return new Promise((resolve, reject) => {
-        response.write(value, (err) => {
-          if (err) {
-            reject(err);
-          } else {
-            resolve();
-          }
-        });
+        res.write(value, (err) => (err ? reject(err) : resolve()));
       });
     },
     close: function (): Promise<void> {
       return new Promise((resolve) => {
-        response.end(() => resolve());
+        res.end(() => resolve());
       });
     },
   };
