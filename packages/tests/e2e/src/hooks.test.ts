@@ -3,303 +3,83 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import * as restate from "@restatedev/restate-sdk";
 import * as clients from "@restatedev/restate-sdk-clients";
 import { RestateTestEnvironment } from "@restatedev/restate-sdk-testcontainers";
-import type {
-  HooksProvider,
-  AttemptResult,
-  HookContext,
-} from "@restatedev/restate-sdk";
-
-// ---------------------------------------------------------------------------
-// Per-invocation event capture — keyed by invocationId, safe under parallel
-// ---------------------------------------------------------------------------
-
-const invocationEvents = new Map<string, string[]>();
-
-function pushEvent(invocationId: string, event: string) {
-  let events = invocationEvents.get(invocationId);
-  if (!events) {
-    events = [];
-    invocationEvents.set(invocationId, events);
-  }
-  events.push(event);
-}
-
-function getEvents(invocationId: string): string[] {
-  return invocationEvents.get(invocationId) ?? [];
-}
-
-// ---------------------------------------------------------------------------
-// Per-invocation AttemptResult capture
-// ---------------------------------------------------------------------------
-
-const capturedResults = new Map<string, AttemptResult[]>();
-
-function pushResult(invocationId: string, result: AttemptResult) {
-  let results = capturedResults.get(invocationId);
-  if (!results) {
-    results = [];
-    capturedResults.set(invocationId, results);
-  }
-  results.push(result);
-}
-
-function getResults(invocationId: string): AttemptResult[] {
-  return capturedResults.get(invocationId) ?? [];
-}
-
-// ---------------------------------------------------------------------------
-// Per-invocation context capture
-// ---------------------------------------------------------------------------
-
-const capturedContexts = new Map<string, HookContext>();
-
-function contextCapturingHook(): HooksProvider {
-  return (ctx: HookContext) => {
-    capturedContexts.set(ctx.invocationId, ctx);
-    return {};
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Attempt tracking — used by retry test handlers
-// ---------------------------------------------------------------------------
-
-const attemptCounts = new Map<string, number>();
-
-function nextAttempt(invocationId: string): number {
-  const n = (attemptCounts.get(invocationId) ?? 0) + 1;
-  attemptCounts.set(invocationId, n);
-  return n;
-}
-
-// ---------------------------------------------------------------------------
-// Hook factories
-// ---------------------------------------------------------------------------
-
-function recordingHook(tag: string): HooksProvider {
-  return (ctx: HookContext) => {
-    const id = ctx.invocationId;
-    return {
-      interceptor: {
-        handler: async (next) => {
-          pushEvent(id, `${tag}:handler:before`);
-          await next();
-          pushEvent(id, `${tag}:handler:after`);
-        },
-        run: async (name, next) => {
-          pushEvent(id, `${tag}:run:${name}:before`);
-          try {
-            await next();
-            pushEvent(id, `${tag}:run:${name}:after`);
-          } catch (e) {
-            pushEvent(id, `${tag}:run:${name}:error`);
-            throw e;
-          }
-        },
-      },
-      listener: {
-        attemptEnd: (result: AttemptResult) => {
-          pushEvent(id, `${tag}:attemptEnd:${result.type}`);
-          pushResult(id, result);
-        },
-      },
-    };
-  };
-}
-
-/** Hook provider that throws a retryable error on the first attempt */
-function providerErrorHook(targetService: string): HooksProvider {
-  return (ctx: HookContext) => {
-    if (ctx.serviceName === targetService) {
-      if (nextAttempt(ctx.invocationId) === 1)
-        throw new Error("provider retryable error");
-    }
-    return {};
-  };
-}
-
-/** Hook whose handler interceptor throws a retryable error on the first attempt */
-function interceptorErrorHook(targetService: string): HooksProvider {
-  return (ctx: HookContext) => {
-    if (ctx.serviceName !== targetService) return {};
-    return {
-      interceptor: {
-        handler: async (next) => {
-          if (nextAttempt(ctx.invocationId) === 1)
-            throw new Error("interceptor retryable error");
-          await next();
-        },
-      },
-    };
-  };
-}
-
-/** Hook whose run interceptor throws a retryable error on the first attempt */
-function runInterceptorErrorHook(targetService: string): HooksProvider {
-  return (ctx: HookContext) => {
-    if (ctx.serviceName !== targetService) return {};
-    return {
-      interceptor: {
-        run: async (_name, next) => {
-          if (nextAttempt(ctx.invocationId) === 1)
-            throw new Error("run interceptor retryable error");
-          await next();
-        },
-      },
-    };
-  };
-}
-
-/** Hook whose handler interceptor never calls next — handler body never executes */
-function skipNextHook(targetService: string): HooksProvider {
-  return (ctx: HookContext) => {
-    if (ctx.serviceName !== targetService) return {};
-    return {
-      interceptor: {
-        handler: (_next) => Promise.resolve(),
-      },
-    };
-  };
-}
-
-/** Listener that always throws for the target service — errors should be swallowed by the SDK */
-function listenerErrorHook(targetService: string): HooksProvider {
-  return (ctx: HookContext) => {
-    if (ctx.serviceName !== targetService) return {};
-    return {
-      listener: {
-        attemptEnd: () => {
-          throw new Error("listener error — should be swallowed");
-        },
-      },
-    };
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-async function invokeExpectingError(
-  fn: () => PromiseLike<unknown>
-): Promise<{ events: string[]; invocationId?: string }> {
-  const idsBefore = new Set(invocationEvents.keys());
-  try {
-    await fn();
-  } catch {
-    // expected
-  }
-  for (const [id, events] of invocationEvents) {
-    if (!idsBefore.has(id)) return { events, invocationId: id };
-  }
-  return { events: [] };
-}
-
-const fastRetry = { retryPolicy: { initialInterval: 10 } };
-
-// ---------------------------------------------------------------------------
-// Test factory — runs the same suite at handler / service / endpoint level
-// ---------------------------------------------------------------------------
-
-type HookLevel = "handler" | "service" | "endpoint";
+import type { HooksProvider } from "@restatedev/restate-sdk";
+import {
+  type HookLevel,
+  createService,
+  withHooksAt,
+  getEvents,
+  getResults,
+  getCapturedContext,
+  captureContext,
+  nextAttempt,
+  recordHookEvents,
+  throwOnFirstHookProviderCall,
+  throwOnFirstHandlerIntercept,
+  throwOnFirstRunIntercept,
+  throwOnAttemptEnd,
+  invokeExpectingError,
+  fastRetry,
+} from "./test-utils.js";
 
 function hooksSuite(level: HookLevel) {
   describe(`${level}-level hooks`, { timeout: 120_000 }, () => {
-    const tag = "hook";
-
-    // -- helper: register hooks at the right level --------------------------
-
-    function createService(
-      name: string,
-      hooks: HooksProvider[],
-      handler: (ctx: restate.Context, input: string) => Promise<unknown>,
-      options?: {
-        retryPolicy?: { initialInterval?: number };
-        inactivityTimeout?: number;
-      }
-    ) {
-      const fullName = `${level}_${name}`;
-      const serviceOpts: Record<string, unknown> = { ...options };
-      if (level === "service") serviceOpts.hooks = hooks;
-
-      switch (level) {
-        case "handler":
-          return restate.service({
-            name: fullName,
-            handlers: {
-              invoke: restate.createServiceHandler({ hooks: hooks }, handler),
-            },
-            ...(Object.keys(serviceOpts).length
-              ? { options: serviceOpts }
-              : {}),
-          });
-        case "service":
-          return restate.service({
-            name: fullName,
-            handlers: { invoke: handler },
-            options: serviceOpts,
-          });
-        case "endpoint":
-          return restate.service({
-            name: fullName,
-            handlers: { invoke: handler },
-            ...(Object.keys(serviceOpts).length
-              ? { options: serviceOpts }
-              : {}),
-          });
-      }
-    }
+    const hooksAt = (hooks: HooksProvider[]) => withHooksAt(level, hooks);
 
     // -- service definitions ------------------------------------------------
 
-    const handlerOnlySvc = createService(
-      "HandlerOnly",
-      [recordingHook(tag)],
-      (ctx, _) =>
+    const handlerOnlyService = createService({
+      name: `${level}_HandlerOnly`,
+      ...hooksAt([recordHookEvents()]),
+      handler: (ctx, _) =>
         Promise.resolve({
           invocationId: ctx.request().id,
-        })
-    );
+        }),
+    });
 
-    const handlerRunSvc = createService(
-      "HandlerRun",
-      [recordingHook(tag)],
-      async (ctx, _) => {
+    const handlerRunService = createService({
+      name: `${level}_HandlerRun`,
+      ...hooksAt([recordHookEvents()]),
+      handler: async (ctx, _) => {
         await ctx.run("step", () => "done");
         return { invocationId: ctx.request().id };
-      }
-    );
+      },
+    });
 
-    const retrySvc = createService(
-      "Retry",
-      [recordingHook(tag)],
-      (ctx, _) => {
+    const retryService = createService({
+      name: `${level}_Retry`,
+      ...hooksAt([recordHookEvents()]),
+      handler: (ctx, _) => {
         if (nextAttempt(ctx.request().id) === 1) throw new Error("retry");
         return Promise.resolve({ invocationId: ctx.request().id });
       },
-      fastRetry
-    );
-
-    const terminalSvc = createService("Terminal", [recordingHook(tag)], () => {
-      throw new restate.TerminalError("terminal");
+      options: fastRetry,
     });
 
-    const retryWithReplayedRunSvc = createService(
-      "RetryRun",
-      [recordingHook(tag)],
-      async (ctx, _) => {
+    const terminalService = createService({
+      name: `${level}_Terminal`,
+      ...hooksAt([recordHookEvents()]),
+      handler: () => {
+        throw new restate.TerminalError("terminal");
+      },
+    });
+
+    const retryWithReplayedRunService = createService({
+      name: `${level}_RetryRun`,
+      ...hooksAt([recordHookEvents()]),
+      handler: async (ctx, _) => {
         await ctx.run("step-1", () => "a");
         if (nextAttempt(ctx.request().id) === 1) throw new Error("retry");
         await ctx.run("step-2", () => "b");
         return { invocationId: ctx.request().id };
       },
-      fastRetry
-    );
+      options: fastRetry,
+    });
 
-    const runRetryableSvc = createService(
-      "RunRetry",
-      [recordingHook(tag)],
-      async (ctx, _) => {
+    const runRetryableService = createService({
+      name: `${level}_RunRetry`,
+      ...hooksAt([recordHookEvents()]),
+      handler: async (ctx, _) => {
         const attempt = nextAttempt(ctx.request().id);
         await ctx.run("step", () => {
           if (attempt === 1) throw new Error("run retryable fail");
@@ -307,48 +87,48 @@ function hooksSuite(level: HookLevel) {
         });
         return { invocationId: ctx.request().id };
       },
-      fastRetry
-    );
+      options: fastRetry,
+    });
 
-    const runTerminalSvc = createService(
-      "RunTerminal",
-      [recordingHook(tag)],
-      async (ctx, _) => {
+    const runTerminalService = createService({
+      name: `${level}_RunTerminal`,
+      ...hooksAt([recordHookEvents()]),
+      handler: async (ctx, _) => {
         await ctx.run("step", () => {
           throw new restate.TerminalError("run fail");
         });
         return { invocationId: ctx.request().id };
-      }
-    );
+      },
+    });
 
-    const retryTwiceSuccessSvc = createService(
-      "RetryTwiceSuccess",
-      [recordingHook(tag)],
-      (ctx, _) => {
+    const retryTwiceSuccessService = createService({
+      name: `${level}_RetryTwiceSuccess`,
+      ...hooksAt([recordHookEvents()]),
+      handler: (ctx, _) => {
         if (nextAttempt(ctx.request().id) <= 2) throw new Error("retry");
         return Promise.resolve({ invocationId: ctx.request().id });
       },
-      fastRetry
-    );
+      options: fastRetry,
+    });
 
-    const retryTwiceTerminalSvc = createService(
-      "RetryTwiceTerminal",
-      [recordingHook(tag)],
-      (ctx, _) => {
+    const retryTwiceTerminalService = createService({
+      name: `${level}_RetryTwiceTerminal`,
+      ...hooksAt([recordHookEvents()]),
+      handler: (ctx, _) => {
         const n = nextAttempt(ctx.request().id);
         if (n <= 2) throw new Error("retry");
         throw new restate.TerminalError("terminal after retries");
       },
-      fastRetry
-    );
+      options: fastRetry,
+    });
 
     const wait = (ms: number) =>
       new Promise((resolve) => setTimeout(resolve, ms));
 
-    const concurrentRunSvc = createService(
-      "ConcurrentRun",
-      [recordingHook(tag)],
-      async (ctx, _) => {
+    const concurrentRunService = createService({
+      name: `${level}_ConcurrentRun`,
+      ...hooksAt([recordHookEvents()]),
+      handler: async (ctx, _) => {
         const attempt = nextAttempt(ctx.request().id);
         await restate.RestatePromise.all([
           ctx.run("run-1", async () => {
@@ -370,29 +150,29 @@ function hooksSuite(level: HookLevel) {
         ]);
         return { invocationId: ctx.request().id };
       },
-      fastRetry
-    );
+      options: fastRetry,
+    });
 
-    const suspendSvc = createService(
-      "Suspend",
-      [recordingHook(tag)],
-      async (ctx, _) => {
+    const suspendService = createService({
+      name: `${level}_Suspend`,
+      ...hooksAt([recordHookEvents()]),
+      handler: async (ctx, _) => {
         await ctx.run("before-sleep", () => "a");
         await ctx.sleep(1000);
         await ctx.run("after-sleep", () => "b");
         return { invocationId: ctx.request().id };
       },
-      { inactivityTimeout: 100 }
-    );
+      options: { inactivityTimeout: 100 },
+    });
 
-    const contextSvc = createService(
-      "Context",
-      [contextCapturingHook()],
-      (ctx, _) =>
+    const contextService = createService({
+      name: `${level}_Context`,
+      ...hooksAt([captureContext()]),
+      handler: (ctx, _) =>
         Promise.resolve({
           invocationId: ctx.request().id,
-        })
-    );
+        }),
+    });
 
     const contextObjName = `${level}_ContextObj`;
     const contextObj = restate.object({
@@ -400,7 +180,7 @@ function hooksSuite(level: HookLevel) {
       handlers: {
         invoke: restate.createObjectHandler(
           {
-            hooks: level === "handler" ? [contextCapturingHook()] : [],
+            hooks: level === "handler" ? [captureContext()] : [],
           },
           (ctx: restate.ObjectContext, _input: string) =>
             Promise.resolve({
@@ -409,68 +189,67 @@ function hooksSuite(level: HookLevel) {
         ),
       },
       options: {
-        ...(level === "service" ? { hooks: [contextCapturingHook()] } : {}),
+        ...(level === "service" ? { hooks: [captureContext()] } : {}),
       },
     });
 
-    const providerErrorSvcName = `${level}_ProviderError`;
-    const providerErrorSvc = createService(
-      "ProviderError",
-      [recordingHook(tag), providerErrorHook(providerErrorSvcName)],
-      (ctx, _) => Promise.resolve({ invocationId: ctx.request().id }),
-      fastRetry
-    );
+    const providerErrorServiceName = `${level}_ProviderError`;
+    const providerErrorService = createService({
+      name: providerErrorServiceName,
+      ...hooksAt([recordHookEvents(), throwOnFirstHookProviderCall(providerErrorServiceName)]),
+      handler: (ctx, _) => Promise.resolve({ invocationId: ctx.request().id }),
+      options: fastRetry,
+    });
 
-    const interceptorErrorSvcName = `${level}_InterceptorError`;
-    const interceptorErrorSvc = createService(
-      "InterceptorError",
-      [recordingHook(tag), interceptorErrorHook(interceptorErrorSvcName)],
-      (ctx, _) => Promise.resolve({ invocationId: ctx.request().id }),
-      fastRetry
-    );
+    const interceptorErrorServiceName = `${level}_InterceptorError`;
+    const interceptorErrorService = createService({
+      name: interceptorErrorServiceName,
+      ...hooksAt([
+        recordHookEvents(),
+        throwOnFirstHandlerIntercept(interceptorErrorServiceName),
+      ]),
+      handler: (ctx, _) => Promise.resolve({ invocationId: ctx.request().id }),
+      options: fastRetry,
+    });
 
-    const runInterceptorErrorSvcName = `${level}_RunInterceptorError`;
-    const runInterceptorErrorSvc = createService(
-      "RunInterceptorError",
-      [recordingHook(tag), runInterceptorErrorHook(runInterceptorErrorSvcName)],
-      async (ctx, _) => {
+    const runInterceptorErrorServiceName = `${level}_RunInterceptorError`;
+    const runInterceptorErrorService = createService({
+      name: runInterceptorErrorServiceName,
+      ...hooksAt([
+        recordHookEvents(),
+        throwOnFirstRunIntercept(runInterceptorErrorServiceName),
+      ]),
+      handler: async (ctx, _) => {
         await ctx.run("step", () => "done");
         return { invocationId: ctx.request().id };
       },
-      fastRetry
-    );
+      options: fastRetry,
+    });
 
-    const listenerErrorSvcName = `${level}_ListenerError`;
-    const listenerErrorSvc = createService(
-      "ListenerError",
-      [recordingHook(tag), listenerErrorHook(listenerErrorSvcName)],
-      (ctx, _) => Promise.resolve({ invocationId: ctx.request().id })
-    );
+    const listenerErrorServiceName = `${level}_ListenerError`;
+    const listenerErrorService = createService({
+      name: listenerErrorServiceName,
+      ...hooksAt([recordHookEvents(), throwOnAttemptEnd(listenerErrorServiceName)]),
+      handler: (ctx, _) => Promise.resolve({ invocationId: ctx.request().id }),
+    });
 
-    const skipNextSvcName = `${level}_SkipNext`;
-    const skipNextSvc = createService(
-      "SkipNext",
-      [recordingHook(tag), skipNextHook(skipNextSvcName)],
-      (ctx, _) => Promise.resolve({ invocationId: ctx.request().id })
-    );
-
-    const als = new AsyncLocalStorage<{ hookTag: string }>();
-    const alsHook: HooksProvider = () => ({
+    const asyncContext = new AsyncLocalStorage<{ hookTag: string }>();
+    const propagateAsyncContext: HooksProvider = () => ({
       interceptor: {
-        handler: (next) => als.run({ hookTag: "from-hook" }, next),
+        handler: (next) => asyncContext.run({ hookTag: "from-hook" }, next),
       },
     });
-    const alsSvc = createService(
-      "AsyncLocalStorage",
-      [alsHook],
-      (ctx, _) => {
-        const store = als.getStore();
+    const asyncContextService = createService({
+      name: `${level}_AsyncLocalStorage`,
+      ...hooksAt([propagateAsyncContext]),
+      handler: (ctx, _) => {
+        const store = asyncContext.getStore();
         return Promise.resolve({
           invocationId: ctx.request().id,
           hookTag: store?.hookTag,
         });
-      }
-    );
+      },
+    });
 
     // -- environment --------------------------------------------------------
 
@@ -478,39 +257,37 @@ function hooksSuite(level: HookLevel) {
 
     beforeAll(async () => {
       const services = [
-        handlerOnlySvc,
-        handlerRunSvc,
-        retrySvc,
-        terminalSvc,
-        retryWithReplayedRunSvc,
-        runRetryableSvc,
-        runTerminalSvc,
-        retryTwiceSuccessSvc,
-        retryTwiceTerminalSvc,
-        concurrentRunSvc,
-        suspendSvc,
-        contextSvc,
+        handlerOnlyService,
+        handlerRunService,
+        retryService,
+        terminalService,
+        retryWithReplayedRunService,
+        runRetryableService,
+        runTerminalService,
+        retryTwiceSuccessService,
+        retryTwiceTerminalService,
+        concurrentRunService,
+        suspendService,
+        contextService,
         contextObj,
-        providerErrorSvc,
-        interceptorErrorSvc,
-        runInterceptorErrorSvc,
-        listenerErrorSvc,
-        skipNextSvc,
-        alsSvc,
+        providerErrorService,
+        interceptorErrorService,
+        runInterceptorErrorService,
+        listenerErrorService,
+        asyncContextService,
       ];
       env = await RestateTestEnvironment.start({
         services,
         ...(level === "endpoint"
           ? {
               hooks: [
-                recordingHook(tag),
-                contextCapturingHook(),
-                providerErrorHook(providerErrorSvcName),
-                interceptorErrorHook(interceptorErrorSvcName),
-                runInterceptorErrorHook(runInterceptorErrorSvcName),
-                listenerErrorHook(listenerErrorSvcName),
-                skipNextHook(skipNextSvcName),
-                alsHook,
+                recordHookEvents(),
+                captureContext(),
+                throwOnFirstHookProviderCall(providerErrorServiceName),
+                throwOnFirstHandlerIntercept(interceptorErrorServiceName),
+                throwOnFirstRunIntercept(runInterceptorErrorServiceName),
+                throwOnAttemptEnd(listenerErrorServiceName),
+                propagateAsyncContext,
               ],
             }
           : {}),
@@ -521,30 +298,14 @@ function hooksSuite(level: HookLevel) {
       await env?.stop();
     });
 
-    // -- test helpers -------------------------------------------------------
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    type AnySvc = restate.ServiceDefinition<string, any>;
-
-    async function invoke(svc: AnySvc) {
-      const client = clients.connect({ url: env.baseUrl() }).serviceClient(svc);
-      const { invocationId } = (await client.invoke!("")) as {
-        invocationId: string;
-      };
-      return { invocationId, events: getEvents(invocationId) };
-    }
-
-    async function invokeAndExpectError(svc: AnySvc) {
-      const client = clients.connect({ url: env.baseUrl() }).serviceClient(svc);
-      return invokeExpectingError(() =>
-        client.invoke!("") as Promise<unknown>
-      );
-    }
-
     // -- tests --------------------------------------------------------------
 
     it("handler interceptor only", async () => {
-      const { events } = await invoke(handlerOnlySvc);
+      const client = clients
+        .connect({ url: env.baseUrl() })
+        .serviceClient(handlerOnlyService);
+      const { invocationId } = await client.invoke("");
+      const events = getEvents(invocationId);
       expect(events).toEqual([
         "hook:handler:before",
         "hook:handler:after",
@@ -553,7 +314,11 @@ function hooksSuite(level: HookLevel) {
     });
 
     it("handler + run interceptor", async () => {
-      const { events } = await invoke(handlerRunSvc);
+      const client = clients
+        .connect({ url: env.baseUrl() })
+        .serviceClient(handlerRunService);
+      const { invocationId } = await client.invoke("");
+      const events = getEvents(invocationId);
       expect(events).toEqual([
         "hook:handler:before",
         "hook:run:step:before",
@@ -564,7 +329,11 @@ function hooksSuite(level: HookLevel) {
     });
 
     it("handler with retry — no duplicate events", async () => {
-      const { events } = await invoke(retrySvc);
+      const client = clients
+        .connect({ url: env.baseUrl() })
+        .serviceClient(retryService);
+      const { invocationId } = await client.invoke("");
+      const events = getEvents(invocationId);
       expect(events).toEqual([
         // attempt 1: retryable error
         "hook:handler:before",
@@ -577,7 +346,12 @@ function hooksSuite(level: HookLevel) {
     });
 
     it("terminal error", async () => {
-      const { events } = await invokeAndExpectError(terminalSvc);
+      const client = clients
+        .connect({ url: env.baseUrl() })
+        .serviceClient(terminalService);
+      const { events } = await invokeExpectingError(
+        () => client.invoke("") as Promise<unknown>
+      );
       expect(events).toEqual([
         "hook:handler:before",
         "hook:attemptEnd:terminalError",
@@ -585,7 +359,10 @@ function hooksSuite(level: HookLevel) {
     });
 
     it("attemptEnd receives the actual error for retryable errors", async () => {
-      const { invocationId } = await invoke(retrySvc);
+      const client = clients
+        .connect({ url: env.baseUrl() })
+        .serviceClient(retryService);
+      const { invocationId } = await client.invoke("");
       const results = getResults(invocationId);
 
       expect(results).toHaveLength(2);
@@ -597,7 +374,12 @@ function hooksSuite(level: HookLevel) {
     });
 
     it("attemptEnd receives the actual error for terminal errors", async () => {
-      const { invocationId } = await invokeAndExpectError(terminalSvc);
+      const client = clients
+        .connect({ url: env.baseUrl() })
+        .serviceClient(terminalService);
+      const { invocationId } = await invokeExpectingError(
+        () => client.invoke("") as Promise<unknown>
+      );
       const results = getResults(invocationId!);
 
       expect(results).toHaveLength(1);
@@ -608,7 +390,11 @@ function hooksSuite(level: HookLevel) {
     });
 
     it("handler + run with retry — replayed run skips interceptor", async () => {
-      const { events } = await invoke(retryWithReplayedRunSvc);
+      const client = clients
+        .connect({ url: env.baseUrl() })
+        .serviceClient(retryWithReplayedRunService);
+      const { invocationId } = await client.invoke("");
+      const events = getEvents(invocationId);
       expect(events).toEqual([
         // attempt 1: step-1 executes, then retryable error
         "hook:handler:before",
@@ -625,7 +411,11 @@ function hooksSuite(level: HookLevel) {
     });
 
     it("run throws retryable error then succeeds", async () => {
-      const { events } = await invoke(runRetryableSvc);
+      const client = clients
+        .connect({ url: env.baseUrl() })
+        .serviceClient(runRetryableService);
+      const { invocationId } = await client.invoke("");
+      const events = getEvents(invocationId);
       expect(events).toEqual([
         // attempt 1: run closure throws retryable error — handled internally,
         // no attemptEnd (the run failure is retried by the runtime)
@@ -642,7 +432,12 @@ function hooksSuite(level: HookLevel) {
     });
 
     it("run throws terminal error", async () => {
-      const { events } = await invokeAndExpectError(runTerminalSvc);
+      const client = clients
+        .connect({ url: env.baseUrl() })
+        .serviceClient(runTerminalService);
+      const { events } = await invokeExpectingError(
+        () => client.invoke("") as Promise<unknown>
+      );
       expect(events).toEqual([
         "hook:handler:before",
         "hook:run:step:before",
@@ -652,7 +447,11 @@ function hooksSuite(level: HookLevel) {
     });
 
     it("hook provider error triggers retry then succeeds", async () => {
-      const { events } = await invoke(providerErrorSvc);
+      const client = clients
+        .connect({ url: env.baseUrl() })
+        .serviceClient(providerErrorService);
+      const { invocationId } = await client.invoke("");
+      const events = getEvents(invocationId);
       expect(events).toEqual([
         // attempt 1: recording hook instantiated, then provider throws
         // — handler interceptor never started, only attemptEnd fires
@@ -665,7 +464,11 @@ function hooksSuite(level: HookLevel) {
     });
 
     it("interceptor error triggers retry then succeeds", async () => {
-      const { events } = await invoke(interceptorErrorSvc);
+      const client = clients
+        .connect({ url: env.baseUrl() })
+        .serviceClient(interceptorErrorService);
+      const { invocationId } = await client.invoke("");
+      const events = getEvents(invocationId);
       expect(events).toEqual([
         // attempt 1: recording hook's handler:before fires (outermost),
         // then error hook's interceptor throws — handler:after skipped
@@ -679,7 +482,11 @@ function hooksSuite(level: HookLevel) {
     });
 
     it("run interceptor error triggers retry then succeeds", async () => {
-      const { events } = await invoke(runInterceptorErrorSvc);
+      const client = clients
+        .connect({ url: env.baseUrl() })
+        .serviceClient(runInterceptorErrorService);
+      const { invocationId } = await client.invoke("");
+      const events = getEvents(invocationId);
       expect(events).toEqual([
         // attempt 1: handler starts, run interceptor throws — handled internally,
         // no attemptEnd (the run failure is retried by the runtime)
@@ -696,7 +503,11 @@ function hooksSuite(level: HookLevel) {
     });
 
     it("listener error is swallowed — does not affect execution", async () => {
-      const { events } = await invoke(listenerErrorSvc);
+      const client = clients
+        .connect({ url: env.baseUrl() })
+        .serviceClient(listenerErrorService);
+      const { invocationId } = await client.invoke("");
+      const events = getEvents(invocationId);
       // Handler succeeds despite listener throwing
       expect(events).toEqual([
         "hook:handler:before",
@@ -705,22 +516,12 @@ function hooksSuite(level: HookLevel) {
       ]);
     });
 
-    it.skip("handler interceptor not calling next — handler body never executes", async () => {
-      const { events } = await invokeAndExpectError(skipNextSvc);
-      // The recording hook (outermost) calls next(), which enters the
-      // skip-next hook that returns without calling next(). The handler
-      // body never runs, no output is written — the SDK treats this as
-      // a successful interceptor return with no response, which is a
-      // protocol error (no output was written).
-      expect(events).toEqual([
-        "hook:handler:before",
-        "hook:handler:after",
-        "hook:attemptEnd:terminalError",
-      ]);
-    });
-
     it("attemptEnd with multiple retries then success", async () => {
-      const { events } = await invoke(retryTwiceSuccessSvc);
+      const client = clients
+        .connect({ url: env.baseUrl() })
+        .serviceClient(retryTwiceSuccessService);
+      const { invocationId } = await client.invoke("");
+      const events = getEvents(invocationId);
       expect(events).toEqual([
         "hook:handler:before",
         "hook:attemptEnd:retryableError",
@@ -733,7 +534,12 @@ function hooksSuite(level: HookLevel) {
     });
 
     it("attemptEnd with multiple retries then terminal error", async () => {
-      const { events } = await invokeAndExpectError(retryTwiceTerminalSvc);
+      const client = clients
+        .connect({ url: env.baseUrl() })
+        .serviceClient(retryTwiceTerminalService);
+      const { events } = await invokeExpectingError(
+        () => client.invoke("") as Promise<unknown>
+      );
       expect(events).toEqual([
         "hook:handler:before",
         "hook:attemptEnd:retryableError",
@@ -745,7 +551,11 @@ function hooksSuite(level: HookLevel) {
     });
 
     it("concurrent runs with progressive retries", async () => {
-      const { events } = await invoke(concurrentRunSvc);
+      const client = clients
+        .connect({ url: env.baseUrl() })
+        .serviceClient(concurrentRunService);
+      const { invocationId } = await client.invoke("");
+      const events = getEvents(invocationId);
       const anyRunBefore = expect.stringMatching(
         /^hook:run:run-[12]:before$/
       ) as unknown as string;
@@ -773,7 +583,11 @@ function hooksSuite(level: HookLevel) {
     });
 
     it("handler with suspension resumes and completes", async () => {
-      const { events } = await invoke(suspendSvc);
+      const client = clients
+        .connect({ url: env.baseUrl() })
+        .serviceClient(suspendService);
+      const { invocationId } = await client.invoke("");
+      const events = getEvents(invocationId);
       expect(events).toEqual([
         // attempt 1: runs before-sleep, then suspends (inactivityTimeout: 100ms)
         // — no attemptEnd (suspension is not an error or success)
@@ -790,7 +604,9 @@ function hooksSuite(level: HookLevel) {
     });
 
     it("handler interceptor propagates async context to handler", async () => {
-      const client = clients.connect({ url: env.baseUrl() }).serviceClient(alsSvc);
+      const client = clients
+        .connect({ url: env.baseUrl() })
+        .serviceClient(asyncContextService);
       const { hookTag } = (await client.invoke("")) as {
         hookTag: string;
       };
@@ -798,8 +614,11 @@ function hooksSuite(level: HookLevel) {
     });
 
     it("hooks provider receives correct HookContext for service", async () => {
-      const { invocationId } = await invoke(contextSvc);
-      const ctx = capturedContexts.get(invocationId);
+      const client = clients
+        .connect({ url: env.baseUrl() })
+        .serviceClient(contextService);
+      const { invocationId } = await client.invoke("");
+      const ctx = getCapturedContext(invocationId);
       expect(ctx).toBeDefined();
       expect(ctx!.serviceName).toBe(`${level}_Context`);
       expect(ctx!.handlerName).toBe("invoke");
@@ -817,7 +636,7 @@ function hooksSuite(level: HookLevel) {
         invocationId: string;
       };
 
-      const ctx = capturedContexts.get(invocationId);
+      const ctx = getCapturedContext(invocationId);
       expect(ctx).toBeDefined();
       expect(ctx!.serviceName).toBe(contextObjName);
       expect(ctx!.handlerName).toBe("invoke");
@@ -845,11 +664,11 @@ hooksSuite("endpoint");
 describe("hooks composition ordering", { timeout: 120_000 }, () => {
   let env: RestateTestEnvironment;
 
-  const orderingSvc = restate.service({
+  const orderingService = restate.service({
     name: "Ordering",
     handlers: {
       invoke: restate.createServiceHandler(
-        { hooks: [recordingHook("h1"), recordingHook("h2")] },
+        { hooks: [recordHookEvents("h1"), recordHookEvents("h2")] },
         async (ctx: restate.Context, _input: string) => {
           await ctx.run("step-1", () => "a");
           if (nextAttempt(ctx.request().id) === 1) throw new Error("retry");
@@ -859,15 +678,15 @@ describe("hooks composition ordering", { timeout: 120_000 }, () => {
       ),
     },
     options: {
-      hooks: [recordingHook("s1"), recordingHook("s2")],
+      hooks: [recordHookEvents("s1"), recordHookEvents("s2")],
       retryPolicy: { initialInterval: 10 },
     },
   });
 
   beforeAll(async () => {
     env = await RestateTestEnvironment.start({
-      services: [orderingSvc],
-      hooks: [recordingHook("e1"), recordingHook("e2")],
+      services: [orderingService],
+      hooks: [recordHookEvents("e1"), recordHookEvents("e2")],
     });
   });
 
@@ -878,7 +697,7 @@ describe("hooks composition ordering", { timeout: 120_000 }, () => {
   it("endpoint -> service -> handler nesting with retries", async () => {
     const client = clients
       .connect({ url: env.baseUrl() })
-      .serviceClient(orderingSvc);
+      .serviceClient(orderingService);
     const { invocationId } = (await client.invoke("")) as {
       invocationId: string;
     };
