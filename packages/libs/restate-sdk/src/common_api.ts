@@ -31,6 +31,7 @@ export type {
   KeyValueStore,
   DurablePromise,
   Request,
+  Target,
 } from "./context.js";
 export { InvocationIdParser, RestatePromise } from "./context.js";
 
@@ -126,6 +127,14 @@ export type {
   LogSource,
 } from "./logging/logger_transport.js";
 export type { EndpointOptions } from "./endpoint/types.js";
+export type {
+  Hooks,
+  HooksProvider,
+  AttemptResult,
+  HookContext,
+  Interceptor,
+  Listener,
+} from "./hooks.js";
 
 // re-exporting createHandler shortcuts
 

@@ -39,6 +39,7 @@ import {
 import type { Logger } from "../logging/logger.js";
 import { createLogger } from "../logging/logger.js";
 import type { DefaultServiceOptions } from "../endpoint.js";
+import type { HooksProvider } from "../hooks.js";
 
 function isServiceDefinition<P extends string, M>(
   m: Record<string, any>
@@ -87,6 +88,7 @@ export type Endpoint = {
    * Codec provider to use for journal values.
    */
   journalValueCodec?: Promise<JournalValueCodec>;
+  hooksProviders: HooksProvider[];
 };
 
 export class EndpointBuilder {
@@ -100,6 +102,7 @@ export class EndpointBuilder {
   private keySet: string[] = [];
   private defaultServiceOptions: DefaultServiceOptions = {};
   private journalValueCodecProvider?: () => Promise<JournalValueCodec>;
+  private endpointHooksProviders: HooksProvider[] = [];
 
   public bind<P extends string, M>(
     definition:
@@ -131,6 +134,10 @@ export class EndpointBuilder {
     codecProvider: () => Promise<JournalValueCodec>
   ) {
     this.journalValueCodecProvider = codecProvider;
+  }
+
+  public setHooksProviders(hooks: HooksProvider[]) {
+    this.endpointHooksProviders = hooks;
   }
 
   public build(): Endpoint {
@@ -200,6 +207,7 @@ export class EndpointBuilder {
       journalValueCodec: this.journalValueCodecProvider
         ? this.journalValueCodecProvider()
         : undefined,
+      hooksProviders: this.endpointHooksProviders,
     };
   }
 }

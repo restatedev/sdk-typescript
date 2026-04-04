@@ -40,6 +40,7 @@ import {
   type Duration,
 } from "@restatedev/restate-sdk-core";
 import { ensureError, TerminalError } from "./errors.js";
+import type { HooksProvider } from "../hooks.js";
 
 // ----------- rpc clients -------------------------------------------------------
 
@@ -420,6 +421,14 @@ export type ServiceHandlerOpts<I, O> = {
    * The input or output of this handler can be overridden using the `input`/`output` fields
    */
   serde?: Serde<any>;
+
+  /**
+   * Hooks providers for this handler. Hooks allow wrapping handler execution and ctx.run closures,
+   * useful for propagating async context (e.g. OpenTelemetry tracing).
+   *
+   * Handler-level hooks wrap innermost (after service-level hooks).
+   */
+  hooks?: HooksProvider[];
 };
 
 export type ObjectHandlerOpts<I, O> = ServiceHandlerOpts<I, O> & {
@@ -476,6 +485,66 @@ export class HandlerWrapper {
       | ObjectHandlerOpts<unknown, unknown>
       | WorkflowHandlerOpts<unknown, unknown>
   ) {}
+
+  public get inputSerde(): Serde<unknown> | undefined {
+    return this.options?.input;
+  }
+
+  public get outputSerde(): Serde<unknown> | undefined {
+    return this.options?.output;
+  }
+
+  public get accept(): string | undefined {
+    return this.options?.accept;
+  }
+
+  public get description(): string | undefined {
+    return this.options?.description;
+  }
+
+  public get metadata(): Record<string, string> | undefined {
+    return this.options?.metadata;
+  }
+
+  public get idempotencyRetention(): Duration | number | undefined {
+    return this.options?.idempotencyRetention;
+  }
+
+  public get journalRetention(): Duration | number | undefined {
+    return this.options?.journalRetention;
+  }
+
+  public get inactivityTimeout(): Duration | number | undefined {
+    return this.options?.inactivityTimeout;
+  }
+
+  public get abortTimeout(): Duration | number | undefined {
+    return this.options?.abortTimeout;
+  }
+
+  public get ingressPrivate(): boolean | undefined {
+    return this.options?.ingressPrivate;
+  }
+
+  public get enableLazyState(): boolean | undefined {
+    return this.options !== undefined && "enableLazyState" in this.options
+      ? this.options.enableLazyState
+      : undefined;
+  }
+
+  public get retryPolicy(): RetryPolicy | undefined {
+    return this.options?.retryPolicy;
+  }
+
+  public get hooks(): HooksProvider[] | undefined {
+    return this.options?.hooks;
+  }
+
+  public get asTerminalError():
+    | ((error: any) => TerminalError | undefined)
+    | undefined {
+    return this.options?.asTerminalError;
+  }
 
   bindInstance(t: unknown) {
     this.handler = this.handler.bind(t) as Function;
@@ -913,6 +982,14 @@ export type ServiceOptions = {
    * If not provided, defaults to `serde.json`.
    */
   serde?: Serde<any>;
+
+  /**
+   * Hooks providers for this service. Hooks allow wrapping handler execution and ctx.run closures,
+   * useful for propagating async context (e.g. OpenTelemetry tracing).
+   *
+   * Service-level hooks wrap outermost (before handler-level hooks).
+   */
+  hooks?: HooksProvider[];
 };
 
 /**

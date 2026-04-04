@@ -40,4 +40,11 @@ export type {
   ServiceDefinition,
   VirtualObjectDefinition,
   WorkflowDefinition,
+  Target,
+  HooksProvider,
+  Hooks,
+  AttemptResult,
+  Interceptor,
+  Listener,
+  HookContext,
 } from "@restatedev/restate-sdk";

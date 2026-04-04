@@ -12,18 +12,19 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import type * as d from "./discovery.js";
-import { ContextImpl } from "../context_impl.js";
-import {
-  HandlerKind,
+import type { ContextImpl } from "../context_impl.js";
+import type {
   HandlerWrapper,
   ObjectOptions,
   ServiceHandlerOpts,
   ServiceOptions,
   WorkflowOptions,
 } from "../types/rpc.js";
+import { HandlerKind } from "../types/rpc.js";
 import type { Serde } from "@restatedev/restate-sdk-core";
 import { millisOrDurationToMillis, serde } from "@restatedev/restate-sdk-core";
-import { TerminalError } from "@restatedev/restate-sdk";
+import type { HooksProvider } from "../hooks.js";
+import type { TerminalError } from "../types/errors.js";
 
 //
 // Interfaces
@@ -32,6 +33,7 @@ export interface Component {
   name(): string;
   handlerMatching(url: InvokePathComponents): ComponentHandler | undefined;
   discovery(): d.Service;
+  options?: ServiceOptions | ObjectOptions | WorkflowOptions;
 }
 
 /**
@@ -50,11 +52,8 @@ export interface ComponentHandler {
   component(): Component;
   invoke(context: ContextImpl, input: Uint8Array): Promise<Uint8Array>;
   kind(): HandlerKind;
-
-  /**
-   * Returns the execution options, already merged with different layers (endpoint -> service -> handler)
-   */
   executionOptions: ExecutionOptions;
+  hooksProviders(): HooksProvider[];
 }
 
 //
@@ -201,6 +200,13 @@ export class ServiceHandler implements ComponentHandler {
   invoke(context: ContextImpl, input: Uint8Array): Promise<Uint8Array> {
     return this.handlerWrapper.invoke(context, input);
   }
+
+  hooksProviders(): HooksProvider[] {
+    return [
+      ...(this.parent.options?.hooks ?? []),
+      ...(this.handlerWrapper.hooks ?? []),
+    ];
+  }
 }
 
 //
@@ -282,6 +288,13 @@ export class VirtualObjectHandler implements ComponentHandler {
 
   invoke(context: ContextImpl, input: Uint8Array): Promise<Uint8Array> {
     return this.handlerWrapper.invoke(context, input);
+  }
+
+  hooksProviders(): HooksProvider[] {
+    return [
+      ...(this.parent.options?.hooks ?? []),
+      ...(this.handlerWrapper.hooks ?? []),
+    ];
   }
 }
 
@@ -366,6 +379,13 @@ export class WorkflowHandler implements ComponentHandler {
 
   invoke(context: ContextImpl, input: Uint8Array): Promise<Uint8Array> {
     return this.handlerWrapper.invoke(context, input);
+  }
+
+  hooksProviders(): HooksProvider[] {
+    return [
+      ...(this.parent.options?.hooks ?? []),
+      ...(this.handlerWrapper.hooks ?? []),
+    ];
   }
 }
 

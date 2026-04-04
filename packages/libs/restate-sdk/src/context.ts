@@ -32,6 +32,12 @@ import {
   ConstRestatePromise,
 } from "./promises.js";
 
+export interface Target {
+  service: string;
+  handler: string;
+  key?: string;
+}
+
 /**
  * Represents the original request as sent to this handler.
  *
@@ -39,6 +45,8 @@ import {
  * request body.
  */
 export interface Request {
+  readonly target: Target;
+
   /**
    * The unique id that identifies the current function invocation. This id is guaranteed to be
    * unique across invocations, but constant across reties and suspensions.

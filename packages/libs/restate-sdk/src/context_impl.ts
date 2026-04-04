@@ -93,6 +93,7 @@ export class ContextImpl
   readonly promisesExecutor: PromisesExecutor;
   readonly defaultSerde: Serde<any>;
   private readonly serviceKey: string;
+  private runInterceptor: (name: string, runner: () => Promise<void>) => Promise<void>;
 
   constructor(
     readonly coreVm: vm.WasmVM,
@@ -131,6 +132,14 @@ export class ContextImpl
     );
     this.defaultSerde = defaultSerde ?? serde.json;
     this.serviceKey = input.key;
+    // Identity interceptor by default; replaced by startUserHandler after hooks are instantiated
+    this.runInterceptor = (_name, runner) => runner();
+  }
+
+  setRunInterceptor(
+    interceptor: (name: string, runner: () => Promise<void>) => Promise<void>
+  ) {
+    this.runInterceptor = interceptor;
   }
 
   isProcessing(): boolean {
@@ -444,12 +453,14 @@ export class ContextImpl
 
     // Now prepare the run task
     const doRun: () => Promise<any> = async () => {
-      // Execute the user code
+      // Execute the user code, wrapping with run interceptor hooks
       const startTime = Date.now();
       let res: T;
       let err;
       try {
-        res = await action();
+        await this.runInterceptor(name ?? "", async () => {
+          res = await action();
+        });
       } catch (e) {
         err = ensureError(e, this.asTerminalError);
       }

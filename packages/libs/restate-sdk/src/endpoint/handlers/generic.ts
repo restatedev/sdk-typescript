@@ -63,6 +63,12 @@ import {
   tryCreateContextualLogger,
 } from "./utils.js";
 import { destroyLogger, registerLogger } from "./core_logging.js";
+import type {
+  Hooks,
+  HooksProvider,
+  AttemptResult,
+  HookContext,
+} from "../../hooks.js";
 
 export function createRestateHandler(
   endpoint: Endpoint,
@@ -244,7 +250,8 @@ class RestateHandlerImpl implements RestateHandler {
       extraArgs,
       additionalContext,
       this.endpoint.journalValueCodec,
-      this.endpoint.loggerTransport
+      this.endpoint.loggerTransport,
+      this.endpoint.hooksProviders
     );
   }
 }
@@ -266,7 +273,8 @@ class RestateInvokeResponse implements RestateResponse {
     private readonly journalValueCodecInit:
       | Promise<JournalValueCodec>
       | undefined,
-    private readonly loggerTransport: LoggerTransport
+    private readonly loggerTransport: LoggerTransport,
+    private readonly endpointHooksProviders: HooksProvider[]
   ) {
     this.loggerId = Math.floor(Math.random() * 4_294_967_295 /* u32::MAX */);
     const isJournalCodecDefined = this.journalValueCodecInit !== undefined;
@@ -357,6 +365,11 @@ class RestateInvokeResponse implements RestateResponse {
       // Get input from coreVm to build the request object
       const input = this.coreVm.sys_input();
       const invocationRequest: Request = {
+        target: {
+          service: this.service.name(),
+          handler: this.handler.name(),
+          key: input.key || undefined,
+        },
         id: input.invocation_id,
         headers: input.headers.reduce((headers, { key, value }) => {
           headers.set(key, value);
@@ -440,7 +453,13 @@ class RestateInvokeResponse implements RestateResponse {
     // We await invocationEndPromise instead, which works as follows:
     // * In the happy path, that is no errors, invocationEndPromise gets resolved by the line below in this finally branch
     // * In the transient error case that happens within the handler, invocationEndPromise gets resolved by the ContextImpl itself, unblocking the await line below
-    void startUserHandler(ctx, this.handler, journalValueCodec).finally(() => {
+    void startUserHandler(
+      ctx,
+      this.service,
+      this.handler,
+      journalValueCodec,
+      [...this.endpointHooksProviders, ...this.handler.hooksProviders()]
+    ).finally(() => {
       invocationEndPromise.resolve();
     });
     await invocationEndPromise.promise;
@@ -468,37 +487,71 @@ async function bufferJournalReplayInCoreVm(
 
 async function startUserHandler(
   ctx: ContextImpl,
+  service: Component,
   handler: ComponentHandler,
-  journalValueCodec: JournalValueCodec
+  journalValueCodec: JournalValueCodec,
+  hooksProviders: HooksProvider[]
 ) {
+  const hooks: Hooks[] = [];
+  let attemptResult: AttemptResult | undefined;
   try {
     try {
-      const decodedInput = await journalValueCodec
-        .decode(ctx.request().body)
-        .catch((e) =>
-          // Re-throw as terminal error, to fail on input errors
-          Promise.reject(
-            new TerminalError(
-              `Failed to decode input using journal value codec: ${
-                ensureError(e).message
-              }`,
-              {
-                errorCode: 400,
-              }
+      // Build HookContext for hook providers
+      const request = ctx.request();
+      const hookContext: HookContext = {
+        serviceName: service.name(),
+        handlerName: handler.name(),
+        key: request.target.key,
+        invocationId: request.id,
+        request,
+      };
+
+      // Instantiate hooks from providers.
+      // If a provider throws, the same rules as handler failures apply:
+      // TerminalError → terminate invocation, other errors → retry.
+      for (const provider of hooksProviders) {
+        hooks.push(provider(hookContext));
+      }
+
+      // Compose interceptor.handler into a single interceptor (first = outermost)
+      const handlerInterceptor = composeInterceptors(
+        hooks.map((h) => h.interceptor?.handler).filter(isDefined)
+      );
+
+      // Compose interceptor.run for ctx.run() calls
+      ctx.setRunInterceptor(
+        composeInterceptors(hooks.map((h) => h.interceptor?.run).filter(isDefined))
+      );
+
+      await handlerInterceptor(async () => {
+        const decodedInput = await journalValueCodec
+          .decode(ctx.request().body)
+          .catch((e) =>
+            // Re-throw as terminal error, to fail on input errors
+            Promise.reject(
+              new TerminalError(
+                `Failed to decode input using journal value codec: ${
+                  ensureError(e).message
+                }`,
+                {
+                  errorCode: 400,
+                }
+              )
             )
-          )
-        );
+          );
 
-      // Then run user code
-      const output = await handler.invoke(ctx, decodedInput);
+        // Then run user code
+        const output = await handler.invoke(ctx, decodedInput);
 
-      // Encode user code output
-      const encodedOutput = journalValueCodec.encode(output);
+        // Encode user code output
+        const encodedOutput = journalValueCodec.encode(output);
 
-      // Write out and end
-      ctx.coreVm.sys_write_output_success(encodedOutput);
-      ctx.coreVm.sys_end();
-      ctx.vmLogger.info("Invocation completed successfully.");
+        // Write out and end
+        ctx.coreVm.sys_write_output_success(encodedOutput);
+        ctx.coreVm.sys_end();
+        ctx.vmLogger.info("Invocation completed successfully.");
+      });
+      attemptResult = { type: "success" };
     } catch (e) {
       // Convert to Error
       const error = ensureError(e, handler.executionOptions.asTerminalError);
@@ -507,6 +560,7 @@ async function startUserHandler(
       // If TerminalError, handle it here.
       // NOTE: this can still fail, that's why the double catch!
       if (error instanceof TerminalError) {
+        attemptResult = { type: "terminalError", error };
         ctx.coreVm.sys_write_output_failure({
           code: error.code,
           message: error.message,
@@ -518,12 +572,16 @@ async function startUserHandler(
         return;
       }
 
+      attemptResult = { type: "retryableError", error };
       // Not a terminal error, have the below catch handle it
       throw error;
     }
   } catch (e) {
     // Handle any other error now (retryable errors)
     const error = ensureError(e);
+    if (attemptResult === undefined) {
+      attemptResult = { type: "retryableError", error };
+    }
     if (error instanceof RetryableError) {
       ctx.coreVm.notify_error_with_delay_override(
         error.message,
@@ -534,6 +592,23 @@ async function startUserHandler(
       );
     } else {
       ctx.coreVm.notify_error(error.message, error.stack);
+    }
+  } finally {
+    // Call listener.attemptEnd for all hooks if we have a result.
+    // On suspension, attemptResult is undefined — skip listeners.
+    if (attemptResult !== undefined) {
+      for (const hook of hooks) {
+        if (hook.listener?.attemptEnd) {
+          try {
+            hook.listener.attemptEnd(attemptResult);
+          } catch (e) {
+            ctx.vmLogger.warn(
+              "Error in attemptEnd listener, this will not be recorded: " +
+                ensureError(e).message
+            );
+          }
+        }
+      }
     }
   }
 }
@@ -611,6 +686,31 @@ function isAbortErrorOnWrite(error: Error) {
     (error as { code?: string }).code === "ERR_HTTP2_INVALID_STREAM"
   );
 }
+
+// -- Hook composition utils --------------------------------------------------
+
+type InterceptorFn<Args extends unknown[]> = (
+  ...args: [...Args, () => Promise<void>]
+) => Promise<void>;
+
+function composeInterceptors<Args extends unknown[]>(
+  interceptors: InterceptorFn<Args>[]
+): InterceptorFn<Args> {
+  return interceptors.reduceRight<InterceptorFn<Args>>(
+    (innerInterceptor, interceptor) => (...args) => {
+      const context = args.slice(0, -1) as unknown as Args;
+      const callback = args.at(-1) as () => Promise<void>;
+      return interceptor(...context, () => innerInterceptor(...context, callback));
+    },
+    (...args) => (args.at(-1) as () => Promise<void>)()
+  );
+}
+
+function isDefined<T>(value: T | undefined | null): value is T {
+  return value != null;
+}
+
+// -- Logging utils -----------------------------------------------------------
 
 function restateLogLevelToWasmLogLevel(level: RestateLogLevel): vm.LogLevel {
   switch (level) {

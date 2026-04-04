@@ -9,6 +9,7 @@ export function withOptions<E extends RestateEndpointBase<E>>(
     logger,
     services,
     journalValueCodecProvider,
+    hooks,
   }: EndpointOptions
 ): E {
   let endpointWithOptions = endpoint;
@@ -27,6 +28,9 @@ export function withOptions<E extends RestateEndpointBase<E>>(
   }
   if (logger) {
     endpointWithOptions = endpointWithOptions.setLogger(logger);
+  }
+  if (hooks && hooks.length > 0) {
+    endpointWithOptions = endpointWithOptions.setHooksProviders(hooks);
   }
 
   return services.reduce((results, service) => {
