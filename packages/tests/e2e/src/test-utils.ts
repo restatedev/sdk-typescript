@@ -132,8 +132,11 @@ export function recordHookEvents(tag = "hook"): HooksProvider {
       interceptor: {
         handler: async (next) => {
           pushEvent(id, `${tag}:handler:before`);
-          await next();
-          pushEvent(id, `${tag}:handler:after`);
+          try {
+            await next();
+          } finally {
+            pushEvent(id, `${tag}:handler:after`);
+          }
         },
         run: async (name, next) => {
           pushEvent(id, `${tag}:run:${name}:before`);
@@ -193,6 +196,54 @@ export function throwOnFirstRunIntercept(targetService: string): HooksProvider {
           if (nextAttempt(ctx.invocationId) === 1)
             throw new Error("run interceptor retryable error");
           await next();
+        },
+      },
+    };
+  };
+}
+
+/** Hook whose handler interceptor throws a terminal error */
+export function throwTerminalOnHandlerIntercept(targetService: string): HooksProvider {
+  return (ctx: HookContext) => {
+    if (ctx.serviceName !== targetService) return {};
+    return {
+      interceptor: {
+        handler: async (next) => {
+          await next();
+          throw new restate.TerminalError("interceptor terminal error");
+        },
+      },
+    };
+  };
+}
+
+/** Hook whose run interceptor throws a terminal error */
+export function throwTerminalOnRunIntercept(targetService: string): HooksProvider {
+  return (ctx: HookContext) => {
+    if (ctx.serviceName !== targetService) return {};
+    return {
+      interceptor: {
+        run: async (_name, next) => {
+          await next();
+          throw new restate.TerminalError("run interceptor terminal error");
+        },
+      },
+    };
+  };
+}
+
+/** Hook whose run interceptor catches and swallows errors from next() */
+export function swallowRunError(targetService: string): HooksProvider {
+  return (ctx: HookContext) => {
+    if (ctx.serviceName !== targetService) return {};
+    return {
+      interceptor: {
+        run: async (_name, next) => {
+          try {
+            await next();
+          } catch {
+            // swallowed
+          }
         },
       },
     };

@@ -17,6 +17,9 @@ import {
   throwOnFirstHookProviderCall,
   throwOnFirstHandlerIntercept,
   throwOnFirstRunIntercept,
+  throwTerminalOnHandlerIntercept,
+  throwTerminalOnRunIntercept,
+  swallowRunError,
   throwOnAttemptEnd,
   invokeExpectingError,
   fastRetry,
@@ -98,6 +101,30 @@ function hooksSuite(level: HookLevel) {
           throw new restate.TerminalError("run fail");
         });
         return { invocationId: ctx.request().id };
+      },
+    });
+
+    const nonExistentService = restate.service({
+      name: "NonExistent",
+      handlers: {
+        call: async (_ctx: restate.Context, _input: string) =>
+          Promise.resolve(""),
+      },
+    });
+    const callNonExistentService = createService({
+      name: `${level}_CallNonExistent`,
+      ...hooksAt([recordHookEvents()]),
+      handler: async (ctx, _) => {
+        const client = ctx.serviceClient(nonExistentService);
+        await client.call("");
+        return { invocationId: ctx.request().id };
+      },
+      options: {
+        retryPolicy: {
+          initialInterval: 10,
+          maxAttempts: 2,
+          onMaxAttempts: "kill",
+        },
       },
     });
 
@@ -226,6 +253,41 @@ function hooksSuite(level: HookLevel) {
       options: fastRetry,
     });
 
+    const handlerInterceptTerminalServiceName = `${level}_HandlerInterceptTerminal`;
+    const handlerInterceptTerminalService = createService({
+      name: handlerInterceptTerminalServiceName,
+      ...hooksAt([
+        recordHookEvents(),
+        throwTerminalOnHandlerIntercept(handlerInterceptTerminalServiceName),
+      ]),
+      handler: (ctx, _) => Promise.resolve({ invocationId: ctx.request().id }),
+    });
+
+    const runInterceptTerminalServiceName = `${level}_RunInterceptTerminal`;
+    const runInterceptTerminalService = createService({
+      name: runInterceptTerminalServiceName,
+      ...hooksAt([
+        recordHookEvents(),
+        throwTerminalOnRunIntercept(runInterceptTerminalServiceName),
+      ]),
+      handler: async (ctx, _) => {
+        await ctx.run("step", () => "done");
+        return { invocationId: ctx.request().id };
+      },
+    });
+
+    const swallowRunErrorServiceName = `${level}_SwallowRunError`;
+    const swallowRunErrorService = createService({
+      name: swallowRunErrorServiceName,
+      ...hooksAt([recordHookEvents(), swallowRunError(swallowRunErrorServiceName)]),
+      handler: async (ctx, _) => {
+        await ctx.run("step", () => {
+          throw new restate.TerminalError("run fail");
+        });
+        return { invocationId: ctx.request().id };
+      },
+    });
+
     const listenerErrorServiceName = `${level}_ListenerError`;
     const listenerErrorService = createService({
       name: listenerErrorServiceName,
@@ -264,6 +326,7 @@ function hooksSuite(level: HookLevel) {
         retryWithReplayedRunService,
         runRetryableService,
         runTerminalService,
+        callNonExistentService,
         retryTwiceSuccessService,
         retryTwiceTerminalService,
         concurrentRunService,
@@ -273,6 +336,9 @@ function hooksSuite(level: HookLevel) {
         providerErrorService,
         interceptorErrorService,
         runInterceptorErrorService,
+        handlerInterceptTerminalService,
+        runInterceptTerminalService,
+        swallowRunErrorService,
         listenerErrorService,
         asyncContextService,
       ];
@@ -286,6 +352,9 @@ function hooksSuite(level: HookLevel) {
                 throwOnFirstHookProviderCall(providerErrorServiceName),
                 throwOnFirstHandlerIntercept(interceptorErrorServiceName),
                 throwOnFirstRunIntercept(runInterceptorErrorServiceName),
+                throwTerminalOnHandlerIntercept(handlerInterceptTerminalServiceName),
+                throwTerminalOnRunIntercept(runInterceptTerminalServiceName),
+                swallowRunError(swallowRunErrorServiceName),
                 throwOnAttemptEnd(listenerErrorServiceName),
                 propagateAsyncContext,
               ],
@@ -337,6 +406,7 @@ function hooksSuite(level: HookLevel) {
       expect(events).toEqual([
         // attempt 1: retryable error
         "hook:handler:before",
+        "hook:handler:after",
         "hook:attemptEnd:retryableError",
         // attempt 2: success
         "hook:handler:before",
@@ -354,6 +424,7 @@ function hooksSuite(level: HookLevel) {
       );
       expect(events).toEqual([
         "hook:handler:before",
+        "hook:handler:after",
         "hook:attemptEnd:terminalError",
       ]);
     });
@@ -400,6 +471,7 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:before",
         "hook:run:step-1:before",
         "hook:run:step-1:after",
+        "hook:handler:after",
         "hook:attemptEnd:retryableError",
         // attempt 2: step-1 replayed (no interceptor), step-2 executes
         "hook:handler:before",
@@ -418,7 +490,7 @@ function hooksSuite(level: HookLevel) {
       const events = getEvents(invocationId);
       expect(events).toEqual([
         // attempt 1: run closure throws retryable error — handled internally,
-        // no attemptEnd (the run failure is retried by the runtime)
+        // no attemptEnd, no handler:after (the run failure restarts the invocation)
         "hook:handler:before",
         "hook:run:step:before",
         "hook:run:step:error",
@@ -442,7 +514,24 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:before",
         "hook:run:step:before",
         "hook:run:step:error",
+        "hook:handler:after",
         "hook:attemptEnd:terminalError",
+      ]);
+    });
+
+    it("call to non-existent service — no handler:after or attemptEnd", async () => {
+      const client = clients
+        .connect({ url: env.baseUrl() })
+        .serviceClient(callNonExistentService);
+      const { events } = await invokeExpectingError(
+        () => client.invoke("") as Promise<unknown>
+      );
+      // The call error is handled internally by the SDK (like a run retryable
+      // error). The handler interceptor is abandoned — no handler:after.
+      // After maxAttempts the invocation is killed — no attemptEnd.
+      expect(events).toEqual([
+        "hook:handler:before",
+        "hook:handler:before",
       ]);
     });
 
@@ -471,8 +560,9 @@ function hooksSuite(level: HookLevel) {
       const events = getEvents(invocationId);
       expect(events).toEqual([
         // attempt 1: recording hook's handler:before fires (outermost),
-        // then error hook's interceptor throws — handler:after skipped
+        // then error hook's interceptor throws — handler:after now fires (finally)
         "hook:handler:before",
+        "hook:handler:after",
         "hook:attemptEnd:retryableError",
         // attempt 2: error hook's interceptor succeeds
         "hook:handler:before",
@@ -489,11 +579,62 @@ function hooksSuite(level: HookLevel) {
       const events = getEvents(invocationId);
       expect(events).toEqual([
         // attempt 1: handler starts, run interceptor throws — handled internally,
-        // no attemptEnd (the run failure is retried by the runtime)
+        // no attemptEnd, no handler:after (the run failure restarts the invocation)
         "hook:handler:before",
         "hook:run:step:before",
         "hook:run:step:error",
         // attempt 2: run interceptor succeeds, run executes
+        "hook:handler:before",
+        "hook:run:step:before",
+        "hook:run:step:after",
+        "hook:handler:after",
+        "hook:attemptEnd:success",
+      ]);
+    });
+
+    it("handler interceptor terminal error after next()", async () => {
+      const client = clients
+        .connect({ url: env.baseUrl() })
+        .serviceClient(handlerInterceptTerminalService);
+      const { events } = await invokeExpectingError(
+        () => client.invoke("") as Promise<unknown>
+      );
+      expect(events).toEqual([
+        // recording hook's handler:before fires, then terminal hook runs
+        // next() (handler completes), then throws — recording hook's
+        // handler:after now fires (finally)
+        "hook:handler:before",
+        "hook:handler:after",
+        "hook:attemptEnd:terminalError",
+      ]);
+    });
+
+    it("run interceptor terminal error after next()", async () => {
+      const client = clients
+        .connect({ url: env.baseUrl() })
+        .serviceClient(runInterceptTerminalService);
+      const { events } = await invokeExpectingError(
+        () => client.invoke("") as Promise<unknown>
+      );
+      expect(events).toEqual([
+        // run executes successfully, then run interceptor throws terminal after next()
+        "hook:handler:before",
+        "hook:run:step:before",
+        "hook:run:step:error",
+        "hook:handler:after",
+        "hook:attemptEnd:terminalError",
+      ]);
+    });
+
+    it("run interceptor swallows error — run completes without error", async () => {
+      const client = clients
+        .connect({ url: env.baseUrl() })
+        .serviceClient(swallowRunErrorService);
+      const { invocationId } = await client.invoke("");
+      const events = getEvents(invocationId);
+      expect(events).toEqual([
+        // The run closure throws TerminalError, but the swallow hook
+        // catches it. The recording hook sees the run complete without error.
         "hook:handler:before",
         "hook:run:step:before",
         "hook:run:step:after",
@@ -524,8 +665,10 @@ function hooksSuite(level: HookLevel) {
       const events = getEvents(invocationId);
       expect(events).toEqual([
         "hook:handler:before",
+        "hook:handler:after",
         "hook:attemptEnd:retryableError",
         "hook:handler:before",
+        "hook:handler:after",
         "hook:attemptEnd:retryableError",
         "hook:handler:before",
         "hook:handler:after",
@@ -542,10 +685,13 @@ function hooksSuite(level: HookLevel) {
       );
       expect(events).toEqual([
         "hook:handler:before",
+        "hook:handler:after",
         "hook:attemptEnd:retryableError",
         "hook:handler:before",
+        "hook:handler:after",
         "hook:attemptEnd:retryableError",
         "hook:handler:before",
+        "hook:handler:after",
         "hook:attemptEnd:terminalError",
       ]);
     });
@@ -565,6 +711,7 @@ function hooksSuite(level: HookLevel) {
         anyRunBefore,
         anyRunBefore,
         "hook:run:run-1:error",
+        // no handler:after — run failure restarts the invocation
         // attempt 2: both start, run-1 succeeds at 100ms, run-2 fails at 300ms
         // (run-2:error from attempt 1 also arrives)
         "hook:handler:before",
@@ -573,6 +720,7 @@ function hooksSuite(level: HookLevel) {
         "hook:run:run-2:error",
         "hook:run:run-1:after",
         "hook:run:run-2:error",
+        // no handler:after — run failure restarts the invocation
         // attempt 3: run-1 replayed, run-2 succeeds (instant)
         "hook:handler:before",
         "hook:run:run-2:before",
@@ -590,7 +738,7 @@ function hooksSuite(level: HookLevel) {
       const events = getEvents(invocationId);
       expect(events).toEqual([
         // attempt 1: runs before-sleep, then suspends (inactivityTimeout: 100ms)
-        // — no attemptEnd (suspension is not an error or success)
+        // — no attemptEnd, no handler:after (handler is suspended mid-execution)
         "hook:handler:before",
         "hook:run:before-sleep:before",
         "hook:run:before-sleep:after",
@@ -725,7 +873,13 @@ describe("hooks composition ordering", { timeout: 120_000 }, () => {
       "s1:run:step-1:after",
       "e2:run:step-1:after",
       "e1:run:step-1:after",
-      // error propagates — handler:after not fired
+      // handler:after unwinds innermost-first (finally block)
+      "h2:handler:after",
+      "h1:handler:after",
+      "s2:handler:after",
+      "s1:handler:after",
+      "e2:handler:after",
+      "e1:handler:after",
       // listeners fire in registration order
       "e1:attemptEnd:retryableError",
       "e2:attemptEnd:retryableError",

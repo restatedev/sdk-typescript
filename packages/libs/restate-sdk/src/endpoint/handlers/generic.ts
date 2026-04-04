@@ -453,13 +453,10 @@ class RestateInvokeResponse implements RestateResponse {
     // We await invocationEndPromise instead, which works as follows:
     // * In the happy path, that is no errors, invocationEndPromise gets resolved by the line below in this finally branch
     // * In the transient error case that happens within the handler, invocationEndPromise gets resolved by the ContextImpl itself, unblocking the await line below
-    void startUserHandler(
-      ctx,
-      this.service,
-      this.handler,
-      journalValueCodec,
-      [...this.endpointHooksProviders, ...this.handler.hooksProviders()]
-    ).finally(() => {
+    void startUserHandler(ctx, this.service, this.handler, journalValueCodec, [
+      ...this.endpointHooksProviders,
+      ...this.handler.hooksProviders(),
+    ]).finally(() => {
       invocationEndPromise.resolve();
     });
     await invocationEndPromise.promise;
@@ -520,7 +517,9 @@ async function startUserHandler(
 
       // Compose interceptor.run for ctx.run() calls
       ctx.setRunInterceptor(
-        composeInterceptors(hooks.map((h) => h.interceptor?.run).filter(isDefined))
+        composeInterceptors(
+          hooks.map((h) => h.interceptor?.run).filter(isDefined)
+        )
       );
 
       await handlerInterceptor(async () => {
@@ -697,11 +696,14 @@ function composeInterceptors<Args extends unknown[]>(
   interceptors: InterceptorFn<Args>[]
 ): InterceptorFn<Args> {
   return interceptors.reduceRight<InterceptorFn<Args>>(
-    (innerInterceptor, interceptor) => (...args) => {
-      const context = args.slice(0, -1) as unknown as Args;
-      const callback = args.at(-1) as () => Promise<void>;
-      return interceptor(...context, () => innerInterceptor(...context, callback));
-    },
+    (innerInterceptor, interceptor) =>
+      (...args) => {
+        const context = args.slice(0, -1) as unknown as Args;
+        const callback = args.at(-1) as () => Promise<void>;
+        return interceptor(...context, () =>
+          innerInterceptor(...context, callback)
+        );
+      },
     (...args) => (args.at(-1) as () => Promise<void>)()
   );
 }
