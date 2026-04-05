@@ -5,13 +5,16 @@
   "type": "module",
   "scripts": {
     "dev": "tsx src/app.ts",
+    "dev:req-res": "MODE=req-res tsx src/app.ts",
     "infra": "docker compose up -d",
     "infra:down": "docker compose down",
     "register": "curl -s localhost:9070/deployments -H 'content-type: application/json' -d '{\"uri\": \"http://host.docker.internal:9080\"}'",
+    "register:req-res": "curl -s localhost:9070/deployments -H 'content-type: application/json' -d '{\"uri\": \"http://host.docker.internal:9080\", \"use_http_11\": true}'",
     "invoke": "curl -s localhost:8080/OrderProcessor/process -H 'content-type: application/json' -d '\"order-123\"'"
   },
   "dependencies": {
     "@restatedev/restate-sdk": "workspace:*",
+    "@whatwg-node/server": "^0.9.0",
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/resources": "^1.30.0",
     "@opentelemetry/semantic-conventions": "^1.28.0",

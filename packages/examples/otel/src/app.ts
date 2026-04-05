@@ -1,4 +1,9 @@
-import { service, serve, TerminalError, type Context } from "@restatedev/restate-sdk";
+import http2 from "node:http2";
+import { createServer } from "node:http";
+import { createServerAdapter } from "@whatwg-node/server";
+import { service, TerminalError, type Context } from "@restatedev/restate-sdk";
+import { createEndpointHandler as createNodeHandler } from "@restatedev/restate-sdk";
+import { createEndpointHandler as createFetchHandler } from "@restatedev/restate-sdk/fetch";
 import { otelTracingHook, shutdownTracing } from "./otel-hooks.js";
 
 // ---------------------------------------------------------------------------
@@ -102,22 +107,37 @@ const orderProcessor = service({
 // Start the endpoint
 // ---------------------------------------------------------------------------
 
-serve({
-  services: [orderProcessor, paymentService],
-  hooks: [otelTracingHook],
-  port: 9080,
-});
+const PORT = 9080;
+const mode = process.env.MODE === "req-res" ? "req-res" : "bidi";
+
+const services = [orderProcessor, paymentService];
+const hooks = [otelTracingHook];
+
+if (mode === "req-res") {
+  // Request-response mode — fetch handler over HTTP/1.1
+  const fetch = createFetchHandler({ services, hooks, bidirectional: false });
+  createServer(createServerAdapter(fetch)).listen(PORT);
+} else {
+  // Bidirectional mode — HTTP/2 with streaming (default)
+  http2.createServer(createNodeHandler({ services, hooks })).listen(PORT);
+}
 
 // Flush pending spans on shutdown
 process.on("SIGTERM", () => shutdownTracing().then(() => process.exit(0)));
 process.on("SIGINT", () => shutdownTracing().then(() => process.exit(0)));
 
+const filter = "--filter @restatedev/example-otel";
+const registerCmd = mode === "req-res" ? `pnpm ${filter} register:req-res` : `pnpm ${filter} register`;
+
 console.log(`
-  Service endpoint listening on :9080
+  Service endpoint listening on :${PORT} (${mode})
 
   Quick start:
-    1. pnpm infra              # Start Jaeger + Restate
-    2. pnpm register           # Register this deployment
-    3. pnpm invoke             # Process an order
-    4. http://localhost:16686   # Open Jaeger UI
+    1. pnpm ${filter} infra        # Start Jaeger + Restate
+    2. ${registerCmd}   # Register this deployment
+    3. pnpm ${filter} invoke       # Process an order
+    4. http://localhost:16686                         # Open Jaeger UI
+
+  To run in request-response mode:
+    pnpm ${filter} dev:req-res
 `);
