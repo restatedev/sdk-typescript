@@ -99,7 +99,6 @@ export class ContextImpl
     runner: () => Promise<void>
   ) => Promise<void>;
   private readonly _abandonmentSignal = new CompletablePromise<never>();
-  private _abandonmentDisarmed = false;
 
   constructor(
     readonly coreVm: vm.WasmVM,
@@ -159,20 +158,9 @@ export class ContextImpl
   /**
    * Signal that the current attempt has been abandoned.
    * Rejects the abandonment signal, causing any racing interceptor next() to throw.
-   * No-op if already disarmed (handler completed successfully).
    */
   private abandonAttempt(cause: Error) {
-    if (this._abandonmentDisarmed) return;
     this._abandonmentSignal.reject(new AttemptAbandonedError(cause.message));
-  }
-
-  /**
-   * Prevent future abandonAttempt() calls from firing.
-   * Called after the handler has completed successfully to avoid a late
-   * abandonment signal winning a Promise.race against a settled next().
-   */
-  disarmAbandonment() {
-    this._abandonmentDisarmed = true;
   }
 
   isProcessing(): boolean {

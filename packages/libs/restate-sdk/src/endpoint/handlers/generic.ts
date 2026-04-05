@@ -526,6 +526,7 @@ async function startUserHandler(
         )
       );
 
+      let encodedOutput: Uint8Array | undefined;
       await raceWithAbandonment(
         ctx,
         handlerInterceptor
@@ -550,25 +551,17 @@ async function startUserHandler(
         const output = await handler.invoke(ctx, decodedInput);
 
         // Encode user code output
-        const encodedOutput = journalValueCodec.encode(output);
-
-        // Write out and end
-        ctx.coreVm.sys_write_output_success(encodedOutput);
-        ctx.coreVm.sys_end();
-        // Lock in the result — interceptor errors after this point
-        // must not override it, since the VM already has success.
-        attemptResult = { type: "success" };
-        ctx.disarmAbandonment();
-        ctx.vmLogger.info("Invocation completed successfully.");
+        encodedOutput = journalValueCodec.encode(output);
       });
-    } catch (e) {
-      // If attemptResult is already set (e.g. success committed via sys_end),
-      // an interceptor error after next() must not override it.
-      if (attemptResult !== undefined) {
-        logError(ctx.vmLogger, e);
-        return;
-      }
 
+      // Interceptor chain completed without error — commit the result.
+      // sys_end() is called here (after interceptors) so that interceptor
+      // errors after next() correctly prevent the invocation from succeeding.
+      ctx.coreVm.sys_write_output_success(encodedOutput!);
+      ctx.coreVm.sys_end();
+      attemptResult = { type: "success" };
+      ctx.vmLogger.info("Invocation completed successfully.");
+    } catch (e) {
       // Convert to Error
       const error = ensureError(e, handler.executionOptions.asTerminalError);
 
@@ -592,7 +585,6 @@ async function startUserHandler(
           ),
         });
         ctx.coreVm.sys_end();
-        ctx.disarmAbandonment();
         return;
       }
 

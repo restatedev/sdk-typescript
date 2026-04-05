@@ -19,13 +19,43 @@ export interface HookContext {
 }
 
 // ---- Interceptor ----
-// Wraps real executions only (skipped during replay).
-// Call `next()` to proceed. Code before/after `next()`
-// runs around the operation. Side-effect only - return
-// value is ignored by the SDK.
 
+/**
+ * Interceptors wrap handler and ctx.run() execution. They are part of the
+ * invocation — anything that happens inside them (including after `next()`)
+ * affects the invocation outcome.
+ *
+ * - Errors thrown at any point (before or after `next()`) will fail or retry the invocation.
+ * - Cannot modify the handler's input or return value (`void` signature).
+ * - Skipped during journal replay — only fires for real executions.
+ * - `next()` must be called exactly once.
+ *
+ * @example
+ * ```ts
+ * interceptor: {
+ *   handler: async (next) => {
+ *     console.log("before handler");
+ *     await next();
+ *     console.log("after handler");
+ *   },
+ *   run: async (name, next) => {
+ *     const span = tracer.startSpan(name);
+ *     try {
+ *       await next();
+ *     } catch (e) {
+ *       span.recordException(e);
+ *       throw e;
+ *     } finally {
+ *       span.end();
+ *     }
+ *   },
+ * }
+ * ```
+ */
 export interface Interceptor {
+  /** Wraps the entire handler invocation. */
   handler?: (next: () => Promise<void>) => Promise<void>;
+  /** Wraps each `ctx.run()` call. `name` is the run's label. */
   run?: (name: string, next: () => Promise<void>) => Promise<void>;
 }
 

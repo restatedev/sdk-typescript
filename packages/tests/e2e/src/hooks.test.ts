@@ -517,7 +517,7 @@ function hooksSuite(level: HookLevel) {
       const events = getEvents(invocationId);
       expect(events).toEqual([
         // attempt 1: run closure throws retryable error — attempt abandoned,
-        // interceptor chain unwinds cleanly via abandonment signal
+        // handler:after and attemptEnd still fire
         "hook:handler:before",
         "hook:run:step:before",
         "hook:run:step:error",
@@ -630,7 +630,7 @@ function hooksSuite(level: HookLevel) {
       const events = getEvents(invocationId);
       expect(events).toEqual([
         // attempt 1: handler starts, run interceptor throws — attempt abandoned,
-        // interceptor chain unwinds cleanly via abandonment signal
+        // handler:after and attemptEnd still fire
         "hook:handler:before",
         "hook:run:step:before",
         "hook:run:step:error",
@@ -656,17 +656,15 @@ function hooksSuite(level: HookLevel) {
         () => client.invoke("") as Promise<unknown>
       );
       expect(events).toEqual([
-        // recording hook's handler:before fires, then terminal hook runs
-        // next() (handler completes successfully), then throws.
-        // The interceptor error does not override the committed success —
-        // attemptEnd reports the actual outcome.
+        // Handler completes, then interceptor throws terminal error
+        // after next(). The error fails the invocation.
         "hook:handler:before",
         "hook:handler:after",
-        "hook:attemptEnd:success",
+        "hook:attemptEnd:terminalError",
       ]);
       expect(
         await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId!)
-      ).toBe("succeeded");
+      ).toBe("failed");
     });
 
     it("run interceptor terminal error after next()", async () => {
@@ -677,10 +675,8 @@ function hooksSuite(level: HookLevel) {
         () => client.invoke("") as Promise<unknown>
       );
       expect(events).toEqual([
-        // run executes successfully, then run interceptor throws terminal
-        // after next(). Unlike the handler interceptor case, the error
-        // propagates up and prevents sys_end() from being reached —
-        // the invocation fails.
+        // Run completes, then run interceptor throws terminal error
+        // after next(). The error fails the invocation.
         "hook:handler:before",
         "hook:run:step:before",
         "hook:run:step:error",
@@ -827,7 +823,7 @@ function hooksSuite(level: HookLevel) {
       const events = getEvents(invocationId);
       expect(events).toEqual([
         // attempt 1: runs before-sleep, then suspends (inactivityTimeout: 100ms)
-        // — abandonment signal unwinds the interceptor chain cleanly
+        // — handler:after and attemptEnd still fire
         "hook:handler:before",
         "hook:run:before-sleep:before",
         "hook:run:before-sleep:after",
