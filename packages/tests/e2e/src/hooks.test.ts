@@ -396,7 +396,9 @@ function hooksSuite(level: HookLevel) {
                   handlerInterceptTerminalServiceName
                 ),
                 throwTerminalOnRunIntercept(runInterceptTerminalServiceName),
-                throwRetryableAfterHandlerNext(handlerInterceptRetryableAfterNextName),
+                throwRetryableAfterHandlerNext(
+                  handlerInterceptRetryableAfterNextName
+                ),
                 throwRetryableAfterRunNext(runInterceptRetryableAfterNextName),
                 swallowRunError(swallowRunErrorServiceName),
                 throwOnAttemptEnd(listenerErrorServiceName),
@@ -452,7 +454,11 @@ function hooksSuite(level: HookLevel) {
         journalOutput: { value: result },
       });
       expect(
-        await getRunJournalEntry(env.adminAPIBaseUrl(), result.invocationId, "step")
+        await getRunJournalEntry(
+          env.adminAPIBaseUrl(),
+          result.invocationId,
+          "step"
+        )
       ).toMatchObject({ value: "done" });
     });
 
@@ -708,7 +714,9 @@ function hooksSuite(level: HookLevel) {
       ).toMatchObject({
         status: "failed",
         journalOutput: {
-          failure: expect.stringContaining("interceptor terminal error"),
+          failure: expect.stringContaining(
+            "interceptor terminal error"
+          ) as string,
         },
       });
     });
@@ -734,7 +742,9 @@ function hooksSuite(level: HookLevel) {
       ).toMatchObject({
         status: "failed",
         journalOutput: {
-          failure: expect.stringContaining("run interceptor terminal error"),
+          failure: expect.stringContaining(
+            "run interceptor terminal error"
+          ) as string,
         },
       });
     });
@@ -791,7 +801,11 @@ function hooksSuite(level: HookLevel) {
       });
       // The run's journal entry has the correct value despite the retry
       expect(
-        await getRunJournalEntry(env.adminAPIBaseUrl(), result.invocationId, "step")
+        await getRunJournalEntry(
+          env.adminAPIBaseUrl(),
+          result.invocationId,
+          "step"
+        )
       ).toMatchObject({ value: "done" });
     });
 

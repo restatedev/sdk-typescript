@@ -1,4 +1,9 @@
-import { trace, context, propagation, SpanStatusCode } from "@opentelemetry/api";
+import {
+  trace,
+  context,
+  propagation,
+  SpanStatusCode,
+} from "@opentelemetry/api";
 import type { Tracer } from "@opentelemetry/api";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { Resource } from "@opentelemetry/resources";
@@ -7,7 +12,11 @@ import {
   BasicTracerProvider,
   BatchSpanProcessor,
 } from "@opentelemetry/sdk-trace-base";
-import type { HooksProvider, AttemptResult, HookContext } from "@restatedev/restate-sdk";
+import type {
+  HooksProvider,
+  AttemptResult,
+  HookContext,
+} from "@restatedev/restate-sdk";
 
 // Cache TracerProviders per service name so we don't create duplicates.
 const providers = new Map<string, BasicTracerProvider>();
@@ -36,9 +45,7 @@ function getTracerForService(serviceName: string): Tracer {
  * Call this on process exit to avoid losing in-flight traces.
  */
 export async function shutdownTracing(): Promise<void> {
-  await Promise.all(
-    [...providers.values()].map((p) => p.shutdown())
-  );
+  await Promise.all([...providers.values()].map((p) => p.shutdown()));
 }
 
 /**
@@ -64,7 +71,10 @@ export const otelTracingHook: HooksProvider = (ctx: HookContext) => {
     context.active(),
     ctx.request.attemptHeaders,
     {
-      get(carrier: ReadonlyMap<string, string | string[] | undefined>, key: string) {
+      get(
+        carrier: ReadonlyMap<string, string | string[] | undefined>,
+        key: string
+      ) {
         const value = carrier.get(key);
         if (Array.isArray(value)) return value[0];
         return value ?? undefined;

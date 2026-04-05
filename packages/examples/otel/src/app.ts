@@ -79,9 +79,7 @@ const orderProcessor = service({
       ctx.console.log("Order validated:", validated);
 
       // 2. Call another service (demonstrates cross-service tracing)
-      const payment = await ctx
-        .serviceClient(paymentService)
-        .charge(orderId);
+      const payment = await ctx.serviceClient(paymentService).charge(orderId);
       ctx.console.log("Payment charged:", payment);
 
       // 3. Sleep — longer than the inactivity timeout, guarantees suspension
@@ -127,7 +125,10 @@ process.on("SIGTERM", () => shutdownTracing().then(() => process.exit(0)));
 process.on("SIGINT", () => shutdownTracing().then(() => process.exit(0)));
 
 const filter = "--filter @restatedev/example-otel";
-const registerCmd = mode === "req-res" ? `pnpm ${filter} register:req-res` : `pnpm ${filter} register`;
+const registerCmd =
+  mode === "req-res"
+    ? `pnpm ${filter} register:req-res`
+    : `pnpm ${filter} register`;
 
 console.log(`
   Service endpoint listening on :${PORT} (${mode})

@@ -334,7 +334,7 @@ export async function invokeExpectingError(
 export const fastRetry = { retryPolicy: { initialInterval: 10 } };
 
 export interface InvocationOutcome {
-  status: "succeeded" | "failed" | "not_found" | string;
+  status: string;
   /** The Output journal entry — either { value } or { failure } */
   journalOutput?: { value?: unknown; failure?: string };
 }
