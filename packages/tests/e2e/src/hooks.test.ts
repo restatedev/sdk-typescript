@@ -224,7 +224,10 @@ function hooksSuite(level: HookLevel) {
     const providerErrorServiceName = `${level}_ProviderError`;
     const providerErrorService = createService({
       name: providerErrorServiceName,
-      ...hooksAt([recordHookEvents(), throwOnFirstHookProviderCall(providerErrorServiceName)]),
+      ...hooksAt([
+        recordHookEvents(),
+        throwOnFirstHookProviderCall(providerErrorServiceName),
+      ]),
       handler: (ctx, _) => Promise.resolve({ invocationId: ctx.request().id }),
       options: fastRetry,
     });
@@ -280,7 +283,10 @@ function hooksSuite(level: HookLevel) {
     const swallowRunErrorServiceName = `${level}_SwallowRunError`;
     const swallowRunErrorService = createService({
       name: swallowRunErrorServiceName,
-      ...hooksAt([recordHookEvents(), swallowRunError(swallowRunErrorServiceName)]),
+      ...hooksAt([
+        recordHookEvents(),
+        swallowRunError(swallowRunErrorServiceName),
+      ]),
       handler: async (ctx, _) => {
         await ctx.run("step", () => {
           throw new restate.TerminalError("run fail");
@@ -292,7 +298,10 @@ function hooksSuite(level: HookLevel) {
     const listenerErrorServiceName = `${level}_ListenerError`;
     const listenerErrorService = createService({
       name: listenerErrorServiceName,
-      ...hooksAt([recordHookEvents(), throwOnAttemptEnd(listenerErrorServiceName)]),
+      ...hooksAt([
+        recordHookEvents(),
+        throwOnAttemptEnd(listenerErrorServiceName),
+      ]),
       handler: (ctx, _) => Promise.resolve({ invocationId: ctx.request().id }),
     });
 
@@ -353,7 +362,9 @@ function hooksSuite(level: HookLevel) {
                 throwOnFirstHookProviderCall(providerErrorServiceName),
                 throwOnFirstHandlerIntercept(interceptorErrorServiceName),
                 throwOnFirstRunIntercept(runInterceptorErrorServiceName),
-                throwTerminalOnHandlerIntercept(handlerInterceptTerminalServiceName),
+                throwTerminalOnHandlerIntercept(
+                  handlerInterceptTerminalServiceName
+                ),
                 throwTerminalOnRunIntercept(runInterceptTerminalServiceName),
                 swallowRunError(swallowRunErrorServiceName),
                 throwOnAttemptEnd(listenerErrorServiceName),
@@ -381,7 +392,9 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:after",
         "hook:attemptEnd:success",
       ]);
-      expect(await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)).toBe("succeeded");
+      expect(
+        await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
+      ).toBe("succeeded");
     });
 
     it("handler + run interceptor", async () => {
@@ -397,7 +410,9 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:after",
         "hook:attemptEnd:success",
       ]);
-      expect(await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)).toBe("succeeded");
+      expect(
+        await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
+      ).toBe("succeeded");
     });
 
     it("handler with retry — no duplicate events", async () => {
@@ -416,7 +431,9 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:after",
         "hook:attemptEnd:success",
       ]);
-      expect(await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)).toBe("succeeded");
+      expect(
+        await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
+      ).toBe("succeeded");
     });
 
     it("terminal error", async () => {
@@ -431,7 +448,9 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:after",
         "hook:attemptEnd:terminalError",
       ]);
-      expect(await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId!)).toBe("failed");
+      expect(
+        await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId!)
+      ).toBe("failed");
     });
 
     it("attemptEnd receives the actual error for retryable errors", async () => {
@@ -485,7 +504,9 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:after",
         "hook:attemptEnd:success",
       ]);
-      expect(await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)).toBe("succeeded");
+      expect(
+        await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
+      ).toBe("succeeded");
     });
 
     it("run throws retryable error then succeeds", async () => {
@@ -509,7 +530,9 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:after",
         "hook:attemptEnd:success",
       ]);
-      expect(await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)).toBe("succeeded");
+      expect(
+        await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
+      ).toBe("succeeded");
     });
 
     it("run throws terminal error", async () => {
@@ -526,7 +549,9 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:after",
         "hook:attemptEnd:terminalError",
       ]);
-      expect(await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId!)).toBe("failed");
+      expect(
+        await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId!)
+      ).toBe("failed");
     });
 
     it("call to non-existent service — handler:after and attemptEnd fire on each attempt", async () => {
@@ -570,7 +595,9 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:after",
         "hook:attemptEnd:success",
       ]);
-      expect(await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)).toBe("succeeded");
+      expect(
+        await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
+      ).toBe("succeeded");
     });
 
     it("interceptor error triggers retry then succeeds", async () => {
@@ -590,7 +617,9 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:after",
         "hook:attemptEnd:success",
       ]);
-      expect(await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)).toBe("succeeded");
+      expect(
+        await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
+      ).toBe("succeeded");
     });
 
     it("run interceptor error triggers retry then succeeds", async () => {
@@ -614,7 +643,9 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:after",
         "hook:attemptEnd:success",
       ]);
-      expect(await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)).toBe("succeeded");
+      expect(
+        await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
+      ).toBe("succeeded");
     });
 
     it("handler interceptor terminal error after next()", async () => {
@@ -633,7 +664,9 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:after",
         "hook:attemptEnd:success",
       ]);
-      expect(await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId!)).toBe("succeeded");
+      expect(
+        await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId!)
+      ).toBe("succeeded");
     });
 
     it("run interceptor terminal error after next()", async () => {
@@ -654,7 +687,9 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:after",
         "hook:attemptEnd:terminalError",
       ]);
-      expect(await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId!)).toBe("failed");
+      expect(
+        await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId!)
+      ).toBe("failed");
     });
 
     it("run interceptor swallows error — run completes without error", async () => {
@@ -672,7 +707,9 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:after",
         "hook:attemptEnd:success",
       ]);
-      expect(await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)).toBe("succeeded");
+      expect(
+        await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
+      ).toBe("succeeded");
     });
 
     it("listener error is swallowed — does not affect execution", async () => {
@@ -687,7 +724,9 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:after",
         "hook:attemptEnd:success",
       ]);
-      expect(await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)).toBe("succeeded");
+      expect(
+        await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
+      ).toBe("succeeded");
     });
 
     it("attemptEnd with multiple retries then success", async () => {
@@ -707,7 +746,9 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:after",
         "hook:attemptEnd:success",
       ]);
-      expect(await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)).toBe("succeeded");
+      expect(
+        await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
+      ).toBe("succeeded");
     });
 
     it("attemptEnd with multiple retries then terminal error", async () => {
@@ -728,7 +769,9 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:after",
         "hook:attemptEnd:terminalError",
       ]);
-      expect(await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId!)).toBe("failed");
+      expect(
+        await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId!)
+      ).toBe("failed");
     });
 
     it("concurrent runs with progressive retries", async () => {
@@ -771,7 +814,9 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:after",
         "hook:attemptEnd:success",
       ]);
-      expect(await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)).toBe("succeeded");
+      expect(
+        await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
+      ).toBe("succeeded");
     });
 
     it("handler with suspension resumes and completes", async () => {
@@ -795,7 +840,9 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:after",
         "hook:attemptEnd:success",
       ]);
-      expect(await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)).toBe("succeeded");
+      expect(
+        await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
+      ).toBe("succeeded");
     });
 
     it("handler interceptor propagates async context to handler", async () => {

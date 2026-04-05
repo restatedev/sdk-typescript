@@ -94,7 +94,10 @@ export class ContextImpl
   readonly promisesExecutor: PromisesExecutor;
   readonly defaultSerde: Serde<any>;
   private readonly serviceKey: string;
-  private runInterceptor: (name: string, runner: () => Promise<void>) => Promise<void>;
+  private runInterceptor: (
+    name: string,
+    runner: () => Promise<void>
+  ) => Promise<void>;
   private readonly _abandonmentSignal = new CompletablePromise<never>();
   private _abandonmentDisarmed = false;
 
@@ -160,9 +163,7 @@ export class ContextImpl
    */
   private abandonAttempt(cause: Error) {
     if (this._abandonmentDisarmed) return;
-    this._abandonmentSignal.reject(
-      new AttemptAbandonedError(cause.message)
-    );
+    this._abandonmentSignal.reject(new AttemptAbandonedError(cause.message));
   }
 
   /**
