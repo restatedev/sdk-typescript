@@ -454,11 +454,7 @@ function hooksSuite(level: HookLevel) {
         journalOutput: { value: result },
       });
       expect(
-        await getRunJournalEntry(
-          env.adminAPIBaseUrl(),
-          result.invocationId,
-          "step"
-        )
+        await getRunJournalEntry(env.adminAPIBaseUrl(), result.invocationId)
       ).toMatchObject({ value: "done" });
     });
 
@@ -782,14 +778,16 @@ function hooksSuite(level: HookLevel) {
       const events = getEvents(result.invocationId);
       expect(events).toEqual([
         // attempt 1: run completes, then run interceptor throws retryable
-        // error after next(). The error propagates and causes a retry.
+        // error after next(). The error triggers abandonment.
         "hook:handler:before",
         "hook:run:step:before",
         "hook:run:step:error",
         "hook:handler:after",
-        "hook:attemptEnd:retryableError",
-        // attempt 2: run replayed, interceptor does not throw, invocation succeeds
+        "hook:attemptEnd:abandoned",
+        // attempt 2: run re-executes, interceptor does not throw, succeeds
         "hook:handler:before",
+        "hook:run:step:before",
+        "hook:run:step:after",
         "hook:handler:after",
         "hook:attemptEnd:success",
       ]);
@@ -799,13 +797,8 @@ function hooksSuite(level: HookLevel) {
         status: "succeeded",
         journalOutput: { value: result },
       });
-      // The run's journal entry has the correct value despite the retry
       expect(
-        await getRunJournalEntry(
-          env.adminAPIBaseUrl(),
-          result.invocationId,
-          "step"
-        )
+        await getRunJournalEntry(env.adminAPIBaseUrl(), result.invocationId)
       ).toMatchObject({ value: "done" });
     });
 

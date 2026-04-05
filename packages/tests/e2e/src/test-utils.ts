@@ -358,7 +358,7 @@ export async function getInvocationOutcome(
           i.completion_failure,
           j.entry_json
         FROM sys_invocation i
-        LEFT JOIN sys_journal j ON i.id = j.id AND j.entry_type = 'Output'
+        LEFT JOIN sys_journal j ON i.id = j.id AND j.entry_type = 'Command: Output'
         WHERE i.id = '${invocationId}'
       `,
     }),
@@ -375,9 +375,30 @@ export async function getInvocationOutcome(
   if (!row) return { status: "not_found" };
   if (row.status !== "completed") return { status: row.status };
 
-  const journalOutput = row.entry_json
-    ? (JSON.parse(row.entry_json) as { value?: unknown; failure?: string })
-    : undefined;
+  let journalOutput: { value?: unknown; failure?: string } | undefined;
+  if (row.entry_json) {
+    const entry = JSON.parse(row.entry_json) as {
+      Command?: {
+        Output?: {
+          result?: {
+            Success?: number[];
+            Failure?: { code: number; message: string };
+          };
+        };
+      };
+    };
+    const result = entry?.Command?.Output?.result;
+    if (result?.Success) {
+      const decoded = new TextDecoder().decode(new Uint8Array(result.Success));
+      try {
+        journalOutput = { value: JSON.parse(decoded) as unknown };
+      } catch {
+        journalOutput = { value: decoded };
+      }
+    } else if (result?.Failure) {
+      journalOutput = { failure: result.Failure.message };
+    }
+  }
 
   return {
     status: row.completion_result === "success" ? "succeeded" : "failed",
@@ -391,14 +412,13 @@ export async function getInvocationOutcome(
  */
 export async function getRunJournalEntry(
   adminUrl: string,
-  invocationId: string,
-  runName: string
+  invocationId: string
 ): Promise<{ value?: unknown; failure?: string } | undefined> {
   const res = await fetch(`${adminUrl}/query`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify({
-      query: `SELECT entry_json FROM sys_journal WHERE id = '${invocationId}' AND entry_type = 'Notification: Run' AND name = '${runName}'`,
+      query: `SELECT entry_json FROM sys_journal WHERE id = '${invocationId}' AND entry_type = 'Notification: Run'`,
     }),
   });
   const json = (await res.json()) as {
@@ -406,5 +426,28 @@ export async function getRunJournalEntry(
   };
   const row = json.rows[0];
   if (!row) return undefined;
-  return JSON.parse(row.entry_json) as { value?: unknown; failure?: string };
+  const entry = JSON.parse(row.entry_json) as {
+    Notification?: {
+      Completion?: {
+        Run?: {
+          result?: {
+            Success?: number[];
+            Failure?: { code: number; message: string };
+          };
+        };
+      };
+    };
+  };
+  const result = entry?.Notification?.Completion?.Run?.result;
+  if (result?.Success) {
+    const decoded = new TextDecoder().decode(new Uint8Array(result.Success));
+    try {
+      return { value: JSON.parse(decoded) as unknown };
+    } catch {
+      return { value: decoded };
+    }
+  } else if (result?.Failure) {
+    return { failure: result.Failure.message };
+  }
+  return undefined;
 }
