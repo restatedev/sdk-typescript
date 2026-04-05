@@ -164,7 +164,9 @@ export function recordHookEvents(tag = "hook"): HooksProvider {
 }
 
 /** Hook provider that throws a retryable error on the first attempt */
-export function throwOnFirstHookProviderCall(targetService: string): HooksProvider {
+export function throwOnFirstHookProviderCall(
+  targetService: string
+): HooksProvider {
   return (ctx: HookContext) => {
     if (ctx.serviceName === targetService) {
       if (nextAttempt(ctx.invocationId) === 1)
@@ -175,7 +177,9 @@ export function throwOnFirstHookProviderCall(targetService: string): HooksProvid
 }
 
 /** Hook whose handler interceptor throws a retryable error on the first attempt */
-export function throwOnFirstHandlerIntercept(targetService: string): HooksProvider {
+export function throwOnFirstHandlerIntercept(
+  targetService: string
+): HooksProvider {
   return (ctx: HookContext) => {
     if (ctx.serviceName !== targetService) return {};
     return {
@@ -207,7 +211,9 @@ export function throwOnFirstRunIntercept(targetService: string): HooksProvider {
 }
 
 /** Hook whose handler interceptor throws a terminal error */
-export function throwTerminalOnHandlerIntercept(targetService: string): HooksProvider {
+export function throwTerminalOnHandlerIntercept(
+  targetService: string
+): HooksProvider {
   return (ctx: HookContext) => {
     if (ctx.serviceName !== targetService) return {};
     return {
@@ -222,7 +228,9 @@ export function throwTerminalOnHandlerIntercept(targetService: string): HooksPro
 }
 
 /** Hook whose run interceptor throws a terminal error */
-export function throwTerminalOnRunIntercept(targetService: string): HooksProvider {
+export function throwTerminalOnRunIntercept(
+  targetService: string
+): HooksProvider {
   return (ctx: HookContext) => {
     if (ctx.serviceName !== targetService) return {};
     return {
@@ -299,7 +307,7 @@ export async function getInvocationOutcome(
 ): Promise<string> {
   const res = await fetch(`${adminUrl}/query`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify({
       query: `SELECT status, completion_result FROM sys_invocation WHERE id = '${invocationId}'`,
     }),

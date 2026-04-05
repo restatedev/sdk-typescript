@@ -645,15 +645,16 @@ function hooksSuite(level: HookLevel) {
       );
       expect(events).toEqual([
         // run executes successfully, then run interceptor throws terminal
-        // after next(). The interceptor error does not override the
-        // committed success — attemptEnd reports the actual outcome.
+        // after next(). Unlike the handler interceptor case, the error
+        // propagates up and prevents sys_end() from being reached —
+        // the invocation fails.
         "hook:handler:before",
         "hook:run:step:before",
         "hook:run:step:error",
         "hook:handler:after",
-        "hook:attemptEnd:success",
+        "hook:attemptEnd:terminalError",
       ]);
-      expect(await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId!)).toBe("succeeded");
+      expect(await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId!)).toBe("failed");
     });
 
     it("run interceptor swallows error — run completes without error", async () => {
