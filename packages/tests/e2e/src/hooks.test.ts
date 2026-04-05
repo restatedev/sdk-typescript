@@ -23,6 +23,7 @@ import {
   throwOnAttemptEnd,
   invokeExpectingError,
   fastRetry,
+  getInvocationOutcome,
 } from "./test-utils.js";
 
 function hooksSuite(level: HookLevel) {
@@ -380,6 +381,7 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:after",
         "hook:attemptEnd:success",
       ]);
+      expect(await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)).toBe("succeeded");
     });
 
     it("handler + run interceptor", async () => {
@@ -395,6 +397,7 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:after",
         "hook:attemptEnd:success",
       ]);
+      expect(await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)).toBe("succeeded");
     });
 
     it("handler with retry — no duplicate events", async () => {
@@ -413,13 +416,14 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:after",
         "hook:attemptEnd:success",
       ]);
+      expect(await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)).toBe("succeeded");
     });
 
     it("terminal error", async () => {
       const client = clients
         .connect({ url: env.baseUrl() })
         .serviceClient(terminalService);
-      const { events } = await invokeExpectingError(
+      const { events, invocationId } = await invokeExpectingError(
         () => client.invoke("") as Promise<unknown>
       );
       expect(events).toEqual([
@@ -427,6 +431,7 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:after",
         "hook:attemptEnd:terminalError",
       ]);
+      expect(await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId!)).toBe("failed");
     });
 
     it("attemptEnd receives the actual error for retryable errors", async () => {
@@ -480,6 +485,7 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:after",
         "hook:attemptEnd:success",
       ]);
+      expect(await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)).toBe("succeeded");
     });
 
     it("run throws retryable error then succeeds", async () => {
@@ -503,13 +509,14 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:after",
         "hook:attemptEnd:success",
       ]);
+      expect(await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)).toBe("succeeded");
     });
 
     it("run throws terminal error", async () => {
       const client = clients
         .connect({ url: env.baseUrl() })
         .serviceClient(runTerminalService);
-      const { events } = await invokeExpectingError(
+      const { events, invocationId } = await invokeExpectingError(
         () => client.invoke("") as Promise<unknown>
       );
       expect(events).toEqual([
@@ -519,6 +526,7 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:after",
         "hook:attemptEnd:terminalError",
       ]);
+      expect(await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId!)).toBe("failed");
     });
 
     it("call to non-existent service — handler:after and attemptEnd fire on each attempt", async () => {
@@ -562,6 +570,7 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:after",
         "hook:attemptEnd:success",
       ]);
+      expect(await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)).toBe("succeeded");
     });
 
     it("interceptor error triggers retry then succeeds", async () => {
@@ -581,6 +590,7 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:after",
         "hook:attemptEnd:success",
       ]);
+      expect(await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)).toBe("succeeded");
     });
 
     it("run interceptor error triggers retry then succeeds", async () => {
@@ -604,40 +614,46 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:after",
         "hook:attemptEnd:success",
       ]);
+      expect(await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)).toBe("succeeded");
     });
 
     it("handler interceptor terminal error after next()", async () => {
       const client = clients
         .connect({ url: env.baseUrl() })
         .serviceClient(handlerInterceptTerminalService);
-      const { events } = await invokeExpectingError(
+      const { events, invocationId } = await invokeExpectingError(
         () => client.invoke("") as Promise<unknown>
       );
       expect(events).toEqual([
         // recording hook's handler:before fires, then terminal hook runs
-        // next() (handler completes), then throws — recording hook's
-        // handler:after now fires (finally)
+        // next() (handler completes successfully), then throws.
+        // The interceptor error does not override the committed success —
+        // attemptEnd reports the actual outcome.
         "hook:handler:before",
         "hook:handler:after",
-        "hook:attemptEnd:terminalError",
+        "hook:attemptEnd:success",
       ]);
+      expect(await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId!)).toBe("succeeded");
     });
 
     it("run interceptor terminal error after next()", async () => {
       const client = clients
         .connect({ url: env.baseUrl() })
         .serviceClient(runInterceptTerminalService);
-      const { events } = await invokeExpectingError(
+      const { events, invocationId } = await invokeExpectingError(
         () => client.invoke("") as Promise<unknown>
       );
       expect(events).toEqual([
-        // run executes successfully, then run interceptor throws terminal after next()
+        // run executes successfully, then run interceptor throws terminal
+        // after next(). The interceptor error does not override the
+        // committed success — attemptEnd reports the actual outcome.
         "hook:handler:before",
         "hook:run:step:before",
         "hook:run:step:error",
         "hook:handler:after",
-        "hook:attemptEnd:terminalError",
+        "hook:attemptEnd:success",
       ]);
+      expect(await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId!)).toBe("succeeded");
     });
 
     it("run interceptor swallows error — run completes without error", async () => {
@@ -655,6 +671,7 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:after",
         "hook:attemptEnd:success",
       ]);
+      expect(await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)).toBe("succeeded");
     });
 
     it("listener error is swallowed — does not affect execution", async () => {
@@ -669,6 +686,7 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:after",
         "hook:attemptEnd:success",
       ]);
+      expect(await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)).toBe("succeeded");
     });
 
     it("attemptEnd with multiple retries then success", async () => {
@@ -688,13 +706,14 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:after",
         "hook:attemptEnd:success",
       ]);
+      expect(await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)).toBe("succeeded");
     });
 
     it("attemptEnd with multiple retries then terminal error", async () => {
       const client = clients
         .connect({ url: env.baseUrl() })
         .serviceClient(retryTwiceTerminalService);
-      const { events } = await invokeExpectingError(
+      const { events, invocationId } = await invokeExpectingError(
         () => client.invoke("") as Promise<unknown>
       );
       expect(events).toEqual([
@@ -708,6 +727,7 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:after",
         "hook:attemptEnd:terminalError",
       ]);
+      expect(await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId!)).toBe("failed");
     });
 
     it("concurrent runs with progressive retries", async () => {
@@ -750,6 +770,7 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:after",
         "hook:attemptEnd:success",
       ]);
+      expect(await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)).toBe("succeeded");
     });
 
     it("handler with suspension resumes and completes", async () => {
@@ -773,6 +794,7 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:after",
         "hook:attemptEnd:success",
       ]);
+      expect(await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)).toBe("succeeded");
     });
 
     it("handler interceptor propagates async context to handler", async () => {

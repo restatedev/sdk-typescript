@@ -288,3 +288,27 @@ export async function invokeExpectingError(
 }
 
 export const fastRetry = { retryPolicy: { initialInterval: 10 } };
+
+/**
+ * Query the Restate runtime for the outcome of an invocation.
+ * Returns "succeeded", "failed", or the raw status if not completed.
+ */
+export async function getInvocationOutcome(
+  adminUrl: string,
+  invocationId: string
+): Promise<string> {
+  const res = await fetch(`${adminUrl}/query`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      query: `SELECT status, completion_result FROM sys_invocation WHERE id = '${invocationId}'`,
+    }),
+  });
+  const json = (await res.json()) as {
+    rows: { status: string; completion_result: string | null }[];
+  };
+  const row = json.rows[0];
+  if (!row) return "not_found";
+  if (row.status !== "completed") return row.status;
+  return row.completion_result === "success" ? "succeeded" : "failed";
+}

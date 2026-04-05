@@ -555,12 +555,20 @@ async function startUserHandler(
         // Write out and end
         ctx.coreVm.sys_write_output_success(encodedOutput);
         ctx.coreVm.sys_end();
-        // Prevent late abandonment signals from winning the Promise.race
+        // Lock in the result — interceptor errors after this point
+        // must not override it, since the VM already has success.
+        attemptResult = { type: "success" };
         ctx.disarmAbandonment();
         ctx.vmLogger.info("Invocation completed successfully.");
       });
-      attemptResult = { type: "success" };
     } catch (e) {
+      // If attemptResult is already set (e.g. success committed via sys_end),
+      // an interceptor error after next() must not override it.
+      if (attemptResult !== undefined) {
+        logError(ctx.vmLogger, e);
+        return;
+      }
+
       // Convert to Error
       const error = ensureError(e, handler.executionOptions.asTerminalError);
 
