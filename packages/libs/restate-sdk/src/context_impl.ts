@@ -35,6 +35,7 @@ import {
 import {
   ensureError,
   INTERNAL_ERROR_CODE,
+  AttemptAbandonedError,
   logError,
   RestateError,
   RetryableError,
@@ -94,6 +95,8 @@ export class ContextImpl
   readonly defaultSerde: Serde<any>;
   private readonly serviceKey: string;
   private runInterceptor: (name: string, runner: () => Promise<void>) => Promise<void>;
+  private readonly _abandonmentSignal = new CompletablePromise<never>();
+  private _abandonmentDisarmed = false;
 
   constructor(
     readonly coreVm: vm.WasmVM,
@@ -140,6 +143,35 @@ export class ContextImpl
     interceptor: (name: string, runner: () => Promise<void>) => Promise<void>
   ) {
     this.runInterceptor = interceptor;
+  }
+
+  /**
+   * Returns a promise that rejects when the current attempt is abandoned.
+   * Used internally to race against interceptor next() calls.
+   */
+  get abandonmentSignal(): Promise<never> {
+    return this._abandonmentSignal.promise;
+  }
+
+  /**
+   * Signal that the current attempt has been abandoned.
+   * Rejects the abandonment signal, causing any racing interceptor next() to throw.
+   * No-op if already disarmed (handler completed successfully).
+   */
+  private abandonAttempt(cause: Error) {
+    if (this._abandonmentDisarmed) return;
+    this._abandonmentSignal.reject(
+      new AttemptAbandonedError(cause.message)
+    );
+  }
+
+  /**
+   * Prevent future abandonAttempt() calls from firing.
+   * Called after the handler has completed successfully to avoid a late
+   * abandonment signal winning a Promise.race against a settled next().
+   */
+  disarmAbandonment() {
+    this._abandonmentDisarmed = true;
   }
 
   isProcessing(): boolean {
@@ -739,6 +771,9 @@ export class ContextImpl
       }
     }
 
+    // Signal abandonment to interceptors so they can clean up.
+    this.abandonAttempt(ensureError(e));
+
     // From now on, no progress will be made.
     this.invocationEndPromise.resolve();
   }
@@ -752,6 +787,9 @@ export class ContextImpl
     const error = ensureError(e);
     logError(this.vmLogger, error);
     notify_vm_error(this.coreVm, error);
+
+    // Signal abandonment to interceptors so they can clean up.
+    this.abandonAttempt(error);
 
     // From now on, no progress will be made.
     this.invocationEndPromise.resolve();

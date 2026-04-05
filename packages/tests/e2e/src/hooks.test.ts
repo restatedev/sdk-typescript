@@ -489,11 +489,13 @@ function hooksSuite(level: HookLevel) {
       const { invocationId } = await client.invoke("");
       const events = getEvents(invocationId);
       expect(events).toEqual([
-        // attempt 1: run closure throws retryable error — handled internally,
-        // no attemptEnd, no handler:after (the run failure restarts the invocation)
+        // attempt 1: run closure throws retryable error — attempt abandoned,
+        // interceptor chain unwinds cleanly via abandonment signal
         "hook:handler:before",
         "hook:run:step:before",
         "hook:run:step:error",
+        "hook:handler:after",
+        "hook:attemptEnd:abandoned",
         // attempt 2: run closure succeeds
         "hook:handler:before",
         "hook:run:step:before",
@@ -519,19 +521,29 @@ function hooksSuite(level: HookLevel) {
       ]);
     });
 
-    it("call to non-existent service — no handler:after or attemptEnd", async () => {
+    it("call to non-existent service — handler:after and attemptEnd fire on each attempt", async () => {
       const client = clients
         .connect({ url: env.baseUrl() })
         .serviceClient(callNonExistentService);
       const { events } = await invokeExpectingError(
         () => client.invoke("") as Promise<unknown>
       );
-      // The call error is handled internally by the SDK (like a run retryable
-      // error). The handler interceptor is abandoned — no handler:after.
-      // After maxAttempts the invocation is killed — no attemptEnd.
+      // The call error triggers invocation abandonment. The end of attempt 1
+      // (handler:after, attemptEnd) may interleave with the start of attempt 2
+      // (handler:before).
+      const attemptEndOrStart = expect.stringMatching(
+        /^hook:(handler:(before|after)|attemptEnd:abandoned)$/
+      ) as unknown as string;
       expect(events).toEqual([
+        // attempt 1 starts
         "hook:handler:before",
-        "hook:handler:before",
+        // attempt 1 ends + attempt 2 starts (may interleave)
+        attemptEndOrStart,
+        attemptEndOrStart,
+        attemptEndOrStart,
+        // attempt 2 ends
+        "hook:handler:after",
+        "hook:attemptEnd:abandoned",
       ]);
     });
 
@@ -578,11 +590,13 @@ function hooksSuite(level: HookLevel) {
       const { invocationId } = await client.invoke("");
       const events = getEvents(invocationId);
       expect(events).toEqual([
-        // attempt 1: handler starts, run interceptor throws — handled internally,
-        // no attemptEnd, no handler:after (the run failure restarts the invocation)
+        // attempt 1: handler starts, run interceptor throws — attempt abandoned,
+        // interceptor chain unwinds cleanly via abandonment signal
         "hook:handler:before",
         "hook:run:step:before",
         "hook:run:step:error",
+        "hook:handler:after",
+        "hook:attemptEnd:abandoned",
         // attempt 2: run interceptor succeeds, run executes
         "hook:handler:before",
         "hook:run:step:before",
@@ -705,23 +719,31 @@ function hooksSuite(level: HookLevel) {
       const anyRunBefore = expect.stringMatching(
         /^hook:run:run-[12]:before$/
       ) as unknown as string;
+      // Between attempts, a stale run-2:error from the previous attempt can
+      // race with the next attempt's handler:before
+      const staleRunErrorOrNextAttemptStart = expect.stringMatching(
+        /^hook:(run:run-2:error|handler:before)$/
+      ) as unknown as string;
       expect(events).toEqual([
-        // attempt 1: both runs start (order non-deterministic), run-1 fails at 200ms
+        // attempt 1: both runs start (order non-deterministic), run-1 fails
         "hook:handler:before",
         anyRunBefore,
         anyRunBefore,
         "hook:run:run-1:error",
-        // no handler:after — run failure restarts the invocation
-        // attempt 2: both start, run-1 succeeds at 100ms, run-2 fails at 300ms
-        // (run-2:error from attempt 1 also arrives)
-        "hook:handler:before",
+        "hook:handler:after",
+        "hook:attemptEnd:abandoned",
+        // stale run-2:error from attempt 1 may arrive here, interleaved
+        // with attempt 2's handler:before
+        staleRunErrorOrNextAttemptStart,
+        staleRunErrorOrNextAttemptStart,
+        // attempt 2: both start, run-1 succeeds, run-2 fails
         anyRunBefore,
         anyRunBefore,
-        "hook:run:run-2:error",
         "hook:run:run-1:after",
         "hook:run:run-2:error",
-        // no handler:after — run failure restarts the invocation
-        // attempt 3: run-1 replayed, run-2 succeeds (instant)
+        "hook:handler:after",
+        "hook:attemptEnd:abandoned",
+        // attempt 3: run-1 replayed, run-2 succeeds
         "hook:handler:before",
         "hook:run:run-2:before",
         "hook:run:run-2:after",
@@ -738,10 +760,12 @@ function hooksSuite(level: HookLevel) {
       const events = getEvents(invocationId);
       expect(events).toEqual([
         // attempt 1: runs before-sleep, then suspends (inactivityTimeout: 100ms)
-        // — no attemptEnd, no handler:after (handler is suspended mid-execution)
+        // — abandonment signal unwinds the interceptor chain cleanly
         "hook:handler:before",
         "hook:run:before-sleep:before",
         "hook:run:before-sleep:after",
+        "hook:handler:after",
+        "hook:attemptEnd:abandoned",
         // attempt 2: replays before-sleep + sleep, then executes after-sleep
         "hook:handler:before",
         "hook:run:after-sleep:before",

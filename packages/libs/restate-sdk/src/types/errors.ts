@@ -182,3 +182,16 @@ export class RetryableError extends RestateError {
     });
   }
 }
+
+/**
+ * Internal error used to signal that the current invocation attempt has been
+ * abandoned (e.g. due to suspension, run-retry restart, or failed call).
+ * This is NOT part of the public API.
+ */
+export class AttemptAbandonedError extends Error {
+  public override name = "AttemptAbandonedError";
+
+  constructor(message = "Invocation abandoned") {
+    super(message);
+  }
+}

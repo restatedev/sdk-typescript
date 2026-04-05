@@ -11,6 +11,7 @@
 
 import {
   ensureError,
+  AttemptAbandonedError,
   logError,
   RestateError,
   RetryableError,
@@ -517,12 +518,18 @@ async function startUserHandler(
 
       // Compose interceptor.run for ctx.run() calls
       ctx.setRunInterceptor(
-        composeInterceptors(
-          hooks.map((h) => h.interceptor?.run).filter(isDefined)
+        raceWithAbandonment(
+          ctx,
+          composeInterceptors(
+            hooks.map((h) => h.interceptor?.run).filter(isDefined)
+          )
         )
       );
 
-      await handlerInterceptor(async () => {
+      await raceWithAbandonment(
+        ctx,
+        handlerInterceptor
+      )(async () => {
         const decodedInput = await journalValueCodec
           .decode(ctx.request().body)
           .catch((e) =>
@@ -548,12 +555,21 @@ async function startUserHandler(
         // Write out and end
         ctx.coreVm.sys_write_output_success(encodedOutput);
         ctx.coreVm.sys_end();
+        // Prevent late abandonment signals from winning the Promise.race
+        ctx.disarmAbandonment();
         ctx.vmLogger.info("Invocation completed successfully.");
       });
       attemptResult = { type: "success" };
     } catch (e) {
       // Convert to Error
       const error = ensureError(e, handler.executionOptions.asTerminalError);
+
+      // Attempt abandoned (suspension, run-retry restart, call to missing service).
+      // The VM already knows — don't notify it again.
+      if (error instanceof AttemptAbandonedError) {
+        attemptResult = { type: "abandoned" };
+        return;
+      }
       logError(ctx.vmLogger, error);
 
       // If TerminalError, handle it here.
@@ -568,6 +584,7 @@ async function startUserHandler(
           ),
         });
         ctx.coreVm.sys_end();
+        ctx.disarmAbandonment();
         return;
       }
 
@@ -593,8 +610,8 @@ async function startUserHandler(
       ctx.coreVm.notify_error(error.message, error.stack);
     }
   } finally {
-    // Call listener.attemptEnd for all hooks if we have a result.
-    // On suspension, attemptResult is undefined — skip listeners.
+    // Call listener.attemptEnd for all hooks — attemptResult is always set now
+    // (including for abandoned attempts via AttemptAbandonedError).
     if (attemptResult !== undefined) {
       for (const hook of hooks) {
         if (hook.listener?.attemptEnd) {
@@ -706,6 +723,28 @@ function composeInterceptors<Args extends unknown[]>(
       },
     (...args) => (args.at(-1) as () => Promise<void>)()
   );
+}
+
+/**
+ * Wraps a composed interceptor so that every `next()` call inside it races
+ * against the context's abandonment signal. When the invocation is abandoned
+ * (suspension, run-retry restart, etc.), the racing promise rejects, causing
+ * the interceptor chain to unwind through catch/finally blocks.
+ */
+function raceWithAbandonment<Args extends unknown[]>(
+  ctx: ContextImpl,
+  interceptor: InterceptorFn<Args>
+): InterceptorFn<Args> {
+  return (...args) => {
+    const originalNext = args.at(-1) as () => Promise<void>;
+    const racingNext = () =>
+      Promise.race([originalNext(), ctx.abandonmentSignal]);
+    const newArgs = [...args.slice(0, -1), racingNext] as unknown as [
+      ...Args,
+      () => Promise<void>,
+    ];
+    return Promise.race([interceptor(...newArgs), ctx.abandonmentSignal]);
+  };
 }
 
 function isDefined<T>(value: T | undefined | null): value is T {

@@ -25,7 +25,11 @@ export function createService<T>(opts: {
   serviceHooks?: HooksProvider[];
   handler: (ctx: restate.Context, input: string) => Promise<T>;
   options?: {
-    retryPolicy?: { initialInterval?: number };
+    retryPolicy?: {
+      initialInterval?: number;
+      maxAttempts?: number;
+      onMaxAttempts?: string;
+    };
     inactivityTimeout?: number;
   };
 }) {

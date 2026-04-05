@@ -5,7 +5,8 @@ import type { Request } from "./context.js";
 export type AttemptResult =
   | { type: "success" }
   | { type: "retryableError"; error: Error }
-  | { type: "terminalError"; error: Error };
+  | { type: "terminalError"; error: Error }
+  | { type: "abandoned" };
 
 // ---- Hook context ----
 
