@@ -19,11 +19,14 @@ import {
   throwOnFirstRunIntercept,
   throwTerminalOnHandlerIntercept,
   throwTerminalOnRunIntercept,
+  throwRetryableAfterHandlerNext,
+  throwRetryableAfterRunNext,
   swallowRunError,
   throwOnAttemptEnd,
   invokeExpectingError,
   fastRetry,
   getInvocationOutcome,
+  getRunJournalEntry,
 } from "./test-utils.js";
 
 function hooksSuite(level: HookLevel) {
@@ -280,6 +283,31 @@ function hooksSuite(level: HookLevel) {
       },
     });
 
+    const handlerInterceptRetryableAfterNextName = `${level}_HandlerInterceptRetryableAfterNext`;
+    const handlerInterceptRetryableAfterNextService = createService({
+      name: handlerInterceptRetryableAfterNextName,
+      ...hooksAt([
+        recordHookEvents(),
+        throwRetryableAfterHandlerNext(handlerInterceptRetryableAfterNextName),
+      ]),
+      handler: (ctx, _) => Promise.resolve({ invocationId: ctx.request().id }),
+      options: fastRetry,
+    });
+
+    const runInterceptRetryableAfterNextName = `${level}_RunInterceptRetryableAfterNext`;
+    const runInterceptRetryableAfterNextService = createService({
+      name: runInterceptRetryableAfterNextName,
+      ...hooksAt([
+        recordHookEvents(),
+        throwRetryableAfterRunNext(runInterceptRetryableAfterNextName),
+      ]),
+      handler: async (ctx, _) => {
+        await ctx.run("step", () => "done");
+        return { invocationId: ctx.request().id };
+      },
+      options: fastRetry,
+    });
+
     const swallowRunErrorServiceName = `${level}_SwallowRunError`;
     const swallowRunErrorService = createService({
       name: swallowRunErrorServiceName,
@@ -348,6 +376,8 @@ function hooksSuite(level: HookLevel) {
         runInterceptorErrorService,
         handlerInterceptTerminalService,
         runInterceptTerminalService,
+        handlerInterceptRetryableAfterNextService,
+        runInterceptRetryableAfterNextService,
         swallowRunErrorService,
         listenerErrorService,
         asyncContextService,
@@ -366,6 +396,8 @@ function hooksSuite(level: HookLevel) {
                   handlerInterceptTerminalServiceName
                 ),
                 throwTerminalOnRunIntercept(runInterceptTerminalServiceName),
+                throwRetryableAfterHandlerNext(handlerInterceptRetryableAfterNextName),
+                throwRetryableAfterRunNext(runInterceptRetryableAfterNextName),
                 swallowRunError(swallowRunErrorServiceName),
                 throwOnAttemptEnd(listenerErrorServiceName),
                 propagateAsyncContext,
@@ -385,24 +417,27 @@ function hooksSuite(level: HookLevel) {
       const client = clients
         .connect({ url: env.baseUrl() })
         .serviceClient(handlerOnlyService);
-      const { invocationId } = await client.invoke("");
-      const events = getEvents(invocationId);
+      const result = (await client.invoke("")) as { invocationId: string };
+      const events = getEvents(result.invocationId);
       expect(events).toEqual([
         "hook:handler:before",
         "hook:handler:after",
         "hook:attemptEnd:success",
       ]);
       expect(
-        await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
-      ).toBe("succeeded");
+        await getInvocationOutcome(env.adminAPIBaseUrl(), result.invocationId)
+      ).toMatchObject({
+        status: "succeeded",
+        journalOutput: { value: result },
+      });
     });
 
     it("handler + run interceptor", async () => {
       const client = clients
         .connect({ url: env.baseUrl() })
         .serviceClient(handlerRunService);
-      const { invocationId } = await client.invoke("");
-      const events = getEvents(invocationId);
+      const result = (await client.invoke("")) as { invocationId: string };
+      const events = getEvents(result.invocationId);
       expect(events).toEqual([
         "hook:handler:before",
         "hook:run:step:before",
@@ -411,8 +446,14 @@ function hooksSuite(level: HookLevel) {
         "hook:attemptEnd:success",
       ]);
       expect(
-        await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
-      ).toBe("succeeded");
+        await getInvocationOutcome(env.adminAPIBaseUrl(), result.invocationId)
+      ).toMatchObject({
+        status: "succeeded",
+        journalOutput: { value: result },
+      });
+      expect(
+        await getRunJournalEntry(env.adminAPIBaseUrl(), result.invocationId, "step")
+      ).toMatchObject({ value: "done" });
     });
 
     it("handler with retry — no duplicate events", async () => {
@@ -433,7 +474,7 @@ function hooksSuite(level: HookLevel) {
       ]);
       expect(
         await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
-      ).toBe("succeeded");
+      ).toMatchObject({ status: "succeeded" });
     });
 
     it("terminal error", async () => {
@@ -450,7 +491,7 @@ function hooksSuite(level: HookLevel) {
       ]);
       expect(
         await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId!)
-      ).toBe("failed");
+      ).toMatchObject({ status: "failed" });
     });
 
     it("attemptEnd receives the actual error for retryable errors", async () => {
@@ -506,7 +547,7 @@ function hooksSuite(level: HookLevel) {
       ]);
       expect(
         await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
-      ).toBe("succeeded");
+      ).toMatchObject({ status: "succeeded" });
     });
 
     it("run throws retryable error then succeeds", async () => {
@@ -532,7 +573,7 @@ function hooksSuite(level: HookLevel) {
       ]);
       expect(
         await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
-      ).toBe("succeeded");
+      ).toMatchObject({ status: "succeeded" });
     });
 
     it("run throws terminal error", async () => {
@@ -551,7 +592,7 @@ function hooksSuite(level: HookLevel) {
       ]);
       expect(
         await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId!)
-      ).toBe("failed");
+      ).toMatchObject({ status: "failed" });
     });
 
     it("call to non-existent service — handler:after and attemptEnd fire on each attempt", async () => {
@@ -597,7 +638,7 @@ function hooksSuite(level: HookLevel) {
       ]);
       expect(
         await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
-      ).toBe("succeeded");
+      ).toMatchObject({ status: "succeeded" });
     });
 
     it("interceptor error triggers retry then succeeds", async () => {
@@ -619,7 +660,7 @@ function hooksSuite(level: HookLevel) {
       ]);
       expect(
         await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
-      ).toBe("succeeded");
+      ).toMatchObject({ status: "succeeded" });
     });
 
     it("run interceptor error triggers retry then succeeds", async () => {
@@ -645,7 +686,7 @@ function hooksSuite(level: HookLevel) {
       ]);
       expect(
         await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
-      ).toBe("succeeded");
+      ).toMatchObject({ status: "succeeded" });
     });
 
     it("handler interceptor terminal error after next()", async () => {
@@ -664,7 +705,12 @@ function hooksSuite(level: HookLevel) {
       ]);
       expect(
         await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId!)
-      ).toBe("failed");
+      ).toMatchObject({
+        status: "failed",
+        journalOutput: {
+          failure: expect.stringContaining("interceptor terminal error"),
+        },
+      });
     });
 
     it("run interceptor terminal error after next()", async () => {
@@ -685,7 +731,68 @@ function hooksSuite(level: HookLevel) {
       ]);
       expect(
         await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId!)
-      ).toBe("failed");
+      ).toMatchObject({
+        status: "failed",
+        journalOutput: {
+          failure: expect.stringContaining("run interceptor terminal error"),
+        },
+      });
+    });
+
+    it("handler interceptor retryable error after next() — retries then succeeds", async () => {
+      const client = clients
+        .connect({ url: env.baseUrl() })
+        .serviceClient(handlerInterceptRetryableAfterNextService);
+      const result = (await client.invoke("")) as { invocationId: string };
+      const events = getEvents(result.invocationId);
+      expect(events).toEqual([
+        // attempt 1: handler completes, then interceptor throws retryable
+        // error after next(). The error causes a retry.
+        "hook:handler:before",
+        "hook:handler:after",
+        "hook:attemptEnd:retryableError",
+        // attempt 2: interceptor does not throw, invocation succeeds
+        "hook:handler:before",
+        "hook:handler:after",
+        "hook:attemptEnd:success",
+      ]);
+      expect(
+        await getInvocationOutcome(env.adminAPIBaseUrl(), result.invocationId)
+      ).toMatchObject({
+        status: "succeeded",
+        journalOutput: { value: result },
+      });
+    });
+
+    it("run interceptor retryable error after next() — retries then succeeds", async () => {
+      const client = clients
+        .connect({ url: env.baseUrl() })
+        .serviceClient(runInterceptRetryableAfterNextService);
+      const result = (await client.invoke("")) as { invocationId: string };
+      const events = getEvents(result.invocationId);
+      expect(events).toEqual([
+        // attempt 1: run completes, then run interceptor throws retryable
+        // error after next(). The error propagates and causes a retry.
+        "hook:handler:before",
+        "hook:run:step:before",
+        "hook:run:step:error",
+        "hook:handler:after",
+        "hook:attemptEnd:retryableError",
+        // attempt 2: run replayed, interceptor does not throw, invocation succeeds
+        "hook:handler:before",
+        "hook:handler:after",
+        "hook:attemptEnd:success",
+      ]);
+      expect(
+        await getInvocationOutcome(env.adminAPIBaseUrl(), result.invocationId)
+      ).toMatchObject({
+        status: "succeeded",
+        journalOutput: { value: result },
+      });
+      // The run's journal entry has the correct value despite the retry
+      expect(
+        await getRunJournalEntry(env.adminAPIBaseUrl(), result.invocationId, "step")
+      ).toMatchObject({ value: "done" });
     });
 
     it("run interceptor swallows error — run completes without error", async () => {
@@ -705,7 +812,7 @@ function hooksSuite(level: HookLevel) {
       ]);
       expect(
         await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
-      ).toBe("succeeded");
+      ).toMatchObject({ status: "succeeded" });
     });
 
     it("listener error is swallowed — does not affect execution", async () => {
@@ -722,7 +829,7 @@ function hooksSuite(level: HookLevel) {
       ]);
       expect(
         await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
-      ).toBe("succeeded");
+      ).toMatchObject({ status: "succeeded" });
     });
 
     it("attemptEnd with multiple retries then success", async () => {
@@ -744,7 +851,7 @@ function hooksSuite(level: HookLevel) {
       ]);
       expect(
         await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
-      ).toBe("succeeded");
+      ).toMatchObject({ status: "succeeded" });
     });
 
     it("attemptEnd with multiple retries then terminal error", async () => {
@@ -767,7 +874,7 @@ function hooksSuite(level: HookLevel) {
       ]);
       expect(
         await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId!)
-      ).toBe("failed");
+      ).toMatchObject({ status: "failed" });
     });
 
     it("concurrent runs with progressive retries", async () => {
@@ -812,7 +919,7 @@ function hooksSuite(level: HookLevel) {
       ]);
       expect(
         await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
-      ).toBe("succeeded");
+      ).toMatchObject({ status: "succeeded" });
     });
 
     it("handler with suspension resumes and completes", async () => {
@@ -838,7 +945,7 @@ function hooksSuite(level: HookLevel) {
       ]);
       expect(
         await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
-      ).toBe("succeeded");
+      ).toMatchObject({ status: "succeeded" });
     });
 
     it("handler interceptor propagates async context to handler", async () => {

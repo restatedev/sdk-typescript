@@ -244,6 +244,42 @@ export function throwTerminalOnRunIntercept(
   };
 }
 
+/** Hook whose handler interceptor throws a retryable error after next() on the first attempt */
+export function throwRetryableAfterHandlerNext(
+  targetService: string
+): HooksProvider {
+  return (ctx: HookContext) => {
+    if (ctx.serviceName !== targetService) return {};
+    return {
+      interceptor: {
+        handler: async (next) => {
+          await next();
+          if (nextAttempt(ctx.invocationId) === 1)
+            throw new Error("handler interceptor retryable after next");
+        },
+      },
+    };
+  };
+}
+
+/** Hook whose run interceptor throws a retryable error after next() on the first attempt */
+export function throwRetryableAfterRunNext(
+  targetService: string
+): HooksProvider {
+  return (ctx: HookContext) => {
+    if (ctx.serviceName !== targetService) return {};
+    return {
+      interceptor: {
+        run: async (_name, next) => {
+          await next();
+          if (nextAttempt(ctx.invocationId) === 1)
+            throw new Error("run interceptor retryable after next");
+        },
+      },
+    };
+  };
+}
+
 /** Hook whose run interceptor catches and swallows errors from next() */
 export function swallowRunError(targetService: string): HooksProvider {
   return (ctx: HookContext) => {
@@ -297,26 +333,78 @@ export async function invokeExpectingError(
 
 export const fastRetry = { retryPolicy: { initialInterval: 10 } };
 
+export interface InvocationOutcome {
+  status: "succeeded" | "failed" | "not_found" | string;
+  /** The Output journal entry — either { value } or { failure } */
+  journalOutput?: { value?: unknown; failure?: string };
+}
+
 /**
- * Query the Restate runtime for the outcome of an invocation.
- * Returns "succeeded", "failed", or the raw status if not completed.
+ * Query the Restate runtime for the outcome of an invocation,
+ * including the Output journal entry.
  */
 export async function getInvocationOutcome(
   adminUrl: string,
   invocationId: string
-): Promise<string> {
+): Promise<InvocationOutcome> {
   const res = await fetch(`${adminUrl}/query`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify({
-      query: `SELECT status, completion_result FROM sys_invocation WHERE id = '${invocationId}'`,
+      query: `
+        SELECT
+          i.status,
+          i.completion_result,
+          i.completion_failure,
+          j.entry_json
+        FROM sys_invocation i
+        LEFT JOIN sys_journal j ON i.id = j.id AND j.entry_type = 'Output'
+        WHERE i.id = '${invocationId}'
+      `,
     }),
   });
   const json = (await res.json()) as {
-    rows: { status: string; completion_result: string | null }[];
+    rows: {
+      status: string;
+      completion_result: string | null;
+      completion_failure: string | null;
+      entry_json: string | null;
+    }[];
   };
   const row = json.rows[0];
-  if (!row) return "not_found";
-  if (row.status !== "completed") return row.status;
-  return row.completion_result === "success" ? "succeeded" : "failed";
+  if (!row) return { status: "not_found" };
+  if (row.status !== "completed") return { status: row.status };
+
+  const journalOutput = row.entry_json
+    ? (JSON.parse(row.entry_json) as { value?: unknown; failure?: string })
+    : undefined;
+
+  return {
+    status: row.completion_result === "success" ? "succeeded" : "failed",
+    journalOutput,
+  };
+}
+
+/**
+ * Query the Restate runtime for a Run journal entry by name.
+ * Returns the parsed entry_json for the matching run.
+ */
+export async function getRunJournalEntry(
+  adminUrl: string,
+  invocationId: string,
+  runName: string
+): Promise<{ value?: unknown; failure?: string } | undefined> {
+  const res = await fetch(`${adminUrl}/query`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({
+      query: `SELECT entry_json FROM sys_journal WHERE id = '${invocationId}' AND entry_type = 'Notification: Run' AND name = '${runName}'`,
+    }),
+  });
+  const json = (await res.json()) as {
+    rows: { entry_json: string }[];
+  };
+  const row = json.rows[0];
+  if (!row) return undefined;
+  return JSON.parse(row.entry_json) as { value?: unknown; failure?: string };
 }
