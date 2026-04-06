@@ -514,6 +514,24 @@ function hooksSuite(level: HookLevel) {
       },
     });
 
+    const suspendPerEntryService = createService({
+      name: `${level}_SuspendPerEntry`,
+      ...hooksAt([recordHookEvents()]),
+      handler: async (ctx, _) => {
+        const attempt = nextAttempt(ctx.request().id);
+        await ctx.run("step-1", () => {
+          if (attempt === 1) throw new Error("step-1 transient");
+          return "a";
+        });
+        await ctx.run("step-2", () => "b");
+        return { invocationId: ctx.request().id };
+      },
+      options: {
+        inactivityTimeout: 0,
+        retryPolicy: { initialInterval: 10 },
+      },
+    });
+
     // -- environment --------------------------------------------------------
 
     let env: RestateTestEnvironment;
@@ -551,6 +569,7 @@ function hooksSuite(level: HookLevel) {
         asTerminalErrorService,
         journalMismatchService,
         abortTimeoutService,
+        suspendPerEntryService,
       ];
       env = await RestateTestEnvironment.start({
         services,
@@ -1302,6 +1321,34 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:before",
         "hook:run:slow-step:before",
         "hook:run:slow-step:after",
+        "hook:handler:after",
+        "hook:attemptEnd:success",
+      ]);
+    });
+
+    it("Always replay — suspend and replay after each entry", async () => {
+      const client = clients
+        .connect({ url: env.baseUrl() })
+        .serviceClient(suspendPerEntryService);
+      const { invocationId } = await client.invoke("");
+      const hookEvents = getHookEvents(invocationId);
+      expect(hookEvents).toEqual([
+        "hook:handler:before",
+        "hook:run:step-1:before",
+        "hook:run:step-1:error:step-1 transient",
+        "hook:handler:error:(500) step-1 transient",
+        "hook:attemptEnd:abandoned",
+        "hook:handler:before",
+        "hook:run:step-1:before",
+        "hook:run:step-1:after",
+        "hook:handler:error:(599) Suspended invocation",
+        "hook:attemptEnd:abandoned",
+        "hook:handler:before",
+        "hook:run:step-2:before",
+        "hook:run:step-2:after",
+        "hook:handler:error:(599) Suspended invocation",
+        "hook:attemptEnd:abandoned",
+        "hook:handler:before",
         "hook:handler:after",
         "hook:attemptEnd:success",
       ]);
