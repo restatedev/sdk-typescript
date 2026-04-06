@@ -1,4 +1,5 @@
 import type { Request } from "./context.js";
+import type { AttemptAbandonedError } from "./types/errors.js";
 
 // ---- Result types ----
 
@@ -26,6 +27,10 @@ export interface HookContext {
  * affects the invocation outcome.
  *
  * - Errors thrown at any point (before or after `next()`) will fail or retry the invocation.
+ * - `next()` can reject with {@link AttemptAbandonedError} when the SDK abandons the current
+ *   attempt and unwinds the interceptor stack. This is control flow for attempt boundaries
+ *   (for example suspension or an internal restart), not necessarily an invocation failure;
+ *   do any cleanup you need and rethrow.
  * - Cannot modify the handler's input or return value (`void` signature).
  * - `next()` must be called exactly once.
  *
