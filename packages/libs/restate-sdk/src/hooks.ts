@@ -27,8 +27,13 @@ export interface HookContext {
  *
  * - Errors thrown at any point (before or after `next()`) will fail or retry the invocation.
  * - Cannot modify the handler's input or return value (`void` signature).
- * - Skipped during journal replay — only fires for real executions.
  * - `next()` must be called exactly once.
+ *
+ * ## When interceptors fire
+ *
+ * - `handler` fires on every attempt.
+ * - `run` fires when the `ctx.run()` closure executes. If the result is
+ *   already in the journal, the closure is skipped and so is the interceptor.
  *
  * @example
  * ```ts
@@ -53,17 +58,27 @@ export interface HookContext {
  * ```
  */
 export interface Interceptor {
-  /** Wraps the entire handler invocation. */
+  /** Wraps the entire handler invocation. Fires on every attempt. */
   handler?: (next: () => Promise<void>) => Promise<void>;
-  /** Wraps each `ctx.run()` call. `name` is the run's label. */
+  /**
+   * Wraps each `ctx.run()` call. Only fires for runs that actually execute —
+   * replayed runs (already in the journal) are skipped.
+   * `name` is the run's label.
+   */
   run?: (name: string, next: () => Promise<void>) => Promise<void>;
 }
 
 // ---- Listener ----
-// Observes lifecycle events. Fires on every attempt,
-// including replay failures. Cannot affect execution.
 
+/**
+ * Observers for lifecycle events. Cannot affect execution.
+ */
 export interface Listener {
+  /**
+   * Called when an attempt ends. Fires for every outcome: success,
+   * retryable error, terminal error, or abandoned (suspension/internal retry).
+   * Errors thrown here are swallowed and logged — they never affect the invocation.
+   */
   attemptEnd?: (result: AttemptResult) => void;
 }
 
@@ -75,7 +90,9 @@ export interface Hooks {
 }
 
 // ---- Provider ----
-// Factory called once per invocation. Receives invocation
-// context, returns hooks for that invocation's lifetime.
 
+/**
+ * Factory called on every attempt. Receives invocation context, returns
+ * hooks for that attempt's lifetime. Each attempt gets a fresh call.
+ */
 export type HooksProvider = (ctx: HookContext) => Hooks;

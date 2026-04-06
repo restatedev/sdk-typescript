@@ -117,6 +117,7 @@ export {
   TimeoutError,
   RetryableError,
   CancelledError,
+  AttemptAbandonedError,
   type RetryableErrorOptions,
 } from "./types/errors.js";
 export type {

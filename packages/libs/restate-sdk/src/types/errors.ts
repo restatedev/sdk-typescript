@@ -184,14 +184,25 @@ export class RetryableError extends RestateError {
 }
 
 /**
- * Internal error used to signal that the current invocation attempt has been
- * abandoned (e.g. due to suspension, run-retry restart, or failed call).
- * This is NOT part of the public API.
+ * Thrown inside interceptors when the current attempt is abandoned by the SDK.
+ *
+ * This happens when the runtime decides to end the current attempt without
+ * the handler completing normally — for example:
+ * - The handler is suspended (e.g. waiting for `ctx.sleep()` or `ctx.call()`)
+ * - A `ctx.run()` closure fails and the runtime restarts the invocation
+ * - A call to a non-existent service fails
+ *
+ * When this error propagates through an interceptor's `next()`, it means
+ * the attempt is over — not that the invocation failed. The runtime will
+ * typically retry with a new attempt.
+ *
+ * Interceptors can catch this to distinguish abandonment from real errors
+ * (e.g. to avoid logging it as a failure or to set a neutral span status).
  */
 export class AttemptAbandonedError extends Error {
   public override name = "AttemptAbandonedError";
 
-  constructor(message = "Invocation abandoned") {
+  constructor(message = "Attempt abandoned") {
     super(message);
   }
 }
