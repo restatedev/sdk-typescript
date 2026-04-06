@@ -37,7 +37,7 @@ const logHook: HooksProvider = (ctx) => {
           console.log(green(`✓ ${tag}`));
         } catch (e) {
           if (!(e instanceof AttemptAbandonedError)) {
-            console.log(errorColor(e)(`✗ ${tag}: ${e}`));
+            console.log(errorColor(e)(`✗ ${tag}: ${e as Error}`));
           }
           throw e;
         } finally {
@@ -50,7 +50,7 @@ const logHook: HooksProvider = (ctx) => {
           await next();
           console.log(green(`  ✓ run "${name}"`));
         } catch (e) {
-          console.log(errorColor(e)(`  ✗ run "${name}": ${e}`));
+          console.log(errorColor(e)(`  ✗ run "${name}": ${e as Error}`));
           throw e;
         }
       },
