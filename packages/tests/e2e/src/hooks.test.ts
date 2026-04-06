@@ -108,30 +108,6 @@ function hooksSuite(level: HookLevel) {
       },
     });
 
-    const nonExistentService = restate.service({
-      name: "NonExistent",
-      handlers: {
-        call: async (_ctx: restate.Context, _input: string) =>
-          Promise.resolve(""),
-      },
-    });
-    const callNonExistentService = createService({
-      name: `${level}_CallNonExistent`,
-      ...hooksAt([recordHookEvents()]),
-      handler: async (ctx, _) => {
-        const client = ctx.serviceClient(nonExistentService);
-        await client.call("");
-        return { invocationId: ctx.request().id };
-      },
-      options: {
-        retryPolicy: {
-          initialInterval: 10,
-          maxAttempts: 2,
-          onMaxAttempts: "kill",
-        },
-      },
-    });
-
     const retryTwiceSuccessService = createService({
       name: `${level}_RetryTwiceSuccess`,
       ...hooksAt([recordHookEvents()]),
@@ -351,6 +327,158 @@ function hooksSuite(level: HookLevel) {
       },
     });
 
+    // -- edge case services --------------------------------------------------
+
+    const nonExistentService = restate.service({
+      name: "NonExistent",
+      handlers: {
+        call: async (_ctx: restate.Context, _input: string) =>
+          Promise.resolve(""),
+      },
+    });
+    const callNonExistentService = createService({
+      name: `${level}_CallNonExistent`,
+      ...hooksAt([recordHookEvents()]),
+      handler: async (ctx, _) => {
+        const client = ctx.serviceClient(nonExistentService);
+        await client.call("");
+        return { invocationId: ctx.request().id };
+      },
+      options: {
+        retryPolicy: {
+          initialInterval: 10,
+          maxAttempts: 2,
+          onMaxAttempts: "kill",
+        },
+      },
+    });
+
+    const failingSerde = {
+      contentType: "application/json",
+      serialize: (v: string) => new TextEncoder().encode(v),
+      deserialize: () => {
+        throw new Error("input serde failure");
+      },
+    };
+    const inputSerdeFailService = createService({
+      name: `${level}_InputSerdeFail`,
+      ...hooksAt([recordHookEvents()]),
+      handlerOpts: { input: failingSerde },
+      handler: (ctx, _) => Promise.resolve({ invocationId: ctx.request().id }),
+      options: {
+        retryPolicy: {
+          initialInterval: 10,
+          maxAttempts: 3,
+          onMaxAttempts: "kill",
+        },
+      },
+    });
+
+    const runSerdeFailService = createService({
+      name: `${level}_RunSerdeFail`,
+      ...hooksAt([recordHookEvents()]),
+      handler: async (ctx, _) => {
+        await ctx.run("step", () => "done", {
+          serde: {
+            contentType: "application/json",
+            serialize: () => {
+              throw new Error("run serde failure");
+            },
+            deserialize: (b: Uint8Array) => new TextDecoder().decode(b),
+          },
+        });
+        return { invocationId: ctx.request().id };
+      },
+      options: {
+        retryPolicy: {
+          initialInterval: 10,
+          maxAttempts: 2,
+          onMaxAttempts: "kill",
+        },
+      },
+    });
+
+    const mapErrorService = createService({
+      name: `${level}_MapError`,
+      ...hooksAt([recordHookEvents()]),
+      handler: async (ctx, _) => {
+        const attempt = nextAttempt(ctx.request().id);
+        const result = await ctx
+          .run("step", () => "hello")
+          .map((value) => {
+            if (attempt === 1)
+              throw new Error(`transient map error on: ${value}`);
+            throw new restate.TerminalError(`map failed on: ${value}`);
+          });
+        return { invocationId: ctx.request().id, result };
+      },
+      options: {
+        retryPolicy: {
+          initialInterval: 10,
+          maxAttempts: 3,
+          onMaxAttempts: "kill",
+        },
+      },
+    });
+
+    const runMaxRetryService = createService({
+      name: `${level}_RunMaxRetry`,
+      ...hooksAt([recordHookEvents()]),
+      handler: async (ctx, _) => {
+        await ctx.run(
+          "flaky-step",
+          () => {
+            throw new Error("always fails");
+          },
+          { maxRetryAttempts: 2, initialRetryInterval: 10 }
+        );
+        return { invocationId: ctx.request().id };
+      },
+    });
+
+    class PaymentRejected extends Error {
+      constructor() {
+        super("Payment rejected");
+      }
+    }
+    const asTerminalErrorService = createService({
+      name: `${level}_AsTerminalError`,
+      ...hooksAt([recordHookEvents()]),
+      handler: async (ctx, _) => {
+        await ctx.run("charge", () => {
+          throw new PaymentRejected();
+        });
+        return { invocationId: ctx.request().id };
+      },
+      options: {
+        asTerminalError: (e) => {
+          if (e instanceof PaymentRejected)
+            return new restate.TerminalError(e.message, { errorCode: 402 });
+          return undefined;
+        },
+      },
+    });
+
+    const journalMismatchService = createService({
+      name: `${level}_JournalMismatch`,
+      ...hooksAt([recordHookEvents()]),
+      handler: async (ctx, _) => {
+        const attempt = nextAttempt(ctx.request().id);
+        await ctx.run(attempt === 1 ? "step-a" : "step-b", () => {
+          if (attempt === 1) throw new Error("transient");
+          return "done";
+        });
+        return { invocationId: ctx.request().id };
+      },
+      options: {
+        retryPolicy: {
+          initialInterval: 10,
+          maxAttempts: 3,
+          onMaxAttempts: "kill",
+        },
+      },
+    });
+
     // -- environment --------------------------------------------------------
 
     let env: RestateTestEnvironment;
@@ -381,6 +509,12 @@ function hooksSuite(level: HookLevel) {
         swallowRunErrorService,
         listenerErrorService,
         asyncContextService,
+        inputSerdeFailService,
+        runSerdeFailService,
+        mapErrorService,
+        runMaxRetryService,
+        asTerminalErrorService,
+        journalMismatchService,
       ];
       env = await RestateTestEnvironment.start({
         services,
@@ -998,6 +1132,130 @@ function hooksSuite(level: HookLevel) {
       expect(ctx!.request.headers).toBeDefined();
       expect(ctx!.request.attemptHeaders).toBeDefined();
     });
+
+    it("input serde failure — terminal error", async () => {
+      const client = clients
+        .connect({ url: env.baseUrl() })
+        .serviceClient(inputSerdeFailService);
+      const { events: hookEvents } = await invokeExpectingError(
+        () => client.invoke("") as Promise<unknown>
+      );
+      expect(hookEvents).toEqual([
+        // attempt 1: input deserialization fails — terminal error (code 400)
+        "hook:handler:before",
+        "hook:handler:after",
+        "hook:attemptEnd:terminalError",
+      ]);
+    });
+
+    it("run serde failure — retries then killed", async () => {
+      const client = clients
+        .connect({ url: env.baseUrl() })
+        .serviceClient(runSerdeFailService);
+      const { events: hookEvents } = await invokeExpectingError(
+        () => client.invoke("") as Promise<unknown>
+      );
+      expect(hookEvents).toEqual([
+        // attempt 1: run succeeds but serialize throws — abandoned
+        "hook:handler:before",
+        "hook:run:step:before",
+        "hook:run:step:after",
+        "hook:handler:after",
+        "hook:attemptEnd:abandoned",
+        // attempt 2: same failure — abandoned, then killed (maxAttempts: 2)
+        "hook:handler:before",
+        "hook:run:step:before",
+        "hook:run:step:after",
+        "hook:handler:after",
+        "hook:attemptEnd:abandoned",
+      ]);
+    });
+
+    it("map() error after run — retryable then terminal", async () => {
+      const client = clients
+        .connect({ url: env.baseUrl() })
+        .serviceClient(mapErrorService);
+      const { events: hookEvents } = await invokeExpectingError(
+        () => client.invoke("") as Promise<unknown>
+      );
+      expect(hookEvents).toEqual([
+        // attempt 1: run succeeds, .map() throws retryable error — abandoned
+        "hook:handler:before",
+        "hook:run:step:before",
+        "hook:run:step:after",
+        "hook:handler:after",
+        "hook:attemptEnd:abandoned",
+        // attempt 2: run replayed, .map() throws terminal error
+        "hook:handler:before",
+        "hook:handler:after",
+        "hook:attemptEnd:terminalError",
+      ]);
+    });
+
+    it("ctx.run with maxRetryAttempts — retries then terminal error", async () => {
+      const client = clients
+        .connect({ url: env.baseUrl() })
+        .serviceClient(runMaxRetryService);
+      const { events: hookEvents } = await invokeExpectingError(
+        () => client.invoke("") as Promise<unknown>
+      );
+      expect(hookEvents).toEqual([
+        // attempt 1: run fails — abandoned
+        "hook:handler:before",
+        "hook:run:flaky-step:before",
+        "hook:run:flaky-step:error",
+        "hook:handler:after",
+        "hook:attemptEnd:abandoned",
+        // attempt 2: run fails — terminal (maxRetryAttempts exhausted)
+        "hook:handler:before",
+        "hook:run:flaky-step:before",
+        "hook:run:flaky-step:error",
+        "hook:handler:after",
+        "hook:attemptEnd:terminalError",
+      ]);
+    });
+
+    it("asTerminalError converts domain error to terminal", async () => {
+      const client = clients
+        .connect({ url: env.baseUrl() })
+        .serviceClient(asTerminalErrorService);
+      const { events: hookEvents } = await invokeExpectingError(
+        () => client.invoke("") as Promise<unknown>
+      );
+      expect(hookEvents).toEqual([
+        // attempt 1: run throws PaymentRejected, converted to terminal
+        "hook:handler:before",
+        "hook:run:charge:before",
+        "hook:run:charge:error",
+        "hook:handler:after",
+        "hook:attemptEnd:terminalError",
+      ]);
+    });
+
+    it("journal mismatch — retries then killed", async () => {
+      const client = clients
+        .connect({ url: env.baseUrl() })
+        .serviceClient(journalMismatchService);
+      const { events: hookEvents } = await invokeExpectingError(
+        () => client.invoke("") as Promise<unknown>
+      );
+      expect(hookEvents).toEqual([
+        // attempt 1: run "step-a" fails — abandoned
+        "hook:handler:before",
+        "hook:run:step-a:before",
+        "hook:run:step-a:error",
+        "hook:handler:after",
+        "hook:attemptEnd:abandoned",
+        // attempt 2: run "step-b" mismatches journal — abandoned
+        "hook:handler:before",
+        "hook:handler:after",
+        "hook:attemptEnd:abandoned",
+        // attempt 3: same mismatch — abandoned, then killed (maxAttempts: 3)
+        "hook:handler:before",
+        "hook:handler:after",
+        "hook:attemptEnd:abandoned",
+      ]);
+    });
   });
 }
 
@@ -1127,304 +1385,6 @@ describe("hooks composition ordering", { timeout: 120_000 }, () => {
       "s2:attemptEnd:success",
       "h1:attemptEnd:success",
       "h2:attemptEnd:success",
-    ]);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Edge cases
-// ---------------------------------------------------------------------------
-
-describe("hooks edge cases", { timeout: 120_000 }, () => {
-  let env: RestateTestEnvironment;
-
-  const failingSerde = {
-    contentType: "application/json",
-    serialize: (v: string) => new TextEncoder().encode(v),
-    deserialize: () => {
-      throw new Error("input serde failure");
-    },
-  };
-
-  const inputSerdeFailService = restate.service({
-    name: "InputSerdeFail",
-    handlers: {
-      invoke: restate.createServiceHandler(
-        { input: failingSerde },
-        (ctx: restate.Context, _input: string) =>
-          Promise.resolve({ invocationId: ctx.request().id })
-      ),
-    },
-    options: {
-      hooks: [recordHookEvents()],
-      retryPolicy: {
-        initialInterval: 10,
-        maxAttempts: 3,
-        onMaxAttempts: "kill",
-      },
-    },
-  });
-
-  const journalMismatchService = restate.service({
-    name: "JournalMismatch",
-    handlers: {
-      invoke: async (ctx: restate.Context, _input: string) => {
-        // ctx.run fails on first attempt, causing a retry.
-        // On retry, nextAttempt returns 2, so the handler calls
-        // ctx.run("step-b") — but the journal has "step-a" → mismatch.
-        const attempt = nextAttempt(ctx.request().id);
-        await ctx.run(attempt === 1 ? "step-a" : "step-b", () => {
-          if (attempt === 1) throw new Error("transient");
-          return "done";
-        });
-        return { invocationId: ctx.request().id };
-      },
-    },
-    options: {
-      hooks: [recordHookEvents()],
-      retryPolicy: {
-        initialInterval: 10,
-        maxAttempts: 3,
-        onMaxAttempts: "kill",
-      },
-    },
-  });
-
-  const runSerdeFailService = restate.service({
-    name: "RunSerdeFail",
-    handlers: {
-      invoke: async (ctx: restate.Context, _input: string) => {
-        await ctx.run("step", () => "done", {
-          serde: {
-            contentType: "application/json",
-            serialize: () => {
-              throw new Error("run serde failure");
-            },
-            deserialize: (b: Uint8Array) => new TextDecoder().decode(b),
-          },
-        });
-        return { invocationId: ctx.request().id };
-      },
-    },
-    options: {
-      hooks: [recordHookEvents()],
-      retryPolicy: {
-        initialInterval: 10,
-        maxAttempts: 2,
-        onMaxAttempts: "kill",
-      },
-    },
-  });
-
-  const mapErrorService = restate.service({
-    name: "MapError",
-    handlers: {
-      invoke: async (ctx: restate.Context, _input: string) => {
-        const attempt = nextAttempt(ctx.request().id);
-        const result = await ctx
-          .run("step", () => "hello")
-          .map((value) => {
-            if (attempt === 1)
-              throw new Error(`transient map error on: ${value}`);
-            throw new restate.TerminalError(`map failed on: ${value}`);
-          });
-        return { invocationId: ctx.request().id, result };
-      },
-    },
-    options: {
-      hooks: [recordHookEvents()],
-      retryPolicy: {
-        initialInterval: 10,
-        maxAttempts: 3,
-        onMaxAttempts: "kill",
-      },
-    },
-  });
-
-  const runMaxRetryService = restate.service({
-    name: "RunMaxRetry",
-    handlers: {
-      invoke: async (ctx: restate.Context, _input: string) => {
-        await ctx.run(
-          "flaky-step",
-          () => {
-            throw new Error("always fails");
-          },
-          { maxRetryAttempts: 2, initialRetryInterval: 10 }
-        );
-        return { invocationId: ctx.request().id };
-      },
-    },
-    options: {
-      hooks: [recordHookEvents()],
-    },
-  });
-
-  class PaymentRejected extends Error {
-    constructor() {
-      super("Payment rejected");
-    }
-  }
-
-  const asTerminalErrorService = restate.service({
-    name: "AsTerminalError",
-    handlers: {
-      invoke: async (ctx: restate.Context, _input: string) => {
-        await ctx.run("charge", () => {
-          throw new PaymentRejected();
-        });
-        return { invocationId: ctx.request().id };
-      },
-    },
-    options: {
-      hooks: [recordHookEvents()],
-      asTerminalError: (e) => {
-        if (e instanceof PaymentRejected) {
-          return new restate.TerminalError(e.message, { errorCode: 402 });
-        }
-        return undefined;
-      },
-    },
-  });
-
-  beforeAll(async () => {
-    env = await RestateTestEnvironment.start({
-      services: [
-        inputSerdeFailService,
-        runSerdeFailService,
-        mapErrorService,
-        runMaxRetryService,
-        asTerminalErrorService,
-        journalMismatchService,
-      ],
-    });
-  });
-
-  afterAll(async () => {
-    await env?.stop();
-  });
-
-  it("input serde failure — terminal error", async () => {
-    const client = clients
-      .connect({ url: env.baseUrl() })
-      .serviceClient(inputSerdeFailService);
-    const { events: hookEvents } = await invokeExpectingError(
-      () => client.invoke("") as Promise<unknown>
-    );
-    expect(hookEvents).toEqual([
-      // Input deserialization fails — treated as terminal error (code 400)
-      "hook:handler:before",
-      "hook:handler:after",
-      "hook:attemptEnd:terminalError",
-    ]);
-  });
-
-  it("run serde failure — retries then killed", async () => {
-    const client = clients
-      .connect({ url: env.baseUrl() })
-      .serviceClient(runSerdeFailService);
-    const { events: hookEvents } = await invokeExpectingError(
-      () => client.invoke("") as Promise<unknown>
-    );
-    expect(hookEvents).toEqual([
-      // attempt 1: run succeeds but serialize throws — abandoned
-      "hook:handler:before",
-      "hook:run:step:before",
-      "hook:run:step:after",
-      "hook:handler:after",
-      "hook:attemptEnd:abandoned",
-      // attempt 2: same failure — abandoned, then killed (maxAttempts: 2)
-      "hook:handler:before",
-      "hook:run:step:before",
-      "hook:run:step:after",
-      "hook:handler:after",
-      "hook:attemptEnd:abandoned",
-    ]);
-  });
-
-  it("map() error after run — retryable then terminal", async () => {
-    const client = clients
-      .connect({ url: env.baseUrl() })
-      .serviceClient(mapErrorService);
-    const { events: hookEvents } = await invokeExpectingError(
-      () => client.invoke("") as Promise<unknown>
-    );
-    expect(hookEvents).toEqual([
-      // attempt 1: run succeeds, .map() throws retryable error — abandoned
-      "hook:handler:before",
-      "hook:run:step:before",
-      "hook:run:step:after",
-      "hook:handler:after",
-      "hook:attemptEnd:abandoned",
-      // attempt 2: run replayed, .map() throws terminal error
-      "hook:handler:before",
-      "hook:handler:after",
-      "hook:attemptEnd:terminalError",
-    ]);
-  });
-
-  it("ctx.run with maxRetryAttempts — retries then terminal error", async () => {
-    const client = clients
-      .connect({ url: env.baseUrl() })
-      .serviceClient(runMaxRetryService);
-    const { events: hookEvents } = await invokeExpectingError(
-      () => client.invoke("") as Promise<unknown>
-    );
-    expect(hookEvents).toEqual([
-      // attempt 1: run fails — abandoned
-      "hook:handler:before",
-      "hook:run:flaky-step:before",
-      "hook:run:flaky-step:error",
-      "hook:handler:after",
-      "hook:attemptEnd:abandoned",
-      // attempt 2: run fails — terminal (maxRetryAttempts exhausted)
-      "hook:handler:before",
-      "hook:run:flaky-step:before",
-      "hook:run:flaky-step:error",
-      "hook:handler:after",
-      "hook:attemptEnd:terminalError",
-    ]);
-  });
-
-  it("asTerminalError converts domain error to terminal", async () => {
-    const client = clients
-      .connect({ url: env.baseUrl() })
-      .serviceClient(asTerminalErrorService);
-    const { events: hookEvents } = await invokeExpectingError(
-      () => client.invoke("") as Promise<unknown>
-    );
-    expect(hookEvents).toEqual([
-      // attempt 1: run throws PaymentRejected, converted to terminal
-      "hook:handler:before",
-      "hook:run:charge:before",
-      "hook:run:charge:error",
-      "hook:handler:after",
-      "hook:attemptEnd:terminalError",
-    ]);
-  });
-
-  it("journal mismatch — retries then killed", async () => {
-    const client = clients
-      .connect({ url: env.baseUrl() })
-      .serviceClient(journalMismatchService);
-    const { events: hookEvents } = await invokeExpectingError(
-      () => client.invoke("") as Promise<unknown>
-    );
-    expect(hookEvents).toEqual([
-      // attempt 1: run "step-a" fails — abandoned
-      "hook:handler:before",
-      "hook:run:step-a:before",
-      "hook:run:step-a:error",
-      "hook:handler:after",
-      "hook:attemptEnd:abandoned",
-      // attempt 2: run "step-b" mismatches journal — abandoned
-      "hook:handler:before",
-      "hook:handler:after",
-      "hook:attemptEnd:abandoned",
-      // attempt 3: same mismatch — abandoned, then killed (maxAttempts: 3)
-      "hook:handler:before",
-      "hook:handler:after",
-      "hook:attemptEnd:abandoned",
     ]);
   });
 });

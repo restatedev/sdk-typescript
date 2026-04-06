@@ -24,6 +24,8 @@ export function createService<T>(opts: {
   handlerHooks?: HooksProvider[];
   serviceHooks?: HooksProvider[];
   handler: (ctx: restate.Context, input: string) => Promise<T>;
+  /** Extra options passed to createServiceHandler (e.g. input serde) */
+  handlerOpts?: Record<string, unknown>;
   options?: {
     retryPolicy?: {
       initialInterval?: number;
@@ -31,17 +33,21 @@ export function createService<T>(opts: {
       onMaxAttempts?: string;
     };
     inactivityTimeout?: number;
+    asTerminalError?: (error: unknown) => restate.TerminalError | undefined;
   };
 }) {
   const serviceOpts: Record<string, unknown> = { ...opts.options };
   if (opts.serviceHooks) serviceOpts.hooks = opts.serviceHooks;
 
-  if (opts.handlerHooks) {
+  if (opts.handlerHooks || opts.handlerOpts) {
     return restate.service({
       name: opts.name,
       handlers: {
         invoke: restate.createServiceHandler(
-          { hooks: opts.handlerHooks },
+          {
+            ...(opts.handlerOpts ?? {}),
+            ...(opts.handlerHooks ? { hooks: opts.handlerHooks } : {}),
+          },
           opts.handler
         ),
       },
