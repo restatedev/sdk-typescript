@@ -137,6 +137,14 @@ export function nextAttempt(invocationId: string): number {
 // Hook factories
 // ---------------------------------------------------------------------------
 
+function errorTag(e: unknown, maxLen = 80): string {
+  const msg = e instanceof Error ? e.message : String(e);
+  const firstLine = msg.split("\n")[0]!;
+  return firstLine.length > maxLen
+    ? firstLine.slice(0, maxLen) + "..."
+    : firstLine;
+}
+
 export function recordHookEvents(tag = "hook"): HooksProvider {
   return (ctx: HookContext) => {
     const id = ctx.invocationId;
@@ -146,8 +154,10 @@ export function recordHookEvents(tag = "hook"): HooksProvider {
           pushEvent(id, `${tag}:handler:before`);
           try {
             await next();
-          } finally {
             pushEvent(id, `${tag}:handler:after`);
+          } catch (e) {
+            pushEvent(id, `${tag}:handler:error:${errorTag(e)}`);
+            throw e;
           }
         },
         run: async (name, next) => {
@@ -156,7 +166,7 @@ export function recordHookEvents(tag = "hook"): HooksProvider {
             await next();
             pushEvent(id, `${tag}:run:${name}:after`);
           } catch (e) {
-            pushEvent(id, `${tag}:run:${name}:error`);
+            pushEvent(id, `${tag}:run:${name}:error:${errorTag(e)}`);
             throw e;
           }
         },
@@ -354,9 +364,11 @@ export const fastRetry = { retryPolicy: { initialInterval: 10 } };
  * ]);
  * ```
  */
-export function inAnyOrder(...events: string[]): string[] {
+export function inAnyOrder(...events: (string | RegExp)[]): string[] {
   const pattern = events
-    .map((e) => e.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .map((e) =>
+      e instanceof RegExp ? e.source : e.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    )
     .join("|");
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
   const matcher: string = expect.stringMatching(new RegExp(`^(${pattern})$`));
