@@ -8,7 +8,7 @@ import {
   type HookLevel,
   createService,
   withHooksAt,
-  getEvents,
+  getEvents as getHookEvents,
   getResults,
   getCapturedContext,
   captureContext,
@@ -420,8 +420,8 @@ function hooksSuite(level: HookLevel) {
         .connect({ url: env.baseUrl() })
         .serviceClient(handlerOnlyService);
       const result = (await client.invoke("")) as { invocationId: string };
-      const events = getEvents(result.invocationId);
-      expect(events).toEqual([
+      const hookEvents = getHookEvents(result.invocationId);
+      expect(hookEvents).toEqual([
         "hook:handler:before",
         "hook:handler:after",
         "hook:attemptEnd:success",
@@ -439,8 +439,8 @@ function hooksSuite(level: HookLevel) {
         .connect({ url: env.baseUrl() })
         .serviceClient(handlerRunService);
       const result = (await client.invoke("")) as { invocationId: string };
-      const events = getEvents(result.invocationId);
-      expect(events).toEqual([
+      const hookEvents = getHookEvents(result.invocationId);
+      expect(hookEvents).toEqual([
         "hook:handler:before",
         "hook:run:step:before",
         "hook:run:step:after",
@@ -463,8 +463,8 @@ function hooksSuite(level: HookLevel) {
         .connect({ url: env.baseUrl() })
         .serviceClient(retryService);
       const { invocationId } = await client.invoke("");
-      const events = getEvents(invocationId);
-      expect(events).toEqual([
+      const hookEvents = getHookEvents(invocationId);
+      expect(hookEvents).toEqual([
         // attempt 1: retryable error
         "hook:handler:before",
         "hook:handler:after",
@@ -483,10 +483,10 @@ function hooksSuite(level: HookLevel) {
       const client = clients
         .connect({ url: env.baseUrl() })
         .serviceClient(terminalService);
-      const { events, invocationId } = await invokeExpectingError(
+      const { events: hookEvents, invocationId } = await invokeExpectingError(
         () => client.invoke("") as Promise<unknown>
       );
-      expect(events).toEqual([
+      expect(hookEvents).toEqual([
         "hook:handler:before",
         "hook:handler:after",
         "hook:attemptEnd:terminalError",
@@ -532,8 +532,8 @@ function hooksSuite(level: HookLevel) {
         .connect({ url: env.baseUrl() })
         .serviceClient(retryWithReplayedRunService);
       const { invocationId } = await client.invoke("");
-      const events = getEvents(invocationId);
-      expect(events).toEqual([
+      const hookEvents = getHookEvents(invocationId);
+      expect(hookEvents).toEqual([
         // attempt 1: step-1 executes, then retryable error
         "hook:handler:before",
         "hook:run:step-1:before",
@@ -557,8 +557,8 @@ function hooksSuite(level: HookLevel) {
         .connect({ url: env.baseUrl() })
         .serviceClient(runRetryableService);
       const { invocationId } = await client.invoke("");
-      const events = getEvents(invocationId);
-      expect(events).toEqual([
+      const hookEvents = getHookEvents(invocationId);
+      expect(hookEvents).toEqual([
         // attempt 1: run closure throws retryable error — attempt abandoned,
         // handler:after and attemptEnd still fire
         "hook:handler:before",
@@ -582,10 +582,10 @@ function hooksSuite(level: HookLevel) {
       const client = clients
         .connect({ url: env.baseUrl() })
         .serviceClient(runTerminalService);
-      const { events, invocationId } = await invokeExpectingError(
+      const { events: hookEvents, invocationId } = await invokeExpectingError(
         () => client.invoke("") as Promise<unknown>
       );
-      expect(events).toEqual([
+      expect(hookEvents).toEqual([
         "hook:handler:before",
         "hook:run:step:before",
         "hook:run:step:error",
@@ -601,7 +601,7 @@ function hooksSuite(level: HookLevel) {
       const client = clients
         .connect({ url: env.baseUrl() })
         .serviceClient(callNonExistentService);
-      const { events } = await invokeExpectingError(
+      const { events: hookEvents } = await invokeExpectingError(
         () => client.invoke("") as Promise<unknown>
       );
       // The call error triggers invocation abandonment. The end of attempt 1
@@ -610,7 +610,7 @@ function hooksSuite(level: HookLevel) {
       const attemptEndOrStart = expect.stringMatching(
         /^hook:(handler:(before|after)|attemptEnd:abandoned)$/
       ) as unknown as string;
-      expect(events).toEqual([
+      expect(hookEvents).toEqual([
         // attempt 1 starts
         "hook:handler:before",
         // attempt 1 ends + attempt 2 starts (may interleave)
@@ -628,8 +628,8 @@ function hooksSuite(level: HookLevel) {
         .connect({ url: env.baseUrl() })
         .serviceClient(providerErrorService);
       const { invocationId } = await client.invoke("");
-      const events = getEvents(invocationId);
-      expect(events).toEqual([
+      const hookEvents = getHookEvents(invocationId);
+      expect(hookEvents).toEqual([
         // attempt 1: recording hook instantiated, then provider throws
         // — handler interceptor never started, only attemptEnd fires
         "hook:attemptEnd:retryableError",
@@ -648,8 +648,8 @@ function hooksSuite(level: HookLevel) {
         .connect({ url: env.baseUrl() })
         .serviceClient(interceptorErrorService);
       const { invocationId } = await client.invoke("");
-      const events = getEvents(invocationId);
-      expect(events).toEqual([
+      const hookEvents = getHookEvents(invocationId);
+      expect(hookEvents).toEqual([
         // attempt 1: recording hook's handler:before fires (outermost),
         // then error hook's interceptor throws — handler:after now fires (finally)
         "hook:handler:before",
@@ -670,8 +670,8 @@ function hooksSuite(level: HookLevel) {
         .connect({ url: env.baseUrl() })
         .serviceClient(runInterceptorErrorService);
       const { invocationId } = await client.invoke("");
-      const events = getEvents(invocationId);
-      expect(events).toEqual([
+      const hookEvents = getHookEvents(invocationId);
+      expect(hookEvents).toEqual([
         // attempt 1: handler starts, run interceptor throws — attempt abandoned,
         // handler:after and attemptEnd still fire
         "hook:handler:before",
@@ -695,10 +695,10 @@ function hooksSuite(level: HookLevel) {
       const client = clients
         .connect({ url: env.baseUrl() })
         .serviceClient(handlerInterceptTerminalService);
-      const { events, invocationId } = await invokeExpectingError(
+      const { events: hookEvents, invocationId } = await invokeExpectingError(
         () => client.invoke("") as Promise<unknown>
       );
-      expect(events).toEqual([
+      expect(hookEvents).toEqual([
         // Handler completes, then interceptor throws terminal error
         // after next(). The error fails the invocation.
         "hook:handler:before",
@@ -721,10 +721,10 @@ function hooksSuite(level: HookLevel) {
       const client = clients
         .connect({ url: env.baseUrl() })
         .serviceClient(runInterceptTerminalService);
-      const { events, invocationId } = await invokeExpectingError(
+      const { events: hookEvents, invocationId } = await invokeExpectingError(
         () => client.invoke("") as Promise<unknown>
       );
-      expect(events).toEqual([
+      expect(hookEvents).toEqual([
         // Run completes, then run interceptor throws terminal error
         // after next(). The error fails the invocation.
         "hook:handler:before",
@@ -750,8 +750,8 @@ function hooksSuite(level: HookLevel) {
         .connect({ url: env.baseUrl() })
         .serviceClient(handlerInterceptRetryableAfterNextService);
       const result = (await client.invoke("")) as { invocationId: string };
-      const events = getEvents(result.invocationId);
-      expect(events).toEqual([
+      const hookEvents = getHookEvents(result.invocationId);
+      expect(hookEvents).toEqual([
         // attempt 1: handler completes, then interceptor throws retryable
         // error after next(). The error causes a retry.
         "hook:handler:before",
@@ -775,8 +775,8 @@ function hooksSuite(level: HookLevel) {
         .connect({ url: env.baseUrl() })
         .serviceClient(runInterceptRetryableAfterNextService);
       const result = (await client.invoke("")) as { invocationId: string };
-      const events = getEvents(result.invocationId);
-      expect(events).toEqual([
+      const hookEvents = getHookEvents(result.invocationId);
+      expect(hookEvents).toEqual([
         // attempt 1: run completes, then run interceptor throws retryable
         // error after next(). The error triggers abandonment.
         "hook:handler:before",
@@ -807,8 +807,8 @@ function hooksSuite(level: HookLevel) {
         .connect({ url: env.baseUrl() })
         .serviceClient(swallowRunErrorService);
       const { invocationId } = await client.invoke("");
-      const events = getEvents(invocationId);
-      expect(events).toEqual([
+      const hookEvents = getHookEvents(invocationId);
+      expect(hookEvents).toEqual([
         // The run closure throws TerminalError, but the swallow hook
         // catches it. The recording hook sees the run complete without error.
         "hook:handler:before",
@@ -827,9 +827,9 @@ function hooksSuite(level: HookLevel) {
         .connect({ url: env.baseUrl() })
         .serviceClient(listenerErrorService);
       const { invocationId } = await client.invoke("");
-      const events = getEvents(invocationId);
+      const hookEvents = getHookEvents(invocationId);
       // Handler succeeds despite listener throwing
-      expect(events).toEqual([
+      expect(hookEvents).toEqual([
         "hook:handler:before",
         "hook:handler:after",
         "hook:attemptEnd:success",
@@ -844,8 +844,8 @@ function hooksSuite(level: HookLevel) {
         .connect({ url: env.baseUrl() })
         .serviceClient(retryTwiceSuccessService);
       const { invocationId } = await client.invoke("");
-      const events = getEvents(invocationId);
-      expect(events).toEqual([
+      const hookEvents = getHookEvents(invocationId);
+      expect(hookEvents).toEqual([
         "hook:handler:before",
         "hook:handler:after",
         "hook:attemptEnd:retryableError",
@@ -865,10 +865,10 @@ function hooksSuite(level: HookLevel) {
       const client = clients
         .connect({ url: env.baseUrl() })
         .serviceClient(retryTwiceTerminalService);
-      const { events, invocationId } = await invokeExpectingError(
+      const { events: hookEvents, invocationId } = await invokeExpectingError(
         () => client.invoke("") as Promise<unknown>
       );
-      expect(events).toEqual([
+      expect(hookEvents).toEqual([
         "hook:handler:before",
         "hook:handler:after",
         "hook:attemptEnd:retryableError",
@@ -889,7 +889,7 @@ function hooksSuite(level: HookLevel) {
         .connect({ url: env.baseUrl() })
         .serviceClient(concurrentRunService);
       const { invocationId } = await client.invoke("");
-      const events = getEvents(invocationId);
+      const hookEvents = getHookEvents(invocationId);
       const anyRunBefore = expect.stringMatching(
         /^hook:run:run-[12]:before$/
       ) as unknown as string;
@@ -898,7 +898,7 @@ function hooksSuite(level: HookLevel) {
       const staleRunErrorOrNextAttemptStart = expect.stringMatching(
         /^hook:(run:run-2:error|handler:before)$/
       ) as unknown as string;
-      expect(events).toEqual([
+      expect(hookEvents).toEqual([
         // attempt 1: both runs start (order non-deterministic), run-1 fails
         "hook:handler:before",
         anyRunBefore,
@@ -934,8 +934,8 @@ function hooksSuite(level: HookLevel) {
         .connect({ url: env.baseUrl() })
         .serviceClient(suspendService);
       const { invocationId } = await client.invoke("");
-      const events = getEvents(invocationId);
-      expect(events).toEqual([
+      const hookEvents = getHookEvents(invocationId);
+      expect(hookEvents).toEqual([
         // attempt 1: runs before-sleep, then suspends (inactivityTimeout: 100ms)
         // — handler:after and attemptEnd still fire
         "hook:handler:before",
@@ -1054,7 +1054,7 @@ describe("hooks composition ordering", { timeout: 120_000 }, () => {
       invocationId: string;
     };
 
-    expect(getEvents(invocationId)).toEqual([
+    expect(getHookEvents(invocationId)).toEqual([
       // ---- attempt 1: step-1 succeeds, then retryable error ----
       // handler interceptors nest outermost-first
       "e1:handler:before",
