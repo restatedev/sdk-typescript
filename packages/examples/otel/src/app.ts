@@ -1,9 +1,11 @@
+import http from "node:http";
 import http2 from "node:http2";
-import { createServer } from "node:http";
-import { createServerAdapter } from "@whatwg-node/server";
-import { service, TerminalError, type Context } from "@restatedev/restate-sdk";
-import { createEndpointHandler as createNodeHandler } from "@restatedev/restate-sdk";
-import { createEndpointHandler as createFetchHandler } from "@restatedev/restate-sdk/fetch";
+import {
+  service,
+  TerminalError,
+  type Context,
+  createEndpointHandler,
+} from "@restatedev/restate-sdk";
 import { otelTracingHook, shutdownTracing } from "./otel-hooks.js";
 
 // ---------------------------------------------------------------------------
@@ -111,20 +113,23 @@ const mode = process.env.MODE === "req-res" ? "req-res" : "bidi";
 const services = [orderProcessor, paymentService];
 const hooks = [otelTracingHook];
 
+const handler = createEndpointHandler({
+  services,
+  hooks,
+  bidirectional: mode === "bidi",
+});
+
 if (mode === "req-res") {
-  // Request-response mode — fetch handler over HTTP/1.1
-  const fetch = createFetchHandler({ services, hooks, bidirectional: false });
-  createServer(createServerAdapter(fetch)).listen(PORT);
+  http.createServer(handler).listen(PORT);
 } else {
-  // Bidirectional mode — HTTP/2 with streaming (default)
-  http2.createServer(createNodeHandler({ services, hooks })).listen(PORT);
+  http2.createServer(handler).listen(PORT);
 }
 
 // Flush pending spans on shutdown
 process.on("SIGTERM", () => shutdownTracing().then(() => process.exit(0)));
 process.on("SIGINT", () => shutdownTracing().then(() => process.exit(0)));
 
-const filter = "--filter @restatedev/example-otel";
+const filter = "--filter @restatedev/otel";
 const registerCmd =
   mode === "req-res"
     ? `pnpm ${filter} register:req-res`
