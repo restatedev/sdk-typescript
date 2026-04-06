@@ -1,3 +1,4 @@
+import { expect } from "vitest";
 import * as restate from "@restatedev/restate-sdk";
 import type {
   HooksProvider,
@@ -339,6 +340,28 @@ export async function invokeExpectingError(
 }
 
 export const fastRetry = { retryPolicy: { initialInterval: 10 } };
+
+/**
+ * Matches N events in any order within the hook events array.
+ * Use inside `toEqual` to express that a set of events may interleave.
+ *
+ * @example
+ * ```ts
+ * expect(hookEvents).toEqual([
+ *   "hook:handler:before",
+ *   ...inAnyOrder("hook:run:error", "hook:handler:before"),
+ *   "hook:handler:after",
+ * ]);
+ * ```
+ */
+export function inAnyOrder(...events: string[]): string[] {
+  const pattern = events
+    .map((e) => e.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("|");
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+  const matcher: string = expect.stringMatching(new RegExp(`^(${pattern})$`));
+  return events.map(() => matcher);
+}
 
 export interface InvocationOutcome {
   status: string;

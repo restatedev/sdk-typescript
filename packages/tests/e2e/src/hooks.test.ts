@@ -27,6 +27,7 @@ import {
   fastRetry,
   getInvocationOutcome,
   getRunJournalEntry,
+  inAnyOrder,
 } from "./test-utils.js";
 
 function hooksSuite(level: HookLevel) {
@@ -764,16 +765,15 @@ function hooksSuite(level: HookLevel) {
       // The call error triggers invocation abandonment. The end of attempt 1
       // (handler:after, attemptEnd) may interleave with the start of attempt 2
       // (handler:before).
-      const attemptEndOrStart = expect.stringMatching(
-        /^hook:(handler:(before|after)|attemptEnd:abandoned)$/
-      ) as unknown as string;
       expect(hookEvents).toEqual([
         // attempt 1 starts
         "hook:handler:before",
         // attempt 1 ends + attempt 2 starts (may interleave)
-        attemptEndOrStart,
-        attemptEndOrStart,
-        attemptEndOrStart,
+        ...inAnyOrder(
+          "hook:handler:after",
+          "hook:attemptEnd:abandoned",
+          "hook:handler:before"
+        ),
         // attempt 2 ends
         "hook:handler:after",
         "hook:attemptEnd:abandoned",
@@ -1047,29 +1047,17 @@ function hooksSuite(level: HookLevel) {
         .serviceClient(concurrentRunService);
       const { invocationId } = await client.invoke("");
       const hookEvents = getHookEvents(invocationId);
-      const anyRunBefore = expect.stringMatching(
-        /^hook:run:run-[12]:before$/
-      ) as unknown as string;
-      // Between attempts, a stale run-2:error from the previous attempt can
-      // race with the next attempt's handler:before
-      const staleRunErrorOrNextAttemptStart = expect.stringMatching(
-        /^hook:(run:run-2:error|handler:before)$/
-      ) as unknown as string;
       expect(hookEvents).toEqual([
         // attempt 1: both runs start (order non-deterministic), run-1 fails
         "hook:handler:before",
-        anyRunBefore,
-        anyRunBefore,
+        ...inAnyOrder("hook:run:run-1:before", "hook:run:run-2:before"),
         "hook:run:run-1:error",
         "hook:handler:after",
         "hook:attemptEnd:abandoned",
-        // stale run-2:error from attempt 1 may arrive here, interleaved
-        // with attempt 2's handler:before
-        staleRunErrorOrNextAttemptStart,
-        staleRunErrorOrNextAttemptStart,
+        // stale run-2:error from attempt 1 + attempt 2 start (may interleave)
+        ...inAnyOrder("hook:run:run-2:error", "hook:handler:before"),
         // attempt 2: both start, run-1 succeeds, run-2 fails
-        anyRunBefore,
-        anyRunBefore,
+        ...inAnyOrder("hook:run:run-1:before", "hook:run:run-2:before"),
         "hook:run:run-1:after",
         "hook:run:run-2:error",
         "hook:handler:after",
@@ -1287,9 +1275,6 @@ function hooksSuite(level: HookLevel) {
       const { invocationId } = await client.invoke("");
       const hookEvents = getHookEvents(invocationId);
       // Late run:error from attempt 1 may interleave with attempt 2 start
-      const lateRunErrorOrNextStart = expect.stringMatching(
-        /^hook:(run:slow-step:error|handler:before)$/
-      ) as unknown as string;
       expect(hookEvents).toEqual([
         // attempt 1: run takes too long, abort fires — abandoned
         "hook:handler:before",
@@ -1297,8 +1282,7 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:after",
         "hook:attemptEnd:abandoned",
         // late run:error from attempt 1 + attempt 2 start (may interleave)
-        lateRunErrorOrNextStart,
-        lateRunErrorOrNextStart,
+        ...inAnyOrder("hook:run:slow-step:error", "hook:handler:before"),
         // attempt 2: run completes quickly — success
         "hook:run:slow-step:before",
         "hook:run:slow-step:after",
