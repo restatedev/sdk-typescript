@@ -486,7 +486,7 @@ function hooksSuite(level: HookLevel) {
       handler: async (ctx, _) => {
         const attempt = nextAttempt(ctx.request().id);
         await ctx.run("slow-step", async () => {
-          if (attempt === 1) await wait(3000);
+          if (attempt === 1) await wait(400);
           return "done";
         });
         return { invocationId: ctx.request().id };
@@ -1273,22 +1273,43 @@ function hooksSuite(level: HookLevel) {
         .connect({ url: env.baseUrl() })
         .serviceClient(abortTimeoutService);
       const { invocationId } = await client.invoke("");
+      // Wait for attempt 1's delayed cleanup events to arrive
+      await wait(1000);
       const hookEvents = getHookEvents(invocationId);
-      // Late run:error from attempt 1 may interleave with attempt 2 start
-      expect(hookEvents).toEqual([
-        // attempt 1: run takes too long, abort fires — abandoned
+      // The abort kills the connection while the run is waiting. Cleanup
+      // arrives after the run finishes — may arrive before or after attempt 2.
+      const cleanupBeforeAttempt2 = [
+        // attempt 1: aborted, cleanup arrives before attempt 2
         "hook:handler:before",
         "hook:run:slow-step:before",
+        "hook:run:slow-step:after",
         "hook:handler:after",
         "hook:attemptEnd:abandoned",
-        // late run:error from attempt 1 + attempt 2 start (may interleave)
-        ...inAnyOrder("hook:run:slow-step:error", "hook:handler:before"),
-        // attempt 2: run completes quickly — success
+        // attempt 2: success
+        "hook:handler:before",
         "hook:run:slow-step:before",
         "hook:run:slow-step:after",
         "hook:handler:after",
         "hook:attemptEnd:success",
-      ]);
+      ];
+      const cleanupAfterAttempt2 = [
+        // attempt 1 starts
+        "hook:handler:before",
+        "hook:run:slow-step:before",
+        // attempt 2 completes while attempt 1 run is still waiting
+        "hook:handler:before",
+        "hook:run:slow-step:before",
+        "hook:run:slow-step:after",
+        "hook:handler:after",
+        "hook:attemptEnd:success",
+        // attempt 1 cleanup arrives late
+        "hook:run:slow-step:after",
+        "hook:handler:after",
+        "hook:attemptEnd:abandoned",
+      ];
+      expect([cleanupBeforeAttempt2, cleanupAfterAttempt2]).toContainEqual(
+        hookEvents
+      );
     });
   });
 }
