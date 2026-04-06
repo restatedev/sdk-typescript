@@ -479,6 +479,28 @@ function hooksSuite(level: HookLevel) {
       },
     });
 
+    const abortTimeoutService = createService({
+      name: `${level}_AbortTimeout`,
+      ...hooksAt([recordHookEvents()]),
+      handler: async (ctx, _) => {
+        const attempt = nextAttempt(ctx.request().id);
+        await ctx.run("slow-step", async () => {
+          if (attempt === 1) await wait(3000);
+          return "done";
+        });
+        return { invocationId: ctx.request().id };
+      },
+      options: {
+        inactivityTimeout: 100,
+        abortTimeout: 100,
+        retryPolicy: {
+          initialInterval: 10,
+          maxAttempts: 3,
+          onMaxAttempts: "kill",
+        },
+      },
+    });
+
     // -- environment --------------------------------------------------------
 
     let env: RestateTestEnvironment;
@@ -515,6 +537,7 @@ function hooksSuite(level: HookLevel) {
         runMaxRetryService,
         asTerminalErrorService,
         journalMismatchService,
+        abortTimeoutService,
       ];
       env = await RestateTestEnvironment.start({
         services,
@@ -1254,6 +1277,33 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:before",
         "hook:handler:after",
         "hook:attemptEnd:abandoned",
+      ]);
+    });
+
+    it("abort timeout — slow run aborted then succeeds on retry", async () => {
+      const client = clients
+        .connect({ url: env.baseUrl() })
+        .serviceClient(abortTimeoutService);
+      const { invocationId } = await client.invoke("");
+      const hookEvents = getHookEvents(invocationId);
+      // Late run:error from attempt 1 may interleave with attempt 2 start
+      const lateRunErrorOrNextStart = expect.stringMatching(
+        /^hook:(run:slow-step:error|handler:before)$/
+      ) as unknown as string;
+      expect(hookEvents).toEqual([
+        // attempt 1: run takes too long, abort fires — abandoned
+        "hook:handler:before",
+        "hook:run:slow-step:before",
+        "hook:handler:after",
+        "hook:attemptEnd:abandoned",
+        // late run:error from attempt 1 + attempt 2 start (may interleave)
+        lateRunErrorOrNextStart,
+        lateRunErrorOrNextStart,
+        // attempt 2: run completes quickly — success
+        "hook:run:slow-step:before",
+        "hook:run:slow-step:after",
+        "hook:handler:after",
+        "hook:attemptEnd:success",
       ]);
     });
   });

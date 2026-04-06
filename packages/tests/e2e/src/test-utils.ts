@@ -33,6 +33,7 @@ export function createService<T>(opts: {
       onMaxAttempts?: string;
     };
     inactivityTimeout?: number;
+    abortTimeout?: number;
     asTerminalError?: (error: unknown) => restate.TerminalError | undefined;
   };
 }) {
