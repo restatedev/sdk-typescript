@@ -173,7 +173,12 @@ export function recordHookEvents(tag = "hook"): HooksProvider {
       },
       listener: {
         attemptEnd: (result: AttemptResult) => {
-          pushEvent(id, `${tag}:attemptEnd:${result.type}`);
+          pushEvent(
+            id,
+            "error" in result
+              ? `${tag}:attemptEnd:${result.type}:${errorTag(result.error)}`
+              : `${tag}:attemptEnd:${result.type}`
+          );
           pushResult(id, result);
         },
       },
