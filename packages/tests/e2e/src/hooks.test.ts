@@ -617,7 +617,7 @@ function hooksSuite(level: HookLevel) {
             }
           : {}),
       });
-    });
+    }, 120_000);
 
     afterAll(async () => {
       await env?.stop();
@@ -1454,7 +1454,7 @@ describe("hooks composition ordering", { timeout: 120_000 }, () => {
       services: [orderingService],
       hooks: [recordHookEvents("e1"), recordHookEvents("e2")],
     });
-  });
+  }, 120_000);
 
   afterAll(async () => {
     await env?.stop();
