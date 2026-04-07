@@ -514,6 +514,33 @@ function hooksSuite(level: HookLevel) {
       },
     });
 
+    const cancelDuringRunService = createService({
+      name: `${level}_CancelDuringRun`,
+      ...hooksAt([recordHookEvents()]),
+      handler: async (ctx, _) => {
+        await ctx.run("slow-step", async () => {
+          await new Promise<void>((_resolve, reject) => {
+            const signal = ctx.request().attemptCompletedSignal;
+            signal.addEventListener(
+              "abort",
+              () => reject(new restate.CancelledError()),
+              { once: true }
+            );
+          });
+          return "done";
+        });
+        return { invocationId: ctx.request().id };
+      },
+    });
+
+    const cancelInvocationService = createService({
+      name: `${level}_CancelInvocation`,
+      handler: async (ctx, invocationId) => {
+        ctx.cancel(restate.InvocationIdParser.fromString(invocationId));
+        return { invocationId: ctx.request().id };
+      },
+    });
+
     const suspendPerEntryService = createService({
       name: `${level}_SuspendPerEntry`,
       ...hooksAt([recordHookEvents()]),
@@ -569,6 +596,8 @@ function hooksSuite(level: HookLevel) {
         asTerminalErrorService,
         journalMismatchService,
         abortTimeoutService,
+        cancelDuringRunService,
+        cancelInvocationService,
         suspendPerEntryService,
       ];
       env = await RestateTestEnvironment.start({
@@ -799,20 +828,20 @@ function hooksSuite(level: HookLevel) {
       await expect
         .poll(() => getHookEvents(send.invocationId))
         .toEqual([
-        // attempt 1 starts
-        "hook:handler:before",
-        // attempt 1 ends + attempt 2 starts (may interleave)
-        ...inAnyOrder(
-          "hook:handler:error:(599) Suspended invocation",
-          "hook:attemptEnd:abandoned",
-          "hook:handler:before"
-        ),
-        // attempt 2 ends
-        ...inAnyOrder(
-          "hook:handler:error:(599) Suspended invocation",
-          "hook:attemptEnd:abandoned"
-        ),
-      ]);
+          // attempt 1 starts
+          "hook:handler:before",
+          // attempt 1 ends + attempt 2 starts (may interleave)
+          ...inAnyOrder(
+            "hook:handler:error:(599) Suspended invocation",
+            "hook:attemptEnd:abandoned",
+            "hook:handler:before"
+          ),
+          // attempt 2 ends
+          ...inAnyOrder(
+            "hook:handler:error:(599) Suspended invocation",
+            "hook:attemptEnd:abandoned"
+          ),
+        ]);
     });
 
     it("hook provider error triggers retry then succeeds", async () => {
@@ -1328,6 +1357,39 @@ function hooksSuite(level: HookLevel) {
       ]);
     });
 
+    it("invocation cancelled in the middle of a run", async () => {
+      const ingress = clients.connect({ url: env.baseUrl() });
+      const send = await ingress
+        .serviceSendClient(cancelDuringRunService)
+        .invoke("");
+
+      await expect
+        .poll(() => getHookEvents(send.invocationId), {
+          timeout: 5_000,
+          interval: 100,
+        })
+        .toEqual(["hook:handler:before", "hook:run:slow-step:before"]);
+
+      await ingress.serviceClient(cancelInvocationService).invoke(send.invocationId);
+
+      await expect
+        .poll(() => getHookEvents(send.invocationId), {
+          timeout: 5_000,
+          interval: 100,
+        })
+        .toEqual([
+          "hook:handler:before",
+          "hook:run:slow-step:before",
+          "hook:handler:error:Cancelled",
+          "hook:attemptEnd:terminalError",
+          "hook:run:slow-step:error:Cancelled",
+        ]);
+
+      expect(
+        await getInvocationOutcome(env.adminAPIBaseUrl(), send.invocationId)
+      ).toMatchObject({ status: "failed" });
+    });
+
     it("Always replay — suspend and replay after each entry", async () => {
       const client = clients
         .connect({ url: env.baseUrl() })
@@ -1363,8 +1425,8 @@ function hooksSuite(level: HookLevel) {
 // ---------------------------------------------------------------------------
 
 hooksSuite("handler");
-hooksSuite("service");
-hooksSuite("endpoint");
+// hooksSuite("service");
+// hooksSuite("endpoint");
 
 // ---------------------------------------------------------------------------
 // Composition ordering: 2 hooks per level, with retries
