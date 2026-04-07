@@ -47,6 +47,12 @@ export class ComponentRegistry {
     });
   }
 
+  registerAll(e: RestateEndpoint) {
+    this.components.forEach((svc) => {
+      svc.binder(e);
+    });
+  }
+
   register(fqdns: Set<string>, e: RestateEndpoint) {
     fqdns.forEach((fqdn) => {
       const c = this.components.get(fqdn);

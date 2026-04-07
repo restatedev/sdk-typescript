@@ -24,6 +24,7 @@ import "./proxy.js";
 import "./test_utils.js";
 import "./kill.js";
 import "./virtual_object_command_interpreter.js";
+import "./promise_combinators.js";
 import * as http2 from "http2";
 import * as heapdump from "heapdump";
 import path from "path";
@@ -41,12 +42,13 @@ process.on("SIGUSR2", () => {
 
 import { REGISTRY } from "./services.js";
 
-if (!process.env.SERVICES) {
-  throw new Error("Cannot find SERVICES env");
-}
-const fqdns = new Set(process.env.SERVICES.split(","));
 const endpoint = restate.endpoint();
-REGISTRY.register(fqdns, endpoint);
+if (!process.env.SERVICES || process.env.SERVICES == "*") {
+  REGISTRY.registerAll(endpoint);
+} else {
+  const fqdns = new Set(process.env.SERVICES.split(","));
+  REGISTRY.register(fqdns, endpoint);
+}
 
 const settings: http2.Settings = {};
 if (process.env.MAX_CONCURRENT_STREAMS) {

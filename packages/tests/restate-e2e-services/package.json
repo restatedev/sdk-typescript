@@ -18,7 +18,6 @@
   "scripts": {
     "build": "turbo run _build --filter={.}...",
     "_build": "tsc -b tsconfig.test.json",
-    "test": "turbo run _test --filter={.}...",
     "_test": "vitest run",
     "test:watch": "vitest watch",
     "clean": "rm -rf dist *.tsbuildinfo .turbo",
