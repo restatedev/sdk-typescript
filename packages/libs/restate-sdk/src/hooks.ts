@@ -2,6 +2,15 @@ import type { Request } from "./context.js";
 
 // ---- Result types ----
 
+/**
+ * Normalized outcome of a single invocation attempt.
+ *
+ * - `success`: the attempt completed and its output was committed.
+ * - `retryableError`: the attempt ended with an error and may be retried.
+ * - `terminalError`: the attempt ended with a non-retryable error.
+ * - `abandoned`: the SDK ended the attempt at an attempt boundary
+ *   (for example suspension) without treating it as a user failure.
+ */
 export type AttemptResult =
   | { type: "success" }
   | { type: "retryableError"; error: Error }
