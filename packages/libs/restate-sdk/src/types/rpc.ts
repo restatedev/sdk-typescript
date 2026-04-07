@@ -486,66 +486,6 @@ export class HandlerWrapper {
       | WorkflowHandlerOpts<unknown, unknown>
   ) {}
 
-  public get inputSerde(): Serde<unknown> | undefined {
-    return this.options?.input;
-  }
-
-  public get outputSerde(): Serde<unknown> | undefined {
-    return this.options?.output;
-  }
-
-  public get accept(): string | undefined {
-    return this.options?.accept;
-  }
-
-  public get description(): string | undefined {
-    return this.options?.description;
-  }
-
-  public get metadata(): Record<string, string> | undefined {
-    return this.options?.metadata;
-  }
-
-  public get idempotencyRetention(): Duration | number | undefined {
-    return this.options?.idempotencyRetention;
-  }
-
-  public get journalRetention(): Duration | number | undefined {
-    return this.options?.journalRetention;
-  }
-
-  public get inactivityTimeout(): Duration | number | undefined {
-    return this.options?.inactivityTimeout;
-  }
-
-  public get abortTimeout(): Duration | number | undefined {
-    return this.options?.abortTimeout;
-  }
-
-  public get ingressPrivate(): boolean | undefined {
-    return this.options?.ingressPrivate;
-  }
-
-  public get enableLazyState(): boolean | undefined {
-    return this.options !== undefined && "enableLazyState" in this.options
-      ? this.options.enableLazyState
-      : undefined;
-  }
-
-  public get retryPolicy(): RetryPolicy | undefined {
-    return this.options?.retryPolicy;
-  }
-
-  public get hooks(): HooksProvider[] | undefined {
-    return this.options?.hooks;
-  }
-
-  public get asTerminalError():
-    | ((error: any) => TerminalError | undefined)
-    | undefined {
-    return this.options?.asTerminalError;
-  }
-
   bindInstance(t: unknown) {
     this.handler = this.handler.bind(t) as Function;
   }
