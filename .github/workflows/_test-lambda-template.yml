@@ -26,14 +26,14 @@ jobs:
           --health-retries 5
 
       localstack:
-        image: localstack/localstack:latest
+        image: localstack/localstack:stable
         ports:
           - 4566:4566
         env:
-          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
+          ACTIVATE_PRO: 0
+          LOG_LICENSE_ISSUES: 0
           SERVICES: lambda,iam,sts,logs
           DEBUG: 1
-          LAMBDA_EXECUTOR: local
           DOCKER_HOST: unix:///var/run/docker.sock
         options: >-
           --health-cmd "curl -f http://localhost:4566/_localstack/health || exit 1"
