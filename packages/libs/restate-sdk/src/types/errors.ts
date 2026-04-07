@@ -102,10 +102,6 @@ export class TerminalError extends RestateError {
        */
       errorCode?: number;
       /**
-       * @deprecated YOU MUST NOT USE THIS FIELD, AS IT WON'T BE RECORDED AND CAN LEAD TO NON-DETERMINISM! From the next SDK version, the constructor won't accept this field anymore.
-       */
-      cause?: any;
-      /**
        * Metadata key-value pairs to attach to the terminal error.
        * These will be recorded together with error message and code.
        *

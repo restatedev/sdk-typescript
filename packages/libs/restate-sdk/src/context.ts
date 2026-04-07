@@ -141,16 +141,6 @@ export interface KeyValueStore<TState extends TypedState> {
   clearAll(): void;
 }
 
-/**
- * @deprecated SendOptions on the client factory are deprecated, please use `restate.rpc.sendOpts` instead
- */
-export interface SendOptions {
-  /**
-   * @deprecated SendOptions on the client factory are deprecated, please use `restate.rpc.sendOpts` instead
-   */
-  delay?: number;
-}
-
 export interface ContextDate {
   /** Returns the number of milliseconds elapsed since midnight, January 1, 1970 Universal Coordinated Time (UTC).
    *  This is equivalent to Date.now()
@@ -178,11 +168,6 @@ export type RunOptions<T> = {
   maxRetryAttempts?: number;
 
   /**
-   * @deprecated Use `maxRetryDuration` instead.
-   */
-  maxRetryDurationMillis?: number;
-
-  /**
    * Max duration of retries, before giving up.
    *
    * When giving up, `ctx.run` will throw a `TerminalError` wrapping the original error message.
@@ -190,11 +175,6 @@ export type RunOptions<T> = {
    * If a number is provided, it will be interpreted as milliseconds.
    */
   maxRetryDuration?: Duration | number;
-
-  /**
-   * @deprecated Use `initialRetryInterval` instead.
-   */
-  initialRetryIntervalMillis?: number;
 
   /**
    * Initial interval for the first retry attempt.
@@ -205,11 +185,6 @@ export type RunOptions<T> = {
    * If a number is provided, it will be interpreted as milliseconds.
    */
   initialRetryInterval?: Duration | number;
-
-  /**
-   * @deprecated Use `maxRetryInterval` instead.
-   */
-  maxRetryIntervalMillis?: number;
 
   /**
    * Max interval between retries.
@@ -560,8 +535,7 @@ export interface Context extends RestateContext {
    * ```
    */
   serviceSendClient<D>(
-    service: ServiceDefinitionFrom<D>,
-    opts?: SendOptions
+    service: ServiceDefinitionFrom<D>
   ): SendClient<Service<D>>;
 
   /**
@@ -573,8 +547,7 @@ export interface Context extends RestateContext {
    */
   objectSendClient<D>(
     obj: VirtualObjectDefinitionFrom<D>,
-    key: string,
-    opts?: SendOptions
+    key: string
   ): SendClient<VirtualObject<D>>;
 
   genericCall<REQ = Uint8Array, RES = Uint8Array>(
