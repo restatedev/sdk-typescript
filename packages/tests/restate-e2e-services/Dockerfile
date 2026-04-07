@@ -10,8 +10,8 @@ RUN corepack enable && corepack prepare pnpm@10.13.1 --activate
 
 COPY . .
 
-# Install dependencies (heapdump will build automatically via onlyBuiltDependencies)
-RUN pnpm install --frozen-lockfile --dangerously-allow-all-builds
+# Install dependencies
+RUN pnpm install --frozen-lockfile
 
 # Build SDK libraries
 RUN pnpm build
