@@ -565,8 +565,7 @@ async function startUserHandler(
       // Convert to Error
       const error = ensureError(e, handler.executionOptions.asTerminalError);
 
-      // Attempt abandoned (suspension, run-retry restart, call to missing service).
-      // The VM already knows — don't notify it again.
+      // Attempt abandoned due to suspension — no error, pure control flow.
       if (error instanceof AttemptAbandonedError) {
         attemptResult = { type: "abandoned" };
         return;

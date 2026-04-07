@@ -754,7 +754,7 @@ function hooksSuite(level: HookLevel) {
         "hook:run:step:before",
         "hook:run:step:error:run retryable fail",
         "hook:handler:error:(500) run retryable fail",
-        "hook:attemptEnd:abandoned",
+        "hook:attemptEnd:retryableError",
         // attempt 2: run closure succeeds
         "hook:handler:before",
         "hook:run:step:before",
@@ -789,14 +789,16 @@ function hooksSuite(level: HookLevel) {
     it("call to non-existent service — handler:error and attemptEnd fire on each attempt", async () => {
       const client = clients
         .connect({ url: env.baseUrl() })
-        .serviceClient(callNonExistentService);
-      const { events: hookEvents } = await invokeExpectingError(
-        () => client.invoke("") as Promise<unknown>
-      );
-      // The call error triggers invocation abandonment. The end of attempt 1
+        .serviceSendClient(callNonExistentService);
+      const send = await client.invoke("");
+
+      // The sent invocation's call error triggers invocation abandonment.
+      // The end of attempt 1
       // (handler:error, attemptEnd) may interleave with the start of attempt 2
       // (handler:before).
-      expect(hookEvents).toEqual([
+      await expect
+        .poll(() => getHookEvents(send.invocationId))
+        .toEqual([
         // attempt 1 starts
         "hook:handler:before",
         // attempt 1 ends + attempt 2 starts (may interleave)
@@ -868,7 +870,7 @@ function hooksSuite(level: HookLevel) {
         "hook:run:step:before",
         "hook:run:step:error:run interceptor retryable error",
         "hook:handler:error:(500) run interceptor retryable error",
-        "hook:attemptEnd:abandoned",
+        "hook:attemptEnd:retryableError",
         // attempt 2: run interceptor succeeds, run executes
         "hook:handler:before",
         "hook:run:step:before",
@@ -973,7 +975,7 @@ function hooksSuite(level: HookLevel) {
         "hook:run:step:before",
         "hook:run:step:error:run interceptor retryable after next",
         "hook:handler:error:(500) run interceptor retryable after next",
-        "hook:attemptEnd:abandoned",
+        "hook:attemptEnd:retryableError",
         // attempt 2: run re-executes, interceptor does not throw, succeeds
         "hook:handler:before",
         "hook:run:step:before",
@@ -1086,7 +1088,7 @@ function hooksSuite(level: HookLevel) {
         ...inAnyOrder("hook:run:run-1:before", "hook:run:run-2:before"),
         "hook:run:run-1:error:run-1 fail",
         "hook:handler:error:(500) run-1 fail",
-        "hook:attemptEnd:abandoned",
+        "hook:attemptEnd:retryableError",
         // stale run-2:error from attempt 1 + attempt 2 start (may interleave)
         ...inAnyOrder(
           "hook:run:run-2:error:(500) run-1 fail",
@@ -1097,7 +1099,7 @@ function hooksSuite(level: HookLevel) {
         "hook:run:run-1:after",
         "hook:run:run-2:error:run-2 fail",
         "hook:handler:error:(500) run-2 fail",
-        "hook:attemptEnd:abandoned",
+        "hook:attemptEnd:retryableError",
         // attempt 3: run-1 replayed, run-2 succeeds
         "hook:handler:before",
         "hook:run:run-2:before",
@@ -1208,13 +1210,13 @@ function hooksSuite(level: HookLevel) {
         "hook:run:step:before",
         "hook:run:step:after",
         "hook:handler:error:run serde failure",
-        "hook:attemptEnd:abandoned",
+        "hook:attemptEnd:retryableError",
         // attempt 2: same failure — abandoned, then killed (maxAttempts: 2)
         "hook:handler:before",
         "hook:run:step:before",
         "hook:run:step:after",
         "hook:handler:error:run serde failure",
-        "hook:attemptEnd:abandoned",
+        "hook:attemptEnd:retryableError",
       ]);
     });
 
@@ -1231,7 +1233,7 @@ function hooksSuite(level: HookLevel) {
         "hook:run:step:before",
         "hook:run:step:after",
         "hook:handler:error:transient map error on: hello",
-        "hook:attemptEnd:abandoned",
+        "hook:attemptEnd:retryableError",
         // attempt 2: run replayed, .map() throws terminal error
         "hook:handler:before",
         "hook:handler:error:map failed on: hello",
@@ -1252,7 +1254,7 @@ function hooksSuite(level: HookLevel) {
         "hook:run:flaky-step:before",
         "hook:run:flaky-step:error:always fails",
         "hook:handler:error:(500) always fails",
-        "hook:attemptEnd:abandoned",
+        "hook:attemptEnd:retryableError",
         // attempt 2: run fails — terminal (maxRetryAttempts exhausted)
         "hook:handler:before",
         "hook:run:flaky-step:before",
@@ -1292,15 +1294,15 @@ function hooksSuite(level: HookLevel) {
         "hook:run:step-a:before",
         "hook:run:step-a:error:transient",
         "hook:handler:error:(500) transient",
-        "hook:attemptEnd:abandoned",
+        "hook:attemptEnd:retryableError",
         // attempt 2: run "step-b" mismatches journal — abandoned
         "hook:handler:before",
         "hook:handler:error:(570) Found a mismatch between the code paths taken during the previous executio...",
-        "hook:attemptEnd:abandoned",
+        "hook:attemptEnd:retryableError",
         // attempt 3: same mismatch — abandoned, then killed (maxAttempts: 3)
         "hook:handler:before",
         "hook:handler:error:(570) Found a mismatch between the code paths taken during the previous executio...",
-        "hook:attemptEnd:abandoned",
+        "hook:attemptEnd:retryableError",
       ]);
     });
 
@@ -1316,7 +1318,7 @@ function hooksSuite(level: HookLevel) {
         "hook:run:slow-step:before",
         "hook:run:slow-step:error:aborted",
         "hook:handler:error:(500) aborted",
-        "hook:attemptEnd:abandoned",
+        "hook:attemptEnd:retryableError",
         // attempt 2: run completes quickly — success
         "hook:handler:before",
         "hook:run:slow-step:before",
@@ -1337,7 +1339,7 @@ function hooksSuite(level: HookLevel) {
         "hook:run:step-1:before",
         "hook:run:step-1:error:step-1 transient",
         "hook:handler:error:(500) step-1 transient",
-        "hook:attemptEnd:abandoned",
+        "hook:attemptEnd:retryableError",
         "hook:handler:before",
         "hook:run:step-1:before",
         "hook:run:step-1:after",

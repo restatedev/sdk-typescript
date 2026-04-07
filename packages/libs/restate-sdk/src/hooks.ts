@@ -1,5 +1,4 @@
 import type { Request } from "./context.js";
-import type { AttemptAbandonedError } from "./types/errors.js";
 
 // ---- Result types ----
 
