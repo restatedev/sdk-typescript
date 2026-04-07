@@ -1470,6 +1470,50 @@ function hooksSuite(level: HookLevel) {
 hooksSuite("handler");
 hooksSuite("service");
 
+describe("default service hook overriding", { timeout: 120_000 }, () => {
+  let env: RestateTestEnvironment;
+
+  const overrideService = restate.service({
+    name: "ServiceOverridesDefaultHooks",
+    handlers: {
+      invoke: async (ctx: restate.Context, _input: string) => ({
+        invocationId: ctx.request().id,
+      }),
+    },
+    options: {
+      hooks: [recordHookEvents("service")],
+    },
+  });
+
+  beforeAll(async () => {
+    env = await RestateTestEnvironment.start({
+      services: [overrideService],
+      defaultServiceOptions: {
+        hooks: [recordHookEvents("default")],
+      },
+    });
+  }, 120_000);
+
+  afterAll(async () => {
+    await env?.stop();
+  });
+
+  it("service hooks override default service hooks", async () => {
+    const client = clients
+      .connect({ url: env.baseUrl() })
+      .serviceClient(overrideService);
+    const { invocationId } = (await client.invoke("")) as {
+      invocationId: string;
+    };
+
+    expect(getHookEvents(invocationId)).toEqual([
+      "service:handler:before",
+      "service:handler:after",
+      "service:attemptEnd:success",
+    ]);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Composition ordering: 2 hooks per level, with retries
 // ---------------------------------------------------------------------------
@@ -1509,7 +1553,7 @@ describe("hooks composition ordering", { timeout: 120_000 }, () => {
     await env?.stop();
   });
 
-  it("default service -> service -> handler nesting with retries", async () => {
+  it("service and handler hooks compose across retries", async () => {
     const client = clients
       .connect({ url: env.baseUrl() })
       .serviceClient(orderingService);
@@ -1519,16 +1563,13 @@ describe("hooks composition ordering", { timeout: 120_000 }, () => {
 
     expect(getHookEvents(invocationId)).toEqual([
       // ---- attempt 1: step-1 succeeds, then retryable error ----
-      // handler interceptors nest outermost-first
-      "d1:handler:before",
-      "d2:handler:before",
+      // service hooks override defaultServiceOptions.hooks, so only
+      // service + handler hooks participate here.
       "s1:handler:before",
       "s2:handler:before",
       "h1:handler:before",
       "h2:handler:before",
       // run interceptors for step-1
-      "d1:run:step-1:before",
-      "d2:run:step-1:before",
       "s1:run:step-1:before",
       "s2:run:step-1:before",
       "h1:run:step-1:before",
@@ -1538,34 +1579,24 @@ describe("hooks composition ordering", { timeout: 120_000 }, () => {
       "h1:run:step-1:after",
       "s2:run:step-1:after",
       "s1:run:step-1:after",
-      "d2:run:step-1:after",
-      "d1:run:step-1:after",
       // handler:error unwinds innermost-first (catch block)
       "h2:handler:error:retry",
       "h1:handler:error:retry",
       "s2:handler:error:retry",
       "s1:handler:error:retry",
-      "d2:handler:error:retry",
-      "d1:handler:error:retry",
       // listeners fire in registration order
-      "d1:attemptEnd:retryableError:retry",
-      "d2:attemptEnd:retryableError:retry",
       "s1:attemptEnd:retryableError:retry",
       "s2:attemptEnd:retryableError:retry",
       "h1:attemptEnd:retryableError:retry",
       "h2:attemptEnd:retryableError:retry",
 
       // ---- attempt 2: step-1 replayed, step-2 executes, success ----
-      "d1:handler:before",
-      "d2:handler:before",
       "s1:handler:before",
       "s2:handler:before",
       "h1:handler:before",
       "h2:handler:before",
       // step-1 replayed — no run interceptor events
       // run interceptors for step-2
-      "d1:run:step-2:before",
-      "d2:run:step-2:before",
       "s1:run:step-2:before",
       "s2:run:step-2:before",
       "h1:run:step-2:before",
@@ -1574,18 +1605,12 @@ describe("hooks composition ordering", { timeout: 120_000 }, () => {
       "h1:run:step-2:after",
       "s2:run:step-2:after",
       "s1:run:step-2:after",
-      "d2:run:step-2:after",
-      "d1:run:step-2:after",
       // handler:after unwinds innermost-first
       "h2:handler:after",
       "h1:handler:after",
       "s2:handler:after",
       "s1:handler:after",
-      "d2:handler:after",
-      "d1:handler:after",
       // listeners
-      "d1:attemptEnd:success",
-      "d2:attemptEnd:success",
       "s1:attemptEnd:success",
       "s2:attemptEnd:success",
       "h1:attemptEnd:success",

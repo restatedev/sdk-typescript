@@ -204,18 +204,6 @@ export class EndpointBuilder {
   }
 }
 
-function mergeServiceOptions<
-  T extends ServiceOptions | ObjectOptions | WorkflowOptions,
->(defaults: Partial<T>, overrides?: T): T {
-  const hooks = [...(defaults.hooks ?? []), ...(overrides?.hooks ?? [])];
-
-  return {
-    ...defaults,
-    ...overrides,
-    hooks: hooks.length > 0 ? hooks : undefined,
-  } as T;
-}
-
 function computeDiscovery(
   components: Map<string, Component>
 ): discovery.Endpoint {
@@ -239,10 +227,10 @@ function buildServiceComponent(
     name,
     definition.description,
     definition.metadata,
-    mergeServiceOptions(
-      defaultServiceOptions,
-      definition?.options as ServiceOptions
-    )
+    {
+      ...defaultServiceOptions,
+      ...(definition?.options as ServiceOptions | undefined),
+    }
   );
 
   for (const [route, handler] of Object.entries(
@@ -272,10 +260,10 @@ function buildVirtualObjectComponent(
     name,
     definition.description,
     definition.metadata,
-    mergeServiceOptions(
-      defaultServiceOptions,
-      definition?.options as ObjectOptions
-    )
+    {
+      ...defaultServiceOptions,
+      ...(definition?.options as ObjectOptions | undefined),
+    }
   );
 
   for (const [route, handler] of Object.entries(
@@ -304,10 +292,10 @@ function buildWorkflowComponent(
     name,
     definition.description,
     definition.metadata,
-    mergeServiceOptions(
-      defaultServiceOptions,
-      definition?.options as WorkflowOptions
-    )
+    {
+      ...defaultServiceOptions,
+      ...(definition?.options as WorkflowOptions | undefined),
+    }
   );
 
   for (const [route, handler] of Object.entries(
