@@ -64,12 +64,7 @@ import {
   tryCreateContextualLogger,
 } from "./utils.js";
 import { destroyLogger, registerLogger } from "./core_logging.js";
-import type {
-  Hooks,
-  HooksProvider,
-  AttemptResult,
-  HookContext,
-} from "../../hooks.js";
+import type { Hooks, AttemptResult, HookContext } from "../../hooks.js";
 
 export function createRestateHandler(
   endpoint: Endpoint,
@@ -251,8 +246,7 @@ class RestateHandlerImpl implements RestateHandler {
       extraArgs,
       additionalContext,
       this.endpoint.journalValueCodec,
-      this.endpoint.loggerTransport,
-      this.endpoint.hooksProviders
+      this.endpoint.loggerTransport
     );
   }
 }
@@ -274,8 +268,7 @@ class RestateInvokeResponse implements RestateResponse {
     private readonly journalValueCodecInit:
       | Promise<JournalValueCodec>
       | undefined,
-    private readonly loggerTransport: LoggerTransport,
-    private readonly endpointHooksProviders: HooksProvider[]
+    private readonly loggerTransport: LoggerTransport
   ) {
     this.loggerId = Math.floor(Math.random() * 4_294_967_295 /* u32::MAX */);
     const isJournalCodecDefined = this.journalValueCodecInit !== undefined;
@@ -454,10 +447,12 @@ class RestateInvokeResponse implements RestateResponse {
     // We await invocationEndPromise instead, which works as follows:
     // * In the happy path, that is no errors, invocationEndPromise gets resolved by the line below in this finally branch
     // * In the transient error case that happens within the handler, invocationEndPromise gets resolved by the ContextImpl itself, unblocking the await line below
-    void startUserHandler(ctx, this.service, this.handler, journalValueCodec, [
-      ...this.endpointHooksProviders,
-      ...this.handler.hooksProviders(),
-    ]).finally(() => {
+    void startUserHandler(
+      ctx,
+      this.service,
+      this.handler,
+      journalValueCodec
+    ).finally(() => {
       invocationEndPromise.resolve();
     });
     await invocationEndPromise.promise;
@@ -487,8 +482,7 @@ async function startUserHandler(
   ctx: ContextImpl,
   service: Component,
   handler: ComponentHandler,
-  journalValueCodec: JournalValueCodec,
-  hooksProviders: HooksProvider[]
+  journalValueCodec: JournalValueCodec
 ) {
   const hooks: Hooks[] = [];
   let attemptResult: AttemptResult | undefined;
@@ -507,7 +501,7 @@ async function startUserHandler(
       // Instantiate hooks from providers.
       // If a provider throws, the same rules as handler failures apply:
       // TerminalError → terminate invocation, other errors → retry.
-      for (const provider of hooksProviders) {
+      for (const provider of handler.executionOptions.hooks ?? []) {
         hooks.push(provider(hookContext));
       }
 

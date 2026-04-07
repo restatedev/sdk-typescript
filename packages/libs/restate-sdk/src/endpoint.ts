@@ -23,7 +23,6 @@ import type {
   ServiceOptions,
   WorkflowOptions,
 } from "./types/rpc.js";
-import type { HooksProvider } from "./hooks.js";
 
 export type DefaultServiceOptions = ServiceOptions &
   ObjectOptions &
@@ -92,12 +91,6 @@ export interface RestateEndpointBase<E> {
    * @experimental
    */
   journalValueCodecProvider(codecProvider: () => Promise<JournalValueCodec>): E;
-
-  /**
-   * Set endpoint-level hooks providers. Endpoint hooks wrap outermost
-   * (before service-level and handler-level hooks).
-   */
-  setHooksProviders(hooks: HooksProvider[]): E;
 }
 
 /**

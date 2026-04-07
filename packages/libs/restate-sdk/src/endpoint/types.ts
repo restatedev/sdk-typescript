@@ -5,7 +5,6 @@ import type {
   VirtualObjectDefinition,
   WorkflowDefinition,
   JournalValueCodec,
-  HooksProvider,
 } from "../common_api.js";
 
 /**
@@ -65,10 +64,4 @@ export interface EndpointOptions {
    * @experimental
    */
   journalValueCodecProvider?: () => Promise<JournalValueCodec>;
-
-  /**
-   * Hooks providers for this endpoint. Endpoint-level hooks wrap outermost
-   * (before service-level and handler-level hooks).
-   */
-  hooks?: HooksProvider[];
 }

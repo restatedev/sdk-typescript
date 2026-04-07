@@ -45,6 +45,7 @@ export interface ExecutionOptions {
    * Default serde to use for requests, responses, state, side effects, awakeables, promises. Used when no other serde is specified.
    */
   defaultSerde?: Serde<any>;
+  hooks?: HooksProvider[];
 }
 
 export interface ComponentHandler {
@@ -53,7 +54,6 @@ export interface ComponentHandler {
   invoke(context: ContextImpl, input: Uint8Array): Promise<Uint8Array>;
   kind(): HandlerKind;
   executionOptions: ExecutionOptions;
-  hooksProviders(): HooksProvider[];
 }
 
 //
@@ -118,10 +118,15 @@ function createExecutionOptions(
   serviceOptions?: ServiceOptions,
   handlerOptions?: ServiceHandlerOpts<unknown, unknown>
 ): ExecutionOptions {
+  const hooks = [
+    ...(serviceOptions?.hooks ?? []),
+    ...(handlerOptions?.hooks ?? []),
+  ];
   return {
     defaultSerde: handlerOptions?.serde ?? serviceOptions?.serde,
     asTerminalError:
       handlerOptions?.asTerminalError ?? serviceOptions?.asTerminalError,
+    hooks: hooks.length > 0 ? hooks : undefined,
   };
 }
 
@@ -199,13 +204,6 @@ export class ServiceHandler implements ComponentHandler {
 
   invoke(context: ContextImpl, input: Uint8Array): Promise<Uint8Array> {
     return this.handlerWrapper.invoke(context, input);
-  }
-
-  hooksProviders(): HooksProvider[] {
-    return [
-      ...(this.parent.options?.hooks ?? []),
-      ...(this.handlerWrapper.hooks ?? []),
-    ];
   }
 }
 
@@ -288,13 +286,6 @@ export class VirtualObjectHandler implements ComponentHandler {
 
   invoke(context: ContextImpl, input: Uint8Array): Promise<Uint8Array> {
     return this.handlerWrapper.invoke(context, input);
-  }
-
-  hooksProviders(): HooksProvider[] {
-    return [
-      ...(this.parent.options?.hooks ?? []),
-      ...(this.handlerWrapper.hooks ?? []),
-    ];
   }
 }
 
@@ -379,13 +370,6 @@ export class WorkflowHandler implements ComponentHandler {
 
   invoke(context: ContextImpl, input: Uint8Array): Promise<Uint8Array> {
     return this.handlerWrapper.invoke(context, input);
-  }
-
-  hooksProviders(): HooksProvider[] {
-    return [
-      ...(this.parent.options?.hooks ?? []),
-      ...(this.handlerWrapper.hooks ?? []),
-    ];
   }
 }
 

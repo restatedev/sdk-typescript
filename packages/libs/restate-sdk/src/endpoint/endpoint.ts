@@ -39,7 +39,6 @@ import {
 import type { Logger } from "../logging/logger.js";
 import { createLogger } from "../logging/logger.js";
 import type { DefaultServiceOptions } from "../endpoint.js";
-import type { HooksProvider } from "../hooks.js";
 
 function isServiceDefinition<P extends string, M>(
   m: Record<string, any>
@@ -88,7 +87,6 @@ export type Endpoint = {
    * Codec provider to use for journal values.
    */
   journalValueCodec?: Promise<JournalValueCodec>;
-  hooksProviders: HooksProvider[];
 };
 
 export class EndpointBuilder {
@@ -102,7 +100,6 @@ export class EndpointBuilder {
   private keySet: string[] = [];
   private defaultServiceOptions: DefaultServiceOptions = {};
   private journalValueCodecProvider?: () => Promise<JournalValueCodec>;
-  private endpointHooksProviders: HooksProvider[] = [];
 
   public bind<P extends string, M>(
     definition:
@@ -134,10 +131,6 @@ export class EndpointBuilder {
     codecProvider: () => Promise<JournalValueCodec>
   ) {
     this.journalValueCodecProvider = codecProvider;
-  }
-
-  public setHooksProviders(hooks: HooksProvider[]) {
-    this.endpointHooksProviders = hooks;
   }
 
   public build(): Endpoint {
@@ -207,9 +200,20 @@ export class EndpointBuilder {
       journalValueCodec: this.journalValueCodecProvider
         ? this.journalValueCodecProvider()
         : undefined,
-      hooksProviders: this.endpointHooksProviders,
     };
   }
+}
+
+function mergeServiceOptions<
+  T extends ServiceOptions | ObjectOptions | WorkflowOptions,
+>(defaults: Partial<T>, overrides?: T): T {
+  const hooks = [...(defaults.hooks ?? []), ...(overrides?.hooks ?? [])];
+
+  return {
+    ...defaults,
+    ...overrides,
+    hooks: hooks.length > 0 ? hooks : undefined,
+  } as T;
 }
 
 function computeDiscovery(
@@ -235,10 +239,10 @@ function buildServiceComponent(
     name,
     definition.description,
     definition.metadata,
-    {
-      ...defaultServiceOptions,
-      ...(definition?.options as ServiceOptions),
-    }
+    mergeServiceOptions(
+      defaultServiceOptions,
+      definition?.options as ServiceOptions
+    )
   );
 
   for (const [route, handler] of Object.entries(
@@ -268,10 +272,10 @@ function buildVirtualObjectComponent(
     name,
     definition.description,
     definition.metadata,
-    {
-      ...defaultServiceOptions,
-      ...(definition?.options as ObjectOptions),
-    }
+    mergeServiceOptions(
+      defaultServiceOptions,
+      definition?.options as ObjectOptions
+    )
   );
 
   for (const [route, handler] of Object.entries(
@@ -300,10 +304,10 @@ function buildWorkflowComponent(
     name,
     definition.description,
     definition.metadata,
-    {
-      ...defaultServiceOptions,
-      ...(definition?.options as WorkflowOptions),
-    }
+    mergeServiceOptions(
+      defaultServiceOptions,
+      definition?.options as WorkflowOptions
+    )
   );
 
   for (const [route, handler] of Object.entries(

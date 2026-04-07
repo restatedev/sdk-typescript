@@ -23,7 +23,6 @@ import type {
 import { createRestateHandler } from "./handlers/generic.js";
 import { isCompressionSupported, LambdaHandler } from "./handlers/lambda.js";
 import type { LoggerTransport } from "../logging/logger_transport.js";
-import type { HooksProvider } from "../hooks.js";
 
 /**
  * LambdaEndpoint encapsulates all the Restate services served by this endpoint.
@@ -76,11 +75,6 @@ export class LambdaEndpointImpl implements LambdaEndpoint {
     codecProvider: () => Promise<JournalValueCodec>
   ): LambdaEndpoint {
     this.builder.setJournalValueCodecProvider(codecProvider);
-    return this;
-  }
-
-  public setHooksProviders(hooks: HooksProvider[]): LambdaEndpoint {
-    this.builder.setHooksProviders(hooks);
     return this;
   }
 

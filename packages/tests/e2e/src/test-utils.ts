@@ -10,14 +10,10 @@ import type {
 // Service factory
 // ---------------------------------------------------------------------------
 
-export type HookLevel = "handler" | "service" | "endpoint";
+export type HookLevel = "handler" | "service";
 
 export function withHooksAt(level: HookLevel, hooks: HooksProvider[]) {
-  return level === "handler"
-    ? { handlerHooks: hooks }
-    : level === "service"
-      ? { serviceHooks: hooks }
-      : {};
+  return level === "handler" ? { handlerHooks: hooks } : { serviceHooks: hooks };
 }
 
 export function createService<T>(opts: {
@@ -535,6 +531,8 @@ export async function pauseInvocationViaAdminApi(
 
   if (!res.ok) {
     const badResponse = await res.text();
-    throw new Error(`Error ${res.status} during invocation pause: ${badResponse}`);
+    throw new Error(
+      `Error ${res.status} during invocation pause: ${badResponse}`
+    );
   }
 }

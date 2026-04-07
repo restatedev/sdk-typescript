@@ -25,7 +25,6 @@ import { createRestateHandler } from "./handlers/generic.js";
 import { ensureError } from "../types/errors.js";
 import type { LoggerTransport } from "../logging/logger_transport.js";
 import type { DefaultServiceOptions } from "../endpoint.js";
-import type { HooksProvider } from "../hooks.js";
 import { tryCreateContextualLogger } from "./handlers/utils.js";
 import type { InputReader, OutputWriter } from "./handlers/types.js";
 import type { ProtocolMode } from "./discovery.js";
@@ -64,11 +63,6 @@ export class NodeEndpoint implements RestateEndpoint {
     codecProvider: () => Promise<JournalValueCodec>
   ): RestateEndpoint {
     this.builder.setJournalValueCodecProvider(codecProvider);
-    return this;
-  }
-
-  public setHooksProviders(hooks: HooksProvider[]): RestateEndpoint {
-    this.builder.setHooksProviders(hooks);
     return this;
   }
 

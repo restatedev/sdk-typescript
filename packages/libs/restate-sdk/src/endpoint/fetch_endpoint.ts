@@ -24,7 +24,6 @@ import { createRestateHandler } from "./handlers/generic.js";
 import { fetcher } from "./handlers/fetch.js";
 import type { LoggerTransport } from "../logging/logger_transport.js";
 import type { ProtocolMode } from "./discovery.js";
-import type { HooksProvider } from "../hooks.js";
 
 /**
  * Generic Fetch encapsulates all the Restate services served by this endpoint.
@@ -95,11 +94,6 @@ export class FetchEndpointImpl implements FetchEndpoint {
     codecProvider: () => Promise<JournalValueCodec>
   ): FetchEndpoint {
     this.builder.setJournalValueCodecProvider(codecProvider);
-    return this;
-  }
-
-  public setHooksProviders(hooks: HooksProvider[]): FetchEndpoint {
-    this.builder.setHooksProviders(hooks);
     return this;
   }
 

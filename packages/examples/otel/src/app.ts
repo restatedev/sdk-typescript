@@ -115,7 +115,9 @@ const hooks = [otelTracingHook];
 
 const handler = createEndpointHandler({
   services,
-  hooks,
+  defaultServiceOptions: {
+    hooks,
+  },
   bidirectional: mode === "bidi",
 });
 
