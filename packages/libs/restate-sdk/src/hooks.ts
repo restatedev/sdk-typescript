@@ -7,11 +7,23 @@ import type { Request } from "./context.js";
  * invocation — anything that happens inside them (including after `next()`)
  * affects the invocation outcome.
  *
- * - Errors thrown at any point (before or after `next()`) will fail or retry the invocation.
+ * ## Error behavior
+ *
+ * Errors thrown at any point (before or after `next()`) affect the invocation:
+ *
+ * - **{@link TerminalError}** — the invocation **fails immediately**, no retry.
+ * - **Any other error** — Restate **retries** the invocation.
  * - On suspension, `next()` rejects with a suspended error. Use {@link isSuspendedError}
- *   to detect this — it means the attempt is paused, not failed.
+ *   to detect this — it means the attempt is suspended/paused, not failed.
  *   Do any cleanup you need and rethrow.
- * - Cannot modify the handler's input or return value (`void` signature).
+ *
+ * ## Output
+ *
+ * Interceptors **cannot alter the handler's return value**. The `void` signature
+ * means the interceptor observes execution but does not transform its result.
+ *
+ * ## Rules
+ *
  * - `next()` must be called exactly once.
  *
  * ## When interceptors fire
