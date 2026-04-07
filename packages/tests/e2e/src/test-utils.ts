@@ -498,3 +498,24 @@ export async function getRunJournalEntry(
   }
   return undefined;
 }
+
+/**
+ * Requests graceful cancellation for an invocation via the Admin API.
+ * The call is non-blocking and may return before the cancellation completes.
+ */
+export async function cancelInvocationViaAdminApi(
+  adminUrl: string,
+  invocationId: string
+): Promise<void> {
+  const res = await fetch(`${adminUrl}/invocations/${invocationId}/cancel`, {
+    method: "PATCH",
+    headers: { Accept: "application/json" },
+  });
+
+  if (!res.ok) {
+    const badResponse = await res.text();
+    throw new Error(
+      `Error ${res.status} during invocation cancel: ${badResponse}`
+    );
+  }
+}

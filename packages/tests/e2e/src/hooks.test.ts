@@ -27,6 +27,7 @@ import {
   fastRetry,
   getInvocationOutcome,
   getRunJournalEntry,
+  cancelInvocationViaAdminApi,
   inAnyOrder,
 } from "./test-utils.js";
 
@@ -533,14 +534,6 @@ function hooksSuite(level: HookLevel) {
       },
     });
 
-    const cancelInvocationService = createService({
-      name: `${level}_CancelInvocation`,
-      handler: async (ctx, invocationId) => {
-        ctx.cancel(restate.InvocationIdParser.fromString(invocationId));
-        return { invocationId: ctx.request().id };
-      },
-    });
-
     const suspendPerEntryService = createService({
       name: `${level}_SuspendPerEntry`,
       ...hooksAt([recordHookEvents()]),
@@ -597,7 +590,6 @@ function hooksSuite(level: HookLevel) {
         journalMismatchService,
         abortTimeoutService,
         cancelDuringRunService,
-        cancelInvocationService,
         suspendPerEntryService,
       ];
       env = await RestateTestEnvironment.start({
@@ -1370,9 +1362,10 @@ function hooksSuite(level: HookLevel) {
         })
         .toEqual(["hook:handler:before", "hook:run:slow-step:before"]);
 
-      await ingress
-        .serviceClient(cancelInvocationService)
-        .invoke(send.invocationId);
+      await cancelInvocationViaAdminApi(
+        env.adminAPIBaseUrl(),
+        send.invocationId
+      );
 
       await expect
         .poll(() => getHookEvents(send.invocationId), {
