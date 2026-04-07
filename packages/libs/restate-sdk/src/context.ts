@@ -25,8 +25,11 @@ import type {
   Serde,
   Duration,
 } from "@restatedev/restate-sdk-core";
-import { ContextImpl } from "./context_impl.js";
 import type { TerminalError } from "./types/errors.js";
+import {
+  RestateCombinatorPromise,
+  RestateCompletedPromise,
+} from "./promises.js";
 
 /**
  * Represents the original request as sent to this handler.
@@ -705,6 +708,14 @@ export type InvocationHandle = {
 export type InvocationPromise<T> = RestatePromise<T> & InvocationHandle;
 
 export const RestatePromise = {
+  resolve<T>(value: T): RestatePromise<Awaited<T>> {
+    return new RestateCompletedPromise(Promise.resolve(value));
+  },
+
+  reject<T = never>(reason: TerminalError): RestatePromise<T> {
+    return new RestateCompletedPromise(Promise.reject(reason));
+  },
+
   /**
    * Creates a Promise that is resolved with an array of results when all of the provided Promises
    * resolve, or rejected when any Promise is rejected.
@@ -717,12 +728,7 @@ export const RestatePromise = {
   all<const T extends readonly RestatePromise<unknown>[]>(
     values: T
   ): RestatePromise<{ -readonly [P in keyof T]: Awaited<T[P]> }> {
-    if (values.length === 0) {
-      throw new Error(
-        "Expected combineable promise to have at least one promise"
-      );
-    }
-    return ContextImpl.createCombinator(
+    return RestateCombinatorPromise.fromPromises(
       (p) => Promise.all(p),
       values
     ) as RestatePromise<{
@@ -742,12 +748,7 @@ export const RestatePromise = {
   race<const T extends readonly RestatePromise<unknown>[]>(
     values: T
   ): RestatePromise<Awaited<T[number]>> {
-    if (values.length === 0) {
-      throw new Error(
-        "Expected combineable promise to have at least one promise"
-      );
-    }
-    return ContextImpl.createCombinator(
+    return RestateCombinatorPromise.fromPromises(
       (p) => Promise.race(p),
       values
     ) as RestatePromise<Awaited<T[number]>>;
@@ -766,12 +767,7 @@ export const RestatePromise = {
   any<const T extends readonly RestatePromise<unknown>[]>(
     values: T
   ): RestatePromise<Awaited<T[number]>> {
-    if (values.length === 0) {
-      throw new Error(
-        "Expected combineable promise to have at least one promise"
-      );
-    }
-    return ContextImpl.createCombinator(
+    return RestateCombinatorPromise.fromPromises(
       (p) => Promise.any(p),
       values
     ) as RestatePromise<Awaited<T[number]>>;
@@ -791,12 +787,7 @@ export const RestatePromise = {
   ): RestatePromise<{
     -readonly [P in keyof T]: PromiseSettledResult<Awaited<T[P]>>;
   }> {
-    if (values.length === 0) {
-      throw new Error(
-        "Expected combineable promise to have at least one promise"
-      );
-    }
-    return ContextImpl.createCombinator(
+    return RestateCombinatorPromise.fromPromises(
       (p) => Promise.allSettled(p),
       values
     ) as RestatePromise<{

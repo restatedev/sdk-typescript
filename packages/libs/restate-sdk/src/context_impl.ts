@@ -61,13 +61,11 @@ import type {
 import { millisOrDurationToMillis, serde } from "@restatedev/restate-sdk-core";
 import { RandImpl } from "./utils/rand.js";
 import { CompletablePromise } from "./utils/completable_promise.js";
-import type { AsyncResultValue, InternalRestatePromise } from "./promises.js";
+import type { AsyncResultValue } from "./promises.js";
 import {
-  extractContext,
   InvocationPendingPromise,
   pendingPromise,
   PromisesExecutor,
-  RestateCombinatorPromise,
   RestateInvocationPromise,
   RestatePendingPromise,
   RestateSinglePromise,
@@ -645,37 +643,6 @@ export class ContextImpl
 
   public promise<T>(name: string, serde?: Serde<T>): DurablePromise<T> {
     return new DurablePromiseImpl(this, name, serde);
-  }
-
-  // Used by static methods of RestatePromise
-  public static createCombinator<T extends readonly RestatePromise<unknown>[]>(
-    combinatorConstructor: (promises: Promise<any>[]) => Promise<any>,
-    promises: T
-  ): RestatePromise<unknown> {
-    // Extract context from first promise
-    const self = extractContext(promises[0]);
-    if (!self) {
-      throw new Error("Not a combinable promise");
-    }
-
-    // Collect first the promises downcasted to the internal promise type
-    const castedPromises: InternalRestatePromise<any>[] = [];
-    for (const promise of promises) {
-      if (extractContext(promise) !== self) {
-        self.handleInvocationEndError(
-          new Error(
-            "You're mixing up RestatePromises from different RestateContext. This is not supported."
-          )
-        );
-        return new RestatePendingPromise(self);
-      }
-      castedPromises.push(promise as InternalRestatePromise<any>);
-    }
-    return new RestateCombinatorPromise(
-      self,
-      combinatorConstructor,
-      castedPromises
-    );
   }
 
   // -- Various private methods
