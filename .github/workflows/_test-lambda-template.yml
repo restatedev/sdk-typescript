@@ -2,13 +2,6 @@ name: Test Lambda Template (LocalStack with CDK)
 
 on:
   workflow_call:
-    inputs:
-      checkout_repository:
-        required: false
-        type: string
-      checkout_ref:
-        required: false
-        type: string
     secrets:
       LOCALSTACK_AUTH_TOKEN:
         required: true
@@ -60,17 +53,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        if: ${{ inputs.checkout_repository == '' }}
         uses: actions/checkout@v4
         with:
-          persist-credentials: false
-
-      - name: Checkout fork head
-        if: ${{ inputs.checkout_repository != '' }}
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ inputs.checkout_repository }}
-          ref: ${{ inputs.checkout_ref }}
+          repository: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
 
       - name: Setup Node.js
