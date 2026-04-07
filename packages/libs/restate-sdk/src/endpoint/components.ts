@@ -12,16 +12,18 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import type * as d from "./discovery.js";
-import type { ContextImpl } from "../context_impl.js";
-import type {
+import { ContextImpl } from "../context_impl.js";
+import {
+  HandlerKind,
   HandlerWrapper,
   ObjectOptions,
+  ServiceHandlerOpts,
   ServiceOptions,
   WorkflowOptions,
 } from "../types/rpc.js";
-import { HandlerKind } from "../types/rpc.js";
 import type { Serde } from "@restatedev/restate-sdk-core";
 import { millisOrDurationToMillis, serde } from "@restatedev/restate-sdk-core";
+import { TerminalError } from "@restatedev/restate-sdk";
 
 //
 // Interfaces
@@ -30,7 +32,17 @@ export interface Component {
   name(): string;
   handlerMatching(url: InvokePathComponents): ComponentHandler | undefined;
   discovery(): d.Service;
-  options?: ServiceOptions | ObjectOptions | WorkflowOptions;
+}
+
+/**
+ * Execution-related options
+ */
+export interface ExecutionOptions {
+  asTerminalError?: (error: any) => TerminalError | undefined;
+  /**
+   * Default serde to use for requests, responses, state, side effects, awakeables, promises. Used when no other serde is specified.
+   */
+  defaultSerde?: Serde<any>;
 }
 
 export interface ComponentHandler {
@@ -38,6 +50,11 @@ export interface ComponentHandler {
   component(): Component;
   invoke(context: ContextImpl, input: Uint8Array): Promise<Uint8Array>;
   kind(): HandlerKind;
+
+  /**
+   * Returns the execution options, already merged with different layers (endpoint -> service -> handler)
+   */
+  executionOptions: ExecutionOptions;
 }
 
 //
@@ -48,16 +65,16 @@ function handlerInputDiscovery(
   handler: HandlerWrapper,
   defaultSerde: Serde<any>
 ): d.InputPayload {
-  const serde = handler.inputSerde ?? defaultSerde;
+  const serde = handler.options?.input ?? defaultSerde;
 
   let contentType = undefined;
   let jsonSchema = undefined;
 
   if (serde.jsonSchema) {
     jsonSchema = serde.jsonSchema;
-    contentType = handler.accept ?? serde.contentType;
-  } else if (handler.accept) {
-    contentType = handler.accept;
+    contentType = handler.options?.accept ?? serde.contentType;
+  } else if (handler.options?.accept) {
+    contentType = handler.options?.accept;
   } else if (serde.contentType) {
     contentType = serde.contentType;
   } else {
@@ -76,7 +93,7 @@ function handlerOutputDiscovery(
   handler: HandlerWrapper,
   defaultSerde: Serde<any>
 ): d.OutputPayload {
-  const serde = handler.outputSerde ?? defaultSerde;
+  const serde = handler.options?.output ?? defaultSerde;
 
   let contentType = undefined;
   let jsonSchema = undefined;
@@ -95,6 +112,17 @@ function handlerOutputDiscovery(
     setContentTypeIfEmpty: false,
     jsonSchema,
     contentType,
+  };
+}
+
+function createExecutionOptions(
+  serviceOptions?: ServiceOptions,
+  handlerOptions?: ServiceHandlerOpts<unknown, unknown>
+): ExecutionOptions {
+  return {
+    defaultSerde: handlerOptions?.serde ?? serviceOptions?.serde,
+    asTerminalError:
+      handlerOptions?.asTerminalError ?? serviceOptions?.asTerminalError,
   };
 }
 
@@ -123,7 +151,7 @@ export class ServiceComponent implements Component {
           name,
           ...commonHandlerOptions(
             handler.handlerWrapper,
-            this.options?.serde ?? serde.json
+            handler.executionOptions.defaultSerde ?? serde.json
           ),
         } satisfies d.Handler;
       }
@@ -145,11 +173,18 @@ export class ServiceComponent implements Component {
 }
 
 export class ServiceHandler implements ComponentHandler {
+  readonly executionOptions: ExecutionOptions;
+
   constructor(
     private readonly handlerName: string,
     public readonly handlerWrapper: HandlerWrapper,
     private readonly parent: ServiceComponent
-  ) {}
+  ) {
+    this.executionOptions = createExecutionOptions(
+      this.parent.options,
+      handlerWrapper.options
+    );
+  }
 
   name(): string {
     return this.handlerName;
@@ -198,7 +233,7 @@ export class VirtualObjectComponent implements Component {
           ty: handler.kind() === HandlerKind.EXCLUSIVE ? "EXCLUSIVE" : "SHARED",
           ...commonHandlerOptions(
             handler.handlerWrapper,
-            this.options?.serde ?? serde.json
+            handler.executionOptions.defaultSerde ?? serde.json
           ),
         } satisfies d.Handler;
       }
@@ -220,11 +255,18 @@ export class VirtualObjectComponent implements Component {
 }
 
 export class VirtualObjectHandler implements ComponentHandler {
+  readonly executionOptions: ExecutionOptions;
+
   constructor(
     private readonly handlerName: string,
     public readonly handlerWrapper: HandlerWrapper,
     private readonly parent: VirtualObjectComponent
-  ) {}
+  ) {
+    this.executionOptions = createExecutionOptions(
+      this.parent.options,
+      handlerWrapper.options
+    );
+  }
 
   name(): string {
     return this.handlerName;
@@ -276,7 +318,7 @@ export class WorkflowComponent implements Component {
               : undefined,
           ...commonHandlerOptions(
             handler.handlerWrapper,
-            this.options?.serde ?? serde.json
+            handler.executionOptions.defaultSerde ?? serde.json
           ),
         } satisfies d.Handler;
       }
@@ -298,11 +340,18 @@ export class WorkflowComponent implements Component {
 }
 
 export class WorkflowHandler implements ComponentHandler {
+  readonly executionOptions: ExecutionOptions;
+
   constructor(
     private readonly handlerName: string,
     public readonly handlerWrapper: HandlerWrapper,
     private readonly parent: WorkflowComponent
-  ) {}
+  ) {
+    this.executionOptions = createExecutionOptions(
+      this.parent.options,
+      handlerWrapper.options
+    );
+  }
 
   name(): string {
     return this.handlerName;
@@ -404,40 +453,47 @@ function commonHandlerOptions(
     input: handlerInputDiscovery(wrapper, defaultSerde),
     output: handlerOutputDiscovery(wrapper, defaultSerde),
     journalRetention:
-      wrapper.journalRetention !== undefined
-        ? millisOrDurationToMillis(wrapper.journalRetention)
+      wrapper.options?.journalRetention !== undefined
+        ? millisOrDurationToMillis(wrapper.options?.journalRetention)
         : undefined,
     idempotencyRetention:
-      wrapper.idempotencyRetention !== undefined
-        ? millisOrDurationToMillis(wrapper.idempotencyRetention)
+      wrapper.options?.idempotencyRetention !== undefined
+        ? millisOrDurationToMillis(wrapper.options?.idempotencyRetention)
         : undefined,
     inactivityTimeout:
-      wrapper.inactivityTimeout !== undefined
-        ? millisOrDurationToMillis(wrapper.inactivityTimeout)
+      wrapper.options?.inactivityTimeout !== undefined
+        ? millisOrDurationToMillis(wrapper.options?.inactivityTimeout)
         : undefined,
     abortTimeout:
-      wrapper.abortTimeout !== undefined
-        ? millisOrDurationToMillis(wrapper.abortTimeout)
+      wrapper.options?.abortTimeout !== undefined
+        ? millisOrDurationToMillis(wrapper.options?.abortTimeout)
         : undefined,
-    ingressPrivate: wrapper.ingressPrivate,
-    enableLazyState: wrapper.enableLazyState,
-    retryPolicyExponentiationFactor: wrapper.retryPolicy?.exponentiationFactor,
+    ingressPrivate: wrapper.options?.ingressPrivate,
+    enableLazyState:
+      wrapper.options !== undefined && "enableLazyState" in wrapper.options
+        ? wrapper.options?.enableLazyState
+        : undefined,
+    retryPolicyExponentiationFactor:
+      wrapper.options?.retryPolicy?.exponentiationFactor,
     retryPolicyInitialInterval:
-      wrapper.retryPolicy?.initialInterval !== undefined
-        ? millisOrDurationToMillis(wrapper.retryPolicy?.initialInterval)
+      wrapper.options?.retryPolicy?.initialInterval !== undefined
+        ? millisOrDurationToMillis(
+            wrapper.options?.retryPolicy?.initialInterval
+          )
         : undefined,
     retryPolicyMaxInterval:
-      wrapper.retryPolicy?.maxInterval !== undefined
-        ? millisOrDurationToMillis(wrapper.retryPolicy?.maxInterval)
+      wrapper.options?.retryPolicy?.maxInterval !== undefined
+        ? millisOrDurationToMillis(wrapper.options?.retryPolicy?.maxInterval)
         : undefined,
-    retryPolicyMaxAttempts: wrapper.retryPolicy?.maxAttempts,
-    retryPolicyOnMaxAttempts: (wrapper.retryPolicy?.onMaxAttempts === "kill"
+    retryPolicyMaxAttempts: wrapper.options?.retryPolicy?.maxAttempts,
+    retryPolicyOnMaxAttempts: (wrapper.options?.retryPolicy?.onMaxAttempts ===
+    "kill"
       ? "KILL"
-      : wrapper.retryPolicy?.onMaxAttempts === "pause"
+      : wrapper.options?.retryPolicy?.onMaxAttempts === "pause"
         ? "PAUSE"
         : undefined) as d.RetryPolicyOnMaxAttempts1,
 
-    documentation: wrapper.description,
-    metadata: wrapper.metadata,
+    documentation: wrapper.options?.description,
+    metadata: wrapper.options?.metadata,
   };
 }
