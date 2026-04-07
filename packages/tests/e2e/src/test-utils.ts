@@ -519,3 +519,22 @@ export async function cancelInvocationViaAdminApi(
     );
   }
 }
+
+/**
+ * Requests graceful pause for an invocation via the Admin API.
+ * The call is non-blocking and may return before the pause completes.
+ */
+export async function pauseInvocationViaAdminApi(
+  adminUrl: string,
+  invocationId: string
+): Promise<void> {
+  const res = await fetch(`${adminUrl}/invocations/${invocationId}/pause`, {
+    method: "PATCH",
+    headers: { Accept: "application/json" },
+  });
+
+  if (!res.ok) {
+    const badResponse = await res.text();
+    throw new Error(`Error ${res.status} during invocation pause: ${badResponse}`);
+  }
+}

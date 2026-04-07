@@ -28,6 +28,7 @@ import {
   getInvocationOutcome,
   getRunJournalEntry,
   cancelInvocationViaAdminApi,
+  pauseInvocationViaAdminApi,
   inAnyOrder,
 } from "./test-utils.js";
 
@@ -534,6 +535,19 @@ function hooksSuite(level: HookLevel) {
       },
     });
 
+    const pauseDuringRunService = createService({
+      name: `${level}_PauseDuringRun`,
+      ...hooksAt([recordHookEvents()]),
+      handler: async (ctx, _) => {
+        await ctx.run("slow-step", async () => {
+          await wait(1_000);
+          return "done";
+        });
+        await ctx.sleep(60_000);
+        return { invocationId: ctx.request().id };
+      },
+    });
+
     const suspendPerEntryService = createService({
       name: `${level}_SuspendPerEntry`,
       ...hooksAt([recordHookEvents()]),
@@ -590,6 +604,7 @@ function hooksSuite(level: HookLevel) {
         journalMismatchService,
         abortTimeoutService,
         cancelDuringRunService,
+        pauseDuringRunService,
         suspendPerEntryService,
       ];
       env = await RestateTestEnvironment.start({
@@ -1383,6 +1398,45 @@ function hooksSuite(level: HookLevel) {
       expect(
         await getInvocationOutcome(env.adminAPIBaseUrl(), send.invocationId)
       ).toMatchObject({ status: "failed" });
+    });
+
+    it("invocation pause requested in the middle of a run", async () => {
+      const ingress = clients.connect({ url: env.baseUrl() });
+      const send = await ingress
+        .serviceSendClient(pauseDuringRunService)
+        .invoke("");
+
+      await expect
+        .poll(() => getHookEvents(send.invocationId), {
+          timeout: 5_000,
+          interval: 100,
+        })
+        .toEqual(["hook:handler:before", "hook:run:slow-step:before"]);
+
+      await pauseInvocationViaAdminApi(env.adminAPIBaseUrl(), send.invocationId);
+
+      await expect
+        .poll(() => getHookEvents(send.invocationId), {
+          timeout: 10_000,
+          interval: 100,
+        })
+        .toEqual([
+          "hook:handler:before",
+          "hook:run:slow-step:before",
+          "hook:run:slow-step:after",
+          "hook:handler:error:(599) Suspended invocation",
+          "hook:attemptEnd:abandoned",
+        ]);
+
+      await expect
+        .poll(
+          () => getInvocationOutcome(env.adminAPIBaseUrl(), send.invocationId),
+          {
+            timeout: 10_000,
+            interval: 100,
+          }
+        )
+        .toMatchObject({ status: "paused" });
     });
 
     it("Always replay — suspend and replay after each entry", async () => {
