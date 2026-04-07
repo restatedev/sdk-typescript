@@ -373,6 +373,53 @@ export type ServiceHandlerOpts<I, O> = {
    * Retry policy to apply to all requests to this handler. For each unspecified field, the default value configured in the service or, if absent, in the restate-server configuration file, will be applied instead.
    */
   retryPolicy?: RetryPolicy;
+
+  /**
+   * By default, Restate treats errors as terminal (non-retryable) only when they are instances of `TerminalError`.
+   *
+   * Use this hook to map domain-specific errors to `TerminalError` (or return `undefined` to keep them retryable).
+   * When mapped to `TerminalError`, the error will not be retried.
+   *
+   * Note: This applies to errors thrown inside `ctx.run` closures as well as errors thrown by Restate handlers.
+   *
+   * Example:
+   *
+   * ```ts
+   * class MyValidationError extends Error {}
+   *
+   * const greeter = restate.service({
+   *   name: "greeter",
+   *   handlers: {
+   *     greet: async (ctx: restate.Context, name: string) => {
+   *       if (name.length === 0) {
+   *         throw new MyValidationError("Length too short");
+   *       }
+   *       return `Hello ${name}`;
+   *     }
+   *   },
+   *   options: {
+   *     asTerminalError: (err) => {
+   *       if (err instanceof MyValidationError) {
+   *         // My validation error is terminal
+   *         return new restate.TerminalError(err.message, { errorCode: 400 });
+   *       }
+   *
+   *       // Any other error is retryable
+   *     }
+   *   }
+   * });
+   * ```
+   */
+  asTerminalError?: (error: any) => TerminalError | undefined;
+
+  /**
+   * Default serde to use for requests, responses, state, side effects, awakeables, promises. Used when no other serde is specified.
+   *
+   * If not provided, defaults to `serde.json`.
+   *
+   * The input or output of this handler can be overridden using the `input`/`output` fields
+   */
+  serde?: Serde<any>;
 };
 
 export type ObjectHandlerOpts<I, O> = ServiceHandlerOpts<I, O> & {
@@ -413,24 +460,7 @@ export class HandlerWrapper {
       return handler.apply(this, args);
     };
 
-    return new HandlerWrapper(
-      kind,
-      handlerCopy,
-      opts?.input,
-      opts?.output,
-      opts?.accept,
-      opts?.description,
-      opts?.metadata,
-      opts?.idempotencyRetention,
-      opts?.journalRetention,
-      opts?.inactivityTimeout,
-      opts?.abortTimeout,
-      opts?.ingressPrivate,
-      opts !== undefined && "enableLazyState" in opts
-        ? opts?.enableLazyState
-        : undefined,
-      opts?.retryPolicy
-    );
+    return new HandlerWrapper(kind, handlerCopy, opts);
   }
 
   public static fromHandler(handler: any): HandlerWrapper | undefined {
@@ -441,19 +471,10 @@ export class HandlerWrapper {
   private constructor(
     public readonly kind: HandlerKind,
     private handler: Function,
-    public readonly inputSerde?: Serde<unknown>,
-    public readonly outputSerde?: Serde<unknown>,
-    public readonly accept?: string,
-    public readonly description?: string,
-    public readonly metadata?: Record<string, string>,
-    public readonly idempotencyRetention?: Duration | number,
-    public readonly journalRetention?: Duration | number,
-    public readonly inactivityTimeout?: Duration | number,
-    public readonly abortTimeout?: Duration | number,
-    public readonly ingressPrivate?: boolean,
-    public readonly enableLazyState?: boolean,
-    public readonly retryPolicy?: RetryPolicy,
-    public readonly asTerminalError?: (error: any) => TerminalError | undefined
+    public readonly options?:
+      | ServiceHandlerOpts<unknown, unknown>
+      | ObjectHandlerOpts<unknown, unknown>
+      | WorkflowHandlerOpts<unknown, unknown>
   ) {}
 
   bindInstance(t: unknown) {
@@ -463,7 +484,7 @@ export class HandlerWrapper {
   async invoke(context: { defaultSerde: Serde<any> }, input: Uint8Array) {
     let req: unknown;
     try {
-      req = (this.inputSerde ?? context.defaultSerde).deserialize(input);
+      req = (this.options?.input ?? context.defaultSerde).deserialize(input);
     } catch (e) {
       const error = ensureError(e);
       throw new TerminalError(`Failed to deserialize input: ${error.message}`, {
@@ -472,7 +493,7 @@ export class HandlerWrapper {
     }
 
     const res: unknown = await this.handler(context, req);
-    return (this.outputSerde ?? context.defaultSerde).serialize(res);
+    return (this.options?.output ?? context.defaultSerde).serialize(res);
   }
 
   /**

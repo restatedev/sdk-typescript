@@ -419,8 +419,8 @@ class RestateInvokeResponse implements RestateResponse {
         inputReader,
         outputWriter,
         journalValueCodec,
-        this.service.options?.serde,
-        this.service.options?.asTerminalError
+        this.handler.executionOptions.defaultSerde,
+        this.handler.executionOptions.asTerminalError
       );
     } catch (e) {
       // That's "preflight" failure cases, where stuff fails before running user code
@@ -440,12 +440,7 @@ class RestateInvokeResponse implements RestateResponse {
     // We await invocationEndPromise instead, which works as follows:
     // * In the happy path, that is no errors, invocationEndPromise gets resolved by the line below in this finally branch
     // * In the transient error case that happens within the handler, invocationEndPromise gets resolved by the ContextImpl itself, unblocking the await line below
-    void startUserHandler(
-      ctx,
-      this.service,
-      this.handler,
-      journalValueCodec
-    ).finally(() => {
+    void startUserHandler(ctx, this.handler, journalValueCodec).finally(() => {
       invocationEndPromise.resolve();
     });
     await invocationEndPromise.promise;
@@ -473,7 +468,6 @@ async function bufferJournalReplayInCoreVm(
 
 async function startUserHandler(
   ctx: ContextImpl,
-  service: Component,
   handler: ComponentHandler,
   journalValueCodec: JournalValueCodec
 ) {
@@ -507,7 +501,7 @@ async function startUserHandler(
       ctx.vmLogger.info("Invocation completed successfully.");
     } catch (e) {
       // Convert to Error
-      const error = ensureError(e, service.options?.asTerminalError);
+      const error = ensureError(e, handler.executionOptions.asTerminalError);
       logError(ctx.vmLogger, error);
 
       // If TerminalError, handle it here.
