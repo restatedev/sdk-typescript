@@ -11,7 +11,7 @@
 
 import {
   ensureError,
-  AttemptAbandonedError,
+  isSuspendedError,
   logError,
   RestateError,
   RetryableError,
@@ -64,7 +64,7 @@ import {
   tryCreateContextualLogger,
 } from "./utils.js";
 import { destroyLogger, registerLogger } from "./core_logging.js";
-import type { Hooks, AttemptResult, HookContext } from "../../hooks.js";
+import type { Hooks } from "../../hooks.js";
 
 export function createRestateHandler(
   endpoint: Endpoint,
@@ -485,24 +485,13 @@ async function startUserHandler(
   journalValueCodec: JournalValueCodec
 ) {
   const hooks: Hooks[] = [];
-  let attemptResult: AttemptResult | undefined;
   try {
     try {
-      // Build HookContext for hook providers
-      const request = ctx.request();
-      const hookContext: HookContext = {
-        serviceName: service.name(),
-        handlerName: handler.name(),
-        key: request.target.key,
-        invocationId: request.id,
-        request,
-      };
-
       // Instantiate hooks from providers.
       // If a provider throws, the same rules as handler failures apply:
       // TerminalError → terminate invocation, other errors → retry.
       for (const provider of handler.executionOptions.hooks ?? []) {
-        hooks.push(provider(hookContext));
+        hooks.push(provider({ request: ctx.request() }));
       }
 
       // Compose interceptor.handler into a single interceptor (first = outermost)
@@ -553,15 +542,13 @@ async function startUserHandler(
       // errors after next() correctly prevent the invocation from succeeding.
       ctx.coreVm.sys_write_output_success(encodedOutput!);
       ctx.coreVm.sys_end();
-      attemptResult = { type: "success" };
       ctx.vmLogger.info("Invocation completed successfully.");
     } catch (e) {
       // Convert to Error
       const error = ensureError(e, handler.executionOptions.asTerminalError);
 
-      // Attempt abandoned due to suspension — no error, pure control flow.
-      if (error instanceof AttemptAbandonedError) {
-        attemptResult = { type: "abandoned" };
+      // Attempt suspended — not an invocation failure, just control flow.
+      if (isSuspendedError(error)) {
         return;
       }
       logError(ctx.vmLogger, error);
@@ -569,7 +556,6 @@ async function startUserHandler(
       // If TerminalError, handle it here.
       // NOTE: this can still fail, that's why the double catch!
       if (error instanceof TerminalError) {
-        attemptResult = { type: "terminalError", error };
         ctx.coreVm.sys_write_output_failure({
           code: error.code,
           message: error.message,
@@ -581,16 +567,12 @@ async function startUserHandler(
         return;
       }
 
-      attemptResult = { type: "retryableError", error };
       // Not a terminal error, have the below catch handle it
       throw error;
     }
   } catch (e) {
     // Handle any other error now (retryable errors)
     const error = ensureError(e);
-    if (attemptResult === undefined) {
-      attemptResult = { type: "retryableError", error };
-    }
     if (error instanceof RetryableError) {
       ctx.coreVm.notify_error_with_delay_override(
         error.message,
@@ -601,23 +583,6 @@ async function startUserHandler(
       );
     } else {
       ctx.coreVm.notify_error(error.message, error.stack);
-    }
-  } finally {
-    // Call listener.attemptEnd for all hooks — attemptResult is always set now
-    // (including for abandoned attempts via AttemptAbandonedError).
-    if (attemptResult !== undefined) {
-      for (const hook of hooks) {
-        if (hook.listener?.attemptEnd) {
-          try {
-            hook.listener.attemptEnd(attemptResult);
-          } catch (e) {
-            ctx.vmLogger.warn(
-              "Error in attemptEnd listener, this will not be recorded: " +
-                ensureError(e).message
-            );
-          }
-        }
-      }
     }
   }
 }

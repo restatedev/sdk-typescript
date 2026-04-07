@@ -117,7 +117,7 @@ export {
   TimeoutError,
   RetryableError,
   CancelledError,
-  AttemptAbandonedError,
+  isSuspendedError,
   type RetryableErrorOptions,
 } from "./types/errors.js";
 export type {
@@ -128,14 +128,7 @@ export type {
   LogSource,
 } from "./logging/logger_transport.js";
 export type { EndpointOptions } from "./endpoint/types.js";
-export type {
-  Hooks,
-  HooksProvider,
-  AttemptResult,
-  HookContext,
-  Interceptor,
-  Listener,
-} from "./hooks.js";
+export type { Hooks, HooksProvider, Interceptor } from "./hooks.js";
 
 // re-exporting createHandler shortcuts
 

@@ -9,7 +9,7 @@ import {
   service,
   serve,
   TerminalError,
-  AttemptAbandonedError,
+  isSuspendedError,
   type Context,
   type HooksProvider,
 } from "@restatedev/restate-sdk";
@@ -21,12 +21,13 @@ const gray = (s: string) => `\x1b[90m${s}\x1b[0m`;
 
 function errorColor(e: unknown) {
   if (e instanceof TerminalError) return red;
-  if (e instanceof AttemptAbandonedError) return gray;
+  if (isSuspendedError(e)) return gray;
   return yellow;
 }
 
 const logHook: HooksProvider = (ctx) => {
-  const tag = `${ctx.serviceName}/${ctx.handlerName} [${ctx.invocationId}]`;
+  const { service: svc, handler: hdl } = ctx.request.target;
+  const tag = `${svc}/${hdl} [${ctx.request.id}]`;
 
   return {
     interceptor: {
@@ -36,7 +37,7 @@ const logHook: HooksProvider = (ctx) => {
           await next();
           console.log(green(`✓ ${tag}`));
         } catch (e) {
-          if (!(e instanceof AttemptAbandonedError)) {
+          if (!isSuspendedError(e)) {
             console.log(errorColor(e)(`✗ ${tag}: ${e as Error}`));
           }
           throw e;
@@ -53,20 +54,6 @@ const logHook: HooksProvider = (ctx) => {
           console.log(errorColor(e)(`  ✗ run "${name}": ${e as Error}`));
           throw e;
         }
-      },
-    },
-
-    listener: {
-      attemptEnd: (result) => {
-        const color =
-          result.type === "success"
-            ? green
-            : result.type === "terminalError"
-              ? red
-              : result.type === "abandoned"
-                ? gray
-                : yellow;
-        console.log(color(`  ⏎ ${tag} attempt: ${result.type}`));
       },
     },
   };

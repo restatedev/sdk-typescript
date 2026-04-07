@@ -43,8 +43,5 @@ export type {
   Target,
   HooksProvider,
   Hooks,
-  AttemptResult,
   Interceptor,
-  Listener,
-  HookContext,
 } from "@restatedev/restate-sdk";

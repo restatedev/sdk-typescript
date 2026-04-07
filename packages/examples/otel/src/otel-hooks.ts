@@ -12,11 +12,8 @@ import {
   BasicTracerProvider,
   BatchSpanProcessor,
 } from "@opentelemetry/sdk-trace-base";
-import type {
-  HooksProvider,
-  AttemptResult,
-  HookContext,
-} from "@restatedev/restate-sdk";
+import { isSuspendedError } from "@restatedev/restate-sdk";
+import type { HooksProvider } from "@restatedev/restate-sdk";
 
 // Cache TracerProviders per service name so we don't create duplicates.
 const providers = new Map<string, BasicTracerProvider>();
@@ -62,8 +59,9 @@ export async function shutdownTracing(): Promise<void> {
  * headers so SDK spans appear as children of the runtime's invocation spans
  * in the trace viewer (e.g. Jaeger).
  */
-export const otelTracingHook: HooksProvider = (ctx: HookContext) => {
-  const tracer = getTracerForService(ctx.serviceName);
+export const otelTracingHook: HooksProvider = (ctx) => {
+  const { service: svc, handler: hdl, key } = ctx.request.target;
+  const tracer = getTracerForService(svc);
 
   // Extract the parent trace context set by the Restate runtime.
   // attemptHeaders contains W3C traceparent/tracestate headers.
@@ -87,16 +85,14 @@ export const otelTracingHook: HooksProvider = (ctx: HookContext) => {
 
   // Build the invocation target string (e.g. "OrderProcessor/process"
   // or "OrderProcessor/myKey/process" for keyed services).
-  const target = ctx.key
-    ? `${ctx.serviceName}/${ctx.key}/${ctx.handlerName}`
-    : `${ctx.serviceName}/${ctx.handlerName}`;
+  const target = key ? `${svc}/${key}/${hdl}` : `${svc}/${hdl}`;
 
   // Create the per-attempt span as a child of the runtime's trace.
   const attemptSpan = tracer.startSpan(
     `attempt: ${target}`,
     {
       attributes: {
-        "restate.invocation.id": ctx.invocationId,
+        "restate.invocation.id": ctx.request.id,
         "restate.invocation.target": target,
       },
     },
@@ -110,7 +106,24 @@ export const otelTracingHook: HooksProvider = (ctx: HookContext) => {
     interceptor: {
       // Establish the OTel context so that trace.getActiveSpan()
       // works inside handler code and child spans are linked.
-      handler: (next) => context.with(attemptContext, next),
+      // Manage the attempt span lifecycle via try/catch/finally.
+      handler: async (next) => {
+        try {
+          await context.with(attemptContext, next);
+          attemptSpan.setStatus({ code: SpanStatusCode.OK });
+        } catch (e) {
+          if (!isSuspendedError(e)) {
+            attemptSpan.setStatus({
+              code: SpanStatusCode.ERROR,
+              message: e instanceof Error ? e.message : String(e),
+            });
+            if (e instanceof Error) attemptSpan.recordException(e);
+          }
+          throw e;
+        } finally {
+          attemptSpan.end();
+        }
+      },
 
       // Create a child span for each ctx.run() operation.
       run: (name, next) => {
@@ -133,37 +146,6 @@ export const otelTracingHook: HooksProvider = (ctx: HookContext) => {
             runSpan.end();
           }
         });
-      },
-    },
-
-    listener: {
-      attemptEnd: (result: AttemptResult) => {
-        switch (result.type) {
-          case "success":
-            attemptSpan.setStatus({ code: SpanStatusCode.OK });
-            break;
-          case "retryableError":
-            attemptSpan.setStatus({
-              code: SpanStatusCode.ERROR,
-              message: result.error.message,
-            });
-            attemptSpan.recordException(result.error);
-            break;
-          case "terminalError":
-            attemptSpan.setStatus({
-              code: SpanStatusCode.ERROR,
-              message: result.error.message,
-            });
-            attemptSpan.recordException(result.error);
-            break;
-          case "abandoned":
-            attemptSpan.setStatus({
-              code: SpanStatusCode.OK,
-              message: "Attempt abandoned (suspension)",
-            });
-            break;
-        }
-        attemptSpan.end();
       },
     },
   };

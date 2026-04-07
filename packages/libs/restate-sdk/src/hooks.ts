@@ -1,32 +1,5 @@
 import type { Request } from "./context.js";
 
-// ---- Result types ----
-
-/**
- * Normalized outcome of a single invocation attempt.
- *
- * - `success`: the attempt completed and its output was committed.
- * - `retryableError`: the attempt ended with an error and may be retried.
- * - `terminalError`: the attempt ended with a non-retryable error.
- * - `abandoned`: the SDK ended the attempt at an attempt boundary
- *   (for example suspension) without treating it as a user failure.
- */
-export type AttemptResult =
-  | { type: "success" }
-  | { type: "retryableError"; error: Error }
-  | { type: "terminalError"; error: Error }
-  | { type: "abandoned" };
-
-// ---- Hook context ----
-
-export interface HookContext {
-  serviceName: string;
-  handlerName: string;
-  key?: string;
-  invocationId: string;
-  request: Request;
-}
-
 // ---- Interceptor ----
 
 /**
@@ -35,10 +8,9 @@ export interface HookContext {
  * affects the invocation outcome.
  *
  * - Errors thrown at any point (before or after `next()`) will fail or retry the invocation.
- * - `next()` can reject with {@link AttemptAbandonedError} when the SDK abandons the current
- *   attempt and unwinds the interceptor stack. This is control flow for attempt boundaries
- *   (for example suspension), not necessarily an invocation failure;
- *   do any cleanup you need and rethrow.
+ * - On suspension, `next()` rejects with a suspended error. Use {@link isSuspendedError}
+ *   to detect this — it means the attempt is paused, not failed.
+ *   Do any cleanup you need and rethrow.
  * - Cannot modify the handler's input or return value (`void` signature).
  * - `next()` must be called exactly once.
  *
@@ -81,31 +53,16 @@ export interface Interceptor {
   run?: (name: string, next: () => Promise<void>) => Promise<void>;
 }
 
-// ---- Listener ----
-
-/**
- * Observers for lifecycle events. Cannot affect execution.
- */
-export interface Listener {
-  /**
-   * Called when an attempt ends. Fires for every outcome: success,
-   * retryable error, terminal error, or abandoned (suspension).
-   * Errors thrown here are swallowed and logged — they never affect the invocation.
-   */
-  attemptEnd?: (result: AttemptResult) => void;
-}
-
 // ---- Hooks ----
 
 export interface Hooks {
   interceptor?: Interceptor;
-  listener?: Listener;
 }
 
 // ---- Provider ----
 
 /**
- * Factory called on every attempt. Receives invocation context, returns
- * hooks for that attempt's lifetime. Each attempt gets a fresh call.
+ * Factory called on every attempt. Receives the invocation request,
+ * returns hooks for that attempt's lifetime. Each attempt gets a fresh call.
  */
-export type HooksProvider = (ctx: HookContext) => Hooks;
+export type HooksProvider = (ctx: { request: Request }) => Hooks;

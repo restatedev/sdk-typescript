@@ -184,22 +184,16 @@ export class RetryableError extends RestateError {
 }
 
 /**
- * Thrown inside interceptors when the current attempt is abandoned by the SDK.
+ * Returns true if the error indicates the current attempt was suspended.
  *
- * This happens when the runtime decides to end the current attempt without
- * the handler completing normally — for example:
- * - The handler is suspended (e.g. waiting for `ctx.sleep()` or `ctx.call()`)
+ * When the runtime suspends the invocation (e.g. waiting for `ctx.sleep()`
+ * or `ctx.call()`), interceptors receive this error through `next()`.
+ * It means the attempt is paused — not that the invocation failed.
  *
- * When this error propagates through an interceptor's `next()`, it means
- * the attempt is over — not necessarily that the invocation failed.
- *
- * Interceptors can catch this to distinguish abandonment from real errors
- * (e.g. to avoid logging it as a failure or to set a neutral span status).
+ * Use this in interceptor catch blocks to distinguish suspension from
+ * real errors (e.g. to avoid logging it as a failure or to set a neutral
+ * span status).
  */
-export class AttemptAbandonedError extends Error {
-  public override name = "AttemptAbandonedError";
-
-  constructor(message = "Attempt abandoned") {
-    super(message);
-  }
+export function isSuspendedError(e: unknown): boolean {
+  return e instanceof RestateError && e.code === SUSPENDED_ERROR_CODE;
 }

@@ -35,8 +35,6 @@ import {
 import {
   ensureError,
   INTERNAL_ERROR_CODE,
-  SUSPENDED_ERROR_CODE,
-  AttemptAbandonedError,
   logError,
   RestateError,
   RetryableError,
@@ -161,11 +159,7 @@ export class ContextImpl
    * Rejects the abandonment signal, causing any racing interceptor next() to throw.
    */
   private abandonAttempt(cause: Error) {
-    if (cause instanceof RestateError && cause.code === SUSPENDED_ERROR_CODE) {
-      this._abandonmentSignal.reject(new AttemptAbandonedError(cause.message));
-    } else {
-      this._abandonmentSignal.reject(cause);
-    }
+    this._abandonmentSignal.reject(cause);
   }
 
   isProcessing(): boolean {

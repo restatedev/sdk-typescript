@@ -1,10 +1,6 @@
 import { expect } from "vitest";
 import * as restate from "@restatedev/restate-sdk";
-import type {
-  HooksProvider,
-  AttemptResult,
-  HookContext,
-} from "@restatedev/restate-sdk";
+import type { HooksProvider, Request } from "@restatedev/restate-sdk";
 
 // ---------------------------------------------------------------------------
 // Service factory
@@ -13,7 +9,9 @@ import type {
 export type HookLevel = "handler" | "service";
 
 export function withHooksAt(level: HookLevel, hooks: HooksProvider[]) {
-  return level === "handler" ? { handlerHooks: hooks } : { serviceHooks: hooks };
+  return level === "handler"
+    ? { handlerHooks: hooks }
+    : { serviceHooks: hooks };
 }
 
 export function createService<T>(opts: {
@@ -80,40 +78,19 @@ export function getEvents(invocationId: string): string[] {
 }
 
 // ---------------------------------------------------------------------------
-// Per-invocation AttemptResult capture
-// ---------------------------------------------------------------------------
-
-const capturedResults = new Map<string, AttemptResult[]>();
-
-function pushResult(invocationId: string, result: AttemptResult) {
-  let results = capturedResults.get(invocationId);
-  if (!results) {
-    results = [];
-    capturedResults.set(invocationId, results);
-  }
-  results.push(result);
-}
-
-export function getResults(invocationId: string): AttemptResult[] {
-  return capturedResults.get(invocationId) ?? [];
-}
-
-// ---------------------------------------------------------------------------
 // Per-invocation context capture
 // ---------------------------------------------------------------------------
 
-const capturedContexts = new Map<string, HookContext>();
+const capturedContexts = new Map<string, Request>();
 
 export function captureContext(): HooksProvider {
-  return (ctx: HookContext) => {
-    capturedContexts.set(ctx.invocationId, ctx);
+  return (ctx) => {
+    capturedContexts.set(ctx.request.id, ctx.request);
     return {};
   };
 }
 
-export function getCapturedContext(
-  invocationId: string
-): HookContext | undefined {
+export function getCapturedContext(invocationId: string): Request | undefined {
   return capturedContexts.get(invocationId);
 }
 
@@ -142,8 +119,8 @@ function errorTag(e: unknown, maxLen = 80): string {
 }
 
 export function recordHookEvents(tag = "hook"): HooksProvider {
-  return (ctx: HookContext) => {
-    const id = ctx.invocationId;
+  return (ctx) => {
+    const id = ctx.request.id;
     return {
       interceptor: {
         handler: async (next) => {
@@ -167,17 +144,6 @@ export function recordHookEvents(tag = "hook"): HooksProvider {
           }
         },
       },
-      listener: {
-        attemptEnd: (result: AttemptResult) => {
-          pushEvent(
-            id,
-            "error" in result
-              ? `${tag}:attemptEnd:${result.type}:${errorTag(result.error)}`
-              : `${tag}:attemptEnd:${result.type}`
-          );
-          pushResult(id, result);
-        },
-      },
     };
   };
 }
@@ -186,9 +152,9 @@ export function recordHookEvents(tag = "hook"): HooksProvider {
 export function throwOnFirstHookProviderCall(
   targetService: string
 ): HooksProvider {
-  return (ctx: HookContext) => {
-    if (ctx.serviceName === targetService) {
-      if (nextAttempt(ctx.invocationId) === 1)
+  return (ctx) => {
+    if (ctx.request.target.service === targetService) {
+      if (nextAttempt(ctx.request.id) === 1)
         throw new Error("provider retryable error");
     }
     return {};
@@ -199,12 +165,12 @@ export function throwOnFirstHookProviderCall(
 export function throwOnFirstHandlerIntercept(
   targetService: string
 ): HooksProvider {
-  return (ctx: HookContext) => {
-    if (ctx.serviceName !== targetService) return {};
+  return (ctx) => {
+    if (ctx.request.target.service !== targetService) return {};
     return {
       interceptor: {
         handler: async (next) => {
-          if (nextAttempt(ctx.invocationId) === 1)
+          if (nextAttempt(ctx.request.id) === 1)
             throw new Error("interceptor retryable error");
           await next();
         },
@@ -215,12 +181,12 @@ export function throwOnFirstHandlerIntercept(
 
 /** Hook whose run interceptor throws a retryable error on the first attempt */
 export function throwOnFirstRunIntercept(targetService: string): HooksProvider {
-  return (ctx: HookContext) => {
-    if (ctx.serviceName !== targetService) return {};
+  return (ctx) => {
+    if (ctx.request.target.service !== targetService) return {};
     return {
       interceptor: {
         run: async (_name, next) => {
-          if (nextAttempt(ctx.invocationId) === 1)
+          if (nextAttempt(ctx.request.id) === 1)
             throw new Error("run interceptor retryable error");
           await next();
         },
@@ -233,8 +199,8 @@ export function throwOnFirstRunIntercept(targetService: string): HooksProvider {
 export function throwTerminalOnHandlerIntercept(
   targetService: string
 ): HooksProvider {
-  return (ctx: HookContext) => {
-    if (ctx.serviceName !== targetService) return {};
+  return (ctx) => {
+    if (ctx.request.target.service !== targetService) return {};
     return {
       interceptor: {
         handler: async (next) => {
@@ -250,8 +216,8 @@ export function throwTerminalOnHandlerIntercept(
 export function throwTerminalOnRunIntercept(
   targetService: string
 ): HooksProvider {
-  return (ctx: HookContext) => {
-    if (ctx.serviceName !== targetService) return {};
+  return (ctx) => {
+    if (ctx.request.target.service !== targetService) return {};
     return {
       interceptor: {
         run: async (_name, next) => {
@@ -267,13 +233,13 @@ export function throwTerminalOnRunIntercept(
 export function throwRetryableAfterHandlerNext(
   targetService: string
 ): HooksProvider {
-  return (ctx: HookContext) => {
-    if (ctx.serviceName !== targetService) return {};
+  return (ctx) => {
+    if (ctx.request.target.service !== targetService) return {};
     return {
       interceptor: {
         handler: async (next) => {
           await next();
-          if (nextAttempt(ctx.invocationId) === 1)
+          if (nextAttempt(ctx.request.id) === 1)
             throw new Error("handler interceptor retryable after next");
         },
       },
@@ -285,13 +251,13 @@ export function throwRetryableAfterHandlerNext(
 export function throwRetryableAfterRunNext(
   targetService: string
 ): HooksProvider {
-  return (ctx: HookContext) => {
-    if (ctx.serviceName !== targetService) return {};
+  return (ctx) => {
+    if (ctx.request.target.service !== targetService) return {};
     return {
       interceptor: {
         run: async (_name, next) => {
           await next();
-          if (nextAttempt(ctx.invocationId) === 1)
+          if (nextAttempt(ctx.request.id) === 1)
             throw new Error("run interceptor retryable after next");
         },
       },
@@ -301,8 +267,8 @@ export function throwRetryableAfterRunNext(
 
 /** Hook whose run interceptor catches and swallows errors from next() */
 export function swallowRunError(targetService: string): HooksProvider {
-  return (ctx: HookContext) => {
-    if (ctx.serviceName !== targetService) return {};
+  return (ctx) => {
+    if (ctx.request.target.service !== targetService) return {};
     return {
       interceptor: {
         run: async (_name, next) => {
@@ -311,20 +277,6 @@ export function swallowRunError(targetService: string): HooksProvider {
           } catch {
             // swallowed
           }
-        },
-      },
-    };
-  };
-}
-
-/** Listener that always throws for the target service — errors should be swallowed by the SDK */
-export function throwOnAttemptEnd(targetService: string): HooksProvider {
-  return (ctx: HookContext) => {
-    if (ctx.serviceName !== targetService) return {};
-    return {
-      listener: {
-        attemptEnd: () => {
-          throw new Error("listener error — should be swallowed");
         },
       },
     };
