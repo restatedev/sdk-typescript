@@ -2,6 +2,16 @@ name: Test Lambda Template (LocalStack with CDK)
 
 on:
   workflow_call:
+    inputs:
+      checkout_repository:
+        required: false
+        type: string
+      checkout_ref:
+        required: false
+        type: string
+    secrets:
+      LOCALSTACK_AUTH_TOKEN:
+        required: true
 
 jobs:
   test:
@@ -26,14 +36,14 @@ jobs:
           --health-retries 5
 
       localstack:
-        image: localstack/localstack:stable
+        image: localstack/localstack:latest
         ports:
           - 4566:4566
         env:
-          ACTIVATE_PRO: 0
-          LOG_LICENSE_ISSUES: 0
+          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
           SERVICES: lambda,iam,sts,logs
           DEBUG: 1
+          LAMBDA_EXECUTOR: local
           DOCKER_HOST: unix:///var/run/docker.sock
         options: >-
           --health-cmd "curl -f http://localhost:4566/_localstack/health || exit 1"
@@ -49,7 +59,19 @@ jobs:
       AWS_REGION: us-east-1
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        if: ${{ inputs.checkout_repository == '' }}
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Checkout fork head
+        if: ${{ inputs.checkout_repository != '' }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.checkout_repository }}
+          ref: ${{ inputs.checkout_ref }}
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
