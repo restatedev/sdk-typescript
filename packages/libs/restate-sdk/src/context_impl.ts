@@ -25,7 +25,6 @@ import type {
   RestatePromise,
   RunAction,
   RunOptions,
-  SendOptions,
   WorkflowContext,
 } from "./context.js";
 import type * as vm from "./endpoint/handlers/vm/sdk_shared_core_wasm_bindings.js";
@@ -386,44 +385,38 @@ export class ContextImpl
     );
   }
 
-  public serviceSendClient<D>(
-    { name }: ServiceDefinitionFrom<D>,
-    opts?: SendOptions
-  ): SendClient<Service<D>> {
+  public serviceSendClient<D>({
+    name,
+  }: ServiceDefinitionFrom<D>): SendClient<Service<D>> {
     return makeRpcSendProxy(
       (send) => this.genericSend(send),
       this.defaultSerde,
       name,
-      undefined,
-      opts?.delay
+      undefined
     );
   }
 
   public objectSendClient<D>(
     { name }: VirtualObjectDefinitionFrom<D>,
-    key: string,
-    opts?: SendOptions
+    key: string
   ): SendClient<VirtualObject<D>> {
     return makeRpcSendProxy(
       (send) => this.genericSend(send),
       this.defaultSerde,
       name,
-      key,
-      opts?.delay
+      key
     );
   }
 
   workflowSendClient<D>(
     { name }: WorkflowDefinitionFrom<D>,
-    key: string,
-    opts?: SendOptions
+    key: string
   ): SendClient<Workflow<D>> {
     return makeRpcSendProxy(
       (send) => this.genericSend(send),
       this.defaultSerde,
       name,
-      key,
-      opts?.delay
+      key
     );
   }
 
@@ -478,8 +471,6 @@ export class ContextImpl
               ),
             });
           } else if (err instanceof RetryableError) {
-            const maxRetryDuration =
-              options?.maxRetryDuration ?? options?.maxRetryDurationMillis;
             this.coreVm.propose_run_completion_failure_transient_with_delay_override(
               handle,
               err.message,
@@ -489,8 +480,8 @@ export class ContextImpl
                 ? BigInt(millisOrDurationToMillis(err.retryAfter))
                 : undefined,
               options?.maxRetryAttempts,
-              maxRetryDuration !== undefined
-                ? BigInt(millisOrDurationToMillis(maxRetryDuration))
+              options?.maxRetryDuration !== undefined
+                ? BigInt(millisOrDurationToMillis(options?.maxRetryDuration))
                 : undefined
             );
           } else {
@@ -505,29 +496,21 @@ export class ContextImpl
               options?.retryIntervalFactor !== undefined ||
               options?.maxRetryAttempts !== undefined ||
               options?.initialRetryInterval !== undefined ||
-              options?.initialRetryIntervalMillis !== undefined ||
               options?.maxRetryDuration !== undefined ||
-              options?.maxRetryDurationMillis !== undefined ||
-              options?.maxRetryInterval !== undefined ||
-              options?.maxRetryIntervalMillis !== undefined
+              options?.maxRetryInterval !== undefined
             ) {
-              const maxRetryDuration =
-                options?.maxRetryDuration ?? options?.maxRetryDurationMillis;
               retryPolicy = {
                 factor: options?.retryIntervalFactor ?? 2.0,
                 initial_interval: millisOrDurationToMillis(
-                  options?.initialRetryInterval ??
-                    options?.initialRetryIntervalMillis ??
-                    50
+                  options?.initialRetryInterval ?? 50
                 ),
                 max_attempts: options?.maxRetryAttempts,
                 max_duration:
-                  maxRetryDuration === undefined
+                  options?.maxRetryDuration === undefined
                     ? undefined
-                    : millisOrDurationToMillis(maxRetryDuration),
+                    : millisOrDurationToMillis(options?.maxRetryDuration),
                 max_interval: millisOrDurationToMillis(
-                  options?.maxRetryInterval ??
-                    options?.maxRetryIntervalMillis ?? { seconds: 10 }
+                  options?.maxRetryInterval ?? { seconds: 10 }
                 ),
               };
             }

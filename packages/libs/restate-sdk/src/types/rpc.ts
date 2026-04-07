@@ -217,8 +217,7 @@ export const makeRpcSendProxy = <T>(
   genericSend: (send: GenericSend<unknown>) => void,
   defaultSerde: Serde<any>,
   service: string,
-  key?: string,
-  legacyDelay?: number
+  key?: string
 ): T => {
   const clientProxy = new Proxy(
     {},
@@ -228,9 +227,7 @@ export const makeRpcSendProxy = <T>(
         return (...args: unknown[]) => {
           const { parameter, opts } = optsFromArgs(args);
           const requestSerde = opts?.input ?? defaultSerde;
-          const delay =
-            legacyDelay ??
-            (opts as ClientSendOptions<unknown> | undefined)?.delay;
+          const delay = (opts as ClientSendOptions<unknown> | undefined)?.delay;
           return genericSend({
             service,
             method,

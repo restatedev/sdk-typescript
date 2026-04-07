@@ -28,7 +28,6 @@ export type {
   ContextDate,
   RunAction,
   RunOptions,
-  SendOptions,
   KeyValueStore,
   DurablePromise,
   Request,
