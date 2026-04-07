@@ -25,7 +25,7 @@ function getTracerForService(serviceName: string): Tracer {
   let provider = providers.get(serviceName);
   if (!provider) {
     provider = new BasicTracerProvider({
-      resource: new Resource({ [ATTR_SERVICE_NAME]: serviceName }),
+      resource: new Resource({ [ATTR_SERVICE_NAME]: `client-${serviceName}` }),
       spanProcessors: [
         new BatchSpanProcessor(
           new OTLPTraceExporter({
