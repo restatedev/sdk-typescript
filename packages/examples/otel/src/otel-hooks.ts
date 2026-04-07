@@ -159,7 +159,7 @@ export const otelTracingHook: HooksProvider = (ctx: HookContext) => {
           case "abandoned":
             attemptSpan.setStatus({
               code: SpanStatusCode.OK,
-              message: "Attempt abandoned (suspension or internal retry)",
+              message: "Attempt abandoned (suspension)",
             });
             break;
         }

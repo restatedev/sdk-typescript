@@ -189,13 +189,9 @@ export class RetryableError extends RestateError {
  * This happens when the runtime decides to end the current attempt without
  * the handler completing normally — for example:
  * - The handler is suspended (e.g. waiting for `ctx.sleep()` or `ctx.call()`)
- * - A `ctx.run()` closure fails and the runtime restarts the invocation
- * - A call to a non-existent service fails
- * - The invocation is killed after exceeding `maxAttempts` (with `onMaxAttempts: "kill"`)
  *
  * When this error propagates through an interceptor's `next()`, it means
- * the attempt is over — not necessarily that the invocation failed. The
- * runtime may retry with a new attempt, or the invocation may be killed.
+ * the attempt is over — not necessarily that the invocation failed.
  *
  * Interceptors can catch this to distinguish abandonment from real errors
  * (e.g. to avoid logging it as a failure or to set a neutral span status).

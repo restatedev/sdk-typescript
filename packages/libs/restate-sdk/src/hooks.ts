@@ -28,7 +28,7 @@ export interface HookContext {
  * - Errors thrown at any point (before or after `next()`) will fail or retry the invocation.
  * - `next()` can reject with {@link AttemptAbandonedError} when the SDK abandons the current
  *   attempt and unwinds the interceptor stack. This is control flow for attempt boundaries
- *   (for example suspension or an internal restart), not necessarily an invocation failure;
+ *   (for example suspension), not necessarily an invocation failure;
  *   do any cleanup you need and rethrow.
  * - Cannot modify the handler's input or return value (`void` signature).
  * - `next()` must be called exactly once.
@@ -80,7 +80,7 @@ export interface Interceptor {
 export interface Listener {
   /**
    * Called when an attempt ends. Fires for every outcome: success,
-   * retryable error, terminal error, or abandoned (suspension/internal retry).
+   * retryable error, terminal error, or abandoned (suspension).
    * Errors thrown here are swallowed and logged — they never affect the invocation.
    */
   attemptEnd?: (result: AttemptResult) => void;
