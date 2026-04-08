@@ -677,9 +677,7 @@ function hooksSuite(level: HookLevel) {
         await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
       ).toMatchObject({
         status: "succeeded",
-        transientErrors: [
-          { error_code: 500, error_message: "[hw] retry" },
-        ],
+        transientErrors: [{ error_code: 500, error_message: "[hw] retry" }],
       });
     });
 
@@ -721,9 +719,7 @@ function hooksSuite(level: HookLevel) {
         await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
       ).toMatchObject({
         status: "succeeded",
-        transientErrors: [
-          { error_code: 500, error_message: "[hw] retry" },
-        ],
+        transientErrors: [{ error_code: 500, error_message: "[hw] retry" }],
       });
     });
 
@@ -836,7 +832,10 @@ function hooksSuite(level: HookLevel) {
       ).toMatchObject({
         status: "succeeded",
         transientErrors: [
-          { error_code: 500, error_message: "[hw] interceptor retryable error" },
+          {
+            error_code: 500,
+            error_message: "[hw] interceptor retryable error",
+          },
         ],
       });
     });
@@ -865,7 +864,10 @@ function hooksSuite(level: HookLevel) {
       ).toMatchObject({
         status: "succeeded",
         transientErrors: [
-          { error_code: 500, error_message: "[rw] run interceptor retryable error" },
+          {
+            error_code: 500,
+            error_message: "[rw] run interceptor retryable error",
+          },
         ],
       });
     });
@@ -943,7 +945,10 @@ function hooksSuite(level: HookLevel) {
         status: "succeeded",
         journalOutput: { value: result },
         transientErrors: [
-          { error_code: 500, error_message: "[hw] handler interceptor retryable after next" },
+          {
+            error_code: 500,
+            error_message: "[hw] handler interceptor retryable after next",
+          },
         ],
       });
     });
@@ -973,7 +978,10 @@ function hooksSuite(level: HookLevel) {
         status: "succeeded",
         journalOutput: { value: result },
         transientErrors: [
-          { error_code: 500, error_message: "[rw] run interceptor retryable after next" },
+          {
+            error_code: 500,
+            error_message: "[rw] run interceptor retryable after next",
+          },
         ],
       });
       expect(
@@ -1018,9 +1026,7 @@ function hooksSuite(level: HookLevel) {
         await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
       ).toMatchObject({
         status: "succeeded",
-        transientErrors: [
-          { error_code: 500, error_message: "[hw] retry" },
-        ],
+        transientErrors: [{ error_code: 500, error_message: "[hw] retry" }],
       });
     });
 
@@ -1043,9 +1049,7 @@ function hooksSuite(level: HookLevel) {
         await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId!)
       ).toMatchObject({
         status: "failed",
-        transientErrors: [
-          { error_code: 500, error_message: "[hw] retry" },
-        ],
+        transientErrors: [{ error_code: 500, error_message: "[hw] retry" }],
       });
     });
 
@@ -1532,14 +1536,36 @@ describe("hooks composition ordering", { timeout: 120_000 }, () => {
 // Interceptor error isolation
 // ---------------------------------------------------------------------------
 
-describe.skip("interceptor error isolation", { timeout: 120_000 }, () => {
+describe("interceptor error isolation", { timeout: 120_000 }, () => {
   let env: RestateTestEnvironment;
 
-  // Collects errors with retryAfter seen by interceptors, keyed by invocationId.
-  // If the SDK correctly isolates internal retry metadata, this list stays empty.
-  const retryAfterErrors = new Map<string, string[]>();
+  // Collects SDK-internal metadata (CommandError) seen by interceptors,
+  // keyed by invocationId. If the SDK correctly isolates internals, these
+  // lists stay empty.
+  const leakedMetadata = new Map<
+    string,
+    { commandType: string[]; commandIndex: string[] }
+  >();
 
-  const recordRetryableErrors: HooksProvider = (ctx) => {
+  function leaksFor(id: string) {
+    if (!leakedMetadata.has(id))
+      leakedMetadata.set(id, {
+        commandType: [],
+        commandIndex: [],
+      });
+    return leakedMetadata.get(id)!;
+  }
+
+  function recordLeak(id: string, source: string, e: unknown) {
+    if (!(e instanceof Error)) return;
+    const obj = e as Record<string, unknown>;
+    if (obj.commandType !== undefined)
+      leaksFor(id).commandType.push(`${source}: ${e.message}`);
+    if (obj.commandIndex !== undefined)
+      leaksFor(id).commandIndex.push(`${source}: ${e.message}`);
+  }
+
+  const recordLeakedMetadata: HooksProvider = (ctx) => {
     const id = ctx.request.id;
     return {
       interceptor: {
@@ -1547,10 +1573,7 @@ describe.skip("interceptor error isolation", { timeout: 120_000 }, () => {
           try {
             await next();
           } catch (e) {
-            if (e instanceof Error && "retryAfter" in e) {
-              if (!retryAfterErrors.has(id)) retryAfterErrors.set(id, []);
-              retryAfterErrors.get(id)!.push(`handler: ${e.message}`);
-            }
+            recordLeak(id, "handler", e);
             throw e;
           }
         },
@@ -1558,10 +1581,7 @@ describe.skip("interceptor error isolation", { timeout: 120_000 }, () => {
           try {
             await next();
           } catch (e) {
-            if (e instanceof Error && "retryAfter" in e) {
-              if (!retryAfterErrors.has(id)) retryAfterErrors.set(id, []);
-              retryAfterErrors.get(id)!.push(`run: ${e.message}`);
-            }
+            recordLeak(id, "run", e);
             throw e;
           }
         },
@@ -1569,25 +1589,18 @@ describe.skip("interceptor error isolation", { timeout: 120_000 }, () => {
     };
   };
 
-  // Service with retryable errors in both run and handler — verifies
-  // interceptors never see retryAfter on caught errors.
-  const retryableErrorService = createService({
-    name: "ErrorIsolation_RetryableError",
-    serviceHooks: [recordRetryableErrors],
+  // Service that triggers a CommandError — verifies interceptors never see
+  // commandType/commandIndex on caught errors.
+  //
+  // Attempt 1: ctx.sleep(NaN) → BigInt(NaN) throws in prepare step →
+  //   rejectAttempt(e, WasmCommandType.Sleep) → CommandError
+  // Attempt 2: succeeds
+  const metadataLeakService = createService({
+    name: "ErrorIsolation_MetadataLeak",
+    serviceHooks: [recordLeakedMetadata],
     handler: async (ctx, _) => {
       const attempt = nextAttempt(ctx.request().id);
-      await ctx.run("step", () => {
-        if (attempt === 1) throw new Error("run failed");
-        return "done";
-      });
-      if (attempt === 2) throw new Error("handler failed");
-      await ctx.run("step-with-retry-after", () => {
-        if (attempt === 3)
-          throw new restate.RetryableError("run retry-after", {
-            retryAfter: 1_000,
-          });
-        return "done";
-      });
+      await ctx.sleep(attempt === 1 ? NaN : 10);
       return { invocationId: ctx.request().id };
     },
     options: fastRetry,
@@ -1639,7 +1652,7 @@ describe.skip("interceptor error isolation", { timeout: 120_000 }, () => {
 
   beforeAll(async () => {
     env = await RestateTestEnvironment.start({
-      services: [retryableErrorService, withCustomRetryAfterService],
+      services: [metadataLeakService, withCustomRetryAfterService],
     });
   }, 120_000);
 
@@ -1647,17 +1660,18 @@ describe.skip("interceptor error isolation", { timeout: 120_000 }, () => {
     await env?.stop();
   });
 
-  it("interceptors do not see retryAfter on caught errors", async () => {
+  it("interceptors do not see SDK-internal metadata on caught errors", async () => {
     const client = clients
       .connect({ url: env.baseUrl() })
-      .serviceClient(retryableErrorService);
+      .serviceClient(metadataLeakService);
     const { invocationId } = await client.invoke("");
 
-    // No error caught by any interceptor should have had retryAfter.
-    expect(retryAfterErrors.get(invocationId) ?? []).toHaveLength(0);
+    const leaks = leakedMetadata.get(invocationId);
+    expect(leaks?.commandType ?? []).toHaveLength(0);
+    expect(leaks?.commandIndex ?? []).toHaveLength(0);
   });
 
-  it(
+  it.skip(
     "interceptor-thrown RetryableError does not affect retry timing",
     { timeout: 5_000 },
     async () => {
