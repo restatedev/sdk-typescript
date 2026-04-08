@@ -14,7 +14,7 @@ export function getIngressUrl(): string {
   if (!url) {
     throw new Error("RESTATE_INGRESS_URL environment variable is not set");
   }
-  return url;
+  return url.replace(/\/+$/, "");
 }
 
 export function getAdminUrl(): string {
@@ -22,7 +22,7 @@ export function getAdminUrl(): string {
   if (!url) {
     throw new Error("RESTATE_ADMIN_URL environment variable is not set");
   }
-  return url;
+  return url.replace(/\/+$/, "");
 }
 
 export function ingressClient() {
