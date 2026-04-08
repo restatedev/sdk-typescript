@@ -315,6 +315,63 @@ export class CombinatorRestatePromise extends BaseRestatePromise<any> {
   readonly [Symbol.toStringTag] = "RestateCombinatorPromise";
 }
 
+export class RestatePendingPromise<T> extends InternalRestatePromise<T> {
+  [RESTATE_CTX_SYMBOL]: ContextImpl;
+
+  constructor(ctx: ContextImpl) {
+    super();
+    this[RESTATE_CTX_SYMBOL] = ctx;
+  }
+
+  then<TResult1 = T, TResult2 = never>(
+    onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null
+  ): Promise<TResult1 | TResult2> {
+    return pendingPromise<T>().then(onfulfilled, onrejected);
+  }
+
+  catch<TResult = never>(
+    onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null
+  ): Promise<T | TResult> {
+    return pendingPromise<T>().catch(onrejected);
+  }
+
+  finally(onfinally?: (() => void) | null): Promise<T> {
+    return pendingPromise<T>().finally(onfinally);
+  }
+
+  orTimeout(): RestatePromise<T> {
+    return this;
+  }
+
+  map<U>(): RestatePromise<U> {
+    return this as unknown as RestatePromise<U>;
+  }
+
+  tryCancel(): void {}
+
+  async tryComplete(): Promise<void> {}
+
+  uncompletedLeaves(): number[] {
+    return [];
+  }
+
+  publicPromise(): Promise<T> {
+    return pendingPromise<T>();
+  }
+
+  readonly [Symbol.toStringTag] = "RestatePendingPromise";
+}
+
+export class InvocationPendingPromise<T>
+  extends RestatePendingPromise<T>
+  implements InvocationPromise<T>
+{
+  get invocationId(): Promise<InvocationId> {
+    return pendingPromise();
+  }
+}
+
 export class MappedRestatePromise<T, U> extends BaseRestatePromise<U> {
   private publicPromiseMapper: (
     value?: T,
@@ -334,7 +391,7 @@ export class MappedRestatePromise<T, U> extends BaseRestatePromise<U> {
         if (e instanceof TerminalError) {
           return Promise.reject(e);
         } else {
-          ctx.handleInvocationEndError(e);
+          ctx.rejectAttempt(e);
           return pendingPromise();
         }
       }

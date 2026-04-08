@@ -139,27 +139,34 @@ function hooksSuite(level: HookLevel) {
       options: fastRetry,
     });
 
-    const wait = (ms: number) =>
-      new Promise((resolve) => setTimeout(resolve, ms));
+    const wait = (ms: number, signal?: AbortSignal) =>
+      new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(resolve, ms);
+        signal?.addEventListener("abort", () => {
+          clearTimeout(timer);
+          reject(new Error("aborted"));
+        });
+      });
 
     const concurrentRunService = createService({
       name: `${level}_ConcurrentRun`,
       ...hooksAt([recordHookEvents()]),
       handler: async (ctx, _) => {
         const attempt = nextAttempt(ctx.request().id);
+        const signal = ctx.request().attemptCompletedSignal;
         await restate.RestatePromise.all([
           ctx.run("run-1", async () => {
-            await wait(100);
+            await wait(100, signal);
             if (attempt === 1) {
-              await wait(100);
+              await wait(100, signal);
               throw new Error("run-1 fail");
             }
             return "a";
           }),
           ctx.run("run-2", async () => {
-            await wait(100);
+            await wait(100, signal);
             if (attempt <= 2) {
-              await wait(200);
+              await wait(200, signal);
               throw new Error("run-2 fail");
             }
             return "b";
@@ -1049,18 +1056,17 @@ function hooksSuite(level: HookLevel) {
       const { invocationId } = await client.invoke("");
       const hookEvents = getHookEvents(invocationId);
       expect(hookEvents).toEqual([
-        // attempt 1: both runs start (order non-deterministic), run-1 fails
+        // attempt 1: both runs start (order non-deterministic), run-1 fails.
+        // run-2 aborts via attemptCompletedSignal — its interceptor sees "aborted".
         "hook:handler:before",
         ...inAnyOrder("hook:run:run-1:before", "hook:run:run-2:before"),
         "hook:run:run-1:error:[rw] run-1 fail",
         "hook:handler:error:[hw] (500) [rw] run-1 fail",
-        // stale run-2:error from attempt 1 + attempt 2 start (may interleave)
-        ...inAnyOrder(
-          "hook:run:run-2:error:[rw] (500) [rw] run-1 fail",
-          "hook:handler:before"
-        ),
-        // attempt 2: both start, run-1 succeeds, run-2 fails
-        ...inAnyOrder("hook:run:run-1:before", "hook:run:run-2:before"),
+        "hook:run:run-2:error:[rw] aborted",
+        // attempt 2: run-1 succeeds, run-2 fails on its own
+        "hook:handler:before",
+        "hook:run:run-1:before",
+        "hook:run:run-2:before",
         "hook:run:run-1:after",
         "hook:run:run-2:error:[rw] run-2 fail",
         "hook:handler:error:[hw] (500) [rw] run-2 fail",
@@ -1303,7 +1309,7 @@ function hooksSuite(level: HookLevel) {
           "hook:handler:before",
           "hook:run:slow-step:before",
           "hook:handler:error:[hw] Cancelled",
-          "hook:run:slow-step:error:[rw] [hw] Cancelled",
+          "hook:run:slow-step:error:[rw] Cancelled",
         ]);
 
       expect(

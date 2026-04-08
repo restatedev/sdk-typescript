@@ -35,8 +35,6 @@ import {
 import {
   ensureError,
   INTERNAL_ERROR_CODE,
-  logError,
-  RestateError,
   RetryableError,
   TerminalError,
   UNKNOWN_ERROR_CODE,
@@ -64,6 +62,8 @@ import { CompletablePromise } from "./utils/completable_promise.js";
 import type { AsyncResultValue } from "./promises.js";
 import {
   ConstRestatePromise,
+  InvocationPendingPromise,
+  RestatePendingPromise,
   pendingPromise,
   PromisesExecutor,
   InvocationRestatePromise,
@@ -105,7 +105,7 @@ export class ContextImpl
     public readonly handlerKind: HandlerKind,
     readonly vmLogger: Console,
     private readonly invocationRequest: Request,
-    private readonly invocationEndPromise: CompletablePromise<void>,
+    readonly invocationEndPromise: CompletablePromise<void>,
     inputReader: InputReader,
     outputWriter: OutputWriter,
     readonly journalValueCodec: JournalValueCodec,
@@ -124,14 +124,10 @@ export class ContextImpl
     this.runClosuresTracker = new RunClosuresTracker();
     this.promisesExecutor = new PromisesExecutor(
       coreVm,
-      new InputPump(
-        coreVm,
-        inputReader,
-        this.handleInvocationEndError.bind(this)
-      ),
+      new InputPump(coreVm, inputReader, this.rejectAttempt.bind(this)),
       this.outputPump,
       this.runClosuresTracker,
-      this.promiseExecutorErrorCallback.bind(this)
+      this.rejectAttempt.bind(this)
     );
     this.defaultSerde = defaultSerde ?? serde.json;
     this.serviceKey = input.key;
@@ -143,14 +139,6 @@ export class ContextImpl
     interceptor: (name: string, runner: () => Promise<void>) => Promise<void>
   ) {
     this.runInterceptor = interceptor;
-  }
-
-  /**
-   * Returns a promise that rejects when the current attempt is abandoned.
-   * Used internally to race against interceptor next() calls.
-   */
-  get abandonmentSignal(): Promise<never> {
-    return this.invocationEndPromise.promise as Promise<never>;
   }
 
   isProcessing(): boolean {
@@ -253,14 +241,8 @@ export class ContextImpl
         requestSerde.serialize(call.parameter)
       );
     } catch (e) {
-      this.handleInvocationEndError(e, (vm, error) =>
-        vm.notify_error_for_next_command(
-          error.message,
-          error.stack,
-          WasmCommandType.Call
-        )
-      );
-      return Object.assign(ConstRestatePromise.pending<RES>(), { invocationId: pendingPromise<InvocationId>() });
+      this.rejectAttempt(e, WasmCommandType.Call);
+      return new InvocationPendingPromise(this);
     }
 
     try {
@@ -301,9 +283,9 @@ export class ContextImpl
         invocationIdPromise as RestatePromise<InvocationId>
       );
     } catch (e) {
-      this.handleInvocationEndError(e);
+      this.rejectAttempt(e);
       // We return a pending promise to avoid the caller to see the error.
-      return Object.assign(ConstRestatePromise.pending<RES>(), { invocationId: pendingPromise<InvocationId>() });
+      return new InvocationPendingPromise(this);
     }
   }
 
@@ -318,14 +300,8 @@ export class ContextImpl
         requestSerde.serialize(send.parameter)
       );
     } catch (e) {
-      this.handleInvocationEndError(e, (vm, error) =>
-        vm.notify_error_for_next_command(
-          error.message,
-          error.stack,
-          WasmCommandType.OneWayCall
-        )
-      );
-      return { invocationId: pendingPromise<InvocationId>() };
+      this.rejectAttempt(e, WasmCommandType.OneWayCall);
+      return new InvocationPendingPromise(this);
     }
 
     try {
@@ -362,7 +338,7 @@ export class ContextImpl
         ),
       };
     } catch (e) {
-      this.handleInvocationEndError(e);
+      this.rejectAttempt(e);
       return {
         invocationId: pendingPromise(),
       };
@@ -457,8 +433,8 @@ export class ContextImpl
     try {
       handle = this.coreVm.sys_run(name ?? "");
     } catch (e) {
-      this.handleInvocationEndError(e);
-      return ConstRestatePromise.pending();
+      this.rejectAttempt(e);
+      return new RestatePendingPromise(this);
     }
     const commandIndex = this.coreVm.last_command_index();
 
@@ -549,7 +525,7 @@ export class ContextImpl
           this.coreVm.propose_run_completion_success(handle, encodedRes);
         }
       } catch (e) {
-        this.handleInvocationEndError(e);
+        this.rejectAttempt(e);
         return pendingPromise<T>();
       }
       await this.outputPump.awaitNextProgress();
@@ -605,7 +581,7 @@ export class ContextImpl
     try {
       awakeable = this.coreVm.sys_awakeable();
     } catch (e) {
-      this.handleInvocationEndError(e);
+      this.rejectAttempt(e);
       return {
         id: "invalid",
         promise: ConstRestatePromise.pending(),
@@ -677,20 +653,14 @@ export class ContextImpl
     try {
       input = prepare();
     } catch (e) {
-      this.handleInvocationEndError(e, (vm, error) =>
-        vm.notify_error_for_next_command(
-          error.message,
-          error.stack,
-          commandType
-        )
-      );
+      this.rejectAttempt(e, commandType);
       return;
     }
 
     try {
       vmCall(this.coreVm, input);
     } catch (e) {
-      this.handleInvocationEndError(e);
+      this.rejectAttempt(e);
     }
   }
 
@@ -704,22 +674,16 @@ export class ContextImpl
     try {
       input = prepare();
     } catch (e) {
-      this.handleInvocationEndError(e, (vm, error) =>
-        vm.notify_error_for_next_command(
-          error.message,
-          error.stack,
-          commandType
-        )
-      );
-      return ConstRestatePromise.pending();
+      this.rejectAttempt(e, commandType);
+      return new RestatePendingPromise(this);
     }
 
     let handle: number;
     try {
       handle = vmCall(this.coreVm, input);
     } catch (e) {
-      this.handleInvocationEndError(e);
-      return ConstRestatePromise.pending();
+      this.rejectAttempt(e);
+      return new RestatePendingPromise(this);
     }
     const commandIndex = this.coreVm.last_command_index();
     return new SingleRestatePromise(
@@ -729,47 +693,14 @@ export class ContextImpl
     );
   }
 
-  promiseExecutorErrorCallback(e: unknown) {
-    if (e instanceof AsyncCompleterError) {
-      const cause = ensureError(e.cause);
-      logError(this.vmLogger, e.cause);
-      // Special handling for this one!
-      this.coreVm.notify_error_for_specific_command(
-        cause.message,
-        cause.stack,
-        e.commandType,
-        e.commandIndex,
-        null
-      );
-    } else {
-      const error = ensureError(e);
-      logError(this.vmLogger, error);
-      if (!(error instanceof RestateError)) {
-        // Notify error
-        this.coreVm.notify_error(error.message, error.stack);
-      }
-    }
-
-    // Reject to signal abandonment — this both unblocks the
-    // invocationEndPromise await and breaks interceptors out via
-    // Promise.race in raceWithAbandonment.
-    this.invocationEndPromise.reject(ensureError(e));
-  }
-
-  handleInvocationEndError(
-    e: unknown,
-    notify_vm_error: (vm: vm.WasmVM, error: Error) => void = (vm, error) => {
-      vm.notify_error(error.message, error.stack);
-    }
-  ) {
-    const error = ensureError(e);
-    logError(this.vmLogger, error);
-    notify_vm_error(this.coreVm, error);
-
-    // Reject to signal abandonment — this both unblocks the
-    // invocationEndPromise await and breaks interceptors out via
-    // Promise.race in raceWithAbandonment.
-    this.invocationEndPromise.reject(error);
+  rejectAttempt(e: unknown, commandType?: WasmCommandType) {
+    // ensureError so interceptors always receive a proper Error,
+    // not a raw VM object like { code, message }.
+    this.invocationEndPromise.reject(
+      commandType !== undefined
+        ? new CommandError(e, commandType)
+        : ensureError(e)
+    );
   }
 }
 
@@ -916,13 +847,33 @@ type Completer = (
   prom: CompletablePromise<any>
 ) => Promise<boolean>;
 
-// This is just a special type we use to propagate completer errors between this function and handleInvocationEndError
-class AsyncCompleterError {
+// Wraps an error with command metadata so the centralized catch in
+// process() can call the right VM notification method.
+//
+// - Preparation failure (command not yet in journal): new CommandError(e, type)
+//   → notify_error_for_next_command
+// - Completion failure (command exists): new CommandError(e, type, index)
+//   → notify_error_for_specific_command
+export class CommandError extends Error {
+  constructor(cause: unknown, commandType: WasmCommandType);
   constructor(
-    readonly cause: any,
+    cause: unknown,
+    commandType: WasmCommandType,
+    commandIndex: number
+  );
+  constructor(
+    override readonly cause: unknown,
     readonly commandType: WasmCommandType,
-    readonly commandIndex: number
-  ) {}
+    readonly commandIndex?: number
+  ) {
+    const msg = cause instanceof Error ? cause.message : String(cause);
+    super(msg, { cause });
+  }
+
+  /** True when the error is for a specific command that exists in the journal. */
+  get isCompletion(): boolean {
+    return this.commandIndex !== undefined;
+  }
 }
 
 function completeCommandPromiseUsing<T>(
@@ -939,7 +890,7 @@ function completeCommandPromiseUsing<T>(
       }
     } catch (e) {
       // eslint-disable-next-line @typescript-eslint/only-throw-error
-      throw new AsyncCompleterError(e, commandType, commandIndex);
+      throw new CommandError(e, commandType, commandIndex);
     }
 
     throw new Error(
