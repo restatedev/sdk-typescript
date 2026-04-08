@@ -1474,3 +1474,151 @@ describe("hooks composition ordering", { timeout: 120_000 }, () => {
     ]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Interceptor error isolation
+// ---------------------------------------------------------------------------
+
+describe.skip("interceptor error isolation", { timeout: 120_000 }, () => {
+  let env: RestateTestEnvironment;
+
+  // Collects errors with retryAfter seen by interceptors, keyed by invocationId.
+  // If the SDK correctly isolates internal retry metadata, this list stays empty.
+  const retryAfterErrors = new Map<string, string[]>();
+
+  const recordRetryableErrors: HooksProvider = (ctx) => {
+    const id = ctx.request.id;
+    return {
+      interceptor: {
+        handler: async (next) => {
+          try {
+            await next();
+          } catch (e) {
+            if (e instanceof Error && "retryAfter" in e) {
+              if (!retryAfterErrors.has(id)) retryAfterErrors.set(id, []);
+              retryAfterErrors.get(id)!.push(`handler: ${e.message}`);
+            }
+            throw e;
+          }
+        },
+        run: async (_name, next) => {
+          try {
+            await next();
+          } catch (e) {
+            if (e instanceof Error && "retryAfter" in e) {
+              if (!retryAfterErrors.has(id)) retryAfterErrors.set(id, []);
+              retryAfterErrors.get(id)!.push(`run: ${e.message}`);
+            }
+            throw e;
+          }
+        },
+      },
+    };
+  };
+
+  // Service with retryable errors in both run and handler — verifies
+  // interceptors never see retryAfter on caught errors.
+  const retryableErrorService = createService({
+    name: "ErrorIsolation_RetryableError",
+    serviceHooks: [recordRetryableErrors],
+    handler: async (ctx, _) => {
+      const attempt = nextAttempt(ctx.request().id);
+      await ctx.run("step", () => {
+        if (attempt === 1) throw new Error("run failed");
+        return "done";
+      });
+      if (attempt === 2) throw new Error("handler failed");
+      await ctx.run("step-with-retry-after", () => {
+        if (attempt === 3)
+          throw new restate.RetryableError("run retry-after", {
+            retryAfter: 1_000,
+          });
+        return "done";
+      });
+      return { invocationId: ctx.request().id };
+    },
+    options: fastRetry,
+  });
+
+  // Service where both run and handler interceptors catch errors and rethrow
+  // RetryableError with retryAfter — verifies the SDK does NOT let
+  // interceptor-thrown RetryableError override retry timing.
+  const overrideRetryAfterHook: HooksProvider = () => ({
+    interceptor: {
+      handler: async (next) => {
+        try {
+          await next();
+        } catch {
+          throw new restate.RetryableError("handler-wrapped", {
+            retryAfter: 120_000,
+          });
+        }
+      },
+      run: async (_name, next) => {
+        try {
+          await next();
+        } catch {
+          throw new restate.RetryableError("run-wrapped", {
+            retryAfter: 120_000,
+          });
+        }
+      },
+    },
+  });
+
+  const withCustomRetryAfterService = createService({
+    name: "ErrorIsolation_CustomRetryAfter",
+    serviceHooks: [overrideRetryAfterHook],
+    handler: async (ctx, _) => {
+      const attempt = nextAttempt(ctx.request().id);
+      // Attempt 1: run throws — tests run interceptor RetryableError path
+      await ctx.run("step", () => {
+        if (attempt === 1) throw new Error("run failed");
+        return "done";
+      });
+      // Attempt 2: handler throws directly — tests handler interceptor path
+      if (attempt === 2) throw new Error("handler failed");
+      // Attempt 3: succeeds
+      return { invocationId: ctx.request().id };
+    },
+    options: fastRetry,
+  });
+
+  beforeAll(async () => {
+    env = await RestateTestEnvironment.start({
+      services: [retryableErrorService, withCustomRetryAfterService],
+    });
+  }, 120_000);
+
+  afterAll(async () => {
+    await env?.stop();
+  });
+
+  it("interceptors do not see retryAfter on caught errors", async () => {
+    const client = clients
+      .connect({ url: env.baseUrl() })
+      .serviceClient(retryableErrorService);
+    const { invocationId } = await client.invoke("");
+
+    // No error caught by any interceptor should have had retryAfter.
+    expect(retryAfterErrors.get(invocationId) ?? []).toHaveLength(0);
+  });
+
+  it(
+    "interceptor-thrown RetryableError does not affect retry timing",
+    { timeout: 5_000 },
+    async () => {
+      const client = clients
+        .connect({ url: env.baseUrl() })
+        .serviceClient(withCustomRetryAfterService);
+      const { invocationId } = await client.invoke("");
+
+      // overrideRetryAfterHook throws RetryableError with retryAfter: 120_000.
+      // If the SDK honored it, the retry would wait 2 minutes and this test
+      // would timeout (5s). With fastRetry (10ms interval), it completes fast.
+      expect(
+        await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
+      ).toMatchObject({ status: "succeeded" });
+    }
+  );
+});
