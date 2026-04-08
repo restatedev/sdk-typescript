@@ -135,7 +135,7 @@ export class WasmVM {
   sys_complete_awakeable_success(id: string, buffer: Uint8Array): void;
   notify_error_with_delay_override(error_message: string, stacktrace?: string | null, delay_override?: bigint | null): void;
   notify_error_for_specific_command(error_message: string, stacktrace: string | null | undefined, wasm_command_type: WasmCommandType, command_index: number, command_name?: string | null): void;
-  constructor(headers: WasmHeader[], log_level: LogLevel, logger_id: number, disable_payload_checks: boolean);
+  constructor(headers: WasmHeader[], log_level: LogLevel, logger_id: number, disable_payload_checks: boolean, explicit_cancellation: boolean);
   propose_run_completion_failure_transient(handle: number, error_message: string, error_stacktrace: string | null | undefined, attempt_duration: bigint, config?: WasmExponentialRetryConfig | null): void;
   propose_run_completion_failure_transient_with_delay_override(handle: number, error_message: string, error_stacktrace: string | null | undefined, attempt_duration: bigint, delay_override?: bigint | null, max_retry_attempts_override?: number | null, max_retry_duration_override?: bigint | null): void;
   sys_end(): void;

@@ -290,7 +290,8 @@ class RestateInvokeResponse implements RestateResponse {
       vmHeaders,
       restateLogLevelToWasmLogLevel(DEFAULT_CONSOLE_LOGGER_LOG_LEVEL),
       this.loggerId,
-      isJournalCodecDefined
+      isJournalCodecDefined,
+      handler.executionOptions.explicitCancellation ?? false
     );
     const responseHead = this.coreVm.get_response_head();
     this.statusCode = responseHead.status_code;
@@ -437,8 +438,7 @@ class RestateInvokeResponse implements RestateResponse {
         inputReader,
         outputWriter,
         journalValueCodec,
-        this.handler.executionOptions.defaultSerde,
-        this.handler.executionOptions.asTerminalError
+        this.handler.executionOptions
       );
     } catch (e) {
       // That's "preflight" failure cases, where stuff fails before running user code

@@ -164,7 +164,8 @@ export class WasmVM {
     headers: WasmHeader[],
     log_level: LogLevel,
     logger_id: number,
-    disable_payload_checks: boolean
+    disable_payload_checks: boolean,
+    explicit_cancellation: boolean
   );
   propose_run_completion_failure_transient(
     handle: number,

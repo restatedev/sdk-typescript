@@ -31,6 +31,8 @@ import type * as vm from "./endpoint/handlers/vm/sdk_shared_core_wasm_bindings.j
 import {
   WasmCommandType,
   WasmHeader,
+  WasmInput,
+  WasmVM,
 } from "./endpoint/handlers/vm/sdk_shared_core_wasm_bindings.js";
 import {
   ensureError,
@@ -59,7 +61,7 @@ import type {
 import { millisOrDurationToMillis, serde } from "@restatedev/restate-sdk-core";
 import { RandImpl } from "./utils/rand.js";
 import { CompletablePromise } from "./utils/completable_promise.js";
-import type { AsyncResultValue } from "./promises.js";
+import { AsyncResultValue, CombinatorRestatePromise } from "./promises.js";
 import {
   ConstRestatePromise,
   InvocationPendingPromise,
@@ -72,6 +74,7 @@ import {
 import { InputPump, OutputPump } from "./io.js";
 import type { ContextInternal } from "./internal.js";
 import { InputReader, OutputWriter } from "./endpoint/handlers/types.js";
+import { ExecutionOptions } from "./endpoint/components.js";
 
 export class ContextImpl
   implements ObjectContext, WorkflowContext, ContextInternal
@@ -91,16 +94,21 @@ export class ContextImpl
   private readonly outputPump: OutputPump;
   private readonly runClosuresTracker: RunClosuresTracker;
   readonly promisesExecutor: PromisesExecutor;
-  readonly defaultSerde: Serde<any>;
   private readonly serviceKey: string;
   private runInterceptor: (
     name: string,
     runner: () => Promise<void>
   ) => Promise<void>;
+  private cancellationPromise?: SingleRestatePromise<void>;
+  readonly defaultSerde: Serde<any>;
+  private readonly asTerminalError?: (error: any) => TerminalError | undefined;
+
+  // If undefined, we're not tracking invocation id promises
+  private readonly trackedInvocationIdPromises?: SingleRestatePromise<string>[];
 
   constructor(
-    readonly coreVm: vm.WasmVM,
-    input: vm.WasmInput,
+    readonly coreVm: WasmVM,
+    input: WasmInput,
     public readonly console: Console,
     public readonly handlerKind: HandlerKind,
     readonly vmLogger: Console,
@@ -109,8 +117,7 @@ export class ContextImpl
     inputReader: InputReader,
     outputWriter: OutputWriter,
     readonly journalValueCodec: JournalValueCodec,
-    defaultSerde?: Serde<any>,
-    private readonly asTerminalError?: (error: any) => TerminalError | undefined
+    executionOptions?: ExecutionOptions
   ) {
     this.rand = new RandImpl(input.random_seed, () => {
       // TODO reimplement this check with async context
@@ -129,10 +136,14 @@ export class ContextImpl
       this.runClosuresTracker,
       this.abortAttempt.bind(this)
     );
-    this.defaultSerde = defaultSerde ?? serde.json;
     this.serviceKey = input.key;
     // Identity interceptor by default; replaced by startUserHandler after hooks are instantiated
     this.runInterceptor = (_name, runner) => runner();
+      this.defaultSerde = executionOptions?.defaultSerde ?? serde.json;
+      this.asTerminalError = executionOptions?.asTerminalError;
+      this.trackedInvocationIdPromises = executionOptions?.explicitCancellation
+          ? []
+          : undefined;
   }
 
   setRunInterceptor(
@@ -146,6 +157,10 @@ export class ContextImpl
   }
 
   cancel(invocationId: InvocationId): void {
+    this._cancel(invocationId);
+  }
+
+  private _cancel(invocationId: string): void {
     this.processNonCompletableEntry(
       WasmCommandType.CancelInvocation,
       () => {},
@@ -242,7 +257,9 @@ export class ContextImpl
       );
     } catch (e) {
       this.abortAttempt(e, WasmCommandType.Call);
-      return new InvocationPendingPromise(this);
+        return Object.assign(ConstRestatePromise.pending<RES>(), {
+            invocationId: pendingPromise<InvocationId>(),
+        });
     }
 
     try {
@@ -271,6 +288,10 @@ export class ContextImpl
         )
       );
 
+      this.trackedInvocationIdPromises?.push(
+        invocationIdPromise as SingleRestatePromise<string>
+      );
+
       return new InvocationRestatePromise(
         this,
         call_handles.call_completion_id,
@@ -285,7 +306,9 @@ export class ContextImpl
     } catch (e) {
       this.abortAttempt(e);
       // We return a pending promise to avoid the caller to see the error.
-      return new InvocationPendingPromise(this);
+      return Object.assign(ConstRestatePromise.pending<RES>(), {
+        invocationId: pendingPromise<InvocationId>(),
+      });
     }
   }
 
@@ -640,6 +663,45 @@ export class ContextImpl
 
   public promise<T>(name: string, serde?: Serde<T>): DurablePromise<T> {
     return new DurablePromiseImpl(this, name, serde);
+  }
+
+  cancellation(): RestatePromise<void> {
+    if (!this.cancellationPromise || this.cancellationPromise.isCompleted()) {
+      this.cancellationPromise = new SingleRestatePromise(
+        this,
+        1 /* HANDLE 1 is a hardcoded cancellation signal! */,
+        completeSignalPromiseUsing(VoidAsUndefined)
+      );
+    }
+
+    return this.cancellationPromise;
+  }
+
+  cancelPreviousCalls(): RestatePromise<InvocationId[]> {
+    if (!this.trackedInvocationIdPromises) {
+      return ConstRestatePromise.resolve([]);
+    }
+
+    return CombinatorRestatePromise.fromPromises(
+      (p) => Promise.allSettled(p),
+      this.trackedInvocationIdPromises.splice(0)
+    ).map((results, failure) => {
+      if (failure) {
+        throw failure;
+      }
+      const cancelled: InvocationId[] = [];
+      for (const result of results as PromiseSettledResult<string>[]) {
+        if (result.status === "fulfilled") {
+          this._cancel(result.value);
+          cancelled.push(result.value as InvocationId);
+        } else {
+          this.console.warn(
+            `Error when trying to get invocation id: ${result.reason}`
+          );
+        }
+      }
+      return cancelled;
+    });
   }
 
   // -- Various private methods

@@ -45,6 +45,7 @@ export interface ExecutionOptions {
    */
   defaultSerde?: Serde<any>;
   hooks?: HooksProvider[];
+  explicitCancellation?: boolean;
 }
 
 export interface ComponentHandler {
@@ -132,6 +133,9 @@ function createExecutionOptions(
     asTerminalError:
       handlerOptions?.asTerminalError ?? serviceOptions?.asTerminalError,
     hooks: hooks.length > 0 ? hooks : undefined,
+    explicitCancellation:
+      handlerOptions?.explicitCancellation ??
+      serviceOptions?.explicitCancellation,
   };
 }
 

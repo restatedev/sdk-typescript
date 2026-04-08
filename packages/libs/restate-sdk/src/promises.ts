@@ -214,6 +214,10 @@ export class SingleRestatePromise<T> extends BaseRestatePromise<T> {
     return this.completablePromise.promise;
   }
 
+  isCompleted(): boolean {
+    return this.state === PromiseState.COMPLETED;
+  }
+
   readonly [Symbol.toStringTag] = "RestateSinglePromise";
 }
 
