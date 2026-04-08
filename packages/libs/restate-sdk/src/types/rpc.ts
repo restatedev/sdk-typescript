@@ -428,6 +428,14 @@ export type ServiceHandlerOpts<I, O> = {
    * hooks first, then handler hooks. Within each level, hooks execute in
    * array order: for `[A, B]`: A before → B before → handler → B after → A after.
    *
+   * The `handler` interceptor fires on every attempt. The `run` interceptor
+   * fires only when the `ctx.run()` closure actually executes — replayed
+   * runs (already in the journal) are skipped.
+   *
+   * Errors thrown at any point (before or after `next()`) affect the invocation:
+   * {@link TerminalError} fails immediately, any other error triggers a retry.
+   * On suspension or pause, `next()` also rejects — do any cleanup and rethrow.
+   *
    * @example
    * ```ts
    * const myService = restate.service({
@@ -448,6 +456,16 @@ export type ServiceHandlerOpts<I, O> = {
    *                   // Always rethrow — swallowing the error changes the
    *                   // invocation outcome. You can also throw a different
    *                   // error (e.g. TerminalError to fail immediately).
+   *                   throw e;
+   *                 }
+   *               },
+   *               run: async (name, next) => {
+   *                 console.log(`  before run "${name}"`);
+   *                 try {
+   *                   await next();
+   *                   console.log(`  after run "${name}"`);
+   *                 } catch (e) {
+   *                   console.log(`  error run "${name}": ${e}`);
    *                   throw e;
    *                 }
    *               },
@@ -962,6 +980,14 @@ export type ServiceOptions = {
    * hooks first, then handler hooks. Within each level, hooks execute in
    * array order: for `[A, B]`: A before → B before → handler → B after → A after.
    *
+   * The `handler` interceptor fires on every attempt. The `run` interceptor
+   * fires only when the `ctx.run()` closure actually executes — replayed
+   * runs (already in the journal) are skipped.
+   *
+   * Errors thrown at any point (before or after `next()`) affect the invocation:
+   * {@link TerminalError} fails immediately, any other error triggers a retry.
+   * On suspension or pause, `next()` also rejects — do any cleanup and rethrow.
+   *
    * @example
    * ```ts
    * const myService = restate.service({
@@ -981,6 +1007,16 @@ export type ServiceOptions = {
    *               // Always rethrow — swallowing the error changes the
    *               // invocation outcome. You can also throw a different
    *               // error (e.g. TerminalError to fail immediately).
+   *               throw e;
+   *             }
+   *           },
+   *           run: async (name, next) => {
+   *             console.log(`  before run "${name}"`);
+   *             try {
+   *               await next();
+   *               console.log(`  after run "${name}"`);
+   *             } catch (e) {
+   *               console.log(`  error run "${name}": ${e}`);
    *               throw e;
    *             }
    *           },

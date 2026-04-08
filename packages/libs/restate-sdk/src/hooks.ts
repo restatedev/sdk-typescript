@@ -36,19 +36,26 @@ import type { Request } from "./context.js";
  * ```ts
  * interceptor: {
  *   handler: async (next) => {
- *     console.log("before handler");
- *     await next();
- *     console.log("after handler");
- *   },
- *   run: async (name, next) => {
- *     const span = tracer.startSpan(name);
+ *     console.log(`before ${ctx.request.target}`);
  *     try {
  *       await next();
+ *       console.log(`after ${ctx.request.target}`);
  *     } catch (e) {
- *       span.recordException(e);
+ *       console.log(`error ${ctx.request.target}: ${e}`);
+ *       // Always rethrow — swallowing the error changes the
+ *       // invocation outcome. You can also throw a different
+ *       // error (e.g. TerminalError to fail immediately).
  *       throw e;
- *     } finally {
- *       span.end();
+ *     }
+ *   },
+ *   run: async (name, next) => {
+ *     console.log(`  before run "${name}"`);
+ *     try {
+ *       await next();
+ *       console.log(`  after run "${name}"`);
+ *     } catch (e) {
+ *       console.log(`  error run "${name}": ${e}`);
+ *       throw e;
  *     }
  *   },
  * }
