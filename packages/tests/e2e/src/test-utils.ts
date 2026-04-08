@@ -283,6 +283,44 @@ export function swallowRunError(targetService: string): HooksProvider {
   };
 }
 
+/** Hook that wraps all errors: terminal errors become a new TerminalError with
+ * `[hw]`/`[rw]` prefix, non-terminal errors become a new Error with the same prefix.
+ * Used to verify that interceptors can alter the error that reaches the caller. */
+export function wrapErrors(): HooksProvider {
+  return () => ({
+    interceptor: {
+      handler: async (next) => {
+        try {
+          await next();
+        } catch (e) {
+          if (e instanceof restate.TerminalError) {
+            throw new restate.TerminalError(`[hw] ${e.message}`, {
+              errorCode: e.code,
+              metadata: e.metadata,
+            });
+          }
+          const err = e instanceof Error ? e : new Error(String(e));
+          throw new Error(`[hw] ${err.message}`);
+        }
+      },
+      run: async (_name, next) => {
+        try {
+          await next();
+        } catch (e) {
+          if (e instanceof restate.TerminalError) {
+            throw new restate.TerminalError(`[rw] ${e.message}`, {
+              errorCode: e.code,
+              metadata: e.metadata,
+            });
+          }
+          const err = e instanceof Error ? e : new Error(String(e));
+          throw new Error(`[rw] ${err.message}`);
+        }
+      },
+    },
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------

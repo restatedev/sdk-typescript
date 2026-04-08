@@ -28,11 +28,20 @@ import {
   cancelInvocationViaAdminApi,
   pauseInvocationViaAdminApi,
   inAnyOrder,
+  wrapErrors,
 } from "./test-utils.js";
 
 function hooksSuite(level: HookLevel) {
   describe(`${level}-level hooks`, { timeout: 120_000 }, () => {
-    const hooksAt = (hooks: HooksProvider[]) => withHooksAt(level, hooks);
+    // Insert wrapErrors() after the first hook (the recorder) so it wraps
+    // all errors before they reach the outermost recording hook.
+    const hooksAt = (hooks: HooksProvider[]) => {
+      const [first, ...rest] = hooks;
+      return withHooksAt(
+        level,
+        first != null ? [first, wrapErrors(), ...rest] : [wrapErrors()]
+      );
+    };
 
     // -- service definitions ------------------------------------------------
 
@@ -434,7 +443,7 @@ function hooksSuite(level: HookLevel) {
     }
     const asTerminalErrorService = createService({
       name: `${level}_AsTerminalError`,
-      ...hooksAt([recordHookEvents()]),
+      ...withHooksAt(level, [recordHookEvents()]),
       handler: async (ctx, _) => {
         await ctx.run("charge", () => {
           throw new PaymentRejected();
@@ -652,7 +661,7 @@ function hooksSuite(level: HookLevel) {
       expect(hookEvents).toEqual([
         // attempt 1: retryable error
         "hook:handler:before",
-        "hook:handler:error:retry",
+        "hook:handler:error:[hw] retry",
         // attempt 2: success
         "hook:handler:before",
         "hook:handler:after",
@@ -671,7 +680,7 @@ function hooksSuite(level: HookLevel) {
       );
       expect(hookEvents).toEqual([
         "hook:handler:before",
-        "hook:handler:error:terminal",
+        "hook:handler:error:[hw] terminal",
       ]);
       expect(
         await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId!)
@@ -689,7 +698,7 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:before",
         "hook:run:step-1:before",
         "hook:run:step-1:after",
-        "hook:handler:error:retry",
+        "hook:handler:error:[hw] retry",
         // attempt 2: step-1 replayed (no interceptor), step-2 executes
         "hook:handler:before",
         "hook:run:step-2:before",
@@ -712,8 +721,8 @@ function hooksSuite(level: HookLevel) {
         // handler:error still fires
         "hook:handler:before",
         "hook:run:step:before",
-        "hook:run:step:error:run retryable fail",
-        "hook:handler:error:(500) run retryable fail",
+        "hook:run:step:error:[rw] run retryable fail",
+        "hook:handler:error:[hw] (500) [rw] run retryable fail",
         // attempt 2: run closure succeeds
         "hook:handler:before",
         "hook:run:step:before",
@@ -735,8 +744,8 @@ function hooksSuite(level: HookLevel) {
       expect(hookEvents).toEqual([
         "hook:handler:before",
         "hook:run:step:before",
-        "hook:run:step:error:run fail",
-        "hook:handler:error:run fail",
+        "hook:run:step:error:[rw] run fail",
+        "hook:handler:error:[hw] [rw] run fail",
       ]);
       expect(
         await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId!)
@@ -759,11 +768,11 @@ function hooksSuite(level: HookLevel) {
           "hook:handler:before",
           // attempt 1 ends + attempt 2 starts (may interleave)
           ...inAnyOrder(
-            "hook:handler:error:(599) Suspended invocation",
+            "hook:handler:error:[hw] (599) Suspended invocation",
             "hook:handler:before"
           ),
           // attempt 2 ends
-          "hook:handler:error:(599) Suspended invocation",
+          "hook:handler:error:[hw] (599) Suspended invocation",
         ]);
     });
 
@@ -795,7 +804,7 @@ function hooksSuite(level: HookLevel) {
         // attempt 1: recording hook's handler:before fires (outermost),
         // then error hook's interceptor throws — handler:error fires (catch)
         "hook:handler:before",
-        "hook:handler:error:interceptor retryable error",
+        "hook:handler:error:[hw] interceptor retryable error",
         // attempt 2: error hook's interceptor succeeds
         "hook:handler:before",
         "hook:handler:after",
@@ -816,8 +825,8 @@ function hooksSuite(level: HookLevel) {
         // handler:error still fires
         "hook:handler:before",
         "hook:run:step:before",
-        "hook:run:step:error:run interceptor retryable error",
-        "hook:handler:error:(500) run interceptor retryable error",
+        "hook:run:step:error:[rw] run interceptor retryable error",
+        "hook:handler:error:[hw] (500) [rw] run interceptor retryable error",
         // attempt 2: run interceptor succeeds, run executes
         "hook:handler:before",
         "hook:run:step:before",
@@ -840,7 +849,7 @@ function hooksSuite(level: HookLevel) {
         // Handler completes, then interceptor throws terminal error
         // after next(). The error fails the invocation.
         "hook:handler:before",
-        "hook:handler:error:interceptor terminal error",
+        "hook:handler:error:[hw] interceptor terminal error",
       ]);
       expect(
         await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId!)
@@ -866,8 +875,8 @@ function hooksSuite(level: HookLevel) {
         // after next(). The error fails the invocation.
         "hook:handler:before",
         "hook:run:step:before",
-        "hook:run:step:error:run interceptor terminal error",
-        "hook:handler:error:run interceptor terminal error",
+        "hook:run:step:error:[rw] run interceptor terminal error",
+        "hook:handler:error:[hw] [rw] run interceptor terminal error",
       ]);
       expect(
         await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId!)
@@ -891,7 +900,7 @@ function hooksSuite(level: HookLevel) {
         // attempt 1: handler completes, then interceptor throws retryable
         // error after next(). The error causes a retry.
         "hook:handler:before",
-        "hook:handler:error:handler interceptor retryable after next",
+        "hook:handler:error:[hw] handler interceptor retryable after next",
         // attempt 2: interceptor does not throw, invocation succeeds
         "hook:handler:before",
         "hook:handler:after",
@@ -915,8 +924,8 @@ function hooksSuite(level: HookLevel) {
         // error after next(). The error triggers abandonment.
         "hook:handler:before",
         "hook:run:step:before",
-        "hook:run:step:error:run interceptor retryable after next",
-        "hook:handler:error:(500) run interceptor retryable after next",
+        "hook:run:step:error:[rw] run interceptor retryable after next",
+        "hook:handler:error:[hw] (500) [rw] run interceptor retryable after next",
         // attempt 2: run re-executes, interceptor does not throw, succeeds
         "hook:handler:before",
         "hook:run:step:before",
@@ -961,9 +970,9 @@ function hooksSuite(level: HookLevel) {
       const hookEvents = getHookEvents(invocationId);
       expect(hookEvents).toEqual([
         "hook:handler:before",
-        "hook:handler:error:retry",
+        "hook:handler:error:[hw] retry",
         "hook:handler:before",
-        "hook:handler:error:retry",
+        "hook:handler:error:[hw] retry",
         "hook:handler:before",
         "hook:handler:after",
       ]);
@@ -981,11 +990,11 @@ function hooksSuite(level: HookLevel) {
       );
       expect(hookEvents).toEqual([
         "hook:handler:before",
-        "hook:handler:error:retry",
+        "hook:handler:error:[hw] retry",
         "hook:handler:before",
-        "hook:handler:error:retry",
+        "hook:handler:error:[hw] retry",
         "hook:handler:before",
-        "hook:handler:error:terminal after retries",
+        "hook:handler:error:[hw] terminal after retries",
       ]);
       expect(
         await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId!)
@@ -1002,18 +1011,18 @@ function hooksSuite(level: HookLevel) {
         // attempt 1: both runs start (order non-deterministic), run-1 fails
         "hook:handler:before",
         ...inAnyOrder("hook:run:run-1:before", "hook:run:run-2:before"),
-        "hook:run:run-1:error:run-1 fail",
-        "hook:handler:error:(500) run-1 fail",
+        "hook:run:run-1:error:[rw] run-1 fail",
+        "hook:handler:error:[hw] (500) [rw] run-1 fail",
         // stale run-2:error from attempt 1 + attempt 2 start (may interleave)
         ...inAnyOrder(
-          "hook:run:run-2:error:(500) run-1 fail",
+          "hook:run:run-2:error:[rw] (500) [rw] run-1 fail",
           "hook:handler:before"
         ),
         // attempt 2: both start, run-1 succeeds, run-2 fails
         ...inAnyOrder("hook:run:run-1:before", "hook:run:run-2:before"),
         "hook:run:run-1:after",
-        "hook:run:run-2:error:run-2 fail",
-        "hook:handler:error:(500) run-2 fail",
+        "hook:run:run-2:error:[rw] run-2 fail",
+        "hook:handler:error:[hw] (500) [rw] run-2 fail",
         // attempt 3: run-1 replayed, run-2 succeeds
         "hook:handler:before",
         "hook:run:run-2:before",
@@ -1037,7 +1046,7 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:before",
         "hook:run:before-sleep:before",
         "hook:run:before-sleep:after",
-        "hook:handler:error:(599) Suspended invocation",
+        "hook:handler:error:[hw] (599) Suspended invocation",
         // attempt 2: replays before-sleep + sleep, then executes after-sleep
         "hook:handler:before",
         "hook:run:after-sleep:before",
@@ -1097,7 +1106,7 @@ function hooksSuite(level: HookLevel) {
       expect(hookEvents).toEqual([
         // attempt 1: input deserialization fails — terminal error (code 400)
         "hook:handler:before",
-        "hook:handler:error:Failed to deserialize input: input serde failure",
+        "hook:handler:error:[hw] Failed to deserialize input: input serde failure",
       ]);
     });
 
@@ -1113,12 +1122,12 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:before",
         "hook:run:step:before",
         "hook:run:step:after",
-        "hook:handler:error:run serde failure",
+        "hook:handler:error:[hw] run serde failure",
         // attempt 2: same failure — abandoned, then killed (maxAttempts: 2)
         "hook:handler:before",
         "hook:run:step:before",
         "hook:run:step:after",
-        "hook:handler:error:run serde failure",
+        "hook:handler:error:[hw] run serde failure",
       ]);
     });
 
@@ -1134,10 +1143,10 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:before",
         "hook:run:step:before",
         "hook:run:step:after",
-        "hook:handler:error:transient map error on: hello",
+        "hook:handler:error:[hw] transient map error on: hello",
         // attempt 2: run replayed, .map() throws terminal error
         "hook:handler:before",
-        "hook:handler:error:map failed on: hello",
+        "hook:handler:error:[hw] map failed on: hello",
       ]);
     });
 
@@ -1152,13 +1161,13 @@ function hooksSuite(level: HookLevel) {
         // attempt 1: run fails — abandoned
         "hook:handler:before",
         "hook:run:flaky-step:before",
-        "hook:run:flaky-step:error:always fails",
-        "hook:handler:error:(500) always fails",
+        "hook:run:flaky-step:error:[rw] always fails",
+        "hook:handler:error:[hw] (500) [rw] always fails",
         // attempt 2: run fails — terminal (maxRetryAttempts exhausted)
         "hook:handler:before",
         "hook:run:flaky-step:before",
-        "hook:run:flaky-step:error:always fails",
-        "hook:handler:error:always fails",
+        "hook:run:flaky-step:error:[rw] always fails",
+        "hook:handler:error:[hw] [rw] always fails",
       ]);
     });
 
@@ -1189,14 +1198,14 @@ function hooksSuite(level: HookLevel) {
         // attempt 1: run "step-a" fails — abandoned
         "hook:handler:before",
         "hook:run:step-a:before",
-        "hook:run:step-a:error:transient",
-        "hook:handler:error:(500) transient",
+        "hook:run:step-a:error:[rw] transient",
+        "hook:handler:error:[hw] (500) [rw] transient",
         // attempt 2: run "step-b" mismatches journal — abandoned
         "hook:handler:before",
-        "hook:handler:error:(570) Found a mismatch between the code paths taken during the previous executio...",
+        "hook:handler:error:[hw] (570) Found a mismatch between the code paths taken during the previous exe...",
         // attempt 3: same mismatch — abandoned, then killed (maxAttempts: 3)
         "hook:handler:before",
-        "hook:handler:error:(570) Found a mismatch between the code paths taken during the previous executio...",
+        "hook:handler:error:[hw] (570) Found a mismatch between the code paths taken during the previous exe...",
       ]);
     });
 
@@ -1210,8 +1219,8 @@ function hooksSuite(level: HookLevel) {
         // attempt 1: run listens to abort signal, aborts immediately — abandoned
         "hook:handler:before",
         "hook:run:slow-step:before",
-        "hook:run:slow-step:error:aborted",
-        "hook:handler:error:(500) aborted",
+        "hook:run:slow-step:error:[rw] aborted",
+        "hook:handler:error:[hw] (500) [rw] aborted",
         // attempt 2: run completes quickly — success
         "hook:handler:before",
         "hook:run:slow-step:before",
@@ -1246,8 +1255,8 @@ function hooksSuite(level: HookLevel) {
         .toEqual([
           "hook:handler:before",
           "hook:run:slow-step:before",
-          "hook:handler:error:Cancelled",
-          "hook:run:slow-step:error:Cancelled",
+          "hook:handler:error:[hw] Cancelled",
+          "hook:run:slow-step:error:[rw] [hw] Cancelled",
         ]);
 
       expect(
@@ -1282,7 +1291,7 @@ function hooksSuite(level: HookLevel) {
           "hook:handler:before",
           "hook:run:slow-step:before",
           "hook:run:slow-step:after",
-          "hook:handler:error:(599) Suspended invocation",
+          "hook:handler:error:[hw] (599) Suspended invocation",
         ]);
 
       await expect
@@ -1305,16 +1314,16 @@ function hooksSuite(level: HookLevel) {
       expect(hookEvents).toEqual([
         "hook:handler:before",
         "hook:run:step-1:before",
-        "hook:run:step-1:error:step-1 transient",
-        "hook:handler:error:(500) step-1 transient",
+        "hook:run:step-1:error:[rw] step-1 transient",
+        "hook:handler:error:[hw] (500) [rw] step-1 transient",
         "hook:handler:before",
         "hook:run:step-1:before",
         "hook:run:step-1:after",
-        "hook:handler:error:(599) Suspended invocation",
+        "hook:handler:error:[hw] (599) Suspended invocation",
         "hook:handler:before",
         "hook:run:step-2:before",
         "hook:run:step-2:after",
-        "hook:handler:error:(599) Suspended invocation",
+        "hook:handler:error:[hw] (599) Suspended invocation",
         "hook:handler:before",
         "hook:handler:after",
       ]);
