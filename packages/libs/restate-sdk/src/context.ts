@@ -27,6 +27,7 @@ import type {
 } from "@restatedev/restate-sdk-core";
 import type { TerminalError } from "./types/errors.js";
 import {
+  InternalRestatePromise,
   RestateCombinatorPromise,
   RestateCompletedPromise,
 } from "./promises.js";
@@ -708,10 +709,28 @@ export type InvocationHandle = {
 export type InvocationPromise<T> = RestatePromise<T> & InvocationHandle;
 
 export const RestatePromise = {
+  /**
+   * Creates a {@link RestatePromise} that is resolved with the given value.
+   *
+   * If the value is already a {@link RestatePromise}, it is returned as-is (mirroring
+   * the behavior of {@link Promise.resolve} when given a native {@link Promise}).
+   *
+   * @param value The value to resolve, or an existing {@link RestatePromise} to return.
+   * @returns A resolved {@link RestatePromise}, or the input promise unchanged.
+   */
   resolve<T>(value: T): RestatePromise<Awaited<T>> {
+    if (value instanceof InternalRestatePromise) {
+      return value as unknown as RestatePromise<Awaited<T>>;
+    }
     return new RestateCompletedPromise(Promise.resolve(value));
   },
 
+  /**
+   * Creates a {@link RestatePromise} that is rejected with the given {@link TerminalError}.
+   *
+   * @param reason The {@link TerminalError} to reject with.
+   * @returns A rejected {@link RestatePromise}.
+   */
   reject<T = never>(reason: TerminalError): RestatePromise<T> {
     return new RestateCompletedPromise(Promise.reject(reason));
   },
