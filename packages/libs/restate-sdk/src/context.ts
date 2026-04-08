@@ -691,7 +691,7 @@ export type RestatePromise<T> = Promise<T> & {
    * If this mapper returns a value, this value will be used to resolve the returned {@link RestatePromise}.
    * If the mapper throws a {@link TerminalError}, this error will be used to reject the returned {@link RestatePromise}.
    */
-  map<U>(mapper: (value?: T, failure?: TerminalError) => U): RestatePromise<U>;
+  map<U>(mapper: (value?: T, failure?: TerminalError) => U | Promise<U>): RestatePromise<U>;
 };
 
 /**

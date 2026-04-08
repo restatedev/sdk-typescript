@@ -73,7 +73,7 @@ export abstract class InternalRestatePromise<T> implements RestatePromise<T> {
   abstract finally(onfinally: (() => void) | undefined | null): Promise<T>;
 
   abstract map<U>(
-    mapper: (value?: T, failure?: TerminalError) => U
+    mapper: (value?: T, failure?: TerminalError) => U | Promise<U>
   ): RestatePromise<U>;
   abstract orTimeout(millis: Duration | number): RestatePromise<T>;
 
@@ -170,7 +170,7 @@ abstract class BaseRestatePromise<T> extends InternalRestatePromise<T> {
     ) as RestatePromise<T>;
   }
 
-  map<U>(mapper: (value?: T, failure?: TerminalError) => U): RestatePromise<U> {
+  map<U>(mapper: (value?: T, failure?: TerminalError) => U | Promise<U>): RestatePromise<U> {
     return new MappedRestatePromise(this[RESTATE_CTX_SYMBOL], this, mapper);
   }
 
@@ -338,15 +338,15 @@ export class MappedRestatePromise<T, U> extends BaseRestatePromise<U> {
   constructor(
     ctx: ContextImpl,
     readonly inner: InternalRestatePromise<T>,
-    mapper: (value?: T, failure?: TerminalError) => U
+    mapper: (value?: T, failure?: TerminalError) => U | Promise<U>
   ) {
     super(ctx);
-    this.publicPromiseMapper = (value?: T, failure?: TerminalError) => {
+    this.publicPromiseMapper = async (value?: T, failure?: TerminalError) => {
       try {
-        return Promise.resolve(mapper(value, failure));
+        return await mapper(value, failure);
       } catch (e) {
         if (e instanceof TerminalError) {
-          return Promise.reject(e);
+          throw e;
         } else {
           ctx.abortAttempt(e);
           return pendingPromise();
@@ -382,30 +382,40 @@ export class MappedRestatePromise<T, U> extends BaseRestatePromise<U> {
 }
 
 export class ConstRestatePromise<T> extends InternalRestatePromise<T> {
+  private _constPromise?: Promise<T>;
+
   private constructor(
-    private readonly constPromise: Promise<T>,
+    // Factory for the underlying promise. Called at most once, memoized in
+    // `_constPromise`. This lets `map` be lazy: the mapper is only invoked
+    // when someone actually awaits the result (via then/catch/finally/publicPromise),
+    // matching the contract documented on RestatePromise.map.
+    private readonly promiseFactory: () => Promise<T>,
     private readonly settled: boolean
   ) {
     super();
   }
 
+  private get constPromise(): Promise<T> {
+    return (this._constPromise ??= this.promiseFactory());
+  }
+
   static resolve<T>(value: T): ConstRestatePromise<Awaited<T>> {
-    return new ConstRestatePromise(Promise.resolve(value), true);
+    return new ConstRestatePromise(() => Promise.resolve(value), true);
   }
 
   static reject<T = never>(reason: TerminalError): ConstRestatePromise<T> {
-    return new ConstRestatePromise<T>(Promise.reject(reason), true);
+    return new ConstRestatePromise<T>(() => Promise.reject(reason), true);
   }
 
   static pending<T>(): ConstRestatePromise<T> {
-    return new ConstRestatePromise<T>(pendingPromise(), false);
+    return new ConstRestatePromise<T>(() => pendingPromise<T>(), false);
   }
 
   static fromPromise<T>(
     promise: Promise<T>,
     settled: boolean
   ): ConstRestatePromise<T> {
-    return new ConstRestatePromise(promise, settled);
+    return new ConstRestatePromise(() => promise, settled);
   }
 
   // --- Promise methods
@@ -434,12 +444,17 @@ export class ConstRestatePromise<T> extends InternalRestatePromise<T> {
     return ConstRestatePromise.reject(new TimeoutError());
   }
 
-  map<U>(mapper: (value?: T, failure?: TerminalError) => U): RestatePromise<U> {
-    return ConstRestatePromise.fromPromise(
-      this.constPromise.then(
-        (value) => mapper(value, undefined),
-        (reason) => mapper(undefined, reason as TerminalError)
-      ),
+  map<U>(
+    mapper: (value?: T, failure?: TerminalError) => U | Promise<U>
+  ): RestatePromise<U> {
+    if (!this.settled) return this as unknown as RestatePromise<U>;
+    const selfConstPromise = this.constPromise;
+    return new ConstRestatePromise<U>(
+      () =>
+        selfConstPromise.then(
+          (value) => mapper(value, undefined),
+          (reason) => mapper(undefined, reason as TerminalError)
+        ),
       this.settled
     );
   }
