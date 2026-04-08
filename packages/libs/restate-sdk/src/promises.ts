@@ -143,7 +143,7 @@ abstract class BaseRestatePromise<T> extends InternalRestatePromise<T> {
   // --- RestatePromise methods
 
   orTimeout(duration: number | Duration): RestatePromise<T> {
-    return new RestateCombinatorPromise(
+    return new CombinatorRestatePromise(
       this[RESTATE_CTX_SYMBOL],
       ([thisPromise, sleepPromise]) => {
         return new Promise((resolve, reject) => {
@@ -161,7 +161,7 @@ abstract class BaseRestatePromise<T> extends InternalRestatePromise<T> {
   }
 
   map<U>(mapper: (value?: T, failure?: TerminalError) => U): RestatePromise<U> {
-    return new RestateMappedPromise(this[RESTATE_CTX_SYMBOL], this, mapper);
+    return new MappedRestatePromise(this[RESTATE_CTX_SYMBOL], this, mapper);
   }
 
   tryCancel() {
@@ -177,7 +177,7 @@ abstract class BaseRestatePromise<T> extends InternalRestatePromise<T> {
   abstract override [Symbol.toStringTag]: string;
 }
 
-export class RestateSinglePromise<T> extends BaseRestatePromise<T> {
+export class SingleRestatePromise<T> extends BaseRestatePromise<T> {
   private state: PromiseState = PromiseState.NOT_COMPLETED;
   private completablePromise: CompletablePromise<T> = new CompletablePromise();
 
@@ -217,8 +217,8 @@ export class RestateSinglePromise<T> extends BaseRestatePromise<T> {
   readonly [Symbol.toStringTag] = "RestateSinglePromise";
 }
 
-export class RestateInvocationPromise<T>
-  extends RestateSinglePromise<T>
+export class InvocationRestatePromise<T>
+  extends SingleRestatePromise<T>
   implements InvocationPromise<T>
 {
   constructor(
@@ -238,7 +238,7 @@ export class RestateInvocationPromise<T>
   }
 }
 
-export class RestateCombinatorPromise extends BaseRestatePromise<any> {
+export class CombinatorRestatePromise extends BaseRestatePromise<any> {
   private state: PromiseState = PromiseState.NOT_COMPLETED;
   private readonly combinatorPromise: Promise<any>;
 
@@ -284,10 +284,10 @@ export class RestateCombinatorPromise extends BaseRestatePromise<any> {
     if (foundContext === undefined) {
       // The only situation where this can happen is when the combined promise contains only RestateCompletedPromise as children.
       // In this case, just return back a nice and clean RestateCompletedPromise.
-      return new RestateCompletedPromise(combinatorConstructor(castedPromises));
+      return new CompletedRestatePromise(combinatorConstructor(castedPromises));
     }
 
-    return new RestateCombinatorPromise(
+    return new CombinatorRestatePromise(
       foundContext,
       combinatorConstructor,
       castedPromises
@@ -311,7 +311,7 @@ export class RestateCombinatorPromise extends BaseRestatePromise<any> {
   readonly [Symbol.toStringTag] = "RestateCombinatorPromise";
 }
 
-export class RestatePendingPromise<T> extends InternalRestatePromise<T> {
+export class PendingRestatePromise<T> extends InternalRestatePromise<T> {
   [RESTATE_CTX_SYMBOL]: ContextImpl;
 
   constructor(ctx: ContextImpl) {
@@ -360,8 +360,8 @@ export class RestatePendingPromise<T> extends InternalRestatePromise<T> {
   readonly [Symbol.toStringTag] = "RestatePendingPromise";
 }
 
-export class InvocationPendingPromise<T>
-  extends RestatePendingPromise<T>
+export class PendingInvocationRestatePromise<T>
+  extends PendingRestatePromise<T>
   implements InvocationPromise<T>
 {
   constructor(ctx: ContextImpl) {
@@ -373,7 +373,7 @@ export class InvocationPendingPromise<T>
   }
 }
 
-export class RestateMappedPromise<T, U> extends BaseRestatePromise<U> {
+export class MappedRestatePromise<T, U> extends BaseRestatePromise<U> {
   private publicPromiseMapper: (
     value?: T,
     failure?: TerminalError
@@ -425,7 +425,7 @@ export class RestateMappedPromise<T, U> extends BaseRestatePromise<U> {
   readonly [Symbol.toStringTag] = "RestateMappedPromise";
 }
 
-export class RestateCompletedPromise<T> extends InternalRestatePromise<T> {
+export class CompletedRestatePromise<T> extends InternalRestatePromise<T> {
   constructor(private readonly completedPromise: Promise<T>) {
     super();
   }
@@ -456,7 +456,7 @@ export class RestateCompletedPromise<T> extends InternalRestatePromise<T> {
   }
 
   map<U>(mapper: (value?: T, failure?: TerminalError) => U): RestatePromise<U> {
-    return new RestateCompletedPromise(
+    return new CompletedRestatePromise(
       this.completedPromise.then(
         (value) => mapper(value, undefined),
         (reason) => mapper(undefined, reason as TerminalError)

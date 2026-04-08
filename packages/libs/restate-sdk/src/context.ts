@@ -28,8 +28,8 @@ import type {
 import type { TerminalError } from "./types/errors.js";
 import {
   InternalRestatePromise,
-  RestateCombinatorPromise,
-  RestateCompletedPromise,
+  CombinatorRestatePromise,
+  CompletedRestatePromise,
 } from "./promises.js";
 
 /**
@@ -722,7 +722,7 @@ export const RestatePromise = {
     if (value instanceof InternalRestatePromise) {
       return value as unknown as RestatePromise<Awaited<T>>;
     }
-    return new RestateCompletedPromise(Promise.resolve(value));
+    return new CompletedRestatePromise(Promise.resolve(value));
   },
 
   /**
@@ -732,7 +732,7 @@ export const RestatePromise = {
    * @returns A rejected {@link RestatePromise}.
    */
   reject<T = never>(reason: TerminalError): RestatePromise<T> {
-    return new RestateCompletedPromise(Promise.reject(reason));
+    return new CompletedRestatePromise(Promise.reject(reason));
   },
 
   /**
@@ -747,7 +747,7 @@ export const RestatePromise = {
   all<const T extends readonly RestatePromise<unknown>[]>(
     values: T
   ): RestatePromise<{ -readonly [P in keyof T]: Awaited<T[P]> }> {
-    return RestateCombinatorPromise.fromPromises(
+    return CombinatorRestatePromise.fromPromises(
       (p) => Promise.all(p),
       values
     ) as RestatePromise<{
@@ -767,7 +767,7 @@ export const RestatePromise = {
   race<const T extends readonly RestatePromise<unknown>[]>(
     values: T
   ): RestatePromise<Awaited<T[number]>> {
-    return RestateCombinatorPromise.fromPromises(
+    return CombinatorRestatePromise.fromPromises(
       (p) => Promise.race(p),
       values
     ) as RestatePromise<Awaited<T[number]>>;
@@ -786,7 +786,7 @@ export const RestatePromise = {
   any<const T extends readonly RestatePromise<unknown>[]>(
     values: T
   ): RestatePromise<Awaited<T[number]>> {
-    return RestateCombinatorPromise.fromPromises(
+    return CombinatorRestatePromise.fromPromises(
       (p) => Promise.any(p),
       values
     ) as RestatePromise<Awaited<T[number]>>;
@@ -806,7 +806,7 @@ export const RestatePromise = {
   ): RestatePromise<{
     -readonly [P in keyof T]: PromiseSettledResult<Awaited<T[P]>>;
   }> {
-    return RestateCombinatorPromise.fromPromises(
+    return CombinatorRestatePromise.fromPromises(
       (p) => Promise.allSettled(p),
       values
     ) as RestatePromise<{
