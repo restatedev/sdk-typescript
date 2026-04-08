@@ -11,7 +11,6 @@
 
 import {
   ensureError,
-  isSuspendedError,
   logError,
   RestateError,
   RetryableError,
@@ -445,20 +444,40 @@ class RestateInvokeResponse implements RestateResponse {
 
     // Start the user code but don't await it directly.
     // We await invocationEndPromise instead, which works as follows:
-    // * In the happy path, that is no errors, invocationEndPromise gets resolved by the line below in this finally branch
-    // * In the transient error case that happens within the handler, invocationEndPromise gets resolved by the ContextImpl itself, unblocking the await line below
+    // * In the happy path, that is no errors, invocationEndPromise gets resolved by the line below in this then branch
+    // * In the error case, invocationEndPromise gets rejected by one of two sources:
+    //   - The .then() reject branch: when the error reaches the handler or
+    //     interceptor code and propagates up through startUserHandler. This
+    //     happens when the handler/interceptor throws directly, or when an
+    //     entry completes with a terminal failure.
+    //   - ContextImpl directly: when the attempt ends without the error
+    //     reaching the handler code (e.g. suspension, retryable run error).
+    //     The handler is stuck on an await that will never settle, so
+    //     ContextImpl rejects the promise to unblock processing.
+    //   Whichever fires first wins; the second is a no-op on CompletablePromise.
     void startUserHandler(
       ctx,
       this.service,
       this.handler,
       journalValueCodec
-    ).finally(() => {
-      invocationEndPromise.resolve();
-    });
-    await invocationEndPromise.promise;
-
-    // Then flush and close
-    await flushAndClose(this.coreVm, this.vmLogger, inputReader, outputWriter);
+    ).then(
+      () => invocationEndPromise.resolve(),
+      (e) => invocationEndPromise.reject(e)
+    );
+    try {
+      await invocationEndPromise.promise;
+    } catch {
+      // Rejection is expected on error paths (suspension, terminal error,
+      // retryable error). We only await to know when processing is done.
+    } finally {
+      // Then flush and close
+      await flushAndClose(
+        this.coreVm,
+        this.vmLogger,
+        inputReader,
+        outputWriter
+      );
+    }
   }
 }
 
@@ -546,11 +565,6 @@ async function startUserHandler(
     } catch (e) {
       // Convert to Error
       const error = ensureError(e, handler.executionOptions.asTerminalError);
-
-      // Attempt suspended — not an invocation failure, just control flow.
-      if (isSuspendedError(error)) {
-        return;
-      }
       logError(ctx.vmLogger, error);
 
       // If TerminalError, handle it here.
@@ -564,7 +578,7 @@ async function startUserHandler(
           ),
         });
         ctx.coreVm.sys_end();
-        return;
+        throw error;
       }
 
       // Not a terminal error, have the below catch handle it
@@ -584,6 +598,7 @@ async function startUserHandler(
     } else {
       ctx.coreVm.notify_error(error.message, error.stack);
     }
+    throw error;
   }
 }
 

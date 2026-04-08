@@ -97,7 +97,6 @@ export class ContextImpl
     name: string,
     runner: () => Promise<void>
   ) => Promise<void>;
-  private readonly _abandonmentSignal = new CompletablePromise<never>();
 
   constructor(
     readonly coreVm: vm.WasmVM,
@@ -151,15 +150,7 @@ export class ContextImpl
    * Used internally to race against interceptor next() calls.
    */
   get abandonmentSignal(): Promise<never> {
-    return this._abandonmentSignal.promise;
-  }
-
-  /**
-   * Signal that the current attempt has been abandoned.
-   * Rejects the abandonment signal, causing any racing interceptor next() to throw.
-   */
-  private abandonAttempt(cause: Error) {
-    this._abandonmentSignal.reject(cause);
+    return this.invocationEndPromise.promise as Promise<never>;
   }
 
   isProcessing(): boolean {
@@ -759,11 +750,10 @@ export class ContextImpl
       }
     }
 
-    // Signal abandonment to interceptors so they can clean up.
-    this.abandonAttempt(ensureError(e));
-
-    // From now on, no progress will be made.
-    this.invocationEndPromise.resolve();
+    // Reject to signal abandonment — this both unblocks the
+    // invocationEndPromise await and breaks interceptors out via
+    // Promise.race in raceWithAbandonment.
+    this.invocationEndPromise.reject(ensureError(e));
   }
 
   handleInvocationEndError(
@@ -776,11 +766,10 @@ export class ContextImpl
     logError(this.vmLogger, error);
     notify_vm_error(this.coreVm, error);
 
-    // Signal abandonment to interceptors so they can clean up.
-    this.abandonAttempt(error);
-
-    // From now on, no progress will be made.
-    this.invocationEndPromise.resolve();
+    // Reject to signal abandonment — this both unblocks the
+    // invocationEndPromise await and breaks interceptors out via
+    // Promise.race in raceWithAbandonment.
+    this.invocationEndPromise.reject(error);
   }
 }
 
