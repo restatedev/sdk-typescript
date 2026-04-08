@@ -12,7 +12,7 @@ import {
   BasicTracerProvider,
   BatchSpanProcessor,
 } from "@opentelemetry/sdk-trace-base";
-import { isSuspendedError } from "@restatedev/restate-sdk";
+import { internal } from "@restatedev/restate-sdk";
 import type { HooksProvider } from "@restatedev/restate-sdk";
 
 // Cache TracerProviders per service name so we don't create duplicates.
@@ -112,7 +112,7 @@ export const otelTracingHook: HooksProvider = (ctx) => {
           await context.with(attemptContext, next);
           attemptSpan.setStatus({ code: SpanStatusCode.OK });
         } catch (e) {
-          if (!isSuspendedError(e)) {
+          if (!internal.isSuspendedError(e)) {
             attemptSpan.setStatus({
               code: SpanStatusCode.ERROR,
               message: e instanceof Error ? e.message : String(e),

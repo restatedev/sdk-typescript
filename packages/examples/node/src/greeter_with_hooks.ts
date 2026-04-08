@@ -9,7 +9,7 @@ import {
   service,
   serve,
   TerminalError,
-  isSuspendedError,
+  internal,
   type Context,
   type HooksProvider,
 } from "@restatedev/restate-sdk";
@@ -21,7 +21,7 @@ const gray = (s: string) => `\x1b[90m${s}\x1b[0m`;
 
 function errorColor(e: unknown) {
   if (e instanceof TerminalError) return red;
-  if (isSuspendedError(e)) return gray;
+  if (internal.isSuspendedError(e)) return gray;
   return yellow;
 }
 
@@ -37,7 +37,7 @@ const logHook: HooksProvider = (ctx) => {
           await next();
           console.log(green(`✓ ${tag}`));
         } catch (e) {
-          if (!isSuspendedError(e)) {
+          if (!internal.isSuspendedError(e)) {
             console.log(errorColor(e)(`✗ ${tag}: ${e as Error}`));
           }
           throw e;

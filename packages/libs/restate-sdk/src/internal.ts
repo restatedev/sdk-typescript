@@ -1,5 +1,7 @@
 import { Context } from "./context.js";
 
+export { isSuspendedError } from "./types/errors.js";
+
 /**
  * Internal {@link Context} interface exposing additional features.
  *

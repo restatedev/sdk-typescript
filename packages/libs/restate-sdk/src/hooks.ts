@@ -13,9 +13,9 @@ import type { Request } from "./context.js";
  *
  * - **{@link TerminalError}** — the invocation **fails immediately**, no retry.
  * - **Any other error** — Restate **retries** the invocation.
- * - On suspension, `next()` rejects with a suspended error. Use {@link isSuspendedError}
- *   to detect this — it means the attempt is suspended/paused, not failed.
- *   Do any cleanup you need and rethrow.
+ * - On suspension or pause, `next()` also rejects with an error. This does not
+ *   mean the invocation failed — the attempt is simply ending. Do any cleanup
+ *   you need and rethrow.
  *
  * ## Output
  *
