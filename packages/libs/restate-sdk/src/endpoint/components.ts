@@ -52,6 +52,10 @@ export interface ComponentHandler {
   component(): Component;
   invoke(context: ContextImpl, input: Uint8Array): Promise<Uint8Array>;
   kind(): HandlerKind;
+
+  /**
+   * Returns the execution options, already merged with different layers (endpoint -> service -> handler)
+   */
   executionOptions: ExecutionOptions;
 }
 
