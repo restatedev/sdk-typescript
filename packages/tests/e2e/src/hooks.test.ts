@@ -668,7 +668,12 @@ function hooksSuite(level: HookLevel) {
       ]);
       expect(
         await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
-      ).toMatchObject({ status: "succeeded" });
+      ).toMatchObject({
+        status: "succeeded",
+        transientErrors: [
+          { error_code: 500, error_message: "[hw] retry" },
+        ],
+      });
     });
 
     it("terminal error", async () => {
@@ -707,7 +712,12 @@ function hooksSuite(level: HookLevel) {
       ]);
       expect(
         await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
-      ).toMatchObject({ status: "succeeded" });
+      ).toMatchObject({
+        status: "succeeded",
+        transientErrors: [
+          { error_code: 500, error_message: "[hw] retry" },
+        ],
+      });
     });
 
     it("run throws retryable error then succeeds", async () => {
@@ -731,7 +741,12 @@ function hooksSuite(level: HookLevel) {
       ]);
       expect(
         await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
-      ).toMatchObject({ status: "succeeded" });
+      ).toMatchObject({
+        status: "succeeded",
+        transientErrors: [
+          { error_code: 500, error_message: "[rw] run retryable fail" },
+        ],
+      });
     });
 
     it("run throws terminal error", async () => {
@@ -811,7 +826,12 @@ function hooksSuite(level: HookLevel) {
       ]);
       expect(
         await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
-      ).toMatchObject({ status: "succeeded" });
+      ).toMatchObject({
+        status: "succeeded",
+        transientErrors: [
+          { error_code: 500, error_message: "[hw] interceptor retryable error" },
+        ],
+      });
     });
 
     it("run interceptor error triggers retry then succeeds", async () => {
@@ -835,7 +855,12 @@ function hooksSuite(level: HookLevel) {
       ]);
       expect(
         await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
-      ).toMatchObject({ status: "succeeded" });
+      ).toMatchObject({
+        status: "succeeded",
+        transientErrors: [
+          { error_code: 500, error_message: "[rw] run interceptor retryable error" },
+        ],
+      });
     });
 
     it("handler interceptor terminal error after next()", async () => {
@@ -910,6 +935,9 @@ function hooksSuite(level: HookLevel) {
       ).toMatchObject({
         status: "succeeded",
         journalOutput: { value: result },
+        transientErrors: [
+          { error_code: 500, error_message: "[hw] handler interceptor retryable after next" },
+        ],
       });
     });
 
@@ -937,6 +965,9 @@ function hooksSuite(level: HookLevel) {
       ).toMatchObject({
         status: "succeeded",
         journalOutput: { value: result },
+        transientErrors: [
+          { error_code: 500, error_message: "[rw] run interceptor retryable after next" },
+        ],
       });
       expect(
         await getRunJournalEntry(env.adminAPIBaseUrl(), result.invocationId)
@@ -978,7 +1009,12 @@ function hooksSuite(level: HookLevel) {
       ]);
       expect(
         await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
-      ).toMatchObject({ status: "succeeded" });
+      ).toMatchObject({
+        status: "succeeded",
+        transientErrors: [
+          { error_code: 500, error_message: "[hw] retry" },
+        ],
+      });
     });
 
     it("multiple retries then terminal error", async () => {
@@ -998,7 +1034,12 @@ function hooksSuite(level: HookLevel) {
       ]);
       expect(
         await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId!)
-      ).toMatchObject({ status: "failed" });
+      ).toMatchObject({
+        status: "failed",
+        transientErrors: [
+          { error_code: 500, error_message: "[hw] retry" },
+        ],
+      });
     });
 
     it("concurrent runs with progressive retries", async () => {
@@ -1031,7 +1072,13 @@ function hooksSuite(level: HookLevel) {
       ]);
       expect(
         await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
-      ).toMatchObject({ status: "succeeded" });
+      ).toMatchObject({
+        status: "succeeded",
+        transientErrors: [
+          { error_code: 500, error_message: "[rw] run-1 fail" },
+          { error_code: 500, error_message: "[rw] run-2 fail" },
+        ],
+      });
     });
 
     it("handler with suspension resumes and completes", async () => {

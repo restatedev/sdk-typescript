@@ -366,10 +366,17 @@ export function inAnyOrder(...events: (string | RegExp)[]): string[] {
   return events.map(() => matcher);
 }
 
+export interface TransientError {
+  error_code: number;
+  error_message: string;
+}
+
 export interface InvocationOutcome {
   status: string;
   /** The Output journal entry — either { value } or { failure } */
   journalOutput?: { value?: unknown; failure?: string };
+  /** Transient errors recorded in the journal events */
+  transientErrors?: TransientError[];
 }
 
 /**
@@ -433,9 +440,32 @@ export async function getInvocationOutcome(
     }
   }
 
+  // Query transient errors from journal events
+  const eventsRes = await fetch(`${adminUrl}/query`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({
+      query: `SELECT event_json FROM sys_journal_events WHERE id = '${invocationId}' AND event_type = 'TransientError' ORDER BY appended_at`,
+    }),
+  });
+  const eventsJson = (await eventsRes.json()) as {
+    rows: { event_json: string }[];
+  };
+  const transientErrors: TransientError[] = eventsJson.rows.map((r) => {
+    const event = JSON.parse(r.event_json) as {
+      error_code: number;
+      error_message: string;
+    };
+    return {
+      error_code: event.error_code,
+      error_message: event.error_message,
+    };
+  });
+
   return {
     status: row.completion_result === "success" ? "succeeded" : "failed",
     journalOutput,
+    transientErrors: transientErrors.length > 0 ? transientErrors : undefined,
   };
 }
 
