@@ -33,7 +33,6 @@ export interface Component {
   name(): string;
   handlerMatching(url: InvokePathComponents): ComponentHandler | undefined;
   discovery(): d.Service;
-  options?: ServiceOptions | ObjectOptions | WorkflowOptions;
 }
 
 /**
