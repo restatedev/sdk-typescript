@@ -29,6 +29,7 @@ import {
 import { parseUrlComponents } from "../components.js";
 import { X_RESTATE_SERVER } from "../../user_agent.js";
 import { CommandError, ContextImpl } from "../../context_impl.js";
+import { restoreError, sanitizeError } from "../../error_sanitization.js";
 import type { Request } from "../../context.js";
 import * as vm from "./vm/sdk_shared_core_wasm_bindings.js";
 import { CompletablePromise } from "../../utils/completable_promise.js";
@@ -726,26 +727,38 @@ function composeInterceptors<Args extends unknown[]>(
  * error, etc.), the promise rejects and the interceptor chain unwinds through
  * catch/finally blocks — preventing interceptors from hanging on a `next()`
  * that will never settle.
+ *
+ * SDK-internal metadata (CommandError, retryAfter) is stripped before the
+ * interceptor sees the error and restored after the chain exits.
  */
 function raceWithAttemptEnd<Args extends unknown[]>(
   ctx: ContextImpl,
   interceptor: InterceptorFn<Args>
 ): InterceptorFn<Args> {
   return (...args) => {
+    let originalError: unknown;
+
+    // Strip SDK metadata before interceptors see the error.
+    // Store the original in the closure for restoration after the chain.
+    const signal = ctx.invocationEndPromise.promise.catch((e) => {
+      originalError = e;
+      throw sanitizeError(e);
+    }) as Promise<never>;
+
     const originalNext = args.at(-1) as () => Promise<void>;
-    const racingNext = () =>
-      Promise.race([
-        originalNext(),
-        ctx.invocationEndPromise.promise as Promise<never>,
-      ]);
+    const racingNext = () => Promise.race([originalNext(), signal]);
     const newArgs = [...args.slice(0, -1), racingNext] as unknown as [
       ...Args,
       () => Promise<void>,
     ];
-    return Promise.race([
-      interceptor(...newArgs),
-      ctx.invocationEndPromise.promise as Promise<never>,
-    ]);
+
+    return Promise.race([interceptor(...newArgs), signal]).catch((e) => {
+      // Restore SDK metadata after the interceptor chain exits.
+      if (originalError !== undefined) {
+        throw restoreError(e, originalError);
+      }
+      throw e;
+    });
   };
 }
 
