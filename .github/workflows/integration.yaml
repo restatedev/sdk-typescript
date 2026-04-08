@@ -61,11 +61,26 @@ jobs:
       checks: write
       pull-requests: write
       actions: read
+    strategy:
+      matrix:
+        node-version: [ 20.x ]
 
     steps:
       - uses: actions/checkout@v4
         with:
           repository: restatedev/sdk-typescript
+
+      - uses: actions/checkout@v4
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          registry-url: "https://registry.npmjs.org"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
 
       # support importing oci-format restate.tar
       - name: Set up Docker containerd snapshotter
