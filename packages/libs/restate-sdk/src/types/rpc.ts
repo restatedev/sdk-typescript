@@ -423,10 +423,43 @@ export type ServiceHandlerOpts<I, O> = {
   serde?: Serde<any>;
 
   /**
-   * Hooks providers for this handler. Hooks allow wrapping handler execution and ctx.run closures,
-   * useful for propagating async context (e.g. OpenTelemetry tracing).
+   * Hooks providers for this handler. Handler-level hooks wrap innermost —
+   * they run after service-level hooks. Both levels are merged: service
+   * hooks first, then handler hooks. Within each level, hooks execute in
+   * array order: for `[A, B]`: A before → B before → handler → B after → A after.
    *
-   * Handler-level hooks wrap innermost (after service-level hooks).
+   * @example
+   * ```ts
+   * const myService = restate.service({
+   *   name: "MyService",
+   *   handlers: {
+   *     greet: restate.createServiceHandler(
+   *       {
+   *         hooks: [
+   *           (ctx) => ({
+   *             interceptor: {
+   *               handler: async (next) => {
+   *                 console.log(`before ${ctx.request.target}`);
+   *                 try {
+   *                   await next();
+   *                   console.log(`after ${ctx.request.target}`);
+   *                 } catch (e) {
+   *                   console.log(`error ${ctx.request.target}: ${e}`);
+   *                   // Always rethrow — swallowing the error changes the
+   *                   // invocation outcome. You can also throw a different
+   *                   // error (e.g. TerminalError to fail immediately).
+   *                   throw e;
+   *                 }
+   *               },
+   *             },
+   *           }),
+   *         ],
+   *       },
+   *       async (ctx, name) => `Hello, ${name}!`
+   *     ),
+   *   },
+   * });
+   * ```
    */
   hooks?: HooksProvider[];
 };
@@ -924,10 +957,39 @@ export type ServiceOptions = {
   serde?: Serde<any>;
 
   /**
-   * Hooks providers for this service. Hooks allow wrapping handler execution and ctx.run closures,
-   * useful for propagating async context (e.g. OpenTelemetry tracing).
+   * Hooks providers for this service. Service-level hooks wrap outermost —
+   * they run before handler-level hooks. Both levels are merged: service
+   * hooks first, then handler hooks. Within each level, hooks execute in
+   * array order: for `[A, B]`: A before → B before → handler → B after → A after.
    *
-   * Service-level hooks wrap outermost (before handler-level hooks).
+   * @example
+   * ```ts
+   * const myService = restate.service({
+   *   name: "MyService",
+   *   handlers: { greet: async (ctx, name) => `Hello, ${name}!` },
+   *   options: {
+   *     hooks: [
+   *       (ctx) => ({
+   *         interceptor: {
+   *           handler: async (next) => {
+   *             console.log(`before ${ctx.request.target}`);
+   *             try {
+   *               await next();
+   *               console.log(`after ${ctx.request.target}`);
+   *             } catch (e) {
+   *               console.log(`error ${ctx.request.target}: ${e}`);
+   *               // Always rethrow — swallowing the error changes the
+   *               // invocation outcome. You can also throw a different
+   *               // error (e.g. TerminalError to fail immediately).
+   *               throw e;
+   *             }
+   *           },
+   *         },
+   *       }),
+   *     ],
+   *   },
+   * });
+   * ```
    */
   hooks?: HooksProvider[];
 };

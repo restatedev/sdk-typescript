@@ -117,6 +117,8 @@ function createExecutionOptions(
   serviceOptions?: ServiceOptions,
   handlerOptions?: ServiceHandlerOpts<unknown, unknown>
 ): ExecutionOptions {
+  // Service-level hooks run outermost, handler-level hooks run innermost.
+  // Both are merged into a single list: service hooks first, then handler hooks.
   const hooks = [
     ...(serviceOptions?.hooks ?? []),
     ...(handlerOptions?.hooks ?? []),
