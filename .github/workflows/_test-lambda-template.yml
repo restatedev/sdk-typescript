@@ -2,6 +2,9 @@ name: Test Lambda Template (LocalStack with CDK)
 
 on:
   workflow_call:
+    secrets:
+      LOCALSTACK_AUTH_TOKEN:
+        required: true
 
 jobs:
   test:
@@ -49,7 +52,12 @@ jobs:
       AWS_REGION: us-east-1
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name || github.repository }}
+          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

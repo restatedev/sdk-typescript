@@ -3,6 +3,7 @@ name: Compatibility
 # Controls when the workflow will run
 on:
   pull_request:
+  pull_request_target:
   push:
     branches:
       - main
@@ -24,5 +25,6 @@ jobs:
     uses: ./.github/workflows/_test-vercel-template.yml
 
   lambda:
+    if: ${{ github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'pull_request_target' && github.event.pull_request.head.repo.full_name != github.repository) }}
     uses: ./.github/workflows/_test-lambda-template.yml
     secrets: inherit
