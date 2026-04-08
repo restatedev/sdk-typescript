@@ -362,6 +362,11 @@ class RestateInvokeResponse implements RestateResponse {
           service: this.service.name(),
           handler: this.handler.name(),
           key: input.key || undefined,
+          toString() {
+            return this.key !== undefined
+              ? `${this.service}/${this.key}/${this.handler}`
+              : `${this.service}/${this.handler}`;
+          },
         },
         id: input.invocation_id,
         headers: input.headers.reduce((headers, { key, value }) => {

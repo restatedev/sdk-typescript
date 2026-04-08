@@ -60,8 +60,7 @@ export async function shutdownTracing(): Promise<void> {
  * in the trace viewer (e.g. Jaeger).
  */
 export const otelTracingHook: HooksProvider = (ctx) => {
-  const { service: svc, handler: hdl, key } = ctx.request.target;
-  const tracer = getTracerForService(svc);
+  const tracer = getTracerForService(ctx.request.target.service);
 
   // Extract the parent trace context set by the Restate runtime.
   // attemptHeaders contains W3C traceparent/tracestate headers.
@@ -83,9 +82,7 @@ export const otelTracingHook: HooksProvider = (ctx) => {
     }
   );
 
-  // Build the invocation target string (e.g. "OrderProcessor/process"
-  // or "OrderProcessor/myKey/process" for keyed services).
-  const target = key ? `${svc}/${key}/${hdl}` : `${svc}/${hdl}`;
+  const target = String(ctx.request.target);
 
   // Create the per-attempt span as a child of the runtime's trace.
   const attemptSpan = tracer.startSpan(

@@ -36,6 +36,7 @@ export interface Target {
   service: string;
   handler: string;
   key?: string;
+  toString(): string;
 }
 
 /**
