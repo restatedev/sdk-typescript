@@ -639,6 +639,21 @@ function hooksSuite(level: HookLevel) {
       options: fastRetry,
     });
 
+    const awakeableSerdeFailAfterRunService = createService({
+      name: `${level}_AwakeableSerdeFailureAfterRun`,
+      ...hooksAt([recordHookEvents()]),
+      handler: async (ctx, _) => {
+        const attempt = nextAttempt(ctx.request().id);
+        await ctx.run("setup", () => "setup");
+        const serde = attempt === 1 ? failingDeserializeSerde : undefined;
+        const { id, promise } = ctx.awakeable(serde);
+        storeAwakeableId(ctx.request().id, id);
+        await promise;
+        return { invocationId: ctx.request().id };
+      },
+      options: fastRetry,
+    });
+
     // -- environment --------------------------------------------------------
 
     let env: RestateTestEnvironment;
@@ -681,6 +696,7 @@ function hooksSuite(level: HookLevel) {
         awakeableSuccessService,
         awakeableRejectService,
         awakeableSerdeFailService,
+        awakeableSerdeFailAfterRunService,
         suspendPerEntryService,
       ];
       env = await RestateTestEnvironment.start({
@@ -1642,6 +1658,50 @@ function hooksSuite(level: HookLevel) {
           "hook:handler:before",
           "hook:handler:error:[hw] awakeable serde fail",
           // attempt 2: replayed awakeable with good serde succeeds
+          "hook:handler:before",
+          "hook:handler:after",
+        ]);
+
+      const outcome = await getInvocationOutcome(
+        env.adminAPIBaseUrl(),
+        send.invocationId
+      );
+      const transientErrors = outcome.transientErrors ?? [];
+      expect(outcome.status).toBe("succeeded");
+      expect(transientErrors).toEqual([
+        { error_code: 500, error_message: "awakeable serde fail" },
+      ]);
+    });
+
+    it("awakeable serde failure after prior run does not inherit stale run metadata", async () => {
+      const ingress = clients.connect({ url: env.baseUrl() });
+      const send = await ingress
+        .serviceSendClient(awakeableSerdeFailAfterRunService)
+        .invoke("");
+
+      await expect
+        .poll(() => getAwakeableId(send.invocationId), {
+          timeout: 5_000,
+          interval: 100,
+        })
+        .toBeTruthy();
+
+      await resolveAwakeableViaIngress(
+        env.baseUrl(),
+        getAwakeableId(send.invocationId)!,
+        "hello"
+      );
+
+      await expect
+        .poll(() => getHookEvents(send.invocationId), {
+          timeout: 10_000,
+          interval: 100,
+        })
+        .toEqual([
+          "hook:handler:before",
+          "hook:run:setup:before",
+          "hook:run:setup:after",
+          "hook:handler:error:[hw] awakeable serde fail",
           "hook:handler:before",
           "hook:handler:after",
         ]);
