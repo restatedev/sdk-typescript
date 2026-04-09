@@ -1168,15 +1168,28 @@ function hooksSuite(level: HookLevel) {
         "hook:run:run-2:after",
         "hook:handler:after",
       ]);
-      expect(
-        await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
-      ).toMatchObject({
-        status: "succeeded",
-        transientErrors: [
-          { error_code: 500, error_message: "[rw] run-1 fail" },
-          { error_code: 500, error_message: "[rw] run-2 fail" },
-        ],
-      });
+      const outcome = await getInvocationOutcome(
+        env.adminAPIBaseUrl(),
+        invocationId
+      );
+      const transientErrors = outcome.transientErrors ?? [];
+      expect(outcome.status).toBe("succeeded");
+      expect(transientErrors).toEqual([
+        {
+          error_code: 500,
+          error_message: "[rw] run-1 fail",
+          related_command_type: "Run",
+          related_command_name: "run-1",
+          related_command_index: 1,
+        },
+        {
+          error_code: 500,
+          error_message: "[rw] run-2 fail",
+          related_command_type: "Run",
+          related_command_name: "run-2",
+          related_command_index: 2,
+        },
+      ]);
     });
 
     it("handler with suspension resumes and completes", async () => {
@@ -1633,9 +1646,15 @@ function hooksSuite(level: HookLevel) {
           "hook:handler:after",
         ]);
 
-      expect(
-        await getInvocationOutcome(env.adminAPIBaseUrl(), send.invocationId)
-      ).toMatchObject({ status: "succeeded" });
+      const outcome = await getInvocationOutcome(
+        env.adminAPIBaseUrl(),
+        send.invocationId
+      );
+      const transientErrors = outcome.transientErrors ?? [];
+      expect(outcome.status).toBe("succeeded");
+      expect(transientErrors).toEqual([
+        { error_code: 500, error_message: "awakeable serde fail" },
+      ]);
     });
   });
 }
