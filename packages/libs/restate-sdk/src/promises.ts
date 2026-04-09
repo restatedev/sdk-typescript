@@ -43,15 +43,36 @@ enum PromiseState {
   NOT_COMPLETED,
 }
 
-export const RESTATE_CTX_SYMBOL = Symbol("restateContext");
+export abstract class InternalRestatePromise<T> implements RestatePromise<T> {
+  abstract then<TResult1, TResult2>(
+    onfulfilled:
+      | ((value: T) => PromiseLike<TResult1> | TResult1)
+      | undefined
+      | null,
+    onrejected:
+      | ((reason: any) => PromiseLike<TResult2> | TResult2)
+      | undefined
+      | null
+  ): Promise<TResult1 | TResult2>;
+  abstract catch<TResult>(
+    onrejected:
+      | ((reason: any) => PromiseLike<TResult> | TResult)
+      | undefined
+      | null
+  ): Promise<T | TResult>;
+  abstract finally(onfinally: (() => void) | undefined | null): Promise<T>;
 
-export interface InternalRestatePromise<T> extends RestatePromise<T> {
-  [RESTATE_CTX_SYMBOL]: ContextImpl;
+  abstract map<U>(
+    mapper: (value?: T, failure?: TerminalError) => U
+  ): RestatePromise<U>;
+  abstract orTimeout(millis: Duration | number): RestatePromise<T>;
 
-  tryCancel(): void;
-  tryComplete(): Promise<void>;
-  uncompletedLeaves(): Array<number>;
-  publicPromise(): Promise<T>;
+  abstract tryCancel(): void;
+  abstract tryComplete(): Promise<void>;
+  abstract uncompletedLeaves(): Array<number>;
+  abstract publicPromise(): Promise<T>;
+
+  abstract readonly [Symbol.toStringTag]: string;
 }
 
 export type AsyncResultValue =
@@ -61,17 +82,20 @@ export type AsyncResultValue =
   | { StateKeys: string[] }
   | { InvocationId: string };
 
-export function extractContext(n: any): ContextImpl | undefined {
+const RESTATE_CTX_SYMBOL = Symbol("restateContext");
+
+function extractContext(n: any): ContextImpl | undefined {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
   return n[RESTATE_CTX_SYMBOL] as ContextImpl | undefined;
 }
 
-abstract class AbstractRestatePromise<T> implements InternalRestatePromise<T> {
+abstract class BaseRestatePromise<T> extends InternalRestatePromise<T> {
   [RESTATE_CTX_SYMBOL]: ContextImpl;
   private pollingPromise?: Promise<any>;
   private cancelPromise: CompletablePromise<any> = new CompletablePromise();
 
   protected constructor(ctx: ContextImpl) {
+    super();
     this[RESTATE_CTX_SYMBOL] = ctx;
   }
 
@@ -119,7 +143,7 @@ abstract class AbstractRestatePromise<T> implements InternalRestatePromise<T> {
   // --- RestatePromise methods
 
   orTimeout(duration: number | Duration): RestatePromise<T> {
-    return new RestateCombinatorPromise(
+    return new CombinatorRestatePromise(
       this[RESTATE_CTX_SYMBOL],
       ([thisPromise, sleepPromise]) => {
         return new Promise((resolve, reject) => {
@@ -137,23 +161,23 @@ abstract class AbstractRestatePromise<T> implements InternalRestatePromise<T> {
   }
 
   map<U>(mapper: (value?: T, failure?: TerminalError) => U): RestatePromise<U> {
-    return new RestateMappedPromise(this[RESTATE_CTX_SYMBOL], this, mapper);
+    return new MappedRestatePromise(this[RESTATE_CTX_SYMBOL], this, mapper);
   }
 
   tryCancel() {
     this.cancelPromise.reject(new CancelledError());
   }
 
-  abstract tryComplete(): Promise<void>;
+  abstract override tryComplete(): Promise<void>;
 
-  abstract uncompletedLeaves(): Array<number>;
+  abstract override uncompletedLeaves(): Array<number>;
 
-  abstract publicPromise(): Promise<T>;
+  abstract override publicPromise(): Promise<T>;
 
-  abstract [Symbol.toStringTag]: string;
+  abstract override [Symbol.toStringTag]: string;
 }
 
-export class RestateSinglePromise<T> extends AbstractRestatePromise<T> {
+export class SingleRestatePromise<T> extends BaseRestatePromise<T> {
   private state: PromiseState = PromiseState.NOT_COMPLETED;
   private completablePromise: CompletablePromise<T> = new CompletablePromise();
 
@@ -193,8 +217,8 @@ export class RestateSinglePromise<T> extends AbstractRestatePromise<T> {
   readonly [Symbol.toStringTag] = "RestateSinglePromise";
 }
 
-export class RestateInvocationPromise<T>
-  extends RestateSinglePromise<T>
+export class InvocationRestatePromise<T>
+  extends SingleRestatePromise<T>
   implements InvocationPromise<T>
 {
   constructor(
@@ -214,7 +238,7 @@ export class RestateInvocationPromise<T>
   }
 }
 
-export class RestateCombinatorPromise extends AbstractRestatePromise<any> {
+export class CombinatorRestatePromise extends BaseRestatePromise<any> {
   private state: PromiseState = PromiseState.NOT_COMPLETED;
   private readonly combinatorPromise: Promise<any>;
 
@@ -229,6 +253,49 @@ export class RestateCombinatorPromise extends AbstractRestatePromise<any> {
     ).finally(() => {
       this.state = PromiseState.COMPLETED;
     });
+  }
+
+  // Used by static methods of RestatePromise
+  public static fromPromises<T extends readonly RestatePromise<unknown>[]>(
+    combinatorConstructor: (promises: Promise<any>[]) => Promise<any>,
+    promises: T
+  ): RestatePromise<unknown> {
+    const castedPromises: InternalRestatePromise<any>[] = [];
+    let foundContext: ContextImpl | undefined = undefined;
+
+    for (const [idx, promise] of promises.entries()) {
+      if (!(promise instanceof InternalRestatePromise)) {
+        throw new Error(
+          `Promise index ${idx} used inside the combinator is not an instance of RestatePromise. This is not supported.`
+        );
+      } else if (foundContext === undefined) {
+        foundContext = extractContext(promise);
+      } else {
+        const thisContext = extractContext(promise);
+        if (thisContext !== undefined && thisContext !== foundContext) {
+          throw new Error(
+            "You're mixing up RestatePromises from different RestateContext. This is not supported."
+          );
+        }
+      }
+      castedPromises.push(promise);
+    }
+
+    if (foundContext === undefined) {
+      // The only situation where this can happen is when the combined promise contains only ConstRestatePromise as children.
+      // In this case, just return back a nice and clean ConstRestatePromise.
+      // There is a specific workaround for the funky interface of Promise.race, inside the RestatePromise.race factory method.
+      return ConstRestatePromise.fromPromise(
+        combinatorConstructor(castedPromises),
+        true
+      );
+    }
+
+    return new CombinatorRestatePromise(
+      foundContext,
+      combinatorConstructor,
+      castedPromises
+    );
   }
 
   uncompletedLeaves(): number[] {
@@ -248,68 +315,7 @@ export class RestateCombinatorPromise extends AbstractRestatePromise<any> {
   readonly [Symbol.toStringTag] = "RestateCombinatorPromise";
 }
 
-export class RestatePendingPromise<T> implements InternalRestatePromise<T> {
-  [RESTATE_CTX_SYMBOL]: ContextImpl;
-
-  constructor(ctx: ContextImpl) {
-    this[RESTATE_CTX_SYMBOL] = ctx;
-  }
-
-  // --- Promise methods
-
-  then<TResult1 = T, TResult2 = never>(
-    onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | null,
-    onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null
-  ): Promise<TResult1 | TResult2> {
-    return pendingPromise<T>().then(onfulfilled, onrejected);
-  }
-
-  catch<TResult = never>(
-    onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null
-  ): Promise<T | TResult> {
-    return pendingPromise<T>().catch(onrejected);
-  }
-
-  finally(onfinally?: (() => void) | null): Promise<T> {
-    return pendingPromise<T>().finally(onfinally);
-  }
-
-  // --- RestatePromise methods
-
-  orTimeout(): RestatePromise<T> {
-    return this;
-  }
-
-  map<U>(): RestatePromise<U> {
-    return this as unknown as RestatePromise<U>;
-  }
-
-  tryCancel(): void {}
-  async tryComplete(): Promise<void> {}
-  uncompletedLeaves(): number[] {
-    return [];
-  }
-  publicPromise(): Promise<T> {
-    return pendingPromise<T>();
-  }
-
-  readonly [Symbol.toStringTag] = "RestatePendingPromise";
-}
-
-export class InvocationPendingPromise<T>
-  extends RestatePendingPromise<T>
-  implements InvocationPromise<T>
-{
-  constructor(ctx: ContextImpl) {
-    super(ctx);
-  }
-
-  get invocationId(): Promise<InvocationId> {
-    return pendingPromise();
-  }
-}
-
-export class RestateMappedPromise<T, U> extends AbstractRestatePromise<U> {
+export class MappedRestatePromise<T, U> extends BaseRestatePromise<U> {
   private publicPromiseMapper: (
     value?: T,
     failure?: TerminalError
@@ -361,6 +367,89 @@ export class RestateMappedPromise<T, U> extends AbstractRestatePromise<U> {
   readonly [Symbol.toStringTag] = "RestateMappedPromise";
 }
 
+export class ConstRestatePromise<T> extends InternalRestatePromise<T> {
+  private constructor(
+    private readonly constPromise: Promise<T>,
+    private readonly settled: boolean
+  ) {
+    super();
+  }
+
+  static resolve<T>(value: T): ConstRestatePromise<Awaited<T>> {
+    return new ConstRestatePromise(
+      Promise.resolve(value),
+      true
+    );
+  }
+
+  static reject<T = never>(reason: TerminalError): ConstRestatePromise<T> {
+    return new ConstRestatePromise<T>(Promise.reject(reason), true);
+  }
+
+  static pending<T>(): ConstRestatePromise<T> {
+    return new ConstRestatePromise<T>(pendingPromise(), false);
+  }
+
+  static fromPromise<T>(
+    promise: Promise<T>,
+    settled: boolean
+  ): ConstRestatePromise<T> {
+    return new ConstRestatePromise(promise, settled);
+  }
+
+  // --- Promise methods
+
+  then<TResult1 = T, TResult2 = never>(
+    onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null
+  ): Promise<TResult1 | TResult2> {
+    return this.constPromise.then(onfulfilled, onrejected);
+  }
+
+  catch<TResult = never>(
+    onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null
+  ): Promise<T | TResult> {
+    return this.constPromise.catch(onrejected);
+  }
+
+  finally(onfinally?: (() => void) | null): Promise<T> {
+    return this.constPromise.finally(onfinally);
+  }
+
+  // --- RestatePromise methods
+
+  orTimeout(): RestatePromise<T> {
+    if (this.settled) return this;
+    return ConstRestatePromise.reject(new TimeoutError());
+  }
+
+  map<U>(mapper: (value?: T, failure?: TerminalError) => U): RestatePromise<U> {
+    return ConstRestatePromise.fromPromise(
+      this.constPromise.then(
+        (value) => mapper(value, undefined),
+        (reason) => mapper(undefined, reason as TerminalError)
+      ),
+      this.settled
+    );
+  }
+
+  tryCancel() {}
+
+  publicPromise(): Promise<T> {
+    return this.constPromise;
+  }
+
+  tryComplete(): Promise<void> {
+    return Promise.resolve();
+  }
+
+  uncompletedLeaves(): Array<number> {
+    return [];
+  }
+
+  readonly [Symbol.toStringTag] = "ConstRestatePromise";
+}
+
 /**
  * Promises executor, gluing VM with I/O and Promises given to user space.
  */
@@ -388,7 +477,7 @@ export class PromisesExecutor {
     } catch (e) {
       // This can happen if either take_notification throws an exception or completer throws an exception.
       // This could either happen for a deserialization issue, or for an SDK bug, but we cover them here.
-      restatePromise[RESTATE_CTX_SYMBOL].handleInvocationEndError(e);
+      this.errorCallback(e);
       return Promise.resolve();
     }
 

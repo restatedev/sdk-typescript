@@ -61,16 +61,13 @@ import type {
 import { millisOrDurationToMillis, serde } from "@restatedev/restate-sdk-core";
 import { RandImpl } from "./utils/rand.js";
 import { CompletablePromise } from "./utils/completable_promise.js";
-import type { AsyncResultValue, InternalRestatePromise } from "./promises.js";
+import type { AsyncResultValue } from "./promises.js";
 import {
-  extractContext,
-  InvocationPendingPromise,
+  ConstRestatePromise,
   pendingPromise,
   PromisesExecutor,
-  RestateCombinatorPromise,
-  RestateInvocationPromise,
-  RestatePendingPromise,
-  RestateSinglePromise,
+  InvocationRestatePromise,
+  SingleRestatePromise,
 } from "./promises.js";
 import { InputPump, OutputPump } from "./io.js";
 import type { ContextInternal } from "./internal.js";
@@ -243,7 +240,7 @@ export class ContextImpl
           WasmCommandType.Call
         )
       );
-      return new InvocationPendingPromise(this);
+      return Object.assign(ConstRestatePromise.pending<RES>(), { invocationId: pendingPromise<InvocationId>() });
     }
 
     try {
@@ -262,7 +259,7 @@ export class ContextImpl
       );
       const commandIndex = this.coreVm.last_command_index();
 
-      const invocationIdPromise = new RestateSinglePromise(
+      const invocationIdPromise = new SingleRestatePromise(
         this,
         call_handles.invocation_id_completion_id,
         completeCommandPromiseUsing(
@@ -272,7 +269,7 @@ export class ContextImpl
         )
       );
 
-      return new RestateInvocationPromise(
+      return new InvocationRestatePromise(
         this,
         call_handles.call_completion_id,
         completeCommandPromiseUsing(
@@ -286,7 +283,7 @@ export class ContextImpl
     } catch (e) {
       this.handleInvocationEndError(e);
       // We return a pending promise to avoid the caller to see the error.
-      return new InvocationPendingPromise(this);
+      return Object.assign(ConstRestatePromise.pending<RES>(), { invocationId: pendingPromise<InvocationId>() });
     }
   }
 
@@ -308,7 +305,7 @@ export class ContextImpl
           WasmCommandType.OneWayCall
         )
       );
-      return new InvocationPendingPromise(this);
+      return { invocationId: pendingPromise<InvocationId>() };
     }
 
     try {
@@ -334,7 +331,7 @@ export class ContextImpl
       const commandIndex = this.coreVm.last_command_index();
 
       return {
-        invocationId: new RestateSinglePromise(
+        invocationId: new SingleRestatePromise(
           this,
           handles.invocation_id_completion_id,
           completeCommandPromiseUsing(
@@ -441,7 +438,7 @@ export class ContextImpl
       handle = this.coreVm.sys_run(name ?? "");
     } catch (e) {
       this.handleInvocationEndError(e);
-      return new RestatePendingPromise(this);
+      return ConstRestatePromise.pending();
     }
     const commandIndex = this.coreVm.last_command_index();
 
@@ -541,7 +538,7 @@ export class ContextImpl
 
     // TODO: here as well
     // Return the promise
-    return new RestateSinglePromise(
+    return new SingleRestatePromise(
       this,
       handle,
       completeCommandPromiseUsing(
@@ -589,13 +586,13 @@ export class ContextImpl
       this.handleInvocationEndError(e);
       return {
         id: "invalid",
-        promise: new RestatePendingPromise(this),
+        promise: ConstRestatePromise.pending(),
       };
     }
 
     return {
       id: awakeable.id,
-      promise: new RestateSinglePromise(
+      promise: new SingleRestatePromise(
         this,
         awakeable.handle,
         completeSignalPromiseUsing(
@@ -647,37 +644,6 @@ export class ContextImpl
     return new DurablePromiseImpl(this, name, serde);
   }
 
-  // Used by static methods of RestatePromise
-  public static createCombinator<T extends readonly RestatePromise<unknown>[]>(
-    combinatorConstructor: (promises: Promise<any>[]) => Promise<any>,
-    promises: T
-  ): RestatePromise<unknown> {
-    // Extract context from first promise
-    const self = extractContext(promises[0]);
-    if (!self) {
-      throw new Error("Not a combinable promise");
-    }
-
-    // Collect first the promises downcasted to the internal promise type
-    const castedPromises: InternalRestatePromise<any>[] = [];
-    for (const promise of promises) {
-      if (extractContext(promise) !== self) {
-        self.handleInvocationEndError(
-          new Error(
-            "You're mixing up RestatePromises from different RestateContext. This is not supported."
-          )
-        );
-        return new RestatePendingPromise(self);
-      }
-      castedPromises.push(promise as InternalRestatePromise<any>);
-    }
-    return new RestateCombinatorPromise(
-      self,
-      combinatorConstructor,
-      castedPromises
-    );
-  }
-
   // -- Various private methods
 
   private processNonCompletableEntry<T>(
@@ -723,7 +689,7 @@ export class ContextImpl
           commandType
         )
       );
-      return new RestatePendingPromise(this);
+      return ConstRestatePromise.pending();
     }
 
     let handle: number;
@@ -731,10 +697,10 @@ export class ContextImpl
       handle = vmCall(this.coreVm, input);
     } catch (e) {
       this.handleInvocationEndError(e);
-      return new RestatePendingPromise(this);
+      return ConstRestatePromise.pending();
     }
     const commandIndex = this.coreVm.last_command_index();
-    return new RestateSinglePromise(
+    return new SingleRestatePromise(
       this,
       handle,
       completeCommandPromiseUsing(commandType, commandIndex, ...completers)

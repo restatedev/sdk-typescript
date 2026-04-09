@@ -61,11 +61,26 @@ jobs:
       checks: write
       pull-requests: write
       actions: read
+    strategy:
+      matrix:
+        node-version: [ 20.x ]
 
     steps:
       - uses: actions/checkout@v4
         with:
           repository: restatedev/sdk-typescript
+
+      - uses: actions/checkout@v4
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          registry-url: "https://registry.npmjs.org"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
 
       # support importing oci-format restate.tar
       - name: Set up Docker containerd snapshotter
@@ -133,11 +148,12 @@ jobs:
           cache-to: type=gha,url=http://127.0.0.1:49160/,mode=max,version=1,scope=${{ github.workflow }}
 
       - name: Run test tool
-        uses: restatedev/sdk-test-suite@v4.0
+        uses: restatedev/sdk-test-suite@v4.1
         with:
           restateContainerImage: ${{ inputs.restateCommit != '' && 'localhost/restatedev/restate-commit-download:latest' || (inputs.restateImage != '' && inputs.restateImage || 'ghcr.io/restatedev/restate:main') }}
           serviceContainerImage: ${{ inputs.serviceImage != '' && inputs.serviceImage || 'restatedev/typescript-test-services' }}
           exclusionsFile: "packages/tests/restate-e2e-services/exclusions.yaml"
+          customTestsFile: "packages/tests/restate-e2e-services/custom_tests.yaml"
           envVars: ${{ inputs.envVars }}
           testArtifactOutput: ${{ inputs.testArtifactOutput != '' && inputs.testArtifactOutput || 'sdk-typescript-integration-test-report' }}
           serviceContainerEnvFile: "packages/tests/restate-e2e-services/.env"

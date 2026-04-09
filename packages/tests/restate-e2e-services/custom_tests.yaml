@@ -1,0 +1,3 @@
+tests:
+  - name: "all vitest"
+    command: "pnpm --filter @restatedev/restate-e2e-services run testrunner"
