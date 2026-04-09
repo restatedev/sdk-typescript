@@ -66,6 +66,12 @@ import {
 import { destroyLogger, registerLogger } from "./core_logging.js";
 import type { Hooks } from "../../hooks.js";
 
+// Hidden symbol key used by first-party hooks to read the live
+// replay/processing phase without widening the public HooksProvider API.
+const HOOK_CONTEXT_IS_PROCESSING_SYMBOL = Symbol.for(
+  "@restatedev/restate-sdk/hooks.isProcessing"
+);
+
 export function createRestateHandler(
   endpoint: Endpoint,
   protocolMode: ProtocolMode,
@@ -501,7 +507,14 @@ async function startUserHandler(
   // TerminalError → terminate invocation, other errors → retry.
   const hooks: Hooks[] = [];
   for (const provider of handler.executionOptions.hooks ?? []) {
-    hooks.push(provider({ request: ctx.request() }));
+    const hookContext: { request: Request } = {
+      request: ctx.request(),
+    };
+    Object.defineProperty(hookContext, HOOK_CONTEXT_IS_PROCESSING_SYMBOL, {
+      value: () => ctx.isProcessing(),
+      enumerable: false,
+    });
+    hooks.push(provider(hookContext));
   }
 
   // Compose interceptor.handler into a single interceptor (first = outermost)

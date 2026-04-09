@@ -24,6 +24,9 @@
       "@restatedev/restate-sdk-core": [
         "packages/libs/restate-sdk-core/src/index.ts"
       ],
+      "@restatedev/restate-sdk-opentelemetry": [
+        "packages/libs/restate-sdk-opentelemetry/src/index.ts"
+      ],
       "@restatedev/restate-sdk-testcontainers": [
         "packages/libs/restate-sdk-testcontainers/src/index.ts"
       ],
@@ -47,10 +50,16 @@
       "path": "packages/libs/restate-sdk-core"
     },
     {
+      "path": "packages/libs/restate-sdk-opentelemetry"
+    },
+    {
       "path": "packages/libs/restate-sdk-testcontainers"
     },
     {
       "path": "packages/libs/restate-sdk-zod"
+    },
+    {
+      "path": "packages/tests/e2e"
     },
     {
       "path": "packages/tests/restate-e2e-services"
@@ -69,6 +78,9 @@
     },
     {
       "path": "packages/examples/node"
+    },
+    {
+      "path": "packages/examples/otel"
     },
     {
       "path": "packages/examples/vercel"
