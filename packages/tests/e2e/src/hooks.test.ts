@@ -1606,6 +1606,8 @@ function hooksSuite(level: HookLevel) {
         .serviceSendClient(abortBeforeFirstCommandService)
         .invoke("");
 
+      // handler:before fires immediately; handler:error fires ~1s later
+      // when the handler's ctx.run() hits the poisoned VM.
       await expect
         .poll(() => getHookEvents(send.invocationId), {
           timeout: 10_000,
@@ -1613,7 +1615,7 @@ function hooksSuite(level: HookLevel) {
         })
         .toEqual([
           "hook:handler:before",
-          "hook:handler:error:[hw] Connection closed",
+          "hook:handler:error:[hw] (500) Connection closed",
         ]);
 
       await waitForInvocationOutcome(
