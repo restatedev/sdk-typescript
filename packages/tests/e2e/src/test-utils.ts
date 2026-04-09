@@ -573,6 +573,27 @@ export async function cancelInvocationViaAdminApi(
 }
 
 /**
+ * Immediately kills an invocation via the Admin API.
+ * Unlike cancel, kill does not wait for the handler to complete gracefully.
+ */
+export async function killInvocationViaAdminApi(
+  adminUrl: string,
+  invocationId: string
+): Promise<void> {
+  const res = await fetch(`${adminUrl}/invocations/${invocationId}/kill`, {
+    method: "PATCH",
+    headers: { Accept: "application/json" },
+  });
+
+  if (!res.ok) {
+    const badResponse = await res.text();
+    throw new Error(
+      `Error ${res.status} during invocation kill: ${badResponse}`
+    );
+  }
+}
+
+/**
  * Requests graceful pause for an invocation via the Admin API.
  * The call is non-blocking and may return before the pause completes.
  */

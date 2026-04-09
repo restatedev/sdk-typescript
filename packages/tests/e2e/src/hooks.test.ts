@@ -541,6 +541,22 @@ function hooksSuite(level: HookLevel) {
       },
     });
 
+    // Service where the run closure does NOT listen to attemptCompletedSignal.
+    // When killed, the run interceptor must wait for the closure to complete
+    // naturally (~1s) before its :after event fires.
+    const cancelDuringSlowRunService = createService({
+      name: `${level}_CancelDuringSlowRun`,
+      ...hooksAt([recordHookEvents()]),
+      handler: async (ctx, _) => {
+        await ctx.run("slow-step", async () => {
+          await wait(1_000);
+          return "done";
+        });
+        return { invocationId: ctx.request().id };
+      },
+      options: { inactivityTimeout: 60_000 },
+    });
+
     const pauseDuringRunService = createService({
       name: `${level}_PauseDuringRun`,
       ...hooksAt([recordHookEvents()]),
@@ -609,6 +625,7 @@ function hooksSuite(level: HookLevel) {
         journalMismatchService,
         abortTimeoutService,
         cancelDuringRunService,
+        cancelDuringSlowRunService,
         pauseDuringRunService,
         suspendPerEntryService,
       ];
@@ -1085,10 +1102,9 @@ function hooksSuite(level: HookLevel) {
         "hook:run:run-1:error:[rw] run-1 fail",
         "hook:handler:error:[hw] (500) [rw] run-1 fail",
         "hook:run:run-2:error:[rw] aborted",
-        // attempt 2: run-1 succeeds, run-2 fails on its own
+        // attempt 2: both runs start (order non-deterministic), run-1 succeeds, run-2 fails
         "hook:handler:before",
-        "hook:run:run-1:before",
-        "hook:run:run-2:before",
+        ...inAnyOrder("hook:run:run-1:before", "hook:run:run-2:before"),
         "hook:run:run-1:after",
         "hook:run:run-2:error:[rw] run-2 fail",
         "hook:handler:error:[hw] (500) [rw] run-2 fail",
@@ -1332,6 +1348,54 @@ function hooksSuite(level: HookLevel) {
           "hook:run:slow-step:before",
           "hook:handler:error:[hw] Cancelled",
           "hook:run:slow-step:error:[rw] Cancelled",
+        ]);
+
+      expect(
+        await getInvocationOutcome(env.adminAPIBaseUrl(), send.invocationId)
+      ).toMatchObject({ status: "failed" });
+    });
+
+    it("cancelled invocation — run interceptor waits for closure to complete", async () => {
+      const ingress = clients.connect({ url: env.baseUrl() });
+      const send = await ingress
+        .serviceSendClient(cancelDuringSlowRunService)
+        .invoke("");
+
+      // Wait for the slow-step to be in-flight
+      await wait(100);
+
+      // Cancel — the slow-step closure is still sleeping (~1s).
+      // Cancel sends a CancelledError through the VM protocol.
+      await cancelInvocationViaAdminApi(
+        env.adminAPIBaseUrl(),
+        send.invocationId
+      );
+
+      // handler:error fires immediately (broken out by raceWithAttemptEnd).
+      await expect
+        .poll(() => getHookEvents(send.invocationId), {
+          timeout: 5_000,
+          interval: 100,
+        })
+        .toEqual([
+          "hook:handler:before",
+          "hook:run:slow-step:before",
+          "hook:handler:error:[hw] Cancelled",
+        ]);
+
+      // run:after fires only after the closure finishes (~1s). The run
+      // interceptor is NOT broken out — it waits for the closure to
+      // complete. The :after (not :error) proves it completed normally.
+      await expect
+        .poll(() => getHookEvents(send.invocationId), {
+          timeout: 5_000,
+          interval: 100,
+        })
+        .toEqual([
+          "hook:handler:before",
+          "hook:run:slow-step:before",
+          "hook:handler:error:[hw] Cancelled",
+          "hook:run:slow-step:after",
         ]);
 
       expect(
