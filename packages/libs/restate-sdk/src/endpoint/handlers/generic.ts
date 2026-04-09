@@ -454,6 +454,27 @@ class RestateInvokeResponse implements RestateResponse {
       return;
     }
 
+    // When the HTTP connection closes (e.g. abort timeout), reject
+    // invocationEndPromise so raceWithAttemptEnd can break out the
+    // interceptor chain even when the handler is stuck in user code
+    // before any Restate command.
+    //
+    // We defer with setImmediate so that any in-flight PromisesExecutor
+    // work (which also uses setImmediate) gets to run first and call
+    // abortAttempt with the specific protocol-level error. Our fallback
+    // only takes effect if no protocol abort has been processed yet
+    // (CompletablePromise.reject is a no-op on an already-settled promise).
+    let abortFallbackTimer: ReturnType<typeof setImmediate> | undefined;
+    const abortFallback = () => {
+      abortFallbackTimer = setImmediate(() => {
+        ctx.abortAttempt(new Error("Connection closed"));
+      });
+    };
+    abortSignal.addEventListener("abort", abortFallback, { once: true });
+    if (abortSignal.aborted) {
+      abortFallback();
+    }
+
     // Run user code. Errors that reach the handler or interceptor code
     // (handler throws, interceptor throws, entry completes with terminal
     // failure) propagate naturally. Errors where the handler is stuck on
@@ -470,6 +491,14 @@ class RestateInvokeResponse implements RestateResponse {
     } catch (e) {
       notifyError(e, ctx, this.handler.executionOptions.asTerminalError);
     } finally {
+      // Cancel the abort fallback — the handler is done. Without this,
+      // the fallback could reject invocationEndPromise after
+      // raceWithAttemptEnd has exited (e.g. provider error path where
+      // raceWithAttemptEnd was never set up), causing unhandled rejections.
+      abortSignal.removeEventListener("abort", abortFallback);
+      if (abortFallbackTimer !== undefined) {
+        clearImmediate(abortFallbackTimer);
+      }
       await flushAndClose(
         this.coreVm,
         this.vmLogger,

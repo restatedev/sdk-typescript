@@ -605,6 +605,25 @@ function hooksSuite(level: HookLevel) {
       },
     });
 
+    const abortBeforeFirstCommandService = createService({
+      name: `${level}_AbortBeforeFirstCommand`,
+      ...hooksAt([recordHookEvents()]),
+      handler: async (ctx, _) => {
+        await wait(1_000);
+        await ctx.run("after-wait", () => "done");
+        return { invocationId: ctx.request().id };
+      },
+      options: {
+        inactivityTimeout: 0,
+        abortTimeout: 1,
+        retryPolicy: {
+          initialInterval: 10,
+          maxAttempts: 1,
+          onMaxAttempts: "kill",
+        },
+      },
+    });
+
     const suspendPerEntryService = createService({
       name: `${level}_SuspendPerEntry`,
       ...hooksAt([recordHookEvents()]),
@@ -724,6 +743,7 @@ function hooksSuite(level: HookLevel) {
         cancelDuringRunService,
         cancelDuringSlowRunService,
         pauseDuringRunService,
+        abortBeforeFirstCommandService,
         awakeableSuccessService,
         awakeableRejectService,
         awakeableSerdeFailService,
@@ -1572,6 +1592,35 @@ function hooksSuite(level: HookLevel) {
         send.invocationId,
         {
           status: "paused",
+        },
+        {
+          timeout: 10_000,
+          interval: 100,
+        }
+      );
+    });
+
+    it("abort timeout before first command aborts the handler early", async () => {
+      const ingress = clients.connect({ url: env.baseUrl() });
+      const send = await ingress
+        .serviceSendClient(abortBeforeFirstCommandService)
+        .invoke("");
+
+      await expect
+        .poll(() => getHookEvents(send.invocationId), {
+          timeout: 10_000,
+          interval: 100,
+        })
+        .toEqual([
+          "hook:handler:before",
+          "hook:handler:error:[hw] Connection closed",
+        ]);
+
+      await waitForInvocationOutcome(
+        env.adminAPIBaseUrl(),
+        send.invocationId,
+        {
+          status: "failed",
         },
         {
           timeout: 10_000,
