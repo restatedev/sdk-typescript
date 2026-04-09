@@ -29,7 +29,7 @@ import { parseUrlComponents } from "../components.js";
 import { X_RESTATE_SERVER } from "../../user_agent.js";
 import { CommandError, ContextImpl } from "../../context_impl.js";
 import { restoreError, sanitizeError } from "../../error_sanitization.js";
-import type { Request } from "../../context.js";
+import type { InvocationId, Request } from "../../context.js";
 import * as vm from "./vm/sdk_shared_core_wasm_bindings.js";
 import { CompletablePromise } from "../../utils/completable_promise.js";
 import { HandlerKind } from "../../types/rpc.js";
@@ -376,7 +376,7 @@ class RestateInvokeResponse implements RestateResponse {
               : `${this.service}/${this.handler}`;
           },
         },
-        id: input.invocation_id,
+        id: input.invocation_id as InvocationId,
         headers: input.headers.reduce((headers, { key, value }) => {
           headers.set(key, value);
           return headers;

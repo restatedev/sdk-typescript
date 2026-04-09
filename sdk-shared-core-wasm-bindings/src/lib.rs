@@ -795,6 +795,41 @@ impl WasmVM {
         .map_err(Into::into)
     }
 
+    pub fn sys_signal(&mut self,signal_name: String,) -> Result<WasmNotificationHandle, WasmFailure> {
+        use_log_dispatcher!(self, |vm| CoreVM::create_signal_handle(vm, signal_name))       .map(Into::into)
+            .map_err(Into::into)
+    }
+
+    pub fn sys_complete_signal_success(
+        &mut self,
+        invocation_id: String,
+        signal_name: String,
+        buffer: Vec<u8>,
+    ) -> Result<(), WasmFailure> {
+        use_log_dispatcher!(self, |vm| CoreVM::sys_complete_signal(
+            vm,
+            invocation_id,
+            signal_name,
+            NonEmptyValue::Success(buffer.to_vec().into()),
+        ))
+            .map_err(Into::into)
+    }
+
+    pub fn sys_complete_signal_failure(
+        &mut self,
+        invocation_id: String,
+        signal_name: String,
+        value: WasmFailure,
+    ) -> Result<(), WasmFailure> {
+        use_log_dispatcher!(self, |vm| CoreVM::sys_complete_signal(
+            vm,
+              invocation_id,
+            signal_name,
+            NonEmptyValue::Failure(value.into()),
+        ))
+            .map_err(Into::into)
+    }
+
     pub fn sys_get_promise(&mut self, key: String) -> Result<WasmNotificationHandle, WasmFailure> {
         use_log_dispatcher!(self, |vm| CoreVM::sys_get_promise(vm, key))
             .map(Into::into)

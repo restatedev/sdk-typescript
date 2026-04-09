@@ -102,6 +102,7 @@ export class WasmResponseHead {
 }
 export class WasmVM {
   free(): void;
+  sys_signal(signal_name: string): number;
   do_progress(handles: Uint32Array): WasmDoProgressResult;
   take_output(): any;
   is_completed(handle: number): boolean;
@@ -126,6 +127,8 @@ export class WasmVM {
   sys_write_output_failure(value: WasmFailure): void;
   sys_write_output_success(buffer: Uint8Array): void;
   sys_get_invocation_output(invocation_id: string): number;
+  sys_complete_signal_failure(invocation_id: string, signal_name: string, value: WasmFailure): void;
+  sys_complete_signal_success(invocation_id: string, signal_name: string, buffer: Uint8Array): void;
   sys_complete_promise_failure(key: string, value: WasmFailure): number;
   sys_complete_promise_success(key: string, buffer: Uint8Array): number;
   notify_error_for_next_command(error_message: string, stacktrace: string | null | undefined, wasm_command_type: WasmCommandType): void;
