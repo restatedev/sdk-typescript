@@ -223,7 +223,7 @@ function hooksSuite(level: HookLevel) {
         await ctx.run("after-resume", () => "b");
         return { invocationId: ctx.request().id };
       },
-      options: { inactivityTimeout: 100 },
+      options: { inactivityTimeout: 500 },
     });
 
     const contextService = createService({
@@ -748,10 +748,14 @@ function hooksSuite(level: HookLevel) {
       const result = (await client.invoke("")) as { invocationId: string };
       const hookEvents = getHookEvents(result.invocationId);
       expect(hookEvents).toEqual(["hook:handler:before", "hook:handler:after"]);
-      await waitForInvocationOutcome(env.adminAPIBaseUrl(), result.invocationId, {
-        status: "succeeded",
-        journalOutput: { value: result },
-      });
+      await waitForInvocationOutcome(
+        env.adminAPIBaseUrl(),
+        result.invocationId,
+        {
+          status: "succeeded",
+          journalOutput: { value: result },
+        }
+      );
     });
 
     it("handler + run interceptor", async () => {
@@ -766,10 +770,14 @@ function hooksSuite(level: HookLevel) {
         "hook:run:step:after",
         "hook:handler:after",
       ]);
-      await waitForInvocationOutcome(env.adminAPIBaseUrl(), result.invocationId, {
-        status: "succeeded",
-        journalOutput: { value: result },
-      });
+      await waitForInvocationOutcome(
+        env.adminAPIBaseUrl(),
+        result.invocationId,
+        {
+          status: "succeeded",
+          journalOutput: { value: result },
+        }
+      );
       expect(
         await getRunJournalEntry(env.adminAPIBaseUrl(), result.invocationId)
       ).toMatchObject({ value: "done" });
@@ -1055,16 +1063,20 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:before",
         "hook:handler:after",
       ]);
-      await waitForInvocationOutcome(env.adminAPIBaseUrl(), result.invocationId, {
-        status: "succeeded",
-        journalOutput: { value: result },
-        transientErrors: [
-          {
-            error_code: 500,
-            error_message: "[hw] handler interceptor retryable after next",
-          },
-        ],
-      });
+      await waitForInvocationOutcome(
+        env.adminAPIBaseUrl(),
+        result.invocationId,
+        {
+          status: "succeeded",
+          journalOutput: { value: result },
+          transientErrors: [
+            {
+              error_code: 500,
+              error_message: "[hw] handler interceptor retryable after next",
+            },
+          ],
+        }
+      );
     });
 
     it("run interceptor retryable error after next() — retries then succeeds", async () => {
@@ -1086,16 +1098,20 @@ function hooksSuite(level: HookLevel) {
         "hook:run:step:after",
         "hook:handler:after",
       ]);
-      await waitForInvocationOutcome(env.adminAPIBaseUrl(), result.invocationId, {
-        status: "succeeded",
-        journalOutput: { value: result },
-        transientErrors: [
-          {
-            error_code: 500,
-            error_message: "[rw] run interceptor retryable after next",
-          },
-        ],
-      });
+      await waitForInvocationOutcome(
+        env.adminAPIBaseUrl(),
+        result.invocationId,
+        {
+          status: "succeeded",
+          journalOutput: { value: result },
+          transientErrors: [
+            {
+              error_code: 500,
+              error_message: "[rw] run interceptor retryable after next",
+            },
+          ],
+        }
+      );
       expect(
         await getRunJournalEntry(env.adminAPIBaseUrl(), result.invocationId)
       ).toMatchObject({ value: "done" });
