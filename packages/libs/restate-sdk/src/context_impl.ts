@@ -139,11 +139,11 @@ export class ContextImpl
     this.serviceKey = input.key;
     // Identity interceptor by default; replaced by startUserHandler after hooks are instantiated
     this.runInterceptor = (_name, runner) => runner();
-      this.defaultSerde = executionOptions?.defaultSerde ?? serde.json;
-      this.asTerminalError = executionOptions?.asTerminalError;
-      this.trackedInvocationIdPromises = executionOptions?.explicitCancellation
-          ? []
-          : undefined;
+    this.defaultSerde = executionOptions?.defaultSerde ?? serde.json;
+    this.asTerminalError = executionOptions?.asTerminalError;
+    this.trackedInvocationIdPromises = executionOptions?.explicitCancellation
+      ? []
+      : undefined;
   }
 
   setRunInterceptor(
@@ -257,9 +257,9 @@ export class ContextImpl
       );
     } catch (e) {
       this.abortAttempt(e, WasmCommandType.Call);
-        return Object.assign(ConstRestatePromise.pending<RES>(), {
-            invocationId: pendingPromise<InvocationId>(),
-        });
+      return Object.assign(ConstRestatePromise.pending<RES>(), {
+        invocationId: pendingPromise<InvocationId>(),
+      });
     }
 
     try {
