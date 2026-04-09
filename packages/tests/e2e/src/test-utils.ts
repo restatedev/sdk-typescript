@@ -432,6 +432,9 @@ export function inAnyOrder(...events: (string | RegExp)[]): string[] {
 export interface TransientError {
   error_code: number;
   error_message: string;
+  related_command_type?: string;
+  related_command_name?: string;
+  related_command_index?: number;
 }
 
 export interface InvocationOutcome {
@@ -549,11 +552,21 @@ export async function getInvocationOutcome(
     const event = JSON.parse(r.event_json) as {
       error_code: number;
       error_message: string;
+      related_command_type?: string;
+      related_command_name?: string;
+      related_command_index?: number;
     };
-    return {
+    const te: TransientError = {
       error_code: event.error_code,
       error_message: event.error_message,
     };
+    if (event.related_command_type != null)
+      te.related_command_type = event.related_command_type;
+    if (event.related_command_name != null)
+      te.related_command_name = event.related_command_name;
+    if (event.related_command_index != null)
+      te.related_command_index = event.related_command_index;
+    return te;
   });
 
   return {

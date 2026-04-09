@@ -617,8 +617,7 @@ function hooksSuite(level: HookLevel) {
     });
 
     const failingDeserializeSerde = {
-      serialize: (v: unknown) =>
-        new TextEncoder().encode(JSON.stringify(v)),
+      serialize: (v: unknown) => new TextEncoder().encode(JSON.stringify(v)),
       deserialize: (): unknown => {
         throw new Error("awakeable serde fail");
       },
@@ -1551,10 +1550,7 @@ function hooksSuite(level: HookLevel) {
           timeout: 5_000,
           interval: 100,
         })
-        .toEqual([
-          "hook:handler:before",
-          "hook:handler:after",
-        ]);
+        .toEqual(["hook:handler:before", "hook:handler:after"]);
     });
 
     it("awakeable reject via ingress — terminal error", async () => {
@@ -1784,6 +1780,181 @@ describe("hooks composition ordering", { timeout: 120_000 }, () => {
       "h1:handler:after",
       "s2:handler:after",
       "s1:handler:after",
+    ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Transient error command metadata (kitchen sink)
+// ---------------------------------------------------------------------------
+
+describe("transient error command metadata", { timeout: 120_000 }, () => {
+  let env: RestateTestEnvironment;
+
+  // Per-invocation attempt counter, incremented in the hook provider so both
+  // the hook interceptors and handler read the same attempt number.
+  const ksAttempts = new Map<string, number>();
+
+  const ksHook: HooksProvider = (ctx) => {
+    const id = ctx.request.id;
+    const attempt = (ksAttempts.get(id) ?? 0) + 1;
+    ksAttempts.set(id, attempt);
+
+    return {
+      interceptor: {
+        handler: async (next) => {
+          // Attempt 5: handler interceptor throws before next()
+          if (attempt === 5) throw new Error("handler-interceptor boom");
+          await next();
+        },
+        run: async (name, next) => {
+          // Attempt 3: run interceptor throws before next() on step-3
+          if (attempt === 3 && name === "step-3")
+            throw new Error("run-interceptor boom");
+          await next();
+        },
+      },
+    };
+  };
+
+  const failingSerializeSerde = {
+    contentType: "application/json",
+    serialize: (): Uint8Array => {
+      throw new Error("serde boom");
+    },
+    deserialize: (b: Uint8Array) => new TextDecoder().decode(b),
+  };
+
+  // Kitchen sink service that exercises many failure modes on known attempts.
+  // The attempt ordering is chosen carefully so that runs are journaled in
+  // the right order — a failure mode must occur BEFORE the affected run is
+  // ever successfully journaled, otherwise it would just be replayed.
+  //
+  // Attempt 1: handler throws directly (no command)
+  // Attempt 2: ctx.run("step-1") closure fails
+  // Attempt 3: step-1 ok, step-2 ok, step-3 run interceptor throws (before next)
+  // Attempt 4: step-1,2 replay, step-3 ok, step-4 serde.serialize fails
+  // Attempt 5: step-1,2,3 replay, handler interceptor throws (before next)
+  // Attempt 6: step-1,2,3 replay, step-4 ok, step-5 ok, handler throws
+  // Attempt 7: replay through step-4, "MISMATCH" at step-5 pos → mismatch, killed
+  const kitchenSinkService = createService({
+    name: "KitchenSink_TransientErrors",
+    serviceHooks: [ksHook],
+    handler: async (ctx, _) => {
+      const id = ctx.request().id;
+      const attempt = ksAttempts.get(id) ?? 1;
+
+      // Attempt 1: handler throws before any command
+      if (attempt === 1) throw new Error("handler boom");
+
+      // Attempt 2+: first run
+      await ctx.run("step-1", () => {
+        if (attempt === 2) throw new Error("step-1 boom");
+        return "a";
+      });
+
+      // Attempt 3+: step-2 always succeeds
+      await ctx.run("step-2", () => "b");
+
+      // Attempt 3: run interceptor throws on step-3 (before next)
+      // Attempt 4+: step-3 executes normally
+      await ctx.run("step-3", () => "c");
+
+      // Attempt 4: serde.serialize fails on step-4
+      await ctx.run(
+        "step-4",
+        () => "d",
+        attempt === 4 ? { serde: failingSerializeSerde } : {}
+      );
+
+      // Attempt 6: step-5 ok, then handler throws to set up mismatch
+      // Attempt 7: name changes to "MISMATCH" → journal mismatch
+      const step5Name = attempt >= 7 ? "MISMATCH" : "step-5";
+      await ctx.run(step5Name, () => "e");
+
+      if (attempt === 6) throw new Error("pre-mismatch");
+
+      return { invocationId: ctx.request().id };
+    },
+    options: {
+      retryPolicy: {
+        initialInterval: 10,
+        maxAttempts: 9,
+        onMaxAttempts: "kill",
+      },
+    },
+  });
+
+  beforeAll(async () => {
+    env = await RestateTestEnvironment.start({
+      services: [kitchenSinkService],
+    });
+  }, 120_000);
+
+  afterAll(async () => {
+    await env?.stop();
+  });
+
+  it("transient errors carry correct command metadata per failure type", async () => {
+    const ingress = clients.connect({ url: env.baseUrl() });
+    const send = await ingress.serviceSendClient(kitchenSinkService).invoke("");
+
+    // Wait for invocation to complete (killed after maxAttempts)
+    await expect
+      .poll(
+        () => getInvocationOutcome(env.adminAPIBaseUrl(), send.invocationId),
+        { timeout: 30_000, interval: 200 }
+      )
+      .toMatchObject({
+        status: expect.stringMatching(/succeeded|failed/) as string,
+      });
+
+    const outcome = await getInvocationOutcome(
+      env.adminAPIBaseUrl(),
+      send.invocationId
+    );
+    const allErrors = outcome.transientErrors ?? [];
+
+    expect(allErrors).toEqual([
+      {
+        error_code: 500,
+        error_message: "handler boom",
+      },
+      {
+        error_code: 500,
+        error_message: "step-1 boom",
+        related_command_type: "Run",
+        related_command_name: "step-1",
+        related_command_index: 1,
+      },
+      {
+        error_code: 500,
+        error_message: "run-interceptor boom",
+        related_command_type: "Run",
+        related_command_name: "step-3",
+        related_command_index: 3,
+      },
+      {
+        error_code: 500,
+        error_message: "serde boom",
+      },
+      {
+        error_code: 500,
+        error_message: "handler-interceptor boom",
+      },
+      {
+        error_code: 500,
+        error_message: "pre-mismatch",
+      },
+      {
+        error_code: 570,
+        error_message: expect.stringContaining(
+          "Found a mismatch between the code paths taken during the previous exe"
+        ) as string,
+        related_command_type: "Run",
+        related_command_name: "MISMATCH",
+        related_command_index: 5,
+      },
     ]);
   });
 });
