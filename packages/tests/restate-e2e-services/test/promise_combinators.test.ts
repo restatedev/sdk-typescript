@@ -114,4 +114,20 @@ describe("PromiseCombinators", () => {
     });
     expect(result).toBe("instant");
   });
+
+  // --- orTimeout on resolved/pending ---
+
+  it("resolve().orTimeout() returns the value", async () => {
+    const result = await client.resolveOrTimeout("hello");
+    expect(result).toBe("hello");
+  });
+
+  it("race([]).orTimeout() rejects with TimeoutError", async () => {
+    await expect(client.raceEmptyOrTimeout()).rejects.toThrow();
+  });
+
+  it("race([]).orTimeout().map() catches the TimeoutError", async () => {
+    const result = await client.raceEmptyOrTimeoutMapped();
+    expect(result).toBe("timeout");
+  });
 });

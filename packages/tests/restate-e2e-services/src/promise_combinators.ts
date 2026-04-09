@@ -127,6 +127,39 @@ const promiseCombinators = restate.service({
       const resolvedPromise = RestatePromise.resolve(input.resolvedValue);
       return RestatePromise.race([sleepPromise, resolvedPromise]);
     },
+
+    // --- orTimeout on resolved/pending ---
+
+    resolveOrTimeout: async (
+      _ctx: restate.Context,
+      value: string
+    ): Promise<string> => {
+      // orTimeout on an already-resolved promise should return the value, not timeout
+      return RestatePromise.resolve(value).orTimeout(1);
+    },
+
+    raceEmptyOrTimeout: async (
+      _ctx: restate.Context
+    ): Promise<string> => {
+      // race([]) is forever pending, orTimeout should reject with TimeoutError
+      return RestatePromise.race<restate.RestatePromise<string>[]>(
+        []
+      ).orTimeout(1);
+    },
+
+    raceEmptyOrTimeoutMapped: async (
+      _ctx: restate.Context
+    ): Promise<string> => {
+      // race([]).orTimeout().map() — verify we can map the TimeoutError
+      return RestatePromise.race<restate.RestatePromise<string>[]>([])
+        .orTimeout(1)
+        .map((_v, err) => {
+          if (err instanceof restate.TimeoutError) {
+            return "timeout";
+          }
+          return "unexpected";
+        });
+    },
   },
 });
 
