@@ -185,6 +185,9 @@ importers:
       '@restatedev/restate-sdk':
         specifier: workspace:*
         version: link:../../libs/restate-sdk
+      '@restatedev/restate-sdk-opentelemetry':
+        specifier: workspace:*
+        version: link:../../libs/restate-sdk-opentelemetry
     devDependencies:
       tsx:
         specifier: ^4.19.0
@@ -239,6 +242,15 @@ importers:
         version: 8.10.161
 
   packages/libs/restate-sdk-core: {}
+
+  packages/libs/restate-sdk-opentelemetry:
+    devDependencies:
+      '@opentelemetry/api':
+        specifier: ^1.9.0
+        version: 1.9.1
+      '@restatedev/restate-sdk':
+        specifier: workspace:*
+        version: link:../restate-sdk
 
   packages/libs/restate-sdk-testcontainers:
     dependencies:
