@@ -40,10 +40,10 @@ export interface ContextInternal extends Context {
    *   name: "greeter",
    *   handlers: {
    *     greet: async (ctx: restate.Context, name: string) => {
-   *       ctxInternal = ctx as restate.ContextInternal;
-   *       const result = await Promise.race([
+   *       ctxInternal = ctx as restate.internal.ContextInternal;
+   *       const result = await RestatePromise.race([
    *         ctx.run(() => longRunningTask(name)),
-   *         ctxInternal.cancellation().then(() => { throw new restate.TerminalError("Cancelled") }),
+   *         ctxInternal.cancellation().map(() => { throw new restate.TerminalError("Cancelled") }),
    *       ]);
    *       return result;
    *     },
@@ -54,39 +54,55 @@ export interface ContextInternal extends Context {
    *
    * @example Use the cancellation promise to create an AbortSignal for ctx.run
    * ```ts
-   * greet: async (ctx: restate.Context, name: string) => {
-   *   const ctxInternal = ctx as restate.ContextInternal;
-   *   const result = await ctx.run(() => {
-   *     const controller = new AbortController();
-   *     ctxInternal.cancellation().then(() => controller.abort());
-   *     return fetch(`https://api.example.com/greet/${name}`, { signal: controller.signal });
-   *   });
-   *   return result;
-   * }
+   * const greeter = restate.service({
+   *   name: "greeter",
+   *   handlers: {
+   *     greet: async (ctx: restate.Context, name: string) => {
+   *       const ctxInternal = ctx as restate.internal.ContextInternal;
+   *       const controller = new AbortController();
+   *       const cancellation = ctxInternal.cancellation()
+   *         .map(() => {
+   *            controller.abort();
+   *            throw new restate.TerminalError("Cancelled");
+   *         });
+   *
+   *       return RestatePromise.race([
+   *         ctx.run(() => fetch(`https://api.example.com/greet/${name}`, { signal: controller.signal })),
+   *         cancellation,
+   *       ]);
+   *     },
+   *   },
+   *   options: { explicitCancellation: true },
+   * });
    * ```
    *
    * @example Handle cancellation, perform cleanup, then listen for the next cancellation
    * ```ts
-   * greet: async (ctx: restate.Context, name: string) => {
-   *   const ctxInternal = ctx as restate.ContextInternal;
-   *   try {
-   *     const result = await Promise.race([
-   *       ctx.run(() => longRunningTask(name)),
-   *       ctxInternal.cancellation().then(() => { throw new restate.TerminalError("Cancelled") }),
-   *     ]);
-   *     return result;
-   *   } catch (e) {
-   *     // Perform cleanup
-   *     await ctx.run(() => cleanupResources(name));
+   * const greeter = restate.service({
+   *   name: "greeter",
+   *   handlers: {
+   *     greet: async (ctx: restate.Context, name: string) => {
+   *       const ctxInternal = ctx as restate.internal.ContextInternal;
+   *       try {
+   *         return await RestatePromise.race([
+   *           ctx.run(() => longRunningTask(name)),
+   *           ctxInternal.cancellation().map(() => { throw new restate.TerminalError("Cancelled") }),
+   *         ]);
+   *       } catch (e) {
+   *         // Perform cleanup
+   *         await ctx.run(() => cleanupResources(name));
    *
-   *     // After cancellation is resolved, ctx.cancellation() returns a fresh promise.
-   *     // Race cleanup confirmation against the next cancellation signal.
-   *     await Promise.race([
-   *       ctx.run(() => confirmCleanup(name)),
-   *       ctxInternal.cancellation().then(() => { throw new restate.TerminalError("Canceled during cleanup") }),
-   *     ]);
-   *   }
-   * }
+   *         // After cancellation is resolved, ctx.cancellation() returns a fresh promise.
+   *         // Race cleanup confirmation against the next cancellation signal.
+   *         await RestatePromise.race([
+   *           ctx.run(() => confirmCleanup(name)),
+   *           ctxInternal.cancellation().map(() => { throw new restate.TerminalError("Canceled during cleanup") }),
+   *         ]);
+   *       }
+   *     },
+   *   },
+   *   options: { explicitCancellation: true },
+   * });
    * ```
    *
    * @experimental
