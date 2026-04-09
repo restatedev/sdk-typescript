@@ -6,7 +6,7 @@ import {
   BasicTracerProvider,
   BatchSpanProcessor,
 } from "@opentelemetry/sdk-trace-base";
-import { createOpenTelemetryHook } from "@restatedev/restate-sdk-opentelemetry";
+import { openTelemetryHook } from "@restatedev/restate-sdk-opentelemetry";
 
 // Cache TracerProviders per service name so we don't create duplicates.
 const providers = new Map<string, BasicTracerProvider>();
@@ -38,7 +38,7 @@ export async function shutdownTracing(): Promise<void> {
   await Promise.all([...providers.values()].map((p) => p.shutdown()));
 }
 
-export const otelTracingHook = createOpenTelemetryHook({
+export const otelTracingHook = openTelemetryHook({
   tracer: ({ request }) => getTracerForService(request.target.service),
   runSpans: true,
 });

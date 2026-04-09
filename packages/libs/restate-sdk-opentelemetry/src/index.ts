@@ -10,7 +10,7 @@
  */
 
 export {
-  createOpenTelemetryHook,
+  openTelemetryHook,
   type OpenTelemetryHookContext,
   type OpenTelemetryHookOptions,
 } from "./opentelemetry.js";

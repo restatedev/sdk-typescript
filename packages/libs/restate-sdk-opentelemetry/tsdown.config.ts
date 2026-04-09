@@ -9,5 +9,9 @@ export default defineConfig({
   clean: true,
   unbundle: true,
   ignoreWatch: ["dist", ".turbo", "*.tsbuildinfo"],
-  external: ["@opentelemetry/api", "@restatedev/restate-sdk"],
+  external: [
+    "@opentelemetry/api",
+    "@opentelemetry/core",
+    "@restatedev/restate-sdk",
+  ],
 });

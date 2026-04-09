@@ -11,14 +11,13 @@
 
 import {
   context,
-  propagation,
   trace,
   SpanStatusCode,
   type Attributes,
   type TextMapGetter,
-  type TextMapPropagator,
   type Tracer,
 } from "@opentelemetry/api";
+import { W3CTraceContextPropagator } from "@opentelemetry/core";
 import {
   internal,
   type HooksProvider,
@@ -42,15 +41,9 @@ export interface OpenTelemetryHookOptions {
    * When `true`, create child spans for `ctx.run()` closures that actually
    * execute. Replayed journaled runs are skipped by the hook system.
    *
-   * @default false
+   * @default true
    */
   runSpans?: boolean;
-
-  /**
-   * Optional propagator used to extract the parent context from Restate
-   * attempt headers. When omitted, the global propagator is used.
-   */
-  propagator?: TextMapPropagator;
 
   /**
    * Additional attempt span attributes to attach alongside the standard
@@ -84,6 +77,8 @@ const attemptHeadersGetter: TextMapGetter<
     return [...carrier.keys()];
   },
 };
+
+const traceContextPropagator = new W3CTraceContextPropagator();
 
 function resolveTracer(
   tracer: OpenTelemetryHookOptions["tracer"],
@@ -122,28 +117,24 @@ function getExceptionValue(error: unknown): Error | string {
  *
  * The helper always creates one span per invocation attempt, with the standard
  * Restate attributes `restate.invocation.id` and
- * `restate.invocation.target`.
+ * `restate.invocation.target`. Parent context extraction is always based on
+ * W3C trace context headers from the Restate attempt headers.
  *
  * When `runSpans` is enabled, it also creates child spans for `ctx.run()`
  * closures that actually execute, adding the standard `restate.run.name`
  * attribute.
  */
-export function createOpenTelemetryHook(
+export function openTelemetryHook(
   options: OpenTelemetryHookOptions
 ): HooksProvider {
   return (ctx) => {
+    const runSpans = options.runSpans ?? true;
     const tracer = resolveTracer(options.tracer, ctx);
-    const parentContext =
-      options.propagator?.extract(
-        context.active(),
-        ctx.request.attemptHeaders,
-        attemptHeadersGetter
-      ) ??
-      propagation.extract(
-        context.active(),
-        ctx.request.attemptHeaders,
-        attemptHeadersGetter
-      );
+    const parentContext = traceContextPropagator.extract(
+      context.active(),
+      ctx.request.attemptHeaders,
+      attemptHeadersGetter
+    );
 
     const target = String(ctx.request.target);
     const attemptSpan = tracer.startSpan(
@@ -181,7 +172,7 @@ export function createOpenTelemetryHook(
       },
     };
 
-    if (options.runSpans) {
+    if (runSpans) {
       hooks.interceptor!.run = (name, next) => {
         const runSpan = tracer.startSpan(
           `run (${name})`,
