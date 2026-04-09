@@ -27,6 +27,10 @@ import {
   getRunJournalEntry,
   cancelInvocationViaAdminApi,
   pauseInvocationViaAdminApi,
+  storeAwakeableId,
+  getAwakeableId,
+  resolveAwakeableViaIngress,
+  rejectAwakeableViaIngress,
   inAnyOrder,
   wrapErrors,
 } from "./test-utils.js";
@@ -588,6 +592,54 @@ function hooksSuite(level: HookLevel) {
       },
     });
 
+    // -- awakeable services ---------------------------------------------------
+
+    const awakeableSuccessService = createService({
+      name: `${level}_AwakeableSuccess`,
+      ...hooksAt([recordHookEvents()]),
+      handler: async (ctx, _) => {
+        const { id, promise } = ctx.awakeable();
+        storeAwakeableId(ctx.request().id, id);
+        const result = await promise;
+        return { invocationId: ctx.request().id, result };
+      },
+    });
+
+    const awakeableRejectService = createService({
+      name: `${level}_AwakeableReject`,
+      ...hooksAt([recordHookEvents()]),
+      handler: async (ctx, _) => {
+        const { id, promise } = ctx.awakeable();
+        storeAwakeableId(ctx.request().id, id);
+        await promise;
+        return { invocationId: ctx.request().id };
+      },
+    });
+
+    const failingDeserializeSerde = {
+      serialize: (v: unknown) =>
+        new TextEncoder().encode(JSON.stringify(v)),
+      deserialize: (): unknown => {
+        throw new Error("awakeable serde fail");
+      },
+    };
+
+    const awakeableSerdeFailService = createService({
+      name: `${level}_AwakeableSerdeFailure`,
+      ...hooksAt([recordHookEvents()]),
+      handler: async (ctx, _) => {
+        const attempt = nextAttempt(ctx.request().id);
+        // Attempt 1: awakeable serde fails on deserialize → CommandError
+        // Attempt 2+: normal awakeable succeeds
+        const serde = attempt === 1 ? failingDeserializeSerde : undefined;
+        const { id, promise } = ctx.awakeable(serde);
+        storeAwakeableId(ctx.request().id, id);
+        await promise;
+        return { invocationId: ctx.request().id };
+      },
+      options: fastRetry,
+    });
+
     // -- environment --------------------------------------------------------
 
     let env: RestateTestEnvironment;
@@ -627,6 +679,9 @@ function hooksSuite(level: HookLevel) {
         cancelDuringRunService,
         cancelDuringSlowRunService,
         pauseDuringRunService,
+        awakeableSuccessService,
+        awakeableRejectService,
+        awakeableSerdeFailService,
         suspendPerEntryService,
       ];
       env = await RestateTestEnvironment.start({
@@ -1466,6 +1521,125 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:before",
         "hook:handler:after",
       ]);
+    });
+
+    // -- awakeable tests ----------------------------------------------------
+
+    it("awakeable success — resolved via ingress", async () => {
+      const ingress = clients.connect({ url: env.baseUrl() });
+      const send = await ingress
+        .serviceSendClient(awakeableSuccessService)
+        .invoke("");
+
+      // Wait for the handler to create the awakeable
+      await expect
+        .poll(() => getAwakeableId(send.invocationId), {
+          timeout: 5_000,
+          interval: 100,
+        })
+        .toBeTruthy();
+
+      // Resolve via ingress
+      await resolveAwakeableViaIngress(
+        env.baseUrl(),
+        getAwakeableId(send.invocationId)!,
+        "hello"
+      );
+
+      await expect
+        .poll(() => getHookEvents(send.invocationId), {
+          timeout: 5_000,
+          interval: 100,
+        })
+        .toEqual([
+          "hook:handler:before",
+          "hook:handler:after",
+        ]);
+    });
+
+    it("awakeable reject via ingress — terminal error", async () => {
+      const ingress = clients.connect({ url: env.baseUrl() });
+      const send = await ingress
+        .serviceSendClient(awakeableRejectService)
+        .invoke("");
+
+      // Wait for the handler to create the awakeable
+      await expect
+        .poll(() => getAwakeableId(send.invocationId), {
+          timeout: 5_000,
+          interval: 100,
+        })
+        .toBeTruthy();
+
+      // Reject via ingress
+      await rejectAwakeableViaIngress(
+        env.baseUrl(),
+        getAwakeableId(send.invocationId)!,
+        "awakeable rejected"
+      );
+
+      await expect
+        .poll(() => getHookEvents(send.invocationId), {
+          timeout: 5_000,
+          interval: 100,
+        })
+        .toEqual([
+          "hook:handler:before",
+          "hook:handler:error:[hw] awakeable rejected",
+        ]);
+
+      expect(
+        await getInvocationOutcome(env.adminAPIBaseUrl(), send.invocationId)
+      ).toMatchObject({
+        status: "failed",
+        journalOutput: {
+          failure: {
+            message: expect.stringContaining("awakeable rejected") as string,
+          },
+        },
+      });
+    });
+
+    it("awakeable serde failure — retries then succeeds", async () => {
+      const ingress = clients.connect({ url: env.baseUrl() });
+      const send = await ingress
+        .serviceSendClient(awakeableSerdeFailService)
+        .invoke("");
+
+      // Wait for the handler to create the awakeable (attempt 1)
+      await expect
+        .poll(() => getAwakeableId(send.invocationId), {
+          timeout: 5_000,
+          interval: 100,
+        })
+        .toBeTruthy();
+
+      // Resolve via ingress — serde will fail on deserialize (attempt 1)
+      await resolveAwakeableViaIngress(
+        env.baseUrl(),
+        getAwakeableId(send.invocationId)!,
+        "hello"
+      );
+
+      // Attempt 1 fails, attempt 2 replays the awakeable with good serde
+      await expect
+        .poll(() => getHookEvents(send.invocationId), {
+          timeout: 10_000,
+          interval: 100,
+        })
+        .toEqual([
+          // attempt 1: awakeable serde fails on deserialize → CommandError
+          // (sanitized — interceptor does not see commandType)
+          "hook:handler:before",
+          "hook:handler:error:[hw] awakeable serde fail",
+          // attempt 2: replayed awakeable with good serde succeeds
+          "hook:handler:before",
+          "hook:handler:after",
+        ]);
+
+      expect(
+        await getInvocationOutcome(env.adminAPIBaseUrl(), send.invocationId)
+      ).toMatchObject({ status: "succeeded" });
     });
   });
 }

@@ -347,6 +347,64 @@ export async function invokeExpectingError(
 
 export const fastRetry = { retryPolicy: { initialInterval: 10 } };
 
+// ---------------------------------------------------------------------------
+// Awakeable helpers
+// ---------------------------------------------------------------------------
+
+const awakeableIds = new Map<string, string>();
+
+/** Store an awakeable ID so the test can retrieve and resolve/reject it. */
+export function storeAwakeableId(invocationId: string, awakeableId: string) {
+  awakeableIds.set(invocationId, awakeableId);
+}
+
+/** Retrieve the stored awakeable ID for an invocation. */
+export function getAwakeableId(
+  invocationId: string
+): string | undefined {
+  return awakeableIds.get(invocationId);
+}
+
+/** Resolve an awakeable via the ingress API. */
+export async function resolveAwakeableViaIngress(
+  ingressUrl: string,
+  awakeableId: string,
+  value: unknown
+): Promise<void> {
+  const res = await fetch(
+    `${ingressUrl}/restate/awakeables/${awakeableId}/resolve`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(value),
+    }
+  );
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Error ${res.status} resolving awakeable: ${body}`);
+  }
+}
+
+/** Reject an awakeable via the ingress API. */
+export async function rejectAwakeableViaIngress(
+  ingressUrl: string,
+  awakeableId: string,
+  reason: string
+): Promise<void> {
+  const res = await fetch(
+    `${ingressUrl}/restate/awakeables/${awakeableId}/reject`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: reason,
+    }
+  );
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Error ${res.status} rejecting awakeable: ${body}`);
+  }
+}
+
 /**
  * Matches N events in any order within the hook events array.
  * Use inside `toEqual` to express that a set of events may interleave.
