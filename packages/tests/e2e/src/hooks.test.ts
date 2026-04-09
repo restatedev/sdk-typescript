@@ -1662,15 +1662,16 @@ function hooksSuite(level: HookLevel) {
           "hook:handler:after",
         ]);
 
-      const outcome = await getInvocationOutcome(
-        env.adminAPIBaseUrl(),
-        send.invocationId
-      );
-      const transientErrors = outcome.transientErrors ?? [];
-      expect(outcome.status).toBe("succeeded");
-      expect(transientErrors).toEqual([
-        { error_code: 500, error_message: "awakeable serde fail" },
-      ]);
+      await expect
+        .poll(() =>
+          getInvocationOutcome(env.adminAPIBaseUrl(), send.invocationId)
+        )
+        .toMatchObject({
+          status: "succeeded",
+          transientErrors: [
+            { error_code: 500, error_message: "awakeable serde fail" },
+          ],
+        });
     });
 
     it("awakeable serde failure after prior run does not inherit stale run metadata", async () => {
