@@ -138,9 +138,7 @@ const promiseCombinators = restate.service({
       return RestatePromise.resolve(value).orTimeout(1);
     },
 
-    raceEmptyOrTimeout: async (
-      _ctx: restate.Context
-    ): Promise<string> => {
+    raceEmptyOrTimeout: async (_ctx: restate.Context): Promise<string> => {
       // race([]) is forever pending, orTimeout should reject with TimeoutError
       return RestatePromise.race<restate.RestatePromise<string>[]>(
         []

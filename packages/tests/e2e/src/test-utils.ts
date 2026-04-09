@@ -359,9 +359,7 @@ export function storeAwakeableId(invocationId: string, awakeableId: string) {
 }
 
 /** Retrieve the stored awakeable ID for an invocation. */
-export function getAwakeableId(
-  invocationId: string
-): string | undefined {
+export function getAwakeableId(invocationId: string): string | undefined {
   return awakeableIds.get(invocationId);
 }
 

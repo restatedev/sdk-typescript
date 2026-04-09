@@ -433,10 +433,7 @@ export class ConstRestatePromise<T> extends InternalRestatePromise<T> {
   }
 
   static resolve<T>(value: T): ConstRestatePromise<Awaited<T>> {
-    return new ConstRestatePromise(
-      Promise.resolve(value),
-      true
-    );
+    return new ConstRestatePromise(Promise.resolve(value), true);
   }
 
   static reject<T = never>(reason: TerminalError): ConstRestatePromise<T> {
