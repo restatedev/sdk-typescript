@@ -187,9 +187,11 @@ function hooksSuite(level: HookLevel) {
       name: `${level}_Suspend`,
       ...hooksAt([recordHookEvents()]),
       handler: async (ctx, _) => {
-        await ctx.run("before-sleep", () => "a");
-        await ctx.sleep(1000);
-        await ctx.run("after-sleep", () => "b");
+        await ctx.run("before-suspend", () => "a");
+        const { id, promise } = ctx.awakeable<string>();
+        storeAwakeableId(ctx.request().id, id);
+        await promise;
+        await ctx.run("after-resume", () => "b");
         return { invocationId: ctx.request().id };
       },
       options: { inactivityTimeout: 100 },
@@ -1209,26 +1211,56 @@ function hooksSuite(level: HookLevel) {
     });
 
     it("handler with suspension resumes and completes", async () => {
-      const client = clients
-        .connect({ url: env.baseUrl() })
-        .serviceClient(suspendService);
-      const { invocationId } = await client.invoke("");
-      const hookEvents = getHookEvents(invocationId);
-      expect(hookEvents).toEqual([
-        // attempt 1: runs before-sleep, then suspends (inactivityTimeout: 100ms)
-        // — handler:error still fires
-        "hook:handler:before",
-        "hook:run:before-sleep:before",
-        "hook:run:before-sleep:after",
-        "hook:handler:error:[hw] (599) Suspended invocation",
-        // attempt 2: replays before-sleep + sleep, then executes after-sleep
-        "hook:handler:before",
-        "hook:run:after-sleep:before",
-        "hook:run:after-sleep:after",
-        "hook:handler:after",
-      ]);
+      const ingress = clients.connect({ url: env.baseUrl() });
+      const send = await ingress.serviceSendClient(suspendService).invoke("");
+
+      await expect
+        .poll(() => getAwakeableId(send.invocationId), {
+          timeout: 5_000,
+          interval: 100,
+        })
+        .toBeTruthy();
+
+      await expect
+        .poll(() => getHookEvents(send.invocationId), {
+          timeout: 5_000,
+          interval: 100,
+        })
+        .toEqual([
+          // attempt 1: runs before-suspend, then suspends (inactivityTimeout: 100ms)
+          // handler:error still fires
+          "hook:handler:before",
+          "hook:run:before-suspend:before",
+          "hook:run:before-suspend:after",
+          "hook:handler:error:[hw] (599) Suspended invocation",
+        ]);
+
+      await resolveAwakeableViaIngress(
+        env.baseUrl(),
+        getAwakeableId(send.invocationId)!,
+        "resume"
+      );
+
+      await expect
+        .poll(() => getHookEvents(send.invocationId), {
+          timeout: 5_000,
+          interval: 100,
+        })
+        .toEqual([
+          // attempt 1: runs before-suspend, then suspends (inactivityTimeout: 100ms)
+          // handler:error still fires
+          "hook:handler:before",
+          "hook:run:before-suspend:before",
+          "hook:run:before-suspend:after",
+          "hook:handler:error:[hw] (599) Suspended invocation",
+          // attempt 2: replays before-suspend + awakeable, then executes after-resume
+          "hook:handler:before",
+          "hook:run:after-resume:before",
+          "hook:run:after-resume:after",
+          "hook:handler:after",
+        ]);
       expect(
-        await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
+        await getInvocationOutcome(env.adminAPIBaseUrl(), send.invocationId)
       ).toMatchObject({ status: "succeeded" });
     });
 
@@ -1714,7 +1746,7 @@ function hooksSuite(level: HookLevel) {
         .toMatchObject({
           status: "succeeded",
           transientErrors: [
-        { error_code: 500, error_message: "awakeable serde fail" },
+            { error_code: 500, error_message: "awakeable serde fail" },
           ],
         });
     });
