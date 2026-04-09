@@ -184,15 +184,13 @@ export class RetryableError extends RestateError {
 }
 
 /**
- * Returns true if the error indicates the current attempt was suspended.
+ * Returns true if the error indicates the current attempt is ending without
+ * a failure — e.g. the runtime suspended the invocation (waiting for
+ * `ctx.sleep()` or `ctx.call()`), or the connection was dropped (kill).
  *
- * When the runtime suspends the invocation (e.g. waiting for `ctx.sleep()`
- * or `ctx.call()`), interceptors receive this error through `next()`.
- * It means the attempt is paused — not that the invocation failed.
- *
- * Use this in interceptor catch blocks to distinguish suspension from
- * real errors (e.g. to avoid logging it as a failure or to set a neutral
- * span status).
+ * Use this in handler interceptor catch blocks to distinguish attempt-ending
+ * signals from real errors (e.g. to avoid logging it as a failure or to set
+ * a neutral span status).
  */
 export function isSuspendedError(e: unknown): boolean {
   return e instanceof RestateError && e.code === SUSPENDED_ERROR_CODE;
