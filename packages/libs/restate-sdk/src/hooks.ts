@@ -19,8 +19,9 @@ import type { Request } from "./context.js";
  *
  * ## Output
  *
- * Interceptors **cannot alter the handler's return value**. The `void` signature
- * means the interceptor observes execution but does not transform its result.
+ * Interceptors **cannot alter the handler's success return value** (the `void`
+ * signature means there is no way to replace it), but they **can transform
+ * errors** by catching and rethrowing a different error.
  *
  * ## Rules
  *
