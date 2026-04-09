@@ -63,11 +63,10 @@ import { RandImpl } from "./utils/rand.js";
 import { CompletablePromise } from "./utils/completable_promise.js";
 import type { AsyncResultValue } from "./promises.js";
 import {
-  PendingInvocationRestatePromise,
+  ConstRestatePromise,
   pendingPromise,
   PromisesExecutor,
   InvocationRestatePromise,
-  PendingRestatePromise,
   SingleRestatePromise,
 } from "./promises.js";
 import { InputPump, OutputPump } from "./io.js";
@@ -241,7 +240,7 @@ export class ContextImpl
           WasmCommandType.Call
         )
       );
-      return new PendingInvocationRestatePromise(this);
+      return Object.assign(ConstRestatePromise.pending<RES>(), { invocationId: pendingPromise<InvocationId>() });
     }
 
     try {
@@ -284,7 +283,7 @@ export class ContextImpl
     } catch (e) {
       this.handleInvocationEndError(e);
       // We return a pending promise to avoid the caller to see the error.
-      return new PendingInvocationRestatePromise(this);
+      return Object.assign(ConstRestatePromise.pending<RES>(), { invocationId: pendingPromise<InvocationId>() });
     }
   }
 
@@ -306,7 +305,7 @@ export class ContextImpl
           WasmCommandType.OneWayCall
         )
       );
-      return new PendingInvocationRestatePromise(this);
+      return { invocationId: pendingPromise<InvocationId>() };
     }
 
     try {
@@ -439,7 +438,7 @@ export class ContextImpl
       handle = this.coreVm.sys_run(name ?? "");
     } catch (e) {
       this.handleInvocationEndError(e);
-      return new PendingRestatePromise(this);
+      return ConstRestatePromise.pending();
     }
     const commandIndex = this.coreVm.last_command_index();
 
@@ -587,7 +586,7 @@ export class ContextImpl
       this.handleInvocationEndError(e);
       return {
         id: "invalid",
-        promise: new PendingRestatePromise(this),
+        promise: ConstRestatePromise.pending(),
       };
     }
 
@@ -690,7 +689,7 @@ export class ContextImpl
           commandType
         )
       );
-      return new PendingRestatePromise(this);
+      return ConstRestatePromise.pending();
     }
 
     let handle: number;
@@ -698,7 +697,7 @@ export class ContextImpl
       handle = vmCall(this.coreVm, input);
     } catch (e) {
       this.handleInvocationEndError(e);
-      return new PendingRestatePromise(this);
+      return ConstRestatePromise.pending();
     }
     const commandIndex = this.coreVm.last_command_index();
     return new SingleRestatePromise(

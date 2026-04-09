@@ -29,7 +29,7 @@ import type { TerminalError } from "./types/errors.js";
 import {
   InternalRestatePromise,
   CombinatorRestatePromise,
-  CompletedRestatePromise,
+  ConstRestatePromise,
 } from "./promises.js";
 
 /**
@@ -722,7 +722,7 @@ export const RestatePromise = {
     if (value instanceof InternalRestatePromise) {
       return value as unknown as RestatePromise<Awaited<T>>;
     }
-    return new CompletedRestatePromise(Promise.resolve(value));
+    return ConstRestatePromise.resolve(value);
   },
 
   /**
@@ -732,7 +732,7 @@ export const RestatePromise = {
    * @returns A rejected {@link RestatePromise}.
    */
   reject<T = never>(reason: TerminalError): RestatePromise<T> {
-    return new CompletedRestatePromise(Promise.reject(reason));
+    return ConstRestatePromise.reject(reason);
   },
 
   /**
@@ -767,6 +767,9 @@ export const RestatePromise = {
   race<const T extends readonly RestatePromise<unknown>[]>(
     values: T
   ): RestatePromise<Awaited<T[number]>> {
+    if (values.length === 0) {
+      return ConstRestatePromise.pending();
+    }
     return CombinatorRestatePromise.fromPromises(
       (p) => Promise.race(p),
       values
@@ -818,7 +821,7 @@ export const RestatePromise = {
 /**
  * Workflow bound durable promise
  *
- * See {@link WorkflowSharedContext} promise..
+ * See {@link WorkflowSharedContext}.
  */
 export type DurablePromise<T> = Promise<T> & {
   /**

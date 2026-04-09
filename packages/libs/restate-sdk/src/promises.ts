@@ -282,9 +282,13 @@ export class CombinatorRestatePromise extends BaseRestatePromise<any> {
     }
 
     if (foundContext === undefined) {
-      // The only situation where this can happen is when the combined promise contains only RestateCompletedPromise as children.
-      // In this case, just return back a nice and clean RestateCompletedPromise.
-      return new CompletedRestatePromise(combinatorConstructor(castedPromises));
+      // The only situation where this can happen is when the combined promise contains only ConstRestatePromise as children.
+      // In this case, just return back a nice and clean ConstRestatePromise.
+      // There is a specific workaround for the funky interface of Promise.race, inside the RestatePromise.race factory method.
+      return ConstRestatePromise.fromPromise(
+        combinatorConstructor(castedPromises),
+        true
+      );
     }
 
     return new CombinatorRestatePromise(
@@ -309,68 +313,6 @@ export class CombinatorRestatePromise extends BaseRestatePromise<any> {
   }
 
   readonly [Symbol.toStringTag] = "RestateCombinatorPromise";
-}
-
-export class PendingRestatePromise<T> extends InternalRestatePromise<T> {
-  [RESTATE_CTX_SYMBOL]: ContextImpl;
-
-  constructor(ctx: ContextImpl) {
-    super();
-    this[RESTATE_CTX_SYMBOL] = ctx;
-  }
-
-  // --- Promise methods
-
-  then<TResult1 = T, TResult2 = never>(
-    onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | null,
-    onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null
-  ): Promise<TResult1 | TResult2> {
-    return pendingPromise<T>().then(onfulfilled, onrejected);
-  }
-
-  catch<TResult = never>(
-    onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null
-  ): Promise<T | TResult> {
-    return pendingPromise<T>().catch(onrejected);
-  }
-
-  finally(onfinally?: (() => void) | null): Promise<T> {
-    return pendingPromise<T>().finally(onfinally);
-  }
-
-  // --- RestatePromise methods
-
-  orTimeout(): RestatePromise<T> {
-    return this;
-  }
-
-  map<U>(): RestatePromise<U> {
-    return this as unknown as RestatePromise<U>;
-  }
-
-  tryCancel(): void {}
-  async tryComplete(): Promise<void> {}
-  uncompletedLeaves(): number[] {
-    return [];
-  }
-  publicPromise(): Promise<T> {
-    return pendingPromise<T>();
-  }
-
-  readonly [Symbol.toStringTag] = "RestatePendingPromise";
-}
-
-export class PendingInvocationRestatePromise<T>
-  extends PendingRestatePromise<T>
-  implements InvocationPromise<T>
-{
-  constructor(ctx: ContextImpl) {
-    super(ctx);
-  }
-
-  get invocationId(): Promise<InvocationId> {
-    return pendingPromise();
-  }
 }
 
 export class MappedRestatePromise<T, U> extends BaseRestatePromise<U> {
@@ -425,9 +367,34 @@ export class MappedRestatePromise<T, U> extends BaseRestatePromise<U> {
   readonly [Symbol.toStringTag] = "RestateMappedPromise";
 }
 
-export class CompletedRestatePromise<T> extends InternalRestatePromise<T> {
-  constructor(private readonly completedPromise: Promise<T>) {
+export class ConstRestatePromise<T> extends InternalRestatePromise<T> {
+  private constructor(
+    private readonly constPromise: Promise<T>,
+    private readonly settled: boolean
+  ) {
     super();
+  }
+
+  static resolve<T>(value: T): ConstRestatePromise<Awaited<T>> {
+    return new ConstRestatePromise(
+      Promise.resolve(value),
+      true
+    );
+  }
+
+  static reject<T = never>(reason: TerminalError): ConstRestatePromise<T> {
+    return new ConstRestatePromise<T>(Promise.reject(reason), true);
+  }
+
+  static pending<T>(): ConstRestatePromise<T> {
+    return new ConstRestatePromise<T>(pendingPromise(), false);
+  }
+
+  static fromPromise<T>(
+    promise: Promise<T>,
+    settled: boolean
+  ): ConstRestatePromise<T> {
+    return new ConstRestatePromise(promise, settled);
   }
 
   // --- Promise methods
@@ -436,38 +403,40 @@ export class CompletedRestatePromise<T> extends InternalRestatePromise<T> {
     onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | null,
     onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | null
   ): Promise<TResult1 | TResult2> {
-    return this.completedPromise.then(onfulfilled, onrejected);
+    return this.constPromise.then(onfulfilled, onrejected);
   }
 
   catch<TResult = never>(
     onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | null
   ): Promise<T | TResult> {
-    return this.completedPromise.catch(onrejected);
+    return this.constPromise.catch(onrejected);
   }
 
   finally(onfinally?: (() => void) | null): Promise<T> {
-    return this.completedPromise.finally(onfinally);
+    return this.constPromise.finally(onfinally);
   }
 
   // --- RestatePromise methods
 
   orTimeout(): RestatePromise<T> {
-    return this; // Timeout never kicks in!
+    if (this.settled) return this;
+    return ConstRestatePromise.reject(new TimeoutError());
   }
 
   map<U>(mapper: (value?: T, failure?: TerminalError) => U): RestatePromise<U> {
-    return new CompletedRestatePromise(
-      this.completedPromise.then(
+    return ConstRestatePromise.fromPromise(
+      this.constPromise.then(
         (value) => mapper(value, undefined),
         (reason) => mapper(undefined, reason as TerminalError)
-      )
+      ),
+      this.settled
     );
   }
 
   tryCancel() {}
 
   publicPromise(): Promise<T> {
-    return this.completedPromise;
+    return this.constPromise;
   }
 
   tryComplete(): Promise<void> {
@@ -478,7 +447,7 @@ export class CompletedRestatePromise<T> extends InternalRestatePromise<T> {
     return [];
   }
 
-  readonly [Symbol.toStringTag] = "RestateCombinatorPromise";
+  readonly [Symbol.toStringTag] = "ConstRestatePromise";
 }
 
 /**
