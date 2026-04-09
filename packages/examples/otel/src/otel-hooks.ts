@@ -2,19 +2,17 @@ import type { Tracer } from "@opentelemetry/api";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { Resource } from "@opentelemetry/resources";
 import { ATTR_SERVICE_NAME } from "@opentelemetry/semantic-conventions";
-import {
-  BasicTracerProvider,
-  BatchSpanProcessor,
-} from "@opentelemetry/sdk-trace-base";
+import { BatchSpanProcessor } from "@opentelemetry/sdk-trace-base";
+import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { openTelemetryHook } from "@restatedev/restate-sdk-opentelemetry";
 
 // Cache TracerProviders per service name so we don't create duplicates.
-const providers = new Map<string, BasicTracerProvider>();
+const providers = new Map<string, NodeTracerProvider>();
 
 function getTracerForService(serviceName: string): Tracer {
   let provider = providers.get(serviceName);
   if (!provider) {
-    provider = new BasicTracerProvider({
+    provider = new NodeTracerProvider({
       resource: new Resource({ [ATTR_SERVICE_NAME]: `client-${serviceName}` }),
       spanProcessors: [
         new BatchSpanProcessor(

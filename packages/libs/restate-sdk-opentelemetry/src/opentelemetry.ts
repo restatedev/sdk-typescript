@@ -47,6 +47,17 @@ export interface OpenTelemetryHookOptions {
   runSpans?: boolean;
 
   /**
+   * When `true`, suppress span events added to the attempt span while the
+   * invocation is replaying journaled work. Attributes are still recorded.
+   *
+   * This affects only the attempt span; `ctx.run()` spans are only created
+   * when the run closure actually executes.
+   *
+   * @default true
+   */
+  suppressSpanEventsDuringReplay?: boolean;
+
+  /**
    * Additional attempt span attributes to attach alongside the standard
    * Restate attributes.
    */
@@ -195,6 +206,8 @@ export function openTelemetryHook(
 ): HooksProvider {
   return (ctx) => {
     const runSpans = options.runSpans ?? true;
+    const suppressSpanEventsDuringReplay =
+      options.suppressSpanEventsDuringReplay ?? true;
     const tracer = resolveTracer(options.tracer, ctx);
     const isProcessing = getIsProcessing(ctx);
     const parentContext = traceContextPropagator.extract(
@@ -217,7 +230,9 @@ export function openTelemetryHook(
     );
     const attemptContext = trace.setSpan(
       parentContext,
-      wrapSpanSuppressingReplayEvents(attemptSpan, isProcessing)
+      suppressSpanEventsDuringReplay
+        ? wrapSpanSuppressingReplayEvents(attemptSpan, isProcessing)
+        : attemptSpan
     );
 
     const hooks: ReturnType<HooksProvider> = {
@@ -254,10 +269,7 @@ export function openTelemetryHook(
           },
           attemptContext
         );
-        const runContext = trace.setSpan(
-          attemptContext,
-          wrapSpanSuppressingReplayEvents(runSpan, isProcessing)
-        );
+        const runContext = trace.setSpan(attemptContext, runSpan);
 
         return context.with(runContext, async () => {
           try {
