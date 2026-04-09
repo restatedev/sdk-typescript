@@ -1616,7 +1616,7 @@ describe("interceptor error isolation", { timeout: 120_000 }, () => {
           await next();
         } catch {
           throw new restate.RetryableError("handler-wrapped", {
-            retryAfter: 120_000,
+            retryAfter: 10,
           });
         }
       },
@@ -1625,7 +1625,7 @@ describe("interceptor error isolation", { timeout: 120_000 }, () => {
           await next();
         } catch {
           throw new restate.RetryableError("run-wrapped", {
-            retryAfter: 120_000,
+            retryAfter: 10,
           });
         }
       },
@@ -1647,7 +1647,11 @@ describe("interceptor error isolation", { timeout: 120_000 }, () => {
       // Attempt 3: succeeds
       return { invocationId: ctx.request().id };
     },
-    options: fastRetry,
+    options: {
+      retryPolicy: {
+        initialInterval: 120_000,
+      },
+    },
   });
 
   beforeAll(async () => {
@@ -1671,8 +1675,8 @@ describe("interceptor error isolation", { timeout: 120_000 }, () => {
     expect(leaks?.commandIndex ?? []).toHaveLength(0);
   });
 
-  it.skip(
-    "interceptor-thrown RetryableError does not affect retry timing",
+  it(
+    "interceptor-thrown RetryableError does affect retry timing",
     { timeout: 5_000 },
     async () => {
       const client = clients
