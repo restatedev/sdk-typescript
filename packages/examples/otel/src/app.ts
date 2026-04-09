@@ -1,5 +1,6 @@
 import http from "node:http";
 import http2 from "node:http2";
+import { trace } from "@opentelemetry/api";
 import {
   service,
   TerminalError,
@@ -42,9 +43,14 @@ const paymentService = service({
   name: "PaymentService",
   handlers: {
     charge: async (ctx: Context, orderId: string) => {
+      trace.getActiveSpan()?.addEvent("payment.charge.started", { orderId });
       const txId = await ctx.run("process-payment", async () => {
         await wait(150); // simulate payment gateway latency
         return `txn_${orderId}_${Date.now()}`;
+      });
+      trace.getActiveSpan()?.addEvent("payment.charge.completed", {
+        orderId,
+        txId,
       });
       return { txId, status: "charged" };
     },
@@ -66,10 +72,19 @@ const orderProcessor = service({
   handlers: {
     process: async (ctx: Context, orderId: string) => {
       const invocationId = ctx.request().id;
+      trace.getActiveSpan()?.addEvent("order.process.started", {
+        invocationId,
+        orderId,
+      });
 
       // 1. ctx.run that fails twice then succeeds (demonstrates run retries)
       const validated = await ctx.run("validate-order", async () => {
         const attempt = nextRunAttempt(invocationId);
+        trace.getActiveSpan()?.addEvent("order.validation.attempt", {
+          attempt,
+          invocationId,
+          orderId,
+        });
         await wait(80); // simulate validation API call
         if (attempt <= 2) {
           throw new Error(
@@ -79,21 +94,37 @@ const orderProcessor = service({
         return { orderId, valid: true };
       });
       ctx.console.log("Order validated:", validated);
+      trace.getActiveSpan()?.addEvent("order.validated", { orderId });
 
       // 2. Call another service (demonstrates cross-service tracing)
       const payment = await ctx.serviceClient(paymentService).charge(orderId);
       ctx.console.log("Payment charged:", payment);
+      trace.getActiveSpan()?.addEvent("order.payment.charged", {
+        orderId,
+        paymentTxId: payment.txId,
+      });
 
       // 3. Sleep — longer than the inactivity timeout, guarantees suspension
+      trace.getActiveSpan()?.addEvent("order.sleep.before", { orderId });
       await ctx.sleep(5000);
       ctx.console.log("Post-sleep processing");
+      trace.getActiveSpan()?.addEvent("order.sleep.after", { orderId });
 
       // 4. Transient handler error on first attempt (demonstrates handler retry)
       if (nextHandlerAttempt(invocationId) === 1) {
+        trace.getActiveSpan()?.addEvent("order.transient-error.retrying", {
+          invocationId,
+          orderId,
+        });
         throw new Error("Transient handler error — will retry");
       }
 
       // 5. Success
+      trace.getActiveSpan()?.addEvent("order.process.completed", {
+        invocationId,
+        orderId,
+        paymentTxId: payment.txId,
+      });
       return {
         orderId,
         status: "processed",

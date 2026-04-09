@@ -14,6 +14,7 @@ import {
   trace,
   SpanStatusCode,
   type Attributes,
+  type Span,
   type TextMapGetter,
   type Tracer,
 } from "@opentelemetry/api";
@@ -61,6 +62,12 @@ export interface OpenTelemetryHookOptions {
     | Attributes
     | ((ctx: OpenTelemetryHookContext, name: string) => Attributes | undefined);
 }
+
+// Hidden symbol key injected by the Restate SDK when instantiating hooks.
+// This is intentionally not part of the public hook context contract.
+const HOOK_CONTEXT_IS_PROCESSING_SYMBOL = Symbol.for(
+  "@restatedev/restate-sdk/hooks.isProcessing"
+);
 
 const attemptHeadersGetter: TextMapGetter<
   ReadonlyMap<string, string | string[] | undefined>
@@ -111,6 +118,65 @@ function getExceptionValue(error: unknown): Error | string {
   return error instanceof Error ? error : getExceptionMessage(error);
 }
 
+function getIsProcessing(ctx: OpenTelemetryHookContext): () => boolean {
+  const isProcessing = (ctx as unknown as Record<PropertyKey, unknown>)[
+    HOOK_CONTEXT_IS_PROCESSING_SYMBOL
+  ];
+  return typeof isProcessing === "function"
+    ? (isProcessing as () => boolean)
+    : () => true;
+}
+
+function wrapSpanSuppressingReplayEvents(
+  span: Span,
+  isProcessing: () => boolean
+): Span {
+  const wrapped: Span = {
+    spanContext: () => span.spanContext(),
+    setAttribute: (key, value) => {
+      span.setAttribute(key, value);
+      return wrapped;
+    },
+    setAttributes: (attributes) => {
+      span.setAttributes(attributes);
+      return wrapped;
+    },
+    addEvent: (name, attributesOrStartTime, startTime) => {
+      if (isProcessing()) {
+        span.addEvent(name, attributesOrStartTime, startTime);
+      }
+      return wrapped;
+    },
+    addLink: (link) => {
+      span.addLink(link);
+      return wrapped;
+    },
+    addLinks: (links) => {
+      span.addLinks(links);
+      return wrapped;
+    },
+    setStatus: (status) => {
+      span.setStatus(status);
+      return wrapped;
+    },
+    updateName: (name) => {
+      span.updateName(name);
+      return wrapped;
+    },
+    end: (endTime) => {
+      span.end(endTime);
+    },
+    isRecording: () => span.isRecording(),
+    recordException: (exception, time) => {
+      if (isProcessing()) {
+        span.recordException(exception, time);
+      }
+    },
+  };
+
+  return wrapped;
+}
+
 /**
  * Creates a HooksProvider that integrates Restate invocations with
  * OpenTelemetry tracing using the SDK hook system.
@@ -130,6 +196,7 @@ export function openTelemetryHook(
   return (ctx) => {
     const runSpans = options.runSpans ?? true;
     const tracer = resolveTracer(options.tracer, ctx);
+    const isProcessing = getIsProcessing(ctx);
     const parentContext = traceContextPropagator.extract(
       context.active(),
       ctx.request.attemptHeaders,
@@ -148,7 +215,10 @@ export function openTelemetryHook(
       },
       parentContext
     );
-    const attemptContext = trace.setSpan(parentContext, attemptSpan);
+    const attemptContext = trace.setSpan(
+      parentContext,
+      wrapSpanSuppressingReplayEvents(attemptSpan, isProcessing)
+    );
 
     const hooks: ReturnType<HooksProvider> = {
       interceptor: {
@@ -184,7 +254,10 @@ export function openTelemetryHook(
           },
           attemptContext
         );
-        const runContext = trace.setSpan(attemptContext, runSpan);
+        const runContext = trace.setSpan(
+          attemptContext,
+          wrapSpanSuppressingReplayEvents(runSpan, isProcessing)
+        );
 
         return context.with(runContext, async () => {
           try {
