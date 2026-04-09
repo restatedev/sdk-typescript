@@ -35,6 +35,35 @@ import {
   wrapErrors,
 } from "./test-utils.js";
 
+type InvocationOutcome = Awaited<ReturnType<typeof getInvocationOutcome>>;
+
+async function waitForInvocationOutcome(
+  adminAPIBaseUrl: string,
+  invocationId: string,
+  expected: object,
+  options?: {
+    timeout?: number;
+    interval?: number;
+  }
+): Promise<InvocationOutcome> {
+  let outcome: InvocationOutcome | undefined;
+
+  await expect
+    .poll(
+      async () => {
+        outcome = await getInvocationOutcome(adminAPIBaseUrl, invocationId);
+        return outcome;
+      },
+      {
+        timeout: options?.timeout ?? 10_000,
+        interval: options?.interval ?? 100,
+      }
+    )
+    .toMatchObject(expected);
+
+  return outcome!;
+}
+
 function hooksSuite(level: HookLevel) {
   describe(`${level}-level hooks`, { timeout: 120_000 }, () => {
     // Insert wrapErrors() after the first hook (the recorder) so it wraps
@@ -719,9 +748,7 @@ function hooksSuite(level: HookLevel) {
       const result = (await client.invoke("")) as { invocationId: string };
       const hookEvents = getHookEvents(result.invocationId);
       expect(hookEvents).toEqual(["hook:handler:before", "hook:handler:after"]);
-      expect(
-        await getInvocationOutcome(env.adminAPIBaseUrl(), result.invocationId)
-      ).toMatchObject({
+      await waitForInvocationOutcome(env.adminAPIBaseUrl(), result.invocationId, {
         status: "succeeded",
         journalOutput: { value: result },
       });
@@ -739,9 +766,7 @@ function hooksSuite(level: HookLevel) {
         "hook:run:step:after",
         "hook:handler:after",
       ]);
-      expect(
-        await getInvocationOutcome(env.adminAPIBaseUrl(), result.invocationId)
-      ).toMatchObject({
+      await waitForInvocationOutcome(env.adminAPIBaseUrl(), result.invocationId, {
         status: "succeeded",
         journalOutput: { value: result },
       });
@@ -764,9 +789,7 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:before",
         "hook:handler:after",
       ]);
-      expect(
-        await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
-      ).toMatchObject({
+      await waitForInvocationOutcome(env.adminAPIBaseUrl(), invocationId, {
         status: "succeeded",
         transientErrors: [{ error_code: 500, error_message: "[hw] retry" }],
       });
@@ -783,9 +806,9 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:before",
         "hook:handler:error:[hw] terminal",
       ]);
-      expect(
-        await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId!)
-      ).toMatchObject({ status: "failed" });
+      await waitForInvocationOutcome(env.adminAPIBaseUrl(), invocationId!, {
+        status: "failed",
+      });
     });
 
     it("handler + run with retry — replayed run skips interceptor", async () => {
@@ -806,9 +829,7 @@ function hooksSuite(level: HookLevel) {
         "hook:run:step-2:after",
         "hook:handler:after",
       ]);
-      expect(
-        await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
-      ).toMatchObject({
+      await waitForInvocationOutcome(env.adminAPIBaseUrl(), invocationId, {
         status: "succeeded",
         transientErrors: [{ error_code: 500, error_message: "[hw] retry" }],
       });
@@ -833,9 +854,7 @@ function hooksSuite(level: HookLevel) {
         "hook:run:step:after",
         "hook:handler:after",
       ]);
-      expect(
-        await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
-      ).toMatchObject({
+      await waitForInvocationOutcome(env.adminAPIBaseUrl(), invocationId, {
         status: "succeeded",
         transientErrors: [
           { error_code: 500, error_message: "[rw] run retryable fail" },
@@ -856,9 +875,7 @@ function hooksSuite(level: HookLevel) {
         "hook:run:step:error:[rw] run fail",
         "hook:handler:error:[hw] [rw] run fail",
       ]);
-      expect(
-        await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId!)
-      ).toMatchObject({
+      await waitForInvocationOutcome(env.adminAPIBaseUrl(), invocationId!, {
         status: "failed",
         journalOutput: {
           failure: {
@@ -906,9 +923,9 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:before",
         "hook:handler:after",
       ]);
-      expect(
-        await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
-      ).toMatchObject({ status: "succeeded" });
+      await waitForInvocationOutcome(env.adminAPIBaseUrl(), invocationId, {
+        status: "succeeded",
+      });
     });
 
     it("interceptor error triggers retry then succeeds", async () => {
@@ -926,9 +943,7 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:before",
         "hook:handler:after",
       ]);
-      expect(
-        await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
-      ).toMatchObject({
+      await waitForInvocationOutcome(env.adminAPIBaseUrl(), invocationId, {
         status: "succeeded",
         transientErrors: [
           {
@@ -958,9 +973,7 @@ function hooksSuite(level: HookLevel) {
         "hook:run:step:after",
         "hook:handler:after",
       ]);
-      expect(
-        await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
-      ).toMatchObject({
+      await waitForInvocationOutcome(env.adminAPIBaseUrl(), invocationId, {
         status: "succeeded",
         transientErrors: [
           {
@@ -984,9 +997,7 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:before",
         "hook:handler:error:[hw] interceptor terminal error",
       ]);
-      expect(
-        await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId!)
-      ).toMatchObject({
+      await waitForInvocationOutcome(env.adminAPIBaseUrl(), invocationId!, {
         status: "failed",
         journalOutput: {
           failure: {
@@ -1017,9 +1028,7 @@ function hooksSuite(level: HookLevel) {
         "hook:run:step:error:[rw] run interceptor terminal error",
         "hook:handler:error:[hw] [rw] run interceptor terminal error",
       ]);
-      expect(
-        await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId!)
-      ).toMatchObject({
+      await waitForInvocationOutcome(env.adminAPIBaseUrl(), invocationId!, {
         status: "failed",
         journalOutput: {
           failure: {
@@ -1046,9 +1055,7 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:before",
         "hook:handler:after",
       ]);
-      expect(
-        await getInvocationOutcome(env.adminAPIBaseUrl(), result.invocationId)
-      ).toMatchObject({
+      await waitForInvocationOutcome(env.adminAPIBaseUrl(), result.invocationId, {
         status: "succeeded",
         journalOutput: { value: result },
         transientErrors: [
@@ -1079,9 +1086,7 @@ function hooksSuite(level: HookLevel) {
         "hook:run:step:after",
         "hook:handler:after",
       ]);
-      expect(
-        await getInvocationOutcome(env.adminAPIBaseUrl(), result.invocationId)
-      ).toMatchObject({
+      await waitForInvocationOutcome(env.adminAPIBaseUrl(), result.invocationId, {
         status: "succeeded",
         journalOutput: { value: result },
         transientErrors: [
@@ -1110,9 +1115,9 @@ function hooksSuite(level: HookLevel) {
         "hook:run:step:after",
         "hook:handler:after",
       ]);
-      expect(
-        await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
-      ).toMatchObject({ status: "succeeded" });
+      await waitForInvocationOutcome(env.adminAPIBaseUrl(), invocationId, {
+        status: "succeeded",
+      });
     });
 
     it("multiple retries then success", async () => {
@@ -1129,9 +1134,7 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:before",
         "hook:handler:after",
       ]);
-      expect(
-        await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
-      ).toMatchObject({
+      await waitForInvocationOutcome(env.adminAPIBaseUrl(), invocationId, {
         status: "succeeded",
         transientErrors: [{ error_code: 500, error_message: "[hw] retry" }],
       });
@@ -1152,9 +1155,7 @@ function hooksSuite(level: HookLevel) {
         "hook:handler:before",
         "hook:handler:error:[hw] terminal after retries",
       ]);
-      expect(
-        await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId!)
-      ).toMatchObject({
+      await waitForInvocationOutcome(env.adminAPIBaseUrl(), invocationId!, {
         status: "failed",
         transientErrors: [{ error_code: 500, error_message: "[hw] retry" }],
       });
@@ -1186,12 +1187,14 @@ function hooksSuite(level: HookLevel) {
         "hook:run:run-2:after",
         "hook:handler:after",
       ]);
-      const outcome = await getInvocationOutcome(
+      const outcome = await waitForInvocationOutcome(
         env.adminAPIBaseUrl(),
-        invocationId
+        invocationId,
+        {
+          status: "succeeded",
+        }
       );
       const transientErrors = outcome.transientErrors ?? [];
-      expect(outcome.status).toBe("succeeded");
       expect(transientErrors).toEqual([
         {
           error_code: 500,
@@ -1259,9 +1262,9 @@ function hooksSuite(level: HookLevel) {
           "hook:run:after-resume:after",
           "hook:handler:after",
         ]);
-      expect(
-        await getInvocationOutcome(env.adminAPIBaseUrl(), send.invocationId)
-      ).toMatchObject({ status: "succeeded" });
+      await waitForInvocationOutcome(env.adminAPIBaseUrl(), send.invocationId, {
+        status: "succeeded",
+      });
     });
 
     it("handler interceptor propagates async context to handler", async () => {
@@ -1465,9 +1468,9 @@ function hooksSuite(level: HookLevel) {
           "hook:run:slow-step:error:[rw] Cancelled",
         ]);
 
-      expect(
-        await getInvocationOutcome(env.adminAPIBaseUrl(), send.invocationId)
-      ).toMatchObject({ status: "failed" });
+      await waitForInvocationOutcome(env.adminAPIBaseUrl(), send.invocationId, {
+        status: "failed",
+      });
     });
 
     it("cancelled invocation — run interceptor waits for closure to complete", async () => {
@@ -1513,9 +1516,9 @@ function hooksSuite(level: HookLevel) {
           "hook:run:slow-step:after",
         ]);
 
-      expect(
-        await getInvocationOutcome(env.adminAPIBaseUrl(), send.invocationId)
-      ).toMatchObject({ status: "failed" });
+      await waitForInvocationOutcome(env.adminAPIBaseUrl(), send.invocationId, {
+        status: "failed",
+      });
     });
 
     it("invocation pause requested in the middle of a run", async () => {
@@ -1548,15 +1551,17 @@ function hooksSuite(level: HookLevel) {
           "hook:handler:error:[hw] (599) Suspended invocation",
         ]);
 
-      await expect
-        .poll(
-          () => getInvocationOutcome(env.adminAPIBaseUrl(), send.invocationId),
-          {
-            timeout: 10_000,
-            interval: 100,
-          }
-        )
-        .toMatchObject({ status: "paused" });
+      await waitForInvocationOutcome(
+        env.adminAPIBaseUrl(),
+        send.invocationId,
+        {
+          status: "paused",
+        },
+        {
+          timeout: 10_000,
+          interval: 100,
+        }
+      );
     });
 
     it("Always replay — suspend and replay after each entry", async () => {
@@ -1645,9 +1650,7 @@ function hooksSuite(level: HookLevel) {
           "hook:handler:error:[hw] awakeable rejected",
         ]);
 
-      expect(
-        await getInvocationOutcome(env.adminAPIBaseUrl(), send.invocationId)
-      ).toMatchObject({
+      await waitForInvocationOutcome(env.adminAPIBaseUrl(), send.invocationId, {
         status: "failed",
         journalOutput: {
           failure: {
@@ -1694,16 +1697,12 @@ function hooksSuite(level: HookLevel) {
           "hook:handler:after",
         ]);
 
-      await expect
-        .poll(() =>
-          getInvocationOutcome(env.adminAPIBaseUrl(), send.invocationId)
-        )
-        .toMatchObject({
-          status: "succeeded",
-          transientErrors: [
-            { error_code: 500, error_message: "awakeable serde fail" },
-          ],
-        });
+      await waitForInvocationOutcome(env.adminAPIBaseUrl(), send.invocationId, {
+        status: "succeeded",
+        transientErrors: [
+          { error_code: 500, error_message: "awakeable serde fail" },
+        ],
+      });
     });
 
     it("awakeable serde failure after prior run does not inherit stale run metadata", async () => {
@@ -1739,16 +1738,12 @@ function hooksSuite(level: HookLevel) {
           "hook:handler:after",
         ]);
 
-      await expect
-        .poll(() =>
-          getInvocationOutcome(env.adminAPIBaseUrl(), send.invocationId)
-        )
-        .toMatchObject({
-          status: "succeeded",
-          transientErrors: [
-            { error_code: 500, error_message: "awakeable serde fail" },
-          ],
-        });
+      await waitForInvocationOutcome(env.adminAPIBaseUrl(), send.invocationId, {
+        status: "succeeded",
+        transientErrors: [
+          { error_code: 500, error_message: "awakeable serde fail" },
+        ],
+      });
     });
   });
 }
@@ -2012,19 +2007,16 @@ describe("transient error command metadata", { timeout: 120_000 }, () => {
     const ingress = clients.connect({ url: env.baseUrl() });
     const send = await ingress.serviceSendClient(kitchenSinkService).invoke("");
 
-    // Wait for invocation to complete (killed after maxAttempts)
-    await expect
-      .poll(
-        () => getInvocationOutcome(env.adminAPIBaseUrl(), send.invocationId),
-        { timeout: 30_000, interval: 200 }
-      )
-      .toMatchObject({
-        status: expect.stringMatching(/succeeded|failed/) as string,
-      });
-
-    const outcome = await getInvocationOutcome(
+    const outcome = await waitForInvocationOutcome(
       env.adminAPIBaseUrl(),
-      send.invocationId
+      send.invocationId,
+      {
+        status: expect.stringMatching(/succeeded|failed/) as string,
+      },
+      {
+        timeout: 30_000,
+        interval: 200,
+      }
     );
     const allErrors = outcome.transientErrors ?? [];
 
@@ -2228,9 +2220,9 @@ describe("interceptor error isolation", { timeout: 120_000 }, () => {
       // overrideRetryAfterHook throws RetryableError with retryAfter: 120_000.
       // If the SDK honored it, the retry would wait 2 minutes and this test
       // would timeout (5s). With fastRetry (10ms interval), it completes fast.
-      expect(
-        await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId)
-      ).toMatchObject({ status: "succeeded" });
+      await waitForInvocationOutcome(env.adminAPIBaseUrl(), invocationId, {
+        status: "succeeded",
+      });
     }
   );
 });
