@@ -1,9 +1,9 @@
 use js_sys::Uint8Array;
 use restate_sdk_shared_core::{
     CallHandle, CommandRelationship, CommandType, CoreVM, DoProgressResponse, Error, Header,
-    HeaderMap, IdentityVerifier, Input, NonDeterministicChecksOption, NonEmptyValue, ResponseHead,
-    RetryPolicy, RunExitResult, SendHandle, TakeOutputResult, Target, TerminalFailure, VMOptions,
-    Value, CANCEL_NOTIFICATION_HANDLE, VM,
+    HeaderMap, IdentityVerifier, ImplicitCancellationOption, Input, NonDeterministicChecksOption,
+    NonEmptyValue, ResponseHead, RetryPolicy, RunExitResult, SendHandle, TakeOutputResult, Target,
+    TerminalFailure, VMOptions, Value, CANCEL_NOTIFICATION_HANDLE, VM,
 };
 use serde::{Deserialize, Serialize};
 use std::cmp;
@@ -465,6 +465,7 @@ impl WasmVM {
         log_level: LogLevel,
         logger_id: u32,
         disable_payload_checks: bool,
+        explicit_cancellation: bool,
     ) -> Result<WasmVM, WasmFailure> {
         let log_dispatcher = Dispatch::new(log_subscriber(log_level, Some(logger_id)));
 
@@ -477,7 +478,14 @@ impl WasmVM {
                     } else {
                         NonDeterministicChecksOption::Enabled
                     },
-                    ..Default::default()
+                    implicit_cancellation: if explicit_cancellation {
+                        ImplicitCancellationOption::Disabled
+                    } else {
+                        ImplicitCancellationOption::Enabled {
+                            cancel_children_calls: true,
+                            cancel_children_one_way_calls: false,
+                        }
+                    },
                 },
             )
         })?;
@@ -701,7 +709,7 @@ impl WasmVM {
         key: Option<String>,
         headers: Vec<WasmHeader>,
         idempotency_key: Option<String>,
-        name: Option<String>
+        name: Option<String>,
     ) -> Result<WasmCallHandle, WasmFailure> {
         use_log_dispatcher!(self, |vm| CoreVM::sys_call(
             vm,
@@ -730,7 +738,7 @@ impl WasmVM {
         headers: Vec<WasmHeader>,
         delay: Option<u64>,
         idempotency_key: Option<String>,
-        name: Option<String>
+        name: Option<String>,
     ) -> Result<WasmSendHandle, WasmFailure> {
         use_log_dispatcher!(self, |vm| CoreVM::sys_send(
             vm,

@@ -480,6 +480,15 @@ export type ServiceHandlerOpts<I, O> = {
    * ```
    */
   hooks?: HooksProvider[];
+
+  /**
+   * When set to `true`, the SDK will stop automatically propagating cancellations when awaiting {@link RestatePromise}s.
+   *
+   * Instead, the user code must explicitly listen to cancellations using the `ctx.cancellation()` API in {@link ContextInternal}.
+   *
+   * @experimental
+   */
+  explicitCancellation?: boolean;
 };
 
 export type ObjectHandlerOpts<I, O> = ServiceHandlerOpts<I, O> & {
@@ -1028,6 +1037,15 @@ export type ServiceOptions = {
    * ```
    */
   hooks?: HooksProvider[];
+
+  /**
+   * When set to `true`, the SDK will stop automatically propagating cancellations when awaiting {@link RestatePromise}s.
+   *
+   * Instead, the user code must explicitly listen to cancellations using the `ctx.cancellation()` API in {@link ContextInternal}.
+   *
+   * @experimental
+   */
+  explicitCancellation?: boolean;
 };
 
 /**

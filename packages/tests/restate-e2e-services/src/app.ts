@@ -25,6 +25,7 @@ import "./test_utils.js";
 import "./kill.js";
 import "./virtual_object_command_interpreter.js";
 import "./promise_combinators.js";
+import "./explicit_cancellation.js";
 import * as http2 from "http2";
 import * as heapdump from "heapdump";
 import path from "path";

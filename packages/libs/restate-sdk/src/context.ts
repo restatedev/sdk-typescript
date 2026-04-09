@@ -681,6 +681,9 @@ export type RestatePromise<T> = Promise<T> & {
    * {@link Promise.then} is used by Restate to distinguish when awaiting an asynchronous operation,
    * thus calling `.then` on several Restate promises can lead to concurrency issues.
    *
+   * **NOTE**: Contrary to `.then`, the closure is executed ONLY when the promise is awaited,
+   * and not eagerly as soon as the promise completes.
+   *
    * @param mapper the function to execute when this promise is fulfilled.
    * If the promise completed successfully, `value` is provided as input, otherwise `failure` is provided as input.
    * If this mapper returns a value, this value will be used to resolve the returned {@link RestatePromise}.
