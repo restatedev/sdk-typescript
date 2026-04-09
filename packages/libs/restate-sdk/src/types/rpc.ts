@@ -40,6 +40,7 @@ import {
   type Duration,
 } from "@restatedev/restate-sdk-core";
 import { ensureError, TerminalError } from "./errors.js";
+import type { HooksProvider } from "../hooks.js";
 
 // ----------- rpc clients -------------------------------------------------------
 
@@ -420,6 +421,65 @@ export type ServiceHandlerOpts<I, O> = {
    * The input or output of this handler can be overridden using the `input`/`output` fields
    */
   serde?: Serde<any>;
+
+  /**
+   * Hooks providers for this handler. Handler-level hooks wrap innermost —
+   * they run after service-level hooks. Both levels are merged: service
+   * hooks first, then handler hooks. Within each level, hooks execute in
+   * array order: for `[A, B]`: A before → B before → handler → B after → A after.
+   *
+   * The `handler` interceptor fires on every attempt. The `run` interceptor
+   * fires only when the `ctx.run()` closure actually executes — replayed
+   * runs (already in the journal) are skipped.
+   *
+   * Errors thrown at any point (before or after `next()`) affect the invocation:
+   * {@link TerminalError} fails immediately, any other error triggers a retry.
+   * On suspension or pause, `next()` also rejects — do any cleanup and rethrow.
+   *
+   * @example
+   * ```ts
+   * const myService = restate.service({
+   *   name: "MyService",
+   *   handlers: {
+   *     greet: restate.createServiceHandler(
+   *       {
+   *         hooks: [
+   *           (ctx) => ({
+   *             interceptor: {
+   *               handler: async (next) => {
+   *                 console.log(`before ${ctx.request.target}`);
+   *                 try {
+   *                   await next();
+   *                   console.log(`after ${ctx.request.target}`);
+   *                 } catch (e) {
+   *                   console.log(`error ${ctx.request.target}: ${e}`);
+   *                   // Always rethrow — swallowing the error changes the
+   *                   // invocation outcome. You can also throw a different
+   *                   // error (e.g. TerminalError to fail immediately).
+   *                   throw e;
+   *                 }
+   *               },
+   *               run: async (name, next) => {
+   *                 console.log(`  before run "${name}"`);
+   *                 try {
+   *                   await next();
+   *                   console.log(`  after run "${name}"`);
+   *                 } catch (e) {
+   *                   console.log(`  error run "${name}": ${e}`);
+   *                   throw e;
+   *                 }
+   *               },
+   *             },
+   *           }),
+   *         ],
+   *       },
+   *       async (ctx, name) => `Hello, ${name}!`
+   *     ),
+   *   },
+   * });
+   * ```
+   */
+  hooks?: HooksProvider[];
 };
 
 export type ObjectHandlerOpts<I, O> = ServiceHandlerOpts<I, O> & {
@@ -913,6 +973,61 @@ export type ServiceOptions = {
    * If not provided, defaults to `serde.json`.
    */
   serde?: Serde<any>;
+
+  /**
+   * Hooks providers for this service. Service-level hooks wrap outermost —
+   * they run before handler-level hooks. Both levels are merged: service
+   * hooks first, then handler hooks. Within each level, hooks execute in
+   * array order: for `[A, B]`: A before → B before → handler → B after → A after.
+   *
+   * The `handler` interceptor fires on every attempt. The `run` interceptor
+   * fires only when the `ctx.run()` closure actually executes — replayed
+   * runs (already in the journal) are skipped.
+   *
+   * Errors thrown at any point (before or after `next()`) affect the invocation:
+   * {@link TerminalError} fails immediately, any other error triggers a retry.
+   * On suspension or pause, `next()` also rejects — do any cleanup and rethrow.
+   *
+   * @example
+   * ```ts
+   * const myService = restate.service({
+   *   name: "MyService",
+   *   handlers: { greet: async (ctx, name) => `Hello, ${name}!` },
+   *   options: {
+   *     hooks: [
+   *       (ctx) => ({
+   *         interceptor: {
+   *           handler: async (next) => {
+   *             console.log(`before ${ctx.request.target}`);
+   *             try {
+   *               await next();
+   *               console.log(`after ${ctx.request.target}`);
+   *             } catch (e) {
+   *               console.log(`error ${ctx.request.target}: ${e}`);
+   *               // Always rethrow — swallowing the error changes the
+   *               // invocation outcome. You can also throw a different
+   *               // error (e.g. TerminalError to fail immediately).
+   *               throw e;
+   *             }
+   *           },
+   *           run: async (name, next) => {
+   *             console.log(`  before run "${name}"`);
+   *             try {
+   *               await next();
+   *               console.log(`  after run "${name}"`);
+   *             } catch (e) {
+   *               console.log(`  error run "${name}": ${e}`);
+   *               throw e;
+   *             }
+   *           },
+   *         },
+   *       }),
+   *     ],
+   *   },
+   * });
+   * ```
+   */
+  hooks?: HooksProvider[];
 };
 
 /**

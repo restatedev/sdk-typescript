@@ -12,18 +12,19 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import type * as d from "./discovery.js";
-import { ContextImpl } from "../context_impl.js";
-import {
-  HandlerKind,
+import type { ContextImpl } from "../context_impl.js";
+import type {
   HandlerWrapper,
   ObjectOptions,
   ServiceHandlerOpts,
   ServiceOptions,
   WorkflowOptions,
 } from "../types/rpc.js";
+import { HandlerKind } from "../types/rpc.js";
 import type { Serde } from "@restatedev/restate-sdk-core";
 import { millisOrDurationToMillis, serde } from "@restatedev/restate-sdk-core";
-import { TerminalError } from "@restatedev/restate-sdk";
+import type { HooksProvider } from "../hooks.js";
+import type { TerminalError } from "../types/errors.js";
 
 //
 // Interfaces
@@ -43,6 +44,7 @@ export interface ExecutionOptions {
    * Default serde to use for requests, responses, state, side effects, awakeables, promises. Used when no other serde is specified.
    */
   defaultSerde?: Serde<any>;
+  hooks?: HooksProvider[];
 }
 
 export interface ComponentHandler {
@@ -119,10 +121,17 @@ function createExecutionOptions(
   serviceOptions?: ServiceOptions,
   handlerOptions?: ServiceHandlerOpts<unknown, unknown>
 ): ExecutionOptions {
+  // Service-level hooks run outermost, handler-level hooks run innermost.
+  // Both are merged into a single list: service hooks first, then handler hooks.
+  const hooks = [
+    ...(serviceOptions?.hooks ?? []),
+    ...(handlerOptions?.hooks ?? []),
+  ];
   return {
     defaultSerde: handlerOptions?.serde ?? serviceOptions?.serde,
     asTerminalError:
       handlerOptions?.asTerminalError ?? serviceOptions?.asTerminalError,
+    hooks: hooks.length > 0 ? hooks : undefined,
   };
 }
 

@@ -1,0 +1,26 @@
+{
+  "name": "@restatedev/otel",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/app.ts",
+    "dev:req-res": "MODE=req-res tsx src/app.ts",
+    "infra": "docker compose up -d",
+    "infra:down": "docker compose down",
+    "register": "curl -s localhost:9070/deployments -H 'content-type: application/json' -d '{\"uri\": \"http://host.docker.internal:9080\"}'",
+    "register:req-res": "curl -s localhost:9070/deployments -H 'content-type: application/json' -d '{\"uri\": \"http://host.docker.internal:9080\", \"use_http_11\": true}'",
+    "invoke": "curl -s localhost:8080/OrderProcessor/process -H 'content-type: application/json' -d '\"order-123\"'"
+  },
+  "dependencies": {
+    "@restatedev/restate-sdk": "workspace:*",
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/resources": "^1.30.0",
+    "@opentelemetry/semantic-conventions": "^1.28.0",
+    "@opentelemetry/sdk-trace-base": "^1.30.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.57.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0"
+  }
+}

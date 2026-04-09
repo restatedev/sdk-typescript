@@ -1,0 +1,33 @@
+{
+  "name": "@restatedev/e2e",
+  "version": "0.0.0",
+  "description": "E2E tests for the Restate SDK",
+  "author": "Restate Developers",
+  "email": "code@restate.dev",
+  "license": "MIT",
+  "homepage": "https://github.com/restatedev/sdk-typescript#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/restatedev/sdk-typescript.git"
+  },
+  "bugs": {
+    "url": "https://github.com/restatedev/sdk-typescript/issues"
+  },
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "turbo run _test --filter={.}...",
+    "_test": "vitest run",
+    "test:watch": "vitest watch",
+    "clean": "rm -rf dist *.tsbuildinfo .turbo",
+    "check:types": "turbo run _check:types --filter={.}...",
+    "_check:types": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@restatedev/restate-sdk": "workspace:*",
+    "@restatedev/restate-sdk-clients": "workspace:*",
+    "@restatedev/restate-sdk-testcontainers": "workspace:*"
+  },
+  "devDependencies": {}
+}

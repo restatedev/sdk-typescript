@@ -27,7 +27,8 @@ import {
 } from "../components.js";
 import { parseUrlComponents } from "../components.js";
 import { X_RESTATE_SERVER } from "../../user_agent.js";
-import { ContextImpl } from "../../context_impl.js";
+import { CommandError, ContextImpl } from "../../context_impl.js";
+import { restoreError, sanitizeError } from "../../error_sanitization.js";
 import type { Request } from "../../context.js";
 import * as vm from "./vm/sdk_shared_core_wasm_bindings.js";
 import { CompletablePromise } from "../../utils/completable_promise.js";
@@ -63,6 +64,7 @@ import {
   tryCreateContextualLogger,
 } from "./utils.js";
 import { destroyLogger, registerLogger } from "./core_logging.js";
+import type { Hooks } from "../../hooks.js";
 
 export function createRestateHandler(
   endpoint: Endpoint,
@@ -357,6 +359,16 @@ class RestateInvokeResponse implements RestateResponse {
       // Get input from coreVm to build the request object
       const input = this.coreVm.sys_input();
       const invocationRequest: Request = {
+        target: {
+          service: this.service.name(),
+          handler: this.handler.name(),
+          key: input.key || undefined,
+          toString() {
+            return this.key !== undefined
+              ? `${this.service}/${this.key}/${this.handler}`
+              : `${this.service}/${this.handler}`;
+          },
+        },
         id: input.invocation_id,
         headers: input.headers.reduce((headers, { key, value }) => {
           headers.set(key, value);
@@ -436,17 +448,29 @@ class RestateInvokeResponse implements RestateResponse {
       return;
     }
 
-    // Start the user code but don't await it directly.
-    // We await invocationEndPromise instead, which works as follows:
-    // * In the happy path, that is no errors, invocationEndPromise gets resolved by the line below in this finally branch
-    // * In the transient error case that happens within the handler, invocationEndPromise gets resolved by the ContextImpl itself, unblocking the await line below
-    void startUserHandler(ctx, this.handler, journalValueCodec).finally(() => {
-      invocationEndPromise.resolve();
-    });
-    await invocationEndPromise.promise;
-
-    // Then flush and close
-    await flushAndClose(this.coreVm, this.vmLogger, inputReader, outputWriter);
+    // Run user code. Errors that reach the handler or interceptor code
+    // (handler throws, interceptor throws, entry completes with terminal
+    // failure) propagate naturally. Errors where the handler is stuck on
+    // an await that will never settle (e.g. suspension, retryable run
+    // error) are broken out by raceWithAttemptEnd, which races against
+    // invocationEndPromise — rejected by ContextImpl when the attempt ends.
+    try {
+      await startUserHandler(
+        ctx,
+        this.service,
+        this.handler,
+        journalValueCodec
+      );
+    } catch (e) {
+      notifyError(e, ctx, this.handler.executionOptions.asTerminalError);
+    } finally {
+      await flushAndClose(
+        this.coreVm,
+        this.vmLogger,
+        inputReader,
+        outputWriter
+      );
+    }
   }
 }
 
@@ -468,63 +492,115 @@ async function bufferJournalReplayInCoreVm(
 
 async function startUserHandler(
   ctx: ContextImpl,
+  service: Component,
   handler: ComponentHandler,
   journalValueCodec: JournalValueCodec
 ) {
-  try {
-    try {
-      const decodedInput = await journalValueCodec
-        .decode(ctx.request().body)
-        .catch((e) =>
-          // Re-throw as terminal error, to fail on input errors
-          Promise.reject(
-            new TerminalError(
-              `Failed to decode input using journal value codec: ${
-                ensureError(e).message
-              }`,
-              {
-                errorCode: 400,
-              }
-            )
+  // Instantiate hooks from providers.
+  // If a provider throws, the same rules as handler failures apply:
+  // TerminalError → terminate invocation, other errors → retry.
+  const hooks: Hooks[] = [];
+  for (const provider of handler.executionOptions.hooks ?? []) {
+    hooks.push(provider({ request: ctx.request() }));
+  }
+
+  // Compose interceptor.handler into a single interceptor (first = outermost)
+  const handlerInterceptor = composeInterceptors(
+    hooks.map((h) => h.interceptor?.handler).filter(isDefined)
+  );
+
+  ctx.setRunInterceptor(
+    composeInterceptors(hooks.map((h) => h.interceptor?.run).filter(isDefined))
+  );
+
+  let encodedOutput: Uint8Array | undefined;
+  await raceWithAttemptEnd(
+    ctx,
+    handlerInterceptor
+  )(async () => {
+    const decodedInput = await journalValueCodec
+      .decode(ctx.request().body)
+      .catch((e) =>
+        // Re-throw as terminal error, to fail on input errors
+        Promise.reject(
+          new TerminalError(
+            `Failed to decode input using journal value codec: ${
+              ensureError(e).message
+            }`,
+            {
+              errorCode: 400,
+            }
           )
-        );
+        )
+      );
 
-      // Then run user code
-      const output = await handler.invoke(ctx, decodedInput);
+    // Then run user code
+    const output = await handler.invoke(ctx, decodedInput);
 
-      // Encode user code output
-      const encodedOutput = journalValueCodec.encode(output);
+    // Encode user code output
+    encodedOutput = journalValueCodec.encode(output);
+  });
 
-      // Write out and end
-      ctx.coreVm.sys_write_output_success(encodedOutput);
-      ctx.coreVm.sys_end();
-      ctx.vmLogger.info("Invocation completed successfully.");
-    } catch (e) {
-      // Convert to Error
-      const error = ensureError(e, handler.executionOptions.asTerminalError);
-      logError(ctx.vmLogger, error);
+  // Interceptor chain completed without error — commit the result.
+  // sys_end() is called here (after interceptors) so that interceptor
+  // errors after next() correctly prevent the invocation from succeeding.
+  ctx.coreVm.sys_write_output_success(encodedOutput!);
+  ctx.coreVm.sys_end();
+  ctx.vmLogger.info("Invocation completed successfully.");
+}
 
-      // If TerminalError, handle it here.
-      // NOTE: this can still fail, that's why the double catch!
-      if (error instanceof TerminalError) {
-        ctx.coreVm.sys_write_output_failure({
-          code: error.code,
-          message: error.message,
-          metadata: Object.entries(error.metadata ?? {}).map(
-            ([key, value]) => ({ key, value })
-          ),
-        });
-        ctx.coreVm.sys_end();
-        return;
-      }
-
-      // Not a terminal error, have the below catch handle it
-      throw error;
+/**
+ * Classifies the error and notifies the VM. Called from the process() catch
+ * block — the single place that decides how to report errors to the VM.
+ */
+function notifyError(
+  e: unknown,
+  ctx: ContextImpl,
+  asTerminalError?: (error: unknown) => TerminalError | undefined
+) {
+  // Command-specific errors from ContextImpl carry metadata the VM needs
+  // for command correlation. Check before ensureError to preserve the type.
+  if (e instanceof CommandError) {
+    const cause = ensureError(e.cause);
+    logError(ctx.vmLogger, cause);
+    if (e.hasCommandIndex) {
+      // Completion failure — command exists in the journal
+      ctx.coreVm.notify_error_for_specific_command(
+        cause.message,
+        cause.stack,
+        e.commandType,
+        e.commandIndex!,
+        null
+      );
+    } else {
+      // Preparation failure — command not yet issued
+      ctx.coreVm.notify_error_for_next_command(
+        cause.message,
+        cause.stack,
+        e.commandType
+      );
     }
-  } catch (e) {
-    // Handle any other error now (retryable errors)
-    const error = ensureError(e);
-    if (error instanceof RetryableError) {
+    return;
+  }
+
+  // Handler/interceptor errors
+  const error = ensureError(e, asTerminalError);
+  logError(ctx.vmLogger, error);
+
+  try {
+    if (error instanceof TerminalError) {
+      // Terminal: write the failure as the invocation output
+      ctx.coreVm.sys_write_output_failure({
+        code: error.code,
+        message: error.message,
+        metadata: Object.entries(error.metadata ?? {}).map(([key, value]) => ({
+          key,
+          value,
+        })),
+      });
+      ctx.coreVm.sys_end();
+    } else if (error instanceof RetryableError) {
+      // Retryable with explicit delay
       ctx.coreVm.notify_error_with_delay_override(
         error.message,
         error.stack,
@@ -533,8 +609,14 @@ async function startUserHandler(
           : undefined
       );
     } else {
+      // Transient error — VM decides retry policy
       ctx.coreVm.notify_error(error.message, error.stack);
     }
+  } catch (vmError) {
+    // Safety net: if sys_write_output_failure or other VM calls fail,
+    // fall back to notify_error.
+    const inner = ensureError(vmError);
+    ctx.coreVm.notify_error(inner.message, inner.stack);
   }
 }
 
@@ -611,6 +693,75 @@ function isAbortErrorOnWrite(error: Error) {
     (error as { code?: string }).code === "ERR_HTTP2_INVALID_STREAM"
   );
 }
+
+// -- Hook composition utils --------------------------------------------------
+
+type InterceptorFn<Args extends unknown[]> = (
+  ...args: [...Args, () => Promise<void>]
+) => Promise<void>;
+
+function composeInterceptors<Args extends unknown[]>(
+  interceptors: InterceptorFn<Args>[]
+): InterceptorFn<Args> {
+  return interceptors.reduceRight<InterceptorFn<Args>>(
+    (innerInterceptor, interceptor) =>
+      (...args) => {
+        const context = args.slice(0, -1) as unknown as Args;
+        const callback = args.at(-1) as () => Promise<void>;
+        return interceptor(...context, () =>
+          innerInterceptor(...context, callback)
+        );
+      },
+    (...args) => (args.at(-1) as () => Promise<void>)()
+  );
+}
+
+/**
+ * Wraps an interceptor so that both `next()` and the interceptor body race
+ * against `invocationEndPromise`. When the attempt ends (suspension, retryable
+ * error, etc.), the promise rejects and the interceptor chain unwinds through
+ * catch/finally blocks — preventing interceptors from hanging on a `next()`
+ * that will never settle.
+ *
+ * SDK-internal metadata (CommandError, retryAfter) is stripped before the
+ * interceptor sees the error and restored after the chain exits.
+ */
+function raceWithAttemptEnd<Args extends unknown[]>(
+  ctx: ContextImpl,
+  interceptor: InterceptorFn<Args>
+): InterceptorFn<Args> {
+  return (...args) => {
+    let originalError: unknown;
+
+    // Strip SDK metadata before interceptors see the error.
+    // Store the original in the closure for restoration after the chain.
+    const signal = ctx.invocationEndPromise.promise.catch((e) => {
+      originalError = e;
+      throw sanitizeError(e);
+    }) as Promise<never>;
+
+    const originalNext = args.at(-1) as () => Promise<void>;
+    const racingNext = () => Promise.race([originalNext(), signal]);
+    const newArgs = [...args.slice(0, -1), racingNext] as unknown as [
+      ...Args,
+      () => Promise<void>,
+    ];
+
+    return Promise.race([interceptor(...newArgs), signal]).catch((e) => {
+      // Restore SDK metadata after the interceptor chain exits.
+      if (originalError !== undefined) {
+        throw restoreError(e, originalError);
+      }
+      throw e;
+    });
+  };
+}
+
+function isDefined<T>(value: T | undefined | null): value is T {
+  return value != null;
+}
+
+// -- Logging utils -----------------------------------------------------------
 
 function restateLogLevelToWasmLogLevel(level: RestateLogLevel): vm.LogLevel {
   switch (level) {

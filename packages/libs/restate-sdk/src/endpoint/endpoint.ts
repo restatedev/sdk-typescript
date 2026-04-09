@@ -229,7 +229,7 @@ function buildServiceComponent(
     definition.metadata,
     {
       ...defaultServiceOptions,
-      ...(definition?.options as ServiceOptions),
+      ...(definition?.options as ServiceOptions | undefined),
     }
   );
 
@@ -262,7 +262,7 @@ function buildVirtualObjectComponent(
     definition.metadata,
     {
       ...defaultServiceOptions,
-      ...(definition?.options as ObjectOptions),
+      ...(definition?.options as ObjectOptions | undefined),
     }
   );
 
@@ -294,7 +294,7 @@ function buildWorkflowComponent(
     definition.metadata,
     {
       ...defaultServiceOptions,
-      ...(definition?.options as WorkflowOptions),
+      ...(definition?.options as WorkflowOptions | undefined),
     }
   );
 
