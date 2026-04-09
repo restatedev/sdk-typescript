@@ -64,8 +64,6 @@ import { CompletablePromise } from "./utils/completable_promise.js";
 import { AsyncResultValue, CombinatorRestatePromise } from "./promises.js";
 import {
   ConstRestatePromise,
-  InvocationPendingPromise,
-  RestatePendingPromise,
   pendingPromise,
   PromisesExecutor,
   InvocationRestatePromise,
@@ -324,7 +322,9 @@ export class ContextImpl
       );
     } catch (e) {
       this.abortAttempt(e, WasmCommandType.OneWayCall);
-      return new InvocationPendingPromise(this);
+      return Object.assign(ConstRestatePromise.pending<void>(), {
+        invocationId: pendingPromise<InvocationId>(),
+      });
     }
 
     try {
@@ -457,7 +457,7 @@ export class ContextImpl
       handle = this.coreVm.sys_run(name ?? "");
     } catch (e) {
       this.abortAttempt(e);
-      return new RestatePendingPromise(this);
+      return ConstRestatePromise.pending();
     }
     const commandIndex = this.coreVm.last_command_index();
 
@@ -737,7 +737,7 @@ export class ContextImpl
       input = prepare();
     } catch (e) {
       this.abortAttempt(e, commandType);
-      return new RestatePendingPromise(this);
+      return ConstRestatePromise.pending();
     }
 
     let handle: number;
@@ -745,7 +745,7 @@ export class ContextImpl
       handle = vmCall(this.coreVm, input);
     } catch (e) {
       this.abortAttempt(e);
-      return new RestatePendingPromise(this);
+      return ConstRestatePromise.pending();
     }
     const commandIndex = this.coreVm.last_command_index();
     return new SingleRestatePromise(
