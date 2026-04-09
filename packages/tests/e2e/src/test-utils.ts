@@ -195,7 +195,7 @@ export function throwOnFirstRunIntercept(targetService: string): HooksProvider {
   };
 }
 
-/** Hook whose handler interceptor throws a terminal error */
+/** Hook whose handler interceptor throws a terminal error with metadata */
 export function throwTerminalOnHandlerIntercept(
   targetService: string
 ): HooksProvider {
@@ -205,7 +205,12 @@ export function throwTerminalOnHandlerIntercept(
       interceptor: {
         handler: async (next) => {
           await next();
-          throw new restate.TerminalError("interceptor terminal error");
+          throw new restate.TerminalError("interceptor terminal error", {
+            metadata: {
+              source: "handler-interceptor",
+              severity: "critical",
+            },
+          });
         },
       },
     };
@@ -374,7 +379,14 @@ export interface TransientError {
 export interface InvocationOutcome {
   status: string;
   /** The Output journal entry — either { value } or { failure } */
-  journalOutput?: { value?: unknown; failure?: string };
+  journalOutput?: {
+    value?: unknown;
+    failure?: {
+      code: number;
+      message: string;
+      metadata?: Record<string, string>;
+    };
+  };
   /** Transient errors recorded in the journal events */
   transientErrors?: TransientError[];
 }
@@ -415,14 +427,27 @@ export async function getInvocationOutcome(
   if (!row) return { status: "not_found" };
   if (row.status !== "completed") return { status: row.status };
 
-  let journalOutput: { value?: unknown; failure?: string } | undefined;
+  let journalOutput:
+    | {
+        value?: unknown;
+        failure?: {
+          code: number;
+          message: string;
+          metadata?: Record<string, string>;
+        };
+      }
+    | undefined;
   if (row.entry_json) {
     const entry = JSON.parse(row.entry_json) as {
       Command?: {
         Output?: {
           result?: {
             Success?: number[];
-            Failure?: { code: number; message: string };
+            Failure?: {
+              code: number;
+              message: string;
+              metadata?: { key: string; value: string }[];
+            };
           };
         };
       };
@@ -436,7 +461,18 @@ export async function getInvocationOutcome(
         journalOutput = { value: decoded };
       }
     } else if (result?.Failure) {
-      journalOutput = { failure: result.Failure.message };
+      const metadata = result.Failure.metadata?.length
+        ? Object.fromEntries(
+            result.Failure.metadata.map((m) => [m.key, m.value])
+          )
+        : undefined;
+      journalOutput = {
+        failure: {
+          code: result.Failure.code,
+          message: result.Failure.message,
+          metadata,
+        },
+      };
     }
   }
 

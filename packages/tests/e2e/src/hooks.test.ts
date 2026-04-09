@@ -112,7 +112,9 @@ function hooksSuite(level: HookLevel) {
       ...hooksAt([recordHookEvents()]),
       handler: async (ctx, _) => {
         await ctx.run("step", () => {
-          throw new restate.TerminalError("run fail");
+          throw new restate.TerminalError("run fail", {
+            metadata: { source: "run-closure", severity: "critical" },
+          });
         });
         return { invocationId: ctx.request().id };
       },
@@ -767,7 +769,15 @@ function hooksSuite(level: HookLevel) {
       ]);
       expect(
         await getInvocationOutcome(env.adminAPIBaseUrl(), invocationId!)
-      ).toMatchObject({ status: "failed" });
+      ).toMatchObject({
+        status: "failed",
+        journalOutput: {
+          failure: {
+            message: expect.stringContaining("run fail") as string,
+            metadata: { source: "run-closure", severity: "critical" },
+          },
+        },
+      });
     });
 
     it("call to non-existent service — handler:error fires on each attempt", async () => {
@@ -890,9 +900,15 @@ function hooksSuite(level: HookLevel) {
       ).toMatchObject({
         status: "failed",
         journalOutput: {
-          failure: expect.stringContaining(
-            "interceptor terminal error"
-          ) as string,
+          failure: {
+            message: expect.stringContaining(
+              "interceptor terminal error"
+            ) as string,
+            metadata: {
+              source: "handler-interceptor",
+              severity: "critical",
+            },
+          },
         },
       });
     });
@@ -917,9 +933,11 @@ function hooksSuite(level: HookLevel) {
       ).toMatchObject({
         status: "failed",
         journalOutput: {
-          failure: expect.stringContaining(
-            "run interceptor terminal error"
-          ) as string,
+          failure: {
+            message: expect.stringContaining(
+              "run interceptor terminal error"
+            ) as string,
+          },
         },
       });
     });
@@ -1558,7 +1576,8 @@ describe("interceptor error isolation", { timeout: 120_000 }, () => {
 
   function recordLeak(id: string, source: string, e: unknown) {
     if (!(e instanceof Error)) return;
-    const obj = e as Record<string, unknown>;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const obj = e as Record<string, any>;
     if (obj.commandType !== undefined)
       leaksFor(id).commandType.push(`${source}: ${e.message}`);
     if (obj.commandIndex !== undefined)
