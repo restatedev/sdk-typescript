@@ -30,3 +30,4 @@ lambda.zip
 .DS_Store
 
 .turbo
+.npm-cache

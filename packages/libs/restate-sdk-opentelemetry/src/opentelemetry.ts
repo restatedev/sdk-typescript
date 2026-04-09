@@ -102,6 +102,20 @@ function resolveAttributes<TArgs extends unknown[]>(
   return source;
 }
 
+function getExceptionMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === "string") {
+    return error;
+  }
+  return "Unknown error";
+}
+
+function getExceptionValue(error: unknown): Error | string {
+  return error instanceof Error ? error : getExceptionMessage(error);
+}
+
 /**
  * Creates a HooksProvider that integrates Restate invocations with
  * OpenTelemetry tracing using the SDK hook system.
@@ -155,11 +169,9 @@ export function createOpenTelemetryHook(
             if (!internal.isSuspendedError(e)) {
               attemptSpan.setStatus({
                 code: SpanStatusCode.ERROR,
-                message: e instanceof Error ? e.message : String(e),
+                message: getExceptionMessage(e),
               });
-              attemptSpan.recordException(
-                e instanceof Error ? e : String(e ?? "Unknown error")
-              );
+              attemptSpan.recordException(getExceptionValue(e));
             }
             throw e;
           } finally {
@@ -191,11 +203,9 @@ export function createOpenTelemetryHook(
             if (!internal.isSuspendedError(e)) {
               runSpan.setStatus({
                 code: SpanStatusCode.ERROR,
-                message: e instanceof Error ? e.message : String(e),
+                message: getExceptionMessage(e),
               });
-              runSpan.recordException(
-                e instanceof Error ? e : String(e ?? "Unknown error")
-              );
+              runSpan.recordException(getExceptionValue(e));
             }
             throw e;
           } finally {
