@@ -391,7 +391,7 @@ export class MappedRestatePromise<T, U> extends BaseRestatePromise<U> {
         if (e instanceof TerminalError) {
           return Promise.reject(e);
         } else {
-          ctx.rejectAttempt(e);
+          ctx.abortAttempt(e);
           return pendingPromise();
         }
       }

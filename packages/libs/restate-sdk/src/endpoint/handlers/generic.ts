@@ -11,7 +11,6 @@
 
 import {
   ensureError,
-  isSuspendedError,
   logError,
   RestateError,
   RetryableError,
@@ -564,7 +563,7 @@ function notifyError(
   if (e instanceof CommandError) {
     const cause = ensureError(e.cause);
     logError(ctx.vmLogger, cause);
-    if (e.isCompletion) {
+    if (e.hasCommandIndex) {
       // Completion failure — command exists in the journal
       ctx.coreVm.notify_error_for_specific_command(
         cause.message,
@@ -586,10 +585,6 @@ function notifyError(
 
   // Handler/interceptor errors
   const error = ensureError(e, asTerminalError);
-
-  // Suspension — control flow, not a failure. No VM notification needed.
-  if (isSuspendedError(error)) return;
-
   logError(ctx.vmLogger, error);
 
   try {

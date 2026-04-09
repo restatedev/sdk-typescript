@@ -124,10 +124,10 @@ export class ContextImpl
     this.runClosuresTracker = new RunClosuresTracker();
     this.promisesExecutor = new PromisesExecutor(
       coreVm,
-      new InputPump(coreVm, inputReader, this.rejectAttempt.bind(this)),
+      new InputPump(coreVm, inputReader, this.abortAttempt.bind(this)),
       this.outputPump,
       this.runClosuresTracker,
-      this.rejectAttempt.bind(this)
+      this.abortAttempt.bind(this)
     );
     this.defaultSerde = defaultSerde ?? serde.json;
     this.serviceKey = input.key;
@@ -241,7 +241,7 @@ export class ContextImpl
         requestSerde.serialize(call.parameter)
       );
     } catch (e) {
-      this.rejectAttempt(e, WasmCommandType.Call);
+      this.abortAttempt(e, WasmCommandType.Call);
       return new InvocationPendingPromise(this);
     }
 
@@ -283,7 +283,7 @@ export class ContextImpl
         invocationIdPromise as RestatePromise<InvocationId>
       );
     } catch (e) {
-      this.rejectAttempt(e);
+      this.abortAttempt(e);
       // We return a pending promise to avoid the caller to see the error.
       return new InvocationPendingPromise(this);
     }
@@ -300,7 +300,7 @@ export class ContextImpl
         requestSerde.serialize(send.parameter)
       );
     } catch (e) {
-      this.rejectAttempt(e, WasmCommandType.OneWayCall);
+      this.abortAttempt(e, WasmCommandType.OneWayCall);
       return new InvocationPendingPromise(this);
     }
 
@@ -338,7 +338,7 @@ export class ContextImpl
         ),
       };
     } catch (e) {
-      this.rejectAttempt(e);
+      this.abortAttempt(e);
       return {
         invocationId: pendingPromise(),
       };
@@ -433,7 +433,7 @@ export class ContextImpl
     try {
       handle = this.coreVm.sys_run(name ?? "");
     } catch (e) {
-      this.rejectAttempt(e);
+      this.abortAttempt(e);
       return new RestatePendingPromise(this);
     }
     const commandIndex = this.coreVm.last_command_index();
@@ -525,7 +525,7 @@ export class ContextImpl
           this.coreVm.propose_run_completion_success(handle, encodedRes);
         }
       } catch (e) {
-        this.rejectAttempt(e);
+        this.abortAttempt(e);
         return pendingPromise<T>();
       }
       await this.outputPump.awaitNextProgress();
@@ -581,7 +581,7 @@ export class ContextImpl
     try {
       awakeable = this.coreVm.sys_awakeable();
     } catch (e) {
-      this.rejectAttempt(e);
+      this.abortAttempt(e);
       return {
         id: "invalid",
         promise: ConstRestatePromise.pending(),
@@ -653,14 +653,14 @@ export class ContextImpl
     try {
       input = prepare();
     } catch (e) {
-      this.rejectAttempt(e, commandType);
+      this.abortAttempt(e, commandType);
       return;
     }
 
     try {
       vmCall(this.coreVm, input);
     } catch (e) {
-      this.rejectAttempt(e);
+      this.abortAttempt(e);
     }
   }
 
@@ -674,7 +674,7 @@ export class ContextImpl
     try {
       input = prepare();
     } catch (e) {
-      this.rejectAttempt(e, commandType);
+      this.abortAttempt(e, commandType);
       return new RestatePendingPromise(this);
     }
 
@@ -682,7 +682,7 @@ export class ContextImpl
     try {
       handle = vmCall(this.coreVm, input);
     } catch (e) {
-      this.rejectAttempt(e);
+      this.abortAttempt(e);
       return new RestatePendingPromise(this);
     }
     const commandIndex = this.coreVm.last_command_index();
@@ -693,7 +693,7 @@ export class ContextImpl
     );
   }
 
-  rejectAttempt(e: unknown, commandType?: WasmCommandType) {
+  abortAttempt(e: unknown, commandType?: WasmCommandType) {
     // ensureError so interceptors always receive a proper Error,
     // not a raw VM object like { code, message }.
     this.invocationEndPromise.reject(
@@ -871,7 +871,7 @@ export class CommandError extends Error {
   }
 
   /** True when the error is for a specific command that exists in the journal. */
-  get isCompletion(): boolean {
+  get hasCommandIndex(): boolean {
     return this.commandIndex !== undefined;
   }
 }
