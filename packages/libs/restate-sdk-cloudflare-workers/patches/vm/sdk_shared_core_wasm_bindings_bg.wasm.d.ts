@@ -47,6 +47,8 @@ export const wasmvm_sys_complete_awakeable_failure: (a: number, b: number, c: nu
 export const wasmvm_sys_complete_awakeable_success: (a: number, b: number, c: number, d: number, e: number) => [number, number];
 export const wasmvm_sys_complete_promise_failure: (a: number, b: number, c: number, d: any) => [number, number, number];
 export const wasmvm_sys_complete_promise_success: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+export const wasmvm_sys_complete_signal_failure: (a: number, b: number, c: number, d: number, e: number, f: any) => [number, number];
+export const wasmvm_sys_complete_signal_success: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number];
 export const wasmvm_sys_end: (a: number) => [number, number];
 export const wasmvm_sys_get_invocation_output: (a: number, b: number, c: number) => [number, number, number];
 export const wasmvm_sys_get_promise: (a: number, b: number, c: number) => [number, number, number];
@@ -57,6 +59,7 @@ export const wasmvm_sys_peek_promise: (a: number, b: number, c: number) => [numb
 export const wasmvm_sys_run: (a: number, b: number, c: number) => [number, number, number];
 export const wasmvm_sys_send: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: bigint, n: number, o: number, p: number, q: number) => [number, number, number];
 export const wasmvm_sys_set_state: (a: number, b: number, c: number, d: number, e: number) => [number, number];
+export const wasmvm_sys_signal: (a: number, b: number, c: number) => [number, number, number];
 export const wasmvm_sys_sleep: (a: number, b: bigint, c: number, d: number) => [number, number, number];
 export const wasmvm_sys_write_output_failure: (a: number, b: any) => [number, number];
 export const wasmvm_sys_write_output_success: (a: number, b: number, c: number) => [number, number];

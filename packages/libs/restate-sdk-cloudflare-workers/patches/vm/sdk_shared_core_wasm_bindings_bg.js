@@ -554,6 +554,19 @@ export class WasmVM {
         wasm.__wbg_wasmvm_free(ptr, 0);
     }
     /**
+     * @param {string} signal_name
+     * @returns {number}
+     */
+    sys_signal(signal_name) {
+        const ptr0 = passStringToWasm0(signal_name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmvm_sys_signal(this.__wbg_ptr, ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ret[0] >>> 0;
+    }
+    /**
      * @param {Uint32Array} handles
      * @returns {WasmDoProgressResult}
      */
@@ -791,6 +804,38 @@ export class WasmVM {
             throw takeFromExternrefTable0(ret[1]);
         }
         return ret[0] >>> 0;
+    }
+    /**
+     * @param {string} invocation_id
+     * @param {string} signal_name
+     * @param {WasmFailure} value
+     */
+    sys_complete_signal_failure(invocation_id, signal_name, value) {
+        const ptr0 = passStringToWasm0(invocation_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(signal_name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmvm_sys_complete_signal_failure(this.__wbg_ptr, ptr0, len0, ptr1, len1, value);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
+    /**
+     * @param {string} invocation_id
+     * @param {string} signal_name
+     * @param {Uint8Array} buffer
+     */
+    sys_complete_signal_success(invocation_id, signal_name, buffer) {
+        const ptr0 = passStringToWasm0(invocation_id, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(signal_name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ptr2 = passArray8ToWasm0(buffer, wasm.__wbindgen_malloc);
+        const len2 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmvm_sys_complete_signal_success(this.__wbg_ptr, ptr0, len0, ptr1, len1, ptr2, len2);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
     }
     /**
      * @param {string} key

@@ -1,4 +1,6 @@
+import type { Serde } from "@restatedev/restate-sdk-core";
 import { Context, InvocationId, RestatePromise } from "./context.js";
+import type { TerminalError } from "./types/errors.js";
 
 export { isSuspendedError } from "./types/errors.js";
 
@@ -101,4 +103,97 @@ export interface ContextInternal extends Context {
    * @experimental
    */
   cancelPreviousCalls(): RestatePromise<InvocationId[]>;
+
+  /**
+   * Wait for a named signal to arrive on the current invocation.
+   *
+   * Signals are identified by name and are scoped to the current invocation.
+   * Another handler can send a signal to this invocation using
+   * {@link InvocationReference.signal}, specifying this invocation's
+   * ID (available via `ctx.request().id`) and the same signal name.
+   *
+   * @param name the name of the signal to wait for.
+   * @param serde optional custom serializer/deserializer for the payload.
+   * @returns a {@link RestatePromise} that resolves when the signal arrives.
+   *
+   * @example
+   * const ctxInternal = ctx as restate.internal.ContextInternal;
+   * const approved = await ctxInternal.signal<boolean>("approved");
+   *
+   * @experimental
+   */
+  signal<T>(name: string, serde?: Serde<T>): RestatePromise<T>;
+
+  /**
+   * Get a reference to a target invocation, to send signals to it.
+   *
+   * @param invocationId the invocation ID of the target invocation.
+   * @returns an {@link InvocationReference} for the target invocation.
+   *
+   * @example
+   * const ctxInternal = ctx as restate.internal.ContextInternal;
+   * const target = ctxInternal.invocation(targetInvocationId);
+   * target.signal("approved").resolve(true);
+   * target.signal("approved").reject("Request denied");
+   *
+   * @experimental
+   */
+  invocation(invocationId: InvocationId): InvocationReference;
+}
+
+/**
+ * A reference to a target invocation, used to send signals.
+ *
+ * @experimental
+ */
+export interface InvocationReference {
+  /**
+   * Get a handle to a named signal on the target invocation.
+   *
+   * @param name the name of the signal.
+   * @param serde optional custom serializer/deserializer for the payload.
+   * @returns a {@link SignalReference} to resolve or reject the signal.
+   *
+   * @experimental
+   */
+  signal<T>(name: string, serde?: Serde<T>): SignalReference<T>;
+
+  /**
+   * Cancel the target invocation.
+   */
+  cancel(): void;
+
+  /**
+   * Attach to the target invocation and wait for its result.
+   *
+   * @param serde optional custom serializer/deserializer for the result.
+   * @returns a {@link RestatePromise} that resolves with the invocation result.
+   */
+  attach<T>(serde?: Serde<T>): RestatePromise<T>;
+}
+
+/**
+ * A handle to send a signal value to a target invocation.
+ *
+ * @experimental
+ */
+export interface SignalReference<T> {
+  /**
+   * Resolve the signal with a value.
+   *
+   * @param payload the payload to send.
+   *
+   * @experimental
+   */
+  resolve(payload?: T): void;
+
+  /**
+   * Reject the signal. The target invocation waiting on this signal will be
+   * woken up with a terminal error containing the provided reason.
+   *
+   * @param reason the reason for rejection, either a string message or a {@link TerminalError}.
+   *
+   * @experimental
+   */
+  reject(reason: string | TerminalError): void;
 }

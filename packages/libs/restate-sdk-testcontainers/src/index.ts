@@ -44,4 +44,5 @@ export type {
   HooksProvider,
   Hooks,
   Interceptor,
+  InvocationId,
 } from "@restatedev/restate-sdk";

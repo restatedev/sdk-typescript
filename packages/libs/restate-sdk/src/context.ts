@@ -52,7 +52,7 @@ export interface Request {
    * The unique id that identifies the current function invocation. This id is guaranteed to be
    * unique across invocations, but constant across reties and suspensions.
    */
-  readonly id: string;
+  readonly id: InvocationId;
 
   /**
    * Request headers - the following headers capture the original invocation headers, as provided to
@@ -413,13 +413,13 @@ export interface Context extends RestateContext {
    * Reject an awakeable. When rejecting, the service waiting on this awakeable will be woken up with a terminal error with the provided reason.
    * @param id the string ID of the awakeable.
    * This is supplied by the service that needs to be woken up.
-   * @param reason the reason of the rejection.
+   * @param reason the reason of the rejection, either a string message or a {@link TerminalError}.
    *
    * @example
    * // The sleeping service should have sent the awakeableIdentifier string to this service.
    * ctx.rejectAwakeable(awakeableIdentifier, "super bad error");
    */
-  rejectAwakeable(id: string, reason: string): void;
+  rejectAwakeable(id: string, reason: string | TerminalError): void;
 
   /**
    * Sleep until a timeout has passed.

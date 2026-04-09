@@ -70,7 +70,11 @@ import {
   SingleRestatePromise,
 } from "./promises.js";
 import { InputPump, OutputPump } from "./io.js";
-import type { ContextInternal } from "./internal.js";
+import type {
+  ContextInternal,
+  InvocationReference,
+  SignalReference,
+} from "./internal.js";
 import { InputReader, OutputWriter } from "./endpoint/handlers/types.js";
 import { ExecutionOptions } from "./endpoint/components.js";
 
@@ -647,18 +651,40 @@ export class ContextImpl
     );
   }
 
-  public rejectAwakeable(id: string, reason: string): void {
+  public rejectAwakeable(id: string, reason: string | TerminalError): void {
     this.processNonCompletableEntry(
       WasmCommandType.CompleteAwakeable,
       () => {},
       (vm) => {
-        vm.sys_complete_awakeable_failure(id, {
-          code: UNKNOWN_ERROR_CODE,
-          message: reason,
-          metadata: [],
-        });
+        vm.sys_complete_awakeable_failure(id, toWasmFailure(reason));
       }
     );
+  }
+
+  // -- Signals
+
+  public signal<T>(name: string, serde?: Serde<T>): RestatePromise<T> {
+    let handle: number;
+    try {
+      handle = this.coreVm.sys_signal(name);
+    } catch (e) {
+      this.abortAttempt(e);
+      return ConstRestatePromise.pending();
+    }
+
+    return new SingleRestatePromise(
+      this,
+      handle,
+      completeSignalPromiseUsing(
+        VoidAsUndefined,
+        SuccessWithSerde(serde ?? this.defaultSerde, this.journalValueCodec),
+        Failure
+      )
+    );
+  }
+
+  public invocation(invocationId: InvocationId): InvocationReference {
+    return new InvocationReferenceImpl(this, invocationId);
   }
 
   public promise<T>(name: string, serde?: Serde<T>): DurablePromise<T> {
@@ -706,7 +732,7 @@ export class ContextImpl
 
   // -- Various private methods
 
-  private processNonCompletableEntry<T>(
+  processNonCompletableEntry<T>(
     commandType: vm.WasmCommandType,
     prepare: () => T,
     vmCall: (vm: vm.WasmVM, input: T) => void
@@ -766,6 +792,24 @@ export class ContextImpl
   }
 }
 
+function toWasmFailure(reason: string | TerminalError): vm.WasmFailure {
+  if (typeof reason === "string") {
+    return {
+      code: UNKNOWN_ERROR_CODE,
+      message: reason,
+      metadata: [],
+    };
+  }
+  return {
+    code: reason.code,
+    message: reason.message,
+    metadata: Object.entries(reason.metadata ?? {}).map(([key, value]) => ({
+      key,
+      value,
+    })),
+  };
+}
+
 function unpackRunParameters<T>(
   a: string | RunAction<T>,
   b?: RunAction<T>
@@ -783,6 +827,62 @@ function unpackRunParameters<T>(
     throw new TypeError("unexpected a function as a second parameter.");
   }
   return { action: a };
+}
+
+class InvocationReferenceImpl implements InvocationReference {
+  constructor(
+    private readonly ctx: ContextImpl,
+    private readonly invocationId: InvocationId
+  ) {}
+
+  signal<T>(name: string, serde?: Serde<T>): SignalReference<T> {
+    return new SignalReferenceImpl(this.ctx, this.invocationId, name, serde);
+  }
+
+  cancel(): void {
+    this.ctx.cancel(this.invocationId);
+  }
+
+  attach<T>(serde?: Serde<T>): RestatePromise<T> {
+    return this.ctx.attach(this.invocationId, serde);
+  }
+}
+
+class SignalReferenceImpl<T> implements SignalReference<T> {
+  private readonly serde: Serde<T>;
+
+  constructor(
+    private readonly ctx: ContextImpl,
+    private readonly invocationId: InvocationId,
+    private readonly name: string,
+    serde?: Serde<T>
+  ) {
+    this.serde = serde ?? (this.ctx.defaultSerde as unknown as Serde<T>);
+  }
+
+  resolve(payload?: T): void {
+    this.ctx.processNonCompletableEntry(
+      WasmCommandType.SendSignal,
+      () =>
+        this.ctx.journalValueCodec.encode(this.serde.serialize(payload as T)),
+      (vm, bytes) =>
+        vm.sys_complete_signal_success(this.invocationId, this.name, bytes)
+    );
+  }
+
+  reject(reason: string | TerminalError): void {
+    this.ctx.processNonCompletableEntry(
+      WasmCommandType.SendSignal,
+      () => {},
+      (vm) => {
+        vm.sys_complete_signal_failure(
+          this.invocationId,
+          this.name,
+          toWasmFailure(reason)
+        );
+      }
+    );
+  }
 }
 
 class DurablePromiseImpl<T> implements DurablePromise<T> {
