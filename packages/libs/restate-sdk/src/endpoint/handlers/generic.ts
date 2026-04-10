@@ -330,7 +330,9 @@ class RestateInvokeResponse implements RestateResponse {
     abortSignal.addEventListener(
       "abort",
       () => {
+        // In any case, on abort remove the invocation logger to avoid memory leaks
         destroyLogger(this.loggerId);
+
         // Poison the VM so the handler fails on the next VM call.
         // We only read new input from the server when a Restate command is
         // waiting for a response. If no command has been issued, the server's
