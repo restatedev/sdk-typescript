@@ -333,12 +333,11 @@ class RestateInvokeResponse implements RestateResponse {
         // In any case, on abort remove the invocation logger to avoid memory leaks
         destroyLogger(this.loggerId);
 
-        // Poison the VM so the handler fails on the next VM call.
+        // When the HTTP connection closes (e.g. abort timeout), poison the VM.
         // We only read new input from the server when a Restate command is
         // waiting for a response. If no command has been issued, the server's
-        // abort signal is never read.
-        // Deferred with setImmediate so in-flight PromisesExecutor work
-        // gets to deliver the specific protocol-level error first.
+        // abort signal is never read. Poisoning the VM ensures the handler
+        // fails on the next VM call (e.g. ctx.run, ctx.sleep).
         setImmediate(() => {
           const msg = "Connection closed";
           this.coreVm.notify_error(msg, msg);
