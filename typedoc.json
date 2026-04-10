@@ -5,6 +5,7 @@
     "packages/libs/restate-sdk-core",
     "packages/libs/restate-sdk",
     "packages/libs/restate-sdk-clients",
+    "packages/libs/restate-sdk-opentelemetry",
     "packages/libs/restate-sdk-testcontainers",
     "packages/libs/restate-sdk-zod"
   ],
