@@ -332,6 +332,16 @@ class RestateInvokeResponse implements RestateResponse {
       () => {
         // In any case, on abort remove the invocation logger to avoid memory leaks
         destroyLogger(this.loggerId);
+
+        // When the HTTP connection closes (e.g. abort timeout), poison the VM.
+        // We only read new input from the server when a Restate command is
+        // waiting for a response. If no command has been issued, the server's
+        // abort signal is never read. Poisoning the VM ensures the handler
+        // fails on the next VM call (e.g. ctx.run, ctx.sleep).
+        setImmediate(() => {
+          const msg = "Connection closed";
+          this.coreVm.notify_error(msg, msg);
+        });
       },
       { once: true }
     );
@@ -453,22 +463,6 @@ class RestateInvokeResponse implements RestateResponse {
       );
       return;
     }
-
-    // When the HTTP connection closes (e.g. abort timeout), poison the VM.
-    // We only read new input from the server when a Restate command is
-    // waiting for a response. If no command has been issued, the server's
-    // abort signal is never read. Poisoning the VM ensures the handler
-    // fails on the next VM call (e.g. ctx.run, ctx.sleep).
-    abortSignal.addEventListener(
-      "abort",
-      () => {
-        setImmediate(() => {
-          const msg = "Connection closed";
-          this.coreVm.notify_error(msg, msg);
-        });
-      },
-      { once: true }
-    );
 
     // Run user code. Errors that reach the handler or interceptor code
     // (handler throws, interceptor throws, entry completes with terminal
