@@ -661,6 +661,8 @@ export interface Rand {
 
 /**
  * A promise that can be combined using Promise combinators in RestateContext.
+ *
+ * To check at runtime whether a value is a {@link RestatePromise}, use {@link isRestatePromise}.
  */
 export type RestatePromise<T> = Promise<T> & {
   /**

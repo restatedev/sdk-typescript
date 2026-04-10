@@ -38,6 +38,16 @@ export function pendingPromise<T>(): Promise<T> {
 // These promises are "proxy promises" that will be handed over to the user,
 // and moved forward by the PromiseExecutor below when the user awaits on them.
 
+/**
+ * Returns `true` if the given value is a {@link RestatePromise}.
+ *
+ * Use this for runtime type detection when you need to distinguish Restate promises
+ * from regular promises, e.g. for overload resolution.
+ */
+export function isRestatePromise<T>(p: Promise<T>): p is RestatePromise<T> {
+  return p instanceof InternalRestatePromise;
+}
+
 enum PromiseState {
   COMPLETED,
   NOT_COMPLETED,
@@ -268,7 +278,7 @@ export class CombinatorRestatePromise extends BaseRestatePromise<any> {
     let foundContext: ContextImpl | undefined = undefined;
 
     for (const [idx, promise] of promises.entries()) {
-      if (!(promise instanceof InternalRestatePromise)) {
+      if (!isRestatePromise(promise)) {
         throw new Error(
           `Promise index ${idx} used inside the combinator is not an instance of RestatePromise. This is not supported.`
         );
@@ -282,7 +292,7 @@ export class CombinatorRestatePromise extends BaseRestatePromise<any> {
           );
         }
       }
-      castedPromises.push(promise);
+      castedPromises.push(promise as InternalRestatePromise<any>);
     }
 
     if (foundContext === undefined) {
