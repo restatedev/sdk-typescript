@@ -334,6 +334,9 @@ export class MappedRestatePromise<T, U> extends BaseRestatePromise<U> {
     value?: T,
     failure?: TerminalError
   ) => Promise<U>;
+  // Memoized so the mapper fires at most once regardless of how many times
+  // the promise is awaited / consumed via then/catch/finally/publicPromise.
+  private _mappedPromise?: Promise<U>;
 
   constructor(
     ctx: ContextImpl,
@@ -364,6 +367,10 @@ export class MappedRestatePromise<T, U> extends BaseRestatePromise<U> {
   }
 
   publicPromise(): Promise<U> {
+    return (this._mappedPromise ??= this.buildMappedPromise());
+  }
+
+  private buildMappedPromise(): Promise<U> {
     const promiseMapper = this.publicPromiseMapper;
     return this.inner.publicPromise().then(
       (t) => promiseMapper(t, undefined),

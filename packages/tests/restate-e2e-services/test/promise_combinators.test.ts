@@ -131,8 +131,16 @@ describe("PromiseCombinators", () => {
     expect(result).toBe("timeout");
   });
 
-  it("map with sync ctx side effect produces expected mapped value deterministically", async () => {
-    const result = await client.verifyConstPromiseMapDeterministic("hello");
-    expect(result).toBe("hello");
+  it("map with sync ctx side effect and const promise produces expected mapped value deterministically", async () => {
+    await client.verifyConstPromiseMapInterleaving();
+  });
+
+  it("map with sync ctx side effect and non-const promise produces expected mapped value deterministically", async () => {
+    await client.verifyPromiseMapInterleaving();
+  });
+
+  it("map gets run once", async () => {
+    const result = await client.verifyPromiseMapGetsRunOnce();
+    expect(result).toBe(1);
   });
 });
