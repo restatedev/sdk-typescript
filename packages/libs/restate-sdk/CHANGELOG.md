@@ -1,5 +1,22 @@
 # @restatedev/restate-sdk
 
+## 1.13.0
+
+### Minor Changes
+
+- a296aa5: Fixes to `RestatePromise.map`:
+  - **Bug fix:** for promises created via `RestatePromise.resolve()` / `RestatePromise.reject()`, `.map()` is now correctly executed.
+  - **Bug fix/Behavioral breaking change:** for all other promises, the mapper closure now runs **exactly once**, regardless of how many times the resulting promise is awaited. Previously it ran on every await.
+
+- a296aa5: Add `setOutputContentTypeIfEmpty` handler option, allowing handlers to configure the response `content-type` header when the output body is empty.
+  This is needed when using Protobuf, where an empty body is still a valid message and the `content-type` must be set accordingly.
+
+### Patch Changes
+
+- Updated dependencies [a296aa5]
+- Updated dependencies [a296aa5]
+  - @restatedev/restate-sdk-core@1.13.0
+
 ## 1.12.0
 
 ### New Features
@@ -51,9 +68,7 @@ const greeter = restate.service({
   name: "Greeter",
   options: {
     // Set up the openTelemetryHook
-    hooks: [
-      openTelemetryHook({ tracer: trace.getTracer("greeter-service") }),
-    ],
+    hooks: [openTelemetryHook({ tracer: trace.getTracer("greeter-service") })],
   },
   handlers: {
     greet: async (ctx: Context, name: string) => {
@@ -74,6 +89,7 @@ const greeter = restate.service({
 ```
 
 For more complete examples, check out:
+
 - OpenTelemetry integration example: https://github.com/restatedev/examples/tree/main/typescript/integrations/opentelemetry
 
 #### HTTP/1.1 Handler for Node.js
@@ -110,6 +126,7 @@ Check [`RestateContainer`](https://restatedev.github.io/sdk-typescript/classes/_
 #### Experimental APIs
 
 We're releasing two new experimental APIs:
+
 - Explicit cancellation, to manually handle Restate's cancellation, instead of relying on `RestatePromise` failing with `CancelledError` when cancellation is received.
 - Signals, a way for invocations to communicate between each other.
 
