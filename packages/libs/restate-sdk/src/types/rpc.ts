@@ -312,6 +312,18 @@ export type ServiceHandlerOpts<I, O> = {
   output?: Serde<O>;
 
   /**
+   * If `true`, the output `Content-Type` declared by the output `Serde` is set
+   * on the response even when the serialized output is an empty byte array.
+   *
+   * This is needed for serialization formats where an empty byte array is a
+   * valid value (for example Protobuf, where an empty message serializes to
+   * zero bytes).
+   *
+   * Defaults to `false`: when the serialized output is empty, no `Content-Type` header is sent.
+   */
+  setOutputContentTypeIfEmpty?: boolean;
+
+  /**
    * Human-readable description of the handler, shown in documentation/admin tools.
    */
   description?: string;

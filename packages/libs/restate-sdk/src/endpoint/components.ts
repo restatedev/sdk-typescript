@@ -97,6 +97,8 @@ function handlerOutputDiscovery(
   defaultSerde: Serde<any>
 ): d.OutputPayload {
   const serde = handler.options?.output ?? defaultSerde;
+  const setContentTypeIfEmpty =
+    handler.options?.setOutputContentTypeIfEmpty ?? false;
 
   let contentType = undefined;
   let jsonSchema = undefined;
@@ -108,11 +110,11 @@ function handlerOutputDiscovery(
     contentType = serde.contentType;
   } else {
     // no input information
-    return { setContentTypeIfEmpty: false };
+    return { setContentTypeIfEmpty };
   }
 
   return {
-    setContentTypeIfEmpty: false,
+    setContentTypeIfEmpty,
     jsonSchema,
     contentType,
   };
