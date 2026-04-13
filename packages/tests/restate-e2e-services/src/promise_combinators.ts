@@ -158,6 +158,39 @@ const promiseCombinators = restate.service({
           return "unexpected";
         });
     },
+
+    verifyConstPromiseMapDeterministic: restate.handlers.handler(
+      {
+        inactivityTimeout: 0,
+      },
+      async (ctx: restate.Context, value: string): Promise<string> => {
+        // 1. Contract: the mapper runs ONLY when the RestatePromise is
+        //    awaited, never eagerly when `.map()` is called.
+        // 2. If violated: the mapper's `ctx.rand.uuidv4()` lands BETWEEN
+        //    the two outer `ctx.rand.uuidv4()` calls below (at .map() time).
+        // 3. If held: it lands AFTER both, when `mappedPromise` is awaited.
+        // 4. The two interleavings observe different RNG state, so the uuid
+        //    produced inside the mapper differs.
+        // 5. We feed that uuid as the journaled name of a `ctx.sleep`. Names
+        //    are checked for equality on replay; a mismatch fails the
+        //    invocation.
+        // 6. inactivityTimeout: 0 forces suspension at every journal entry,
+        //    so any divergence fails fast on the very next replay.
+
+        ctx.rand.uuidv4();
+        const mappedPromise = RestatePromise.resolve(undefined).map(() =>
+          ctx.rand.uuidv4()
+        );
+        ctx.rand.uuidv4();
+
+        await ctx.sleep({ milliseconds: 50 });
+        const shouldBeDeterministic = await mappedPromise;
+
+        await ctx.sleep({ milliseconds: 50 }, shouldBeDeterministic);
+
+        return value;
+      }
+    ),
   },
 });
 

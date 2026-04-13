@@ -130,4 +130,9 @@ describe("PromiseCombinators", () => {
     const result = await client.raceEmptyOrTimeoutMapped();
     expect(result).toBe("timeout");
   });
+
+  it("map with sync ctx side effect produces expected mapped value deterministically", async () => {
+    const result = await client.verifyConstPromiseMapDeterministic("hello");
+    expect(result).toBe("hello");
+  });
 });

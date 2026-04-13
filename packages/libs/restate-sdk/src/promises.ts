@@ -387,7 +387,7 @@ export class ConstRestatePromise<T> extends InternalRestatePromise<T> {
   private constructor(
     // Factory for the underlying promise. Called at most once, memoized in
     // `_constPromise`.
-      //
+    //
     // This way `map` is lazy, making it deterministically invoked on await points.
     private readonly promiseFactory: () => Promise<T>,
     private readonly settled: boolean
