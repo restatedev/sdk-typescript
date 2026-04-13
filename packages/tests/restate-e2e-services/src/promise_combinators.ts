@@ -9,6 +9,7 @@
 
 import * as restate from "@restatedev/restate-sdk";
 import { REGISTRY } from "./services.js";
+import { setTimeout } from "node:timers/promises";
 
 const promiseCombinators = restate.service({
   name: "PromiseCombinators",
@@ -157,6 +158,95 @@ const promiseCombinators = restate.service({
           }
           return "unexpected";
         });
+    },
+
+    // --- Async map on ConstRestatePromise ---
+
+    resolveAsyncMap: async (
+      _ctx: restate.Context,
+      value: string
+    ): Promise<string> => {
+      // async mapper on a resolved const promise
+      return RestatePromise.resolve(value).map(async (v) => {
+        return `mapped:${v ?? ""}`;
+      });
+    },
+
+    rejectAsyncMapRecover: async (
+      _ctx: restate.Context,
+      message: string
+    ): Promise<string> => {
+      // async mapper recovers from a rejected const promise
+      return RestatePromise.reject<string>(
+        new restate.TerminalError(message)
+      ).map(async (_v, err) => {
+        return `recovered:${err?.message ?? ""}`;
+      });
+    },
+
+    resolveAsyncMapChained: async (
+      _ctx: restate.Context,
+      value: string
+    ): Promise<string> => {
+      // chained async maps on a resolved const promise
+      return RestatePromise.resolve(value)
+        .map(async (v) => `${v ?? ""}-a`)
+        .map(async (v) => `${v ?? ""}-b`)
+        .map(async (v) => `${v ?? ""}-c`);
+    },
+
+    resolveAsyncMapWithCtxRun: async (
+      ctx: restate.Context,
+      value: string
+    ): Promise<string> => {
+      // async mapper that performs a ctx.run inside — verifies determinism:
+      // the ctx.run must be journaled exactly once across replays even though
+      // the mapper is a microtask-deferred async closure.
+      return RestatePromise.resolve(value).map(async (v) => {
+        const suffix = await ctx.run("append", () => "ran");
+        return `${v ?? ""}-${suffix}`;
+      });
+    },
+
+    resolveAsyncMapThrows: async (
+      _ctx: restate.Context,
+      input: { value: string; errorMessage: string }
+    ): Promise<string> => {
+      // async mapper throws TerminalError — must propagate as rejection
+      return RestatePromise.resolve(input.value).map(async () => {
+        throw new restate.TerminalError(input.errorMessage);
+      });
+    },
+
+    resolveAsyncMapOrTimeout: async (
+      _ctx: restate.Context,
+      value: string
+    ): Promise<string> => {
+      // resolve().map(async).orTimeout() — mapped promise inherits settled=true,
+      // so orTimeout returns `this` and the async mapper still runs to completion.
+      return RestatePromise.resolve(value)
+        .map(async (v) => `mapped:${v ?? ""}`)
+        .orTimeout(1);
+    },
+
+    allSettledAsyncMapWithCtxRun: async (
+      ctx: restate.Context,
+      values: string[]
+    ): Promise<string[]> => {
+      // Build N const RestatePromises, each with an async mapper that calls ctx.run,
+      // then await them together via RestatePromise.allSettled.
+      // Verifies: (a) mappers fire lazily (only when allSettled consumes them),
+      // (b) each ctx.run is journaled deterministically, (c) results come back in order.
+      const promises = values.map((v, i) =>
+        RestatePromise.resolve(v).map(async (inner) => {
+          const suffix = await ctx.run(`run-${i}`, async () => {
+            await setTimeout(Math.random() * 1000);
+            return `ran-${i}`;
+          });
+          return `${inner ?? ""}:${suffix}`;
+        })
+      );
+      return RestatePromise.all(promises);
     },
   },
 });

@@ -130,4 +130,54 @@ describe("PromiseCombinators", () => {
     const result = await client.raceEmptyOrTimeoutMapped();
     expect(result).toBe("timeout");
   });
+
+  // --- Async map on ConstRestatePromise ---
+
+  it("resolve().map(async) returns the mapped value", async () => {
+    const result = await client.resolveAsyncMap("hello");
+    expect(result).toBe("mapped:hello");
+  });
+
+  it("reject().map(async) can recover from rejection", async () => {
+    const result = await client.rejectAsyncMapRecover("boom");
+    expect(result).toBe("recovered:boom");
+  });
+
+  it("resolve().map(async).map(async).map(async) chains correctly", async () => {
+    const result = await client.resolveAsyncMapChained("start");
+    expect(result).toBe("start-a-b-c");
+  });
+
+  it("resolve().map(async) can perform ctx.run inside the mapper", async () => {
+    const result = await client.resolveAsyncMapWithCtxRun("val");
+    expect(result).toBe("val-ran");
+  });
+
+  it("resolve().map(async) propagates TerminalError thrown in mapper", async () => {
+    await expect(
+      client.resolveAsyncMapThrows({ value: "x", errorMessage: "mapper fail" })
+    ).rejects.toThrow("mapper fail");
+  });
+
+  it("resolve().map(async).orTimeout() returns the mapped value", async () => {
+    const result = await client.resolveAsyncMapOrTimeout("hello");
+    expect(result).toBe("mapped:hello");
+  });
+
+  it("allSettled over many resolve().map(async ctx.run) preserves order and journals each run", async () => {
+    const result = await client.allSettledAsyncMapWithCtxRun([
+      "a",
+      "b",
+      "c",
+      "d",
+      "e",
+    ]);
+    expect(result).toEqual([
+      "a:ran-0",
+      "b:ran-1",
+      "c:ran-2",
+      "d:ran-3",
+      "e:ran-4",
+    ]);
+  });
 });
