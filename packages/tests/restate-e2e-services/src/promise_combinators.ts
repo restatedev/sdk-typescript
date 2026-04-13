@@ -9,7 +9,7 @@
 
 import * as restate from "@restatedev/restate-sdk";
 import { REGISTRY } from "./services.js";
-import {setTimeout} from "node:timers/promises"
+import { setTimeout } from "node:timers/promises";
 
 const promiseCombinators = restate.service({
   name: "PromiseCombinators",
@@ -240,8 +240,8 @@ const promiseCombinators = restate.service({
       const promises = values.map((v, i) =>
         RestatePromise.resolve(v).map(async (inner) => {
           const suffix = await ctx.run(`run-${i}`, async () => {
-           await setTimeout(Math.random() *1000)
-           return `ran-${i}`;
+            await setTimeout(Math.random() * 1000);
+            return `ran-${i}`;
           });
           return `${inner ?? ""}:${suffix}`;
         })

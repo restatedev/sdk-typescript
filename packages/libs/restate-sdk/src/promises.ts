@@ -170,7 +170,9 @@ abstract class BaseRestatePromise<T> extends InternalRestatePromise<T> {
     ) as RestatePromise<T>;
   }
 
-  map<U>(mapper: (value?: T, failure?: TerminalError) => U | Promise<U>): RestatePromise<U> {
+  map<U>(
+    mapper: (value?: T, failure?: TerminalError) => U | Promise<U>
+  ): RestatePromise<U> {
     return new MappedRestatePromise(this[RESTATE_CTX_SYMBOL], this, mapper);
   }
 
