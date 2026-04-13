@@ -382,30 +382,40 @@ export class MappedRestatePromise<T, U> extends BaseRestatePromise<U> {
 }
 
 export class ConstRestatePromise<T> extends InternalRestatePromise<T> {
+  private _constPromise?: Promise<T>;
+
   private constructor(
-    private readonly constPromise: Promise<T>,
+    // Factory for the underlying promise. Called at most once, memoized in
+    // `_constPromise`.
+      //
+    // This way `map` is lazy, making it deterministically invoked on await points.
+    private readonly promiseFactory: () => Promise<T>,
     private readonly settled: boolean
   ) {
     super();
   }
 
+  private get constPromise(): Promise<T> {
+    return (this._constPromise ??= this.promiseFactory());
+  }
+
   static resolve<T>(value: T): ConstRestatePromise<Awaited<T>> {
-    return new ConstRestatePromise(Promise.resolve(value), true);
+    return new ConstRestatePromise(() => Promise.resolve(value), true);
   }
 
   static reject<T = never>(reason: TerminalError): ConstRestatePromise<T> {
-    return new ConstRestatePromise<T>(Promise.reject(reason), true);
+    return new ConstRestatePromise<T>(() => Promise.reject(reason), true);
   }
 
   static pending<T>(): ConstRestatePromise<T> {
-    return new ConstRestatePromise<T>(pendingPromise(), false);
+    return new ConstRestatePromise<T>(() => pendingPromise<T>(), false);
   }
 
   static fromPromise<T>(
     promise: Promise<T>,
     settled: boolean
   ): ConstRestatePromise<T> {
-    return new ConstRestatePromise(promise, settled);
+    return new ConstRestatePromise(() => promise, settled);
   }
 
   // --- Promise methods
@@ -435,11 +445,14 @@ export class ConstRestatePromise<T> extends InternalRestatePromise<T> {
   }
 
   map<U>(mapper: (value?: T, failure?: TerminalError) => U): RestatePromise<U> {
-    return ConstRestatePromise.fromPromise(
-      this.constPromise.then(
-        (value) => mapper(value, undefined),
-        (reason) => mapper(undefined, reason as TerminalError)
-      ),
+    if (!this.settled) return this as unknown as RestatePromise<U>;
+    const selfConstPromise = this.constPromise;
+    return new ConstRestatePromise<U>(
+      () =>
+        selfConstPromise.then(
+          (value) => mapper(value, undefined),
+          (reason) => mapper(undefined, reason as TerminalError)
+        ),
       this.settled
     );
   }
