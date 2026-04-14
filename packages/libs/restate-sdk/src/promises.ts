@@ -532,12 +532,24 @@ export class PromisesExecutor {
 
         if (doProgressResult === "AnyCompleted") {
           // Next recursion will cause the promise to do some progress
-        } else if (doProgressResult === "ReadFromInput") {
-          // Read from input
-          await this.inputPump.awaitNextProgress();
-        } else if (doProgressResult === "WaitingPendingRun") {
-          // Wait for any of the pending run to complete
-          await this.runClosuresTracker.awaitNextCompletedRun();
+        } else if (doProgressResult === "ReadFromInput" || doProgressResult === "WaitingPendingRun") {
+          // The shared-core now can't make progress without "external progress".
+          //
+          // There are really 3 situations here:
+          // * Input is still open, and a run is being executed.
+          //   Both reading from input or proposing a run completion causes the invocation to make progress.
+          // * Input is still open, there is no run being executed.
+          //   Only reading from input causes the invocation to make progress.
+          // * Input is closed, a run is being executed.
+          //   Only proposing a run completion causes the invocation to make progress.
+
+          // In this scenario, we might need to write some stuff out which might be in the shared-core buffer.
+          await this.outputPump.awaitNextProgress();
+
+          await Promise.race([
+            this.inputPump.awaitNextProgress(),
+            this.runClosuresTracker.awaitNextCompletedRun()
+          ])
         } else if (doProgressResult === "CancelSignalReceived") {
           restatePromise.tryCancel();
           return;

@@ -20,12 +20,15 @@ import { InputReader, OutputWriter } from "./endpoint/handlers/types.js";
  */
 export class InputPump {
   private currentRead?: Promise<void>;
+  private closed: boolean;
 
   constructor(
     private readonly coreVm: vm.WasmVM,
     private readonly inputReader: InputReader,
     private readonly errorCallback: (e: any) => void
-  ) {}
+  ) {
+    this.closed= false;
+  }
 
   // This function triggers a read on the input reader,
   // and will notify the caller that a read was executed
@@ -43,6 +46,9 @@ export class InputPump {
   }
 
   private async readNext(): Promise<void> {
+    if (this.closed) {
+      return pendingPromise<void>();
+    }
     // Take input, and notify it to the vm
     let nextValue;
     try {
@@ -52,6 +58,7 @@ export class InputPump {
       return pendingPromise<void>();
     }
     if (nextValue.done) {
+      this.closed = true;
       this.coreVm.notify_input_closed();
     } else if (nextValue.value !== undefined) {
       this.coreVm.notify_input(nextValue.value);
