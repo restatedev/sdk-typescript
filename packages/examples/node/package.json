@@ -14,6 +14,7 @@
     "greeter_hooks": "RESTATE_LOGGING=ERROR tsx --tsconfig ./tsconfig.json ./src/greeter_with_hooks.ts",
     "greeter_http1": "RESTATE_LOGGING=debug tsx --tsconfig ./tsconfig.json ./src/greeter_http1.ts",
     "zgreeter": "RESTATE_LOGGING=debug tsx --tsconfig ./tsconfig.json ./src/zod_greeter.ts",
+    "minirestate": "RESTATE_LOGGING=debug tsx --tsconfig ./tsconfig.json ./src/mini_example.ts",
     "workflow": "RESTATE_LOGGING=debug tsx --tsconfig ./tsconfig.json ./src/workflow.ts",
     "workflow_client": "RESTATE_LOGGING=debug tsx --tsconfig ./tsconfig.json ./src/workflow_client.ts",
     "ingress": "RESTATE_LOGGING=debug tsx ./src/ingress_client.ts",

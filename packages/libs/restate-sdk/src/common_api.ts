@@ -34,7 +34,12 @@ export type {
   Target,
 } from "./context.js";
 export { InvocationIdParser, RestatePromise } from "./context.js";
-export { isRestatePromise } from "./promises.js";
+export {
+  isRestatePromise,
+  publicPromise,
+  createDynamicPromise,
+} from "./promises.js";
+export type { DynamicPromise } from "./promises.js";
 
 /**
  * @deprecated Use {@link RestatePromise}

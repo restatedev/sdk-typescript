@@ -12,6 +12,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import type {
+  Context,
   RestatePromise,
   InvocationId,
   InvocationPromise,
@@ -568,4 +569,119 @@ export class PromisesExecutor {
       }
     });
   }
+}
+
+// -----------------------------------------------------------------
+// DynamicPromise
+// -----------------------------------------------------------------
+
+export interface DynamicPromise<T> extends RestatePromise<T> {
+  /**
+   * Register a RestatePromise as a tracked leaf.
+   * The leaf is removed automatically when it settles.
+   */
+  addLeaf(cp: RestatePromise<any>): void;
+
+  /** Resolve the dynamic promise -- called when the handler body completes. */
+  resolve(value: T): void;
+
+  /** Reject the dynamic promise -- called when the handler body throws. */
+  reject(error: unknown): void;
+
+  /** Access the underlying RestatePromise (returns `this`). */
+  readonly promise: RestatePromise<T>;
+}
+
+class DynamicPromiseImpl<T>
+  extends BaseRestatePromise<T>
+  implements DynamicPromise<T>
+{
+  private readonly leaves = new Set<InternalRestatePromise<any>>();
+  private readonly completable = new CompletablePromise<T>();
+  private settled = false;
+  private leafSignal = new CompletablePromise<void>();
+
+  constructor(ctx: ContextImpl) {
+    super(ctx);
+  }
+
+  get promise(): RestatePromise<T> {
+    return this;
+  }
+
+  addLeaf(cp: RestatePromise<any>): void {
+    const internal = cp as unknown as InternalRestatePromise<any>;
+    this.leaves.add(internal);
+    internal.publicPromise().then(
+      () => this.leaves.delete(internal),
+      () => this.leaves.delete(internal)
+    );
+    this.leafSignal.resolve();
+    this.leafSignal = new CompletablePromise();
+  }
+
+  resolve(value: T): void {
+    this.settled = true;
+    this.leafSignal.resolve();
+    this.completable.resolve(value);
+  }
+
+  reject(error: unknown): void {
+    this.settled = true;
+    this.leafSignal.resolve();
+    this.completable.reject(error);
+  }
+
+  uncompletedLeaves(): number[] {
+    if (this.settled && this.leaves.size === 0) return [];
+    return [...this.leaves].flatMap((l) => l.uncompletedLeaves());
+  }
+
+  async tryComplete(): Promise<void> {
+    while (!this.settled) {
+      // Wait for at least one leaf to be registered
+      while (!this.settled && this.leaves.size === 0) {
+        await this.leafSignal.promise;
+      }
+      if (this.settled) break;
+      // Drive current leaves
+      await Promise.allSettled([...this.leaves].map((l) => l.tryComplete()));
+      // If any leaves still have uncompleted work, return and let
+      // doProgressInner handle VM interaction for those handles.
+      if ([...this.leaves].some((l) => l.uncompletedLeaves().length > 0)) {
+        return;
+      }
+      // All leaves completed and were removed — loop back and wait for
+      // more leaves or settlement.
+    }
+    // Settled — drive any remaining leaves one last time
+    await Promise.allSettled([...this.leaves].map((l) => l.tryComplete()));
+  }
+
+  publicPromise(): Promise<T> {
+    return this.completable.promise;
+  }
+
+  override tryCancel(): void {
+    super.tryCancel();
+    this.leafSignal.resolve();
+    this.completable.reject(new CancelledError());
+  }
+
+  readonly [Symbol.toStringTag] = "DynamicPromise";
+}
+
+export function createDynamicPromise<T>(ctx: Context): DynamicPromise<T> {
+  return new DynamicPromiseImpl<T>(ctx as unknown as ContextImpl);
+}
+
+/**
+ * Await the resolved value of a RestatePromise via its underlying
+ * CompletablePromise, WITHOUT triggering a doProgress loop.
+ *
+ * Use only when an external DynamicPromise is already driving this promise
+ * as a registered leaf. Calling this without an active driver will hang.
+ */
+export function publicPromise<T>(cp: RestatePromise<T>): Promise<T> {
+  return (cp as unknown as InternalRestatePromise<T>).publicPromise();
 }
