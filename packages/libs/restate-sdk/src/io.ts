@@ -27,7 +27,7 @@ export class InputPump {
     private readonly inputReader: InputReader,
     private readonly errorCallback: (e: any) => void
   ) {
-    this.closed= false;
+    this.closed = false;
   }
 
   // This function triggers a read on the input reader,
