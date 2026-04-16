@@ -532,7 +532,10 @@ export class PromisesExecutor {
 
         if (doProgressResult === "AnyCompleted") {
           // Next recursion will cause the promise to do some progress
-        } else if (doProgressResult === "ReadFromInput" || doProgressResult === "WaitingPendingRun") {
+        } else if (
+          doProgressResult === "ReadFromInput" ||
+          doProgressResult === "WaitingPendingRun"
+        ) {
           // The shared-core now can't make progress without "external progress".
           //
           // There are really 3 situations here:
@@ -548,8 +551,8 @@ export class PromisesExecutor {
 
           await Promise.race([
             this.inputPump.awaitNextProgress(),
-            this.runClosuresTracker.awaitNextCompletedRun()
-          ])
+            this.runClosuresTracker.awaitNextCompletedRun(),
+          ]);
         } else if (doProgressResult === "CancelSignalReceived") {
           restatePromise.tryCancel();
           return;
