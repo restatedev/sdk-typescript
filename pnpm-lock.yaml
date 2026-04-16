@@ -157,10 +157,16 @@ importers:
       '@restatedev/restate-sdk-zod':
         specifier: workspace:*
         version: link:../../libs/restate-sdk-zod
+      effection:
+        specifier: ^4.0.2
+        version: 4.0.2
       zod:
         specifier: 'catalog:'
         version: 4.3.6
     devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.39
       testcontainers:
         specifier: ^11.12.0
         version: 11.13.0
@@ -2532,6 +2538,10 @@ packages:
 
   eastasianwidth@0.2.0:
     resolution: {integrity: sha512-I88TYZWc9XiYHRQ4/3c5rjjfgkjhLyW2luGIheGERbNQ6OY7yTybanSpDXZa8y7VUP9YmDcYa+eyq4ca7iLqWA==}
+
+  effection@4.0.2:
+    resolution: {integrity: sha512-O8WMGP10nPuJDwbNGILcaCNWS+CvDYjcdsUSD79nWZ+WtUQ8h1MEV7JJwCSZCSeKx8+TdEaZ/8r6qPTR2o/o8w==}
+    engines: {node: '>= 16'}
 
   emoji-regex@8.0.0:
     resolution: {integrity: sha512-MSjYzcWNOA0ewAHpz0MxpYFvwg6yjy1NG3xteoqz644VCo/RPgnr1/GGt+ic3iJTzQ8Eu3TdM14SawnVUmGE6A==}
@@ -6643,6 +6653,8 @@ snapshots:
       gopd: 1.2.0
 
   eastasianwidth@0.2.0: {}
+
+  effection@4.0.2: {}
 
   emoji-regex@8.0.0: {}
 

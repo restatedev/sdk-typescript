@@ -31,9 +31,11 @@
     "@restatedev/restate-sdk-core": "workspace:*",
     "@restatedev/restate-sdk-testcontainers": "workspace:*",
     "@restatedev/restate-sdk-zod": "workspace:*",
+    "effection": "^4.0.2",
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@types/node": "^20.0.0",
     "testcontainers": "^11.12.0"
   }
 }
