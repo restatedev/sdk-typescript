@@ -92,6 +92,21 @@ const promiseCombinators = restate.service({
       return RestatePromise.allSettled(promises);
     },
 
+    allSettledOfRacesSharingSignal: restate.handlers.handler(
+        {
+          inactivityTimeout: 0,
+        },
+        async (ctx: restate.Context) => {
+      const ctxInternal = ctx as restate.internal.ContextInternal;
+      const p1 = ctxInternal.signal<string>("p1");
+      const p2 = ctxInternal.signal<string>("p2");
+      const p3 = ctxInternal.signal<string>("p3");
+      return RestatePromise.allSettled([
+        RestatePromise.race([p1, p2]),
+        RestatePromise.race([p1, p3]),
+      ]);
+    }),
+
     // --- Empty array combinators ---
 
     allEmpty: async (_ctx: restate.Context): Promise<unknown[]> => {
