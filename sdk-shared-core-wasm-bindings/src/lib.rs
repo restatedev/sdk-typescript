@@ -1,10 +1,5 @@
 use js_sys::Uint8Array;
-use restate_sdk_shared_core::{
-    CallHandle, CommandRelationship, CommandType, CoreVM, DoProgressResponse, Error, Header,
-    HeaderMap, IdentityVerifier, ImplicitCancellationOption, Input, NonDeterministicChecksOption,
-    NonEmptyValue, ResponseHead, RetryPolicy, RunExitResult, SendHandle, TakeOutputResult, Target,
-    TerminalFailure, VMOptions, Value, CANCEL_NOTIFICATION_HANDLE, VM,
-};
+use restate_sdk_shared_core::{AwaitResponse, CallHandle, CommandRelationship, CommandType, CoreVM, Error, Header, HeaderMap, IdentityVerifier, ImplicitCancellationOption, Input, NonDeterministicChecksOption, NonEmptyValue, ResponseHead, RetryPolicy, RunExitResult, SendHandle, TakeOutputResult, Target, TerminalFailure, UnresolvedFuture, VMOptions, Value, CANCEL_NOTIFICATION_HANDLE, VM};
 use serde::{Deserialize, Serialize};
 use std::cmp;
 use std::convert::{Infallible, Into};
@@ -387,24 +382,21 @@ pub enum WasmAsyncResultValue {
 pub enum WasmDoProgressResult {
     /// Any of the given AsyncResultHandle completed
     AnyCompleted,
-    /// The SDK should read from input at this point
-    ReadFromInput,
-    /// Any of the run given before with ExecuteRun is waiting for completion
-    WaitingPendingRun,
+    /// The SDK should read from input at this point, or wait for any executing run
+    WaitExternalProgress,
     /// The SDK should execute a pending run
     ExecuteRun(#[tsify(type = "number")] WasmNotificationHandle),
     /// Got cancel signal
     CancelSignalReceived,
 }
 
-impl From<DoProgressResponse> for WasmDoProgressResult {
-    fn from(value: DoProgressResponse) -> Self {
+impl From<AwaitResponse> for WasmDoProgressResult {
+    fn from(value: AwaitResponse) -> Self {
         match value {
-            DoProgressResponse::AnyCompleted => WasmDoProgressResult::AnyCompleted,
-            DoProgressResponse::ReadFromInput => WasmDoProgressResult::ReadFromInput,
-            DoProgressResponse::WaitingPendingRun => WasmDoProgressResult::WaitingPendingRun,
-            DoProgressResponse::ExecuteRun(n) => WasmDoProgressResult::ExecuteRun(n.into()),
-            DoProgressResponse::CancelSignalReceived => WasmDoProgressResult::CancelSignalReceived,
+            AwaitResponse::AnyCompleted => WasmDoProgressResult::AnyCompleted,
+            AwaitResponse::WaitingExternalProgress {..} => WasmDoProgressResult::WaitExternalProgress,
+            AwaitResponse::ExecuteRun(n) => WasmDoProgressResult::ExecuteRun(n.into()),
+            AwaitResponse::CancelSignalReceived => WasmDoProgressResult::CancelSignalReceived,
         }
     }
 }
@@ -486,6 +478,7 @@ impl WasmVM {
                             cancel_children_one_way_calls: false,
                         }
                     },
+                    awaiting_on_policy: Default::default(),
                 },
             )
         })?;
@@ -596,9 +589,11 @@ impl WasmVM {
         &mut self,
         handles: Vec<WasmNotificationHandle>,
     ) -> Result<WasmDoProgressResult, WasmFailure> {
-        Ok(use_log_dispatcher!(self, |vm| CoreVM::do_progress(
+        Ok(use_log_dispatcher!(self, |vm| CoreVM::do_await(
             vm,
-            handles.into_iter().map(Into::into).collect()
+            UnresolvedFuture::Unknown(
+            handles.into_iter().map(|h| UnresolvedFuture::Single(h.into())).collect()
+                )
         ))?
         .into())
     }
