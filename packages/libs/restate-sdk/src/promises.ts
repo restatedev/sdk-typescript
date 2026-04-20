@@ -79,7 +79,7 @@ export abstract class InternalRestatePromise<T> implements RestatePromise<T> {
 
   abstract tryCancel(): void;
   abstract tryComplete(): Promise<void>;
-  abstract uncompletedLeaves(): Array<number>;
+  abstract unresolvedFuture(): vm.WasmUnresolvedFuture | null;
   abstract publicPromise(): Promise<T>;
 
   abstract readonly [Symbol.toStringTag]: string;
@@ -155,7 +155,8 @@ abstract class BaseRestatePromise<T> extends InternalRestatePromise<T> {
   orTimeout(duration: number | Duration): RestatePromise<T> {
     return new CombinatorRestatePromise(
       this[RESTATE_CTX_SYMBOL],
-      ([thisPromise, sleepPromise]) => {
+      "Unknown",
+      ([thisPromise, sleepPromise]: Promise<any>[]) => {
         return new Promise((resolve, reject) => {
           thisPromise!.then(resolve, reject);
           sleepPromise!.then(() => {
@@ -180,7 +181,7 @@ abstract class BaseRestatePromise<T> extends InternalRestatePromise<T> {
 
   abstract override tryComplete(): Promise<void>;
 
-  abstract override uncompletedLeaves(): Array<number>;
+  abstract override unresolvedFuture(): vm.WasmUnresolvedFuture | null;
 
   abstract override publicPromise(): Promise<T>;
 
@@ -202,8 +203,10 @@ export class SingleRestatePromise<T> extends BaseRestatePromise<T> {
     super(ctx);
   }
 
-  uncompletedLeaves(): number[] {
-    return this.state === PromiseState.COMPLETED ? [] : [this.handle];
+  unresolvedFuture(): vm.WasmUnresolvedFuture | null {
+    return this.state === PromiseState.COMPLETED
+      ? null
+      : { Single: this.handle };
   }
 
   async tryComplete(): Promise<void> {
@@ -252,12 +255,20 @@ export class InvocationRestatePromise<T>
   }
 }
 
+export type CombinatorVariant =
+  | "Unknown"
+  | "FirstCompleted" // race
+  | "AllCompleted" // allSettled
+  | "FirstSucceededOrAllFailed" // any
+  | "AllSucceededOrFirstFailed"; // all
+
 export class CombinatorRestatePromise extends BaseRestatePromise<any> {
   private state: PromiseState = PromiseState.NOT_COMPLETED;
   private readonly combinatorPromise: Promise<any>;
 
   constructor(
     ctx: ContextImpl,
+    private readonly combinatorVariant: CombinatorVariant,
     combinatorConstructor: (promises: Promise<any>[]) => Promise<any>,
     readonly childs: Array<InternalRestatePromise<any>>
   ) {
@@ -271,6 +282,7 @@ export class CombinatorRestatePromise extends BaseRestatePromise<any> {
 
   // Used by static methods of RestatePromise
   public static fromPromises<T extends readonly RestatePromise<unknown>[]>(
+    combinatorVariant: CombinatorVariant,
     combinatorConstructor: (promises: Promise<any>[]) => Promise<any>,
     promises: T
   ): RestatePromise<unknown> {
@@ -307,15 +319,19 @@ export class CombinatorRestatePromise extends BaseRestatePromise<any> {
 
     return new CombinatorRestatePromise(
       foundContext,
+      combinatorVariant,
       combinatorConstructor,
       castedPromises
     );
   }
 
-  uncompletedLeaves(): number[] {
-    return this.state === PromiseState.COMPLETED
-      ? []
-      : this.childs.flatMap((p) => p.uncompletedLeaves());
+  unresolvedFuture(): vm.WasmUnresolvedFuture | null {
+    if (this.state === PromiseState.COMPLETED) return null;
+    const children = this.childs
+      .map((p) => p.unresolvedFuture())
+      .filter((f): f is vm.WasmUnresolvedFuture => f !== null);
+    if (children.length === 0) return null;
+    return { [this.combinatorVariant]: children } as vm.WasmUnresolvedFuture;
   }
 
   async tryComplete(): Promise<void> {
@@ -362,8 +378,9 @@ export class MappedRestatePromise<T, U> extends BaseRestatePromise<U> {
     await this.inner.tryComplete();
   }
 
-  uncompletedLeaves(): number[] {
-    return this.inner.uncompletedLeaves();
+  unresolvedFuture(): vm.WasmUnresolvedFuture | null {
+    const inner = this.inner.unresolvedFuture();
+    return inner === null ? null : { Unknown: [inner] };
   }
 
   publicPromise(): Promise<U> {
@@ -474,8 +491,8 @@ export class ConstRestatePromise<T> extends InternalRestatePromise<T> {
     return Promise.resolve();
   }
 
-  uncompletedLeaves(): Array<number> {
-    return [];
+  unresolvedFuture(): vm.WasmUnresolvedFuture | null {
+    return null;
   }
 
   readonly [Symbol.toStringTag] = "ConstRestatePromise";
@@ -521,14 +538,12 @@ export class PromisesExecutor {
     return setImmediate().then(async () => {
       try {
         // Invoke do progress on the vm
-        const handles = restatePromise.uncompletedLeaves();
-        if (handles.length === 0) {
+        const unresolvedFuture = restatePromise.unresolvedFuture();
+        if (unresolvedFuture === null) {
           // Completed, we're good!
           return;
         }
-        const doProgressResult = this.coreVm.do_progress(
-          new Uint32Array(handles)
-        );
+        const doProgressResult = this.coreVm.do_progress(unresolvedFuture);
 
         if (doProgressResult === "AnyCompleted") {
           // Next recursion will cause the promise to do some progress

@@ -762,6 +762,7 @@ export const RestatePromise = {
     values: T
   ): RestatePromise<{ -readonly [P in keyof T]: Awaited<T[P]> }> {
     return CombinatorRestatePromise.fromPromises(
+      "AllSucceededOrFirstFailed",
       (p) => Promise.all(p),
       values
     ) as RestatePromise<{
@@ -785,6 +786,7 @@ export const RestatePromise = {
       return ConstRestatePromise.pending();
     }
     return CombinatorRestatePromise.fromPromises(
+      "FirstCompleted",
       (p) => Promise.race(p),
       values
     ) as RestatePromise<Awaited<T[number]>>;
@@ -804,6 +806,7 @@ export const RestatePromise = {
     values: T
   ): RestatePromise<Awaited<T[number]>> {
     return CombinatorRestatePromise.fromPromises(
+      "FirstSucceededOrAllFailed",
       (p) => Promise.any(p),
       values
     ) as RestatePromise<Awaited<T[number]>>;
@@ -824,6 +827,7 @@ export const RestatePromise = {
     -readonly [P in keyof T]: PromiseSettledResult<Awaited<T[P]>>;
   }> {
     return CombinatorRestatePromise.fromPromises(
+      "AllCompleted",
       (p) => Promise.allSettled(p),
       values
     ) as RestatePromise<{

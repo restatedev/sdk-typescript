@@ -1,10 +1,10 @@
 /* tslint:disable */
 /* eslint-disable */
-export function cancel_handle(): number;
 /**
  * This will set the log level of the overall log subscriber.
  */
 export function set_log_level(level: LogLevel): void;
+export function cancel_handle(): number;
 /**
  * Setups the WASM module
  */
@@ -59,13 +59,21 @@ export type WasmAsyncResultValue =
   | { StateKeys: string[] }
   | { InvocationId: string };
 
+export interface WasmSendHandle {
+  invocation_id_completion_id: number;
+}
+
+export type WasmUnresolvedFuture =
+  | { Single: number }
+  | { FirstCompleted: WasmUnresolvedFuture[] }
+  | { AllCompleted: WasmUnresolvedFuture[] }
+  | { FirstSucceededOrAllFailed: WasmUnresolvedFuture[] }
+  | { AllSucceededOrFirstFailed: WasmUnresolvedFuture[] }
+  | { Unknown: WasmUnresolvedFuture[] };
+
 export interface WasmCallHandle {
   invocation_id_completion_id: number;
   call_completion_id: number;
-}
-
-export interface WasmSendHandle {
-  invocation_id_completion_id: number;
 }
 
 export interface WasmAwakeable {
@@ -113,7 +121,7 @@ export class WasmResponseHead {
 export class WasmVM {
   free(): void;
   sys_signal(signal_name: string): number;
-  do_progress(handles: Uint32Array): WasmDoProgressResult;
+  do_progress(future: WasmUnresolvedFuture): WasmDoProgressResult;
   take_output(): any;
   is_completed(handle: number): boolean;
   notify_error(error_message: string, stacktrace?: string | null): void;
