@@ -402,6 +402,44 @@ impl From<AwaitResponse> for WasmDoProgressResult {
 }
 
 #[derive(Tsify, Serialize, Deserialize)]
+#[tsify(from_wasm_abi)]
+pub enum WasmUnresolvedFuture {
+    Single(#[tsify(type = "number")] WasmNotificationHandle),
+    FirstCompleted(Vec<WasmUnresolvedFuture>),
+    AllCompleted(Vec<WasmUnresolvedFuture>),
+    FirstSucceededOrAllFailed(Vec<WasmUnresolvedFuture>),
+    AllSucceededOrFirstFailed(Vec<WasmUnresolvedFuture>),
+    Unknown(Vec<WasmUnresolvedFuture>),
+}
+
+impl From<WasmUnresolvedFuture> for UnresolvedFuture {
+    fn from(value: WasmUnresolvedFuture) -> Self {
+        match value {
+            WasmUnresolvedFuture::Single(h) => UnresolvedFuture::Single(h.into()),
+            WasmUnresolvedFuture::FirstCompleted(c) => {
+                UnresolvedFuture::FirstCompleted(c.into_iter().map(Into::into).collect())
+            }
+            WasmUnresolvedFuture::AllCompleted(c) => {
+                UnresolvedFuture::AllCompleted(c.into_iter().map(Into::into).collect())
+            }
+            WasmUnresolvedFuture::FirstSucceededOrAllFailed(c) => {
+                UnresolvedFuture::FirstSucceededOrAllFailed(
+                    c.into_iter().map(Into::into).collect(),
+                )
+            }
+            WasmUnresolvedFuture::AllSucceededOrFirstFailed(c) => {
+                UnresolvedFuture::AllSucceededOrFirstFailed(
+                    c.into_iter().map(Into::into).collect(),
+                )
+            }
+            WasmUnresolvedFuture::Unknown(c) => {
+                UnresolvedFuture::Unknown(c.into_iter().map(Into::into).collect())
+            }
+        }
+    }
+}
+
+#[derive(Tsify, Serialize, Deserialize)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct WasmCallHandle {
     #[tsify(type = "number")]
@@ -587,15 +625,9 @@ impl WasmVM {
 
     pub fn do_progress(
         &mut self,
-        handles: Vec<WasmNotificationHandle>,
+        future: WasmUnresolvedFuture,
     ) -> Result<WasmDoProgressResult, WasmFailure> {
-        Ok(use_log_dispatcher!(self, |vm| CoreVM::do_await(
-            vm,
-            UnresolvedFuture::Unknown(
-            handles.into_iter().map(|h| UnresolvedFuture::Single(h.into())).collect()
-                )
-        ))?
-        .into())
+        Ok(use_log_dispatcher!(self, |vm| CoreVM::do_await(vm, future.into()))?.into())
     }
 
     pub fn take_notification(
