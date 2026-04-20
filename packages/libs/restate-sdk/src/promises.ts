@@ -532,10 +532,7 @@ export class PromisesExecutor {
 
         if (doProgressResult === "AnyCompleted") {
           // Next recursion will cause the promise to do some progress
-        } else if (
-          doProgressResult === "ReadFromInput" ||
-          doProgressResult === "WaitingPendingRun"
-        ) {
+        } else if (doProgressResult === "WaitExternalProgress") {
           // The shared-core now can't make progress without "external progress".
           //
           // There are really 3 situations here:
