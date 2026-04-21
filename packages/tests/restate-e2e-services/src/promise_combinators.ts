@@ -9,6 +9,7 @@
 
 import * as restate from "@restatedev/restate-sdk";
 import { REGISTRY } from "./services.js";
+import { TerminalError } from "@restatedev/restate-sdk";
 
 const promiseCombinators = restate.service({
   name: "PromiseCombinators",
@@ -93,19 +94,54 @@ const promiseCombinators = restate.service({
     },
 
     allSettledOfRacesSharingSignal: restate.handlers.handler(
-        {
-          inactivityTimeout: 0,
-        },
-        async (ctx: restate.Context) => {
-      const ctxInternal = ctx as restate.internal.ContextInternal;
-      const p1 = ctxInternal.signal<string>("p1");
-      const p2 = ctxInternal.signal<string>("p2");
-      const p3 = ctxInternal.signal<string>("p3");
-      return RestatePromise.allSettled([
-        RestatePromise.race([p1, p2]),
-        RestatePromise.race([p1, p3]),
-      ]);
-    }),
+      {
+        inactivityTimeout: 0,
+      },
+      async (ctx: restate.Context) => {
+        const ctxInternal = ctx as restate.internal.ContextInternal;
+        const p1 = ctxInternal.signal<string>("p1");
+        const p2 = ctxInternal.signal<string>("p2");
+        const p3 = ctxInternal.signal<string>("p3");
+        const res = await RestatePromise.allSettled([
+          RestatePromise.race([p1, p2]),
+          RestatePromise.race([p1, p3]),
+        ]);
+
+        // To trigger suspension
+        await ctx.sleep({ milliseconds: 1 });
+
+        return res;
+      }
+    ),
+
+    allOfRacesSharingSignalWithMapping: restate.handlers.handler(
+      {
+        inactivityTimeout: 0,
+      },
+      async (ctx: restate.Context) => {
+        const ctxInternal = ctx as restate.internal.ContextInternal;
+        const p1 = ctxInternal.signal<string>("p1");
+        const p2 = ctxInternal.signal<string>("p2");
+        const p3 = ctxInternal.signal<string>("p3");
+        let result;
+        try {
+          result = await RestatePromise.all([
+            RestatePromise.race([
+              p1.map(() => {
+                throw new TerminalError("p1 completed");
+              }),
+              p2,
+            ]),
+            RestatePromise.race([p1, p3]),
+          ]);
+        } catch (e) {
+          // To trigger suspension
+          await ctx.sleep({ milliseconds: 1 });
+          throw e;
+        }
+        return result;
+      }
+    ),
 
     // --- Empty array combinators ---
 
