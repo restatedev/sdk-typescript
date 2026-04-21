@@ -121,6 +121,28 @@ describe("PromiseCombinators", () => {
     expect(result[1]).toEqual({ status: "fulfilled", value: "from-p1" });
   }, 30_000);
 
+  it("all(race(map(p1), p2), race(p1, p3))", async () => {
+    const send = await ingress
+      .serviceSendClient(PromiseCombinators)
+      .allOfRacesSharingSignalWithMapping(idempotentSend());
+
+    // Resolve p1 first — both races should settle with p1.
+    await ingress.serviceClient(SignalTest).resolveSignal({
+      invocationId: send.invocationId,
+      name: "p1",
+      value: "from-p1",
+    });
+
+    // Resolve p3 afterwards — must not affect the already-settled races.
+    await ingress.serviceClient(SignalTest).resolveSignal({
+      invocationId: send.invocationId,
+      name: "p3",
+      value: "from-p3",
+    });
+
+    await expect(ingress.result(send)).rejects.toThrow("p1 completed");
+  }, 30_000);
+
   // --- Empty array combinators ---
 
   it("all with empty array returns empty array", async () => {
