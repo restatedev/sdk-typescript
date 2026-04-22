@@ -71,15 +71,13 @@ export function simpleResponse(
   body: Uint8Array
 ): RestateResponse {
   return {
-    headers,
-    statusCode,
-    async process({ inputReader, outputWriter }): Promise<void> {
-      if (inputReader !== undefined) {
-        // Drain the input stream
-        while (true) {
-          const { done } = await inputReader.next();
-          if (done) break;
-        }
+    async process({ inputReader, outputWriter, writeHead }): Promise<void> {
+      writeHead(statusCode, headers);
+
+      // Drain the input stream
+      while (true) {
+        const { done } = await inputReader.next();
+        if (done) break;
       }
 
       await outputWriter.write(body);
@@ -91,4 +89,25 @@ export function simpleResponse(
 
 export function emptyInputReader(): InputReader {
   return (async function* () {})()[Symbol.asyncIterator]();
+}
+
+/**
+ * Bundles a `writeHead` callback with a Promise that resolves once the head
+ * is committed. Used by adapters (fetch, lambda) that need to observe the
+ * head commit from outside the `process()` call.
+ */
+export function captureHead(): {
+  writeHead: (statusCode: number, headers: ResponseHeaders) => void;
+  head: Promise<{ statusCode: number; headers: ResponseHeaders }>;
+} {
+  const { promise, resolve } = Promise.withResolvers<{
+    statusCode: number;
+    headers: ResponseHeaders;
+  }>();
+  return {
+    writeHead: (statusCode, headers) => {
+      resolve({ statusCode, headers: { ...headers } });
+    },
+    head: promise,
+  };
 }

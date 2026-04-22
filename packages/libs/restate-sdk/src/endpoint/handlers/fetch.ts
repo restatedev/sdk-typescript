@@ -11,7 +11,11 @@
 
 import { ensureError } from "../../types/errors.js";
 import type { RestateHandler } from "./types.js";
-import { emptyInputReader, tryCreateContextualLogger } from "./utils.js";
+import {
+  captureHead,
+  emptyInputReader,
+  tryCreateContextualLogger,
+} from "./utils.js";
 
 export function fetcher(handler: RestateHandler) {
   return {
@@ -19,6 +23,7 @@ export function fetcher(handler: RestateHandler) {
       const url = event.url;
       const headers = Object.fromEntries(event.headers.entries());
 
+      // handle should never throw
       const response = handler.handle({
         url,
         headers,
@@ -33,15 +38,18 @@ export function fetcher(handler: RestateHandler) {
       const transformStream = new TransformStream<Uint8Array>();
       const outputWriter = transformStream.writable.getWriter();
 
-      // Start processing, then return back the response
+      const { writeHead, head } = captureHead();
+
       response
         .process({
           inputReader,
           outputWriter,
+          writeHead,
           abortSignal: event.signal,
         })
         .catch((e) => {
-          // handle should never throw
+          // Responses handle their own errors before rejecting; anything
+          // reaching here is an unexpected failure — just log.
           const error = ensureError(e);
           const logger =
             tryCreateContextualLogger(
@@ -52,11 +60,12 @@ export function fetcher(handler: RestateHandler) {
           logger.error("Unexpected error: " + (error.stack ?? error.message));
         });
 
-      return Promise.resolve(
-        new Response(transformStream.readable, {
-          status: response.statusCode,
-          headers: response.headers,
-        })
+      return head.then(
+        (h) =>
+          new Response(transformStream.readable, {
+            status: h.statusCode,
+            headers: h.headers,
+          })
       );
     },
   };

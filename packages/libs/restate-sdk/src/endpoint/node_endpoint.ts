@@ -176,6 +176,9 @@ function nodeHandlerImpl(
 
   return (httpRequest, httpResponse) => {
     const url = httpRequest.url!;
+    const inputReader = inputReaderAdapter(httpRequest);
+    const outputWriter = outputWriterAdapter(httpResponse);
+    const res = httpResponse as NodeWritableResponse;
 
     // Abort controller used to cleanup resources at the end of this stream lifecycle
     const abortController = new AbortController();
@@ -183,22 +186,25 @@ function nodeHandlerImpl(
       abortController.abort();
     });
 
+    const writeHead = res.writeHead.bind(res);
+
+    // handle should never throw
     const restateResponse = handler.handle({
       url,
       headers: httpRequest.headers,
       extraArgs: [],
     });
-    const res = httpResponse as NodeWritableResponse;
-    res.writeHead(restateResponse.statusCode, restateResponse.headers);
 
     restateResponse
       .process({
-        inputReader: inputReaderAdapter(httpRequest),
-        outputWriter: outputWriterAdapter(httpResponse),
+        inputReader,
+        outputWriter,
+        writeHead,
         abortSignal: abortController.signal,
       })
       .catch((e) => {
-        // handle should never throw
+        // Responses handle their own errors before rejecting; anything
+        // reaching here is an unexpected failure — just log.
         const error = ensureError(e);
         const logger =
           tryCreateContextualLogger(

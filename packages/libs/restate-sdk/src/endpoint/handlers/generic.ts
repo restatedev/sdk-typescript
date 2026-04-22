@@ -258,8 +258,8 @@ class RestateHandlerImpl implements RestateHandler {
 }
 
 class RestateInvokeResponse implements RestateResponse {
-  public headers: ResponseHeaders;
-  public statusCode: number;
+  private readonly headers: ResponseHeaders;
+  private readonly statusCode: number;
 
   private readonly loggerId: number;
   private vmLogger: Logger;
@@ -321,12 +321,18 @@ class RestateInvokeResponse implements RestateResponse {
   async process({
     inputReader,
     outputWriter,
+    writeHead,
     abortSignal,
   }: {
     inputReader: InputReader;
     outputWriter: OutputWriter;
+    writeHead: (statusCode: number, headers: ResponseHeaders) => void;
     abortSignal: AbortSignal;
   }): Promise<void> {
+    // Commit the response head immediately — the VM-determined head is known
+    // at construction time and never changes during processing.
+    writeHead(this.statusCode, this.headers);
+
     abortSignal.addEventListener(
       "abort",
       () => {
