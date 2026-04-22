@@ -20,6 +20,10 @@ import type {
 export interface Serde<T> {
   contentType?: string;
   jsonSchema?: object;
+  preview?: {
+    toJsonString(value: T): string;
+    fromJsonString(json: string): T;
+  };
 
   serialize(value: T): Uint8Array;
 

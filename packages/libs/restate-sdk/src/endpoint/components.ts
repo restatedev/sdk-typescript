@@ -32,6 +32,7 @@ import type { TerminalError } from "../types/errors.js";
 export interface Component {
   name(): string;
   handlerMatching(url: InvokePathComponents): ComponentHandler | undefined;
+  serdeMatching(name: string): Serde<any> | undefined;
   discovery(): d.Service;
 }
 
@@ -43,7 +44,7 @@ export interface ExecutionOptions {
   /**
    * Default serde to use for requests, responses, state, side effects, awakeables, promises. Used when no other serde is specified.
    */
-  defaultSerde?: Serde<any>;
+  defaultSerde: Serde<any>;
   hooks?: HooksProvider[];
   explicitCancellation?: boolean;
 }
@@ -124,6 +125,9 @@ function createExecutionOptions(
   serviceOptions?: ServiceOptions,
   handlerOptions?: ServiceHandlerOpts<unknown, unknown>
 ): ExecutionOptions {
+  const defaultSerde =
+    handlerOptions?.serde ?? serviceOptions?.serde ?? serde.json;
+
   // Service-level hooks run outermost, handler-level hooks run innermost.
   // Both are merged into a single list: service hooks first, then handler hooks.
   const hooks = [
@@ -131,7 +135,7 @@ function createExecutionOptions(
     ...(handlerOptions?.hooks ?? []),
   ];
   return {
-    defaultSerde: handlerOptions?.serde ?? serviceOptions?.serde,
+    defaultSerde,
     asTerminalError:
       handlerOptions?.asTerminalError ?? serviceOptions?.asTerminalError,
     hooks: hooks.length > 0 ? hooks : undefined,
@@ -141,8 +145,65 @@ function createExecutionOptions(
   };
 }
 
+const PREVIEW_METADATA_KEY_PREFIX = "restate.serde.preview";
+
+/**
+ * Service-scoped serde namespace.
+ *
+ * Today it is populated from handler inputs/outputs under `<handler>/input`
+ * and `<handler>/output`. Custom service-level serdes can be registered
+ * alongside them under any name.
+ */
+class ServiceSerdeRegistry {
+  private readonly serdes = new Map<string, Serde<unknown>>();
+
+  registerHandlerIO(
+    handlerName: string,
+    wrapper: HandlerWrapper,
+    executionOptions: ExecutionOptions
+  ): void {
+    this.serdes.set(
+      `${handlerName}/input`,
+      wrapper.options?.input ?? executionOptions.defaultSerde
+    );
+    this.serdes.set(
+      `${handlerName}/output`,
+      wrapper.options?.output ?? executionOptions.defaultSerde
+    );
+  }
+
+  resolve(name: string): Serde<unknown> | undefined {
+    return this.serdes.get(name);
+  }
+
+  previewMetadata(): Record<string, string> | undefined {
+    const metadata: Record<string, string> = {};
+    for (const [name, s] of this.serdes) {
+      if (s.preview) {
+        metadata[`${PREVIEW_METADATA_KEY_PREFIX}.${name}`] = "true";
+      }
+    }
+    return Object.keys(metadata).length > 0 ? metadata : undefined;
+  }
+}
+
+function mergeMetadata(
+  baseMetadata?: Record<string, string>,
+  additionalMetadata?: Record<string, string>
+): Record<string, string> | undefined {
+  if (!baseMetadata && !additionalMetadata) {
+    return undefined;
+  }
+
+  return {
+    ...(baseMetadata ?? {}),
+    ...(additionalMetadata ?? {}),
+  };
+}
+
 export class ServiceComponent implements Component {
   private readonly handlers: Map<string, ServiceHandler> = new Map();
+  private readonly serdeRegistry = new ServiceSerdeRegistry();
 
   constructor(
     private readonly componentName: string,
@@ -156,7 +217,13 @@ export class ServiceComponent implements Component {
   }
 
   add(name: string, handlerWrapper: HandlerWrapper) {
-    this.handlers.set(name, new ServiceHandler(name, handlerWrapper, this));
+    const handler = new ServiceHandler(name, handlerWrapper, this);
+    this.handlers.set(name, handler);
+    this.serdeRegistry.registerHandlerIO(
+      name,
+      handlerWrapper,
+      handler.executionOptions
+    );
   }
 
   discovery(): d.Service {
@@ -166,7 +233,7 @@ export class ServiceComponent implements Component {
           name,
           ...commonHandlerOptions(
             handler.handlerWrapper,
-            handler.executionOptions.defaultSerde ?? serde.json
+            handler.executionOptions.defaultSerde
           ),
         } satisfies d.Handler;
       }
@@ -177,13 +244,20 @@ export class ServiceComponent implements Component {
       ty: "SERVICE",
       handlers,
       documentation: this.description,
-      metadata: this.metadata,
+      metadata: mergeMetadata(
+        this.metadata,
+        this.serdeRegistry.previewMetadata()
+      ),
       ...commonServiceOptions(this.options),
     } satisfies d.Service;
   }
 
   handlerMatching(url: InvokePathComponents): ComponentHandler | undefined {
     return this.handlers.get(url.handlerName);
+  }
+
+  serdeMatching(name: string): Serde<any> | undefined {
+    return this.serdeRegistry.resolve(name);
   }
 }
 
@@ -224,6 +298,7 @@ export class ServiceHandler implements ComponentHandler {
 
 export class VirtualObjectComponent implements Component {
   private readonly handlers: Map<string, VirtualObjectHandler> = new Map();
+  private readonly serdeRegistry = new ServiceSerdeRegistry();
 
   constructor(
     public readonly componentName: string,
@@ -237,7 +312,13 @@ export class VirtualObjectComponent implements Component {
   }
 
   add(name: string, wrapper: HandlerWrapper) {
-    this.handlers.set(name, new VirtualObjectHandler(name, wrapper, this));
+    const handler = new VirtualObjectHandler(name, wrapper, this);
+    this.handlers.set(name, handler);
+    this.serdeRegistry.registerHandlerIO(
+      name,
+      wrapper,
+      handler.executionOptions
+    );
   }
 
   discovery(): d.Service {
@@ -248,7 +329,7 @@ export class VirtualObjectComponent implements Component {
           ty: handler.kind() === HandlerKind.EXCLUSIVE ? "EXCLUSIVE" : "SHARED",
           ...commonHandlerOptions(
             handler.handlerWrapper,
-            handler.executionOptions.defaultSerde ?? serde.json
+            handler.executionOptions.defaultSerde
           ),
         } satisfies d.Handler;
       }
@@ -259,13 +340,20 @@ export class VirtualObjectComponent implements Component {
       ty: "VIRTUAL_OBJECT",
       handlers,
       documentation: this.description,
-      metadata: this.metadata,
+      metadata: mergeMetadata(
+        this.metadata,
+        this.serdeRegistry.previewMetadata()
+      ),
       ...commonServiceOptions(this.options),
     } satisfies d.Service;
   }
 
   handlerMatching(url: InvokePathComponents): ComponentHandler | undefined {
     return this.handlers.get(url.handlerName);
+  }
+
+  serdeMatching(name: string): Serde<any> | undefined {
+    return this.serdeRegistry.resolve(name);
   }
 }
 
@@ -304,6 +392,7 @@ export class VirtualObjectHandler implements ComponentHandler {
 
 export class WorkflowComponent implements Component {
   private readonly handlers: Map<string, WorkflowHandler> = new Map();
+  private readonly serdeRegistry = new ServiceSerdeRegistry();
 
   constructor(
     public readonly componentName: string,
@@ -317,7 +406,13 @@ export class WorkflowComponent implements Component {
   }
 
   add(name: string, wrapper: HandlerWrapper) {
-    this.handlers.set(name, new WorkflowHandler(name, wrapper, this));
+    const handler = new WorkflowHandler(name, wrapper, this);
+    this.handlers.set(name, handler);
+    this.serdeRegistry.registerHandlerIO(
+      name,
+      wrapper,
+      handler.executionOptions
+    );
   }
 
   discovery(): d.Service {
@@ -333,7 +428,7 @@ export class WorkflowComponent implements Component {
               : undefined,
           ...commonHandlerOptions(
             handler.handlerWrapper,
-            handler.executionOptions.defaultSerde ?? serde.json
+            handler.executionOptions.defaultSerde
           ),
         } satisfies d.Handler;
       }
@@ -344,13 +439,20 @@ export class WorkflowComponent implements Component {
       ty: "WORKFLOW",
       handlers,
       documentation: this.description,
-      metadata: this.metadata,
+      metadata: mergeMetadata(
+        this.metadata,
+        this.serdeRegistry.previewMetadata()
+      ),
       ...commonServiceOptions(this.options),
     } satisfies d.Service;
   }
 
   handlerMatching(url: InvokePathComponents): ComponentHandler | undefined {
     return this.handlers.get(url.handlerName);
+  }
+
+  serdeMatching(name: string): Serde<any> | undefined {
+    return this.serdeRegistry.resolve(name);
   }
 }
 
@@ -386,6 +488,7 @@ export class WorkflowHandler implements ComponentHandler {
 
 export type PathComponents =
   | InvokePathComponents
+  | PreviewPathComponents
   | { type: "discover" }
   | { type: "health" }
   | { type: "unknown"; path: string };
@@ -396,10 +499,34 @@ export type InvokePathComponents = {
   handlerName: string;
 };
 
+export type PreviewPathComponents = {
+  type: "preview";
+  componentName: string;
+  operation: "decode" | "encode";
+  serdeName: string;
+};
+
+// Preview uses a regex so that `serdeName` can span multiple path segments
+// (built-ins are shaped as `<handler>/(input|output)`). The regex is anchored
+// with `(?:^|\/)` so deployments mounted under a sub-path also work.
+const PREVIEW_PATH_REGEX =
+  /(?:^|\/)serdes\/(?<componentName>[^/]+)\/(?<operation>encode|decode)\/(?<serdeName>.+?)\/?$/;
+
 export function parseUrlComponents(urlPath?: string): PathComponents {
   if (!urlPath) {
     return { type: "unknown", path: "" };
   }
+
+  const preview = PREVIEW_PATH_REGEX.exec(urlPath);
+  if (preview?.groups) {
+    return {
+      type: "preview",
+      componentName: preview.groups.componentName!,
+      operation: preview.groups.operation as "decode" | "encode",
+      serdeName: preview.groups.serdeName!,
+    };
+  }
+
   const fragments = urlPath.split("/");
   if (fragments.length >= 3 && fragments[fragments.length - 3] === "invoke") {
     return {
