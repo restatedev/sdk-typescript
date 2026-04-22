@@ -21,8 +21,8 @@ export interface Serde<T> {
   contentType?: string;
   jsonSchema?: object;
   preview?: {
-    toJsonString(value: T): string;
-    fromJsonString(json: string): T;
+    toJsonString(value: T): Promise<string> | string;
+    fromJsonString(json: string): Promise<T> | T;
   };
 
   serialize(value: T): Uint8Array;

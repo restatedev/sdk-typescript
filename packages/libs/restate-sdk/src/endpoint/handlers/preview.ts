@@ -66,22 +66,22 @@ class RestatePreviewResponse implements RestateResponse {
 
     const response =
       this.operation === "decode"
-        ? this.buildDecodeResponse(requestBody)
-        : this.buildEncodeResponse(requestBody);
+        ? await this.buildDecodeResponse(requestBody)
+        : await this.buildEncodeResponse(requestBody);
 
     writeHead(response.statusCode, response.headers);
     await outputWriter.write(response.body);
     await outputWriter.close();
   }
 
-  private buildDecodeResponse(requestBody: Uint8Array): {
+  private async buildDecodeResponse(requestBody: Uint8Array): Promise<{
     body: Uint8Array;
     headers: ResponseHeaders;
     statusCode: number;
-  } {
+  }> {
     try {
       const value = this.serde.deserialize(requestBody);
-      const json = this.serde.preview!.toJsonString(value);
+      const json = await this.serde.preview!.toJsonString(value);
       return {
         statusCode: 200,
         headers: {
@@ -95,14 +95,14 @@ class RestatePreviewResponse implements RestateResponse {
     }
   }
 
-  private buildEncodeResponse(requestBody: Uint8Array): {
+  private async buildEncodeResponse(requestBody: Uint8Array): Promise<{
     body: Uint8Array;
     headers: ResponseHeaders;
     statusCode: number;
-  } {
+  }> {
     try {
       const json = new TextDecoder().decode(requestBody);
-      const value = this.serde.preview!.fromJsonString(json);
+      const value = await this.serde.preview!.fromJsonString(json);
       return {
         statusCode: 200,
         headers: {
