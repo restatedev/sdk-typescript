@@ -155,8 +155,8 @@ export class LambdaHandler {
         };
       }
 
-      // Framework wrapper guarantees writeHead was called, so this resolves
-      // synchronously on the next microtask.
+      // wrapResponseWithSafety guarantees writeHead was called, so this
+      // resolves synchronously on the next microtask.
       const head = await headPromise;
 
       const responseBodyBuffer = Buffer.concat(chunks);

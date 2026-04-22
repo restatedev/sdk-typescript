@@ -95,7 +95,8 @@ export function createRestateHandler(
 }
 
 /**
- * Framework-level safety net around a user-provided `RestateResponse`.
+ * Safety net around a `RestateResponse` returned by `_handle()`, applied
+ * in `RestateHandlerImpl.handle()` before the response reaches any adapter.
  *
  * Guarantees to adapters:
  *   - `writeHead` is called exactly once on the success path.

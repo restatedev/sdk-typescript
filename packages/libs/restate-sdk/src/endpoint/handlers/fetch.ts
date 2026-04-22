@@ -48,8 +48,9 @@ export function fetcher(handler: RestateHandler) {
           abortSignal: event.signal,
         })
         .catch((e) => {
-          // Framework wrapper guarantees writeHead is called and closes the
-          // output stream; anything reaching here is a post-commit error.
+          // wrapResponseWithSafety guarantees writeHead is called and
+          // closes the output stream; anything reaching here is a
+          // post-commit error.
           const error = ensureError(e);
           const logger =
             tryCreateContextualLogger(

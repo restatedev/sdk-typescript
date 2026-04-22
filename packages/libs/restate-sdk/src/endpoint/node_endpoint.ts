@@ -209,7 +209,7 @@ function nodeHandlerImpl(
         abortSignal: abortController.signal,
       })
       .catch((e) => {
-        // Framework wrapper guarantees writeHead is called; anything
+        // wrapResponseWithSafety guarantees writeHead is called; anything
         // reaching here is a post-commit error. Nothing to do but log.
         const error = ensureError(e);
         const logger =
