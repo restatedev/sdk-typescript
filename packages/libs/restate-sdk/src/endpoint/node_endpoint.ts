@@ -26,11 +26,7 @@ import { ensureError } from "../types/errors.js";
 import type { LoggerTransport } from "../logging/logger_transport.js";
 import type { DefaultServiceOptions } from "../endpoint.js";
 import { tryCreateContextualLogger } from "./handlers/utils.js";
-import type {
-  InputReader,
-  OutputWriter,
-  ResponseHeaders,
-} from "./handlers/types.js";
+import type { InputReader, OutputWriter } from "./handlers/types.js";
 import type { ProtocolMode } from "./discovery.js";
 
 export class NodeEndpoint implements RestateEndpoint {
@@ -190,9 +186,7 @@ function nodeHandlerImpl(
       abortController.abort();
     });
 
-    const writeHead = (statusCode: number, headers: ResponseHeaders): void => {
-      res.writeHead(statusCode, headers);
-    };
+    const writeHead = res.writeHead.bind(res);
 
     // handle should never throw
     const restateResponse = handler.handle({
