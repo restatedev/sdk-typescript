@@ -12,7 +12,6 @@ import type {
 import { createLogger, Logger } from "../../logging/logger.js";
 import { parseUrlComponents } from "../components.js";
 import { X_RESTATE_SERVER } from "../../user_agent.js";
-import { CompletablePromise } from "../../utils/completable_promise.js";
 
 export function tryCreateContextualLogger(
   loggerTransport: LoggerTransport,
@@ -94,24 +93,21 @@ export function emptyInputReader(): InputReader {
 
 /**
  * Bundles a `writeHead` callback with a Promise that resolves once the head
- * is committed. Used by adapters (fetch, lambda) that need to observe head
- * commit from outside the `process()` call.
- *
- * `writeHead` is expected to be called exactly once — enforced by the
- * safety layer in {@link RestateHandler.handle}, so there is no guard here.
+ * is committed. Used by adapters (fetch, lambda) that need to observe the
+ * head commit from outside the `process()` call.
  */
 export function captureHead(): {
   writeHead: (statusCode: number, headers: ResponseHeaders) => void;
   head: Promise<{ statusCode: number; headers: ResponseHeaders }>;
 } {
-  const ready = new CompletablePromise<{
+  const { promise, resolve } = Promise.withResolvers<{
     statusCode: number;
     headers: ResponseHeaders;
   }>();
   return {
     writeHead: (statusCode, headers) => {
-      ready.resolve({ statusCode, headers: { ...headers } });
+      resolve({ statusCode, headers: { ...headers } });
     },
-    head: ready.promise,
+    head: promise,
   };
 }

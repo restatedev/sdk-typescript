@@ -209,8 +209,8 @@ function nodeHandlerImpl(
         abortSignal: abortController.signal,
       })
       .catch((e) => {
-        // wrapResponseWithSafety guarantees writeHead is called; anything
-        // reaching here is a post-commit error. Nothing to do but log.
+        // Responses handle their own errors before rejecting; anything
+        // reaching here is an unexpected failure — just log.
         const error = ensureError(e);
         const logger =
           tryCreateContextualLogger(
