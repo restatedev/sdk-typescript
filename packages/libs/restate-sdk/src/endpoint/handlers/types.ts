@@ -31,15 +31,23 @@ export interface OutputWriter {
 }
 
 export interface RestateResponse {
-  readonly headers: ResponseHeaders;
-  readonly statusCode: number;
-
-  // Promise resolved when the request has been fully processed,
-  // the last message has been written out,
-  // and outputStream has been closed.
+  /**
+   * Drive the full response lifecycle.
+   *
+   * Implementations own the order of things: they must call {@link writeHead}
+   * exactly once before the first {@link outputWriter.write}, read any
+   * {@link inputReader} content they need, write the body, and finally call
+   * {@link outputWriter.close}.
+   *
+   * {@link RestateHandler.handle} returns responses wrapped in a safety layer
+   * that emits a 500 fallback if `process()` rejects before {@link writeHead}
+   * or resolves without committing a head, and closes the output stream on
+   * every path. Adapters can treat transport failures as logging concerns.
+   */
   process(value: {
     inputReader: InputReader;
     outputWriter: OutputWriter;
+    writeHead: (statusCode: number, headers: ResponseHeaders) => void;
     abortSignal: AbortSignal;
   }): Promise<void>;
 }

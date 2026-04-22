@@ -12,6 +12,7 @@ import type {
 import { createLogger, Logger } from "../../logging/logger.js";
 import { parseUrlComponents } from "../components.js";
 import { X_RESTATE_SERVER } from "../../user_agent.js";
+import { CompletablePromise } from "../../utils/completable_promise.js";
 
 export function tryCreateContextualLogger(
   loggerTransport: LoggerTransport,
@@ -71,15 +72,13 @@ export function simpleResponse(
   body: Uint8Array
 ): RestateResponse {
   return {
-    headers,
-    statusCode,
-    async process({ inputReader, outputWriter }): Promise<void> {
-      if (inputReader !== undefined) {
-        // Drain the input stream
-        while (true) {
-          const { done } = await inputReader.next();
-          if (done) break;
-        }
+    async process({ inputReader, outputWriter, writeHead }): Promise<void> {
+      writeHead(statusCode, headers);
+
+      // Drain the input stream
+      while (true) {
+        const { done } = await inputReader.next();
+        if (done) break;
       }
 
       await outputWriter.write(body);
@@ -91,4 +90,28 @@ export function simpleResponse(
 
 export function emptyInputReader(): InputReader {
   return (async function* () {})()[Symbol.asyncIterator]();
+}
+
+/**
+ * Bundles a `writeHead` callback with a Promise that resolves once the head
+ * is committed. Used by adapters (fetch, lambda) that need to observe head
+ * commit from outside the `process()` call.
+ *
+ * `writeHead` is expected to be called exactly once — enforced by the
+ * safety layer in {@link RestateHandler.handle}, so there is no guard here.
+ */
+export function captureHead(): {
+  writeHead: (statusCode: number, headers: ResponseHeaders) => void;
+  head: Promise<{ statusCode: number; headers: ResponseHeaders }>;
+} {
+  const ready = new CompletablePromise<{
+    statusCode: number;
+    headers: ResponseHeaders;
+  }>();
+  return {
+    writeHead: (statusCode, headers) => {
+      ready.resolve({ statusCode, headers: { ...headers } });
+    },
+    head: ready.promise,
+  };
 }

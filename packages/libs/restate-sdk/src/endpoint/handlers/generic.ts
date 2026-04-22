@@ -72,6 +72,16 @@ const HOOK_CONTEXT_IS_PROCESSING_SYMBOL = Symbol.for(
   "@restatedev/restate-sdk/hooks.isProcessing"
 );
 
+/**
+ * Builds the Restate handler for an endpoint.
+ *
+ * Responses returned by `handle()` are wrapped via
+ * {@link wrapResponseWithSafety}, which enforces exactly-once `writeHead`,
+ * emits a 500 fallback if `process()` fails before `writeHead` or resolves
+ * without committing a head, and closes the output stream on every path.
+ * Adapters (node, fetch, lambda) can therefore treat transport failures as
+ * logging concerns.
+ */
 export function createRestateHandler(
   endpoint: Endpoint,
   protocolMode: ProtocolMode,
@@ -82,6 +92,77 @@ export function createRestateHandler(
     protocolMode,
     additionalDiscoveryFields
   );
+}
+
+/**
+ * Framework-level safety net around a user-provided `RestateResponse`.
+ *
+ * Guarantees to adapters:
+ *   - `writeHead` is called exactly once on the success path.
+ *   - If `process()` rejects before `writeHead`, a 500 `errorResponse` is
+ *     written instead (including input drain).
+ *   - If `process()` resolves without calling `writeHead`, same recovery.
+ *   - Post-writeHead errors propagate to the adapter for logging — the head
+ *     is already committed to the transport and can't be changed.
+ *
+ * Mirrors the existing pattern where `handle()` wraps user errors via
+ * `errorResponse`; this extends that safety net to the `process()` phase.
+ */
+function wrapResponseWithSafety(inner: RestateResponse): RestateResponse {
+  return {
+    async process({ inputReader, outputWriter, writeHead, abortSignal }) {
+      let committed = false;
+      const safeWriteHead = (
+        statusCode: number,
+        headers: ResponseHeaders
+      ): void => {
+        if (committed) {
+          throw new Error("writeHead() called more than once");
+        }
+        committed = true;
+        writeHead(statusCode, headers);
+      };
+
+      try {
+        try {
+          await inner.process({
+            inputReader,
+            outputWriter,
+            writeHead: safeWriteHead,
+            abortSignal,
+          });
+        } catch (e) {
+          if (committed) {
+            // Head already on the wire — nothing structural the adapter can do.
+            throw e;
+          }
+          await errorResponse(500, ensureError(e).message).process({
+            inputReader,
+            outputWriter,
+            writeHead,
+            abortSignal,
+          });
+          return;
+        }
+
+        if (!committed) {
+          await errorResponse(
+            500,
+            "Handler did not produce a response head"
+          ).process({
+            inputReader,
+            outputWriter,
+            writeHead,
+            abortSignal,
+          });
+        }
+      } finally {
+        // Ensure the output stream closes on every path. If it was already
+        // closed (the usual case), close() rejects — which we swallow.
+        await outputWriter.close().catch(() => {});
+      }
+    },
+  };
 }
 
 /**
@@ -122,7 +203,7 @@ class RestateHandlerImpl implements RestateHandler {
     context?: AdditionalContext
   ): RestateResponse {
     try {
-      return this._handle(request, context);
+      return wrapResponseWithSafety(this._handle(request, context));
     } catch (e) {
       const error = ensureError(e);
       (
@@ -134,9 +215,11 @@ class RestateHandlerImpl implements RestateHandler {
       ).error(
         "Error while handling request: " + (error.stack ?? error.message)
       );
-      return errorResponse(
-        error instanceof RestateError ? error.code : 500,
-        error.message
+      return wrapResponseWithSafety(
+        errorResponse(
+          error instanceof RestateError ? error.code : 500,
+          error.message
+        )
       );
     }
   }
@@ -258,8 +341,8 @@ class RestateHandlerImpl implements RestateHandler {
 }
 
 class RestateInvokeResponse implements RestateResponse {
-  public headers: ResponseHeaders;
-  public statusCode: number;
+  private readonly headers: ResponseHeaders;
+  private readonly statusCode: number;
 
   private readonly loggerId: number;
   private vmLogger: Logger;
@@ -321,12 +404,18 @@ class RestateInvokeResponse implements RestateResponse {
   async process({
     inputReader,
     outputWriter,
+    writeHead,
     abortSignal,
   }: {
     inputReader: InputReader;
     outputWriter: OutputWriter;
+    writeHead: (statusCode: number, headers: ResponseHeaders) => void;
     abortSignal: AbortSignal;
   }): Promise<void> {
+    // Commit the response head immediately — the VM-determined head is known
+    // at construction time and never changes during processing.
+    writeHead(this.statusCode, this.headers);
+
     abortSignal.addEventListener(
       "abort",
       () => {

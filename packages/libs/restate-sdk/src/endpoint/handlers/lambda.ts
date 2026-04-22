@@ -21,7 +21,11 @@ import { X_RESTATE_SERVER } from "../../user_agent.js";
 import { ensureError } from "../../types/errors.js";
 import * as zlib from "node:zlib";
 import { InputReader, OutputWriter, RestateHandler } from "./types.js";
-import { emptyInputReader, tryCreateContextualLogger } from "./utils.js";
+import {
+  captureHead,
+  emptyInputReader,
+  tryCreateContextualLogger,
+} from "./utils.js";
 
 const RESPONSE_COMPRESSION_THRESHOLD = 3 * 1024 * 1024;
 
@@ -108,6 +112,9 @@ export class LambdaHandler {
         },
       };
 
+      const { writeHead, head: headPromise } = captureHead();
+
+      // handle should never throw
       const response = this.handler.handle(
         {
           headers: event.headers,
@@ -123,10 +130,12 @@ export class LambdaHandler {
         await response.process({
           inputReader,
           outputWriter,
+          writeHead,
           abortSignal: abortController.signal,
         });
       } catch (e) {
-        // handle should never throw
+        // Lambda always has to return a result object, so we convert
+        // process() failures into a 500 response here rather than log-only.
         const error = ensureError(e);
         const logger =
           tryCreateContextualLogger(
@@ -146,6 +155,10 @@ export class LambdaHandler {
         };
       }
 
+      // Framework wrapper guarantees writeHead was called, so this resolves
+      // synchronously on the next microtask.
+      const head = await headPromise;
+
       const responseBodyBuffer = Buffer.concat(chunks);
       let responseBody;
 
@@ -156,7 +169,7 @@ export class LambdaHandler {
         requestAcceptEncoding &&
         requestAcceptEncoding.includes("zstd")
       ) {
-        response.headers["content-encoding"] = "zstd";
+        head.headers["content-encoding"] = "zstd";
 
         responseBody = (
           zlib as unknown as { zstdCompressSync: (b: Buffer) => Buffer }
@@ -167,8 +180,8 @@ export class LambdaHandler {
         responseBody = responseBodyBuffer.toString("base64");
       }
       return {
-        headers: response.headers,
-        statusCode: response.statusCode,
+        headers: head.headers,
+        statusCode: head.statusCode,
         isBase64Encoded: true,
         body: responseBody,
       };

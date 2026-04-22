@@ -26,7 +26,11 @@ import { ensureError } from "../types/errors.js";
 import type { LoggerTransport } from "../logging/logger_transport.js";
 import type { DefaultServiceOptions } from "../endpoint.js";
 import { tryCreateContextualLogger } from "./handlers/utils.js";
-import type { InputReader, OutputWriter } from "./handlers/types.js";
+import type {
+  InputReader,
+  OutputWriter,
+  ResponseHeaders,
+} from "./handlers/types.js";
 import type { ProtocolMode } from "./discovery.js";
 
 export class NodeEndpoint implements RestateEndpoint {
@@ -176,6 +180,9 @@ function nodeHandlerImpl(
 
   return (httpRequest, httpResponse) => {
     const url = httpRequest.url!;
+    const inputReader = inputReaderAdapter(httpRequest);
+    const outputWriter = outputWriterAdapter(httpResponse);
+    const res = httpResponse as NodeWritableResponse;
 
     // Abort controller used to cleanup resources at the end of this stream lifecycle
     const abortController = new AbortController();
@@ -183,22 +190,27 @@ function nodeHandlerImpl(
       abortController.abort();
     });
 
+    const writeHead = (statusCode: number, headers: ResponseHeaders): void => {
+      res.writeHead(statusCode, headers);
+    };
+
+    // handle should never throw
     const restateResponse = handler.handle({
       url,
       headers: httpRequest.headers,
       extraArgs: [],
     });
-    const res = httpResponse as NodeWritableResponse;
-    res.writeHead(restateResponse.statusCode, restateResponse.headers);
 
     restateResponse
       .process({
-        inputReader: inputReaderAdapter(httpRequest),
-        outputWriter: outputWriterAdapter(httpResponse),
+        inputReader,
+        outputWriter,
+        writeHead,
         abortSignal: abortController.signal,
       })
       .catch((e) => {
-        // handle should never throw
+        // Framework wrapper guarantees writeHead is called; anything
+        // reaching here is a post-commit error. Nothing to do but log.
         const error = ensureError(e);
         const logger =
           tryCreateContextualLogger(
