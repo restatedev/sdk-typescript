@@ -36,7 +36,7 @@
   },
   "scripts": {
     "build": "turbo run _build --filter={.}...",
-    "_build": "./patch_sdk_cf_workers.sh",
+    "_build": "rm -rf dist && ./patch_sdk_cf_workers.sh && rm -f dist/endpoint/handlers/vm/.gitignore",
     "clean": "rm -rf dist *.tsbuildinfo .turbo",
     "check:exports": "turbo run _check:exports --filter={.}...",
     "_check:exports": "attw --pack .",
