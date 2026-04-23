@@ -5,6 +5,7 @@ use std::cmp;
 use std::convert::{Infallible, Into};
 use std::io::Write;
 use std::time::Duration;
+use restate_sdk_shared_core::tracing_pretty::{Pretty, PrettyFields};
 use tracing::metadata::LevelFilter;
 use tracing::{Dispatch, Level, Subscriber};
 use tracing_subscriber::fmt::format::FmtSpan;
@@ -115,26 +116,43 @@ fn log_subscriber(
         LogLevel::ERROR => Level::ERROR,
     };
 
-    let fmt_layer = tracing_subscriber::fmt::layer()
-        .with_ansi(false)
-        .without_time()
-        .with_thread_names(false)
-        .with_thread_ids(false)
-        .with_file(false)
-        .with_line_number(false)
-        .with_target(level == Level::TRACE)
-        .with_level(false)
-        .with_span_events(if level == Level::TRACE {
-            FmtSpan::ENTER
-        } else {
-            FmtSpan::NONE
-        })
-        .with_writer(MakeWebConsoleWriter { logger_id })
-        // We do filtering here too,
-        // as it might get expensive to pass logs through
-        // the various layers even though we don't need them
-        .with_filter(LevelFilter::from_level(level));
-    Registry::default().with(fmt_layer)
+    let fmt_layer = if level == Level::TRACE {
+        tracing_subscriber::fmt::layer()
+            .with_ansi(false)
+            .without_time()
+            .with_span_events(
+                FmtSpan::ENTER
+            )
+            .with_writer(MakeWebConsoleWriter { logger_id })
+            .event_format(Pretty::default()
+                .without_time()
+                .with_thread_names(false)
+                .with_thread_ids(false)
+                .with_target(true)
+                .with_level(true)
+            )
+            .fmt_fields(PrettyFields::default()).boxed()
+    } else {
+        tracing_subscriber::fmt::layer()
+            .with_ansi(false)
+            .without_time()
+            .with_thread_names(false)
+            .with_thread_ids(false)
+            .with_file(false)
+            .with_line_number(false)
+            .with_target(false)
+            .with_level(false)
+            .with_span_events(FmtSpan::NONE)
+            .with_writer(MakeWebConsoleWriter { logger_id }).boxed()
+    };
+
+
+        Registry::default().with(fmt_layer
+                                     // We do filtering here too,
+                                     // as it might get expensive to pass logs through
+                                     // the various layers even though we don't need them
+                                     .with_filter(LevelFilter::from_level(level))
+        )
 }
 
 //--- Data model

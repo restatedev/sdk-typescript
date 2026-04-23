@@ -17,8 +17,10 @@ import {
   InvocationIdParser,
   createServiceHandler,
   type Context,
+  TerminalError,
 } from "@restatedev/restate-sdk";
 import { z } from "zod";
+import * as restate from "@restatedev/restate-sdk";
 
 const SignalPayload = z.object({
   value: z.string(),
@@ -26,29 +28,23 @@ const SignalPayload = z.object({
 
 const ResolveRequest = z.object({
   invocationId: z.string(),
+  signal: z.string(),
   value: z.string(),
 });
 
 const signals = service({
   name: "signals",
+  options: {
+    inactivityTimeout: 0,
+  },
   handlers: {
-    wait: createServiceHandler(
-      { input: serde.empty, output: serde.schema(SignalPayload) },
-      async (ctx: Context) => {
-        const ctxInternal = ctx as internal.ContextInternal;
-
-        // Print the invocation ID so you can use it to send a signal
-        ctx.console.log(`Invocation ID: ${ctx.request().id}`);
-
-        // Wait for a signal named "mySignal"
-        const payload = await ctxInternal.signal(
-          "mySignal",
-          serde.schema(SignalPayload)
-        );
-
-        return payload;
-      }
-    ),
+    wait: async (ctx: Context) => {
+      const ctxInternal = ctx as restate.internal.ContextInternal;
+      const p1 = ctxInternal.signal<string>("p1");
+      const p2 = ctxInternal.signal<string>("p2");
+      const p3 = ctxInternal.signal<string>("p3");
+      return await restate.RestatePromise.all([p1, p2, p3]);
+    },
 
     resolve: createServiceHandler(
       { input: serde.schema(ResolveRequest), output: serde.empty },
@@ -57,8 +53,20 @@ const signals = service({
 
         ctxInternal
           .invocation(InvocationIdParser.fromString(req.invocationId))
-          .signal("mySignal", serde.schema(SignalPayload))
+          .signal(req.signal, serde.schema(SignalPayload))
           .resolve({ value: req.value });
+      }
+    ),
+
+    reject: createServiceHandler(
+      { input: serde.schema(ResolveRequest), output: serde.empty },
+      async (ctx: Context, req) => {
+        const ctxInternal = ctx as internal.ContextInternal;
+
+        ctxInternal
+          .invocation(InvocationIdParser.fromString(req.invocationId))
+          .signal(req.signal, serde.schema(SignalPayload))
+          .reject(req.value);
       }
     ),
   },

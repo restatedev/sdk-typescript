@@ -1,10 +1,10 @@
 /* tslint:disable */
 /* eslint-disable */
+export function cancel_handle(): number;
 /**
  * This will set the log level of the overall log subscriber.
  */
 export function set_log_level(level: LogLevel): void;
-export function cancel_handle(): number;
 /**
  * Setups the WASM module
  */
@@ -37,6 +37,16 @@ export enum WasmCommandType {
   CompleteAwakeable = 17,
   CancelInvocation = 18,
 }
+export interface WasmSendHandle {
+  invocation_id_completion_id: number;
+}
+
+export type WasmDoProgressResult =
+  | "AnyCompleted"
+  | "WaitExternalProgress"
+  | { ExecuteRun: number }
+  | "CancelSignalReceived";
+
 export interface WasmExponentialRetryConfig {
   initial_interval: number | undefined;
   factor: number;
@@ -45,22 +55,20 @@ export interface WasmExponentialRetryConfig {
   max_duration: number | undefined;
 }
 
+export interface WasmCallHandle {
+  invocation_id_completion_id: number;
+  call_completion_id: number;
+}
+
+export interface WasmFailureMetadata {
+  key: string;
+  value: string;
+}
+
 export interface WasmFailure {
   code: number;
   message: string;
   metadata: WasmFailureMetadata[];
-}
-
-export type WasmAsyncResultValue =
-  | "NotReady"
-  | "Empty"
-  | { Success: Uint8Array }
-  | { Failure: WasmFailure }
-  | { StateKeys: string[] }
-  | { InvocationId: string };
-
-export interface WasmSendHandle {
-  invocation_id_completion_id: number;
 }
 
 export type WasmUnresolvedFuture =
@@ -71,26 +79,18 @@ export type WasmUnresolvedFuture =
   | { AllSucceededOrFirstFailed: WasmUnresolvedFuture[] }
   | { Unknown: WasmUnresolvedFuture[] };
 
-export interface WasmCallHandle {
-  invocation_id_completion_id: number;
-  call_completion_id: number;
-}
+export type WasmAsyncResultValue =
+  | "NotReady"
+  | "Empty"
+  | { Success: Uint8Array }
+  | { Failure: WasmFailure }
+  | { StateKeys: string[] }
+  | { InvocationId: string };
 
 export interface WasmAwakeable {
   id: string;
   handle: number;
 }
-
-export interface WasmFailureMetadata {
-  key: string;
-  value: string;
-}
-
-export type WasmDoProgressResult =
-  | "AnyCompleted"
-  | "WaitExternalProgress"
-  | { ExecuteRun: number }
-  | "CancelSignalReceived";
 
 export class WasmHeader {
   free(): void;
