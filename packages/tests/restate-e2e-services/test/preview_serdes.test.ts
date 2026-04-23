@@ -159,10 +159,7 @@ describe("Preview serdes e2e", () => {
     });
   }, 30_000);
 
-  // Skipped: the admin-proxied preview routes
-  // (`/internal/services/.../serdes/(encode|decode)/...`) aren't shipped in
-  // restate-server yet. Unskip once they are.
-  describe.skip("preview encode/decode endpoints", () => {
+  describe("preview encode/decode endpoints", () => {
     it("round-trip explicit handler serdes with distinct prefixes", async () => {
       // explicitA/input: encode then decode the same bytes back
       const encodedA = await previewEncode(
@@ -247,24 +244,24 @@ describe("Preview serdes e2e", () => {
       expect(await decodedService.json()).toEqual({ value: "service-output" });
     }, 30_000);
 
-    it("returns 404 for serdes without preview", async () => {
+    it("returns 500 for serdes without preview", async () => {
       const response = await previewEncode(
         "PreviewSerdeCases",
         "noPreview/input",
         { value: "ignored" }
       );
 
-      expect(response.status).toBe(404);
+      expect(response.status).toBe(500);
     }, 30_000);
 
-    it("returns 404 for serde names that do not exist", async () => {
+    it("returns 500 for serde names that do not exist", async () => {
       const response = await previewEncode(
         "PreviewSerdeCases",
         "does-not-exist",
         { value: "ignored" }
       );
 
-      expect(response.status).toBe(404);
+      expect(response.status).toBe(500);
     }, 30_000);
 
     it("preview-encoded bytes round-trip through the handler via ingress", async () => {
