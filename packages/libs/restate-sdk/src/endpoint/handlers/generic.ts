@@ -57,6 +57,7 @@ import {
   OutputWriter,
 } from "./types.js";
 import { handleDiscovery } from "./discovery.js";
+import { handlePreview } from "./preview.js";
 import {
   errorResponse,
   invocationIdFromHeaders,
@@ -150,7 +151,11 @@ class RestateHandlerImpl implements RestateHandler {
     const parsed = parseUrlComponents(path);
 
     if (parsed.type === "unknown") {
-      const msg = `Invalid path. Allowed are /health, or /discover, or /invoke/SvcName/handlerName, but was: ${path}`;
+      const msg =
+        "Invalid path. Allowed are /health, /discover, /invoke/SvcName/handlerName, " +
+        "/serdes/SvcName/decode/<serdeName>, or " +
+        "/serdes/SvcName/encode/<serdeName>, but was: " +
+        path;
       this.endpoint.rlog.trace(msg);
       return errorResponse(404, msg);
     }
@@ -165,7 +170,7 @@ class RestateHandlerImpl implements RestateHandler {
       );
     }
 
-    // Discovery and handling invocations require identity verification
+    // Discovery, preview, and handling invocations require identity verification
     const error = this.validateConnectionSignature(path, request.headers);
     if (error !== null) {
       return error;
@@ -177,6 +182,9 @@ class RestateHandlerImpl implements RestateHandler {
         this.additionalDiscoveryFields,
         request.headers["accept"]
       );
+    }
+    if (parsed.type === "preview") {
+      return handlePreview(this.endpoint, parsed);
     }
 
     return this.handleInvoke(
@@ -229,7 +237,6 @@ class RestateHandlerImpl implements RestateHandler {
       return errorResponse(415, errorMessage);
     }
 
-    // Resolve service and handler
     const service = this.endpoint.components.get(
       invokePathComponent.componentName
     );
@@ -238,9 +245,10 @@ class RestateHandlerImpl implements RestateHandler {
       this.endpoint.rlog.error(msg);
       return errorResponse(404, msg);
     }
-    const handler = service?.handlerMatching(invokePathComponent);
+
+    const handler = service.handlerMatching(invokePathComponent);
     if (!handler) {
-      const msg = `No service found for URL: ${JSON.stringify(invokePathComponent)}`;
+      const msg = `No handler found for URL: ${JSON.stringify(invokePathComponent)}`;
       this.endpoint.rlog.error(msg);
       return errorResponse(404, msg);
     }

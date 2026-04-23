@@ -17,12 +17,113 @@ import type {
   StandardSchemaV1,
 } from "./standard_schema.js";
 
+/**
+ * Serializer/deserializer pair for any Restate-managed value of type `T` —
+ * handler inputs and outputs, service state, side-effect results,
+ * awakeables, durable promises, and so on.
+ *
+ * A `Serde<T>` is responsible for two conversions:
+ *
+ * - **Wire format**: `serialize` / `deserialize` convert a value `T` to and
+ *   from the raw bytes that flow over the network and get stored in the
+ *   journal.
+ * - **JSON preview (optional)**: `preview.toJsonString` /
+ *   `preview.fromJsonString` convert a value `T` to and from a JSON string,
+ *   used by tooling to render and edit values that humans can read.
+ *
+ * It also advertises metadata (`contentType`, `jsonSchema`) that surfaces in
+ * service discovery.
+ */
 export interface Serde<T> {
+  /**
+   * MIME type of the bytes produced by `serialize` (and accepted by
+   * `deserialize`).
+   */
   contentType?: string;
+
+  /**
+   * Optional JSON Schema describing the logical shape of `T`. Surfaced in
+   * discovery so that tooling can generate forms, auto-complete payloads,
+   * etc. Has no effect on serialization at runtime.
+   */
   jsonSchema?: object;
 
+  /**
+   * Optional bridge between the serde's wire format and a JSON
+   * representation that humans (and tooling like the Restate UI) can read
+   * and edit.
+   *
+   * Only useful for serdes whose wire format isn't already plain JSON —
+   * protobuf, MessagePack, length-prefixed binary, JSON variants that need
+   * post-processing for bigints/dates, etc. Both methods may be async if the
+   * conversion needs I/O.
+   *
+   * ### Preview flow
+   *
+   * Together with `serialize` / `deserialize`, the four functions chain in
+   * both directions between a JSON string and on-the-wire bytes:
+   *
+   * ```text
+   * JSON string  ──fromJsonString──►  T  ──serialize──►  wire bytes
+   * wire bytes   ──deserialize────►  T  ──toJsonString──►  JSON string
+   * ```
+   *
+   * The split keeps `serialize` / `deserialize` responsible for the full
+   * on-the-wire format; `preview` only handles the JSON ↔ `T` bridge.
+   *
+   * @example
+   * ```ts
+   * // Wire format is protobuf; the protobuf-es runtime already ships
+   * // `toJsonString` / `fromJsonString`, so preview is a direct pass-through.
+   * import {
+   *   fromBinary,
+   *   fromJsonString,
+   *   toBinary,
+   *   toJsonString,
+   * } from "@bufbuild/protobuf";
+   * import { PersonSchema, type Person } from "./person_pb.js";
+   *
+   * const personSerde: Serde<Person> = {
+   *   contentType: "application/protobuf",
+   *   serialize(message) { return toBinary(PersonSchema, message); },
+   *   deserialize(bytes) { return fromBinary(PersonSchema, bytes); },
+   *   preview: {
+   *     toJsonString: (v) => toJsonString(PersonSchema, v),
+   *     fromJsonString: (j) => fromJsonString(PersonSchema, j),
+   *   },
+   * };
+   * ```
+   */
+  preview?: {
+    /**
+     * Convert a value into a JSON string for display or editing by humans.
+     * The returned string must round-trip through `fromJsonString` back to
+     * the same logical value.
+     */
+    toJsonString(value: T): Promise<string> | string;
+
+    /**
+     * Parse a human-supplied JSON string back into a value of type `T`.
+     * Should throw (or reject) if `json` is invalid for this serde.
+     */
+    fromJsonString(json: string): Promise<T> | T;
+  };
+
+  /**
+   * Convert a value of type `T` into its on-the-wire bytes. This is the
+   * format Restate sends between services and persists in the journal.
+   *
+   * Must be the inverse of `deserialize` — `deserialize(serialize(v))`
+   * should produce a value equivalent to `v`.
+   */
   serialize(value: T): Uint8Array;
 
+  /**
+   * Convert on-the-wire bytes back into a value of type `T`. Must be the
+   * inverse of `serialize`.
+   *
+   * May throw if `data` doesn't conform to the expected wire format.
+   */
   deserialize(data: Uint8Array): T;
 }
 
