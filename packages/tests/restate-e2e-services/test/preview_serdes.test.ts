@@ -7,11 +7,13 @@
 // directory of this repository or package, or at
 // https://github.com/restatedev/e2e/blob/main/LICENSE
 
+import { rpc } from "@restatedev/restate-sdk-clients";
 import { describe, expect, it } from "vitest";
 import {
   getAdminUrl,
   getIngressUrl,
   getServiceUrl,
+  fetchH2,
   ingressClient,
 } from "./utils.js";
 import {
@@ -30,9 +32,13 @@ const PreviewSerdeServiceDefault: PreviewSerdeServiceDefault = {
   name: "PreviewSerdeServiceDefault",
 };
 
-function serviceFetch(path: string, init?: RequestInit): Promise<Response> {
-  return fetch(`${getServiceUrl()}${path}`, init);
-}
+const serviceFetch = (input: string | URL, init?: RequestInit) => {
+  const url =
+    typeof input === "string"
+      ? new URL(input, getServiceUrl())
+      : new URL(input.toString(), getServiceUrl());
+  return fetchH2(url, init);
+};
 
 async function serviceMetadata(
   serviceName: string
@@ -82,13 +88,13 @@ describe("Preview serdes e2e", () => {
       .serviceClient(PreviewSerdeCases)
       .explicitA(
         { value: "alpha" },
-        { input: explicitAInputSerde, output: explicitAOutputSerde }
+        rpc.opts({ input: explicitAInputSerde, output: explicitAOutputSerde })
       );
     const explicitB = await ingress
       .serviceClient(PreviewSerdeCases)
       .explicitB(
         { value: "beta" },
-        { input: explicitBInputSerde, output: explicitBOutputSerde }
+        rpc.opts({ input: explicitBInputSerde, output: explicitBOutputSerde })
       );
 
     expect(explicitA).toEqual({ value: "explicit-a:alpha" });
@@ -100,7 +106,7 @@ describe("Preview serdes e2e", () => {
       .serviceClient(PreviewSerdeCases)
       .handlerDefault(
         { value: "gamma" },
-        { input: handlerDefaultSerde, output: handlerDefaultSerde }
+        rpc.opts({ input: handlerDefaultSerde, output: handlerDefaultSerde })
       );
 
     expect(result).toEqual({ value: "handler-default:gamma" });
@@ -111,7 +117,7 @@ describe("Preview serdes e2e", () => {
       .serviceClient(PreviewSerdeServiceDefault)
       .invoke(
         { value: "delta" },
-        { input: serviceDefaultSerde, output: serviceDefaultSerde }
+        rpc.opts({ input: serviceDefaultSerde, output: serviceDefaultSerde })
       );
 
     expect(result).toEqual({ value: "service-default:delta" });
