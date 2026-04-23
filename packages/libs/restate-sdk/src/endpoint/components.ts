@@ -523,7 +523,7 @@ export function parseUrlComponents(urlPath?: string): PathComponents {
       type: "preview",
       componentName: preview.groups.componentName!,
       operation: preview.groups.operation as "decode" | "encode",
-      serdeName: preview.groups.serdeName!,
+      serdeName: decodeURIComponent(preview.groups.serdeName!),
     };
   }
 
