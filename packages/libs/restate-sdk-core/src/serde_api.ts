@@ -20,8 +20,43 @@ import type {
 export interface Serde<T> {
   contentType?: string;
   jsonSchema?: object;
+
+  /**
+   * Optional bridge between the serde's wire format and a JSON representation
+   * that humans (and tooling like the Restate UI) can read and edit.
+   *
+   * `preview` is only useful for serdes whose wire format isn't already JSON
+   * (protobuf, MessagePack, length-prefixed binary, JSON variants that need
+   * post-processing for bigints/dates, etc.). Both methods may be async if
+   * the conversion needs I/O.
+   *
+   * @example
+   * ```ts
+   * // Wire format is protobuf; the generated message class already ships
+   * // `toJsonString` / `fromJsonString`, so preview is a direct pass-through.
+   * const personSerde: Serde<Person> = {
+   *   contentType: "application/protobuf",
+   *   serialize(value)   { return Person.encode(value).finish(); },
+   *   deserialize(bytes) { return Person.decode(bytes); },
+   *   preview: {
+   *     toJsonString: (v) => Person.toJsonString(v),
+   *     fromJsonString: (j) => Person.fromJsonString(j),
+   *   },
+   * };
+   * ```
+   */
   preview?: {
+    /**
+     * Convert a value into a JSON string for display or editing by humans.
+     * The returned string must round-trip through `fromJsonString` back to
+     * the same logical value.
+     */
     toJsonString(value: T): Promise<string> | string;
+
+    /**
+     * Parse a human-supplied JSON string back into a value of type T.
+     * Should throw (or reject) if `json` is invalid for this serde.
+     */
     fromJsonString(json: string): Promise<T> | T;
   };
 
