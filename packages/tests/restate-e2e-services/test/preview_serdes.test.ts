@@ -13,6 +13,7 @@ import {
   getAdminUrl,
   getIngressUrl,
   getServiceUrl,
+  getServiceDeploymentUrl,
   fetchH2,
   ingressClient,
 } from "./utils.js";
@@ -32,12 +33,23 @@ const PreviewSerdeServiceDefault: PreviewSerdeServiceDefault = {
   name: "PreviewSerdeServiceDefault",
 };
 
-const serviceFetch = (input: string | URL, init?: RequestInit) => {
-  const url =
-    typeof input === "string"
-      ? new URL(input, getServiceUrl())
-      : new URL(input.toString(), getServiceUrl());
-  return fetchH2(url, init);
+const serviceFetch = async (
+  serviceName: string,
+  input: string | URL,
+  init?: RequestInit
+) => {
+  const fallbackUrl = getServiceUrl();
+  const deploymentUrl = await getServiceDeploymentUrl(serviceName);
+  const resolvedInput = typeof input === "string" ? input : input.toString();
+
+  try {
+    return await fetchH2(new URL(resolvedInput, deploymentUrl), init);
+  } catch (error) {
+    if (deploymentUrl === fallbackUrl) {
+      throw error;
+    }
+    return await fetchH2(new URL(resolvedInput, fallbackUrl), init);
+  }
 };
 
 async function serviceMetadata(
@@ -56,13 +68,17 @@ async function previewEncode(
   serdeName: string,
   json: unknown
 ): Promise<Response> {
-  return serviceFetch(`/serdes/${serviceName}/encode/${serdeName}`, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-    },
-    body: JSON.stringify(json),
-  });
+  return serviceFetch(
+    serviceName,
+    `/serdes/${serviceName}/encode/${serdeName}`,
+    {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(json),
+    }
+  );
 }
 
 async function previewDecode(
@@ -70,10 +86,14 @@ async function previewDecode(
   serdeName: string,
   body: Uint8Array
 ): Promise<Response> {
-  return serviceFetch(`/serdes/${serviceName}/decode/${serdeName}`, {
-    method: "POST",
-    body,
-  });
+  return serviceFetch(
+    serviceName,
+    `/serdes/${serviceName}/decode/${serdeName}`,
+    {
+      method: "POST",
+      body,
+    }
+  );
 }
 
 async function responseBytes(response: Response): Promise<Uint8Array> {

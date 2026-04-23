@@ -15,6 +15,22 @@ export type FetchLike = (
   init?: RequestInit
 ) => Promise<Response>;
 
+type ServiceNameRevPair = {
+  name: string;
+  revision: number;
+};
+
+type HttpDeploymentResponse = {
+  uri: string;
+  services: ServiceNameRevPair[];
+};
+
+type ListDeploymentsResponse = {
+  deployments: HttpDeploymentResponse[];
+};
+
+const serviceDeploymentUrlCache = new Map<string, Promise<string>>();
+
 export function getIngressUrl(): string {
   const url = process.env.RESTATE_INGRESS_URL;
   if (!url) {
@@ -31,13 +47,41 @@ export function getAdminUrl(): string {
   return url.replace(/\/+$/, "");
 }
 
-export function getServiceUrl(): string {
-  const url = process.env.RESTATE_SERVICE_URL ?? "http://localhost:9080";
-  return url.replace(/\/+$/, "");
-}
-
 export function ingressClient() {
   return restate.connect({ url: getIngressUrl() });
+}
+
+export async function getServiceDeploymentUrl(
+  serviceName: string
+): Promise<string> {
+  if (process.env.RESTATE_SERVICE_URL) {
+    return getServiceUrl();
+  }
+
+  const cached = serviceDeploymentUrlCache.get(serviceName);
+  if (!cached) {
+    const response = await fetch(`${getAdminUrl()}/deployments`);
+    if (!response.ok) {
+      throw new Error("Failed fetching deployments");
+    }
+
+    const body = (await response.json()) as Partial<ListDeploymentsResponse>;
+    const deployment = body.deployments?.find(
+      (candidate) =>
+        Array.isArray(candidate.services) &&
+        candidate.services.some((service) => service.name === serviceName) &&
+        typeof candidate.uri === "string"
+    );
+
+    const url = deployment?.uri?.replace(/\/+$/, "");
+    if (url) {
+      serviceDeploymentUrlCache.set(serviceName, cached);
+    } else {
+      throw new Error("Service Url not found");
+    }
+  }
+
+  return serviceDeploymentUrlCache.get(serviceName);
 }
 
 function responseHeaders(headers: http2.IncomingHttpHeaders): Headers {
