@@ -604,7 +604,7 @@ dependencies = [
 [[package]]
 name = "restate-sdk-shared-core"
 version = "0.9.0"
-source = "git+https://github.com/restatedev/sdk-shared-core.git?branch=awaiting_on#4b8fb2b900d5a14acc65218463c5c7578a16cabb"
+source = "git+https://github.com/restatedev/sdk-shared-core.git?branch=awaiting_on#d57c2a5e7db44a649f5b90070bd856cb545e4b62"
 dependencies = [
  "base64",
  "bs58",
@@ -617,6 +617,7 @@ dependencies = [
  "strum",
  "thiserror",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

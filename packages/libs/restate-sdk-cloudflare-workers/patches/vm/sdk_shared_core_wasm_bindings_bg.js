@@ -193,19 +193,19 @@ function getArrayJsValueFromWasm0(ptr, len) {
     return result;
 }
 /**
- * This will set the log level of the overall log subscriber.
- * @param {LogLevel} level
- */
-export function set_log_level(level) {
-    wasm.set_log_level(level);
-}
-
-/**
  * @returns {number}
  */
 export function cancel_handle() {
     const ret = wasm.cancel_handle();
     return ret >>> 0;
+}
+
+/**
+ * This will set the log level of the overall log subscriber.
+ * @param {LogLevel} level
+ */
+export function set_log_level(level) {
+    wasm.set_log_level(level);
 }
 
 /**
