@@ -46,6 +46,12 @@ export function handlePreview(
   );
 }
 
+type PreviewResponse = {
+  body: Uint8Array;
+  headers: ResponseHeaders;
+  statusCode: number;
+};
+
 class RestatePreviewResponse implements RestateResponse {
   constructor(
     private readonly serde: Serde<unknown>,
@@ -62,66 +68,57 @@ class RestatePreviewResponse implements RestateResponse {
     writeHead: (statusCode: number, headers: ResponseHeaders) => void;
     abortSignal: AbortSignal;
   }): Promise<void> {
-    const requestBody = await readAllInput(inputReader);
-
-    const response =
-      this.operation === "decode"
-        ? await this.buildDecodeResponse(requestBody)
-        : await this.buildEncodeResponse(requestBody);
+    const response = await this.computeResponse(inputReader);
 
     writeHead(response.statusCode, response.headers);
-    await outputWriter.write(response.body);
-    await outputWriter.close();
+    try {
+      await outputWriter.write(response.body);
+    } finally {
+      await outputWriter.close();
+    }
   }
 
-  private async buildDecodeResponse(requestBody: Uint8Array): Promise<{
-    body: Uint8Array;
-    headers: ResponseHeaders;
-    statusCode: number;
-  }> {
+  private async computeResponse(
+    inputReader: InputReader
+  ): Promise<PreviewResponse> {
     try {
-      const value = this.serde.deserialize(requestBody);
-      const json = await this.serde.preview!.toJsonString(value);
-      return {
-        statusCode: 200,
-        headers: {
-          "content-type": "application/json",
-          "x-restate-server": X_RESTATE_SERVER,
-        },
-        body: new TextEncoder().encode(json),
-      };
+      const body = await readAllInput(inputReader);
+      return this.operation === "decode"
+        ? await this.decode(body)
+        : await this.encode(body);
     } catch (e) {
       return previewErrorResponse(ensureError(e).message);
     }
   }
 
-  private async buildEncodeResponse(requestBody: Uint8Array): Promise<{
-    body: Uint8Array;
-    headers: ResponseHeaders;
-    statusCode: number;
-  }> {
-    try {
-      const json = new TextDecoder().decode(requestBody);
-      const value = await this.serde.preview!.fromJsonString(json);
-      return {
-        statusCode: 200,
-        headers: {
-          "content-type": this.serde.contentType ?? "application/octet-stream",
-          "x-restate-server": X_RESTATE_SERVER,
-        },
-        body: this.serde.serialize(value),
-      };
-    } catch (e) {
-      return previewErrorResponse(ensureError(e).message);
-    }
+  private async decode(requestBody: Uint8Array): Promise<PreviewResponse> {
+    const value = this.serde.deserialize(requestBody);
+    const json = await this.serde.preview!.toJsonString(value);
+    return {
+      statusCode: 200,
+      headers: {
+        "content-type": "application/json",
+        "x-restate-server": X_RESTATE_SERVER,
+      },
+      body: new TextEncoder().encode(json),
+    };
+  }
+
+  private async encode(requestBody: Uint8Array): Promise<PreviewResponse> {
+    const json = new TextDecoder().decode(requestBody);
+    const value = await this.serde.preview!.fromJsonString(json);
+    return {
+      statusCode: 200,
+      headers: {
+        "content-type": this.serde.contentType ?? "application/octet-stream",
+        "x-restate-server": X_RESTATE_SERVER,
+      },
+      body: this.serde.serialize(value),
+    };
   }
 }
 
-function previewErrorResponse(message: string): {
-  body: Uint8Array;
-  headers: ResponseHeaders;
-  statusCode: number;
-} {
+function previewErrorResponse(message: string): PreviewResponse {
   return {
     statusCode: 422,
     headers: {
