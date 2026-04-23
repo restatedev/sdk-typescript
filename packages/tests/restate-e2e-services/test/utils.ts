@@ -54,10 +54,6 @@ export function ingressClient() {
 export async function getServiceDeploymentUrl(
   serviceName: string
 ): Promise<string> {
-  if (process.env.RESTATE_SERVICE_URL) {
-    return getServiceUrl();
-  }
-
   const cached = serviceDeploymentUrlCache.get(serviceName);
   if (!cached) {
     const response = await fetch(`${getAdminUrl()}/deployments`);
@@ -66,16 +62,17 @@ export async function getServiceDeploymentUrl(
     }
 
     const body = (await response.json()) as Partial<ListDeploymentsResponse>;
+
     const deployment = body.deployments?.find(
       (candidate) =>
         Array.isArray(candidate.services) &&
         candidate.services.some((service) => service.name === serviceName) &&
         typeof candidate.uri === "string"
     );
-
     const url = deployment?.uri?.replace(/\/+$/, "");
     if (url) {
       serviceDeploymentUrlCache.set(serviceName, cached);
+      return url;
     } else {
       throw new Error("Service Url not found");
     }

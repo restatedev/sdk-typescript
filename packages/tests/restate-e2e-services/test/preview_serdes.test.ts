@@ -12,7 +12,6 @@ import { describe, expect, it } from "vitest";
 import {
   getAdminUrl,
   getIngressUrl,
-  getServiceUrl,
   getServiceDeploymentUrl,
   fetchH2,
   ingressClient,
@@ -38,18 +37,9 @@ const serviceFetch = async (
   input: string | URL,
   init?: RequestInit
 ) => {
-  const fallbackUrl = getServiceUrl();
   const deploymentUrl = await getServiceDeploymentUrl(serviceName);
   const resolvedInput = typeof input === "string" ? input : input.toString();
-
-  try {
-    return await fetchH2(new URL(resolvedInput, deploymentUrl), init);
-  } catch (error) {
-    if (deploymentUrl === fallbackUrl) {
-      throw error;
-    }
-    return await fetchH2(new URL(resolvedInput, fallbackUrl), init);
-  }
+  return await fetchH2(new URL(resolvedInput, deploymentUrl), init);
 };
 
 async function serviceMetadata(
