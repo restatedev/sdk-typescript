@@ -14,9 +14,15 @@ import {
   getServiceUrl,
   ingressClient,
 } from "./utils.js";
-import type {
-  PreviewSerdeCases,
-  PreviewSerdeServiceDefault,
+import {
+  type PreviewSerdeCases,
+  type PreviewSerdeServiceDefault,
+  explicitAInputSerde,
+  explicitAOutputSerde,
+  explicitBInputSerde,
+  explicitBOutputSerde,
+  handlerDefaultSerde,
+  serviceDefaultSerde,
 } from "../src/preview_serdes.js";
 
 const PreviewSerdeCases: PreviewSerdeCases = { name: "PreviewSerdeCases" };
@@ -74,10 +80,16 @@ describe("Preview serdes e2e", () => {
   it("explicit input/output serdes invoke correctly", async () => {
     const explicitA = await ingress
       .serviceClient(PreviewSerdeCases)
-      .explicitA({ value: "alpha" });
+      .explicitA(
+        { value: "alpha" },
+        { input: explicitAInputSerde, output: explicitAOutputSerde }
+      );
     const explicitB = await ingress
       .serviceClient(PreviewSerdeCases)
-      .explicitB({ value: "beta" });
+      .explicitB(
+        { value: "beta" },
+        { input: explicitBInputSerde, output: explicitBOutputSerde }
+      );
 
     expect(explicitA).toEqual({ value: "explicit-a:alpha" });
     expect(explicitB).toEqual({ value: "explicit-b:beta" });
@@ -86,7 +98,10 @@ describe("Preview serdes e2e", () => {
   it("handler-level default serde applies to input and output", async () => {
     const result = await ingress
       .serviceClient(PreviewSerdeCases)
-      .handlerDefault({ value: "gamma" });
+      .handlerDefault(
+        { value: "gamma" },
+        { input: handlerDefaultSerde, output: handlerDefaultSerde }
+      );
 
     expect(result).toEqual({ value: "handler-default:gamma" });
   }, 30_000);
@@ -94,7 +109,10 @@ describe("Preview serdes e2e", () => {
   it("service-level default serde applies to input and output", async () => {
     const result = await ingress
       .serviceClient(PreviewSerdeServiceDefault)
-      .invoke({ value: "delta" });
+      .invoke(
+        { value: "delta" },
+        { input: serviceDefaultSerde, output: serviceDefaultSerde }
+      );
 
     expect(result).toEqual({ value: "service-default:delta" });
   }, 30_000);

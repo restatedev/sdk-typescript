@@ -60,12 +60,14 @@ function prefixedSerde<T>(
   return serdeImpl;
 }
 
-const explicitAInputSerde = prefixedSerde<EchoInput>("explicit-a-input");
-const explicitAOutputSerde = prefixedSerde<EchoOutput>("explicit-a-output");
-const explicitBInputSerde = prefixedSerde<EchoInput>("explicit-b-input");
-const explicitBOutputSerde = prefixedSerde<EchoOutput>("explicit-b-output");
-const handlerDefaultSerde = prefixedSerde<unknown>("handler-default");
-const serviceDefaultSerde = prefixedSerde<unknown>("service-default");
+export const explicitAInputSerde = prefixedSerde<EchoInput>("explicit-a-input");
+export const explicitAOutputSerde =
+  prefixedSerde<EchoOutput>("explicit-a-output");
+export const explicitBInputSerde = prefixedSerde<EchoInput>("explicit-b-input");
+export const explicitBOutputSerde =
+  prefixedSerde<EchoOutput>("explicit-b-output");
+export const handlerDefaultSerde = prefixedSerde<EchoInput>("handler-default");
+export const serviceDefaultSerde = prefixedSerde<EchoInput>("service-default");
 const noPreviewSerde = prefixedSerde<EchoInput>("no-preview", {
   preview: false,
 });
