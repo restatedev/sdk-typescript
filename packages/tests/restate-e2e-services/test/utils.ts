@@ -103,9 +103,7 @@ export const fetchH2: FetchLike = async (
   init?: RequestInit
 ): Promise<Response> => {
   const url =
-    typeof input === "string"
-      ? new URL(input)
-      : new URL(input.toString());
+    typeof input === "string" ? new URL(input) : new URL(input.toString());
   const session = http2.connect(url.origin);
 
   return await new Promise<Response>(async (resolve, reject) => {
