@@ -8,7 +8,12 @@
 // https://github.com/restatedev/e2e/blob/main/LICENSE
 
 import { describe, expect, it } from "vitest";
-import { getAdminUrl, getServiceUrl, ingressClient } from "./utils.js";
+import {
+  getAdminUrl,
+  getIngressUrl,
+  getServiceUrl,
+  ingressClient,
+} from "./utils.js";
 import type {
   PreviewSerdeCases,
   PreviewSerdeServiceDefault,
@@ -239,5 +244,44 @@ describe("Preview serdes e2e", () => {
     );
 
     expect(response.status).toBe(404);
+  }, 30_000);
+
+  it("preview-encoded bytes round-trip through the handler via ingress", async () => {
+    // 1. Preview-encode a value into the handler's declared wire format.
+    const encodeResp = await previewEncode(
+      "PreviewSerdeCases",
+      "explicitA/input",
+      { value: "via-preview" }
+    );
+    expect(encodeResp.status).toBe(200);
+    const requestBytes = await responseBytes(encodeResp);
+
+    // 2. POST those raw bytes straight to the Restate ingress for the
+    //    handler, with the content-type the input serde advertised.
+    //    This proves the serde resolved by `/serdes/.../encode/...` is the
+    //    same instance used to deserialize the handler's input.
+    const invokeResp = await fetch(
+      `${getIngressUrl()}/PreviewSerdeCases/explicitA`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/x-explicit-a-input+json" },
+        body: requestBytes,
+      }
+    );
+    expect(invokeResp.status).toBe(200);
+    const responseBodyBytes = await responseBytes(invokeResp);
+
+    // 3. Feed the handler's response bytes through the decode endpoint for
+    //    the output serde — confirms the output serde is the same instance
+    //    too.
+    const decodeResp = await previewDecode(
+      "PreviewSerdeCases",
+      "explicitA/output",
+      responseBodyBytes
+    );
+    expect(decodeResp.status).toBe(200);
+    expect(await decodeResp.json()).toEqual({
+      value: "explicit-a:via-preview",
+    });
   }, 30_000);
 });
