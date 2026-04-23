@@ -25,6 +25,11 @@ export function getAdminUrl(): string {
   return url.replace(/\/+$/, "");
 }
 
+export function getServiceUrl(): string {
+  const url = process.env.RESTATE_SERVICE_URL ?? "http://localhost:9080";
+  return url.replace(/\/+$/, "");
+}
+
 export function ingressClient() {
   return restate.connect({ url: getIngressUrl() });
 }
