@@ -133,29 +133,29 @@ describe("Preview serdes e2e", () => {
     );
 
     expect(casesMetadata).toMatchObject({
-      "restate.serde.preview.explicitA/input": "true",
-      "restate.serde.preview.explicitA/output": "true",
-      "restate.serde.preview.explicitB/input": "true",
-      "restate.serde.preview.explicitB/output": "true",
-      "restate.serde.preview.handlerDefault/input": "true",
-      "restate.serde.preview.handlerDefault/output": "true",
+      "dev.restate.serde.preview.explicitA/input": "true",
+      "dev.restate.serde.preview.explicitA/output": "true",
+      "dev.restate.serde.preview.explicitB/input": "true",
+      "dev.restate.serde.preview.explicitB/output": "true",
+      "dev.restate.serde.preview.handlerDefault/input": "true",
+      "dev.restate.serde.preview.handlerDefault/output": "true",
     });
     expect(
-      casesMetadata["restate.serde.preview.noPreview/input"]
+      casesMetadata["dev.restate.serde.preview.noPreview/input"]
     ).toBeUndefined();
     expect(
-      casesMetadata["restate.serde.preview.noPreview/output"]
+      casesMetadata["dev.restate.serde.preview.noPreview/output"]
     ).toBeUndefined();
     expect(
-      casesMetadata["restate.serde.preview.jsonDefault/input"]
+      casesMetadata["dev.restate.serde.preview.jsonDefault/input"]
     ).toBeUndefined();
     expect(
-      casesMetadata["restate.serde.preview.jsonDefault/output"]
+      casesMetadata["dev.restate.serde.preview.jsonDefault/output"]
     ).toBeUndefined();
 
     expect(serviceDefaultMetadata).toMatchObject({
-      "restate.serde.preview.invoke/input": "true",
-      "restate.serde.preview.invoke/output": "true",
+      "dev.restate.serde.preview.invoke/input": "true",
+      "dev.restate.serde.preview.invoke/output": "true",
     });
   }, 30_000);
 

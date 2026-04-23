@@ -65,7 +65,7 @@ function prefixedJsonSerde<T>(): Serde<T> {
     // `preview` lets tooling render values as JSON for humans, and accept
     // JSON edits back into the serde's native format. The service exposes
     // this capability via discovery metadata
-    // (`restate.serde.preview.greet/input = "true"`) and via HTTP at
+    // (`dev.restate.serde.preview.greet/input = "true"`) and via HTTP at
     // `/serdes/<service>/(encode|decode)/<serdeName>`.
     preview: {
       toJsonString(value: T): string {

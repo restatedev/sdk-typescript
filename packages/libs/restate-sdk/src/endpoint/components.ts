@@ -145,7 +145,7 @@ function createExecutionOptions(
   };
 }
 
-const PREVIEW_METADATA_KEY_PREFIX = "restate.serde.preview";
+const PREVIEW_METADATA_KEY_PREFIX = "dev.restate.serde.preview";
 
 /**
  * Service-scoped serde namespace.
