@@ -181,12 +181,22 @@ function debugString(val) {
     // TODO we could test for more things here, like `Set`s and `Map`s.
     return className;
 }
+
+function getArrayJsValueFromWasm0(ptr, len) {
+    ptr = ptr >>> 0;
+    const mem = getDataViewMemory0();
+    const result = [];
+    for (let i = ptr; i < ptr + 4 * len; i += 4) {
+        result.push(wasm.__wbindgen_export_4.get(mem.getUint32(i, true)));
+    }
+    wasm.__externref_drop_slice(ptr, len);
+    return result;
+}
 /**
- * @returns {number}
+ * Setups the WASM module
  */
-export function cancel_handle() {
-    const ret = wasm.cancel_handle();
-    return ret >>> 0;
+export function start() {
+    wasm.start();
 }
 
 /**
@@ -198,21 +208,11 @@ export function set_log_level(level) {
 }
 
 /**
- * Setups the WASM module
+ * @returns {number}
  */
-export function start() {
-    wasm.start();
-}
-
-function getArrayJsValueFromWasm0(ptr, len) {
-    ptr = ptr >>> 0;
-    const mem = getDataViewMemory0();
-    const result = [];
-    for (let i = ptr; i < ptr + 4 * len; i += 4) {
-        result.push(wasm.__wbindgen_export_4.get(mem.getUint32(i, true)));
-    }
-    wasm.__externref_drop_slice(ptr, len);
-    return result;
+export function cancel_handle() {
+    const ret = wasm.cancel_handle();
+    return ret >>> 0;
 }
 
 function passArrayJsValueToWasm0(array, malloc) {

@@ -1,14 +1,14 @@
 /* tslint:disable */
 /* eslint-disable */
-export function cancel_handle(): number;
-/**
- * This will set the log level of the overall log subscriber.
- */
-export function set_log_level(level: LogLevel): void;
 /**
  * Setups the WASM module
  */
 export function start(): void;
+/**
+ * This will set the log level of the overall log subscriber.
+ */
+export function set_log_level(level: LogLevel): void;
+export function cancel_handle(): number;
 export enum LogLevel {
   TRACE = 0,
   DEBUG = 1,
@@ -37,18 +37,14 @@ export enum WasmCommandType {
   CompleteAwakeable = 17,
   CancelInvocation = 18,
 }
-export interface WasmExponentialRetryConfig {
-  initial_interval: number | undefined;
-  factor: number;
-  max_interval: number | undefined;
-  max_attempts: number | undefined;
-  max_duration: number | undefined;
+export interface WasmAwakeable {
+  id: string;
+  handle: number;
 }
 
-export interface WasmFailure {
-  code: number;
-  message: string;
-  metadata: WasmFailureMetadata[];
+export interface WasmFailureMetadata {
+  key: string;
+  value: string;
 }
 
 export interface WasmCallHandle {
@@ -56,17 +52,16 @@ export interface WasmCallHandle {
   call_completion_id: number;
 }
 
-export type WasmAsyncResultValue =
-  | "NotReady"
-  | "Empty"
-  | { Success: Uint8Array }
-  | { Failure: WasmFailure }
-  | { StateKeys: string[] }
-  | { InvocationId: string };
+export interface WasmSendHandle {
+  invocation_id_completion_id: number;
+}
 
-export interface WasmAwakeable {
-  id: string;
-  handle: number;
+export interface WasmExponentialRetryConfig {
+  initial_interval: number | undefined;
+  factor: number;
+  max_interval: number | undefined;
+  max_attempts: number | undefined;
+  max_duration: number | undefined;
 }
 
 export type WasmDoProgressResult =
@@ -76,13 +71,18 @@ export type WasmDoProgressResult =
   | { ExecuteRun: number }
   | "CancelSignalReceived";
 
-export interface WasmFailureMetadata {
-  key: string;
-  value: string;
-}
+export type WasmAsyncResultValue =
+  | "NotReady"
+  | "Empty"
+  | { Success: Uint8Array }
+  | { Failure: WasmFailure }
+  | { StateKeys: string[] }
+  | { InvocationId: string };
 
-export interface WasmSendHandle {
-  invocation_id_completion_id: number;
+export interface WasmFailure {
+  code: number;
+  message: string;
+  metadata: WasmFailureMetadata[];
 }
 
 export class WasmHeader {
