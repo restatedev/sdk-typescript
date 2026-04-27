@@ -604,7 +604,7 @@ dependencies = [
 [[package]]
 name = "restate-sdk-shared-core"
 version = "0.9.0"
-source = "git+https://github.com/restatedev/sdk-shared-core.git?branch=awaiting_on#d57c2a5e7db44a649f5b90070bd856cb545e4b62"
+source = "git+https://github.com/restatedev/sdk-shared-core.git?branch=awaiting_on#bac1014ddf418481a63f87898fc9f913843f33d7"
 dependencies = [
  "base64",
  "bs58",
