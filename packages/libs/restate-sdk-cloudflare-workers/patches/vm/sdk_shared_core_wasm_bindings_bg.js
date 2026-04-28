@@ -181,6 +181,12 @@ function debugString(val) {
     // TODO we could test for more things here, like `Set`s and `Map`s.
     return className;
 }
+/**
+ * Setups the WASM module
+ */
+export function start() {
+    wasm.start();
+}
 
 function getArrayJsValueFromWasm0(ptr, len) {
     ptr = ptr >>> 0;
@@ -193,14 +199,6 @@ function getArrayJsValueFromWasm0(ptr, len) {
     return result;
 }
 /**
- * @returns {number}
- */
-export function cancel_handle() {
-    const ret = wasm.cancel_handle();
-    return ret >>> 0;
-}
-
-/**
  * This will set the log level of the overall log subscriber.
  * @param {LogLevel} level
  */
@@ -209,10 +207,11 @@ export function set_log_level(level) {
 }
 
 /**
- * Setups the WASM module
+ * @returns {number}
  */
-export function start() {
-    wasm.start();
+export function cancel_handle() {
+    const ret = wasm.cancel_handle();
+    return ret >>> 0;
 }
 
 function passArrayJsValueToWasm0(array, malloc) {
