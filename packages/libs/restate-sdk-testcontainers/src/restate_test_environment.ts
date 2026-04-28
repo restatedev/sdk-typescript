@@ -9,16 +9,11 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import {
-  endpoint,
-  createEndpointHandler,
-  serde,
-} from "@restatedev/restate-sdk";
+import { createEndpointHandler, serde } from "@restatedev/restate-sdk";
 import type {
   TypedState,
   UntypedState,
   Serde,
-  RestateEndpoint,
   VirtualObjectDefinition,
   WorkflowDefinition,
   EndpointOptions,
@@ -36,6 +31,20 @@ import {
 import { tableFromIPC } from "apache-arrow";
 import * as http2 from "http2";
 import type * as net from "net";
+
+export type ServiceEndpointAccess = "testcontainers" | "docker-host";
+
+export type TestEnvironmentStorage = "disk" | "memory";
+
+interface ResolvedTestEnvironmentOptions {
+  serviceEndpointAccess: ServiceEndpointAccess;
+  storage: TestEnvironmentStorage;
+}
+
+const DEFAULT_START_OPTIONS: ResolvedTestEnvironmentOptions = {
+  serviceEndpointAccess: "testcontainers",
+  storage: "disk",
+};
 
 /**
  * Custom wait strategy that waits for Restate partitions to be ready by
@@ -107,26 +116,13 @@ class PartitionsReadyWaitStrategy implements WaitStrategy {
 
 // Prepare the restate server
 async function prepareRestateEndpoint(
-  param: (server: RestateEndpoint) => void
-): Promise<http2.Http2Server>;
-async function prepareRestateEndpoint(
   param: EndpointOptions
-): Promise<http2.Http2Server>;
-async function prepareRestateEndpoint(
-  param: EndpointOptions | ((server: RestateEndpoint) => void)
 ): Promise<http2.Http2Server> {
   // Prepare RestateServer
-  let handler: (
+  const handler: (
     request: http2.Http2ServerRequest,
     response: http2.Http2ServerResponse
-  ) => void;
-  if (typeof param === "function") {
-    const restateEndpoint = endpoint();
-    param(restateEndpoint);
-    handler = restateEndpoint.http2Handler();
-  } else {
-    handler = createEndpointHandler(param);
-  }
+  ) => void = createEndpointHandler(param);
 
   // Start HTTP2 server on random port
   const restateHttpServer = http2.createServer(handler);
@@ -146,9 +142,10 @@ async function prepareRestateEndpoint(
 // Prepare the restate testcontainer
 async function prepareRestateTestContainer(
   restateServerPort: number,
-  restateContainerFactory: () => GenericContainer
+  restateContainerFactory: () => GenericContainer,
+  options: ResolvedTestEnvironmentOptions
 ): Promise<StartedTestContainer> {
-  const restateContainer = restateContainerFactory()
+  let restateContainer = restateContainerFactory()
     // Expose ports
     .withExposedPorts(8080, 9070)
     // Wait start on health checks and partition readiness
@@ -160,9 +157,24 @@ async function prepareRestateTestContainer(
       ])
     );
 
-  // This MUST be executed before starting the restate container
-  // Expose host port to access the restate server
-  await TestContainers.exposeHostPorts(restateServerPort);
+  if (options.storage === "memory") {
+    restateContainer = restateContainer.withTmpFs({ "/restate-data": "rw" });
+  }
+
+  const serviceEndpointHost =
+    options.serviceEndpointAccess === "docker-host"
+      ? "host.docker.internal"
+      : "host.testcontainers.internal";
+
+  if (options.serviceEndpointAccess === "docker-host") {
+    restateContainer = restateContainer.withExtraHosts([
+      { host: "host.docker.internal", ipAddress: "host-gateway" },
+    ]);
+  } else {
+    // This MUST be executed before starting the restate container.
+    // Expose host port to access the restate server.
+    await TestContainers.exposeHostPorts(restateServerPort);
+  }
 
   // Start restate container
   const startedRestateContainer = await restateContainer.start();
@@ -170,7 +182,7 @@ async function prepareRestateTestContainer(
   // From now on, if something fails, stop the container to cleanup the environment
   try {
     console.info(
-      `Registering services at http://host.testcontainers.internal:${restateServerPort}...`
+      `Registering services at http://${serviceEndpointHost}:${restateServerPort}...`
     );
 
     // Register this service endpoint
@@ -184,8 +196,7 @@ async function prepareRestateTestContainer(
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          // See https://node.testcontainers.org/features/networking/#expose-host-ports-to-container
-          uri: `http://host.testcontainers.internal:${restateServerPort}`,
+          uri: `http://${serviceEndpointHost}:${restateServerPort}`,
         }),
       }
     );
@@ -209,6 +220,44 @@ async function prepareRestateTestContainer(
 }
 
 export interface TestEnvironmentOptions extends EndpointOptions {
+  /**
+   * Factory for the Restate container used by the test environment.
+   *
+   * Use this to customize the Restate image or container settings before the
+   * helper applies its own ports, wait strategy, networking, and storage
+   * configuration.
+   *
+   * For backwards compatibility, the second `start(options, factory)` argument
+   * is still supported and takes precedence over this option.
+   *
+   * @defaultValue `() => new RestateContainer()`
+   */
+  container?: () => GenericContainer;
+
+  /**
+   * Controls how the Restate container reaches the SDK service endpoint running
+   * on the test host.
+   *
+   * - `"testcontainers"` exposes the host port through Testcontainers and
+   *   registers `http://host.testcontainers.internal:<port>`.
+   * - `"docker-host"` skips Testcontainers port exposure, adds
+   *   `host.docker.internal:host-gateway` to the Restate container, and
+   *   registers `http://host.docker.internal:<port>`.
+   *
+   * @defaultValue `"testcontainers"`
+   */
+  serviceEndpointAccess?: ServiceEndpointAccess;
+
+  /**
+   * Controls where Restate stores container data.
+   *
+   * - `"disk"` keeps the current Testcontainers/Docker storage behavior.
+   * - `"memory"` mounts `/restate-data` as tmpfs for faster disposable tests.
+   *
+   * @defaultValue `"disk"`
+   */
+  storage?: TestEnvironmentStorage;
+
   /**
    * Forces restate-server to always replay on a suspension point.
    * This is useful to hunt non-deterministic bugs that might prevent
@@ -257,51 +306,39 @@ export class RestateTestEnvironment {
     this.startedRestateHttpServer.close();
   }
 
-  /**
-   *
-   * @deprecated Please use {@link TestEnvironmentOptions} instead of this.
-   * @example
-   * ```
-   * RestateTestEnvironment.start({ services: [mysService] })
-   * ```
-   */
-  public static async start(
-    mountServicesFn: (server: RestateEndpoint) => void,
-    restateContainerFactory?: () => GenericContainer
-  ): Promise<RestateTestEnvironment>;
   public static async start(
     options: TestEnvironmentOptions,
-    restateContainerFactory?: () => GenericContainer
-  ): Promise<RestateTestEnvironment>;
-  public static async start(
-    param: TestEnvironmentOptions | ((server: RestateEndpoint) => void),
     restateContainerFactory?: () => GenericContainer
   ): Promise<RestateTestEnvironment> {
     let containerFactory: () => GenericContainer;
     if (restateContainerFactory) {
       containerFactory = restateContainerFactory;
-    } else if (typeof param !== "function") {
+    } else if (options.container) {
+      containerFactory = options.container;
+    } else {
       containerFactory = () => {
         const container = new RestateContainer();
-        if (param.alwaysReplay) {
+        if (options.alwaysReplay) {
           container.alwaysReplay();
         }
-        if (param.disableRetries) {
+        if (options.disableRetries) {
           container.disableRetries();
         }
         return container;
       };
-    } else {
-      containerFactory = () => new RestateContainer();
     }
+    const resolvedStartOptions: ResolvedTestEnvironmentOptions = {
+      serviceEndpointAccess:
+        options.serviceEndpointAccess ??
+        DEFAULT_START_OPTIONS.serviceEndpointAccess,
+      storage: options.storage ?? DEFAULT_START_OPTIONS.storage,
+    };
 
-    const startedRestateHttpServer =
-      typeof param === "function"
-        ? await prepareRestateEndpoint(param)
-        : await prepareRestateEndpoint(param);
+    const startedRestateHttpServer = await prepareRestateEndpoint(options);
     const startedRestateContainer = await prepareRestateTestContainer(
       (startedRestateHttpServer.address() as net.AddressInfo).port,
-      containerFactory
+      containerFactory,
+      resolvedStartOptions
     );
     return new RestateTestEnvironment(
       startedRestateHttpServer,
