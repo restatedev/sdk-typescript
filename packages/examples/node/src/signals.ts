@@ -17,7 +17,6 @@ import {
   InvocationIdParser,
   createServiceHandler,
   type Context,
-  TerminalError,
 } from "@restatedev/restate-sdk";
 import { z } from "zod";
 import * as restate from "@restatedev/restate-sdk";
