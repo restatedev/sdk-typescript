@@ -752,7 +752,6 @@ function hooksSuite(level: HookLevel) {
       ];
       env = await RestateTestEnvironment.start({
         services,
-        serviceEndpointAccess: "testcontainers",
         storage: 'disk'
       });
     }, 120_000);
