@@ -1,5 +1,27 @@
 # @restatedev/restate-sdk-cloudflare-workers
 
+## 1.14.0
+
+### New Features
+
+#### Serde Preview
+
+Serde definitions can now expose preview conversions between their wire format and editable JSON through `Serde.preview`. SDK endpoints advertise previewable handler inputs and outputs in discovery and serve signed `/serdes/.../encode|decode/...` preview routes for Restate tooling.
+
+Serde Preview requires Restate Server 1.7 or newer.
+
+### Improvements and bug fixes
+
+- `RestateTestEnvironment` now defaults to `serviceEndpointAccess: "docker-host"` and `storage: "memory"` for faster disposable tests. Set `serviceEndpointAccess: "testcontainers"` or `storage: "disk"` to opt back into the previous behavior.
+- Removed the deprecated `RestateTestEnvironment.start(server => ...)` API; pass `TestEnvironmentOptions` instead.
+- Fixed workflow submission options handling and await-loop progress while input may still advance execution.
+- Fixed response-head handling across endpoint adapters.
+
+### Patch Changes
+
+- Updated dependencies
+  - @restatedev/restate-sdk-core@1.14.0
+
 ## 1.13.0
 
 ### Minor Changes
