@@ -209,7 +209,7 @@ function computeDiscovery(
 ): discovery.Endpoint {
   return {
     minProtocolVersion: 5,
-    maxProtocolVersion: 6,
+    maxProtocolVersion: 7,
     services: [...components.values()].map((c) => c.discovery()),
   };
 }

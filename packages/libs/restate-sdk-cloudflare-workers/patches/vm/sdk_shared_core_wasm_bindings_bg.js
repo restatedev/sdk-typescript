@@ -182,22 +182,6 @@ function debugString(val) {
     return className;
 }
 /**
- * @returns {number}
- */
-export function cancel_handle() {
-    const ret = wasm.cancel_handle();
-    return ret >>> 0;
-}
-
-/**
- * This will set the log level of the overall log subscriber.
- * @param {LogLevel} level
- */
-export function set_log_level(level) {
-    wasm.set_log_level(level);
-}
-
-/**
  * Setups the WASM module
  */
 export function start() {
@@ -214,6 +198,21 @@ function getArrayJsValueFromWasm0(ptr, len) {
     wasm.__externref_drop_slice(ptr, len);
     return result;
 }
+/**
+ * This will set the log level of the overall log subscriber.
+ * @param {LogLevel} level
+ */
+export function set_log_level(level) {
+    wasm.set_log_level(level);
+}
+
+/**
+ * @returns {number}
+ */
+export function cancel_handle() {
+    const ret = wasm.cancel_handle();
+    return ret >>> 0;
+}
 
 function passArrayJsValueToWasm0(array, malloc) {
     const ptr = malloc(array.length * 4, 4) >>> 0;
@@ -229,22 +228,6 @@ function takeFromExternrefTable0(idx) {
     const value = wasm.__wbindgen_export_4.get(idx);
     wasm.__externref_table_dealloc(idx);
     return value;
-}
-
-let cachedUint32ArrayMemory0 = null;
-
-function getUint32ArrayMemory0() {
-    if (cachedUint32ArrayMemory0 === null || cachedUint32ArrayMemory0.byteLength === 0) {
-        cachedUint32ArrayMemory0 = new Uint32Array(wasm.memory.buffer);
-    }
-    return cachedUint32ArrayMemory0;
-}
-
-function passArray32ToWasm0(arg, malloc) {
-    const ptr = malloc(arg.length * 4, 4) >>> 0;
-    getUint32ArrayMemory0().set(arg, ptr / 4);
-    WASM_VECTOR_LEN = arg.length;
-    return ptr;
 }
 
 function passArray8ToWasm0(arg, malloc) {
@@ -567,13 +550,11 @@ export class WasmVM {
         return ret[0] >>> 0;
     }
     /**
-     * @param {Uint32Array} handles
+     * @param {WasmUnresolvedFuture} future
      * @returns {WasmDoProgressResult}
      */
-    do_progress(handles) {
-        const ptr0 = passArray32ToWasm0(handles, wasm.__wbindgen_malloc);
-        const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.wasmvm_do_progress(this.__wbg_ptr, ptr0, len0);
+    do_progress(future) {
+        const ret = wasm.wasmvm_do_progress(this.__wbg_ptr, future);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }
@@ -1147,6 +1128,11 @@ export function __wbg_crypto_86f2631e91b51511(arg0) {
 
 export function __wbg_done_769e5ede4b31c67b(arg0) {
     const ret = arg0.done;
+    return ret;
+};
+
+export function __wbg_entries_3265d4158b33e5dc(arg0) {
+    const ret = Object.entries(arg0);
     return ret;
 };
 

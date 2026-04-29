@@ -1,14 +1,14 @@
 /* tslint:disable */
 /* eslint-disable */
-export function cancel_handle(): number;
-/**
- * This will set the log level of the overall log subscriber.
- */
-export function set_log_level(level: LogLevel): void;
 /**
  * Setups the WASM module
  */
 export function start(): void;
+/**
+ * This will set the log level of the overall log subscriber.
+ */
+export function set_log_level(level: LogLevel): void;
+export function cancel_handle(): number;
 export enum LogLevel {
   TRACE = 0,
   DEBUG = 1,
@@ -37,6 +37,27 @@ export enum WasmCommandType {
   CompleteAwakeable = 17,
   CancelInvocation = 18,
 }
+export interface WasmFailure {
+  code: number;
+  message: string;
+  metadata: WasmFailureMetadata[];
+}
+
+export interface WasmAwakeable {
+  id: string;
+  handle: number;
+}
+
+export interface WasmCallHandle {
+  invocation_id_completion_id: number;
+  call_completion_id: number;
+}
+
+export interface WasmFailureMetadata {
+  key: string;
+  value: string;
+}
+
 export interface WasmExponentialRetryConfig {
   initial_interval: number | undefined;
   factor: number;
@@ -45,16 +66,11 @@ export interface WasmExponentialRetryConfig {
   max_duration: number | undefined;
 }
 
-export interface WasmFailure {
-  code: number;
-  message: string;
-  metadata: WasmFailureMetadata[];
-}
-
-export interface WasmCallHandle {
-  invocation_id_completion_id: number;
-  call_completion_id: number;
-}
+export type WasmDoProgressResult =
+  | "AnyCompleted"
+  | "WaitExternalProgress"
+  | { ExecuteRun: number }
+  | "CancelSignalReceived";
 
 export type WasmAsyncResultValue =
   | "NotReady"
@@ -64,26 +80,17 @@ export type WasmAsyncResultValue =
   | { StateKeys: string[] }
   | { InvocationId: string };
 
-export interface WasmAwakeable {
-  id: string;
-  handle: number;
-}
-
-export type WasmDoProgressResult =
-  | "AnyCompleted"
-  | "ReadFromInput"
-  | "WaitingPendingRun"
-  | { ExecuteRun: number }
-  | "CancelSignalReceived";
-
-export interface WasmFailureMetadata {
-  key: string;
-  value: string;
-}
-
 export interface WasmSendHandle {
   invocation_id_completion_id: number;
 }
+
+export type WasmUnresolvedFuture =
+  | { Single: number }
+  | { FirstCompleted: WasmUnresolvedFuture[] }
+  | { AllCompleted: WasmUnresolvedFuture[] }
+  | { FirstSucceededOrAllFailed: WasmUnresolvedFuture[] }
+  | { AllSucceededOrFirstFailed: WasmUnresolvedFuture[] }
+  | { Unknown: WasmUnresolvedFuture[] };
 
 export class WasmHeader {
   free(): void;
@@ -114,7 +121,7 @@ export class WasmResponseHead {
 export class WasmVM {
   free(): void;
   sys_signal(signal_name: string): number;
-  do_progress(handles: Uint32Array): WasmDoProgressResult;
+  do_progress(future: WasmUnresolvedFuture): WasmDoProgressResult;
   take_output(): any;
   is_completed(handle: number): boolean;
   notify_error(error_message: string, stacktrace?: string | null): void;
