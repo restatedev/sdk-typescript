@@ -42,8 +42,8 @@ interface ResolvedTestEnvironmentOptions {
 }
 
 const DEFAULT_START_OPTIONS: ResolvedTestEnvironmentOptions = {
-  serviceEndpointAccess: "testcontainers",
-  storage: "disk",
+  serviceEndpointAccess: "docker-host",
+  storage: "memory",
 };
 
 /**
@@ -244,7 +244,7 @@ export interface TestEnvironmentOptions extends EndpointOptions {
    *   `host.docker.internal:host-gateway` to the Restate container, and
    *   registers `http://host.docker.internal:<port>`.
    *
-   * @defaultValue `"testcontainers"`
+   * @defaultValue `"docker-host"`
    */
   serviceEndpointAccess?: ServiceEndpointAccess;
 
@@ -254,7 +254,7 @@ export interface TestEnvironmentOptions extends EndpointOptions {
    * - `"disk"` keeps the current Testcontainers/Docker storage behavior.
    * - `"memory"` mounts `/restate-data` as tmpfs for faster disposable tests.
    *
-   * @defaultValue `"disk"`
+   * @defaultValue `"memory"`
    */
   storage?: TestEnvironmentStorage;
 

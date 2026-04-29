@@ -241,15 +241,15 @@ describe("Custom testcontainer config", () => {
   it("Works", () => {});
 });
 
-describe("Docker host networking with memory storage", () => {
+describe("Testcontainers networking with disk storage", () => {
   let restateTestEnvironment: RestateTestEnvironment;
   let rs: clients.Ingress;
 
   beforeAll(async () => {
     restateTestEnvironment = await RestateTestEnvironment.start({
       services: [counter],
-      serviceEndpointAccess: "docker-host",
-      storage: "memory",
+      serviceEndpointAccess: "testcontainers",
+      storage: "disk",
     });
     rs = clients.connect({ url: restateTestEnvironment.baseUrl() });
   }, 20_000);
@@ -261,7 +261,7 @@ describe("Docker host networking with memory storage", () => {
   });
 
   it("Can call a service", async () => {
-    const client = rs.objectClient(counter, "docker-host-memory");
+    const client = rs.objectClient(counter, "testcontainers-disk");
 
     expect(await client.add(1)).toBe(1);
   });
