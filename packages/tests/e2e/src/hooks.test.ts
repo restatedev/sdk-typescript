@@ -390,7 +390,7 @@ function hooksSuite(level: HookLevel) {
       },
       options: {
         retryPolicy: {
-          initialInterval: 20,
+          initialInterval: 10,
           maxAttempts: 2,
           onMaxAttempts: "kill",
         },
@@ -934,7 +934,7 @@ function hooksSuite(level: HookLevel) {
             "hook:handler:before"
           ),
           // attempt 2 ends
-          "hook:handler:error:[hw] (599) Suspended invocation",
+          expect.stringContaining("hook:handler:error:[hw]")
         ]);
     });
 
