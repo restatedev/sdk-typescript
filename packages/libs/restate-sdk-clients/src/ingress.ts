@@ -315,9 +315,9 @@ class HttpIngress implements Ingress {
     const conn = this.opts;
 
     const workflowSubmit = async (
-      parameter?: unknown,
-      opts?: SendOpts<unknown>
+      ...args: unknown[]
     ): Promise<WorkflowSubmission<unknown>> => {
+      const { parameter, opts } = optsFromArgs(args);
       const res: Send = await doComponentInvocation(conn, {
         component,
         handler: "run",
