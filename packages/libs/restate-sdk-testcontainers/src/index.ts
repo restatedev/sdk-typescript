@@ -16,6 +16,10 @@ export {
 } from "./restate_test_environment.js";
 export type { TestEnvironmentOptions } from "./restate_test_environment.js";
 export type {
+  ServiceEndpointAccess,
+  TestEnvironmentStorage,
+} from "./restate_test_environment.js";
+export type {
   TypedState,
   UntypedState,
   Serde,

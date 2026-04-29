@@ -240,3 +240,29 @@ describe("Custom testcontainer config", () => {
 
   it("Works", () => {});
 });
+
+describe("Testcontainers host networking with disk storage", () => {
+  let restateTestEnvironment: RestateTestEnvironment;
+  let rs: clients.Ingress;
+
+  beforeAll(async () => {
+    restateTestEnvironment = await RestateTestEnvironment.start({
+      services: [counter],
+      serviceEndpointAccess: "testcontainers",
+      storage: "disk",
+    });
+    rs = clients.connect({ url: restateTestEnvironment.baseUrl() });
+  }, 20_000);
+
+  afterAll(async () => {
+    if (restateTestEnvironment !== undefined) {
+      await restateTestEnvironment.stop();
+    }
+  });
+
+  it("Can call a service", async () => {
+    const client = rs.objectClient(counter, "testcontainers-disk");
+
+    expect(await client.add(1)).toBe(1);
+  });
+});
