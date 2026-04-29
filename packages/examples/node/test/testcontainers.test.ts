@@ -241,7 +241,7 @@ describe("Custom testcontainer config", () => {
   it("Works", () => {});
 });
 
-describe("Testcontainers networking with disk storage", () => {
+describe("Testcontainers host networking with disk storage", () => {
   let restateTestEnvironment: RestateTestEnvironment;
   let rs: clients.Ingress;
 
