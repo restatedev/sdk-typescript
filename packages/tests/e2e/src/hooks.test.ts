@@ -390,7 +390,7 @@ function hooksSuite(level: HookLevel) {
       },
       options: {
         retryPolicy: {
-          initialInterval: 10,
+          initialInterval: 20,
           maxAttempts: 2,
           onMaxAttempts: "kill",
         },
@@ -752,7 +752,6 @@ function hooksSuite(level: HookLevel) {
       ];
       env = await RestateTestEnvironment.start({
         services,
-        storage: 'disk'
       });
     }, 120_000);
 
