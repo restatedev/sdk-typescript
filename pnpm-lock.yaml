@@ -279,18 +279,6 @@ importers:
         specifier: 'catalog:'
         version: 4.3.6
 
-  packages/tests/e2e:
-    dependencies:
-      '@restatedev/restate-sdk':
-        specifier: workspace:*
-        version: link:../../libs/restate-sdk
-      '@restatedev/restate-sdk-clients':
-        specifier: workspace:*
-        version: link:../../libs/restate-sdk-clients
-      '@restatedev/restate-sdk-testcontainers':
-        specifier: workspace:*
-        version: link:../../libs/restate-sdk-testcontainers
-
   packages/tests/restate-e2e-services:
     dependencies:
       '@restatedev/restate-sdk':
