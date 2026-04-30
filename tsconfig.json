@@ -59,9 +59,6 @@
       "path": "packages/libs/restate-sdk-zod"
     },
     {
-      "path": "packages/tests/e2e"
-    },
-    {
       "path": "packages/tests/restate-e2e-services"
     },
     {
