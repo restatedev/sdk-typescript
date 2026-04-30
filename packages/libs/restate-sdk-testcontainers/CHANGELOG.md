@@ -1,5 +1,18 @@
 # @restatedev/restate-sdk-testcontainers
 
+## 1.14.1
+
+### Improvements and bug fixes
+
+- Added a connection-level default `serde` option to the ingress client. It is used for calls, workflow attach/output, awakeable resolution, and attached invocation results when no operation-specific serde is provided.
+- Operation-level `input`/`output` serdes still take precedence over the connection default.
+
+### Patch Changes
+
+- Updated dependencies
+  - @restatedev/restate-sdk@1.14.1
+  - @restatedev/restate-sdk-clients@1.14.1
+
 ## 1.14.0
 
 ### New Features
