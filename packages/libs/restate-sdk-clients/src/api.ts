@@ -65,7 +65,11 @@ export interface Ingress {
   /**
    * Resolve an awakeable from the ingress client.
    */
-  resolveAwakeable<T>(id: string, payload?: T): Promise<void>;
+  resolveAwakeable<T>(
+    id: string,
+    payload?: T,
+    payloadSerde?: Serde<T>
+  ): Promise<void>;
 
   /**
    * Reject an awakeable from the ingress client.
@@ -77,7 +81,10 @@ export interface Ingress {
    *
    * @param send either the send response or the workflow submission as obtained by the respective clients.
    */
-  result<T>(send: Send<T> | WorkflowSubmission<T>): Promise<T>;
+  result<T>(
+    send: Send<T> | WorkflowSubmission<T>,
+    resultSerde?: Serde<T>
+  ): Promise<T>;
 }
 
 export interface IngressCallOptions<I = unknown, O = unknown> {
@@ -305,7 +312,7 @@ export type IngressSendClient<M> = {
   [K in keyof M as M[K] extends never ? never : K]: M[K] extends (
     arg: any,
     ...args: infer P
-  ) => infer O
+  ) => PromiseLike<infer O>
     ? (
         ...args: [...P, ...[opts?: SendOpts<InferArgType<P>>]]
       ) => Promise<Send<O>>
@@ -323,6 +330,15 @@ export type ConnectionOpts = {
    * Use this to attach authentication headers.
    */
   headers?: Record<string, string>;
+
+  /**
+   * Default serde to use for ingress payloads when no operation-specific serde
+   * is provided. Applies to handler calls, workflow attaches/output polling,
+   * awakeable resolution, and attached invocation results.
+   *
+   * Defaults to `restate.serde.json`.
+   */
+  serde?: Serde<any>;
 
   /**
    * Codec to use for input/outputs. Check {@link JournalValueCodec} for more details

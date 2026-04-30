@@ -144,7 +144,7 @@ const doComponentInvocation = async <I, O>(
   //
   // request body
   //
-  const inputSerde = params.opts?.opts.input ?? serde.json;
+  const inputSerde = params.opts?.opts.input ?? opts.serde ?? serde.json;
 
   const { body, contentType } = serializeBodyWithContentType(
     params.parameter,
@@ -208,7 +208,7 @@ const doComponentInvocation = async <I, O>(
     const decodedBuf = opts.journalValueCodec
       ? await opts.journalValueCodec.decode(responseBuf)
       : responseBuf;
-    const outputSerde = params.opts?.opts.output ?? serde.json;
+    const outputSerde = params.opts?.opts.output ?? opts.serde ?? serde.json;
     return outputSerde.deserialize(decodedBuf) as O;
   }
   const json = serde.json.deserialize(responseBuf) as O;
@@ -222,7 +222,7 @@ const doWorkflowHandleCall = async <O>(
   op: "output" | "attach",
   callOpts?: Opts<unknown, O> | SendOpts<unknown>
 ): Promise<O> => {
-  const outputSerde = callOpts?.opts.output ?? serde.json;
+  const outputSerde = callOpts?.opts.output ?? opts.serde ?? serde.json;
   //
   // headers
   //
@@ -420,7 +420,7 @@ class HttpIngress implements Ingress {
     const url = `${this.opts.url}/restate/a/${id}/resolve`;
     const { body, contentType } = serializeBodyWithContentType(
       payload,
-      payloadSerde ?? serde.json,
+      payloadSerde ?? this.opts.serde ?? serde.json,
       this.opts.journalValueCodec
     );
     const headers = {
@@ -494,7 +494,9 @@ class HttpIngress implements Ingress {
       const decodedBuf = this.opts.journalValueCodec
         ? await this.opts.journalValueCodec.decode(responseBuf)
         : responseBuf;
-      return (resultSerde ?? serde.json).deserialize(decodedBuf) as T;
+      return (resultSerde ?? this.opts.serde ?? serde.json).deserialize(
+        decodedBuf
+      ) as T;
     }
     const body = await httpResponse.text();
     throw new HttpCallError(
