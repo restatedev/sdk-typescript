@@ -929,10 +929,18 @@ function hooksSuite(level: HookLevel) {
           // attempt 1 starts
           "hook:handler:before",
           // attempt 1 ends + attempt 2 starts (may interleave)
-          expect.toSatisfy((v: string) => v.includes('hook:handler:error:[hw]') || v.includes('hook:handler:before')),
-          expect.toSatisfy((v: string) => v.includes('hook:handler:error:[hw]') || v.includes('hook:handler:before')),
+          expect.toSatisfy(
+            (v: string) =>
+              v.includes("hook:handler:error:[hw]") ||
+              v.includes("hook:handler:before")
+          ),
+          expect.toSatisfy(
+            (v: string) =>
+              v.includes("hook:handler:error:[hw]") ||
+              v.includes("hook:handler:before")
+          ),
           // attempt 2 ends
-          expect.stringContaining("hook:handler:error:[hw]")
+          expect.stringContaining("hook:handler:error:[hw]"),
         ]);
     });
 
