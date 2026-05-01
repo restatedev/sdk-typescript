@@ -65,6 +65,11 @@ async function handleFetchRequest(
   req: http2.Http2ServerRequest,
   res: http2.Http2ServerResponse
 ) {
+  const abortController = new AbortController();
+  const abort = () => abortController.abort();
+  req.once("close", abort);
+  res.once("close", abort);
+
   const body =
     req.method === "GET" || req.method === "HEAD"
       ? undefined
@@ -76,6 +81,7 @@ async function handleFetchRequest(
         method: req.method,
         headers: toWebHeaders(req.headers),
         body,
+        signal: abortController.signal,
         duplex: body ? "half" : undefined,
       } as RequestInit & { duplex?: "half" })
     );
@@ -93,11 +99,20 @@ async function handleFetchRequest(
       res.end();
     }
   } catch (e) {
+    if (abortController.signal.aborted) {
+      return;
+    }
+
     console.error("Fetch endpoint request failed", e);
     if (!res.headersSent) {
       res.writeHead(500, { "content-type": "text/plain" });
     }
-    res.end("Fetch endpoint request failed");
+    if (!res.writableEnded && !res.destroyed) {
+      res.end("Fetch endpoint request failed");
+    }
+  } finally {
+    req.off("close", abort);
+    res.off("close", abort);
   }
 }
 

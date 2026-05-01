@@ -469,6 +469,7 @@ class RestateInvokeResponse implements RestateResponse {
       // In this scenario, we close the coreVm, then flush and close
       const error = ensureError(e);
       this.coreVm.notify_error(error.message, error.message);
+      destroyLogger(this.loggerId);
       await flushAndClose(
         this.coreVm,
         this.vmLogger,
@@ -494,6 +495,7 @@ class RestateInvokeResponse implements RestateResponse {
     } catch (e) {
       notifyError(e, ctx, this.handler.executionOptions.asTerminalError);
     } finally {
+      destroyLogger(this.loggerId);
       await flushAndClose(
         this.coreVm,
         this.vmLogger,
