@@ -15,42 +15,40 @@ import {
   envInt,
   invocationStatusCounts,
   renderMemoryLeakReport,
-  type InvocationStatusReportRow,
+  type InvocationLoadReportRow,
   type MemoryLeakSendClient,
   type MemoryProbeConfig,
   type MemoryReportRow,
 } from "./memory_leak_utils.js";
 import { getAdminUrl, getIngressUrl } from "./utils.js";
 
-const testTimeout = envInt("RESTATE_E2E_MEMORY_TEST_TIMEOUT_MS", 180_000);
-const invocationStatusSendMethods = {
+const testTimeout = envInt("RESTATE_E2E_MEMORY_TEST_TIMEOUT_MS", 360_000);
+const invocationLoadSendMethods = {
   succeeded: "succeed",
   failed: "terminalError",
   retrying: "retryForever",
   suspended: "suspendOnAwakeable",
   paused: "pauseAfterMaxAttempts",
+  hookAndRunHook: "hookAndRunHook",
+  abortTimeoutZero: "abortTimeoutZero",
 } as const satisfies Record<string, keyof MemoryLeakSendClient>;
 
 type InvocationGroups = Record<
-  keyof typeof invocationStatusSendMethods,
+  keyof typeof invocationLoadSendMethods,
   string[]
 >;
 
 describe("SDK memory pressure", { timeout: testTimeout }, () => {
-  it("does not retain SDK heap after mixed invocation status load", async () => {
+  it("does not retain SDK heap after mixed invocation load", async () => {
     const ingress = clients.connect({ url: getIngressUrl() });
     const adminUrl = getAdminUrl();
     const config: MemoryProbeConfig = {
       payloadBytes: envInt("RESTATE_E2E_MEMORY_PAYLOAD_BYTES", 512),
       waitTimeout: envInt("RESTATE_E2E_MEMORY_WAIT_TIMEOUT_MS", 90_000),
       cleanupDelay: envInt("RESTATE_E2E_MEMORY_CLEANUP_DELAY_MS", 1_000),
-      invocationsPerInvocationStatusPerRound: envInt(
-        "RESTATE_E2E_MEMORY_INVOCATIONS_PER_INVOCATION_STATUS_PER_ROUND",
+      invocationsPerHandlerPerRound: envInt(
+        "RESTATE_E2E_MEMORY_INVOCATIONS_PER_HANDLER_PER_ROUND",
         25
-      ),
-      warmupInvocationsPerInvocationStatus: envInt(
-        "RESTATE_E2E_MEMORY_WARMUP_INVOCATIONS_PER_INVOCATION_STATUS",
-        5
       ),
       rounds: envInt("RESTATE_E2E_MEMORY_ROUNDS", 20),
       maxHeapDeltaBytes: envInt(
@@ -58,16 +56,12 @@ describe("SDK memory pressure", { timeout: testTimeout }, () => {
         8 * 1024 * 1024
       ),
     };
-    const invocationStatusCount = Object.keys(
-      invocationStatusSendMethods
-    ).length;
-
     const client = ingress.serviceClient(memoryLeakProbe);
     const sendClient = ingress.serviceSendClient(
       memoryLeakProbe
     ) as unknown as MemoryLeakSendClient;
 
-    const invocationStatusRows: InvocationStatusReportRow[] = [];
+    const invocationLoadRows: InvocationLoadReportRow[] = [];
     const roundMemoryRows: MemoryReportRow[] = [];
     let measuredInvocations = 0;
     let baseline = await client.memoryStats({ forceGc: true });
@@ -76,24 +70,24 @@ describe("SDK memory pressure", { timeout: testTimeout }, () => {
     const iterations = [
       {
         round: "warmup" as const,
-        invocationsPerStatus: config.warmupInvocationsPerInvocationStatus,
+        invocationsPerHandler: config.invocationsPerHandlerPerRound,
       },
       ...Array.from({ length: config.rounds }, (_, index) => ({
         round: index + 1,
-        invocationsPerStatus: config.invocationsPerInvocationStatusPerRound,
+        invocationsPerHandler: config.invocationsPerHandlerPerRound,
       })),
     ];
 
     for (const iteration of iterations) {
       const groups = Object.fromEntries(
         await Promise.all(
-          Object.entries(invocationStatusSendMethods).map(
+          Object.entries(invocationLoadSendMethods).map(
             async ([status, method]) => [
               status,
               await Promise.all(
                 Array.from(
                   {
-                    length: iteration.invocationsPerStatus,
+                    length: iteration.invocationsPerHandler,
                   },
                   () =>
                     sendClient[method]({
@@ -113,11 +107,11 @@ describe("SDK memory pressure", { timeout: testTimeout }, () => {
           { timeout: config.waitTimeout, interval: 500 }
         )
         .toMatchObject({
-          succeeded: iteration.invocationsPerStatus,
-          failed: iteration.invocationsPerStatus,
-          retrying: iteration.invocationsPerStatus,
-          suspended: iteration.invocationsPerStatus,
-          paused: iteration.invocationsPerStatus,
+          succeeded: groups.succeeded.length + groups.hookAndRunHook.length,
+          failed: groups.failed.length + groups.abortTimeoutZero.length,
+          retrying: groups.retrying.length,
+          suspended: groups.suspended.length,
+          paused: groups.paused.length,
         });
 
       const underLoad =
@@ -167,20 +161,21 @@ describe("SDK memory pressure", { timeout: testTimeout }, () => {
         completedRoundHeap.heapUsed - previousAfterCleanup.heapUsed;
       const heapDeltaSinceBaseline =
         completedRoundHeap.heapUsed - baseline.heapUsed;
-      const actualRoundInvocations =
-        iteration.invocationsPerStatus * invocationStatusCount;
+      const actualRoundInvocations = Object.values(groups).flat().length;
 
       measuredInvocations += actualRoundInvocations;
       latestAfterCleanup = completedRoundHeap;
       previousAfterCleanup = completedRoundHeap;
 
-      invocationStatusRows.push({
+      invocationLoadRows.push({
         round: iteration.round,
-        succeeded: iteration.invocationsPerStatus,
-        failed: iteration.invocationsPerStatus,
-        retrying: iteration.invocationsPerStatus,
-        suspended: iteration.invocationsPerStatus,
-        paused: iteration.invocationsPerStatus,
+        succeeded: groups.succeeded.length,
+        failed: groups.failed.length,
+        retrying: groups.retrying.length,
+        suspended: groups.suspended.length,
+        paused: groups.paused.length,
+        hookAndRunHook: groups.hookAndRunHook.length,
+        abortTimeoutZero: groups.abortTimeoutZero.length,
       });
       roundMemoryRows.push({
         round: iteration.round,
@@ -202,7 +197,7 @@ describe("SDK memory pressure", { timeout: testTimeout }, () => {
       finalHeapUsed: latestAfterCleanup.heapUsed,
       totalHeapDelta,
       maxHeapDeltaBytes: config.maxHeapDeltaBytes,
-      invocationStatusRows,
+      invocationLoadRows,
       roundMemoryRows,
     });
 

@@ -9,6 +9,7 @@
 
 import * as v8 from "node:v8";
 import * as restate from "@restatedev/restate-sdk";
+import type { HooksProvider } from "@restatedev/restate-sdk";
 import { REGISTRY } from "./services.js";
 
 export interface MemoryLoadInput {
@@ -71,6 +72,17 @@ function collectMemoryStats(input: MemoryStatsInput | undefined): MemoryStats {
   };
 }
 
+const passThroughHooks: HooksProvider = () => ({
+  interceptor: {
+    handler: async (next) => {
+      await next();
+    },
+    run: async (_name, next) => {
+      await next();
+    },
+  },
+});
+
 function createMemoryLeakProbe(name: string) {
   return restate.service({
     name,
@@ -100,6 +112,7 @@ function createMemoryLeakProbe(name: string) {
           retryPolicy: {
             initialInterval: 10,
             maxInterval: 50,
+            maxAttempts: 10_000,
           },
         },
         async (ctx: restate.Context, input: MemoryLoadInput): Promise<void> => {
@@ -136,6 +149,50 @@ function createMemoryLeakProbe(name: string) {
           const { promise } = ctx.awakeable<string>();
           await promise;
           return { invocationId: ctx.request().id, payloadBytes };
+        }
+      ),
+
+      hookAndRunHook: restate.createServiceHandler(
+        {
+          hooks: [passThroughHooks],
+        },
+        async (
+          ctx: restate.Context,
+          input: MemoryLoadInput
+        ): Promise<MemoryInvocationResult> => {
+          const payloadBytes = await ctx.run("allocate-with-hooks", () =>
+            allocatePayload(input)
+          );
+          return { invocationId: ctx.request().id, payloadBytes };
+        }
+      ),
+
+      abortTimeoutZero: restate.createServiceHandler(
+        {
+          inactivityTimeout: 0,
+          abortTimeout: 0,
+          retryPolicy: {
+            initialInterval: 10,
+            maxAttempts: 1,
+            onMaxAttempts: "kill",
+          },
+        },
+        async (ctx: restate.Context, input: MemoryLoadInput): Promise<void> => {
+          await ctx.run("wait-for-zero-abort-timeout", async () => {
+            allocatePayload(input);
+            const signal = ctx.request().attemptCompletedSignal;
+            await new Promise<void>((_resolve, reject) => {
+              if (signal.aborted) {
+                reject(new Error("aborted"));
+                return;
+              }
+              signal.addEventListener(
+                "abort",
+                () => reject(new Error("aborted")),
+                { once: true }
+              );
+            });
+          });
         }
       ),
 

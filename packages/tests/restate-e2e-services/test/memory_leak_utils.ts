@@ -21,8 +21,15 @@ export interface InvocationStatusCounts {
   paused: number;
 }
 
-export interface InvocationStatusReportRow extends InvocationStatusCounts {
+export interface InvocationLoadReportRow {
   round: number;
+  succeeded: number;
+  failed: number;
+  retrying: number;
+  suspended: number;
+  paused: number;
+  hookAndRunHook: number;
+  abortTimeoutZero: number;
 }
 
 export interface MemoryReportRow {
@@ -41,7 +48,7 @@ export interface MemoryLeakReportInput {
   finalHeapUsed: number;
   totalHeapDelta: number;
   maxHeapDeltaBytes: number;
-  invocationStatusRows: InvocationStatusReportRow[];
+  invocationLoadRows: InvocationLoadReportRow[];
   roundMemoryRows: MemoryReportRow[];
 }
 
@@ -55,14 +62,17 @@ export interface MemoryLeakSendClient {
     input: MemoryLoadInput
   ): Promise<clients.Send<MemoryInvocationResult>>;
   pauseAfterMaxAttempts(input: MemoryLoadInput): Promise<clients.Send<void>>;
+  hookAndRunHook(
+    input: MemoryLoadInput
+  ): Promise<clients.Send<MemoryInvocationResult>>;
+  abortTimeoutZero(input: MemoryLoadInput): Promise<clients.Send<void>>;
 }
 
 export interface MemoryProbeConfig {
   payloadBytes: number;
   waitTimeout: number;
   cleanupDelay: number;
-  invocationsPerInvocationStatusPerRound: number;
-  warmupInvocationsPerInvocationStatus: number;
+  invocationsPerHandlerPerRound: number;
   rounds: number;
   maxHeapDeltaBytes: number;
 }
@@ -201,15 +211,26 @@ function formatOptionalBytes(bytes: number | undefined): string {
 }
 
 export function renderMemoryLeakReport(input: MemoryLeakReportInput): string {
-  const invocationStatusTable = renderTable(
-    ["iteration", "succeeded", "failed", "retrying", "suspended", "paused"],
-    input.invocationStatusRows.map((row) => [
+  const invocationLoadTable = renderTable(
+    [
+      "iteration",
+      "succeeded",
+      "failed",
+      "retrying",
+      "suspended",
+      "paused",
+      "hook + run hook",
+      "abort timeout 0",
+    ],
+    input.invocationLoadRows.map((row) => [
       row.round,
       row.succeeded,
       row.failed,
       row.retrying,
       row.suspended,
       row.paused,
+      row.hookAndRunHook,
+      row.abortTimeoutZero,
     ])
   );
   const memoryTable = renderTable(
@@ -247,8 +268,8 @@ observed heap delta: ${formatBytes(input.totalHeapDelta)}
 threshold: ${formatBytes(input.maxHeapDeltaBytes)}
 invocations: ${input.measuredInvocations}
 
-Invocation status by iteration:
-${invocationStatusTable}
+Invocation load by iteration:
+${invocationLoadTable}
 
 Memory by iteration:
 ${memoryTable}
