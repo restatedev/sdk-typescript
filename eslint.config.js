@@ -16,7 +16,6 @@ export default [
       "**/sdk_shared_core_wasm_bindings.js",
       "**/*.mjs",
       "**/test/**/*",
-      "!packages/tests/restate-e2e-services/test/**/*.ts",
       "**/api-extractor.json",
       "**/src/generated/**",
       "**/cdk.out/**",

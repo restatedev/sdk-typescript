@@ -75,7 +75,7 @@ jobs:
           - id: fetch
             label: Fetch
             endpointAdapter: fetch
-            customTestsFile: packages/tests/restate-e2e-services/custom_tests_memory.yaml
+            customTestsFile: packages/tests/restate-e2e-services/custom_tests_fetch.yaml
             services: MemoryLeakProbe
             artifactSuffix: "-fetch"
 
@@ -205,7 +205,7 @@ jobs:
             printf "%s\n" $env >> $GITHUB_ENV
           done
 
-      - name: Run fetch memory test
+      - name: Run fetch tests
         if: ${{ matrix.adapter.id == 'fetch' }}
         env:
           RESTATE_CONTAINER_IMAGE: ${{ inputs.restateCommit != '' && 'localhost/restatedev/restate-commit-download:latest' || (inputs.restateImage != '' && inputs.restateImage || 'ghcr.io/restatedev/restate:main') }}

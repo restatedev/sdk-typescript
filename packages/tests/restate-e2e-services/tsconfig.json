@@ -3,5 +3,5 @@
   "compilerOptions": {
     "composite": false
   },
-  "include": ["src/**/*", "test/**/*"]
+  "include": ["src/**/*"]
 }
