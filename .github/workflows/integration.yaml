@@ -167,6 +167,7 @@ jobs:
         run: |
           env_file=".service-container-${{ matrix.adapter.id }}.env"
           cp packages/tests/restate-e2e-services/.env "$env_file"
+          printf "\n" >> "$env_file"
           printf "RESTATE_E2E_ENDPOINT_ADAPTER=%s\n" "${{ matrix.adapter.endpointAdapter }}" >> "$env_file"
           if [[ -n "${{ matrix.adapter.services }}" ]]; then
             printf "SERVICES=%s\n" "${{ matrix.adapter.services }}" >> "$env_file"
