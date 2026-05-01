@@ -21,4 +21,4 @@ RUN pnpm --filter restate-e2e-services build
 
 EXPOSE 8080
 ENTRYPOINT ["tini", "--"]
-CMD ["node", "/usr/src/app/packages/tests/restate-e2e-services/dist/app.js"]
+CMD ["node", "--expose-gc", "/usr/src/app/packages/tests/restate-e2e-services/dist/app.js"]

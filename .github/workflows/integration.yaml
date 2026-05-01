@@ -54,7 +54,7 @@ jobs:
   sdk-test-suite:
     if: github.repository_owner == 'restatedev'
     runs-on: warp-ubuntu-latest-x64-4x
-    name: Features integration test
+    name: Features integration test (${{ matrix.adapter.label }})
     permissions:
       contents: read
       issues: read
@@ -62,8 +62,22 @@ jobs:
       pull-requests: write
       actions: read
     strategy:
+      fail-fast: false
       matrix:
         node-version: [20.x]
+        adapter:
+          - id: h2
+            label: Node HTTP/2
+            endpointAdapter: node-http2
+            customTestsFile: packages/tests/restate-e2e-services/custom_tests.yaml
+            services: ""
+            artifactSuffix: ""
+          - id: fetch
+            label: Fetch
+            endpointAdapter: fetch
+            customTestsFile: packages/tests/restate-e2e-services/custom_tests_memory.yaml
+            services: MemoryLeakProbe
+            artifactSuffix: "-fetch"
 
     steps:
       - uses: actions/checkout@v4
@@ -146,13 +160,25 @@ jobs:
           cache-from: type=gha,url=http://127.0.0.1:49160/,version=1,scope=${{ github.workflow }}
           cache-to: type=gha,url=http://127.0.0.1:49160/,mode=max,version=1,scope=${{ github.workflow }}
 
+      - name: Prepare service container environment
+        id: service-env
+        shell: bash
+        run: |
+          env_file=".service-container-${{ matrix.adapter.id }}.env"
+          cp packages/tests/restate-e2e-services/.env "$env_file"
+          printf "RESTATE_E2E_ENDPOINT_ADAPTER=%s\n" "${{ matrix.adapter.endpointAdapter }}" >> "$env_file"
+          if [[ -n "${{ matrix.adapter.services }}" ]]; then
+            printf "SERVICES=%s\n" "${{ matrix.adapter.services }}" >> "$env_file"
+          fi
+          echo "path=$env_file" >> "$GITHUB_OUTPUT"
+
       - name: Run test tool
         uses: restatedev/sdk-test-suite@v4.1
         with:
           restateContainerImage: ${{ inputs.restateCommit != '' && 'localhost/restatedev/restate-commit-download:latest' || (inputs.restateImage != '' && inputs.restateImage || 'ghcr.io/restatedev/restate:main') }}
           serviceContainerImage: ${{ inputs.serviceImage != '' && inputs.serviceImage || 'restatedev/typescript-test-services' }}
           exclusionsFile: "packages/tests/restate-e2e-services/exclusions.yaml"
-          customTestsFile: "packages/tests/restate-e2e-services/custom_tests.yaml"
+          customTestsFile: ${{ matrix.adapter.customTestsFile }}
           envVars: ${{ inputs.envVars }}
-          testArtifactOutput: ${{ inputs.testArtifactOutput != '' && inputs.testArtifactOutput || 'sdk-typescript-integration-test-report' }}
-          serviceContainerEnvFile: "packages/tests/restate-e2e-services/.env"
+          testArtifactOutput: ${{ format('{0}{1}', inputs.testArtifactOutput != '' && inputs.testArtifactOutput || 'sdk-typescript-integration-test-report', matrix.adapter.artifactSuffix) }}
+          serviceContainerEnvFile: ${{ steps.service-env.outputs.path }}
