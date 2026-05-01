@@ -189,8 +189,8 @@ jobs:
         if: ${{ matrix.adapter.id == 'fetch' }}
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '21'
+          distribution: "temurin"
+          java-version: "21"
 
       - name: Download fetch test tool
         if: ${{ matrix.adapter.id == 'fetch' }}
