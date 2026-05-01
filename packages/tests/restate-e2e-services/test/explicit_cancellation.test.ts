@@ -42,7 +42,7 @@ describe("ExplicitCancellation", () => {
 
     await cancelInvocation(send.invocationId);
 
-    expect(ingress.result(send)).rejects.toThrow("Cancelled");
+    await expect(ingress.result(send)).rejects.toThrow("Cancelled");
   }, 30_000);
 
   it("doubleCancellation: catches cancellation, does cleanup, returns normally", async () => {
