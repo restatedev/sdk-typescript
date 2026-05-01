@@ -39,13 +39,21 @@ export function fetcher(handler: RestateHandler) {
       const outputWriter = transformStream.writable.getWriter();
 
       const { writeHead, head } = captureHead();
+      // propagate request aborts, and abort again when processing completes.
+      const abortController = new AbortController();
+      const abort = () => abortController.abort();
+      if (event.signal.aborted) {
+        abort();
+      } else {
+        event.signal.addEventListener("abort", abort, { once: true });
+      }
 
       response
         .process({
           inputReader,
           outputWriter,
           writeHead,
-          abortSignal: event.signal,
+          abortSignal: abortController.signal,
         })
         .catch((e) => {
           // Responses handle their own errors before rejecting; anything
@@ -58,6 +66,10 @@ export function fetcher(handler: RestateHandler) {
               headers
             ) ?? handler.endpoint.rlog;
           logger.error("Unexpected error: " + (error.stack ?? error.message));
+        })
+        .finally(() => {
+          event.signal.removeEventListener("abort", abort);
+          abort();
         });
 
       return head.then(
