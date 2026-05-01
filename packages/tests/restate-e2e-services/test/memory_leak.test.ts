@@ -52,7 +52,7 @@ describe("SDK memory pressure", { timeout: testTimeout }, () => {
         "RESTATE_E2E_MEMORY_WARMUP_INVOCATIONS_PER_INVOCATION_STATUS",
         5
       ),
-      rounds: envInt("RESTATE_E2E_MEMORY_ROUNDS", 4),
+      rounds: envInt("RESTATE_E2E_MEMORY_ROUNDS", 20),
       maxHeapDeltaBytes: envInt(
         "RESTATE_E2E_MEMORY_MAX_HEAP_DELTA_BYTES",
         8 * 1024 * 1024
