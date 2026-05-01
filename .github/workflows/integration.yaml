@@ -160,7 +160,8 @@ jobs:
           cache-from: type=gha,url=http://127.0.0.1:49160/,version=1,scope=${{ github.workflow }}
           cache-to: type=gha,url=http://127.0.0.1:49160/,mode=max,version=1,scope=${{ github.workflow }}
 
-      - name: Prepare service container environment
+      - name: Prepare fetch service container environment
+        if: ${{ matrix.adapter.id == 'fetch' }}
         id: service-env
         shell: bash
         run: |
@@ -173,6 +174,7 @@ jobs:
           echo "path=$env_file" >> "$GITHUB_OUTPUT"
 
       - name: Run test tool
+        if: ${{ matrix.adapter.id == 'h2' }}
         uses: restatedev/sdk-test-suite@v4.1
         with:
           restateContainerImage: ${{ inputs.restateCommit != '' && 'localhost/restatedev/restate-commit-download:latest' || (inputs.restateImage != '' && inputs.restateImage || 'ghcr.io/restatedev/restate:main') }}
@@ -181,4 +183,52 @@ jobs:
           customTestsFile: ${{ matrix.adapter.customTestsFile }}
           envVars: ${{ inputs.envVars }}
           testArtifactOutput: ${{ format('{0}{1}', inputs.testArtifactOutput != '' && inputs.testArtifactOutput || 'sdk-typescript-integration-test-report', matrix.adapter.artifactSuffix) }}
-          serviceContainerEnvFile: ${{ steps.service-env.outputs.path }}
+
+      - name: Setup Java for fetch test tool
+        if: ${{ matrix.adapter.id == 'fetch' }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Download fetch test tool
+        if: ${{ matrix.adapter.id == 'fetch' }}
+        shell: bash
+        run: wget --no-verbose https://github.com/restatedev/sdk-test-suite/releases/download/v4.1/restate-sdk-test-suite.jar
+
+      - name: Set fetch test tool environment variables
+        if: ${{ matrix.adapter.id == 'fetch' && inputs.envVars }}
+        shell: bash
+        run: |
+          for env in "${{ inputs.envVars }}"
+          do
+            printf "%s\n" $env >> $GITHUB_ENV
+          done
+
+      - name: Run fetch memory test
+        if: ${{ matrix.adapter.id == 'fetch' }}
+        env:
+          RESTATE_CONTAINER_IMAGE: ${{ inputs.restateCommit != '' && 'localhost/restatedev/restate-commit-download:latest' || (inputs.restateImage != '' && inputs.restateImage || 'ghcr.io/restatedev/restate:main') }}
+        shell: bash
+        run: |
+          java -jar restate-sdk-test-suite.jar run \
+            --exclusions-file=packages/tests/restate-e2e-services/exclusions.yaml \
+            --service-container-env-file=${{ steps.service-env.outputs.path }} \
+            --custom-tests-file=${{ matrix.adapter.customTestsFile }} \
+            --test-suite=default \
+            --test-name=Custom \
+            --report-dir=test-report \
+            ${{ inputs.serviceImage != '' && inputs.serviceImage || 'restatedev/typescript-test-services' }}
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() && matrix.adapter.id == 'fetch' }}
+        with:
+          name: ${{ format('{0}{1}', inputs.testArtifactOutput != '' && inputs.testArtifactOutput || 'sdk-typescript-integration-test-report', matrix.adapter.artifactSuffix) }}
+          path: test-report
+
+      - name: Publish Fetch Test Results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: ${{ always() && matrix.adapter.id == 'fetch' }}
+        with:
+          files: |
+            test-report/*/*.xml
