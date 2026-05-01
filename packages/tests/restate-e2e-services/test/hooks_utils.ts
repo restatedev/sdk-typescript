@@ -26,11 +26,17 @@ export async function invokeExpectingError(
     // expected
   }
   await expect
-    .poll(() => hooksDriver.findNewInvocation(idsBefore), {
-      timeout: 10_000,
-      interval: 100,
-    })
-    .toMatchObject({ invocationId: expect.any(String) });
+    .poll(
+      async () => {
+        const invocation = await hooksDriver.findNewInvocation(idsBefore);
+        return typeof invocation?.invocationId === "string";
+      },
+      {
+        timeout: 10_000,
+        interval: 100,
+      }
+    )
+    .toBe(true);
   const invocation = await hooksDriver.findNewInvocation(idsBefore);
   return invocation ?? { events: [] };
 }
@@ -62,13 +68,13 @@ export async function waitForInvocationOutcome(
   return outcome!;
 }
 
-export function inAnyOrder(...events: (string | RegExp)[]): string[] {
+export function inAnyOrder(...events: (string | RegExp)[]): unknown[] {
   const pattern = events
     .map((e) =>
       e instanceof RegExp ? e.source : e.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
     )
     .join("|");
-  const matcher: string = expect.stringMatching(new RegExp(`^(${pattern})$`));
+  const matcher = expect.stringMatching(new RegExp(`^(${pattern})$`)) as unknown;
   return events.map(() => matcher);
 }
 

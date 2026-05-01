@@ -17,8 +17,8 @@ const ExplicitCancellation: ExplicitCancellation = {
   name: "ExplicitCancellation",
 };
 
-function idempotentSend() {
-  return rpc.sendOpts({ idempotencyKey: randomUUID() });
+function idempotentSend<I = unknown>() {
+  return rpc.sendOpts<I>({ idempotencyKey: randomUUID() });
 }
 
 async function cancelInvocation(invocationId: string): Promise<void> {

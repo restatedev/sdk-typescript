@@ -4,7 +4,7 @@
     "outDir": "./dist",
     "composite": false
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "test/**/*"],
   "references": [
     {
       "path": "../../libs/restate-sdk/tsconfig.build.json"

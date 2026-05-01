@@ -15,8 +15,8 @@ import type { SignalTest } from "../src/signals.js";
 
 const SignalTest: SignalTest = { name: "SignalTest" };
 
-function idempotentSend() {
-  return rpc.sendOpts({ idempotencyKey: randomUUID() });
+function idempotentSend<I = unknown>() {
+  return rpc.sendOpts<I>({ idempotencyKey: randomUUID() });
 }
 
 describe("SignalTest", () => {
