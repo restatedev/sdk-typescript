@@ -74,7 +74,9 @@ export function inAnyOrder(...events: (string | RegExp)[]): unknown[] {
       e instanceof RegExp ? e.source : e.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
     )
     .join("|");
-  const matcher = expect.stringMatching(new RegExp(`^(${pattern})$`)) as unknown;
+  const matcher = expect.stringMatching(
+    new RegExp(`^(${pattern})$`)
+  ) as unknown;
   return events.map(() => matcher);
 }
 
