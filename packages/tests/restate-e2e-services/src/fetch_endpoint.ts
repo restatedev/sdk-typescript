@@ -12,6 +12,28 @@ import { Readable, Writable } from "node:stream";
 import * as restateFetch from "@restatedev/restate-sdk/fetch";
 import type { ComponentDefinition } from "./services.js";
 
+function installPromiseWithResolversPolyfill() {
+  if (typeof Promise.withResolvers === "function") {
+    return;
+  }
+
+  Object.defineProperty(Promise, "withResolvers", {
+    configurable: true,
+    writable: true,
+    value: function withResolvers<T>() {
+      let resolve!: (value: T | PromiseLike<T>) => void;
+      let reject!: (reason?: unknown) => void;
+      const promise = new Promise<T>((promiseResolve, promiseReject) => {
+        resolve = promiseResolve;
+        reject = promiseReject;
+      });
+      return { promise, resolve, reject };
+    },
+  });
+}
+
+installPromiseWithResolversPolyfill();
+
 function toWebHeaders(headers: http2.IncomingHttpHeaders): Headers {
   const webHeaders = new Headers();
   for (const [key, value] of Object.entries(headers)) {
