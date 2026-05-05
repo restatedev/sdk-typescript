@@ -477,6 +477,9 @@ class RestateInvokeResponse implements RestateResponse {
           outputWriter
         );
       } finally {
+        // Safety net: the abort listener should clean this up when the attempt
+        // ends, but process() owns the logger registration, so avoid leaking if
+        // an adapter ever fails to abort the attempt-completed signal.
         destroyLogger(this.loggerId);
       }
       return;
@@ -506,6 +509,9 @@ class RestateInvokeResponse implements RestateResponse {
           outputWriter
         );
       } finally {
+        // Safety net: the abort listener should clean this up when the attempt
+        // ends, but process() owns the logger registration, so avoid leaking if
+        // an adapter ever fails to abort the attempt-completed signal.
         destroyLogger(this.loggerId);
       }
     }
