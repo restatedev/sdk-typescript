@@ -1,0 +1,59 @@
+// Public API.
+
+export type { Channel } from "./channel.js";
+export type { FluentClient, FluentDurablePromise } from "./clients.js";
+export {
+  all,
+  allSettled,
+  any,
+  attach,
+  awakeable,
+  cancel,
+  channel,
+  genericCall,
+  genericSend,
+  objectClient,
+  objectSendClient,
+  race,
+  rejectAwakeable,
+  resolveAwakeable,
+  run,
+  serviceClient,
+  serviceSendClient,
+  sharedState,
+  signal,
+  sleep,
+  state,
+  workflowClient,
+  workflowPromise,
+  workflowSendClient,
+} from "./free.js";
+export type {
+  Future,
+  FutureFulfilledResult,
+  FutureRejectedResult,
+  FutureSettledResult,
+  FutureValue,
+  FutureValues,
+} from "./future.js";
+export {
+  gen,
+  type Operation,
+  select,
+  type SelectResult,
+  spawn,
+} from "./operation.js";
+export {
+  execute,
+  type RetryOptions,
+  type RunAction,
+  type RunActionOpts,
+  type RunOpts,
+  wrapActionForCancellation,
+} from "./restate-operations.js";
+export type {
+  SharedState,
+  State,
+  TypedState,
+  UntypedState,
+} from "./state.js";
