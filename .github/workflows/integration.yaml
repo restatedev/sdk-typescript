@@ -157,35 +157,6 @@ jobs:
           testArtifactOutput: ${{ inputs.testArtifactOutput != '' && inputs.testArtifactOutput || 'sdk-typescript-integration-test-report' }}
           serviceContainerEnvFile: "packages/tests/restate-e2e-services/.env"
 
-  # restate-sdk-gen ships its own testcontainers-based e2e suite (boots a
-  # real Restate container via @restatedev/restate-sdk-testcontainers, runs
-  # workflows against it). Independent of the sdk-test-suite job above.
-  restate-sdk-gen-e2e:
-    if: github.repository_owner == 'restatedev'
-    runs-on: warp-ubuntu-latest-x64-4x
-    name: restate-sdk-gen e2e (testcontainers)
-    permissions:
-      contents: read
-    strategy:
-      matrix:
-        node-version: [20.x]
-
-    steps:
-      - uses: actions/checkout@v4
-      - name: Use Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node-version }}
-          registry-url: "https://registry.npmjs.org"
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.13.1
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm build
-      - name: Run e2e tests
-        run: pnpm --filter @restatedev/restate-sdk-gen test:e2e
-        timeout-minutes: 15
-
   # Mirrors the sdk-test-suite job above, but builds and runs the
   # restate-sdk-gen test-services container against the same Restate
   # image. Exercises the generator-DSL workflows through the official

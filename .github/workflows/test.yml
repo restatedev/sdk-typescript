@@ -65,3 +65,30 @@ jobs:
           path: restatedev-restate-sdk-gen.tgz
           retention-days: 1
           if-no-files-found: error
+
+  # restate-sdk-gen ships a testcontainers-based e2e suite that boots a
+  # real Restate container via @restatedev/restate-sdk-testcontainers and
+  # runs workflows against it. Cheap enough to gate on PR; runs in
+  # parallel with the build job above.
+  restate-sdk-gen-e2e:
+    if: github.repository_owner == 'restatedev'
+    runs-on: warp-ubuntu-latest-x64-4x
+    strategy:
+      matrix:
+        node-version: [20.x]
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          registry-url: "https://registry.npmjs.org"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Run e2e tests
+        run: pnpm --filter @restatedev/restate-sdk-gen test:e2e
+        timeout-minutes: 15
