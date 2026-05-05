@@ -24,31 +24,6 @@ on:
         required: false
         default: ""
         type: string
-  workflow_call:
-    inputs:
-      restateCommit:
-        description: "restate commit"
-        required: false
-        default: ""
-        type: string
-      restateImage:
-        description: "restate image, superseded by restate commit"
-        required: false
-        default: "ghcr.io/restatedev/restate:main"
-        type: string
-      serviceImage:
-        description: "service image, if provided it will skip building the image from sdk main branch"
-        required: false
-        default: ""
-        type: string
-      envVars:
-        required: false
-        type: string
-        description: list of vars and values used when running the test tool
-      testArtifactOutput:
-        required: false
-        type: string
-        description: name of the test artifact output
 
 jobs:
   sdk-test-suite:
@@ -167,15 +142,6 @@ jobs:
         shell: bash
         run: wget --no-verbose https://github.com/restatedev/sdk-test-suite/releases/download/v4.1/restate-sdk-test-suite.jar
 
-      - name: Set test tool environment variables
-        if: ${{ inputs.envVars }}
-        shell: bash
-        run: |
-          for env in "${{ inputs.envVars }}"
-          do
-            printf "%s\n" $env >> $GITHUB_ENV
-          done
-
       - name: Run test tool
         env:
           RESTATE_CONTAINER_IMAGE: ${{ inputs.restateCommit != '' && 'localhost/restatedev/restate-commit-download:latest' || (inputs.restateImage != '' && inputs.restateImage || 'ghcr.io/restatedev/restate:main') }}
@@ -193,7 +159,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: ${{ always() }}
         with:
-          name: ${{ inputs.testArtifactOutput != '' && inputs.testArtifactOutput || 'sdk-typescript-fetch-integration-test-report' }}
+          name: sdk-typescript-fetch-integration-test-report
           path: test-report
 
       - name: Publish Test Results
