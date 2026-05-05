@@ -1,6 +1,10 @@
-name: Integration
+name: Integration (restate-sdk-gen)
 
-# Controls when the workflow will run
+# Mirrors integration.yaml but exercises the @restatedev/restate-sdk-gen
+# test-services container instead of restate-e2e-services. Same Restate
+# image selection logic and trigger surface; runs in parallel and is
+# scoped to a separate file so changes to one don't churn the other.
+
 on:
   pull_request:
   push:
@@ -54,7 +58,7 @@ jobs:
   sdk-test-suite:
     if: github.repository_owner == 'restatedev'
     runs-on: warp-ubuntu-latest-x64-4x
-    name: Features integration test
+    name: restate-sdk-gen sdk-test-suite
     permissions:
       contents: read
       issues: read
@@ -133,16 +137,16 @@ jobs:
         shell: bash
         run: docker pull ${{ inputs.serviceImage }}
 
-      - name: Build Typescript test-services image
+      - name: Build restate-sdk-gen test-services image
         if: ${{ inputs.serviceImage == '' }}
         id: build
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: "packages/tests/restate-e2e-services/Dockerfile"
+          file: "packages/libs/restate-sdk-gen/test-services/Dockerfile"
           push: false
           load: true
-          tags: restatedev/typescript-test-services
+          tags: restatedev/restate-sdk-gen-test-services
           cache-from: type=gha,url=http://127.0.0.1:49160/,version=1,scope=${{ github.workflow }}
           cache-to: type=gha,url=http://127.0.0.1:49160/,mode=max,version=1,scope=${{ github.workflow }}
 
@@ -150,9 +154,7 @@ jobs:
         uses: restatedev/sdk-test-suite@v4.1
         with:
           restateContainerImage: ${{ inputs.restateCommit != '' && 'localhost/restatedev/restate-commit-download:latest' || (inputs.restateImage != '' && inputs.restateImage || 'ghcr.io/restatedev/restate:main') }}
-          serviceContainerImage: ${{ inputs.serviceImage != '' && inputs.serviceImage || 'restatedev/typescript-test-services' }}
-          exclusionsFile: "packages/tests/restate-e2e-services/exclusions.yaml"
-          customTestsFile: "packages/tests/restate-e2e-services/custom_tests.yaml"
+          serviceContainerImage: ${{ inputs.serviceImage != '' && inputs.serviceImage || 'restatedev/restate-sdk-gen-test-services' }}
+          exclusionsFile: "packages/libs/restate-sdk-gen/test-services/exclusions.yaml"
           envVars: ${{ inputs.envVars }}
-          testArtifactOutput: ${{ inputs.testArtifactOutput != '' && inputs.testArtifactOutput || 'sdk-typescript-integration-test-report' }}
-          serviceContainerEnvFile: "packages/tests/restate-e2e-services/.env"
+          testArtifactOutput: ${{ inputs.testArtifactOutput != '' && inputs.testArtifactOutput || 'sdk-typescript-restate-sdk-gen-integration-test-report' }}
