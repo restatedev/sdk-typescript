@@ -97,6 +97,12 @@ export default [
       "./packages/examples/**/*.ts",
       "./packages/tests/restate-e2e-services/**/*.ts",
       "./packages/libs/restate-sdk-testcontainers/**/*.ts",
+      // restate-sdk-gen co-locates its examples/e2e/test-services/bench
+      // inside the lib package; relax the same rules here.
+      "./packages/libs/restate-sdk-gen/examples/**/*.ts",
+      "./packages/libs/restate-sdk-gen/e2e/**/*.ts",
+      "./packages/libs/restate-sdk-gen/test-services/**/*.ts",
+      "./packages/libs/restate-sdk-gen/bench/**/*.ts",
     ],
     rules: {
       "no-console": "off",

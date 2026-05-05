@@ -243,6 +243,21 @@ importers:
 
   packages/libs/restate-sdk-core: {}
 
+  packages/libs/restate-sdk-gen:
+    devDependencies:
+      '@restatedev/restate-sdk':
+        specifier: workspace:*
+        version: link:../restate-sdk
+      '@restatedev/restate-sdk-clients':
+        specifier: workspace:*
+        version: link:../restate-sdk-clients
+      '@restatedev/restate-sdk-testcontainers':
+        specifier: workspace:*
+        version: link:../restate-sdk-testcontainers
+      testcontainers:
+        specifier: ^11.12.0
+        version: 11.13.0
+
   packages/libs/restate-sdk-opentelemetry:
     devDependencies:
       '@opentelemetry/api':
