@@ -12,6 +12,12 @@ let failures = 0;
 let eventualSuccessSideEffects = 0;
 let eventualFailureSideEffects = 0;
 
+// Shape sdk-test-suite uses to drive failure-propagation tests.
+type FailureToPropagate = {
+  errorMessage: string;
+  metadata?: Record<string, string>;
+};
+
 const FailingApi: restate.VirtualObjectDefinitionFrom<typeof failing> = {
   name: "Failing",
 };
@@ -21,15 +27,15 @@ export const failing = restate.object({
   handlers: {
     terminallyFailingCall: async (
       ctx: restate.ObjectContext,
-      msg: string
+      f: FailureToPropagate
     ): Promise<void> => {
       void ctx;
-      throw new restate.TerminalError(msg);
+      throw new restate.TerminalError(f.errorMessage, { metadata: f.metadata });
     },
 
     callTerminallyFailingCall: async (
       ctx: restate.ObjectContext,
-      msg: string
+      f: FailureToPropagate
     ): Promise<string> =>
       execute(
         ctx,
@@ -37,7 +43,7 @@ export const failing = restate.object({
           yield* objectClient(
             FailingApi,
             "random-583e1bf2"
-          ).terminallyFailingCall(msg);
+          ).terminallyFailingCall(f);
           throw new Error("Should not reach here");
         })
       ),
@@ -56,14 +62,16 @@ export const failing = restate.object({
 
     terminallyFailingSideEffect: async (
       ctx: restate.ObjectContext,
-      errorMessage: string
+      f: FailureToPropagate
     ): Promise<void> =>
       execute(
         ctx,
         gen(function* () {
           yield* run(
             async () => {
-              throw new restate.TerminalError(errorMessage);
+              throw new restate.TerminalError(f.errorMessage, {
+                metadata: f.metadata,
+              });
             },
             { name: "sideEffect" }
           );
