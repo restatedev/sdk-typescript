@@ -156,3 +156,130 @@ jobs:
           envVars: ${{ inputs.envVars }}
           testArtifactOutput: ${{ inputs.testArtifactOutput != '' && inputs.testArtifactOutput || 'sdk-typescript-integration-test-report' }}
           serviceContainerEnvFile: "packages/tests/restate-e2e-services/.env"
+
+  # restate-sdk-gen ships its own testcontainers-based e2e suite (boots a
+  # real Restate container via @restatedev/restate-sdk-testcontainers, runs
+  # workflows against it). Independent of the sdk-test-suite job above.
+  restate-sdk-gen-e2e:
+    if: github.repository_owner == 'restatedev'
+    runs-on: warp-ubuntu-latest-x64-4x
+    name: restate-sdk-gen e2e (testcontainers)
+    permissions:
+      contents: read
+    strategy:
+      matrix:
+        node-version: [20.x]
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          registry-url: "https://registry.npmjs.org"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Run e2e tests
+        run: pnpm --filter @restatedev/restate-sdk-gen test:e2e
+        timeout-minutes: 15
+
+  # Mirrors the sdk-test-suite job above, but builds and runs the
+  # restate-sdk-gen test-services container against the same Restate
+  # image. Exercises the generator-DSL workflows through the official
+  # test harness (separate from the testcontainers e2e suite, which
+  # tests our package's own end-to-end paths from the consumer side).
+  restate-sdk-gen-sdk-test-suite:
+    if: github.repository_owner == 'restatedev'
+    runs-on: warp-ubuntu-latest-x64-4x
+    name: restate-sdk-gen sdk-test-suite
+    permissions:
+      contents: read
+      issues: read
+      checks: write
+      pull-requests: write
+      actions: read
+    strategy:
+      matrix:
+        node-version: [20.x]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: restatedev/sdk-typescript
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          registry-url: "https://registry.npmjs.org"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+      - name: Set up Docker containerd snapshotter
+        uses: docker/setup-docker-action@v4
+        with:
+          version: "v28.5.2"
+          set-host: true
+          daemon-config: |
+            {
+              "features": {
+                "containerd-snapshotter": true
+              }
+            }
+
+      # Restate image: same selection logic as the sdk-test-suite job
+      # above (commit-pinned snapshot if requested, else input image,
+      # else main).
+      - name: Download restate snapshot from in-progress workflow
+        if: ${{ inputs.restateCommit != '' && github.event_name != 'workflow_dispatch' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: restate.tar
+      - name: Download restate snapshot from completed workflow
+        if: ${{ inputs.restateCommit != '' && github.event_name == 'workflow_dispatch' }}
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          repo: restatedev/restate
+          workflow: ci.yml
+          commit: ${{ inputs.restateCommit }}
+          name: restate.tar
+      - name: Install restate snapshot
+        if: ${{ inputs.restateCommit != '' }}
+        run: |
+          output=$(docker load --input restate.tar | head -n 1)
+          docker tag "${output#*: }" "localhost/restatedev/restate-commit-download:latest"
+          docker image ls -a
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: |
+            network=host
+
+      - name: Build restate-sdk-gen test-services image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: "packages/libs/restate-sdk-gen/test-services/Dockerfile"
+          push: false
+          load: true
+          tags: restatedev/restate-sdk-gen-test-services
+          cache-from: type=gha,url=http://127.0.0.1:49160/,version=1,scope=${{ github.workflow }}-gen
+          cache-to: type=gha,url=http://127.0.0.1:49160/,mode=max,version=1,scope=${{ github.workflow }}-gen
+
+      - name: Run sdk-test-suite
+        uses: restatedev/sdk-test-suite@v4.1
+        with:
+          restateContainerImage: ${{ inputs.restateCommit != '' && 'localhost/restatedev/restate-commit-download:latest' || (inputs.restateImage != '' && inputs.restateImage || 'ghcr.io/restatedev/restate:main') }}
+          serviceContainerImage: restatedev/restate-sdk-gen-test-services
+          exclusionsFile: "packages/libs/restate-sdk-gen/test-services/exclusions.yaml"
+          envVars: ${{ inputs.envVars }}
+          testArtifactOutput: sdk-typescript-restate-sdk-gen-integration-test-report

@@ -40,6 +40,7 @@ jobs:
       - run: find -type f -name "restatedev-restate-sdk-[0-9.]*\.tgz" | xargs -I {} mv {} restatedev-restate-sdk.tgz
       - run: find -type f -name "restatedev-restate-sdk-clients-[0-9.]*\.tgz" | xargs -I {} mv {} restatedev-restate-sdk-clients.tgz
       - run: find -type f -name "restatedev-restate-sdk-core-[0-9.]*\.tgz" | xargs -I {} mv {} restatedev-restate-sdk-core.tgz
+      - run: find -type f -name "restatedev-restate-sdk-gen-[0-9.]*\.tgz" | xargs -I {} mv {} restatedev-restate-sdk-gen.tgz
       - uses: actions/upload-artifact@v4
         with:
           name: restatedev-restate-sdk
@@ -56,5 +57,11 @@ jobs:
         with:
           name: restatedev-restate-sdk-core
           path: restatedev-restate-sdk-core.tgz
+          retention-days: 1
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: restatedev-restate-sdk-gen
+          path: restatedev-restate-sdk-gen.tgz
           retention-days: 1
           if-no-files-found: error
