@@ -182,8 +182,9 @@ function nodeHandlerImpl(
 
     // Abort controller used to cleanup resources at the end of this stream lifecycle
     const abortController = new AbortController();
-    const abort = () => abortController.abort();
-    httpRequest.on("close", abort);
+    httpRequest.on("close", () => {
+      abortController.abort();
+    });
 
     const writeHead = res.writeHead.bind(res);
 
@@ -212,10 +213,6 @@ function nodeHandlerImpl(
             httpRequest.headers
           ) ?? endpoint.rlog;
         logger.error("Unexpected error: " + (error.stack ?? error.message));
-      })
-      .finally(() => {
-        httpRequest.off("close", abort);
-        abort();
       });
   };
 }
