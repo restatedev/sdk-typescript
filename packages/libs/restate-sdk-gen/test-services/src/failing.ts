@@ -1,3 +1,14 @@
+/*
+ * Copyright (c) 2023-2026 - Restate Software, Inc., Restate GmbH
+ *
+ * This file is part of the Restate SDK for Node.js/TypeScript,
+ * which is released under the MIT license.
+ *
+ * You can find a copy of the license in file LICENSE in the root
+ * directory of this repository or package, or at
+ * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
+ */
+
 // Failing — virtual object that exercises terminal-error and retry
 // semantics in handler bodies and `ctx.run` closures.
 // Mirrors sdk-ruby/test-services/services/failing.rb.

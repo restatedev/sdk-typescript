@@ -1,3 +1,14 @@
+/*
+ * Copyright (c) 2023-2026 - Restate Software, Inc., Restate GmbH
+ *
+ * This file is part of the Restate SDK for Node.js/TypeScript,
+ * which is released under the MIT license.
+ *
+ * You can find a copy of the license in file LICENSE in the root
+ * directory of this repository or package, or at
+ * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
+ */
+
 // Channel<T> e2e: validates channel patterns end-to-end against a real
 // Restate runtime. Channels are pure scheduler primitives — never enter
 // `lib.race`, never journal — but they must remain deterministic across

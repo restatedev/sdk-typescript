@@ -1,3 +1,14 @@
+/*
+ * Copyright (c) 2023-2026 - Restate Software, Inc., Restate GmbH
+ *
+ * This file is part of the Restate SDK for Node.js/TypeScript,
+ * which is released under the MIT license.
+ *
+ * You can find a copy of the license in file LICENSE in the root
+ * directory of this repository or package, or at
+ * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
+ */
+
 // Subtle interaction edge cases that flat tests don't usually catch:
 //   - errors in synthesized combinator bodies (routine-backed all/race)
 //   - waiter-list correctness when targets settle before the waiter parks

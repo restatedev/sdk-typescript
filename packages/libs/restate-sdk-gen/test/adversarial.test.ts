@@ -1,3 +1,14 @@
+/*
+ * Copyright (c) 2023-2026 - Restate Software, Inc., Restate GmbH
+ *
+ * This file is part of the Restate SDK for Node.js/TypeScript,
+ * which is released under the MIT license.
+ *
+ * You can find a copy of the license in file LICENSE in the root
+ * directory of this repository or package, or at
+ * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
+ */
+
 // Adversarial tests: patterns specifically designed to find subtle bugs
 // in the scheduler. These come from re-reading the implementation and
 // asking "what would break if X happened in order Y?"
