@@ -17,8 +17,8 @@ const ExplicitCancellation: ExplicitCancellation = {
   name: "ExplicitCancellation",
 };
 
-function idempotentSend() {
-  return rpc.sendOpts({ idempotencyKey: randomUUID() });
+function idempotentSend<I = unknown>() {
+  return rpc.sendOpts<I>({ idempotencyKey: randomUUID() });
 }
 
 async function cancelInvocation(invocationId: string): Promise<void> {
@@ -42,7 +42,7 @@ describe("ExplicitCancellation", () => {
 
     await cancelInvocation(send.invocationId);
 
-    expect(ingress.result(send)).rejects.toThrow("Cancelled");
+    await expect(ingress.result(send)).rejects.toThrow("Cancelled");
   }, 30_000);
 
   it("doubleCancellation: catches cancellation, does cleanup, returns normally", async () => {

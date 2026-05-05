@@ -30,6 +30,7 @@ import "./signals.js";
 import "./preview_serdes.js";
 import "./ingress_default_serde.js";
 import "./hooks.js";
+import "./memory_leak.js";
 import * as http2 from "http2";
 import * as heapdump from "heapdump";
 import path from "path";
@@ -47,76 +48,92 @@ process.on("SIGUSR2", () => {
 
 import { REGISTRY } from "./services.js";
 
-const endpoint = restate.endpoint();
-if (!process.env.SERVICES || process.env.SERVICES == "*") {
-  REGISTRY.registerAll(endpoint);
-} else {
-  const fqdns = new Set(process.env.SERVICES.split(","));
-  REGISTRY.register(fqdns, endpoint);
-}
+const port = parseInt(process.env.PORT || "9080");
+const identityKeys = process.env.E2E_REQUEST_SIGNING
+  ? process.env.E2E_REQUEST_SIGNING.split(",")
+  : undefined;
+const selectedServices = REGISTRY.definitions(
+  !process.env.SERVICES || process.env.SERVICES === "*"
+    ? undefined
+    : new Set(process.env.SERVICES.split(","))
+);
 
-const settings: http2.Settings = {};
-if (process.env.MAX_CONCURRENT_STREAMS) {
-  settings.maxConcurrentStreams = parseInt(process.env.MAX_CONCURRENT_STREAMS);
-}
+function startNodeHttp2Endpoint() {
+  const settings: http2.Settings = {};
+  if (process.env.MAX_CONCURRENT_STREAMS) {
+    settings.maxConcurrentStreams = parseInt(
+      process.env.MAX_CONCURRENT_STREAMS
+    );
+  }
 
-if (process.env.E2E_REQUEST_SIGNING) {
-  endpoint.withIdentityV1(...process.env.E2E_REQUEST_SIGNING.split(","));
-}
+  let inflightRequests = 0;
+  let activeSessions = 0;
+  const sessions = new Map<number, Set<string>>();
 
-let INFLIGHT_REQUESTS = 0;
-let ACTIVE_SESSIONS = 0;
-const sessions = new Map();
-
-const handler = endpoint.http2Handler();
-const server = http2.createServer((req, res) => {
-  INFLIGHT_REQUESTS++;
-  res.once("close", () => {
-    INFLIGHT_REQUESTS--;
+  const handler = restate.createEndpointHandler({
+    services: selectedServices,
+    identityKeys,
   });
-  handler(req, res);
-});
+  const server = http2.createServer((req, res) => {
+    inflightRequests++;
+    res.once("close", () => {
+      inflightRequests--;
+    });
+    handler(req, res);
+  });
 
-server.on("session", (session) => {
-  const sessionId = ACTIVE_SESSIONS++;
-  const streams = new Set();
-  sessions.set(sessionId, streams);
+  server.on("session", (session) => {
+    const sessionId = activeSessions++;
+    const streams = new Set<string>();
+    sessions.set(sessionId, streams);
 
-  const handleCloseSession = () => {
-    sessions.delete(sessionId);
-  };
-
-  session.on("close", handleCloseSession);
-  session.on("error", handleCloseSession);
-
-  session.on("stream", (stream) => {
-    streams.add(`${sessionId}_${stream.id}`);
-
-    const handleCloseStream = () => {
-      streams.delete(`${sessionId}_${stream.id}`);
+    const handleCloseSession = () => {
+      sessions.delete(sessionId);
     };
 
-    stream.on("close", handleCloseStream);
-    stream.on("error", handleCloseStream);
+    session.on("close", handleCloseSession);
+    session.on("error", handleCloseSession);
+
+    session.on("stream", (stream) => {
+      streams.add(`${sessionId}_${stream.id}`);
+
+      const handleCloseStream = () => {
+        streams.delete(`${sessionId}_${stream.id}`);
+      };
+
+      stream.on("close", handleCloseStream);
+      stream.on("error", handleCloseStream);
+    });
+
+    return undefined;
   });
 
-  return undefined;
-});
+  setInterval(() => {
+    console.log(
+      `${new Date().toISOString()}: Inflight requests: ${inflightRequests}`
+    );
+    console.table(
+      Array.from(sessions.values()).map((set: Set<string>) => ({
+        "#streams": set.size,
+      }))
+    );
+  }, 30 * 1000);
 
-setInterval(() => {
-  console.log(
-    `${new Date().toISOString()}: Inflight requests: ${INFLIGHT_REQUESTS}`
+  server.updateSettings(settings);
+  server.listen(port, "0.0.0.0", () => {
+    console.log(`Server listening on 0.0.0.0:${port}`);
+  });
+}
+
+const endpointAdapter =
+  process.env.RESTATE_E2E_ENDPOINT_ADAPTER ?? "node-http2";
+if (endpointAdapter === "fetch") {
+  const { startFetchEndpoint } = await import("./fetch_endpoint.js");
+  startFetchEndpoint({ port, services: selectedServices, identityKeys });
+} else if (endpointAdapter === "node-http2" || endpointAdapter === "http2") {
+  startNodeHttp2Endpoint();
+} else {
+  throw new Error(
+    `Unsupported RESTATE_E2E_ENDPOINT_ADAPTER=${endpointAdapter}`
   );
-  console.table(
-    Array.from(sessions.values()).map((set: Set<string>) => ({
-      "#streams": set.size,
-    }))
-  );
-}, 30 * 1000);
-
-server.updateSettings(settings);
-
-const port = parseInt(process.env.PORT || "9080");
-server.listen(port, "0.0.0.0", () => {
-  console.log(`Server listening on 0.0.0.0:${port}`);
-});
+}

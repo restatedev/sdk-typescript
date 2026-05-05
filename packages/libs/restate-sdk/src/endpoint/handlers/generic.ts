@@ -469,12 +469,19 @@ class RestateInvokeResponse implements RestateResponse {
       // In this scenario, we close the coreVm, then flush and close
       const error = ensureError(e);
       this.coreVm.notify_error(error.message, error.message);
-      await flushAndClose(
-        this.coreVm,
-        this.vmLogger,
-        inputReader,
-        outputWriter
-      );
+      try {
+        await flushAndClose(
+          this.coreVm,
+          this.vmLogger,
+          inputReader,
+          outputWriter
+        );
+      } finally {
+        // Safety net: the abort listener should clean this up when the attempt
+        // ends, but process() owns the logger registration, so avoid leaking if
+        // an adapter ever fails to abort the attempt-completed signal.
+        destroyLogger(this.loggerId);
+      }
       return;
     }
 
@@ -494,12 +501,19 @@ class RestateInvokeResponse implements RestateResponse {
     } catch (e) {
       notifyError(e, ctx, this.handler.executionOptions.asTerminalError);
     } finally {
-      await flushAndClose(
-        this.coreVm,
-        this.vmLogger,
-        inputReader,
-        outputWriter
-      );
+      try {
+        await flushAndClose(
+          this.coreVm,
+          this.vmLogger,
+          inputReader,
+          outputWriter
+        );
+      } finally {
+        // Safety net: the abort listener should clean this up when the attempt
+        // ends, but process() owns the logger registration, so avoid leaking if
+        // an adapter ever fails to abort the attempt-completed signal.
+        destroyLogger(this.loggerId);
+      }
     }
   }
 }

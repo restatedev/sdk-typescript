@@ -1,0 +1,170 @@
+name: Integration Fetch
+
+# Controls when the workflow will run
+on:
+  pull_request:
+  push:
+    branches: [main, release-**]
+  schedule:
+    - cron: "0 */6 * * *" # Every 6 hours
+  workflow_dispatch:
+    inputs:
+      restateCommit:
+        description: "restate commit"
+        required: false
+        default: ""
+        type: string
+      restateImage:
+        description: "restate image, superseded by restate commit"
+        required: false
+        default: "ghcr.io/restatedev/restate:main"
+        type: string
+      serviceImage:
+        description: "service image, if provided it will skip building the image from sdk main branch"
+        required: false
+        default: ""
+        type: string
+
+jobs:
+  sdk-test-suite:
+    if: github.repository_owner == 'restatedev'
+    runs-on: warp-ubuntu-latest-x64-4x
+    name: Fetch integration test
+    permissions:
+      contents: read
+      issues: read
+      checks: write
+      pull-requests: write
+      actions: read
+    strategy:
+      matrix:
+        node-version: [20.x]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: restatedev/sdk-typescript
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          registry-url: "https://registry.npmjs.org"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.13.1
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+      # support importing oci-format restate.tar
+      - name: Set up Docker containerd snapshotter
+        uses: docker/setup-docker-action@v4
+        with:
+          version: "v28.5.2"
+          set-host: true
+          daemon-config: |
+            {
+              "features": {
+                "containerd-snapshotter": true
+              }
+            }
+
+      ### Download the Restate container image, if needed
+      # Setup restate snapshot if necessary
+      # Due to https://github.com/actions/upload-artifact/issues/53
+      # We must use download-artifact to get artifacts created during *this* workflow run, ie by workflow call
+      - name: Download restate snapshot from in-progress workflow
+        if: ${{ inputs.restateCommit != '' && github.event_name != 'workflow_dispatch' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: restate.tar
+      # In the workflow dispatch case where the artifact was created in a previous run, we can download as normal
+      - name: Download restate snapshot from completed workflow
+        if: ${{ inputs.restateCommit != '' && github.event_name == 'workflow_dispatch' }}
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          repo: restatedev/restate
+          workflow: ci.yml
+          commit: ${{ inputs.restateCommit }}
+          name: restate.tar
+      - name: Install restate snapshot
+        if: ${{ inputs.restateCommit != '' }}
+        run: |
+          output=$(docker load --input restate.tar | head -n 1)
+          docker tag "${output#*: }" "localhost/restatedev/restate-commit-download:latest"
+          docker image ls -a
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: |
+            network=host
+
+      # Pre-emptively pull the test-services image, to avoid affecting execution time
+      - name: Pull test services image
+        if: ${{ inputs.serviceImage != '' }}
+        shell: bash
+        run: docker pull ${{ inputs.serviceImage }}
+
+      - name: Build Typescript test-services image
+        if: ${{ inputs.serviceImage == '' }}
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: "packages/tests/restate-e2e-services/Dockerfile"
+          push: false
+          load: true
+          tags: restatedev/typescript-test-services
+          cache-from: type=gha,url=http://127.0.0.1:49160/,version=1,scope=${{ github.workflow }}
+          cache-to: type=gha,url=http://127.0.0.1:49160/,mode=max,version=1,scope=${{ github.workflow }}
+
+      - name: Prepare fetch service container environment
+        id: service-env
+        shell: bash
+        run: |
+          env_file=".service-container-fetch.env"
+          cp packages/tests/restate-e2e-services/.env "$env_file"
+          printf "\n" >> "$env_file"
+          printf "RESTATE_E2E_ENDPOINT_ADAPTER=fetch\n" >> "$env_file"
+          printf "SERVICES=MemoryLeakProbe\n" >> "$env_file"
+          echo "path=$env_file" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "21"
+
+      - name: Download test tool
+        shell: bash
+        run: wget --no-verbose https://github.com/restatedev/sdk-test-suite/releases/download/v4.1/restate-sdk-test-suite.jar
+
+      - name: Run test tool
+        env:
+          RESTATE_CONTAINER_IMAGE: ${{ inputs.restateCommit != '' && 'localhost/restatedev/restate-commit-download:latest' || (inputs.restateImage != '' && inputs.restateImage || 'ghcr.io/restatedev/restate:main') }}
+        shell: bash
+        run: |
+          java -jar restate-sdk-test-suite.jar run \
+            --exclusions-file=packages/tests/restate-e2e-services/exclusions.yaml \
+            --service-container-env-file=${{ steps.service-env.outputs.path }} \
+            --custom-tests-file=packages/tests/restate-e2e-services/custom_tests_fetch.yaml \
+            --test-suite=default \
+            --test-name=Custom \
+            --report-dir=test-report \
+            ${{ inputs.serviceImage != '' && inputs.serviceImage || 'restatedev/typescript-test-services' }}
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() }}
+        with:
+          name: sdk-typescript-fetch-integration-test-report
+          path: test-report
+
+      - name: Publish Test Results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: ${{ always() }}
+        with:
+          files: |
+            test-report/*/*.xml

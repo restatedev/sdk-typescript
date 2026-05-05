@@ -39,13 +39,24 @@ export function fetcher(handler: RestateHandler) {
       const outputWriter = transformStream.writable.getWriter();
 
       const { writeHead, head } = captureHead();
+      // Request.signal is not portable as an attempt-completed signal. Bun,
+      // Hono's Node adapter, Cloudflare Workers/Miniflare, and Vercel/Next do
+      // not abort it after a successful response; Deno does, but that is
+      // runtime-specific. Own the signal and abort it when processing finishes.
+      const abortController = new AbortController();
+      const abort = () => abortController.abort();
+      if (event.signal.aborted) {
+        abort();
+      } else {
+        event.signal.addEventListener("abort", abort, { once: true });
+      }
 
       response
         .process({
           inputReader,
           outputWriter,
           writeHead,
-          abortSignal: event.signal,
+          abortSignal: abortController.signal,
         })
         .catch((e) => {
           // Responses handle their own errors before rejecting; anything
@@ -58,6 +69,10 @@ export function fetcher(handler: RestateHandler) {
               headers
             ) ?? handler.endpoint.rlog;
           logger.error("Unexpected error: " + (error.stack ?? error.message));
+        })
+        .finally(() => {
+          event.signal.removeEventListener("abort", abort);
+          abort();
         });
 
       return head.then(

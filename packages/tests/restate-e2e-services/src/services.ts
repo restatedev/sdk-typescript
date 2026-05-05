@@ -8,60 +8,50 @@
 // https://github.com/restatedev/e2e/blob/main/LICENSE
 
 import type {
-  RestateEndpoint,
   ServiceDefinition,
   VirtualObjectDefinition,
   WorkflowDefinition,
 } from "@restatedev/restate-sdk";
 
-export type IComponent = {
-  fqdn: string;
-  binder: (endpoint: RestateEndpoint) => void;
-};
+export type ComponentDefinition =
+  | ServiceDefinition<string, unknown>
+  | VirtualObjectDefinition<string, unknown>
+  | WorkflowDefinition<string, unknown>;
 
 export class ComponentRegistry {
-  constructor(readonly components: Map<string, IComponent> = new Map()) {}
+  constructor(
+    readonly components: Map<string, ComponentDefinition> = new Map()
+  ) {}
 
-  add(c: IComponent) {
-    this.components.set(c.fqdn, c);
+  add(c: ComponentDefinition) {
+    this.components.set(c.name, c);
   }
 
   addObject(o: VirtualObjectDefinition<string, unknown>) {
-    this.add({
-      fqdn: o.name,
-      binder: (b) => b.bind(o),
-    });
+    this.add(o);
   }
 
   addService(s: ServiceDefinition<string, unknown>) {
-    this.add({
-      fqdn: s.name,
-      binder: (b) => b.bind(s),
-    });
+    this.add(s);
   }
 
   addWorkflow(s: WorkflowDefinition<string, unknown>) {
-    this.add({
-      fqdn: s.name,
-      binder: (b) => b.bind(s),
-    });
+    this.add(s);
   }
 
-  registerAll(e: RestateEndpoint) {
-    this.components.forEach((svc) => {
-      svc.binder(e);
-    });
-  }
+  definitions(fqdns?: Set<string>): ComponentDefinition[] {
+    if (!fqdns) {
+      return Array.from(this.components.values());
+    }
 
-  register(fqdns: Set<string>, e: RestateEndpoint) {
-    fqdns.forEach((fqdn) => {
+    return Array.from(fqdns, (fqdn) => {
       const c = this.components.get(fqdn);
       if (!c) {
         throw new Error(
           `unknown fqdn ${fqdn}. Did you remember to import the test at app.ts?`
         );
       }
-      c.binder(e);
+      return c;
     });
   }
 }

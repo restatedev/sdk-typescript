@@ -15,7 +15,7 @@ export default [
       "**/next-env.d.ts",
       "**/sdk_shared_core_wasm_bindings.js",
       "**/*.mjs",
-      "**/test/**",
+      "**/test/**/*",
       "**/api-extractor.json",
       "**/src/generated/**",
       "**/cdk.out/**",
