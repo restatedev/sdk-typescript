@@ -10,16 +10,14 @@
  */
 
 // Counter — virtual object exercising basic state I/O.
-// Written in the free-standing style: handler bodies call `state()` /
-// `sharedState()` directly, no `ops` parameter.
+// Written in the free-standing style: handler bodies call `state()`
+// directly, no `ops` parameter.
 // Mirrors sdk-ruby/test-services/services/counter.rb.
 
 import * as restate from "@restatedev/restate-sdk";
-import { gen, execute, state, sharedState } from "@restatedev/restate-sdk-gen";
+import { gen, execute, state } from "@restatedev/restate-sdk-gen";
 
-type CounterState = {
-  counter: number;
-};
+const counterState = state({ counter: { default: 0 } });
 
 export const counterObject = restate.object({
   name: "Counter",
@@ -28,7 +26,7 @@ export const counterObject = restate.object({
       execute(
         ctx,
         gen(function* () {
-          state<CounterState>().clear("counter");
+          counterState.counter.clear();
         })
       ),
 
@@ -36,7 +34,7 @@ export const counterObject = restate.object({
       execute(
         ctx,
         gen(function* () {
-          return (yield* sharedState<CounterState>().get("counter")) ?? 0;
+          return yield* counterState.counter.get();
         })
       ),
 
@@ -47,10 +45,9 @@ export const counterObject = restate.object({
       execute(
         ctx,
         gen(function* () {
-          const s = state<CounterState>();
-          const oldValue = (yield* s.get("counter")) ?? 0;
+          const oldValue: number = yield* counterState.counter.get();
           const newValue = oldValue + addend;
-          s.set("counter", newValue);
+          counterState.counter.set(newValue);
           return { oldValue, newValue };
         })
       ),
@@ -62,9 +59,8 @@ export const counterObject = restate.object({
       execute(
         ctx,
         gen(function* () {
-          const s = state<CounterState>();
-          const oldValue = (yield* s.get("counter")) ?? 0;
-          s.set("counter", oldValue + addend);
+          const oldValue: number = yield* counterState.counter.get();
+          counterState.counter.set(oldValue + addend);
           throw new restate.TerminalError(ctx.key);
         })
       ),

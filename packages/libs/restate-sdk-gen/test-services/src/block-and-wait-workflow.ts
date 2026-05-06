@@ -14,15 +14,9 @@
 // Mirrors sdk-ruby/test-services/services/block_and_wait_workflow.rb.
 
 import * as restate from "@restatedev/restate-sdk";
-import {
-  gen,
-  execute,
-  state,
-  sharedState,
-  workflowPromise,
-} from "@restatedev/restate-sdk-gen";
+import { gen, execute, state, workflowPromise } from "@restatedev/restate-sdk-gen";
 
-type WfState = { "my-state": string };
+const wfState = state<{ "my-state": string }>();
 
 export const blockAndWaitWorkflow = restate.workflow({
   name: "BlockAndWaitWorkflow",
@@ -31,7 +25,7 @@ export const blockAndWaitWorkflow = restate.workflow({
       execute(
         ctx,
         gen(function* () {
-          state<WfState>().set("my-state", input);
+          wfState["my-state"].set(input);
 
           const output = workflowPromise<string>("durable-promise");
           const value = yield* output.get();
@@ -63,7 +57,7 @@ export const blockAndWaitWorkflow = restate.workflow({
       execute(
         ctx,
         gen(function* () {
-          return (yield* sharedState<WfState>().get("my-state")) ?? null;
+          return (yield* wfState["my-state"].get()) ?? null;
         })
       ),
   },

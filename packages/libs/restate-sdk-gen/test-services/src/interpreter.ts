@@ -19,8 +19,9 @@ import {
   type Future,
   gen,
   execute,
-  state,
-  sharedState,
+  getState,
+  setState,
+  clearState,
   awakeable,
   resolveAwakeable,
   rejectAwakeable,
@@ -220,17 +221,17 @@ function makeInterpretHandler(layer: 0 | 1 | 2) {
         ): Generator<unknown, void, unknown> {
           switch (cmd.kind) {
             case SET_STATE:
-              state().set(`key-${cmd.key}`, `value-${cmd.key}`);
+              setState(`key-${cmd.key}`, `value-${cmd.key}`);
               return;
             case GET_STATE:
-              yield* state().get<string>(`key-${cmd.key}`);
+              yield* getState<string>(`key-${cmd.key}`);
               return;
             case CLEAR_STATE:
-              state().clear(`key-${cmd.key}`);
+              clearState(`key-${cmd.key}`);
               return;
             case INCREMENT_STATE_COUNTER: {
-              const c = (yield* state().get<number>("counter")) ?? 0;
-              state().set("counter", c + 1);
+              const c = (yield* getState<number>("counter")) ?? 0;
+              setState("counter", c + 1);
               return;
             }
             case SLEEP:
@@ -404,7 +405,7 @@ const sharedCounter = restate.handlers.object.shared(
     execute(
       ctx,
       gen(function* () {
-        return (yield* sharedState().get<number>("counter")) ?? 0;
+        return (yield* getState<number>("counter")) ?? 0;
       })
     )
 );

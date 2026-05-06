@@ -33,11 +33,18 @@ import {
 } from "./operation.js";
 import type { Scheduler } from "./scheduler.js";
 import {
-  type State,
-  type SharedState,
-  type TypedState,
-  type UntypedState,
-  makeState,
+  type AnyKeySpec,
+  type StateKeyAccessor,
+  type StateAccessors,
+  type UntypedStateAccessors,
+  makeStateFromConfig,
+  makeStateFromShape,
+  makeKeyAccessorFromSpec,
+  makeGetState,
+  makeSetState,
+  makeClearState,
+  makeClearAllState,
+  makeGetAllStateKeys,
 } from "./state.js";
 import {
   type FluentClient,
@@ -438,45 +445,93 @@ export class RestateOperations {
   // ---- state ----
 
   /**
-   * Per-invocation read-write key-value store. Use from a handler whose
-   * underlying context is ObjectContext or WorkflowContext.
+   * Per-key typed state accessor.
    *
-   * The optional `TState` generic gives keyof-checked names and per-key
-   * value types:
+   * Pass a config object to get per-key accessors with optional defaults
+   * and serde. Keys with a default return `Future<T>` (never null); others
+   * return `Future<T | null>`.
    *
-   *   ops.state<{count: number; user: User}>()
-   *     // state.get("count") → Future<number | null>
+   *   const s = ops.state({ count: { default: 0 }, label: {} });
+   *   s.count.get()   // Future<number>
+   *   s.label.get()   // Future<unknown | null>
+   *   s.count.set(1)
+   *   s.count.clear()
    *
-   * Without it, names are `string` and values are inferred per call:
+   * Pass an explicit shape generic with no config to get per-key accessors
+   * where all keys return nullable:
    *
-   *   ops.state()
-   *     // state.get<number>("count") → Future<number | null>
-   *
-   * Calling write methods from a shared (read-only) context throws at
-   * runtime — for shared handlers, use `sharedState()` below to get a
-   * narrower type that drops the write methods.
+   *   const s = ops.state<{ count: number; label: string }>();
+   *   s.count.get()   // Future<number | null>
    */
-  state<TState extends TypedState = UntypedState>(): State<TState> {
-    return makeState<TState>(
+  state<TConfig extends Record<string, AnyKeySpec>>(
+    config: TConfig
+  ): StateAccessors<TConfig>;
+  state<
+    TShape extends Record<string, unknown>,
+  >(): UntypedStateAccessors<TShape>;
+  state<
+    TConfig extends Record<string, AnyKeySpec>,
+    TShape extends Record<string, unknown>,
+  >(config?: TConfig): StateAccessors<TConfig> | UntypedStateAccessors<TShape> {
+    if (config !== undefined) {
+      return makeStateFromConfig(
+        config,
+        this.ctx as unknown as restate.ObjectContext,
+        this.sched,
+        adapt
+      );
+    }
+    return makeStateFromShape<TShape>(
       this.ctx as unknown as restate.ObjectContext,
       this.sched,
       adapt
     );
   }
 
-  /**
-   * Per-invocation read-only key-value store. Use from a handler whose
-   * underlying context is ObjectSharedContext or WorkflowSharedContext.
-   *
-   * Same `TState` generic as `state()`. Returns the read-only subset
-   * (`get`, `keys`); attempting to call writes is a type error.
-   */
-  sharedState<TState extends TypedState = UntypedState>(): SharedState<TState> {
-    return makeState<TState>(
-      this.ctx as unknown as restate.ObjectSharedContext,
+  // Build a single key accessor from an optional spec — used by the lazy
+  // Proxy in free.ts so each method call creates exactly one accessor.
+  stateKey<T>(name: string, spec?: AnyKeySpec): StateKeyAccessor<T, boolean> {
+    return makeKeyAccessorFromSpec<T>(
+      name,
+      spec,
+      this.ctx as unknown as restate.ObjectContext,
       this.sched,
       adapt
     );
+  }
+
+  // ---- flat untyped state operations ----
+
+  getState<T>(name: string, serde?: restate.Serde<T>): Future<T | null> {
+    return makeGetState(
+      this.ctx as unknown as restate.ObjectContext,
+      this.sched,
+      adapt
+    )(name, serde);
+  }
+
+  setState<T>(name: string, value: T, serde?: restate.Serde<T>): void {
+    makeSetState(this.ctx as unknown as restate.ObjectContext)(
+      name,
+      value,
+      serde
+    );
+  }
+
+  clearState(name: string): void {
+    makeClearState(this.ctx as unknown as restate.ObjectContext)(name);
+  }
+
+  clearAllState(): void {
+    makeClearAllState(this.ctx as unknown as restate.ObjectContext)();
+  }
+
+  getAllStateKeys(): Future<string[]> {
+    return makeGetAllStateKeys(
+      this.ctx as unknown as restate.ObjectContext,
+      this.sched,
+      adapt
+    )();
   }
 
   // ---- combinators ----

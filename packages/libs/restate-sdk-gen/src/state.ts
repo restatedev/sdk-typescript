@@ -9,139 +9,297 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-// State<TState>
+// State API
 // =============================================================================
 //
-// Wrapper around Restate's KeyValueStore — the per-key state attached
-// to a virtual object or workflow invocation. Available via
-// `ops.state()` (read-write) or `ops.sharedState()` (read-only) from
-// within `execute()`.
+// Two surfaces:
 //
-// Read-only vs read-write is a real distinction:
-//   - ObjectContext / WorkflowContext expose the full KeyValueStore
-//     (get + keys + set + clear + clearAll).
-//   - ObjectSharedContext / WorkflowSharedContext expose only the
-//     reads. Calling `set` etc. on the underlying context throws at
-//     runtime; we surface that at the type level by giving shared
-//     handlers a narrower interface.
+//   1. Per-key typed accessor — `state(config)` / `state<TShape>()`
+//      Returns an object whose properties are per-key accessor objects,
+//      each with `.get()`, `.set()`, `.clear()`. The return type of `.get()`
+//      is baked in at accessor-creation time, so TypeScript evaluates it
+//      eagerly rather than deferring a conditional over a free type variable.
 //
-// Both interfaces are generic over `TState extends TypedState`:
-//   - Default `UntypedState` keeps the loose `(name: string)` shape
-//     and a per-call value type — same as the SDK's untyped mode.
-//   - Pass an explicit shape to get keyof-checked names and per-key
-//     value types: `ops.state<{count: number; user: User}>()` then
-//     `state.get("count")` infers `Future<number | null>`.
+//   2. Flat untyped functions — `getState / setState / clearState /
+//      clearAllState / getAllStateKeys`. Used internally and re-exported
+//      from free.ts for call sites that don't need per-key typing (e.g.
+//      dynamic key names).
+//
+// Read-only vs read-write is a runtime distinction (ObjectSharedContext vs
+// ObjectContext). The type system does not enforce it here — callers in a
+// shared context get the same accessor shape; the SDK throws at runtime if
+// they call writes.
 
 import type * as restate from "@restatedev/restate-sdk";
 import type { Awaitable } from "./awaitable.js";
 import type { Future } from "./future.js";
 import type { Scheduler } from "./scheduler.js";
 
-/**
- * Marker types matching the SDK's typed-state convention. Pass a
- * concrete shape (e.g. `{count: number; name: string}`) to enable
- * keyof-checked names; leave the default to keep names as `string`
- * with a per-call value generic.
- */
-export type TypedState = Record<string, unknown>;
-export type UntypedState = { _: never };
+// ---------------------------------------------------------------------------
+// Public types
+// ---------------------------------------------------------------------------
 
 /**
- * Read-only state, for handlers running under an
- * ObjectSharedContext or WorkflowSharedContext.
- */
-export interface SharedState<TState extends TypedState = UntypedState> {
-  /** Read a state value. Returns null if the key isn't set. */
-  get<TValue, TKey extends keyof TState = string>(
-    name: TState extends UntypedState ? string : TKey,
-    serde?: restate.Serde<TState extends UntypedState ? TValue : TState[TKey]>
-  ): Future<(TState extends UntypedState ? TValue : TState[TKey]) | null>;
-
-  /** List all currently-known state keys. */
-  keys(): Future<string[]>;
-}
-
-/**
- * Read-write state, for handlers running under an ObjectContext or
- * WorkflowContext. Extends SharedState with mutation methods.
+ * Marker for a key that is typed but has no default. Use when you want
+ * keyof-checked names and per-key value types but the key should return
+ * `Future<T | null>` (no default substitution).
  *
- * Writes are synchronous in the SDK — the journal entry is recorded
- * immediately, no yield required — so `set` / `clear` / `clearAll`
- * return `void` rather than `Operation<void>`.
+ * Create with `typed<T>()` and include in the state config:
+ *
+ *   state({ count: { default: 0 }, label: typed<string>() })
+ *   // count.get() → Future<number>
+ *   // label.get() → Future<string | null>
  */
-export interface State<
-  TState extends TypedState = UntypedState,
-> extends SharedState<TState> {
-  /** Write a state value. Sync; journal entry recorded immediately. */
-  set<TValue, TKey extends keyof TState = string>(
-    name: TState extends UntypedState ? string : TKey,
-    value: TState extends UntypedState ? TValue : TState[TKey],
-    serde?: restate.Serde<TState extends UntypedState ? TValue : TState[TKey]>
-  ): void;
+export type TypedNoDefault<T> = { readonly _noDefaultType: T };
 
-  /** Clear a single key. */
-  clear<TKey extends keyof TState>(
-    name: TState extends UntypedState ? string : TKey
-  ): void;
-
-  /** Clear all state for this invocation. */
-  clearAll(): void;
+/** Create a typed-but-no-default marker for use in a state config. */
+export function typed<T>(): TypedNoDefault<T> {
+  return {} as TypedNoDefault<T>;
 }
 
-// Loose type covering every Restate context flavor that exposes any
-// state methods. We only call KeyValueStore methods on this; the rest
-// of Context is unused here.
+/** Per-key configuration passed to state(). */
+export type StateKeySpec<T = unknown> = {
+  /**
+   * Default value (or factory) substituted when the store returns null.
+   * Use a factory `() => value` for mutable defaults (e.g. arrays/objects)
+   * so each invocation gets a fresh copy.
+   */
+  default?: T | (() => T);
+  /** Custom serde for this key. */
+  serde?: restate.Serde<T>;
+};
+
+/** Any valid per-key spec: either a StateKeySpec or a TypedNoDefault marker. */
+export type AnyKeySpec = StateKeySpec | TypedNoDefault<unknown>;
+
+/** Per-key read-write accessor returned by state(). */
+export type StateKeyAccessor<T, HasDefault extends boolean> = {
+  /**
+   * Read the key. Returns the stored value, or the default if set, or null.
+   * When the key has a default, the return type is `Future<T>` (never null).
+   */
+  get(serde?: restate.Serde<T>): Future<HasDefault extends true ? T : T | null>;
+  /** Write the key. Synchronous; journal entry recorded immediately. */
+  set(value: T, serde?: restate.Serde<T>): void;
+  /** Delete the key. */
+  clear(): void;
+};
+
+// Extract value type from an AnyKeySpec.
+// TypedNoDefault<T> → T; factory default → T; static default → T; serde → T; else unknown.
+type SpecValue<S extends AnyKeySpec> =
+  S extends TypedNoDefault<infer T>
+    ? T
+    : S extends { default: (...args: never[]) => infer D }
+      ? D
+      : S extends { default: infer D }
+        ? D
+        : S extends { serde: restate.Serde<infer D> }
+          ? D
+          : unknown;
+
+// Whether a spec carries a runtime default (TypedNoDefault never does).
+type SpecHasDefault<S extends AnyKeySpec> =
+  S extends TypedNoDefault<unknown>
+    ? false
+    : S extends { default: unknown }
+      ? true
+      : false;
+
+/** Typed accessor map produced by state(config). */
+export type StateAccessors<TConfig extends Record<string, AnyKeySpec>> = {
+  [K in keyof TConfig]: StateKeyAccessor<
+    SpecValue<TConfig[K]>,
+    SpecHasDefault<TConfig[K]>
+  >;
+};
+
+/** Accessor map produced by state<TShape>() — all keys nullable. */
+export type UntypedStateAccessors<TShape extends Record<string, unknown>> = {
+  [K in keyof TShape]: StateKeyAccessor<TShape[K], false>;
+};
+
+// ---------------------------------------------------------------------------
+// Context type
+// ---------------------------------------------------------------------------
+
 type StateContext =
   | restate.ObjectContext
   | restate.ObjectSharedContext
   | restate.WorkflowContext
   | restate.WorkflowSharedContext;
 
+// ---------------------------------------------------------------------------
+// Runtime implementation
+// ---------------------------------------------------------------------------
+
 /**
- * Build a `State<TState>` over the given context. The runtime delegates
- * straight to `ctx.get` / `ctx.set` / etc.; the TState generic is purely
- * a TS-level convenience and gets erased at runtime.
- *
- * For shared (read-only) contexts, the returned State has the same
- * runtime shape but the caller should use the `SharedState<TState>`
- * type to drop the write methods. The convenience method
- * `RestateOperations.sharedState()` does this cast.
+ * Build one per-key accessor. `rawDefault` is either a static value or a
+ * factory function — we normalize it to a factory (or undefined) here so
+ * each `.get()` call that returns null produces a fresh default (important
+ * for mutable defaults like arrays/objects).
  */
-export function makeState<TState extends TypedState = UntypedState>(
+function makeKeyAccessor<T>(
+  name: string,
   ctx: StateContext,
   sched: Scheduler,
-  adapt: <T>(p: restate.RestatePromise<T>) => Awaitable<T>
-): State<TState> {
-  // Cast for write methods: the typed shared variants don't have them
-  // on the type, but the runtime object does carry them in writable
-  // contexts. Calling write() from a shared handler throws naturally.
+  adapt: <U>(p: restate.RestatePromise<U>) => Awaitable<U>,
+  rawDefault: T | (() => T) | undefined,
+  specSerde: restate.Serde<T> | undefined
+): StateKeyAccessor<T, boolean> {
   const writeCtx = ctx as restate.ObjectContext;
+  // Normalize default to a factory (or undefined when no default).
+  const defaultFactory: (() => T) | undefined =
+    rawDefault === undefined
+      ? undefined
+      : typeof rawDefault === "function"
+        ? (rawDefault as () => T)
+        : () => rawDefault as T;
 
-  // Internally we use the loose UntypedState signatures and cast the
-  // resulting object to the narrower State<TState>. Runtime is identical;
-  // the conditional types only matter at the call site.
-  const impl: State<UntypedState> = {
-    get<T>(name: string, serde?: restate.Serde<T>): Future<T | null> {
-      return sched.makeJournalFuture(
-        adapt(
-          ctx.get<T>(name, serde) as unknown as restate.RestatePromise<T | null>
-        )
+  return {
+    get(callSerde?: restate.Serde<T>): Future<T | null> {
+      const serde = callSerde ?? specSerde;
+      const p = adapt(
+        ctx.get<T>(name, serde) as unknown as restate.RestatePromise<T | null>
       );
+      if (defaultFactory !== undefined) {
+        const factory = defaultFactory;
+        return sched.makeJournalFuture(
+          p.map((v, e) => {
+            if (e !== undefined) throw e;
+            return (v !== null ? v : factory()) as T | null;
+          })
+        );
+      }
+      return sched.makeJournalFuture(p);
     },
-    keys(): Future<string[]> {
-      return sched.makeJournalFuture(
-        adapt(ctx.stateKeys() as unknown as restate.RestatePromise<string[]>)
-      );
+    set(value: T, callSerde?: restate.Serde<T>): void {
+      writeCtx.set(name, value, callSerde ?? specSerde);
     },
-    set<T>(name: string, value: T, serde?: restate.Serde<T>): void {
-      writeCtx.set(name, value, serde);
-    },
-    clear(name: string): void {
+    clear(): void {
       writeCtx.clear(name);
     },
-    clearAll(): void {
-      writeCtx.clearAll();
-    },
   };
-  return impl as unknown as State<TState>;
+}
+
+/**
+ * Build a typed accessor map from a config object.
+ * Each key in the config gets its own accessor with the configured default
+ * and serde.
+ */
+export function makeStateFromConfig<TConfig extends Record<string, AnyKeySpec>>(
+  config: TConfig,
+  ctx: StateContext,
+  sched: Scheduler,
+  adapt: <U>(p: restate.RestatePromise<U>) => Awaitable<U>
+): StateAccessors<TConfig> {
+  const result: Record<string, StateKeyAccessor<unknown, boolean>> = {};
+  for (const key of Object.keys(config)) {
+    const spec = config[key] ?? {};
+    // TypedNoDefault markers have no default or serde; treat as plain key.
+    const s = "_noDefaultType" in spec ? {} : (spec as StateKeySpec);
+    result[key] = makeKeyAccessor(
+      key,
+      ctx,
+      sched,
+      adapt,
+      s.default,
+      s.serde as restate.Serde<unknown> | undefined
+    );
+  }
+  return result as unknown as StateAccessors<TConfig>;
+}
+
+/**
+ * Build a single per-key accessor, given an optional spec.
+ * Used by the lazy free-standing state() Proxy so each method call
+ * creates exactly one accessor rather than the full map.
+ */
+export function makeKeyAccessorFromSpec<T>(
+  name: string,
+  spec: AnyKeySpec | undefined,
+  ctx: StateContext,
+  sched: Scheduler,
+  adapt: <U>(p: restate.RestatePromise<U>) => Awaitable<U>
+): StateKeyAccessor<T, boolean> {
+  // TypedNoDefault markers carry no runtime info — treat as plain key.
+  const s =
+    spec && "_noDefaultType" in spec
+      ? {}
+      : (spec as StateKeySpec<T> | undefined);
+  return makeKeyAccessor(name, ctx, sched, adapt, s?.default, s?.serde);
+}
+
+/**
+ * Build an untyped accessor map for state<TShape>() calls (no config).
+ * Returns a Proxy that creates per-key accessors on demand — since TShape
+ * is erased at runtime we can't enumerate keys ahead of time.
+ */
+export function makeStateFromShape<TShape extends Record<string, unknown>>(
+  ctx: StateContext,
+  sched: Scheduler,
+  adapt: <U>(p: restate.RestatePromise<U>) => Awaitable<U>
+): UntypedStateAccessors<TShape> {
+  const cache: Record<string, StateKeyAccessor<unknown, false>> = {};
+  return new Proxy({} as UntypedStateAccessors<TShape>, {
+    get(_target, prop: string) {
+      if (!(prop in cache)) {
+        cache[prop] = makeKeyAccessor(
+          prop,
+          ctx,
+          sched,
+          adapt,
+          undefined,
+          undefined
+        );
+      }
+      return cache[prop];
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Flat untyped state operations (used by RestateOperations directly)
+// ---------------------------------------------------------------------------
+
+export function makeGetState(
+  ctx: StateContext,
+  sched: Scheduler,
+  adapt: <U>(p: restate.RestatePromise<U>) => Awaitable<U>
+): <T>(name: string, serde?: restate.Serde<T>) => Future<T | null> {
+  return <T>(name: string, serde?: restate.Serde<T>) =>
+    sched.makeJournalFuture(
+      adapt(
+        ctx.get<T>(name, serde) as unknown as restate.RestatePromise<T | null>
+      )
+    );
+}
+
+export function makeSetState(
+  ctx: StateContext
+): <T>(name: string, value: T, serde?: restate.Serde<T>) => void {
+  const writeCtx = ctx as restate.ObjectContext;
+  return <T>(name: string, value: T, serde?: restate.Serde<T>) =>
+    writeCtx.set(name, value, serde);
+}
+
+export function makeClearState(ctx: StateContext): (name: string) => void {
+  const writeCtx = ctx as restate.ObjectContext;
+  return (name: string) => writeCtx.clear(name);
+}
+
+export function makeClearAllState(ctx: StateContext): () => void {
+  const writeCtx = ctx as restate.ObjectContext;
+  return () => writeCtx.clearAll();
+}
+
+export function makeGetAllStateKeys(
+  ctx: StateContext,
+  sched: Scheduler,
+  adapt: <U>(p: restate.RestatePromise<U>) => Awaitable<U>
+): () => Future<string[]> {
+  return () =>
+    sched.makeJournalFuture(
+      adapt(ctx.stateKeys() as unknown as restate.RestatePromise<string[]>)
+    );
 }

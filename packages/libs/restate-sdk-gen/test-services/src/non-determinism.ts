@@ -18,7 +18,7 @@ import * as restate from "@restatedev/restate-sdk";
 import {
   gen,
   execute,
-  state,
+  setState,
   sleep,
   objectClient,
   objectSendClient,
@@ -45,9 +45,9 @@ export const nonDeterministic = restate.object({
         ctx,
         gen(function* () {
           if (doLeftAction(ctx.key)) {
-            state().set("a", "my-state");
+            setState("a", "my-state");
           } else {
-            state().set("b", "my-state");
+            setState("b", "my-state");
           }
           yield* sleep(100);
           objectSendClient(CounterApi, ctx.key).add(1);

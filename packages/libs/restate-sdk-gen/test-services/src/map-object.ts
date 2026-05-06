@@ -13,7 +13,14 @@
 // Mirrors sdk-ruby/test-services/services/map_object.rb.
 
 import * as restate from "@restatedev/restate-sdk";
-import { gen, execute, state, sharedState } from "@restatedev/restate-sdk-gen";
+import {
+  gen,
+  execute,
+  getState,
+  setState,
+  clearState,
+  getAllStateKeys,
+} from "@restatedev/restate-sdk-gen";
 
 type Entry = { key: string; value: string };
 
@@ -24,7 +31,7 @@ export const mapObject = restate.object({
       execute(
         ctx,
         gen(function* () {
-          state().set(entry.key, entry.value);
+          setState(entry.key, entry.value);
         })
       ),
 
@@ -35,8 +42,7 @@ export const mapObject = restate.object({
       execute(
         ctx,
         gen(function* () {
-          const v = yield* sharedState().get<string>(key);
-          return v ?? "";
+          return (yield* getState<string>(key)) ?? "";
         })
       ),
 
@@ -44,13 +50,12 @@ export const mapObject = restate.object({
       execute(
         ctx,
         gen(function* () {
-          const s = state();
-          const keys = yield* s.keys();
+          const keys = yield* getAllStateKeys();
           const entries: Entry[] = [];
           for (const key of keys) {
-            const value = (yield* s.get<string>(key)) ?? "";
+            const value = (yield* getState<string>(key)) ?? "";
             entries.push({ key, value });
-            s.clear(key);
+            clearState(key);
           }
           return entries;
         })

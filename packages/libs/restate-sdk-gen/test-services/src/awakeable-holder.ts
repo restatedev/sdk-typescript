@@ -15,17 +15,9 @@
 // Mirrors sdk-ruby/test-services/services/awakeable_holder.rb.
 
 import * as restate from "@restatedev/restate-sdk";
-import {
-  gen,
-  execute,
-  state,
-  sharedState,
-  resolveAwakeable,
-} from "@restatedev/restate-sdk-gen";
+import { gen, execute, state, resolveAwakeable } from "@restatedev/restate-sdk-gen";
 
-type HolderState = {
-  id: string;
-};
+const holderState = state<{ id: string }>();
 
 export const awakeableHolder = restate.object({
   name: "AwakeableHolder",
@@ -34,7 +26,7 @@ export const awakeableHolder = restate.object({
       execute(
         ctx,
         gen(function* () {
-          state<HolderState>().set("id", id);
+          holderState.id.set(id);
         })
       ),
 
@@ -42,8 +34,7 @@ export const awakeableHolder = restate.object({
       execute(
         ctx,
         gen(function* () {
-          const id = yield* sharedState<HolderState>().get("id");
-          return id != null;
+          return (yield* holderState.id.get()) != null;
         })
       ),
 
@@ -54,7 +45,7 @@ export const awakeableHolder = restate.object({
       execute(
         ctx,
         gen(function* () {
-          const id = yield* state<HolderState>().get("id");
+          const id = yield* holderState.id.get();
           if (id == null) {
             throw new restate.TerminalError("No awakeable is registered");
           }
