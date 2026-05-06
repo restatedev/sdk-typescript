@@ -14,7 +14,12 @@
 // Mirrors sdk-ruby/test-services/services/block_and_wait_workflow.rb.
 
 import * as restate from "@restatedev/restate-sdk";
-import { gen, execute, state, workflowPromise } from "@restatedev/restate-sdk-gen";
+import {
+  gen,
+  execute,
+  state,
+  workflowPromise,
+} from "@restatedev/restate-sdk-gen";
 
 const wfState = state<{ "my-state": string }>();
 

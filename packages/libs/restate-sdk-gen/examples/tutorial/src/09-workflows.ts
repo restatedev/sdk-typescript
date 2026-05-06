@@ -23,7 +23,12 @@
 // `resolve()` to unpark it.
 
 import * as restate from "@restatedev/restate-sdk";
-import { gen, execute, state, workflowPromise } from "@restatedev/restate-sdk-gen";
+import {
+  gen,
+  execute,
+  state,
+  workflowPromise,
+} from "@restatedev/restate-sdk-gen";
 
 const wfState = state<{ input: string }>();
 

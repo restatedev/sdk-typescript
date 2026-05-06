@@ -17,9 +17,7 @@ import {
   type FutureSettledResult,
   type FutureRejectedResult,
 } from "../src/index.js";
-import {
-  Scheduler,
-} from "../src/internal.js";
+import { Scheduler } from "../src/internal.js";
 import { deferred, resolved, rejected, testLib } from "./test-promise.js";
 
 describe("allSettled — journal sources (fast path)", () => {

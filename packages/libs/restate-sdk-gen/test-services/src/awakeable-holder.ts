@@ -15,7 +15,12 @@
 // Mirrors sdk-ruby/test-services/services/awakeable_holder.rb.
 
 import * as restate from "@restatedev/restate-sdk";
-import { gen, execute, state, resolveAwakeable } from "@restatedev/restate-sdk-gen";
+import {
+  gen,
+  execute,
+  state,
+  resolveAwakeable,
+} from "@restatedev/restate-sdk-gen";
 
 const holderState = state<{ id: string }>();
 

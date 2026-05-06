@@ -14,15 +14,8 @@
 // asking "what would break if X happened in order Y?"
 
 import { describe, expect, test } from "vitest";
-import {
-  gen,
-  spawn,
-  type Future,
-  type Operation,
-} from "../src/index.js";
-import {
-  Scheduler,
-} from "../src/internal.js";
+import { gen, spawn, type Future, type Operation } from "../src/index.js";
+import { Scheduler } from "../src/internal.js";
 import { deferred, resolved, testLib } from "./test-promise.js";
 
 describe("adversarial — spawn-and-immediately-await ordering", () => {

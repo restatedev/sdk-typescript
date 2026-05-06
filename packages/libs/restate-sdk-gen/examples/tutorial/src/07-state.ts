@@ -68,21 +68,6 @@ export const counter = restate.object({
         })
       ),
 
-    // Using state<TShape>() — all keys nullable.
-    addLegacy: async (
-      ctx: restate.ObjectContext,
-      addend: number
-    ): Promise<number> =>
-      execute(
-        ctx,
-        gen(function* () {
-          const oldValue = yield* counterState.counter.get() ?? 0; // Future<number | null>
-          const newValue = oldValue + addend;
-          counterState.counter.set(newValue);
-          return newValue;
-        })
-      ),
-
     reset: async (ctx: restate.ObjectContext): Promise<void> =>
       execute(
         ctx,
