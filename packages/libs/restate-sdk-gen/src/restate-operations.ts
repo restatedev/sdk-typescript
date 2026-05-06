@@ -316,7 +316,7 @@ export class RestateOperations {
   handlerRequest(): restate.Request & { key?: string } {
     const req = this.ctx.request();
     const key = (this.ctx as unknown as { key?: string }).key;
-    return key !== undefined ? Object.assign(req, { key }) : req;
+    return key !== undefined ? Object.create(req, { key: { value: key, enumerable: true } }) as restate.Request & { key: string } : req;
   }
 
   // ---- typed clients (call + send) backed by call()/send() ----
