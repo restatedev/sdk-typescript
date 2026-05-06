@@ -24,21 +24,23 @@
 
 import * as restate from "@restatedev/restate-sdk";
 import type { Awaitable } from "./awaitable.js";
-import type { Future, FutureValues, FutureSettledResult } from "./future.js";
+import type { Future, FutureSettledResult, FutureValues } from "./future.js";
 import type { Channel } from "./channel.js";
 import {
+  gen,
   type Operation,
+  select as selectOp,
   type SelectResult,
   spawn as spawnOp,
-  select as selectOp,
 } from "./operation.js";
 import type { Scheduler } from "./scheduler.js";
+import { Scheduler as SchedulerClass } from "./scheduler.js";
 import {
-  type State,
+  makeState,
   type SharedState,
+  type State,
   type TypedState,
   type UntypedState,
-  makeState,
 } from "./state.js";
 import {
   type GenClient,
@@ -52,11 +54,12 @@ import {
 } from "./durable-promise.js";
 import type { Descriptor, HandlerDescriptor } from "./define.js";
 import {
-  InvocationReferenceImpl,
   type InvocationReference,
+  InvocationReferenceImpl,
   type SignalReference,
 } from "./invocation-reference.js";
-import { gen } from "./operation.js";
+import { defaultLib } from "./default-lib.js";
+import { HandlerRequest } from "./free.js";
 
 // Adapt a real RestatePromise to our Awaitable interface. RestatePromise
 // already has `.map((v, e) => U)` and is thenable, so the adapter is a
@@ -315,22 +318,18 @@ export class RestateOperations {
    */
   handlerRequest(): HandlerRequest {
     const req = this.ctx.request();
-    let key: string | undefined;
-    try {
-      key = (this.ctx as unknown as { key?: string }).key;
-    } catch {
-      // Service handlers don't have a key — the getter throws for non-object contexts.
-      key = undefined;
-    }
+    const ctx = this.ctx;
     return {
       attemptHeaders: req.attemptHeaders,
       body: req.body,
       extraArgs: req.extraArgs,
       headers: req.headers,
       id: req.id,
-      key,
-      target: req.target
-    }
+      target: req.target,
+      get key(): string | undefined {
+        return (ctx as unknown as { key: string }).key;
+      },
+    };
   }
 
   // ---- typed clients (call + send) backed by call()/send() ----
@@ -602,10 +601,6 @@ export class RestateOperations {
 // =============================================================================
 // Production execute() entry point.
 // =============================================================================
-
-import { defaultLib } from "./default-lib.js";
-import { Scheduler as SchedulerClass } from "./scheduler.js";
-import {HandlerRequest} from "./free.js";
 
 /**
  * Run a generator-based workflow against a Restate context.
