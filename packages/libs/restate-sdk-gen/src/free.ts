@@ -81,12 +81,14 @@ export function currentOps(): RestateOperations {
  */
 // ---- context accessor ----
 
+export type HandlerRequest = Omit<restate.Request, "attemptCompletedSignal"> & { key?: string };
+
 /**
  * Returns the current invocation's request metadata plus the optional
  * virtual-object / workflow key. The `key` field is only present when
  * the handler belongs to an object or workflow.
  */
-export const handlerRequest = (): restate.Request & { key?: string } =>
+export const handlerRequest = (): HandlerRequest =>
   currentOps().handlerRequest();
 
 // ---- journal-backed Futures ----

@@ -313,14 +313,24 @@ export class RestateOperations {
    * virtual-object / workflow key. The `key` field is only present when
    * the handler belongs to an object or workflow.
    */
-  handlerRequest(): restate.Request & { key?: string } {
+  handlerRequest(): HandlerRequest {
     const req = this.ctx.request();
-    const key = (this.ctx as unknown as { key?: string }).key;
-    return key !== undefined
-      ? (Object.create(req, {
-          key: { value: key, enumerable: true },
-        }) as restate.Request & { key: string })
-      : req;
+    let key: string | undefined;
+    try {
+      key = (this.ctx as unknown as { key?: string }).key;
+    } catch {
+      // Service handlers don't have a key — the getter throws for non-object contexts.
+      key = undefined;
+    }
+    return {
+      attemptHeaders: req.attemptHeaders,
+      body: req.body,
+      extraArgs: req.extraArgs,
+      headers: req.headers,
+      id: req.id,
+      key,
+      target: req.target
+    }
   }
 
   // ---- typed clients (call + send) backed by call()/send() ----
@@ -595,6 +605,7 @@ export class RestateOperations {
 
 import { defaultLib } from "./default-lib.js";
 import { Scheduler as SchedulerClass } from "./scheduler.js";
+import {HandlerRequest} from "./free.js";
 
 /**
  * Run a generator-based workflow against a Restate context.
