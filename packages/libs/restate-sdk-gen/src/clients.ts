@@ -13,6 +13,12 @@ import * as restate from "@restatedev/restate-sdk";
 import type { Future } from "./future.js";
 import type { InvocationReference } from "./invocation-reference.js";
 import type { HandlerDescriptor, Descriptor } from "./define.js";
+import {
+  ClientCallOptions,
+  ClientSendOptions,
+  Opts,
+  SendOpts,
+} from "@restatedev/restate-sdk";
 
 /**
  * A Future<O> that also carries an `invocation` field — a Future<InvocationReference<O>>
@@ -26,8 +32,8 @@ export type ClientFuture<O> = Future<O> & {
 export type GenClient<H extends Record<string, HandlerDescriptor>> = {
   readonly [K in keyof H]: H[K] extends HandlerDescriptor<infer I, infer O>
     ? [I] extends [void]
-      ? () => ClientFuture<O>
-      : (input: I) => ClientFuture<O>
+      ? (opts?: Opts<I, O>) => ClientFuture<O>
+      : (input: I, opts?: Opts<I, O>) => ClientFuture<O>
     : never;
 };
 
@@ -35,8 +41,8 @@ export type GenClient<H extends Record<string, HandlerDescriptor>> = {
 export type GenSendClient<H extends Record<string, HandlerDescriptor>> = {
   readonly [K in keyof H]: H[K] extends HandlerDescriptor<infer I, infer O>
     ? [I] extends [void]
-      ? () => Future<InvocationReference<O>>
-      : (input: I) => Future<InvocationReference<O>>
+      ? (opts?: SendOpts<I>) => Future<InvocationReference<O>>
+      : (input: I, opts?: SendOpts<I>) => Future<InvocationReference<O>>
     : never;
 };
 
@@ -53,6 +59,9 @@ type GenericCallFn = (opts: {
   parameter: unknown;
   inputSerde: restate.Serde<unknown>;
   outputSerde: restate.Serde<unknown>;
+  idempotencyKey?: string;
+  headers?: Record<string, string>;
+  name?: string;
 }) => restate.RestatePromise<unknown>;
 
 type GenericSendFn = (opts: {
@@ -62,6 +71,9 @@ type GenericSendFn = (opts: {
   parameter: unknown;
   inputSerde: restate.Serde<unknown>;
   delay?: restate.Duration | number;
+  idempotencyKey?: string;
+  headers?: Record<string, string>;
+  name?: string;
 }) => restate.InvocationHandle;
 
 type ToFutureFn<T> = (p: restate.RestatePromise<T>) => Future<T>;
@@ -79,22 +91,24 @@ export function makeClient<H extends Record<string, HandlerDescriptor>>(
 ): GenClient<H> {
   return new Proxy({} as any, {
     get(_target, methodName: string) {
-      return (
-        input: unknown,
-        callOpts?: restate.ClientCallOptions<unknown, unknown>
-      ) => {
+      return (...args: unknown[]) => {
+        const { parameter, opts } = optsFromArgs(args);
+        const callOpts = opts as ClientCallOptions<unknown, unknown>;
         const desc = def._handlers[methodName];
         const outputSerde = callOpts?.output ?? desc?._outputSerde;
         const restatePromise = genericCall({
           service: def.name,
           key,
           method: String(methodName),
-          parameter: input,
+          parameter,
           inputSerde: (callOpts?.input ??
             desc?._inputSerde ??
             restate.serde.json) as restate.Serde<unknown>,
           outputSerde: (outputSerde ??
             restate.serde.json) as restate.Serde<unknown>,
+          idempotencyKey: callOpts?.idempotencyKey,
+          headers: callOpts?.headers,
+          name: callOpts?.name,
         });
         const resultFuture = toFuture(restatePromise);
         const invHandle =
@@ -117,23 +131,74 @@ export function makeSendClient<H extends Record<string, HandlerDescriptor>>(
 ): GenSendClient<H> {
   return new Proxy({} as any, {
     get(_target, methodName: string) {
-      return (
-        input: unknown,
-        sendOpts?: restate.ClientSendOptions<unknown>
-      ) => {
+      return (...args: unknown[]) => {
+        const { parameter, opts } = optsFromArgs(args);
+        const sendOpts = opts as ClientSendOptions<unknown>;
         const desc = def._handlers[methodName];
         const handle = genericSend({
           service: def.name,
           key,
           method: String(methodName),
-          parameter: input,
+          parameter,
           inputSerde: (sendOpts?.input ??
             desc?._inputSerde ??
             restate.serde.json) as restate.Serde<unknown>,
           delay: sendOpts?.delay,
+          idempotencyKey: sendOpts?.idempotencyKey,
+          headers: sendOpts?.headers,
+          name: sendOpts?.name,
         });
         return toRef(handle, desc?._outputSerde);
       };
     },
   }) as GenSendClient<H>;
+}
+
+function optsFromArgs(args: unknown[]): {
+  parameter?: unknown;
+  opts?:
+    | ClientCallOptions<unknown, unknown>
+    | ClientSendOptions<unknown>
+    | undefined;
+} {
+  let parameter: unknown;
+  let opts:
+    | ClientCallOptions<unknown, unknown>
+    | ClientSendOptions<unknown>
+    | undefined;
+  switch (args.length) {
+    case 0: {
+      break;
+    }
+    case 1: {
+      if (args[0] instanceof Opts) {
+        opts = args[0].getOpts();
+      } else if (args[0] instanceof SendOpts) {
+        opts = args[0].getOpts();
+      } else {
+        parameter = args[0];
+      }
+      break;
+    }
+    case 2: {
+      parameter = args[0];
+      if (args[1] instanceof Opts) {
+        opts = args[1].getOpts();
+      } else if (args[1] instanceof SendOpts) {
+        opts = args[1].getOpts();
+      } else {
+        throw new TypeError(
+          "The second argument must be either Opts or SendOpts"
+        );
+      }
+      break;
+    }
+    default: {
+      throw new TypeError("unexpected number of arguments");
+    }
+  }
+  return {
+    parameter,
+    opts,
+  };
 }
