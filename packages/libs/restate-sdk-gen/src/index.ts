@@ -71,6 +71,8 @@ export {
   type TypedNoDefault,
   type StateKeySpec,
   type AnyKeySpec,
+  type SpecValue,
+  type SpecHasDefault,
   type StateKeyAccessor,
   type StateAccessors,
   type UntypedStateAccessors,

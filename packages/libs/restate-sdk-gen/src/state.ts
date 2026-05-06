@@ -87,7 +87,7 @@ export type StateKeyAccessor<T, HasDefault extends boolean> = {
 
 // Extract value type from an AnyKeySpec.
 // TypedNoDefault<T> → T; factory default → T; static default → T; serde → T; else unknown.
-type SpecValue<S extends AnyKeySpec> =
+export type SpecValue<S extends AnyKeySpec> =
   S extends TypedNoDefault<infer T>
     ? T
     : S extends { default: (...args: never[]) => infer D }
@@ -99,7 +99,7 @@ type SpecValue<S extends AnyKeySpec> =
           : unknown;
 
 // Whether a spec carries a runtime default (TypedNoDefault never does).
-type SpecHasDefault<S extends AnyKeySpec> =
+export type SpecHasDefault<S extends AnyKeySpec> =
   S extends TypedNoDefault<unknown>
     ? false
     : S extends { default: unknown }
@@ -198,14 +198,7 @@ export function makeStateFromConfig<TConfig extends Record<string, AnyKeySpec>>(
     const spec = config[key] ?? {};
     // TypedNoDefault markers have no default or serde; treat as plain key.
     const s: StateKeySpec = "_noDefaultType" in spec ? {} : spec;
-    result[key] = makeKeyAccessor(
-      key,
-      ctx,
-      sched,
-      adapt,
-      s.default,
-      s.serde
-    );
+    result[key] = makeKeyAccessor(key, ctx, sched, adapt, s.default, s.serde);
   }
   return result as unknown as StateAccessors<TConfig>;
 }
