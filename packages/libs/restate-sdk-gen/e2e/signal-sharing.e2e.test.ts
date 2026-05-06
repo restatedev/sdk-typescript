@@ -45,7 +45,9 @@ import {
 
 let idempotencyKeySeq = 0;
 const idem = () =>
-  clients.SendOpts.from<void>({ idempotencyKey: `test-${++idempotencyKeySeq}` });
+  clients.SendOpts.from<void>({
+    idempotencyKey: `test-${++idempotencyKeySeq}`,
+  });
 
 // ---------------------------------------------------------------------------
 // Helper: send a named signal to a target invocation.
@@ -171,7 +173,11 @@ describe.each(modes)(
       // p3 fires afterward — must not disturb the already-settled race.
       await sendSignal(invocationId, "p3", "from-p3");
 
-      const result = await ingress.result(handle) as Array<{status: string; value?: unknown; reason?: unknown}>;
+      const result = (await ingress.result(handle)) as Array<{
+        status: string;
+        value?: unknown;
+        reason?: unknown;
+      }>;
       expect(result).toHaveLength(2);
       expect(result[0]).toEqual({ status: "fulfilled", value: "from-p1" });
       expect(result[1]).toEqual({ status: "fulfilled", value: "from-p1" });
@@ -189,7 +195,11 @@ describe.each(modes)(
       // p1 fires last — races already settled.
       await sendSignal(invocationId, "p1", "from-p1");
 
-      const result = await ingress.result(handle) as Array<{status: string; value?: string; reason?: unknown}>;
+      const result = (await ingress.result(handle)) as Array<{
+        status: string;
+        value?: string;
+        reason?: unknown;
+      }>;
       expect(result).toHaveLength(2);
       expect(result[0]).toEqual({ status: "fulfilled", value: "from-p2" });
       expect(result[1]).toEqual({ status: "fulfilled", value: "from-p3" });
@@ -223,7 +233,7 @@ describe.each(modes)(
       // p1 fires last — the races already settled without it.
       await sendSignal(invocationId, "p1", "from-p1");
 
-      const result = await ingress.result(handle) as string[];
+      const result = (await ingress.result(handle)) as string[];
       expect(result).toHaveLength(2);
       expect(result[0]).toBe("from-p2");
       expect(result[1]).toBe("from-p3");

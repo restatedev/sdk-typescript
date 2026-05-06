@@ -23,7 +23,16 @@ import {
 import type { HandlerDescriptor, Descriptor } from "./define.js";
 
 // Re-export connect, Ingress, SendOpts so consumers can use clients.connect / clients.Ingress
-export { connect, SendOpts, type Ingress, type Send, type Opts, type IngressClient, type IngressWorkflowClient, type IngressSendClient };
+export {
+  connect,
+  SendOpts,
+  type Ingress,
+  type Send,
+  type Opts,
+  type IngressClient,
+  type IngressWorkflowClient,
+  type IngressSendClient,
+};
 
 /**
  * Minimal ingress interface required by the sdk-gen ingress helpers.
@@ -55,22 +64,28 @@ type InferInput<D> = D extends HandlerDescriptor<infer I, any> ? I : unknown;
 type InferOutput<D> = D extends HandlerDescriptor<any, infer O> ? O : unknown;
 
 /** Typed ingress call client — each method returns Promise<O> */
-export type IngressHandlerClient<H extends Record<string, HandlerDescriptor>> = {
-  readonly [K in keyof H]: (
-    input: InferInput<H[K]>,
-    opts?: Opts<InferInput<H[K]>, InferOutput<H[K]>>
-  ) => Promise<InferOutput<H[K]>>;
-};
+export type IngressHandlerClient<H extends Record<string, HandlerDescriptor>> =
+  {
+    readonly [K in keyof H]: (
+      input: InferInput<H[K]>,
+      opts?: Opts<InferInput<H[K]>, InferOutput<H[K]>>
+    ) => Promise<InferOutput<H[K]>>;
+  };
 
 /** Typed ingress send client — each method returns Promise<Send> */
-export type IngressSendHandlerClient<H extends Record<string, HandlerDescriptor>> = {
+export type IngressSendHandlerClient<
+  H extends Record<string, HandlerDescriptor>,
+> = {
   readonly [K in keyof H]: [InferInput<H[K]>] extends [void]
     ? (opts?: SendOpts<void>) => Promise<Send>
-    : (input: InferInput<H[K]>, opts?: SendOpts<InferInput<H[K]>>) => Promise<Send>;
+    : (
+        input: InferInput<H[K]>,
+        opts?: SendOpts<InferInput<H[K]>>
+      ) => Promise<Send>;
 };
 
 // =============================================================================
-// client / sendClient (aliases for ingressClient / ingressSendClient)
+// client / sendClient
 // =============================================================================
 
 export function client<H extends Record<string, HandlerDescriptor>>(
@@ -144,7 +159,6 @@ export function sendClient(
   });
 }
 
-
 // =============================================================================
 // optsFromArgs — parses (input, opts?) or (opts?) call signatures
 // =============================================================================
@@ -174,7 +188,9 @@ function optsFromArgs(args: unknown[]): {
       } else if (args[1] instanceof SendOpts) {
         opts = args[1];
       } else {
-        throw new TypeError("The second argument must be either Opts or SendOpts");
+        throw new TypeError(
+          "The second argument must be either Opts or SendOpts"
+        );
       }
       break;
     default:

@@ -22,6 +22,7 @@
 import {
   iface,
   implement,
+  service,
   client,
   state,
   sharedState,
@@ -70,21 +71,17 @@ export const counterImpl = implement(counterIface, {
 //
 // Pass the interface directly to client() — no separate type import needed.
 
-export const orchestrator = implement(
-  iface.service("ifaceOrchestrator", {
-    run: iface.json<string, string>(),
-  }),
-  {
-    handlers: {
-      *run(itemId) {
-        const { value } = yield* client(counterIface, itemId).add({
-          delta: 1,
-          tag: "purchase",
-        });
-        return `item ${itemId} count is now ${value}`;
-      },
+export const orchestrator = service({
+  name: "ifaceOrchestrator",
+  handlers: {
+    *run(itemId: string) {
+      const { value } = yield* client(counterIface, itemId).add({
+        delta: 1,
+        tag: "purchase",
+      });
+      return `item ${itemId} count is now ${value}`;
     },
-  }
-);
+  },
+});
 
 export const ifaceServices = [counterImpl, orchestrator] as const;
