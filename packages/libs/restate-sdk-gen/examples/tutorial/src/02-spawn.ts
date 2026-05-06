@@ -29,6 +29,7 @@ import {
   race,
   select,
   type Operation,
+  gen,
 } from "@restatedev/restate-sdk-gen";
 import { wait } from "./fakes.js";
 
@@ -36,7 +37,7 @@ import { wait } from "./fakes.js";
 // journaled work for `ms` milliseconds, return `label`. Each call
 // produces a fresh Operation with its own internal `run` entry.
 const labeledWork = (label: string, ms: number): Operation<string> =>
-  (function* () {
+  gen(function* () {
     return yield* run(
       async () => {
         await wait(ms);
@@ -44,7 +45,7 @@ const labeledWork = (label: string, ms: number): Operation<string> =>
       },
       { name: `${label}-step` }
     );
-  })();
+  });
 
 export const spawnSvc = service({
   name: "spawn",
