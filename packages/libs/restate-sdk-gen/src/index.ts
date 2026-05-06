@@ -116,15 +116,6 @@ export type {
   Duration,
   StandardTypedV1,
 } from "@restatedev/restate-sdk-core";
-export {
-  Opts,
-  SendOpts,
-  type Send,
-  type Ingress,
-  type IngressCallOptions,
-  type IngressSendOptions,
-  type WorkflowSubmission,
-} from "@restatedev/restate-sdk-clients";
 
 // Internal types exposed only for API Extractor traceability — not part of the public API
 /** @internal */
