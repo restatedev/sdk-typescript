@@ -1,15 +1,11 @@
 use js_sys::Uint8Array;
-use restate_sdk_shared_core::{
-    CallHandle, CommandRelationship, CommandType, CoreVM, DoProgressResponse, Error, Header,
-    HeaderMap, IdentityVerifier, ImplicitCancellationOption, Input, NonDeterministicChecksOption,
-    NonEmptyValue, ResponseHead, RetryPolicy, RunExitResult, SendHandle, TakeOutputResult, Target,
-    TerminalFailure, VMOptions, Value, CANCEL_NOTIFICATION_HANDLE, VM,
-};
+use restate_sdk_shared_core::{AwaitResponse, CallHandle, CommandRelationship, CommandType, CoreVM, Error, Header, HeaderMap, IdentityVerifier, ImplicitCancellationOption, Input, NonDeterministicChecksOption, NonEmptyValue, ResponseHead, RetryPolicy, RunExitResult, SendHandle, TakeOutputResult, Target, TerminalFailure, UnresolvedFuture, VMOptions, Value, CANCEL_NOTIFICATION_HANDLE, VM};
 use serde::{Deserialize, Serialize};
 use std::cmp;
 use std::convert::{Infallible, Into};
 use std::io::Write;
 use std::time::Duration;
+use restate_sdk_shared_core::tracing_pretty::{Pretty, PrettyFields};
 use tracing::metadata::LevelFilter;
 use tracing::{Dispatch, Level, Subscriber};
 use tracing_subscriber::fmt::format::FmtSpan;
@@ -120,26 +116,43 @@ fn log_subscriber(
         LogLevel::ERROR => Level::ERROR,
     };
 
-    let fmt_layer = tracing_subscriber::fmt::layer()
-        .with_ansi(false)
-        .without_time()
-        .with_thread_names(false)
-        .with_thread_ids(false)
-        .with_file(false)
-        .with_line_number(false)
-        .with_target(level == Level::TRACE)
-        .with_level(false)
-        .with_span_events(if level == Level::TRACE {
-            FmtSpan::ENTER
-        } else {
-            FmtSpan::NONE
-        })
-        .with_writer(MakeWebConsoleWriter { logger_id })
-        // We do filtering here too,
-        // as it might get expensive to pass logs through
-        // the various layers even though we don't need them
-        .with_filter(LevelFilter::from_level(level));
-    Registry::default().with(fmt_layer)
+    let fmt_layer = if level == Level::TRACE {
+        tracing_subscriber::fmt::layer()
+            .with_ansi(false)
+            .without_time()
+            .with_span_events(
+                FmtSpan::ENTER
+            )
+            .with_writer(MakeWebConsoleWriter { logger_id })
+            .event_format(Pretty::default()
+                .without_time()
+                .with_thread_names(false)
+                .with_thread_ids(false)
+                .with_target(true)
+                .with_level(true)
+            )
+            .fmt_fields(PrettyFields::default()).boxed()
+    } else {
+        tracing_subscriber::fmt::layer()
+            .with_ansi(false)
+            .without_time()
+            .with_thread_names(false)
+            .with_thread_ids(false)
+            .with_file(false)
+            .with_line_number(false)
+            .with_target(false)
+            .with_level(false)
+            .with_span_events(FmtSpan::NONE)
+            .with_writer(MakeWebConsoleWriter { logger_id }).boxed()
+    };
+
+
+        Registry::default().with(fmt_layer
+                                     // We do filtering here too,
+                                     // as it might get expensive to pass logs through
+                                     // the various layers even though we don't need them
+                                     .with_filter(LevelFilter::from_level(level))
+        )
 }
 
 //--- Data model
@@ -387,24 +400,59 @@ pub enum WasmAsyncResultValue {
 pub enum WasmDoProgressResult {
     /// Any of the given AsyncResultHandle completed
     AnyCompleted,
-    /// The SDK should read from input at this point
-    ReadFromInput,
-    /// Any of the run given before with ExecuteRun is waiting for completion
-    WaitingPendingRun,
+    /// The SDK should read from input at this point, or wait for any executing run
+    WaitExternalProgress,
     /// The SDK should execute a pending run
     ExecuteRun(#[tsify(type = "number")] WasmNotificationHandle),
     /// Got cancel signal
     CancelSignalReceived,
 }
 
-impl From<DoProgressResponse> for WasmDoProgressResult {
-    fn from(value: DoProgressResponse) -> Self {
+impl From<AwaitResponse> for WasmDoProgressResult {
+    fn from(value: AwaitResponse) -> Self {
         match value {
-            DoProgressResponse::AnyCompleted => WasmDoProgressResult::AnyCompleted,
-            DoProgressResponse::ReadFromInput => WasmDoProgressResult::ReadFromInput,
-            DoProgressResponse::WaitingPendingRun => WasmDoProgressResult::WaitingPendingRun,
-            DoProgressResponse::ExecuteRun(n) => WasmDoProgressResult::ExecuteRun(n.into()),
-            DoProgressResponse::CancelSignalReceived => WasmDoProgressResult::CancelSignalReceived,
+            AwaitResponse::AnyCompleted => WasmDoProgressResult::AnyCompleted,
+            AwaitResponse::WaitingExternalProgress {..} => WasmDoProgressResult::WaitExternalProgress,
+            AwaitResponse::ExecuteRun(n) => WasmDoProgressResult::ExecuteRun(n.into()),
+            AwaitResponse::CancelSignalReceived => WasmDoProgressResult::CancelSignalReceived,
+        }
+    }
+}
+
+#[derive(Tsify, Serialize, Deserialize)]
+#[tsify(from_wasm_abi)]
+pub enum WasmUnresolvedFuture {
+    Single(#[tsify(type = "number")] WasmNotificationHandle),
+    FirstCompleted(Vec<WasmUnresolvedFuture>),
+    AllCompleted(Vec<WasmUnresolvedFuture>),
+    FirstSucceededOrAllFailed(Vec<WasmUnresolvedFuture>),
+    AllSucceededOrFirstFailed(Vec<WasmUnresolvedFuture>),
+    Unknown(Vec<WasmUnresolvedFuture>),
+}
+
+impl From<WasmUnresolvedFuture> for UnresolvedFuture {
+    fn from(value: WasmUnresolvedFuture) -> Self {
+        match value {
+            WasmUnresolvedFuture::Single(h) => UnresolvedFuture::Single(h.into()),
+            WasmUnresolvedFuture::FirstCompleted(c) => {
+                UnresolvedFuture::FirstCompleted(c.into_iter().map(Into::into).collect())
+            }
+            WasmUnresolvedFuture::AllCompleted(c) => {
+                UnresolvedFuture::AllCompleted(c.into_iter().map(Into::into).collect())
+            }
+            WasmUnresolvedFuture::FirstSucceededOrAllFailed(c) => {
+                UnresolvedFuture::FirstSucceededOrAllFailed(
+                    c.into_iter().map(Into::into).collect(),
+                )
+            }
+            WasmUnresolvedFuture::AllSucceededOrFirstFailed(c) => {
+                UnresolvedFuture::AllSucceededOrFirstFailed(
+                    c.into_iter().map(Into::into).collect(),
+                )
+            }
+            WasmUnresolvedFuture::Unknown(c) => {
+                UnresolvedFuture::Unknown(c.into_iter().map(Into::into).collect())
+            }
         }
     }
 }
@@ -486,6 +534,7 @@ impl WasmVM {
                             cancel_children_one_way_calls: false,
                         }
                     },
+                    awaiting_on_policy: Default::default(),
                 },
             )
         })?;
@@ -594,13 +643,9 @@ impl WasmVM {
 
     pub fn do_progress(
         &mut self,
-        handles: Vec<WasmNotificationHandle>,
+        future: WasmUnresolvedFuture,
     ) -> Result<WasmDoProgressResult, WasmFailure> {
-        Ok(use_log_dispatcher!(self, |vm| CoreVM::do_progress(
-            vm,
-            handles.into_iter().map(Into::into).collect()
-        ))?
-        .into())
+        Ok(use_log_dispatcher!(self, |vm| CoreVM::do_await(vm, future.into()))?.into())
     }
 
     pub fn take_notification(

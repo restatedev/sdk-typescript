@@ -49,6 +49,11 @@ on:
         required: false
         type: string
         description: name of the test artifact output
+      sdkRepoRef:
+        required: false
+        default: ''
+        type: string
+        description: REF to the sdk repo branch/commit, passed to github action ref
 
 jobs:
   sdk-test-suite:
@@ -69,6 +74,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: restatedev/sdk-typescript
+          ref: ${{ inputs.sdkRepoRef }}
 
       - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4

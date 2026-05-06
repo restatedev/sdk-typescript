@@ -709,7 +709,8 @@ export class ContextImpl
     }
 
     return CombinatorRestatePromise.fromPromises(
-      (p) => Promise.allSettled(p),
+      "AllCompleted",
+      (p: Promise<any>[]) => Promise.allSettled(p),
       this.trackedInvocationIdPromises.splice(0)
     ).map((results, failure) => {
       if (failure) {

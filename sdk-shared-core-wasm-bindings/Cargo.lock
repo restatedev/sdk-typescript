@@ -603,9 +603,8 @@ dependencies = [
 
 [[package]]
 name = "restate-sdk-shared-core"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f0417331c92f9ef4a14dcbd40759cb4008221a3538affda05f907923c574119"
+version = "0.10.0"
+source = "git+https://github.com/restatedev/sdk-shared-core.git?branch=awaiting_on#e5729b85d2b72850bafec070bbfbddc46b580208"
 dependencies = [
  "base64",
  "bs58",
@@ -618,6 +617,7 @@ dependencies = [
  "strum",
  "thiserror",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
