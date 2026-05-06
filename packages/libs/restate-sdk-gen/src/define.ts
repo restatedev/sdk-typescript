@@ -23,11 +23,8 @@ import { type Operation } from "./operation.js";
 
 /**
  * Minimal descriptor stored in Descriptor._handlers per handler.
- * Carries serde info so client() / sendClient() can route calls correctly.
- * Discriminated by _isHandlerDescriptor for runtime checks.
  */
 export type HandlerDescriptor<I = any, O = any> = {
-  readonly _isHandlerDescriptor: true;
   readonly _inputSerde?: restate.Serde<I>;
   readonly _outputSerde?: restate.Serde<O>;
 };
@@ -37,7 +34,6 @@ export function makeDescriptor<I, O>(
   outputSerde?: restate.Serde<O>
 ): HandlerDescriptor<I, O> {
   return {
-    _isHandlerDescriptor: true,
     _inputSerde: inputSerde,
     _outputSerde: outputSerde,
   };
@@ -129,9 +125,7 @@ export type ImplementedDefinition<
  */
 export type HandlerDef<I = any, O = any> = {
   readonly _genFn: (input: I) => Operation<O>;
-  readonly _inputSerde?: restate.Serde<I>;
-  readonly _outputSerde?: restate.Serde<O>;
-};
+} & HandlerDescriptor<I, O>;
 
 /** @internal */
 export type EntryToDescriptor<E> =
