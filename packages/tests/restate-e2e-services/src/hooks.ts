@@ -510,7 +510,11 @@ function createHookLevelSuite(level: HookLevel) {
         }),
         ctx.run("run-2", async () => {
           await wait(100, signal);
-          if (attempt <= 2) {
+          if (attempt === 1) {
+            await wait(10_000, signal);
+            return "should not reach";
+          }
+          if (attempt === 2) {
             await wait(200, signal);
             throw new Error("run-2 fail");
           }
