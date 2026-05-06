@@ -9,15 +9,10 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-// VirtualObjectCommandInterpreter — exercises a small command DSL
-// against the SDK primitives (awakeables, sleep, run, await-any).
-// Mirrors sdk-ruby/test-services/services/virtual_object_command_interpreter.rb.
-
 import * as restate from "@restatedev/restate-sdk";
 import {
   type Future,
-  gen,
-  execute,
+  object,
   select,
   state,
   sharedState,
@@ -68,225 +63,164 @@ type RunThrowTerminalSub = {
 };
 type SubCommand = CreateAwakeableSub | SleepSub | RunThrowTerminalSub;
 
-type State = {
-  results: string[];
-  [k: `awk-${string}`]: string;
-};
+type State = { results: string[]; [k: `awk-${string}`]: string };
 
 type SubFutureKind = "awakeable" | "sleep" | "run";
 type SubEntry = { kind: SubFutureKind; future: Future<unknown> };
 
-export const virtualObjectCommandInterpreter = restate.object({
+export const virtualObjectCommandInterpreter = object({
   name: "VirtualObjectCommandInterpreter",
   handlers: {
-    getResults: restate.handlers.object.shared(
-      async (ctx: restate.ObjectSharedContext): Promise<string[]> =>
-        execute(
-          ctx,
-          gen(function* () {
-            return (yield* sharedState<State>().get("results")) ?? [];
-          })
-        )
-    ),
+    *getResults() {
+      return (yield* sharedState<State>().get("results")) ?? [];
+    },
 
-    hasAwakeable: restate.handlers.object.shared(
-      async (
-        ctx: restate.ObjectSharedContext,
-        awakeableKey: string
-      ): Promise<boolean> =>
-        execute(
-          ctx,
-          gen(function* () {
-            const id = yield* sharedState<State>().get(`awk-${awakeableKey}`);
-            return id != null;
-          })
-        )
-    ),
+    *hasAwakeable(awakeableKey: string) {
+      const id = yield* sharedState<State>().get(`awk-${awakeableKey}`);
+      return id != null;
+    },
 
-    resolveAwakeable: restate.handlers.object.shared(
-      async (
-        ctx: restate.ObjectSharedContext,
-        req: { awakeableKey: string; value: string }
-      ): Promise<void> =>
-        execute(
-          ctx,
-          gen(function* () {
-            const id = yield* sharedState<State>().get(
-              `awk-${req.awakeableKey}`
-            );
-            if (!id) {
-              throw new restate.TerminalError("No awakeable is registered");
-            }
-            resolveAwakeable(id, req.value);
-          })
-        )
-    ),
+    *resolveAwakeable(req: { awakeableKey: string; value: string }) {
+      const id = yield* sharedState<State>().get(`awk-${req.awakeableKey}`);
+      if (!id) throw new restate.TerminalError("No awakeable is registered");
+      resolveAwakeable(id, req.value);
+    },
 
-    rejectAwakeable: restate.handlers.object.shared(
-      async (
-        ctx: restate.ObjectSharedContext,
-        req: { awakeableKey: string; reason: string }
-      ): Promise<void> =>
-        execute(
-          ctx,
-          gen(function* () {
-            const id = yield* sharedState<State>().get(
-              `awk-${req.awakeableKey}`
-            );
-            if (!id) {
-              throw new restate.TerminalError("No awakeable is registered");
-            }
-            rejectAwakeable(id, req.reason);
-          })
-        )
-    ),
+    *rejectAwakeable(req: { awakeableKey: string; reason: string }) {
+      const id = yield* sharedState<State>().get(`awk-${req.awakeableKey}`);
+      if (!id) throw new restate.TerminalError("No awakeable is registered");
+      rejectAwakeable(id, req.reason);
+    },
 
-    interpretCommands: async (
-      ctx: restate.ObjectContext,
-      req: { commands: Command[] }
-    ): Promise<string> =>
-      execute(
-        ctx,
-        gen(function* () {
-          let result: string = "";
+    *interpretCommands(req: { commands: Command[] }) {
+      let result = "";
 
-          function* createSub(
-            cmd: SubCommand
-          ): Generator<unknown, SubEntry, unknown> {
-            switch (cmd.type) {
-              case "createAwakeable": {
-                const { id, promise } = awakeable<string>();
-                state<State>().set(`awk-${cmd.awakeableKey}`, id);
-                return { kind: "awakeable", future: promise };
-              }
-              case "sleep":
-                return { kind: "sleep", future: sleep(cmd.timeoutMillis) };
-              case "runThrowTerminalException":
-                return {
-                  kind: "run",
-                  future: run(
-                    async () => {
-                      throw new restate.TerminalError(cmd.reason);
-                    },
-                    { name: "run should fail command" }
-                  ),
-                };
-            }
+      function* createSub(
+        cmd: SubCommand
+      ): Generator<unknown, SubEntry, unknown> {
+        switch (cmd.type) {
+          case "createAwakeable": {
+            const { id, promise } = awakeable<string>();
+            state<State>().set(`awk-${cmd.awakeableKey}`, id);
+            return { kind: "awakeable", future: promise };
           }
+          case "sleep":
+            return { kind: "sleep", future: sleep(cmd.timeoutMillis) };
+          case "runThrowTerminalException":
+            return {
+              kind: "run",
+              future: run(
+                async () => {
+                  throw new restate.TerminalError(cmd.reason);
+                },
+                { name: "run should fail command" }
+              ),
+            };
+        }
+      }
 
-          function* awaitSub(
-            kind: SubFutureKind,
-            future: Future<unknown>
-          ): Generator<unknown, string, unknown> {
-            if (kind === "sleep") {
-              yield* future;
-              return "sleep";
+      function* awaitSub(
+        kind: SubFutureKind,
+        future: Future<unknown>
+      ): Generator<unknown, string, unknown> {
+        if (kind === "sleep") {
+          yield* future;
+          return "sleep";
+        }
+        return (yield* future) as string;
+      }
+
+      for (const cmd of req.commands) {
+        switch (cmd.type) {
+          case "awaitAwakeableOrTimeout": {
+            const { id, promise } = awakeable<string>();
+            state<State>().set(`awk-${cmd.awakeableKey}`, id);
+            const sleepFuture = sleep(cmd.timeoutMillis);
+            const r = yield* select({ awk: promise, sleep: sleepFuture });
+            if (r.tag === "awk") {
+              result = (yield* r.future) as unknown as string;
+            } else {
+              yield* r.future;
+              throw new restate.TerminalError("await-timeout");
             }
-            const v = yield* future;
-            return v as string;
+            break;
           }
-
-          for (const cmd of req.commands) {
-            switch (cmd.type) {
-              case "awaitAwakeableOrTimeout": {
-                const { id, promise } = awakeable<string>();
-                state<State>().set(`awk-${cmd.awakeableKey}`, id);
-                const sleepFuture = sleep(cmd.timeoutMillis);
-                const r = yield* select({
-                  awk: promise,
-                  sleep: sleepFuture,
-                });
-                if (r.tag === "awk") {
-                  result = yield* r.future;
-                } else {
-                  yield* r.future;
-                  throw new restate.TerminalError("await-timeout");
-                }
-                break;
-              }
-              case "resolveAwakeable": {
-                const id = yield* state<State>().get(`awk-${cmd.awakeableKey}`);
-                if (!id) {
-                  throw new restate.TerminalError("No awakeable is registered");
-                }
-                resolveAwakeable(id, cmd.value);
-                result = "";
-                break;
-              }
-              case "rejectAwakeable": {
-                const id = yield* state<State>().get(`awk-${cmd.awakeableKey}`);
-                if (!id) {
-                  throw new restate.TerminalError("No awakeable is registered");
-                }
-                rejectAwakeable(id, cmd.reason);
-                result = "";
-                break;
-              }
-              case "getEnvVariable": {
-                result = yield* run(
-                  async () => process.env[cmd.envName] ?? "",
-                  { name: "get_env" }
-                );
-                break;
-              }
-              case "awaitOne": {
-                const sub = yield* createSub(cmd.command);
-                result = yield* awaitSub(sub.kind, sub.future);
-                break;
-              }
-              case "awaitAny": {
-                const subs: SubEntry[] = [];
-                for (const c of cmd.commands) {
-                  subs.push(yield* createSub(c));
-                }
-                const branches: Record<string, Future<unknown>> = {};
-                subs.forEach((s, i) => {
-                  branches[String(i)] = s.future;
-                });
-                const r = yield* select(branches);
-                const winner = subs[Number(r.tag)]!;
+          case "resolveAwakeable": {
+            const id = yield* state<State>().get(`awk-${cmd.awakeableKey}`);
+            if (!id)
+              throw new restate.TerminalError("No awakeable is registered");
+            resolveAwakeable(id, cmd.value);
+            result = "";
+            break;
+          }
+          case "rejectAwakeable": {
+            const id = yield* state<State>().get(`awk-${cmd.awakeableKey}`);
+            if (!id)
+              throw new restate.TerminalError("No awakeable is registered");
+            rejectAwakeable(id, cmd.reason);
+            result = "";
+            break;
+          }
+          case "getEnvVariable":
+            result = yield* run(async () => process.env[cmd.envName] ?? "", {
+              name: "get_env",
+            });
+            break;
+          case "awaitOne": {
+            const sub = yield* createSub(cmd.command);
+            result = yield* awaitSub(sub.kind, sub.future);
+            break;
+          }
+          case "awaitAny": {
+            const subs: SubEntry[] = [];
+            for (const c of cmd.commands) subs.push(yield* createSub(c));
+            const branches: Record<string, Future<unknown>> = {};
+            subs.forEach((s, i) => {
+              branches[String(i)] = s.future;
+            });
+            const r = yield* select(branches);
+            const winner = subs[Number(r.tag)]!;
+            result = yield* awaitSub(winner.kind, winner.future);
+            break;
+          }
+          case "awaitAnySuccessful": {
+            const remaining: SubEntry[] = [];
+            for (const c of cmd.commands) remaining.push(yield* createSub(c));
+            let found = false;
+            while (remaining.length > 0) {
+              const branches: Record<string, Future<unknown>> = {};
+              remaining.forEach((s, i) => {
+                branches[String(i)] = s.future;
+              });
+              const r = yield* select(branches);
+              const idx = Number(r.tag);
+              const winner = remaining[idx]!;
+              try {
                 result = yield* awaitSub(winner.kind, winner.future);
+                found = true;
                 break;
-              }
-              case "awaitAnySuccessful": {
-                const remaining: SubEntry[] = [];
-                for (const c of cmd.commands) {
-                  remaining.push(yield* createSub(c));
-                }
-                let found = false;
-                while (remaining.length > 0) {
-                  const branches: Record<string, Future<unknown>> = {};
-                  remaining.forEach((s, i) => {
-                    branches[String(i)] = s.future;
-                  });
-                  const r = yield* select(branches);
-                  const idx = Number(r.tag);
-                  const winner = remaining[idx]!;
-                  try {
-                    result = yield* awaitSub(winner.kind, winner.future);
-                    found = true;
-                    break;
-                  } catch (e) {
-                    if (e instanceof restate.TerminalError) {
-                      remaining.splice(idx, 1);
-                    } else {
-                      throw e;
-                    }
-                  }
-                }
-                if (!found) {
-                  throw new restate.TerminalError("All commands failed");
-                }
-                break;
+              } catch (e) {
+                if (e instanceof restate.TerminalError)
+                  remaining.splice(idx, 1);
+                else throw e;
               }
             }
-
-            const last = (yield* state<State>().get("results")) ?? [];
-            state<State>().set("results", [...last, result]);
+            if (!found) throw new restate.TerminalError("All commands failed");
+            break;
           }
-
-          return result;
-        })
-      ),
+        }
+        const last = (yield* state<State>().get("results")) ?? [];
+        state<State>().set("results", [...last, result]);
+      }
+      return result;
+    },
+  },
+  options: {
+    handlers: {
+      getResults: { shared: true },
+      hasAwakeable: { shared: true },
+      resolveAwakeable: { shared: true },
+      rejectAwakeable: { shared: true },
+    },
   },
 });

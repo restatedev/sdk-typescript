@@ -9,81 +9,60 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-// TestUtilsService — service with a grab-bag of utility handlers used
-// across the test suite (echo, raw echo, sleep-concurrently, count side
-// effects, cancel-invocation).
-// Mirrors sdk-ruby/test-services/services/test_utils.rb.
-
 import * as restate from "@restatedev/restate-sdk";
-import { gen, execute, run, sleep, all } from "@restatedev/restate-sdk-gen";
+import {
+  service,
+  serdes,
+  handlerRequest,
+  cancel,
+  run,
+  sleep,
+  all,
+} from "@restatedev/restate-sdk-gen";
 
-export const testUtilsService = restate.service({
+export const testUtilsService = service({
   name: "TestUtilsService",
   handlers: {
-    echo: async (_ctx: restate.Context, input: string): Promise<string> =>
-      input,
+    *echo(input: string) {
+      return input;
+    },
 
-    uppercaseEcho: async (
-      _ctx: restate.Context,
-      input: string
-    ): Promise<string> => input.toUpperCase(),
+    *uppercaseEcho(input: string) {
+      return input.toUpperCase();
+    },
 
-    echoHeaders: async (
-      ctx: restate.Context
-    ): Promise<Record<string, string>> => {
+    *echoHeaders() {
       const out: Record<string, string> = {};
-      for (const [k, v] of ctx.request().headers) out[k] = v;
+      for (const [k, v] of handlerRequest().headers) out[k] = v;
       return out;
     },
 
-    rawEcho: restate.handlers.handler(
-      {
-        accept: "*/*",
-        input: restate.serde.binary,
-        output: restate.serde.binary,
-      },
-      async (_ctx: restate.Context, input: Uint8Array): Promise<Uint8Array> =>
-        input
+    rawEcho: serdes(
+      { input: restate.serde.binary, output: restate.serde.binary },
+      function* (input: Uint8Array) {
+        return input;
+      }
     ),
 
-    countExecutedSideEffects: async (
-      ctx: restate.Context,
-      increments: number
-    ): Promise<number> =>
-      execute(
-        ctx,
-        gen(function* () {
-          let invokedSideEffects = 0;
-          for (let i = 0; i < increments; i++) {
-            yield* run(
-              async () => {
-                invokedSideEffects += 1;
-              },
-              { name: "count" }
-            );
-          }
-          return invokedSideEffects;
-        })
-      ),
-
-    cancelInvocation: async (
-      ctx: restate.Context,
-      invocationId: string
-    ): Promise<void> => {
-      // ctx.cancel is sync — no scheduler/generator needed.
-      ctx.cancel(invocationId as restate.InvocationId);
+    *countExecutedSideEffects(increments: number) {
+      let invokedSideEffects = 0;
+      for (let i = 0; i < increments; i++) {
+        yield* run(
+          async () => {
+            invokedSideEffects += 1;
+          },
+          { name: "count" }
+        );
+      }
+      return invokedSideEffects;
     },
 
-    sleepConcurrently: async (
-      ctx: restate.Context,
-      millisList: number[]
-    ): Promise<void> =>
-      execute(
-        ctx,
-        gen(function* () {
-          const futures = millisList.map((ms) => sleep(ms));
-          yield* all(futures);
-        })
-      ),
+    *cancelInvocation(invocationId: string) {
+      cancel(invocationId as restate.InvocationId);
+    },
+
+    *sleepConcurrently(millisList: number[]) {
+      yield* all(millisList.map((ms) => sleep(ms)));
+    },
   },
 });

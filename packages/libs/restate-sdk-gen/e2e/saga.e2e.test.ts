@@ -23,9 +23,8 @@
 
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import * as restate from "@restatedev/restate-sdk";
-import * as clients from "@restatedev/restate-sdk-clients";
 import { RestateTestEnvironment } from "@restatedev/restate-sdk-testcontainers";
-import { gen, execute, run } from "@restatedev/restate-sdk-gen";
+import { service, run, clients } from "@restatedev/restate-sdk-gen";
 
 const released = new Map<string, number>();
 const released_bump = (key: string): void => {
@@ -35,61 +34,54 @@ const released_bump = (key: string): void => {
 type Step = "reserve" | "charge" | "create";
 type SagaReq = { key: string; failAt?: Step };
 
-const sagaSvc = restate.service({
+const sagaSvc = service({
   name: "saga",
   handlers: {
-    placeOrder: async (
-      ctx: restate.Context,
-      req: SagaReq
-    ): Promise<{ orderId: string }> =>
-      execute(
-        ctx,
-        gen(function* () {
-          const reservation = yield* run(
-            async () => {
-              if (req.failAt === "reserve") {
-                throw new restate.TerminalError("reserve failed");
-              }
-              return { id: `res-${req.key}` };
-            },
-            { name: "reserve" }
-          );
-
-          try {
-            const charge = yield* run(
-              async () => {
-                if (req.failAt === "charge") {
-                  throw new restate.TerminalError("charge failed");
-                }
-                return { id: `chg-${req.key}` };
-              },
-              { name: "charge" }
-            );
-
-            const orderId = yield* run(
-              async () => {
-                if (req.failAt === "create") {
-                  throw new restate.TerminalError("create failed");
-                }
-                return `order-${reservation.id}-${charge.id}`;
-              },
-              { name: "create-order" }
-            );
-
-            return { orderId };
-          } catch (e) {
-            // Compensation: release the reservation. The release itself
-            // is journaled so it survives a crash mid-compensation.
-            yield* run(
-              async () => {
-                released_bump(req.key);
-              },
-              { name: "release" }
-            );
-            throw e;
+    *placeOrder(req: SagaReq) {
+      const reservation = yield* run(
+        async () => {
+          if (req.failAt === "reserve") {
+            throw new restate.TerminalError("reserve failed");
           }
-        })
-      ),
+          return { id: `res-${req.key}` };
+        },
+        { name: "reserve" }
+      );
+
+      try {
+        const charge = yield* run(
+          async () => {
+            if (req.failAt === "charge") {
+              throw new restate.TerminalError("charge failed");
+            }
+            return { id: `chg-${req.key}` };
+          },
+          { name: "charge" }
+        );
+
+        const orderId = yield* run(
+          async () => {
+            if (req.failAt === "create") {
+              throw new restate.TerminalError("create failed");
+            }
+            return `order-${reservation.id}-${charge.id}`;
+          },
+          { name: "create-order" }
+        );
+
+        return { orderId };
+      } catch (e) {
+        // Compensation: release the reservation. The release itself
+        // is journaled so it survives a crash mid-compensation.
+        yield* run(
+          async () => {
+            released_bump(req.key);
+          },
+          { name: "release" }
+        );
+        throw e;
+      }
+    },
   },
 });
 
@@ -120,7 +112,7 @@ describe.each(modes)("saga compensation — $name mode", ({ alwaysReplay }) => {
   test("success: all three steps run, no compensation", async () => {
     released.clear();
     const key = `ok-${alwaysReplay ? "replay" : "default"}`;
-    const client = ingress.serviceClient(sagaSvc);
+    const client = clients.client(ingress, sagaSvc);
     const out = await client.placeOrder({ key });
     expect(out.orderId).toBe(`order-res-${key}-chg-${key}`);
     // Compensation never ran.
@@ -130,7 +122,7 @@ describe.each(modes)("saga compensation — $name mode", ({ alwaysReplay }) => {
   test("charge fails: release compensation runs, original error surfaces", async () => {
     released.clear();
     const key = `charge-${alwaysReplay ? "replay" : "default"}`;
-    const client = ingress.serviceClient(sagaSvc);
+    const client = clients.client(ingress, sagaSvc);
     await expect(client.placeOrder({ key, failAt: "charge" })).rejects.toThrow(
       /charge failed/
     );
@@ -141,7 +133,7 @@ describe.each(modes)("saga compensation — $name mode", ({ alwaysReplay }) => {
   test("create fails: release compensation runs, original error surfaces", async () => {
     released.clear();
     const key = `create-${alwaysReplay ? "replay" : "default"}`;
-    const client = ingress.serviceClient(sagaSvc);
+    const client = clients.client(ingress, sagaSvc);
     await expect(client.placeOrder({ key, failAt: "create" })).rejects.toThrow(
       /create failed/
     );
@@ -151,7 +143,7 @@ describe.each(modes)("saga compensation — $name mode", ({ alwaysReplay }) => {
   test("reserve fails: no compensation needed (nothing to undo)", async () => {
     released.clear();
     const key = `reserve-${alwaysReplay ? "replay" : "default"}`;
-    const client = ingress.serviceClient(sagaSvc);
+    const client = clients.client(ingress, sagaSvc);
     await expect(client.placeOrder({ key, failAt: "reserve" })).rejects.toThrow(
       /reserve failed/
     );

@@ -25,12 +25,9 @@
 // doesn't depend on channel-stop survival.
 
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import * as restate from "@restatedev/restate-sdk";
-import * as clients from "@restatedev/restate-sdk-clients";
 import { RestateTestEnvironment } from "@restatedev/restate-sdk-testcontainers";
 import {
-  gen,
-  execute,
+  service,
   spawn,
   run,
   sleep,
@@ -38,6 +35,7 @@ import {
   select,
   type Operation,
   type Channel,
+  clients,
 } from "@restatedev/restate-sdk-gen";
 
 // Job state is read-only from the polling closure's perspective: a
@@ -68,7 +66,7 @@ function pollWorker(
   jobId: string,
   stop: Channel<void>
 ): Operation<string | null> {
-  return gen(function* () {
+  return (function* () {
     let attempt = 0;
     while (true) {
       const r = yield* select({
@@ -85,50 +83,36 @@ function pollWorker(
       });
       if (tick.tag === "stop") return null;
     }
-  });
+  })();
 }
 
-const pollingSvc = restate.service({
+const pollingSvc = service({
   name: "polling",
   handlers: {
-    pollUntilDone: async (
-      ctx: restate.Context,
-      jobId: string
-    ): Promise<string> =>
-      execute(
-        ctx,
-        gen(function* () {
-          let attempt = 0;
-          while (true) {
-            const status = yield* run(async () => takePoll(jobId), {
-              name: `poll-${attempt}`,
-            });
-            if (status !== "pending") return status;
-            attempt += 1;
-            yield* sleep({ milliseconds: 100 });
-          }
-        })
-      ),
+    *pollUntilDone(jobId: string): Operation<string> {
+      let attempt = 0;
+      while (true) {
+        const status = yield* run(async () => takePoll(jobId), {
+          name: `poll-${attempt}`,
+        });
+        if (status !== "pending") return status;
+        attempt += 1;
+        yield* sleep({ milliseconds: 100 });
+      }
+    },
 
-    pollWithStop: async (
-      ctx: restate.Context,
-      req: { jobId: string; budgetMs: number }
-    ): Promise<string | null> =>
-      execute(
-        ctx,
-        gen(function* () {
-          const stop = channel<void>();
-          const t = yield* spawn(pollWorker(req.jobId, stop));
-          const r = yield* select({
-            done: t,
-            budget: sleep({ milliseconds: req.budgetMs }),
-          });
-          if (r.tag === "budget") {
-            yield* stop.send();
-          }
-          return yield* t;
-        })
-      ),
+    *pollWithStop(req: { jobId: string; budgetMs: number }) {
+      const stop = channel<void>();
+      const t = yield* spawn(pollWorker(req.jobId, stop));
+      const r = yield* select({
+        done: t,
+        budget: sleep({ milliseconds: req.budgetMs }),
+      });
+      if (r.tag === "budget") {
+        yield* stop.send();
+      }
+      return yield* t;
+    },
   },
 });
 
@@ -156,14 +140,14 @@ describe.each(modes)("polling — $name mode", ({ alwaysReplay }) => {
   test("pollUntilDone: completes after the job finishes", async () => {
     const jobId = `poll-${alwaysReplay ? "replay" : "default"}`;
     startJob(jobId, 200, "complete");
-    const client = ingress.serviceClient(pollingSvc);
+    const client = clients.client(ingress, pollingSvc);
     expect(await client.pollUntilDone(jobId)).toBe("complete");
   });
 
   test("pollWithStop: worker returns the result before budget elapses", async () => {
     const jobId = `stop-fast-${alwaysReplay ? "replay" : "default"}`;
     startJob(jobId, 100, "got-it");
-    const client = ingress.serviceClient(pollingSvc);
+    const client = clients.client(ingress, pollingSvc);
     expect(await client.pollWithStop({ jobId, budgetMs: 5_000 })).toBe(
       "got-it"
     );
@@ -201,7 +185,7 @@ describe.each(modes)(
       // freshly-constructed channel.
       const jobId = `stop-never-${alwaysReplay ? "replay" : "default"}`;
       startJob(jobId, -1, "never-seen");
-      const client = ingress.serviceClient(pollingSvc);
+      const client = clients.client(ingress, pollingSvc);
       expect(await client.pollWithStop({ jobId, budgetMs: 250 })).toBeNull();
     });
   }

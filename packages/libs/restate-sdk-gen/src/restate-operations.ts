@@ -8,6 +8,7 @@
  * directory of this repository or package, or at
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unnecessary-type-assertion */
 
 // RestateOperations
 // =============================================================================
@@ -40,11 +41,22 @@ import {
   makeState,
 } from "./state.js";
 import {
-  type FluentClient,
-  type FluentDurablePromise,
-  wrapClient,
-  wrapDurablePromise,
+  type GenClient,
+  type GenSendClient,
+  makeClient,
+  makeSendClient,
 } from "./clients.js";
+import {
+  type GenDurablePromise,
+  wrapDurablePromise,
+} from "./durable-promise.js";
+import type { Descriptor, HandlerDescriptor } from "./define.js";
+import {
+  InvocationReferenceImpl,
+  type InvocationReference,
+  type SignalReference,
+} from "./invocation-reference.js";
+import { gen } from "./operation.js";
 
 // Adapt a real RestatePromise to our Awaitable interface. RestatePromise
 // already has `.map((v, e) => U)` and is thenable, so the adapter is a
@@ -294,83 +306,110 @@ export class RestateOperations {
     );
   }
 
-  // ---- typed clients (call) ----
+  // ---- context accessor ----
 
   /**
-   * Typed RPC client for a service: `ops.serviceClient(api).foo(arg)`
-   * yields a `Future<T>` whose value is the handler's return value.
-   *
-   * Same shape as `ctx.serviceClient(api)` from the SDK, but each
-   * handler-method returns `Future<T>` rather than `InvocationPromise<T>`.
+   * Returns the current invocation's request metadata plus the optional
+   * virtual-object / workflow key. The `key` field is only present when
+   * the handler belongs to an object or workflow.
    */
-  serviceClient<D>(
-    api: restate.ServiceDefinitionFrom<D>
-  ): FluentClient<restate.Client<restate.Service<D>>> {
-    return wrapClient(this.ctx.serviceClient<D>(api), (p) => this.toFuture(p));
+  handlerRequest(): restate.Request & { key?: string } {
+    const req = this.ctx.request();
+    const key = (this.ctx as unknown as { key?: string }).key;
+    return key !== undefined ? Object.assign(req, { key }) : req;
   }
 
-  /** Typed RPC client for a virtual object. See {@link serviceClient}. */
-  objectClient<D>(
-    api: restate.VirtualObjectDefinitionFrom<D>,
+  // ---- typed clients (call + send) backed by call()/send() ----
+
+  /**
+   * Unified client for any Descriptor (service, object, or workflow).
+   * Each method yields a Future<O> backed by call().
+   * For services, key is not needed. For objects/workflows, pass the key.
+   */
+  client<H extends Record<string, HandlerDescriptor>>(
+    def: Descriptor<string, H, "service">
+  ): GenClient<H>;
+  client<H extends Record<string, HandlerDescriptor>>(
+    def: Descriptor<string, H, "object" | "workflow">,
     key: string
-  ): FluentClient<restate.Client<restate.VirtualObject<D>>> {
-    return wrapClient(this.ctx.objectClient<D>(api, key), (p) =>
-      this.toFuture(p)
-    );
+  ): GenClient<H>;
+  client(def: Descriptor<string, any, any>, key?: string): GenClient<any> {
+    return makeClient(
+      def,
+      key,
+      (o) => this.ctx.genericCall(o as any),
+      (p) => this.toFuture(p),
+      (h, s) =>
+        this.invocationReferenceFromHandle(h as restate.InvocationHandle, s)
+    ) as any;
   }
 
-  /** Typed RPC client for a workflow. See {@link serviceClient}. */
-  workflowClient<D>(
-    api: restate.WorkflowDefinitionFrom<D>,
+  /**
+   * Fire-and-forget send client for any Descriptor.
+   * Each method returns an InvocationHandle synchronously.
+   */
+  sendClient<H extends Record<string, HandlerDescriptor>>(
+    def: Descriptor<string, H, "service">
+  ): GenSendClient<H>;
+  sendClient<H extends Record<string, HandlerDescriptor>>(
+    def: Descriptor<string, H, "object" | "workflow">,
     key: string
-  ): FluentClient<restate.Client<restate.Workflow<D>>> {
-    return wrapClient(this.ctx.workflowClient<D>(api, key), (p) =>
-      this.toFuture(p)
-    );
+  ): GenSendClient<H>;
+  sendClient(
+    def: Descriptor<string, any, any>,
+    key?: string
+  ): GenSendClient<any> {
+    return makeSendClient(
+      def,
+      key,
+      (o) => this.ctx.genericSend(o as any),
+      (h, s) =>
+        this.invocationReferenceFromHandle(h as restate.InvocationHandle, s)
+    ) as any;
   }
 
-  // ---- typed clients (send) ----
-  //
-  // Send clients fire-and-forget; their methods return `InvocationHandle`
-  // synchronously, so we pass the SDK client through unchanged.
+  // ---- generic call/send (renamed from genericCall/genericSend) ----
 
-  serviceSendClient<D>(
-    api: restate.ServiceDefinitionFrom<D>
-  ): restate.SendClient<restate.Service<D>> {
-    return this.ctx.serviceSendClient<D>(api);
-  }
-
-  objectSendClient<D>(
-    api: restate.VirtualObjectDefinitionFrom<D>,
-    key: string
-  ): restate.SendClient<restate.VirtualObject<D>> {
-    return this.ctx.objectSendClient<D>(api, key);
-  }
-
-  workflowSendClient<D>(
-    api: restate.WorkflowDefinitionFrom<D>,
-    key: string
-  ): restate.SendClient<restate.Workflow<D>> {
-    return this.ctx.workflowSendClient<D>(api, key);
-  }
-
-  // ---- generic call/send ----
-  //
-  // Untyped calls: caller supplies `service`/`method`/`parameter` and the
-  // raw bytes get serialized/deserialized via the supplied serdes. Mostly
-  // useful for proxies and dispatchers that don't statically know the
-  // target's typed definition.
-
-  genericCall<REQ = Uint8Array, RES = Uint8Array>(
+  call<REQ = Uint8Array, RES = Uint8Array>(
     call: restate.GenericCall<REQ, RES>
   ): Future<RES> {
     return this.toFuture(this.ctx.genericCall<REQ, RES>(call));
   }
 
-  genericSend<REQ = Uint8Array>(
+  send<REQ = Uint8Array>(
     call: restate.GenericSend<REQ>
-  ): restate.InvocationHandle {
-    return this.ctx.genericSend<REQ>(call);
+  ): Future<InvocationReference<unknown>> {
+    const handle = this.ctx.genericSend<REQ>(call);
+    return this.invocationReferenceFromHandle(handle, undefined);
+  }
+
+  // ---- invocation reference helpers ----
+
+  invocationReferenceFromHandle<O>(
+    handle: restate.InvocationHandle,
+    outputSerde: restate.Serde<O> | undefined
+  ): Future<InvocationReference<O>> {
+    // handle.invocationId is Promise<InvocationId> typed, but under the hood
+    // it is a RestatePromise — adapt it to a journal-backed Future.
+    const idFuture = this.toFuture(
+      handle.invocationId as unknown as restate.RestatePromise<restate.InvocationId>
+    );
+    return this.sched.spawnDetached(
+      gen(function* (): Generator<unknown, InvocationReference<O>, unknown> {
+        const id = (yield* idFuture) as string;
+        return new InvocationReferenceImpl<O>(id, outputSerde);
+      })
+    );
+  }
+
+  invocationSignal<T>(
+    invocationId: restate.InvocationId,
+    name: string,
+    serde?: restate.Serde<T>
+  ): SignalReference<T> {
+    const internalCtx = this.ctx as unknown as restate.internal.ContextInternal;
+    const ref = internalCtx.invocation(invocationId);
+    return ref.signal<T>(name, serde) as SignalReference<T>;
   }
 
   // ---- cancel another invocation ----
@@ -396,7 +435,7 @@ export class RestateOperations {
   workflowPromise<T>(
     name: string,
     serde?: restate.Serde<T>
-  ): FluentDurablePromise<T> {
+  ): GenDurablePromise<T> {
     const wfCtx = this.ctx as unknown as restate.WorkflowSharedContext;
     return wrapDurablePromise(wfCtx.promise<T>(name, serde), <U>(p: unknown) =>
       this.toFuture(p as restate.RestatePromise<U>)

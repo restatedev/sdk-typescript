@@ -30,8 +30,7 @@
 
 import * as restate from "@restatedev/restate-sdk";
 import {
-  gen,
-  execute,
+  service,
   spawn,
   run,
   sleep,
@@ -46,7 +45,7 @@ function pollWorker(
   jobId: string,
   stop: Channel<void>
 ): Operation<string | null> {
-  return gen(function* () {
+  return (function* () {
     let attempt = 0;
     while (true) {
       // Race the next poll against the stop channel.
@@ -70,70 +69,59 @@ function pollWorker(
       });
       if (tick.tag === "stop") return null;
     }
-  });
+  })();
 }
 
-export const cancel = restate.service({
+export const cancel = service({
   name: "cancel",
   handlers: {
     // Cooperative stop. Returns the job result if it completes within
     // budgetSeconds, or null if budget elapsed first.
-    pollWithStop: async (
-      ctx: restate.Context,
-      req: { jobId: string; budgetSeconds: number }
-    ): Promise<string | null> =>
-      execute(
-        ctx,
-        gen(function* () {
-          const stop = channel<void>();
-          const t = yield* spawn(pollWorker(req.jobId, stop));
+    *pollWithStop(req: { jobId: string; budgetSeconds: number }) {
+      const stop = channel<void>();
+      const t = yield* spawn(pollWorker(req.jobId, stop));
 
-          const r = yield* select({
-            done: t,
-            budget: sleep({ seconds: req.budgetSeconds }),
-          });
+      const r = yield* select({
+        done: t,
+        budget: sleep({ seconds: req.budgetSeconds }),
+      });
 
-          if (r.tag === "budget") {
-            // Budget elapsed — tell the worker to stop and wait for it
-            // to wind down so we don't leak a running routine.
-            yield* stop.send();
-          }
-          return yield* t;
-        })
-      ),
+      if (r.tag === "budget") {
+        // Budget elapsed — tell the worker to stop and wait for it
+        // to wind down so we don't leak a running routine.
+        yield* stop.send();
+      }
+      return yield* t;
+    },
 
     // Invocation cancel, version A — long `sleep`.
     // Cancel the invocation externally to see CancelledError surface at
     // the next yield. The catch runs an audit step before re-throwing.
-    cancellable: async (ctx: restate.Context, jobId: string): Promise<string> =>
-      execute(
-        ctx,
-        gen(function* () {
-          try {
-            // 60-second sleep stands in for any long-running journaled
-            // work. Triggering invocation cancel surfaces here as
-            // CancelledError thrown from yield*.
-            yield* sleep({ seconds: 60 });
-            const status: JobStatus = yield* run(() => getJob(jobId), {
-              name: "get",
-            });
-            return status.state === "done" ? status.result : "(no-result)";
-          } catch (e) {
-            if (e instanceof restate.CancelledError) {
-              // Cleanup yields work normally — cancellation is not
-              // sticky once we've caught it.
-              yield* run(
-                async () => {
-                  console.log(`audit: ${jobId} cancelled at ${Date.now()}`);
-                },
-                { name: "audit-cancel" }
-              );
-              throw e;
-            }
-            throw e;
-          }
-        })
-      ),
+    *cancellable(jobId: string): Operation<string> {
+      try {
+        // 60-second sleep stands in for any long-running journaled
+        // work. Triggering invocation cancel surfaces here as
+        // CancelledError thrown from yield*.
+        yield* sleep({ seconds: 60 });
+        const status: JobStatus = yield* run(() => getJob(jobId), {
+          name: "get",
+        });
+        return status.state === "done" ? status.result : "(no-result)";
+      } catch (e) {
+        if (e instanceof restate.CancelledError) {
+          // Cleanup yields work normally — cancellation is not
+          // sticky once we've caught it.
+          yield* run(
+            async () => {
+              console.log(`audit: ${jobId} cancelled at ${Date.now()}`);
+            },
+            { name: "audit-cancel" }
+          );
+          throw e;
+        }
+        throw e;
+      }
+    },
 
     // Invocation cancel, version B — AbortSignal plumbed into a long-
     // running closure. Each `run` closure receives `{ signal }`; pass it
@@ -151,30 +139,23 @@ export const cancel = restate.service({
     // wrapper sees signal.aborted and re-throws the actual cancellation
     // reason (CancelledError) instead of the AbortError, so the journal
     // records a clean terminal outcome.
-    cancellableFetch: async (
-      ctx: restate.Context,
-      url: string
-    ): Promise<string> =>
-      execute(
-        ctx,
-        gen(function* () {
-          try {
-            return yield* run(({ signal }) => slowFetch(url, signal), {
-              name: "fetch",
-            });
-          } catch (e) {
-            if (e instanceof restate.CancelledError) {
-              yield* run(
-                async () => {
-                  console.log(`audit: fetch of ${url} aborted mid-flight`);
-                },
-                { name: "audit-cancel" }
-              );
-              throw e;
-            }
-            throw e;
-          }
-        })
-      ),
+    *cancellableFetch(url: string): Operation<string> {
+      try {
+        return yield* run(({ signal }) => slowFetch(url, signal), {
+          name: "fetch",
+        });
+      } catch (e) {
+        if (e instanceof restate.CancelledError) {
+          yield* run(
+            async () => {
+              console.log(`audit: fetch of ${url} aborted mid-flight`);
+            },
+            { name: "audit-cancel" }
+          );
+          throw e;
+        }
+        throw e;
+      }
+    },
   },
 });

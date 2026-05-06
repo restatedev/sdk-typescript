@@ -10,14 +10,8 @@
  */
 
 import { describe, expect, test } from "vitest";
-import {
-  gen,
-  spawn,
-  type Future,
-} from "../src/index.js";
-import {
-  Scheduler,
-} from "../src/internal.js";
+import { gen, spawn, type Future } from "../src/index.js";
+import { Scheduler } from "../src/internal.js";
 import { deferred, resolved, rejected, testLib } from "./test-promise.js";
 
 describe("all — journal sources (fast path)", () => {

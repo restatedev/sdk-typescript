@@ -35,8 +35,10 @@ import { retry } from "./04-retry.js";
 import { saga } from "./05-saga.js";
 import { cancel } from "./06-cancel.js";
 import { counter } from "./07-state.js";
-import { clients, greeter, awakeableHolder } from "./08-clients.js";
+import { clientsSvc, greeter, awakeableHolder } from "./08-clients.js";
 import { blockAndWaitWorkflow } from "./09-workflows.js";
+import { ifaceServices } from "./10-ifaces.js";
+import { userService, echoService } from "./11-serdes.js";
 
 restate.serve({
   services: [
@@ -47,9 +49,12 @@ restate.serve({
     saga,
     cancel,
     counter,
-    clients,
+    clientsSvc,
     greeter,
     awakeableHolder,
     blockAndWaitWorkflow,
+    ...ifaceServices,
+    userService,
+    echoService,
   ],
 });

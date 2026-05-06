@@ -21,51 +21,40 @@
 // names and per-key value types. Without it, names are `string` and
 // values are inferred per call (untyped, like the SDK's default).
 
-import * as restate from "@restatedev/restate-sdk";
-import { gen, execute, state, sharedState } from "@restatedev/restate-sdk-gen";
+import { object, state, sharedState } from "@restatedev/restate-sdk-gen";
 
 type CounterState = {
   counter: number;
 };
 
-export const counter = restate.object({
+export const counter = object({
   name: "counter",
   handlers: {
-    // Read-only handler: takes ObjectSharedContext, uses sharedState().
+    // Read-only handler: uses sharedState().
     // Multiple `get` invocations can run concurrently for the same key.
-    get: async (ctx: restate.ObjectSharedContext): Promise<number> =>
-      execute(
-        ctx,
-        gen(function* () {
-          return (yield* sharedState<CounterState>().get("counter")) ?? 0;
-        })
-      ),
+    *get() {
+      return (yield* sharedState<CounterState>().get("counter")) ?? 0;
+    },
 
-    // Read-write handler: takes ObjectContext, uses state(). Exclusive
+    // Read-write handler: uses state(). Exclusive
     // access to the key for the duration of the invocation.
-    add: async (
-      ctx: restate.ObjectContext,
-      addend: number
-    ): Promise<{ oldValue: number; newValue: number }> =>
-      execute(
-        ctx,
-        gen(function* () {
-          const s = state<CounterState>();
-          const oldValue = (yield* s.get("counter")) ?? 0;
-          const newValue = oldValue + addend;
-          s.set("counter", newValue);
-          return { oldValue, newValue };
-        })
-      ),
+    *add(addend: number) {
+      const s = state<CounterState>();
+      const oldValue = (yield* s.get("counter")) ?? 0;
+      const newValue = oldValue + addend;
+      s.set("counter", newValue);
+      return { oldValue, newValue };
+    },
 
     // Clear the counter back to zero (well, deletes the entry; `get`
     // returns 0 by falling through the `?? 0`).
-    reset: async (ctx: restate.ObjectContext): Promise<void> =>
-      execute(
-        ctx,
-        gen(function* () {
-          state<CounterState>().clear("counter");
-        })
-      ),
+    *reset() {
+      state<CounterState>().clear("counter");
+    },
+  },
+  options: {
+    handlers: {
+      get: { shared: true },
+    },
   },
 });

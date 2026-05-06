@@ -8,6 +8,7 @@
  * directory of this repository or package, or at
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument */
 
 // Free-standing API
 // =============================================================================
@@ -44,12 +45,18 @@ import type * as restate from "@restatedev/restate-sdk";
 import type { Future, FutureValues, FutureSettledResult } from "./future.js";
 import type { Channel } from "./channel.js";
 import type { State, SharedState, TypedState, UntypedState } from "./state.js";
-import type { FluentClient, FluentDurablePromise } from "./clients.js";
+import type { GenDurablePromise } from "./durable-promise.js";
 import type {
   RestateOperations,
   RunAction,
   RunOpts,
 } from "./restate-operations.js";
+import type { Descriptor, HandlerDescriptor } from "./define.js";
+import type { GenClient, GenSendClient } from "./clients.js";
+import {
+  InvocationReferenceImpl,
+  type InvocationReference,
+} from "./invocation-reference.js";
 import { getCurrent } from "./current.js";
 
 /**
@@ -72,6 +79,18 @@ export function currentOps(): RestateOperations {
  * arrow functions assigned to a `const`) or specified explicitly via
  * `opts.name`. If neither resolves, throws.
  */
+// ---- context accessor ----
+
+/**
+ * Returns the current invocation's request metadata plus the optional
+ * virtual-object / workflow key. The `key` field is only present when
+ * the handler belongs to an object or workflow.
+ */
+export const handlerRequest = (): restate.Request & { key?: string } =>
+  currentOps().handlerRequest();
+
+// ---- journal-backed Futures ----
+
 export const run = <T>(action: RunAction<T>, opts?: RunOpts<T>): Future<T> =>
   currentOps().run(action, opts);
 
@@ -103,51 +122,69 @@ export const attach = <T>(
   serde?: restate.Serde<T>
 ): Future<T> => currentOps().attach(invocationId, serde);
 
-// ---- typed clients ----
+// ---- unified typed clients ----
 
-export const serviceClient = <D>(
-  api: restate.ServiceDefinitionFrom<D>
-): FluentClient<restate.Client<restate.Service<D>>> =>
-  currentOps().serviceClient<D>(api);
-
-export const objectClient = <D>(
-  api: restate.VirtualObjectDefinitionFrom<D>,
+export function client<H extends Record<string, HandlerDescriptor>>(
+  def: Descriptor<string, H, "service">
+): GenClient<H>;
+export function client<H extends Record<string, HandlerDescriptor>>(
+  def: Descriptor<string, H, "object" | "workflow">,
   key: string
-): FluentClient<restate.Client<restate.VirtualObject<D>>> =>
-  currentOps().objectClient<D>(api, key);
+): GenClient<H>;
+export function client(
+  def: Descriptor<
+    string,
+    Record<string, HandlerDescriptor>,
+    "service" | "object" | "workflow"
+  >,
+  key?: string
+): GenClient<Record<string, HandlerDescriptor>> {
+  return currentOps().client(def as Descriptor<string, any, any>, key as any);
+}
 
-export const workflowClient = <D>(
-  api: restate.WorkflowDefinitionFrom<D>,
+export function sendClient<H extends Record<string, HandlerDescriptor>>(
+  def: Descriptor<string, H, "service">
+): GenSendClient<H>;
+export function sendClient<H extends Record<string, HandlerDescriptor>>(
+  def: Descriptor<string, H, "object" | "workflow">,
   key: string
-): FluentClient<restate.Client<restate.Workflow<D>>> =>
-  currentOps().workflowClient<D>(api, key);
+): GenSendClient<H>;
+export function sendClient(
+  def: Descriptor<
+    string,
+    Record<string, HandlerDescriptor>,
+    "service" | "object" | "workflow"
+  >,
+  key?: string
+): GenSendClient<Record<string, HandlerDescriptor>> {
+  return currentOps().sendClient(
+    def as Descriptor<string, any, any>,
+    key as any
+  );
+}
 
-export const serviceSendClient = <D>(
-  api: restate.ServiceDefinitionFrom<D>
-): restate.SendClient<restate.Service<D>> =>
-  currentOps().serviceSendClient<D>(api);
+// ---- generic call/send (renamed from genericCall/genericSend) ----
 
-export const objectSendClient = <D>(
-  api: restate.VirtualObjectDefinitionFrom<D>,
-  key: string
-): restate.SendClient<restate.VirtualObject<D>> =>
-  currentOps().objectSendClient<D>(api, key);
+export const call = <REQ = Uint8Array, RES = Uint8Array>(
+  c: restate.GenericCall<REQ, RES>
+): Future<RES> => currentOps().call<REQ, RES>(c);
 
-export const workflowSendClient = <D>(
-  api: restate.WorkflowDefinitionFrom<D>,
-  key: string
-): restate.SendClient<restate.Workflow<D>> =>
-  currentOps().workflowSendClient<D>(api, key);
+export const send = <REQ = Uint8Array>(
+  c: restate.GenericSend<REQ>
+): Future<InvocationReference<unknown>> => currentOps().send<REQ>(c);
 
-// ---- generic call/send ----
+// ---- invocation reference ----
 
-export const genericCall = <REQ = Uint8Array, RES = Uint8Array>(
-  call: restate.GenericCall<REQ, RES>
-): Future<RES> => currentOps().genericCall<REQ, RES>(call);
-
-export const genericSend = <REQ = Uint8Array>(
-  call: restate.GenericSend<REQ>
-): restate.InvocationHandle => currentOps().genericSend<REQ>(call);
+/**
+ * Create an InvocationReference from a known invocation ID (e.g. retrieved from state).
+ * `attach()` and `cancel()` on the result use the current fiber slot like all free functions.
+ */
+export function invocation<O = unknown>(
+  id: string,
+  opts?: { outputSerde?: restate.Serde<O> }
+): InvocationReference<O> {
+  return new InvocationReferenceImpl<O>(id, opts?.outputSerde);
+}
 
 // ---- cancel another invocation ----
 
@@ -171,7 +208,7 @@ export const sharedState = <
 export const workflowPromise = <T>(
   name: string,
   serde?: restate.Serde<T>
-): FluentDurablePromise<T> => currentOps().workflowPromise<T>(name, serde);
+): GenDurablePromise<T> => currentOps().workflowPromise<T>(name, serde);
 
 // ---- combinators ----
 

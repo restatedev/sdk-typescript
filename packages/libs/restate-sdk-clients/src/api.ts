@@ -85,6 +85,24 @@ export interface Ingress {
     send: Send<T> | WorkflowSubmission<T>,
     resultSerde?: Serde<T>
   ): Promise<T>;
+
+  /** Generic request-response call. Routes directly by service name without a typed definition. */
+  call<I = Uint8Array, O = Uint8Array>(opts: {
+    service: string;
+    handler: string;
+    parameter: I;
+    key?: string;
+    opts?: Opts<I, O>;
+  }): Promise<O>;
+
+  /** Generic fire-and-forget send. Routes directly by service name without a typed definition. */
+  send<I = Uint8Array>(opts: {
+    service: string;
+    handler: string;
+    parameter: I;
+    key?: string;
+    opts?: SendOpts<I>;
+  }): Promise<Send>;
 }
 
 export interface IngressCallOptions<I = unknown, O = unknown> {
