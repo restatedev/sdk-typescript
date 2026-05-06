@@ -29,6 +29,7 @@ import {
   all,
   type Operation,
   clients,
+  gen,
 } from "@restatedev/restate-sdk-gen";
 
 const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -51,9 +52,9 @@ const channelsSvc = service({
     *spawnCoordinate(value: string): Operation<string> {
       const ch = channel<string>();
       yield* spawn(
-        (function* () {
+        gen(function* () {
           yield* ch.send(value);
-        })()
+        })
       );
       return yield* ch.receive;
     },
@@ -64,17 +65,17 @@ const channelsSvc = service({
     *multiReaderBroadcast(value: string): Operation<string> {
       const ch = channel<string>();
       const reader = (label: string): Operation<string> =>
-        (function* () {
+        gen(function* () {
           const v = yield* ch.receive;
           return `${label}:${v}`;
-        })();
+        });
       const ta = yield* spawn(reader("A"));
       const tb = yield* spawn(reader("B"));
       const tc = yield* spawn(reader("C"));
       yield* spawn(
-        (function* () {
+        gen(function* () {
           yield* ch.send(value);
-        })()
+        })
       );
       const vs = yield* all([ta, tb, tc]);
       return vs.join("|");
@@ -86,7 +87,7 @@ const channelsSvc = service({
     *stopWithReason(req: { reason: string }): Operation<string> {
       const stop = channel<{ reason: string }>();
 
-      const worker: Operation<string> = (function* () {
+      const worker: Operation<string> = gen(function* () {
         const r = yield* select({
           work: run(
             async () => {
@@ -102,7 +103,7 @@ const channelsSvc = service({
           return `stopped:${reason}`;
         }
         return `done:${yield* r.future}`;
-      })();
+      });
 
       const t = yield* spawn(worker);
       yield* sleep({ milliseconds: 100 });
