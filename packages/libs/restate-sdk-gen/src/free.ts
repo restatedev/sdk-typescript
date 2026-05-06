@@ -199,7 +199,7 @@ export function state<
 >(): UntypedStateAccessors<TShape>;
 export function state(
   config?: Record<string, AnyKeySpec>
-): StateAccessors<never> | UntypedStateAccessors<never> {
+): UntypedStateAccessors<never> {
   const capturedConfig = config;
   return new Proxy({} as never, {
     get(_target, prop: string) {

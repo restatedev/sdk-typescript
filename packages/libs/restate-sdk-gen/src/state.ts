@@ -166,8 +166,8 @@ function makeKeyAccessor<T>(
         const factory = defaultFactory;
         return sched.makeJournalFuture(
           p.map((v, e) => {
-            if (e !== undefined) throw e;
-            return (v !== null ? v : factory()) as T | null;
+            if (e !== undefined) throw e as Error;
+            return v !== null ? v : factory();
           })
         );
       }
@@ -197,14 +197,14 @@ export function makeStateFromConfig<TConfig extends Record<string, AnyKeySpec>>(
   for (const key of Object.keys(config)) {
     const spec = config[key] ?? {};
     // TypedNoDefault markers have no default or serde; treat as plain key.
-    const s = "_noDefaultType" in spec ? {} : (spec as StateKeySpec);
+    const s: StateKeySpec = "_noDefaultType" in spec ? {} : spec;
     result[key] = makeKeyAccessor(
       key,
       ctx,
       sched,
       adapt,
       s.default,
-      s.serde as restate.Serde<unknown> | undefined
+      s.serde
     );
   }
   return result as unknown as StateAccessors<TConfig>;
