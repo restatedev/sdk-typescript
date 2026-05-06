@@ -167,7 +167,7 @@ function makeKeyAccessor<T>(
         return sched.makeJournalFuture(
           p.map((v, e) => {
             if (e !== undefined) throw e as Error;
-            return v !== null ? v : factory();
+            return v != null ? v : factory();
           })
         );
       }
