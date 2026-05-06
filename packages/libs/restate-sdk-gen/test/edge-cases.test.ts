@@ -16,15 +16,8 @@
 //   - rejection propagation through deep combinator trees
 
 import { describe, expect, test } from "vitest";
-import {
-  gen,
-  spawn,
-  type Future,
-  type Operation,
-} from "../src/index.js";
-import {
-  Scheduler,
-} from "../src/internal.js";
+import { gen, spawn, type Future, type Operation } from "../src/index.js";
+import { Scheduler } from "../src/internal.js";
 import { deferred, resolved, testLib } from "./test-promise.js";
 
 describe("edge — error propagation through synthesized combinator bodies", () => {

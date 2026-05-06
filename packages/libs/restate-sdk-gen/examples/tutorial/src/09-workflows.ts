@@ -24,67 +24,50 @@
 
 import * as restate from "@restatedev/restate-sdk";
 import {
-  gen,
-  execute,
+  workflow,
   state,
   sharedState,
   workflowPromise,
+  type Operation,
 } from "@restatedev/restate-sdk-gen";
 
 type WfState = { input: string };
 
-export const blockAndWaitWorkflow = restate.workflow({
+export const blockAndWaitWorkflow = workflow({
   name: "blockAndWait",
   handlers: {
     // The `run` handler: stores its input in state, parks on a durable
     // promise, returns the resolved value.
-    run: async (ctx: restate.WorkflowContext, input: string): Promise<string> =>
-      execute(
-        ctx,
-        gen(function* () {
-          state<WfState>().set("input", input);
+    *run(input: string): Operation<string> {
+      state<WfState>().set("input", input);
 
-          // Park until someone calls `unblock` on this workflow id.
-          const output = workflowPromise<string>("done");
-          const value = yield* output.get();
+      // Park until someone calls `unblock` on this workflow id.
+      const output = workflowPromise<string>("done");
+      const value = yield* output.get();
 
-          // After settle, peek() returns the same value synchronously.
-          // Useful for sanity checks; not load-bearing.
-          const peeked = yield* output.peek();
-          if (peeked === undefined) {
-            throw new restate.TerminalError(
-              "durable promise should be resolved by now"
-            );
-          }
-          return value;
-        })
-      ),
+      // After settle, peek() returns the same value synchronously.
+      // Useful for sanity checks; not load-bearing.
+      const peeked = yield* output.peek();
+      if (peeked === undefined) {
+        throw new restate.TerminalError(
+          "durable promise should be resolved by now"
+        );
+      }
+      return value;
+    },
 
     // Shared handler — completes the durable promise. Anyone who knows
     // the workflow id can call this to unpark `run`. Idempotent: a
     // subsequent resolve is a no-op (the SDK records the first).
-    unblock: async (
-      ctx: restate.WorkflowSharedContext,
-      output: string
-    ): Promise<void> =>
-      execute(
-        ctx,
-        gen(function* () {
-          yield* workflowPromise<string>("done").resolve(output);
-        })
-      ),
+    *unblock(output: string) {
+      yield* workflowPromise<string>("done").resolve(output);
+    },
 
     // Shared handler — read the input that `run` stashed. Demonstrates
     // that workflows have state too, accessible from shared handlers
     // without blocking `run`.
-    getInput: async (
-      ctx: restate.WorkflowSharedContext
-    ): Promise<string | null> =>
-      execute(
-        ctx,
-        gen(function* () {
-          return (yield* sharedState<WfState>().get("input")) ?? null;
-        })
-      ),
+    *getInput() {
+      return (yield* sharedState<WfState>().get("input")) ?? null;
+    },
   },
 });

@@ -17,109 +17,95 @@
 // alwaysReplay) catches any combinator-internal non-determinism.
 
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import * as restate from "@restatedev/restate-sdk";
-import * as clients from "@restatedev/restate-sdk-clients";
 import { RestateTestEnvironment } from "@restatedev/restate-sdk-testcontainers";
 import {
-  gen,
-  execute,
+  service,
   spawn,
   run,
   all,
   race,
   select,
   type Operation,
+  clients,
 } from "@restatedev/restate-sdk-gen";
 
 const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-const concurrencySvc = restate.service({
+const concurrencySvc = service({
   name: "concurrency",
   handlers: {
     // Two `run` in parallel; all waits for both, returns values in
     // input order.
-    all: async (ctx: restate.Context): Promise<string> =>
-      execute(
-        ctx,
-        gen(function* () {
-          const a = run(
-            async () => {
-              await wait(40);
-              return "alpha";
-            },
-            { name: "a" }
-          );
-          const b = run(
-            async () => {
-              await wait(20);
-              return "bravo";
-            },
-            { name: "b" }
-          );
-          const [aVal, bVal] = yield* all([a, b]);
-          return `${aVal}+${bVal}`;
-        })
-      ),
+    *all(): Operation<string> {
+      const a = run(
+        async () => {
+          await wait(40);
+          return "alpha";
+        },
+        { name: "a" }
+      );
+      const b = run(
+        async () => {
+          await wait(20);
+          return "bravo";
+        },
+        { name: "b" }
+      );
+      const [aVal, bVal] = yield* all([a, b]);
+      return `${aVal}+${bVal}`;
+    },
 
     // Race the fast and slow closures; the fast one wins.
-    race: async (ctx: restate.Context): Promise<string> =>
-      execute(
-        ctx,
-        gen(function* () {
-          return yield* race([
-            run(
-              async () => {
-                await wait(20);
-                return "fast-result";
-              },
-              { name: "fast" }
-            ),
-            run(
-              async () => {
-                await wait(200);
-                return "slow-result";
-              },
-              { name: "slow" }
-            ),
-          ]);
-        })
-      ),
+    *race(): Operation<string> {
+      return yield* race([
+        run(
+          async () => {
+            await wait(20);
+            return "fast-result";
+          },
+          { name: "fast" }
+        ),
+        run(
+          async () => {
+            await wait(200);
+            return "slow-result";
+          },
+          { name: "slow" }
+        ),
+      ]);
+    },
 
     // select: race + tag. Switch on which branch fired.
-    selectTagged: async (ctx: restate.Context): Promise<string> =>
-      execute(
-        ctx,
-        gen(function* () {
-          const r = yield* select({
-            fast: run(
-              async () => {
-                await wait(20);
-                return "F";
-              },
-              { name: "fast" }
-            ),
-            slow: run(
-              async () => {
-                await wait(200);
-                return "S";
-              },
-              { name: "slow" }
-            ),
-          });
-          switch (r.tag) {
-            case "fast":
-              return `fast-won:${yield* r.future}`;
-            case "slow":
-              return `slow-won:${yield* r.future}`;
-          }
-        })
-      ),
+    *selectTagged(): Operation<string> {
+      const r = yield* select({
+        fast: run(
+          async () => {
+            await wait(20);
+            return "F";
+          },
+          { name: "fast" }
+        ),
+        slow: run(
+          async () => {
+            await wait(200);
+            return "S";
+          },
+          { name: "slow" }
+        ),
+      });
+      switch (r.tag) {
+        case "fast":
+          return `fast-won:${yield* r.future}`;
+        case "slow":
+          return `slow-won:${yield* r.future}`;
+      }
+    },
 
     // Spawn two routines, all over their futures. Concurrency
     // starts at the spawn — by the time we await, the work is in flight.
-    spawnPair: async (ctx: restate.Context): Promise<string> => {
+    *spawnPair(): Operation<string> {
       const child = (label: string, ms: number): Operation<string> =>
-        gen(function* () {
+        (function* () {
           return yield* run(
             async () => {
               await wait(ms);
@@ -127,22 +113,17 @@ const concurrencySvc = restate.service({
             },
             { name: `${label}-step` }
           );
-        });
-      return execute(
-        ctx,
-        gen(function* () {
-          const tA = yield* spawn(child("A", 40));
-          const tB = yield* spawn(child("B", 20));
-          const [a, b] = yield* all([tA, tB]);
-          return `${a}|${b}`;
-        })
-      );
+        })();
+      const tA = yield* spawn(child("A", 40));
+      const tB = yield* spawn(child("B", 20));
+      const [a, b] = yield* all([tA, tB]);
+      return `${a}|${b}`;
     },
 
     // Mixed sources: all over [journal-backed, routine-backed]
     // futures. The combinator handles both transparently.
-    mixedAllOf: async (ctx: restate.Context): Promise<string> => {
-      const child: Operation<string> = gen(function* () {
+    *mixedAllOf(): Operation<string> {
+      const child: Operation<string> = (function* () {
         return yield* run(
           async () => {
             await wait(20);
@@ -150,22 +131,17 @@ const concurrencySvc = restate.service({
           },
           { name: "child-step" }
         );
-      });
-      return execute(
-        ctx,
-        gen(function* () {
-          const journal = run(
-            async () => {
-              await wait(40);
-              return "from-run";
-            },
-            { name: "journal-step" }
-          );
-          const routine = yield* spawn(child);
-          const [a, b] = yield* all([journal, routine]);
-          return `${a} + ${b}`;
-        })
+      })();
+      const journal = run(
+        async () => {
+          await wait(40);
+          return "from-run";
+        },
+        { name: "journal-step" }
       );
+      const routine = yield* spawn(child);
+      const [a, b] = yield* all([journal, routine]);
+      return `${a} + ${b}`;
     },
   },
 });
@@ -192,27 +168,27 @@ describe.each(modes)("concurrency — $name mode", ({ alwaysReplay }) => {
   });
 
   test("all returns both values in input order", async () => {
-    const client = ingress.serviceClient(concurrencySvc);
+    const client = clients.client(ingress, concurrencySvc);
     expect(await client.all()).toBe("alpha+bravo");
   });
 
   test("race returns the fast one", async () => {
-    const client = ingress.serviceClient(concurrencySvc);
+    const client = clients.client(ingress, concurrencySvc);
     expect(await client.race()).toBe("fast-result");
   });
 
   test("select returns the winning tag and the value via r.future", async () => {
-    const client = ingress.serviceClient(concurrencySvc);
+    const client = clients.client(ingress, concurrencySvc);
     expect(await client.selectTagged()).toBe("fast-won:F");
   });
 
   test("spawn pair: all over routine-backed futures", async () => {
-    const client = ingress.serviceClient(concurrencySvc);
+    const client = clients.client(ingress, concurrencySvc);
     expect(await client.spawnPair()).toBe("A|B");
   });
 
   test("mixed sources: run + spawn in one all", async () => {
-    const client = ingress.serviceClient(concurrencySvc);
+    const client = clients.client(ingress, concurrencySvc);
     expect(await client.mixedAllOf()).toBe("from-run + from-spawn");
   });
 });

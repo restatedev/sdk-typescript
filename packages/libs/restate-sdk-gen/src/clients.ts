@@ -9,91 +9,196 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-// Client wrappers
-// =============================================================================
-//
-// Thin Proxy wrappers around the SDK's typed Clients (`Client<M>`,
-// `SendClient<M>`, `DurablePromise<T>`). The SDK returns RestatePromise
-// from each handler-invocation method; this module wraps those into
-// Future<T> so users can `yield* client.foo(arg)` from a fluent generator
-// instead of `await`ing.
-//
-// Send clients aren't transformed — their methods are synchronous,
-// returning `InvocationHandle` immediately, so the SDK shape passes
-// through unchanged.
-
-import type * as restate from "@restatedev/restate-sdk";
+import * as restate from "@restatedev/restate-sdk";
 import type { Future } from "./future.js";
+import type { InvocationReference } from "./invocation-reference.js";
+import type { HandlerDescriptor, Descriptor } from "./define.js";
+import {
+  ClientCallOptions,
+  ClientSendOptions,
+  Opts,
+  SendOpts,
+} from "@restatedev/restate-sdk";
 
 /**
- * Same shape as the SDK's `Client<M>` but each handler returns
- * `Future<O>` instead of `InvocationPromise<O>`. The mapped type
- * preserves the original argument list (including the trailing
- * `opts?: Opts<...>` parameter from the SDK).
+ * A Future<O> that also carries an `invocation` field — a Future<InvocationReference<O>>
+ * for accessing the invocationId, attach, cancel, and signal of the underlying call.
  */
-export type FluentClient<C> = {
-  [K in keyof C]: C[K] extends (
-    ...args: infer A
-  ) => restate.InvocationPromise<infer R>
-    ? (...args: A) => Future<R>
-    : C[K];
+export type ClientFuture<O> = Future<O> & {
+  invocation: Future<InvocationReference<O>>;
 };
 
-/**
- * Same shape as the SDK's `DurablePromise<T>` but each method returns
- * `Future<...>` instead of `Promise<...>`/`RestatePromise<...>`.
- *
- * Workflow promises are durable; reads are journaled (so `peek`/`get`
- * are journal-backed Futures), and writes (`resolve`/`reject`) record
- * a journal entry that the user yields on.
- */
-export type FluentDurablePromise<T> = {
-  peek(): Future<T | undefined>;
-  resolve(value?: T): Future<void>;
-  reject(errorMsg: string): Future<void>;
-  get(): Future<T>;
+/** Client type returned by client() — each method returns ClientFuture<O> */
+export type GenClient<H extends Record<string, HandlerDescriptor>> = {
+  readonly [K in keyof H]: H[K] extends HandlerDescriptor<infer I, infer O>
+    ? [I] extends [void]
+      ? (opts?: Opts<I, O>) => ClientFuture<O>
+      : (input: I, opts?: Opts<I, O>) => ClientFuture<O>
+    : never;
 };
 
-/**
- * Wrap an SDK `Client<M>` so each handler-invocation returns
- * `Future<T>` (via the supplied `toFuture` adapter) instead of
- * `InvocationPromise<T>`.
- */
-export function wrapClient<C extends object>(
-  client: C,
-  toFuture: <T>(p: restate.RestatePromise<T>) => Future<T>
-): FluentClient<C> {
-  return new Proxy(client, {
-    get(target, prop, receiver) {
-      const orig = Reflect.get(target, prop, receiver) as unknown;
-      if (typeof orig !== "function") return orig;
+/** Client type returned by sendClient() — each method returns Future<InvocationReference<O>> */
+export type GenSendClient<H extends Record<string, HandlerDescriptor>> = {
+  readonly [K in keyof H]: H[K] extends HandlerDescriptor<infer I, infer O>
+    ? [I] extends [void]
+      ? (opts?: SendOpts<I>) => Future<InvocationReference<O>>
+      : (input: I, opts?: SendOpts<I>) => Future<InvocationReference<O>>
+    : never;
+};
+
+// =============================================================================
+// makeClient / makeSendClient — proxy factories used by RestateOperations
+// =============================================================================
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+type GenericCallFn = (opts: {
+  service: string;
+  key?: string;
+  method: string;
+  parameter: unknown;
+  inputSerde: restate.Serde<unknown>;
+  outputSerde: restate.Serde<unknown>;
+  idempotencyKey?: string;
+  headers?: Record<string, string>;
+  name?: string;
+}) => restate.RestatePromise<unknown>;
+
+type GenericSendFn = (opts: {
+  service: string;
+  key?: string;
+  method: string;
+  parameter: unknown;
+  inputSerde: restate.Serde<unknown>;
+  delay?: restate.Duration | number;
+  idempotencyKey?: string;
+  headers?: Record<string, string>;
+  name?: string;
+}) => restate.InvocationHandle;
+
+type ToFutureFn<T> = (p: restate.RestatePromise<T>) => Future<T>;
+type ToRefFn = (
+  handle: restate.InvocationHandle,
+  outputSerde?: restate.Serde<unknown>
+) => Future<InvocationReference<unknown>>;
+
+export function makeClient<H extends Record<string, HandlerDescriptor>>(
+  def: Descriptor<string, H, any>,
+  key: string | undefined,
+  genericCall: GenericCallFn,
+  toFuture: ToFutureFn<unknown>,
+  toRef: ToRefFn
+): GenClient<H> {
+  return new Proxy({} as any, {
+    get(_target, methodName: string) {
       return (...args: unknown[]) => {
-        const rp = (
-          orig as (...a: unknown[]) => restate.RestatePromise<unknown>
-        ).apply(target, args);
-        return toFuture(rp);
+        const { parameter, opts } = optsFromArgs(args);
+        const callOpts = opts as ClientCallOptions<unknown, unknown>;
+        const desc = def._handlers[methodName];
+        const outputSerde = callOpts?.output ?? desc?._outputSerde;
+        const restatePromise = genericCall({
+          service: def.name,
+          key,
+          method: String(methodName),
+          parameter,
+          inputSerde: (callOpts?.input ??
+            desc?._inputSerde ??
+            restate.serde.json) as restate.Serde<unknown>,
+          outputSerde: (outputSerde ??
+            restate.serde.json) as restate.Serde<unknown>,
+          idempotencyKey: callOpts?.idempotencyKey,
+          headers: callOpts?.headers,
+          name: callOpts?.name,
+        });
+        const resultFuture = toFuture(restatePromise);
+        const invHandle =
+          restatePromise as unknown as restate.InvocationPromise<unknown>;
+        const invocation = toRef(invHandle, outputSerde);
+
+        return Object.assign(resultFuture, {
+          invocation,
+        }) as ClientFuture<unknown>;
       };
     },
-  }) as FluentClient<C>;
+  }) as GenClient<H>;
 }
 
-/**
- * Wrap an SDK `DurablePromise<T>` so each method returns `Future<...>`
- * instead of `Promise<...>`/`RestatePromise<...>`.
- */
-export function wrapDurablePromise<T>(
-  dp: restate.DurablePromise<T>,
-  toFuture: <U>(p: restate.RestatePromise<U> | Promise<U>) => Future<U>
-): FluentDurablePromise<T> {
+export function makeSendClient<H extends Record<string, HandlerDescriptor>>(
+  def: Descriptor<string, H, any>,
+  key: string | undefined,
+  genericSend: GenericSendFn,
+  toRef: ToRefFn
+): GenSendClient<H> {
+  return new Proxy({} as any, {
+    get(_target, methodName: string) {
+      return (...args: unknown[]) => {
+        const { parameter, opts } = optsFromArgs(args);
+        const sendOpts = opts as ClientSendOptions<unknown>;
+        const desc = def._handlers[methodName];
+        const handle = genericSend({
+          service: def.name,
+          key,
+          method: String(methodName),
+          parameter,
+          inputSerde: (sendOpts?.input ??
+            desc?._inputSerde ??
+            restate.serde.json) as restate.Serde<unknown>,
+          delay: sendOpts?.delay,
+          idempotencyKey: sendOpts?.idempotencyKey,
+          headers: sendOpts?.headers,
+          name: sendOpts?.name,
+        });
+        return toRef(handle, desc?._outputSerde);
+      };
+    },
+  }) as GenSendClient<H>;
+}
+
+function optsFromArgs(args: unknown[]): {
+  parameter?: unknown;
+  opts?:
+    | ClientCallOptions<unknown, unknown>
+    | ClientSendOptions<unknown>
+    | undefined;
+} {
+  let parameter: unknown;
+  let opts:
+    | ClientCallOptions<unknown, unknown>
+    | ClientSendOptions<unknown>
+    | undefined;
+  switch (args.length) {
+    case 0: {
+      break;
+    }
+    case 1: {
+      if (args[0] instanceof Opts) {
+        opts = args[0].getOpts();
+      } else if (args[0] instanceof SendOpts) {
+        opts = args[0].getOpts();
+      } else {
+        parameter = args[0];
+      }
+      break;
+    }
+    case 2: {
+      parameter = args[0];
+      if (args[1] instanceof Opts) {
+        opts = args[1].getOpts();
+      } else if (args[1] instanceof SendOpts) {
+        opts = args[1].getOpts();
+      } else {
+        throw new TypeError(
+          "The second argument must be either Opts or SendOpts"
+        );
+      }
+      break;
+    }
+    default: {
+      throw new TypeError("unexpected number of arguments");
+    }
+  }
   return {
-    peek: () =>
-      toFuture(dp.peek() as unknown as restate.RestatePromise<T | undefined>),
-    resolve: (value?: T) =>
-      toFuture(dp.resolve(value) as unknown as restate.RestatePromise<void>),
-    reject: (errorMsg: string) =>
-      // dp.reject takes a string per Restate's DurablePromise API.
-      // eslint-disable-next-line @typescript-eslint/prefer-promise-reject-errors
-      toFuture(dp.reject(errorMsg) as unknown as restate.RestatePromise<void>),
-    get: () => toFuture(dp.get()),
+    parameter,
+    opts,
   };
 }

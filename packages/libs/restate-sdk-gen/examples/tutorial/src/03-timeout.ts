@@ -21,36 +21,38 @@
 // the guide.
 
 import * as restate from "@restatedev/restate-sdk";
-import { gen, execute, run, sleep, select } from "@restatedev/restate-sdk-gen";
+import {
+  service,
+  run,
+  sleep,
+  select,
+  type Operation,
+} from "@restatedev/restate-sdk-gen";
 import { wait } from "./fakes.js";
 
-export const timeout = restate.service({
+export const timeout = service({
   name: "timeout",
   handlers: {
-    withTimeout: async (
-      ctx: restate.Context,
-      req: { workMs: number; budgetSeconds: number }
-    ): Promise<string> =>
-      execute(
-        ctx,
-        gen(function* () {
-          const r = yield* select({
-            done: run(
-              async () => {
-                await wait(req.workMs);
-                return `did-${req.workMs}ms-of-work`;
-              },
-              { name: "call" }
-            ),
-            timeout: sleep({ seconds: req.budgetSeconds }),
-          });
-          if (r.tag === "timeout") {
-            throw new restate.TerminalError(
-              `timed out after ${req.budgetSeconds}s`
-            );
-          }
-          return yield* r.future;
-        })
-      ),
+    *withTimeout(req: {
+      workMs: number;
+      budgetSeconds: number;
+    }): Operation<string> {
+      const r = yield* select({
+        done: run(
+          async () => {
+            await wait(req.workMs);
+            return `did-${req.workMs}ms-of-work`;
+          },
+          { name: "call" }
+        ),
+        timeout: sleep({ seconds: req.budgetSeconds }),
+      });
+      if (r.tag === "timeout") {
+        throw new restate.TerminalError(
+          `timed out after ${req.budgetSeconds}s`
+        );
+      }
+      return yield* r.future;
+    },
   },
 });

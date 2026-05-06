@@ -26,9 +26,7 @@ import {
   type Future,
   type Operation,
 } from "../src/index.js";
-import {
-  Scheduler,
-} from "../src/internal.js";
+import { Scheduler } from "../src/internal.js";
 import { deferred, resolved, testLib } from "./test-promise.js";
 
 // A trace recorder. Each entry tags its origin so tests can assert on the

@@ -30,40 +30,34 @@
 
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import * as restate from "@restatedev/restate-sdk";
-import * as clients from "@restatedev/restate-sdk-clients";
 import { RestateTestEnvironment } from "@restatedev/restate-sdk-testcontainers";
-
-let idempotencyKeySeq = 0;
-const idem = () =>
-  clients.SendOpts.from({ idempotencyKey: `test-${++idempotencyKeySeq}` });
 import {
-  gen,
-  execute,
+  service,
   spawn,
   signal,
   sleep,
   all,
   allSettled,
   race,
-  type FutureSettledResult,
+  invocation,
+  clients,
 } from "@restatedev/restate-sdk-gen";
+
+let idempotencyKeySeq = 0;
+const idem = () =>
+  clients.SendOpts.from<void>({
+    idempotencyKey: `test-${++idempotencyKeySeq}`,
+  });
 
 // ---------------------------------------------------------------------------
 // Helper: send a named signal to a target invocation.
 // ---------------------------------------------------------------------------
 
-const signalSenderSvc = restate.service({
+const signalSenderSvc = service({
   name: "signalSender",
   handlers: {
-    resolve: async (
-      ctx: restate.Context,
-      req: { invocationId: string; name: string; value: string }
-    ): Promise<void> => {
-      const ctxInternal = ctx as restate.internal.ContextInternal;
-      ctxInternal
-        .invocation(restate.InvocationIdParser.fromString(req.invocationId))
-        .signal<string>(req.name)
-        .resolve(req.value);
+    *resolve(req: { invocationId: string; name: string; value: string }) {
+      invocation(req.invocationId).signal<string>(req.name).resolve(req.value);
     },
   },
 });
@@ -72,31 +66,25 @@ const signalSenderSvc = restate.service({
 // The workflows under test.
 // ---------------------------------------------------------------------------
 
-const combinatorSvc = restate.service({
+const combinatorSvc = service({
   name: "signalCombinator",
   handlers: {
     // allSettled(race(p1, p2), race(p1, p3))
     //
     // p1 is the same Future shared across both races. When p1 settles first,
     // both races should report fulfilled with p1's value.
-    allSettledSharedSignal: async (
-      ctx: restate.Context
-    ): Promise<FutureSettledResult<string>[]> =>
-      execute(
-        ctx,
-        gen(function* () {
-          const p1 = signal<string>("p1");
-          const p2 = signal<string>("p2");
-          const p3 = signal<string>("p3");
+    *allSettledSharedSignal() {
+      const p1 = signal<string>("p1");
+      const p2 = signal<string>("p2");
+      const p3 = signal<string>("p3");
 
-          const results = yield* allSettled([race([p1, p2]), race([p1, p3])]);
+      const results = yield* allSettled([race([p1, p2]), race([p1, p3])]);
 
-          // Force a suspension so alwaysReplay exercises full journal replay.
-          yield* sleep({ milliseconds: 1 });
+      // Force a suspension so alwaysReplay exercises full journal replay.
+      yield* sleep({ milliseconds: 1 });
 
-          return results as FutureSettledResult<string>[];
-        })
-      ),
+      return results;
+    },
 
     // all(race(spawn-that-throws-after-p1, p2), race(p1, p3))
     //
@@ -105,40 +93,36 @@ const combinatorSvc = restate.service({
     // `p1.map(() => { throw new TerminalError("p1 completed") })`.
     // When p1 fires first, the spawned routine throws, race1 rejects,
     // and `all` propagates the rejection.
-    allWithMappedSignal: async (ctx: restate.Context): Promise<string[]> =>
-      execute(
-        ctx,
-        gen(function* () {
-          const p1 = signal<string>("p1");
-          const p2 = signal<string>("p2");
-          const p3 = signal<string>("p3");
+    *allWithMappedSignal() {
+      const p1 = signal<string>("p1");
+      const p2 = signal<string>("p2");
+      const p3 = signal<string>("p3");
 
-          // Equivalent of `p1.map(() => { throw new TerminalError(...) })`:
-          // a spawned routine that parks on p1, then throws regardless of
-          // whether p1 fulfilled or rejected.
-          const p1Throws = yield* spawn(
-            gen(function* () {
-              try {
-                yield* p1;
-              } catch {
-                // p1 may reject; we throw our own error either way.
-              }
-              throw new restate.TerminalError("p1 completed");
-            })
-          );
-
+      // Equivalent of `p1.map(() => { throw new TerminalError(...) })`:
+      // a spawned routine that parks on p1, then throws regardless of
+      // whether p1 fulfilled or rejected.
+      const p1Throws = yield* spawn(
+        (function* () {
           try {
-            const result = yield* all([race([p1Throws, p2]), race([p1, p3])]);
-            // Force a suspension on the success path (not reachable in this
-            // test, but keeps the handler shape symmetric).
-            yield* sleep({ milliseconds: 1 });
-            return result as string[];
-          } catch (e) {
-            yield* sleep({ milliseconds: 1 });
-            throw e;
+            yield* p1;
+          } catch {
+            // p1 may reject; we throw our own error either way.
           }
-        })
-      ),
+          throw new restate.TerminalError("p1 completed");
+        })()
+      );
+
+      try {
+        const result = yield* all([race([p1Throws, p2]), race([p1, p3])]);
+        // Force a suspension on the success path (not reachable in this
+        // test, but keeps the handler shape symmetric).
+        yield* sleep({ milliseconds: 1 });
+        return result as string[];
+      } catch (e) {
+        yield* sleep({ milliseconds: 1 });
+        throw e;
+      }
+    },
   },
 });
 
@@ -170,15 +154,17 @@ describe.each(modes)(
     });
 
     const sendSignal = (invocationId: string, name: string, value: string) =>
-      ingress
-        .serviceClient(signalSenderSvc)
-        .resolve({ invocationId, name, value });
+      clients.client(ingress, signalSenderSvc).resolve({
+        invocationId,
+        name,
+        value,
+      });
 
     // ---- scenario 1: allSettled(race(p1, p2), race(p1, p3)) ----------------
 
     test("allSettled — p1 fires first: both races settle with p1's value", async () => {
-      const handle = await ingress
-        .serviceSendClient(combinatorSvc)
+      const handle = await clients
+        .sendClient(ingress, combinatorSvc)
         .allSettledSharedSignal(idem());
       const invocationId = handle.invocationId;
 
@@ -187,15 +173,19 @@ describe.each(modes)(
       // p3 fires afterward — must not disturb the already-settled race.
       await sendSignal(invocationId, "p3", "from-p3");
 
-      const result = await ingress.result(handle);
+      const result = (await ingress.result(handle)) as Array<{
+        status: string;
+        value?: unknown;
+        reason?: unknown;
+      }>;
       expect(result).toHaveLength(2);
       expect(result[0]).toEqual({ status: "fulfilled", value: "from-p1" });
       expect(result[1]).toEqual({ status: "fulfilled", value: "from-p1" });
     }, 30_000);
 
     test("allSettled — p2 fires first on race1, p3 fires first on race2", async () => {
-      const handle = await ingress
-        .serviceSendClient(combinatorSvc)
+      const handle = await clients
+        .sendClient(ingress, combinatorSvc)
         .allSettledSharedSignal(idem());
       const invocationId = handle.invocationId;
 
@@ -205,7 +195,11 @@ describe.each(modes)(
       // p1 fires last — races already settled.
       await sendSignal(invocationId, "p1", "from-p1");
 
-      const result = await ingress.result(handle);
+      const result = (await ingress.result(handle)) as Array<{
+        status: string;
+        value?: string;
+        reason?: unknown;
+      }>;
       expect(result).toHaveLength(2);
       expect(result[0]).toEqual({ status: "fulfilled", value: "from-p2" });
       expect(result[1]).toEqual({ status: "fulfilled", value: "from-p3" });
@@ -214,8 +208,8 @@ describe.each(modes)(
     // ---- scenario 2: all(race(p1→throws, p2), race(p1, p3)) ---------------
 
     test("all — p1 fires first: spawned transform throws, all rejects", async () => {
-      const handle = await ingress
-        .serviceSendClient(combinatorSvc)
+      const handle = await clients
+        .sendClient(ingress, combinatorSvc)
         .allWithMappedSignal(idem());
       const invocationId = handle.invocationId;
 
@@ -228,8 +222,8 @@ describe.each(modes)(
     }, 30_000);
 
     test("all — p2 fires first on race1: all resolves with both values", async () => {
-      const handle = await ingress
-        .serviceSendClient(combinatorSvc)
+      const handle = await clients
+        .sendClient(ingress, combinatorSvc)
         .allWithMappedSignal(idem());
       const invocationId = handle.invocationId;
 
@@ -239,7 +233,7 @@ describe.each(modes)(
       // p1 fires last — the races already settled without it.
       await sendSignal(invocationId, "p1", "from-p1");
 
-      const result = await ingress.result(handle);
+      const result = (await ingress.result(handle)) as string[];
       expect(result).toHaveLength(2);
       expect(result[0]).toBe("from-p2");
       expect(result[1]).toBe("from-p3");

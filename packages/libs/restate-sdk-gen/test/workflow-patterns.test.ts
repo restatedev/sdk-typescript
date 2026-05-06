@@ -25,9 +25,7 @@ import {
   type Future,
   type Operation,
 } from "../src/index.js";
-import {
-  Scheduler,
-} from "../src/internal.js";
+import { Scheduler } from "../src/internal.js";
 import { deferred, resolved, testLib } from "./test-promise.js";
 
 describe("workflow-patterns — retry with bounded attempts", () => {

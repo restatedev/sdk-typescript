@@ -25,9 +25,13 @@
 
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import * as restate from "@restatedev/restate-sdk";
-import * as clients from "@restatedev/restate-sdk-clients";
 import { RestateTestEnvironment } from "@restatedev/restate-sdk-testcontainers";
-import { gen, execute, run } from "@restatedev/restate-sdk-gen";
+import {
+  service,
+  run,
+  type Operation,
+  clients,
+} from "@restatedev/restate-sdk-gen";
 
 // Module-scope counters: handlers record how many times their throwing
 // code path executed. Cleared per-test inside describe.each blocks.
@@ -38,33 +42,25 @@ const bump = (key: string): number => {
   return n;
 };
 
-const terminalSvc = restate.service({
+const terminalSvc = service({
   name: "terminal",
   handlers: {
-    insideRun: async (ctx: restate.Context, key: string): Promise<string> =>
-      execute(
-        ctx,
-        gen(function* () {
-          return yield* run(
-            async () => {
-              bump(key);
-              throw new restate.TerminalError("inside-run-fatal");
-            },
-            { name: "step" }
-          );
-        })
-      ),
-
-    outsideRun: async (ctx: restate.Context, key: string): Promise<string> =>
-      execute(
-        ctx,
-        gen(function* () {
+    *insideRun(key: string): Operation<string> {
+      return yield* run(
+        async () => {
           bump(key);
-          throw new restate.TerminalError("outside-run-fatal");
-          // unreachable; keeps the generator's return type happy
-          yield* run(async () => "x", { name: "never" });
-        })
-      ),
+          throw new restate.TerminalError("inside-run-fatal");
+        },
+        { name: "step" }
+      );
+    },
+
+    *outsideRun(key: string): Operation<string> {
+      bump(key);
+      throw new restate.TerminalError("outside-run-fatal");
+      // unreachable; keeps the generator's return type happy
+      yield* run(async () => "x", { name: "never" });
+    },
   },
 });
 
@@ -95,7 +91,7 @@ describe.each(modes)("terminal errors — $name mode", ({ alwaysReplay }) => {
   test("inside ops.run", async () => {
     attempts.clear();
     const key = `inside-${alwaysReplay ? "replay" : "default"}`;
-    const client = ingress.serviceClient(terminalSvc);
+    const client = clients.client(ingress, terminalSvc);
     await expect(client.insideRun(key)).rejects.toThrow(/inside-run-fatal/);
     // Closure ran exactly once — terminal errors don't retry, and the
     // journaled terminal outcome is replayed (not re-executed) under
@@ -106,7 +102,7 @@ describe.each(modes)("terminal errors — $name mode", ({ alwaysReplay }) => {
   test("outside ops.run (raw throw in the gen body)", async () => {
     attempts.clear();
     const key = `outside-${alwaysReplay ? "replay" : "default"}`;
-    const client = ingress.serviceClient(terminalSvc);
+    const client = clients.client(ingress, terminalSvc);
     await expect(client.outsideRun(key)).rejects.toThrow(/outside-run-fatal/);
     // No journal entries before the throw → no suspension → no replay
     // even in alwaysReplay mode. Body runs exactly once.

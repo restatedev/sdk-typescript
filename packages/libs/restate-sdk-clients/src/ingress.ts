@@ -20,7 +20,7 @@ import {
   serde,
   type JournalValueCodec,
 } from "@restatedev/restate-sdk-core";
-import type {
+import {
   ConnectionOpts,
   Ingress,
   IngressClient,
@@ -410,6 +410,40 @@ class HttpIngress implements Ingress {
     return this.proxy(opts.name, undefined, true) as IngressSendClient<
       Service<D>
     >;
+  }
+
+  async call<I, O>(opts: {
+    service: string;
+    handler: string;
+    parameter: I;
+    key?: string;
+    opts?: Opts<I, O>;
+  }): Promise<O> {
+    return doComponentInvocation<I, O>(this.opts, {
+      component: opts.service,
+      handler: opts.handler,
+      key: opts.key,
+      parameter: opts.parameter,
+      send: false,
+      opts: opts.opts,
+    });
+  }
+
+  async send<I>(opts: {
+    service: string;
+    handler: string;
+    parameter: I;
+    key?: string;
+    opts?: SendOpts<I>;
+  }): Promise<Send> {
+    return doComponentInvocation<I, Send>(this.opts, {
+      component: opts.service,
+      handler: opts.handler,
+      key: opts.key,
+      parameter: opts.parameter,
+      send: true,
+      opts: opts.opts,
+    });
   }
 
   async resolveAwakeable<T>(

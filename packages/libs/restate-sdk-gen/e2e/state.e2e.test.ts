@@ -26,10 +26,13 @@
 // Both runtime modes: default + alwaysReplay.
 
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import * as restate from "@restatedev/restate-sdk";
-import * as clients from "@restatedev/restate-sdk-clients";
 import { RestateTestEnvironment } from "@restatedev/restate-sdk-testcontainers";
-import { gen, execute, state, sharedState } from "@restatedev/restate-sdk-gen";
+import {
+  object,
+  state,
+  sharedState,
+  clients,
+} from "@restatedev/restate-sdk-gen";
 
 // Typed-state shape for the counter object. Keys and value types here
 // flow through to state<CounterState>() at every call site below.
@@ -38,67 +41,46 @@ type CounterState = {
   secondary: string;
 };
 
-const counterObj = restate.object({
+const counterObj = object({
   name: "counter",
   handlers: {
-    add: async (ctx: restate.ObjectContext, n: number): Promise<number> =>
-      execute(
-        ctx,
-        gen(function* () {
-          const s = state<CounterState>();
-          const current = (yield* s.get("count")) ?? 0;
-          const next = current + n;
-          s.set("count", next);
-          return next;
-        })
-      ),
+    *add(n: number) {
+      const s = state<CounterState>();
+      const current = (yield* s.get("count")) ?? 0;
+      const next = current + n;
+      s.set("count", next);
+      return next;
+    },
 
     // Read-only handler — uses sharedState() so writes wouldn't compile.
-    current: async (ctx: restate.ObjectSharedContext): Promise<number> =>
-      execute(
-        ctx,
-        gen(function* () {
-          return (yield* sharedState<CounterState>().get("count")) ?? 0;
-        })
-      ),
+    *current() {
+      return (yield* sharedState<CounterState>().get("count")) ?? 0;
+    },
 
-    keys: async (ctx: restate.ObjectSharedContext): Promise<string[]> =>
-      execute(
-        ctx,
-        gen(function* () {
-          return yield* sharedState<CounterState>().keys();
-        })
-      ),
+    *keys() {
+      return yield* sharedState<CounterState>().keys();
+    },
 
-    setSecondary: async (
-      ctx: restate.ObjectContext,
-      value: string
-    ): Promise<{ count: number; secondary: string }> =>
-      execute(
-        ctx,
-        gen(function* () {
-          const s = state<CounterState>();
-          s.set("secondary", value);
-          const count = (yield* s.get("count")) ?? 0;
-          return { count, secondary: value };
-        })
-      ),
+    *setSecondary(value: string) {
+      const s = state<CounterState>();
+      s.set("secondary", value);
+      const count = (yield* s.get("count")) ?? 0;
+      return { count, secondary: value };
+    },
 
-    clearSecondary: async (ctx: restate.ObjectContext): Promise<void> =>
-      execute(
-        ctx,
-        gen(function* () {
-          state<CounterState>().clear("secondary");
-        })
-      ),
+    *clearSecondary() {
+      state<CounterState>().clear("secondary");
+    },
 
-    reset: async (ctx: restate.ObjectContext): Promise<void> =>
-      execute(
-        ctx,
-        gen(function* () {
-          state<CounterState>().clearAll();
-        })
-      ),
+    *reset() {
+      state<CounterState>().clearAll();
+    },
+  },
+  options: {
+    handlers: {
+      current: { shared: true },
+      keys: { shared: true },
+    },
   },
 });
 
@@ -125,7 +107,7 @@ describe.each(modes)("state — $name mode", ({ alwaysReplay }) => {
 
   test("get/set: counter accumulates across calls", async () => {
     const key = `acc-${alwaysReplay ? "replay" : "default"}`;
-    const client = ingress.objectClient(counterObj, key);
+    const client = clients.client(ingress, counterObj, key);
     expect(await client.add(1)).toBe(1);
     expect(await client.add(2)).toBe(3);
     expect(await client.add(7)).toBe(10);
@@ -135,8 +117,8 @@ describe.each(modes)("state — $name mode", ({ alwaysReplay }) => {
   test("isolation: each VO key has independent state", async () => {
     const k1 = `iso1-${alwaysReplay ? "replay" : "default"}`;
     const k2 = `iso2-${alwaysReplay ? "replay" : "default"}`;
-    const c1 = ingress.objectClient(counterObj, k1);
-    const c2 = ingress.objectClient(counterObj, k2);
+    const c1 = clients.client(ingress, counterObj, k1);
+    const c2 = clients.client(ingress, counterObj, k2);
     await c1.add(5);
     await c2.add(11);
     expect(await c1.current()).toBe(5);
@@ -145,7 +127,7 @@ describe.each(modes)("state — $name mode", ({ alwaysReplay }) => {
 
   test("keys(): lists all set keys, drops cleared ones", async () => {
     const key = `keys-${alwaysReplay ? "replay" : "default"}`;
-    const client = ingress.objectClient(counterObj, key);
+    const client = clients.client(ingress, counterObj, key);
     await client.add(1);
     await client.setSecondary("hello");
     expect((await client.keys()).sort()).toEqual(["count", "secondary"]);
@@ -155,7 +137,7 @@ describe.each(modes)("state — $name mode", ({ alwaysReplay }) => {
 
   test("clearAll: wipes all state for this object", async () => {
     const key = `clear-${alwaysReplay ? "replay" : "default"}`;
-    const client = ingress.objectClient(counterObj, key);
+    const client = clients.client(ingress, counterObj, key);
     await client.add(42);
     await client.setSecondary("alongside");
     expect((await client.keys()).sort()).toEqual(["count", "secondary"]);

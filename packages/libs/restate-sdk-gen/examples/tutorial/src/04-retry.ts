@@ -21,35 +21,31 @@
 // failures, check external state between attempts).
 
 import * as restate from "@restatedev/restate-sdk";
-import { gen, execute, run } from "@restatedev/restate-sdk-gen";
+import { service, run, type Operation } from "@restatedev/restate-sdk-gen";
 import { flakyFetch } from "./fakes.js";
 
-export const retry = restate.service({
+export const retry = service({
   name: "retry",
   handlers: {
     // The closure throws non-terminal errors a few times before
     // succeeding. With retry.maxAttempts: 5, the SDK retries with
     // backoff and the call eventually succeeds (since flakyFetch fails
     // only twice).
-    bounded: async (ctx: restate.Context, url: string): Promise<string> =>
-      execute(
-        ctx,
-        gen(function* () {
-          try {
-            return yield* run(() => flakyFetch(url, 2), {
-              name: "fetch",
-              retry: { maxAttempts: 5, initialInterval: { milliseconds: 100 } },
-            });
-          } catch (e) {
-            if (e instanceof restate.TerminalError) {
-              // Bound exhausted (or upstream returned a terminal error).
-              // Fall back to a static value. In real code you'd pick
-              // your own fallback, log, or rethrow with context.
-              return `fallback-for-${url}`;
-            }
-            throw e;
-          }
-        })
-      ),
+    *bounded(url: string): Operation<string> {
+      try {
+        return yield* run(() => flakyFetch(url, 2), {
+          name: "fetch",
+          retry: { maxAttempts: 5, initialInterval: { milliseconds: 100 } },
+        });
+      } catch (e) {
+        if (e instanceof restate.TerminalError) {
+          // Bound exhausted (or upstream returned a terminal error).
+          // Fall back to a static value. In real code you'd pick
+          // your own fallback, log, or rethrow with context.
+          return `fallback-for-${url}`;
+        }
+        throw e;
+      }
+    },
   },
 });

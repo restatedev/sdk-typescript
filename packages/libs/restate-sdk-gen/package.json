@@ -51,12 +51,15 @@
     "_check:api": "api-extractor run --local",
     "prepublishOnly": "pnpm -w verify"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@restatedev/restate-sdk-clients": "workspace:*",
+    "@restatedev/restate-sdk-core": "workspace:*"
+  },
   "devDependencies": {
     "@restatedev/restate-sdk": "workspace:*",
-    "@restatedev/restate-sdk-clients": "workspace:*",
     "@restatedev/restate-sdk-testcontainers": "workspace:*",
-    "testcontainers": "^11.12.0"
+    "testcontainers": "^11.12.0",
+    "zod": "catalog:"
   },
   "peerDependencies": {
     "@restatedev/restate-sdk": "^1.14.2"
