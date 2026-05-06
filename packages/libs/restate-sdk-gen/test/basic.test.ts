@@ -10,13 +10,8 @@
  */
 
 import { describe, expect, test } from "vitest";
-import {
-  gen,
-  type Operation,
-} from "../src/index.js";
-import {
-  Scheduler,
-} from "../src/internal.js";
+import { gen, type Operation } from "../src/index.js";
+import { Scheduler } from "../src/internal.js";
 import { testLib } from "./test-promise.js";
 
 describe("gen — basics", () => {

@@ -15,15 +15,8 @@
 // that show up in real workflows.
 
 import { describe, expect, test } from "vitest";
-import {
-  gen,
-  spawn,
-  type Future,
-  type Operation,
-} from "../src/index.js";
-import {
-  Scheduler,
-} from "../src/internal.js";
+import { gen, spawn, type Future, type Operation } from "../src/index.js";
+import { Scheduler } from "../src/internal.js";
 import { deferred, testLib } from "./test-promise.js";
 
 describe("cross-routine — one signals another", () => {

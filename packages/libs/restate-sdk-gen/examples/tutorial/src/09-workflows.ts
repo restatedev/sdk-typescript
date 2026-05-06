@@ -27,11 +27,10 @@ import {
   gen,
   execute,
   state,
-  sharedState,
   workflowPromise,
 } from "@restatedev/restate-sdk-gen";
 
-type WfState = { input: string };
+const wfState = state<{ input: string }>();
 
 export const blockAndWaitWorkflow = restate.workflow({
   name: "blockAndWait",
@@ -42,7 +41,7 @@ export const blockAndWaitWorkflow = restate.workflow({
       execute(
         ctx,
         gen(function* () {
-          state<WfState>().set("input", input);
+          wfState.input.set(input);
 
           // Park until someone calls `unblock` on this workflow id.
           const output = workflowPromise<string>("done");
@@ -83,7 +82,7 @@ export const blockAndWaitWorkflow = restate.workflow({
       execute(
         ctx,
         gen(function* () {
-          return (yield* sharedState<WfState>().get("input")) ?? null;
+          return yield* wfState.input.get();
         })
       ),
   },

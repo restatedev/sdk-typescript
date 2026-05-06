@@ -33,9 +33,7 @@ import {
   type Future,
   type Channel,
 } from "../src/index.js";
-import {
-  Scheduler,
-} from "../src/internal.js";
+import { Scheduler } from "../src/internal.js";
 import { testLib, deferred } from "./test-promise.js";
 
 // Helper: an Operation that yields the send (firing it). Spawn this

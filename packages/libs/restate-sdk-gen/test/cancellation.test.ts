@@ -27,15 +27,8 @@
 // (constructed after cancellation is delivered) are unaffected.
 
 import { describe, expect, test } from "vitest";
-import {
-  gen,
-  spawn,
-  type Future,
-  type Operation,
-} from "../src/index.js";
-import {
-  Scheduler,
-} from "../src/internal.js";
+import { gen, spawn, type Future, type Operation } from "../src/index.js";
+import { Scheduler } from "../src/internal.js";
 import { cancellingLib, deferred } from "./test-promise.js";
 
 // Stand-in for restate.TerminalError with the cancellation code. The

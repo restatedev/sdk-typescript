@@ -25,15 +25,8 @@
 //   3. AwaitAny over the same future referenced multiple times.
 
 import { describe, expect, test } from "vitest";
-import {
-  gen,
-  spawn,
-  type Future,
-  type Operation,
-} from "../src/index.js";
-import {
-  Scheduler,
-} from "../src/internal.js";
+import { gen, spawn, type Future, type Operation } from "../src/index.js";
+import { Scheduler } from "../src/internal.js";
 import { deferred, resolved, testLib } from "./test-promise.js";
 
 describe("won-flag — multiple journal sources ready at once", () => {

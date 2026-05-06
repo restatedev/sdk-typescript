@@ -43,7 +43,11 @@
 import type * as restate from "@restatedev/restate-sdk";
 import type { Future, FutureValues, FutureSettledResult } from "./future.js";
 import type { Channel } from "./channel.js";
-import type { State, SharedState, TypedState, UntypedState } from "./state.js";
+import type {
+  AnyKeySpec,
+  StateAccessors,
+  UntypedStateAccessors,
+} from "./state.js";
 import type { FluentClient, FluentDurablePromise } from "./clients.js";
 import type {
   RestateOperations,
@@ -158,13 +162,80 @@ export const cancel = (invocationId: restate.InvocationId): void =>
 
 export const channel = <T>(): Channel<T> => currentOps().channel<T>();
 
-export const state = <
-  TState extends TypedState = UntypedState,
->(): State<TState> => currentOps().state<TState>();
+/**
+ * Per-key typed state accessor for virtual objects and workflows.
+ * Safe to call at module level — the Restate context is resolved lazily
+ * when `.get()`, `.set()`, or `.clear()` is first called inside a handler.
+ *
+ * @example Keys with defaults return a non-null value; use `typed<T>()` for
+ * typed keys without defaults.
+ * ```ts
+ * const s = state({
+ *   count: { default: 0 },          // count.get() → Future<number>
+ *   items: { default: () => [] },   // factory default, fresh array each time
+ *   label: typed<string>(),         // label.get() → Future<string | null>
+ * });
+ *
+ * // In a handler:
+ * const n: number = yield* s.count.get();
+ * s.count.set(n + 1);
+ * s.count.clear();
+ * ```
+ *
+ * @example Without a config, pass an explicit type — all keys return nullable.
+ * ```ts
+ * const s = state<{ count: number; label: string }>();
+ * const n = (yield* s.count.get()) ?? 0; // Future<number | null>
+ * ```
+ *
+ * When key names are only known at runtime, use instead:
+ * `getState`, `setState`, `clearState`, `clearAllState`, `getAllStateKeys`.
+ */
+export function state<TConfig extends Record<string, AnyKeySpec>>(
+  config: TConfig
+): StateAccessors<TConfig>;
+export function state<
+  TShape extends Record<string, unknown>,
+>(): UntypedStateAccessors<TShape>;
+export function state(
+  config?: Record<string, AnyKeySpec>
+): UntypedStateAccessors<never> {
+  const capturedConfig = config;
+  return new Proxy({} as never, {
+    get(_target, prop: string) {
+      return {
+        get: (serde?: unknown) =>
+          currentOps()
+            .stateKey(prop, capturedConfig?.[prop])
+            .get(serde as never),
+        set: (value: unknown, serde?: unknown) =>
+          currentOps()
+            .stateKey(prop, capturedConfig?.[prop])
+            .set(value as never, serde as never),
+        clear: () =>
+          currentOps().stateKey(prop, capturedConfig?.[prop]).clear(),
+      };
+    },
+  });
+}
 
-export const sharedState = <
-  TState extends TypedState = UntypedState,
->(): SharedState<TState> => currentOps().sharedState<TState>();
+export const getState = <T>(
+  name: string,
+  serde?: restate.Serde<T>
+): Future<T | null> => currentOps().getState<T>(name, serde);
+
+export const setState = <T>(
+  name: string,
+  value: T,
+  serde?: restate.Serde<T>
+): void => currentOps().setState(name, value, serde);
+
+export const clearState = (name: string): void => currentOps().clearState(name);
+
+export const clearAllState = (): void => currentOps().clearAllState();
+
+export const getAllStateKeys = (): Future<string[]> =>
+  currentOps().getAllStateKeys();
 
 // ---- workflow durable promise ----
 

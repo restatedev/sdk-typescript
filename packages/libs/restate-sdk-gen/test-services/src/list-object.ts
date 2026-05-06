@@ -13,11 +13,9 @@
 // Mirrors sdk-ruby/test-services/services/list_object.rb.
 
 import * as restate from "@restatedev/restate-sdk";
-import { gen, execute, state, sharedState } from "@restatedev/restate-sdk-gen";
+import { gen, execute, state } from "@restatedev/restate-sdk-gen";
 
-type ListState = {
-  list: string[];
-};
+const listState = state({ list: { default: [] as string[] } });
 
 export const listObject = restate.object({
   name: "ListObject",
@@ -26,9 +24,8 @@ export const listObject = restate.object({
       execute(
         ctx,
         gen(function* () {
-          const s = state<ListState>();
-          const list = (yield* s.get("list")) ?? [];
-          s.set("list", [...list, value]);
+          const list = yield* listState.list.get();
+          listState.list.set([...list, value]);
         })
       ),
 
@@ -36,7 +33,7 @@ export const listObject = restate.object({
       execute(
         ctx,
         gen(function* () {
-          return (yield* sharedState<ListState>().get("list")) ?? [];
+          return yield* listState.list.get();
         })
       ),
 
@@ -44,9 +41,8 @@ export const listObject = restate.object({
       execute(
         ctx,
         gen(function* () {
-          const s = state<ListState>();
-          const result = (yield* s.get("list")) ?? [];
-          s.clear("list");
+          const result: string[] = yield* listState.list.get();
+          listState.list.clear();
           return result;
         })
       ),

@@ -19,8 +19,8 @@ import {
   gen,
   execute,
   select,
-  state,
-  sharedState,
+  getState,
+  setState,
   awakeable,
   sleep,
   run,
@@ -68,11 +68,6 @@ type RunThrowTerminalSub = {
 };
 type SubCommand = CreateAwakeableSub | SleepSub | RunThrowTerminalSub;
 
-type State = {
-  results: string[];
-  [k: `awk-${string}`]: string;
-};
-
 type SubFutureKind = "awakeable" | "sleep" | "run";
 type SubEntry = { kind: SubFutureKind; future: Future<unknown> };
 
@@ -84,7 +79,7 @@ export const virtualObjectCommandInterpreter = restate.object({
         execute(
           ctx,
           gen(function* () {
-            return (yield* sharedState<State>().get("results")) ?? [];
+            return (yield* getState<string[]>("results")) ?? [];
           })
         )
     ),
@@ -97,7 +92,7 @@ export const virtualObjectCommandInterpreter = restate.object({
         execute(
           ctx,
           gen(function* () {
-            const id = yield* sharedState<State>().get(`awk-${awakeableKey}`);
+            const id = yield* getState<string>(`awk-${awakeableKey}`);
             return id != null;
           })
         )
@@ -111,9 +106,7 @@ export const virtualObjectCommandInterpreter = restate.object({
         execute(
           ctx,
           gen(function* () {
-            const id = yield* sharedState<State>().get(
-              `awk-${req.awakeableKey}`
-            );
+            const id = yield* getState<string>(`awk-${req.awakeableKey}`);
             if (!id) {
               throw new restate.TerminalError("No awakeable is registered");
             }
@@ -130,9 +123,7 @@ export const virtualObjectCommandInterpreter = restate.object({
         execute(
           ctx,
           gen(function* () {
-            const id = yield* sharedState<State>().get(
-              `awk-${req.awakeableKey}`
-            );
+            const id = yield* getState<string>(`awk-${req.awakeableKey}`);
             if (!id) {
               throw new restate.TerminalError("No awakeable is registered");
             }
@@ -156,7 +147,7 @@ export const virtualObjectCommandInterpreter = restate.object({
             switch (cmd.type) {
               case "createAwakeable": {
                 const { id, promise } = awakeable<string>();
-                state<State>().set(`awk-${cmd.awakeableKey}`, id);
+                setState(`awk-${cmd.awakeableKey}`, id);
                 return { kind: "awakeable", future: promise };
               }
               case "sleep":
@@ -190,7 +181,7 @@ export const virtualObjectCommandInterpreter = restate.object({
             switch (cmd.type) {
               case "awaitAwakeableOrTimeout": {
                 const { id, promise } = awakeable<string>();
-                state<State>().set(`awk-${cmd.awakeableKey}`, id);
+                setState(`awk-${cmd.awakeableKey}`, id);
                 const sleepFuture = sleep(cmd.timeoutMillis);
                 const r = yield* select({
                   awk: promise,
@@ -205,7 +196,7 @@ export const virtualObjectCommandInterpreter = restate.object({
                 break;
               }
               case "resolveAwakeable": {
-                const id = yield* state<State>().get(`awk-${cmd.awakeableKey}`);
+                const id = yield* getState<string>(`awk-${cmd.awakeableKey}`);
                 if (!id) {
                   throw new restate.TerminalError("No awakeable is registered");
                 }
@@ -214,7 +205,7 @@ export const virtualObjectCommandInterpreter = restate.object({
                 break;
               }
               case "rejectAwakeable": {
-                const id = yield* state<State>().get(`awk-${cmd.awakeableKey}`);
+                const id = yield* getState<string>(`awk-${cmd.awakeableKey}`);
                 if (!id) {
                   throw new restate.TerminalError("No awakeable is registered");
                 }
@@ -281,8 +272,8 @@ export const virtualObjectCommandInterpreter = restate.object({
               }
             }
 
-            const last = (yield* state<State>().get("results")) ?? [];
-            state<State>().set("results", [...last, result]);
+            const last = (yield* getState<string[]>("results")) ?? [];
+            setState("results", [...last, result]);
           }
 
           return result;

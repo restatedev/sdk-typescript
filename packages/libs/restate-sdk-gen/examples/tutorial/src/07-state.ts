@@ -11,38 +11,49 @@
 
 // Tier 7: virtual-object state.
 //
-// Maps to guide.md §"Working with state". A virtual object owns a
-// per-key state slot the SDK persists between invocations. `state()`
-// gives you the read-write store; `sharedState()` is the read-only
-// view available from `ObjectSharedContext` handlers (concurrent reads
-// while no writer holds the key).
+// Two APIs:
 //
-// Typed state: pass a shape (`{ counter: number }`) to get keyof-checked
-// names and per-key value types. Without it, names are `string` and
-// values are inferred per call (untyped, like the SDK's default).
+//   state(config) — per-key typed accessors. Each key in the config gets a
+//     .get() / .set() / .clear() accessor. Keys with a `default` return
+//     Future<T> (never null); others return Future<T | null>.
+//
+//   state<TShape>() — per-key accessors without config. All keys return
+//     Future<T | null>.
+//
+//   getState / setState / clearState / clearAllState / getAllStateKeys —
+//     flat untyped functions for dynamic key names or simple cases.
 
 import * as restate from "@restatedev/restate-sdk";
-import { gen, execute, state, sharedState } from "@restatedev/restate-sdk-gen";
+import {
+  gen,
+  execute,
+  state,
+  getState,
+  setState,
+  clearState,
+  getAllStateKeys,
+} from "@restatedev/restate-sdk-gen";
 
-type CounterState = {
-  counter: number;
-};
+// Description of the state fields used by counter
+const counterState = state({
+  counter: { default: 0 },
+});
 
 export const counter = restate.object({
   name: "counter",
   handlers: {
-    // Read-only handler: takes ObjectSharedContext, uses sharedState().
-    // Multiple `get` invocations can run concurrently for the same key.
+    // Read-only handler: shared context, uses state() (same API — write
+    // methods throw at runtime in a shared context).
     get: async (ctx: restate.ObjectSharedContext): Promise<number> =>
       execute(
         ctx,
         gen(function* () {
-          return (yield* sharedState<CounterState>().get("counter")) ?? 0;
+          // Default is 0 — no null-coalescing needed.
+          return yield* counterState.counter.get();
         })
       ),
 
-    // Read-write handler: takes ObjectContext, uses state(). Exclusive
-    // access to the key for the duration of the invocation.
+    // Read-write handler: default applied, so no ?? needed.
     add: async (
       ctx: restate.ObjectContext,
       addend: number
@@ -50,21 +61,57 @@ export const counter = restate.object({
       execute(
         ctx,
         gen(function* () {
-          const s = state<CounterState>();
-          const oldValue = (yield* s.get("counter")) ?? 0;
+          const oldValue: number = yield* counterState.counter.get(); // Future<number>
           const newValue = oldValue + addend;
-          s.set("counter", newValue);
+          counterState.counter.set(newValue);
           return { oldValue, newValue };
         })
       ),
 
-    // Clear the counter back to zero (well, deletes the entry; `get`
-    // returns 0 by falling through the `?? 0`).
     reset: async (ctx: restate.ObjectContext): Promise<void> =>
       execute(
         ctx,
         gen(function* () {
-          state<CounterState>().clear("counter");
+          counterState.counter.clear();
+        })
+      ),
+
+    // Flat untyped API — useful when key names are dynamic.
+    setRaw: async (
+      ctx: restate.ObjectContext,
+      payload: { key: string; value: string }
+    ): Promise<void> =>
+      execute(
+        ctx,
+        gen(function* () {
+          setState(payload.key, payload.value);
+        })
+      ),
+
+    getRaw: async (
+      ctx: restate.ObjectContext,
+      key: string
+    ): Promise<string | null> =>
+      execute(
+        ctx,
+        gen(function* () {
+          return yield* getState<string>(key);
+        })
+      ),
+
+    clearRaw: async (ctx: restate.ObjectContext, key: string): Promise<void> =>
+      execute(
+        ctx,
+        gen(function* () {
+          clearState(key);
+        })
+      ),
+
+    keys: async (ctx: restate.ObjectSharedContext): Promise<string[]> =>
+      execute(
+        ctx,
+        gen(function* () {
+          return yield* getAllStateKeys();
         })
       ),
   },

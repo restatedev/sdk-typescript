@@ -19,7 +19,6 @@ import {
   gen,
   execute,
   state,
-  sharedState,
   objectClient,
   awakeable,
   sleep,
@@ -30,7 +29,7 @@ const AwakeableHolderApi: restate.VirtualObjectDefinitionFrom<
   typeof awakeableHolder
 > = { name: "AwakeableHolder" };
 
-type RunnerState = { state: boolean };
+const runnerState = state<{ state: boolean }>();
 
 export const cancelTestRunner = restate.object({
   name: "CancelTestRunner",
@@ -43,7 +42,7 @@ export const cancelTestRunner = restate.object({
             yield* objectClient(CancelTestBlockingApi, ctx.key).block(op);
           } catch (e) {
             if (e instanceof restate.TerminalError && e.code === 409) {
-              state<RunnerState>().set("state", true);
+              runnerState.state.set(true);
               return;
             }
             throw e;
@@ -55,8 +54,7 @@ export const cancelTestRunner = restate.object({
       execute(
         ctx,
         gen(function* () {
-          const v = yield* sharedState<RunnerState>().get("state");
-          return v === true;
+          return (yield* runnerState.state.get()) === true;
         })
       ),
   },

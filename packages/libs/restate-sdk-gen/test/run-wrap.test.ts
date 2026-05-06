@@ -67,9 +67,7 @@ describe("wrapActionForCancellation — success path", () => {
       try {
         // Simulate an abort-aware operation.
         await new Promise<void>((res, rej) => {
-          signal.addEventListener("abort", () =>
-            rej(abortError("aborted"))
-          );
+          signal.addEventListener("abort", () => rej(abortError("aborted")));
         });
         return "never";
       } catch {
@@ -203,9 +201,7 @@ describe("wrapActionForCancellation — reason swallowing scenarios", () => {
     const wrapped = wrapActionForCancellation(signal, async ({ signal }) => {
       try {
         await new Promise<void>((_res, rej) => {
-          signal.addEventListener("abort", () =>
-            rej(abortError("aborted"))
-          );
+          signal.addEventListener("abort", () => rej(abortError("aborted")));
         });
         return "never";
       } catch (e) {
@@ -225,9 +221,7 @@ describe("wrapActionForCancellation — reason swallowing scenarios", () => {
     const wrapped = wrapActionForCancellation(signal, async ({ signal }) => {
       try {
         await new Promise<void>((_res, rej) => {
-          signal.addEventListener("abort", () =>
-            rej(abortError("aborted"))
-          );
+          signal.addEventListener("abort", () => rej(abortError("aborted")));
         });
         return "never";
       } catch {

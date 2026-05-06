@@ -36,7 +36,6 @@ import {
   serviceSendClient,
   objectClient,
   state,
-  sharedState,
 } from "@restatedev/restate-sdk-gen";
 import type { counter } from "./07-state.js";
 
@@ -70,7 +69,7 @@ export const greeter = restate.service({
 // id often surfaces through an external system (webhook, queue) and
 // the holder VO is just a convenient stash.
 
-type HolderState = { id: string };
+const holderState = state<{ id: string }>();
 
 export const awakeableHolder = restate.object({
   name: "awakeableHolder",
@@ -79,7 +78,7 @@ export const awakeableHolder = restate.object({
       execute(
         ctx,
         gen(function* () {
-          state<HolderState>().set("id", id);
+          holderState.id.set(id);
         })
       ),
 
@@ -90,12 +89,12 @@ export const awakeableHolder = restate.object({
       execute(
         ctx,
         gen(function* () {
-          const id = yield* state<HolderState>().get("id");
+          const id = yield* holderState.id.get();
           if (!id) {
             throw new restate.TerminalError("no awakeable registered yet");
           }
           resolveAwakeable(id, payload);
-          state<HolderState>().clear("id");
+          holderState.id.clear();
         })
       ),
 
@@ -105,7 +104,7 @@ export const awakeableHolder = restate.object({
       execute(
         ctx,
         gen(function* () {
-          return (yield* sharedState<HolderState>().get("id")) ?? null;
+          return yield* holderState.id.get();
         })
       ),
   },
