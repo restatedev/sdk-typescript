@@ -29,7 +29,7 @@ export interface SignalReference<T> {
  * - `cancel()` cancels the target invocation.
  */
 export interface InvocationReference<O = unknown> {
-  readonly invocationId: string;
+  readonly id: string;
   attach(serde?: restate.Serde<O>): Future<O>;
   signal<T = unknown>(
     name: string,
@@ -42,13 +42,13 @@ export class InvocationReferenceImpl<
   O = unknown,
 > implements InvocationReference<O> {
   constructor(
-    readonly invocationId: string,
+    readonly id: string,
     private readonly _outputSerde?: restate.Serde<O>
   ) {}
 
   attach(serde?: restate.Serde<O>): Future<O> {
     return (getCurrent() as RestateOperations).attach<O>(
-      this.invocationId as restate.InvocationId,
+      this.id as restate.InvocationId,
       serde ?? this._outputSerde
     );
   }
@@ -58,15 +58,13 @@ export class InvocationReferenceImpl<
     serde?: restate.Serde<T>
   ): SignalReference<T> {
     return (getCurrent() as RestateOperations).invocationSignal<T>(
-      this.invocationId as restate.InvocationId,
+      this.id as restate.InvocationId,
       name,
       serde
     );
   }
 
   cancel(): void {
-    (getCurrent() as RestateOperations).cancel(
-      this.invocationId as restate.InvocationId
-    );
+    (getCurrent() as RestateOperations).cancel(this.id as restate.InvocationId);
   }
 }

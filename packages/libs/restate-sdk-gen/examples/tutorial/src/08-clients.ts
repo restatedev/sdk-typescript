@@ -20,7 +20,7 @@
 //
 // Pass the exported definition directly — no shim objects needed.
 // `client()` returns ClientFuture<O>: yield* for the result, or
-// `.reference()` for the InvocationReference (id, cancel, attach, signal).
+// `.invocation` for the InvocationReference (id, cancel, attach, signal).
 
 import * as restate from "@restatedev/restate-sdk";
 import {
@@ -117,13 +117,13 @@ export const clientsSvc = service({
       sendClient(greeter).record(msg);
     },
 
-    // .reference() — get the InvocationReference without blocking on the
+    // .invocation — get the InvocationReference without blocking on the
     // result. Useful for cancel, attach, or signal before the call returns.
     *callAndReference(name: string) {
       const f = client(greeter).greet(name);
-      const ref = yield* f.reference();
+      const ref = yield* f.invocation;
       const result = yield* f;
-      return { invocationId: ref.invocationId, result };
+      return { invocationId: ref.id, result };
     },
 
     // Cross-handler coordination via awakeable.

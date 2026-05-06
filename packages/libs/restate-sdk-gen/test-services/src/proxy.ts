@@ -63,7 +63,7 @@ export const proxy = service({
         inputSerde: restate.serde.binary,
         delay: req.delayMillis,
       });
-      return ref.invocationId;
+      return ref.id;
     },
 
     *manyCalls(requests: ManyCallsRequest[]) {

@@ -15,11 +15,11 @@ import type { InvocationReference } from "./invocation-reference.js";
 import type { HandlerDescriptor, Descriptor } from "./define.js";
 
 /**
- * A Future<O> that also carries `.reference()` for accessing the
- * InvocationReference of the underlying call (invocationId, attach, signal, cancel).
+ * A Future<O> that also carries an `invocation` field — a Future<InvocationReference<O>>
+ * for accessing the invocationId, attach, cancel, and signal of the underlying call.
  */
 export type ClientFuture<O> = Future<O> & {
-  reference(): Future<InvocationReference<O>>;
+  invocation: Future<InvocationReference<O>>;
 };
 
 /** Client type returned by client() — each method returns ClientFuture<O> */
@@ -97,19 +97,12 @@ export function makeClient<H extends Record<string, HandlerDescriptor>>(
             restate.serde.json) as restate.Serde<unknown>,
         });
         const resultFuture = toFuture(restatePromise);
-
-        let _referenceFuture: Future<InvocationReference<unknown>> | undefined;
-        const reference = () => {
-          if (!_referenceFuture) {
-            const invHandle =
-              restatePromise as unknown as restate.InvocationPromise<unknown>;
-            _referenceFuture = toRef(invHandle, outputSerde);
-          }
-          return _referenceFuture;
-        };
+        const invHandle =
+          restatePromise as unknown as restate.InvocationPromise<unknown>;
+        const invocation = toRef(invHandle, outputSerde);
 
         return Object.assign(resultFuture, {
-          reference,
+          invocation,
         }) as ClientFuture<unknown>;
       };
     },
