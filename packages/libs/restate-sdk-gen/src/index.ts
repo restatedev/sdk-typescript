@@ -64,6 +64,7 @@ export {
   type RunActionOpts,
   type RunOpts,
   wrapActionForCancellation,
+  type HandlerRequest,
 } from "./restate-operations.js";
 export type { SharedState, State, TypedState, UntypedState } from "./state.js";
 
