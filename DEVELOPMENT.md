@@ -251,7 +251,7 @@ This repo uses two release workflows:
 
 4. Update versions:
    ```bash
-   pnpm version  # Apply changesets to bump versions
+   pnpm changeset version  # Apply changesets to bump versions
    ```
 
 5. Push to main:
@@ -270,7 +270,7 @@ This repo uses two release workflows:
 2. Create changeset and update version:
    ```bash
    pnpm changeset
-   pnpm version
+   pnpm changeset version
    ```
 
 3. Commit and push:

@@ -1,5 +1,11 @@
 # @restatedev/restate-sdk-zod
 
+## 1.14.2
+
+### Bug fixes
+
+- eb0afbf: Fixed a memory leak in the fetch-based endpoint handler after completed invocations.
+
 ## 1.14.1
 
 ### Improvements and bug fixes
