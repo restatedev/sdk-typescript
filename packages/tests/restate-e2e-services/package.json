@@ -18,7 +18,7 @@
   "scripts": {
     "build": "turbo run _build --filter={.}...",
     "_build": "tsc -b tsconfig.test.json",
-    "testrunner": "vitest run",
+    "testrunner": "vitest run --exclude \"**/memory_leak.test.ts\" && vitest run test/memory_leak.test.ts",
     "testrunner:fetch": "vitest run test/memory_leak.test.ts",
     "clean": "rm -rf dist *.tsbuildinfo .turbo",
     "check:types": "turbo run _check:types --filter={.}...",
