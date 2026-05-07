@@ -170,9 +170,7 @@ describe("cross-routine — recursive patterns", () => {
         if (depth === 0) return label;
         const futures: Future<number>[] = [];
         for (let i = 0; i < 3; i++) {
-          futures.push(
-            spawn(branch(depth - 1, label * 10 + i))
-          );
+          futures.push(spawn(branch(depth - 1, label * 10 + i)));
         }
         const results = yield* sched.all(futures);
         return results.reduce((a, b) => a + b, 0);

@@ -52,42 +52,10 @@ export type GenSendClient<H extends Record<string, HandlerDescriptor>> = {
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-type GenericCallFn = (opts: {
-  service: string;
-  key?: string;
-  method: string;
-  parameter: unknown;
-  inputSerde: restate.Serde<unknown>;
-  outputSerde: restate.Serde<unknown>;
-  idempotencyKey?: string;
-  headers?: Record<string, string>;
-  name?: string;
-}) => restate.RestatePromise<unknown>;
-
-type GenericSendFn = (opts: {
-  service: string;
-  key?: string;
-  method: string;
-  parameter: unknown;
-  inputSerde: restate.Serde<unknown>;
-  delay?: restate.Duration | number;
-  idempotencyKey?: string;
-  headers?: Record<string, string>;
-  name?: string;
-}) => restate.InvocationHandle;
-
-type ToFutureFn<T> = (p: restate.RestatePromise<T>) => Future<T>;
-type ToRefFn = (
-  handle: restate.InvocationHandle,
-  outputSerde?: restate.Serde<unknown>
-) => Future<InvocationReference<unknown>>;
-
 export function makeClient<H extends Record<string, HandlerDescriptor>>(
   def: Descriptor<string, H, any>,
   key: string | undefined,
-  genericCall: GenericCallFn,
-  toFuture: ToFutureFn<unknown>,
-  toRef: ToRefFn
+  call: (opts: restate.GenericCall<unknown, unknown>) => ClientFuture<unknown>
 ): GenClient<H> {
   return new Proxy({} as any, {
     get(_target, methodName: string) {
@@ -96,7 +64,7 @@ export function makeClient<H extends Record<string, HandlerDescriptor>>(
         const callOpts = opts as ClientCallOptions<unknown, unknown>;
         const desc = def._handlers[methodName];
         const outputSerde = callOpts?.output ?? desc?._outputSerde;
-        const restatePromise = genericCall({
+        return call({
           service: def.name,
           key,
           method: String(methodName),
@@ -110,14 +78,6 @@ export function makeClient<H extends Record<string, HandlerDescriptor>>(
           headers: callOpts?.headers,
           name: callOpts?.name,
         });
-        const resultFuture = toFuture(restatePromise);
-        const invHandle =
-          restatePromise as unknown as restate.InvocationPromise<unknown>;
-        const invocation = toRef(invHandle, outputSerde);
-
-        return Object.assign(resultFuture, {
-          invocation,
-        }) as ClientFuture<unknown>;
       };
     },
   }) as GenClient<H>;
@@ -126,8 +86,10 @@ export function makeClient<H extends Record<string, HandlerDescriptor>>(
 export function makeSendClient<H extends Record<string, HandlerDescriptor>>(
   def: Descriptor<string, H, any>,
   key: string | undefined,
-  genericSend: GenericSendFn,
-  toRef: ToRefFn
+  send: (
+    opts: restate.GenericSend<unknown>,
+    outputSerde?: restate.Serde<unknown>
+  ) => Future<InvocationReference<unknown>>
 ): GenSendClient<H> {
   return new Proxy({} as any, {
     get(_target, methodName: string) {
@@ -135,20 +97,22 @@ export function makeSendClient<H extends Record<string, HandlerDescriptor>>(
         const { parameter, opts } = optsFromArgs(args);
         const sendOpts = opts as ClientSendOptions<unknown>;
         const desc = def._handlers[methodName];
-        const handle = genericSend({
-          service: def.name,
-          key,
-          method: String(methodName),
-          parameter,
-          inputSerde: (sendOpts?.input ??
-            desc?._inputSerde ??
-            restate.serde.json) as restate.Serde<unknown>,
-          delay: sendOpts?.delay,
-          idempotencyKey: sendOpts?.idempotencyKey,
-          headers: sendOpts?.headers,
-          name: sendOpts?.name,
-        });
-        return toRef(handle, desc?._outputSerde);
+        return send(
+          {
+            service: def.name,
+            key,
+            method: String(methodName),
+            parameter,
+            inputSerde: (sendOpts?.input ??
+              desc?._inputSerde ??
+              restate.serde.json) as restate.Serde<unknown>,
+            delay: sendOpts?.delay,
+            idempotencyKey: sendOpts?.idempotencyKey,
+            headers: sendOpts?.headers,
+            name: sendOpts?.name,
+          },
+          desc?._outputSerde as restate.Serde<unknown> | undefined
+        );
       };
     },
   }) as GenSendClient<H>;

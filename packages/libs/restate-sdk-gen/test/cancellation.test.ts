@@ -88,9 +88,7 @@ describe("cancellation — recovery", () => {
       } catch (e) {
         // After catching, the next yield must work normally — cancellation
         // is delivered once and the next race promise is fresh.
-        const cleanup = yield* sched.makeJournalFuture(
-          dCleanup.promise
-        );
+        const cleanup = yield* sched.makeJournalFuture(dCleanup.promise);
         return `recovered:${cleanup}:${(e as Error).message}`;
       }
     });

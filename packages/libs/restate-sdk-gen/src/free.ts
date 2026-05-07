@@ -52,7 +52,7 @@ import type {
   RunOpts,
 } from "./restate-operations.js";
 import type { Descriptor, HandlerDescriptor } from "./define.js";
-import type { GenClient, GenSendClient } from "./clients.js";
+import type { ClientFuture, GenClient, GenSendClient } from "./clients.js";
 import type { Operation } from "./operation.js";
 import {
   InvocationReferenceImpl,
@@ -169,11 +169,13 @@ export function sendClient(
 
 export const call = <REQ = Uint8Array, RES = Uint8Array>(
   c: restate.GenericCall<REQ, RES>
-): Future<RES> => currentOps().call<REQ, RES>(c);
+): ClientFuture<RES> => currentOps().call<REQ, RES>(c);
 
-export const send = <REQ = Uint8Array>(
-  c: restate.GenericSend<REQ>
-): Future<InvocationReference<unknown>> => currentOps().send<REQ>(c);
+export const send = <REQ = Uint8Array, RES = unknown>(
+  c: restate.GenericSend<REQ>,
+  outputSerde?: restate.Serde<RES>
+): Future<InvocationReference<RES>> =>
+  currentOps().send<REQ, RES>(c, outputSerde);
 
 // ---- invocation reference ----
 
@@ -260,8 +262,7 @@ export const allSettled = <const T extends readonly Future<unknown>[] | []>(
  * eventual outcome. Eager — the child is already in flight by the time
  * `spawn` returns. See `RestateOperations.spawn` for full semantics.
  */
-export const spawn = <T>(op: Operation<T>): Future<T> =>
-  currentOps().spawn(op);
+export const spawn = <T>(op: Operation<T>): Future<T> => currentOps().spawn(op);
 
 // `select` is already a free function in `operation.ts` (it yields a
 // marker the scheduler dispatches). It is re-exported from `index.ts`

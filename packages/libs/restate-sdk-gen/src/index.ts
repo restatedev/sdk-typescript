@@ -52,12 +52,7 @@ export type {
   FutureValue,
   FutureValues,
 } from "./future.js";
-export {
-  gen,
-  type Operation,
-  select,
-  type SelectResult,
-} from "./operation.js";
+export { gen, type Operation, select, type SelectResult } from "./operation.js";
 export {
   type RetryOptions,
   type RunAction,
