@@ -51,7 +51,7 @@ const channelsSvc = service({
     // → drainReady → parent advances).
     *spawnCoordinate(value: string): Operation<string> {
       const ch = channel<string>();
-      yield* spawn(
+      spawn(
         gen(function* () {
           yield* ch.send(value);
         })
@@ -69,10 +69,10 @@ const channelsSvc = service({
           const v = yield* ch.receive;
           return `${label}:${v}`;
         });
-      const ta = yield* spawn(reader("A"));
-      const tb = yield* spawn(reader("B"));
-      const tc = yield* spawn(reader("C"));
-      yield* spawn(
+      const ta = spawn(reader("A"));
+      const tb = spawn(reader("B"));
+      const tc = spawn(reader("C"));
+      spawn(
         gen(function* () {
           yield* ch.send(value);
         })
@@ -105,7 +105,7 @@ const channelsSvc = service({
         return `done:${yield* r.future}`;
       });
 
-      const t = yield* spawn(worker);
+      const t = spawn(worker);
       yield* sleep({ milliseconds: 100 });
       yield* stop.send({ reason: req.reason });
       return yield* t;

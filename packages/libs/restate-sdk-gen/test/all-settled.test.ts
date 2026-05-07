@@ -26,16 +26,12 @@ describe("allSettled — journal sources (fast path)", () => {
     const f1 = sched.makeJournalFuture(resolved("a"));
     const f2 = sched.makeJournalFuture(rejected(new Error("middle")));
     const f3 = sched.makeJournalFuture(resolved("c"));
-    const op = gen(function* (): Generator<
-      unknown,
-      FutureSettledResult<string>[],
-      unknown
-    > {
-      return (yield* sched.allSettled([
+    const op = gen(function* () {
+      return yield* sched.allSettled([
         f1,
         f2,
         f3,
-      ])) as FutureSettledResult<string>[];
+      ]);
     });
     const out = await sched.run(op);
     expect(out[0]).toEqual({ status: "fulfilled", value: "a" });
@@ -55,16 +51,12 @@ describe("allSettled — journal sources (fast path)", () => {
     const f1 = sched.makeJournalFuture(d1.promise);
     const f2 = sched.makeJournalFuture(d2.promise);
     const f3 = sched.makeJournalFuture(d3.promise);
-    const op = gen(function* (): Generator<
-      unknown,
-      FutureSettledResult<string>[],
-      unknown
-    > {
-      return (yield* sched.allSettled([
+    const op = gen(function* () {
+      return yield* sched.allSettled([
         f1,
         f2,
         f3,
-      ])) as FutureSettledResult<string>[];
+      ]);
     });
     const result = sched.run(op);
     queueMicrotask(() => {
@@ -80,12 +72,8 @@ describe("allSettled — journal sources (fast path)", () => {
 
   test("empty array resolves to empty array", async () => {
     const sched = new Scheduler(testLib);
-    const op = gen(function* (): Generator<
-      unknown,
-      FutureSettledResult<string>[],
-      unknown
-    > {
-      return (yield* sched.allSettled([])) as FutureSettledResult<string>[];
+    const op = gen(function* () {
+      return yield* sched.allSettled([]);
     });
     expect(await sched.run(op)).toEqual([]);
   });
@@ -95,27 +83,23 @@ describe("allSettled — routine sources (synthesized join)", () => {
   test("captures every routine outcome in order", async () => {
     const sched = new Scheduler(testLib);
     const ok = (label: string) =>
-      gen(function* (): Generator<unknown, string, unknown> {
+      gen(function* () {
         return label;
       });
     const fail = (msg: string) =>
-      gen(function* (): Generator<unknown, never, unknown> {
+      gen(function* () {
         throw new Error(msg);
       });
 
-    const op = gen(function* (): Generator<
-      unknown,
-      FutureSettledResult<string>[],
-      unknown
-    > {
-      const f1 = (yield* spawn(ok("a"))) as Future<string>;
-      const f2 = (yield* spawn(fail("b-fail"))) as Future<string>;
-      const f3 = (yield* spawn(ok("c"))) as Future<string>;
-      return (yield* sched.allSettled([
+    const op = gen(function* () {
+      const f1 = spawn(ok("a"));
+      const f2 = spawn(fail("b-fail"));
+      const f3 = spawn(ok("c"));
+      return yield* sched.allSettled([
         f1,
         f2,
         f3,
-      ])) as FutureSettledResult<string>[];
+      ]);
     });
     const out = await sched.run(op);
     expect(out[0]).toEqual({ status: "fulfilled", value: "a" });
@@ -131,20 +115,16 @@ describe("allSettled — mixed sources", () => {
   test("mixes journal and routine futures, preserves order", async () => {
     const sched = new Scheduler(testLib);
     const j = sched.makeJournalFuture(resolved("j"));
-    const r = gen(function* (): Generator<unknown, string, unknown> {
+    const r = gen(function* () {
       return "r";
     });
 
-    const op = gen(function* (): Generator<
-      unknown,
-      FutureSettledResult<string>[],
-      unknown
-    > {
-      const rf = (yield* spawn(r)) as Future<string>;
-      return (yield* sched.allSettled([
+    const op = gen(function* () {
+      const rf = spawn(r);
+      return yield* sched.allSettled([
         j,
         rf,
-      ])) as FutureSettledResult<string>[];
+      ]);
     });
     const out = await sched.run(op);
     expect(out).toEqual([

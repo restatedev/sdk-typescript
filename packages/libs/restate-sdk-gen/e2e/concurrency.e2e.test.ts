@@ -114,8 +114,8 @@ const concurrencySvc = service({
             { name: `${label}-step` }
           );
         })();
-      const tA = yield* spawn(child("A", 40));
-      const tB = yield* spawn(child("B", 20));
+      const tA = spawn(child("A", 40));
+      const tB = spawn(child("B", 20));
       const [a, b] = yield* all([tA, tB]);
       return `${a}|${b}`;
     },
@@ -139,7 +139,7 @@ const concurrencySvc = service({
         },
         { name: "journal-step" }
       );
-      const routine = yield* spawn(child);
+      const routine = spawn(child);
       const [a, b] = yield* all([journal, routine]);
       return `${a} + ${b}`;
     },

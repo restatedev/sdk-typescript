@@ -52,11 +52,11 @@ export const spawnSvc = service({
   handlers: {
     // 2.1 spawn-and-await — the basic shape.
     // Concurrency starts at the spawn (the work is already running by
-    // the time `yield* spawn(...)` resumes); the later `yield* tX` is
+    // the time `spawn(...)` resumes); the later `yield* tX` is
     // just a collection point.
     *twoRoutines(): Operation<string> {
-      const tA = yield* spawn(labeledWork("A", 50));
-      const tB = yield* spawn(labeledWork("B", 60));
+      const tA = spawn(labeledWork("A", 50));
+      const tB = spawn(labeledWork("B", 60));
       return `${yield* tA}|${yield* tB}`;
     },
 
@@ -67,7 +67,7 @@ export const spawnSvc = service({
       const labels = ["X", "Y", "Z"];
       const tasks = [];
       for (const l of labels) {
-        tasks.push(yield* spawn(labeledWork(l, 40 + l.length)));
+        tasks.push(spawn(labeledWork(l, 40 + l.length)));
       }
       return yield* all(tasks); // ["X","Y","Z"], in input order
     },
@@ -77,16 +77,16 @@ export const spawnSvc = service({
     // is journaled but no one reads it. Use this for hedged calls or
     // fastest-replica-wins patterns.
     *raceSpawned(): Operation<string> {
-      const fast = yield* spawn(labeledWork("fast", 30));
-      const slow = yield* spawn(labeledWork("slow", 200));
+      const fast = spawn(labeledWork("fast", 30));
+      const slow = spawn(labeledWork("slow", 200));
       return yield* race([fast, slow]);
     },
 
     // 2.4 select over spawned futures: race + tag.
     // Branch on which side won, unwrap with yield* r.future.
     *selectSpawned(): Operation<string> {
-      const a = yield* spawn(labeledWork("alpha", 30));
-      const b = yield* spawn(labeledWork("beta", 200));
+      const a = spawn(labeledWork("alpha", 30));
+      const b = spawn(labeledWork("beta", 200));
       const r = yield* select({ a, b });
       return `${r.tag}-won:${yield* r.future}`;
     },
@@ -103,7 +103,7 @@ export const spawnSvc = service({
         },
         { name: "journaled" }
       );
-      const routine = yield* spawn(labeledWork("from-spawn", 30));
+      const routine = spawn(labeledWork("from-spawn", 30));
       const [a, b] = yield* all([journal, routine]);
       return `${a} + ${b}`;
     },
@@ -114,8 +114,8 @@ export const spawnSvc = service({
       const fib = (k: number): Operation<number> =>
         (function* () {
           if (k < 2) return k;
-          const a = yield* spawn(fib(k - 1));
-          const b = yield* spawn(fib(k - 2));
+          const a = spawn(fib(k - 1));
+          const b = spawn(fib(k - 2));
           const vs = yield* all([a, b]);
           return vs.reduce((x, y) => x + y, 0);
         })();

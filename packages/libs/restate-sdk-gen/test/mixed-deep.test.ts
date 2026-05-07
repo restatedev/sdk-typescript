@@ -55,13 +55,13 @@ const makeDeferredJournal = <T>(sched: Scheduler) => {
 describe("nested combinators — all of all", () => {
   test("two-level all-journal: outer all of inner all, all journal", async () => {
     const sched = new Scheduler(testLib);
-    const op = gen(function* (): Generator<unknown, number[][], unknown> {
+    const op = gen(function* () {
       const inner1 = sched.all([makeJournal(sched, 1), makeJournal(sched, 2)]);
       const inner2 = sched.all([makeJournal(sched, 3), makeJournal(sched, 4)]);
       const inner3 = sched.all([makeJournal(sched, 5), makeJournal(sched, 6)]);
       // The outer is all over journal-backed futures (because each inner
       // all returned a journal future via the fast path).
-      return (yield* sched.all([inner1, inner2, inner3])) as number[][];
+      return yield* sched.all([inner1, inner2, inner3]);
     });
     expect(await sched.run(op)).toEqual([
       [1, 2],
@@ -72,24 +72,20 @@ describe("nested combinators — all of all", () => {
 
   test("two-level mixed: outer all where one inner is a spawn-join, others are journal", async () => {
     const sched = new Scheduler(testLib);
-    const op = gen(function* (): Generator<unknown, number[][], unknown> {
+    const op = gen(function* () {
       // Inner 1: pure journal all (fast path → journal future).
       const inner1 = sched.all([makeJournal(sched, 1), makeJournal(sched, 2)]);
       // Inner 2: spawn a routine that does its own all.
-      const subOp: Operation<number[]> = gen(function* (): Generator<
-        unknown,
-        number[],
-        unknown
-      > {
-        return (yield* sched.all([
+      const subOp: Operation<number[]> = gen(function* () {
+        return yield* sched.all([
           makeJournal(sched, 10),
           makeJournal(sched, 20),
-        ])) as number[];
+        ]);
       });
-      const inner2 = (yield* spawn(subOp)) as Future<number[]>;
+      const inner2 = spawn(subOp);
       // Outer is over a journal future and a routine future — falls to the
       // synthesized join path.
-      return (yield* sched.all([inner1, inner2])) as number[][];
+      return yield* sched.all([inner1, inner2]);
     });
     expect(await sched.run(op)).toEqual([
       [1, 2],
@@ -99,7 +95,7 @@ describe("nested combinators — all of all", () => {
 
   test("three levels deep: all over alls over alls", async () => {
     const sched = new Scheduler(testLib);
-    const op = gen(function* (): Generator<unknown, number, unknown> {
+    const op = gen(function* () {
       // 8 leaves, each a journal future. Group into pairs, then quads.
       const leaves = [1, 2, 3, 4, 5, 6, 7, 8].map((n) => makeJournal(sched, n));
       const pairs = [
@@ -112,7 +108,7 @@ describe("nested combinators — all of all", () => {
         sched.all([pairs[0]!, pairs[1]!]),
         sched.all([pairs[2]!, pairs[3]!]),
       ];
-      const all = (yield* sched.all(quads)) as number[][][];
+      const all = yield* sched.all(quads);
       // Flatten and sum.
       let sum = 0;
       for (const q of all) for (const p of q) for (const n of p) sum += n;
@@ -129,7 +125,7 @@ describe("nested combinators — all of all", () => {
 describe("nested combinators — race inside all", () => {
   test("all of three races, each over [deferred, sync-resolved]", async () => {
     const sched = new Scheduler(testLib);
-    const op = gen(function* (): Generator<unknown, string[], unknown> {
+    const op = gen(function* () {
       const dSlow1 = makeDeferredJournal<string>(sched);
       const dSlow2 = makeDeferredJournal<string>(sched);
       const dSlow3 = makeDeferredJournal<string>(sched);
@@ -145,7 +141,7 @@ describe("nested combinators — race inside all", () => {
         dSlow2.resolve("late2");
         dSlow3.resolve("late3");
       });
-      return (yield* sched.all([r1, r2, r3])) as string[];
+      return yield* sched.all([r1, r2, r3]);
     });
     const result = await sched.run(op);
     // Each race picks one of {fastN, lateN}. Test that we get a valid
@@ -158,20 +154,20 @@ describe("nested combinators — race inside all", () => {
 
   test("all where some inputs are spawn(race(...)) chains", async () => {
     const sched = new Scheduler(testLib);
-    const op = gen(function* (): Generator<unknown, string[], unknown> {
+    const op = gen(function* () {
       // Each child does a race internally and returns the winner.
       const child = (label: string): Operation<string> =>
-        gen(function* (): Generator<unknown, string, unknown> {
-          const winner = (yield* sched.race([
+        gen(function* () {
+          const winner = yield* sched.race([
             makeJournal(sched, `${label}-a`),
             makeJournal(sched, `${label}-b`),
-          ])) as string;
+          ]);
           return winner;
         });
-      const f1 = (yield* spawn(child("c1"))) as Future<string>;
-      const f2 = (yield* spawn(child("c2"))) as Future<string>;
-      const f3 = (yield* spawn(child("c3"))) as Future<string>;
-      const out = (yield* sched.all([f1, f2, f3])) as string[];
+      const f1 = spawn(child("c1"));
+      const f2 = spawn(child("c2"));
+      const f3 = spawn(child("c3"));
+      const out = yield* sched.all([f1, f2, f3]);
       return out;
     });
     const result = await sched.run(op);
@@ -185,7 +181,7 @@ describe("nested combinators — race inside all", () => {
 describe("nested combinators — all inside race", () => {
   test("race(all(slow), fast) returns fast", async () => {
     const sched = new Scheduler(testLib);
-    const op = gen(function* (): Generator<unknown, unknown, unknown> {
+    const op = gen(function* () {
       const dSlow1 = makeDeferredJournal<number>(sched);
       const dSlow2 = makeDeferredJournal<number>(sched);
       // all over deferred journal futures → a journal future that
@@ -210,7 +206,7 @@ describe("nested combinators — all inside race", () => {
 
   test("race over four all branches; one branch's all is sync-fast", async () => {
     const sched = new Scheduler(testLib);
-    const op = gen(function* (): Generator<unknown, number[], unknown> {
+    const op = gen(function* () {
       const fast = sched.all([makeJournal(sched, 1), makeJournal(sched, 2)]);
       const slow = (label: number) => {
         const d1 = makeDeferredJournal<number>(sched);
@@ -224,12 +220,12 @@ describe("nested combinators — all inside race", () => {
         });
         return sched.all([d1.future, d2.future]);
       };
-      const winner = (yield* sched.race([
+      const winner = yield* sched.race([
         slow(10),
         slow(20),
         fast,
         slow(30),
-      ])) as number[];
+      ]);
       return winner;
     });
     expect(await sched.run(op)).toEqual([1, 2]);
@@ -243,18 +239,18 @@ describe("nested combinators — all inside race", () => {
 describe("nested combinators — select on combinator outputs", () => {
   test("select over (all, raw future): all-output as a branch", async () => {
     const sched = new Scheduler(testLib);
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       const both = sched.all([makeJournal(sched, 1), makeJournal(sched, 2)]);
       const direct = makeJournal(sched, "direct-wins");
       const r = yield* select({ both, direct });
       // Both are sync-ready; either may win. Whichever does, we identify it.
       switch (r.tag) {
         case "both": {
-          const v = (yield* r.future) as number[];
+          const v = yield* r.future;
           return `both:${v.join(",")}`;
         }
         case "direct":
-          return `direct:${(yield* r.future) as string}`;
+          return `direct:${yield* r.future}`;
       }
     });
     const result = await sched.run(op);
@@ -263,7 +259,7 @@ describe("nested combinators — select on combinator outputs", () => {
 
   test("select over multiple race-derived futures", async () => {
     const sched = new Scheduler(testLib);
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       const a = sched.race([
         makeJournal(sched, "a1"),
         makeJournal(sched, "a2"),
@@ -277,7 +273,7 @@ describe("nested combinators — select on combinator outputs", () => {
         makeJournal(sched, "c2"),
       ]);
       const r = yield* select({ a, b, c });
-      const v = (yield* r.future) as string;
+      const v = yield* r.future;
       return `${r.tag}:${v}`;
     });
     const result = await sched.run(op);
@@ -294,20 +290,20 @@ describe("nested combinators — long chains feeding into combinators", () => {
   test("pipeline: spawn → spawn → all → race", async () => {
     const sched = new Scheduler(testLib);
     const stage = (label: string, input: Future<number>): Operation<number> =>
-      gen(function* (): Generator<unknown, number, unknown> {
-        const v = (yield* input) as number;
+      gen(function* () {
+        const v = yield* input;
         return v + label.length;
       });
 
-    const op = gen(function* (): Generator<unknown, number, unknown> {
+    const op = gen(function* () {
       const seed = makeJournal(sched, 0);
       // Two parallel pipelines, each two stages deep.
-      const pipeA1 = (yield* spawn(stage("aa", seed))) as Future<number>;
-      const pipeA2 = (yield* spawn(stage("aaa", pipeA1))) as Future<number>;
-      const pipeB1 = (yield* spawn(stage("bbbb", seed))) as Future<number>;
-      const pipeB2 = (yield* spawn(stage("bbbbb", pipeB1))) as Future<number>;
+      const pipeA1 = spawn(stage("aa", seed));
+      const pipeA2 = spawn(stage("aaa", pipeA1));
+      const pipeB1 = spawn(stage("bbbb", seed));
+      const pipeB2 = spawn(stage("bbbbb", pipeB1));
       // all over the two pipeline tails.
-      const both = (yield* sched.all([pipeA2, pipeB2])) as number[];
+      const both = yield* sched.all([pipeA2, pipeB2]);
       // 0 + 2 + 3 = 5,  0 + 4 + 5 = 9
       return both.reduce((a, b) => a + b, 0);
     });
@@ -324,16 +320,16 @@ describe("nested combinators — long chains feeding into combinators", () => {
       if (depth === 0) return makeJournal(sched, 1);
       const left = buildTree(depth - 1);
       const right = buildTree(depth - 1);
-      return sched.spawnDetached(
-        gen(function* (): Generator<unknown, number, unknown> {
-          const [a, b] = (yield* sched.all([left, right])) as number[];
+      return sched.spawn(
+        gen(function* () {
+          const [a, b] = yield* sched.all([left, right]);
           return (a as number) + (b as number);
         })
       );
     };
-    const op = gen(function* (): Generator<unknown, number, unknown> {
+    const op = gen(function* () {
       const tree = buildTree(D);
-      return (yield* tree) as number;
+      return yield* tree;
     });
     // 2^D leaves of value 1.
     expect(await sched.run(op)).toBe(1 << D);
@@ -351,34 +347,23 @@ describe("nested combinators — routines that themselves use combinators", () =
     const SUBTASKS = 3;
 
     const worker = (id: number): Operation<{ id: number; total: number }> =>
-      gen(function* (): Generator<
-        unknown,
-        { id: number; total: number },
-        unknown
-      > {
+      gen(function* () {
         const subFutures: Future<number>[] = [];
         for (let i = 0; i < SUBTASKS; i++) {
           subFutures.push(makeJournal(sched, id * 100 + i));
         }
-        const subResults = (yield* sched.all(subFutures)) as number[];
+        const subResults = yield* sched.all(subFutures);
         return { id, total: subResults.reduce((a, b) => a + b, 0) };
       });
 
-    const op = gen(function* (): Generator<
-      unknown,
-      Array<{ id: number; total: number }>,
-      unknown
-    > {
+    const op = gen(function* () {
       const workerFutures: Future<{ id: number; total: number }>[] = [];
       for (let i = 0; i < N; i++) {
         workerFutures.push(
-          (yield* spawn(worker(i))) as Future<{ id: number; total: number }>
+          spawn(worker(i))
         );
       }
-      return (yield* sched.all(workerFutures)) as Array<{
-        id: number;
-        total: number;
-      }>;
+      return yield* sched.all(workerFutures);
     });
 
     const results = await sched.run(op);
@@ -393,26 +378,26 @@ describe("nested combinators — routines that themselves use combinators", () =
     const sched = new Scheduler(testLib);
 
     const leaf = (n: number): Operation<number> =>
-      gen(function* (): Generator<unknown, number, unknown> {
+      gen(function* () {
         const f1 = makeJournal(sched, n);
         const f2 = makeJournal(sched, n * 10);
-        const winner = (yield* sched.race([f1, f2])) as number;
+        const winner = yield* sched.race([f1, f2]);
         return winner;
       });
 
     const mid = (label: number): Operation<number> =>
-      gen(function* (): Generator<unknown, number, unknown> {
-        const l1 = (yield* spawn(leaf(label))) as Future<number>;
-        const l2 = (yield* spawn(leaf(label + 1))) as Future<number>;
-        const both = (yield* sched.all([l1, l2])) as number[];
+      gen(function* () {
+        const l1 = spawn(leaf(label));
+        const l2 = spawn(leaf(label + 1));
+        const both = yield* sched.all([l1, l2]);
         return both.reduce((a, b) => a + b, 0);
       });
 
-    const top = gen(function* (): Generator<unknown, number, unknown> {
-      const m1 = (yield* spawn(mid(1))) as Future<number>;
-      const m2 = (yield* spawn(mid(10))) as Future<number>;
-      const m3 = (yield* spawn(mid(100))) as Future<number>;
-      const all = (yield* sched.all([m1, m2, m3])) as number[];
+    const top = gen(function* () {
+      const m1 = spawn(mid(1));
+      const m2 = spawn(mid(10));
+      const m3 = spawn(mid(100));
+      const all = yield* sched.all([m1, m2, m3]);
       return all.reduce((a, b) => a + b, 0);
     });
 
@@ -436,7 +421,7 @@ describe("nested combinators — out-of-order resolution", () => {
     const N = 16;
     const ds = Array.from({ length: N }, () => deferred<number>());
 
-    const op = gen(function* (): Generator<unknown, number, unknown> {
+    const op = gen(function* () {
       const futures = ds.map((d) => sched.makeJournalFuture(d.promise));
       // Tree-shape: pair, then quad, then octet, then full.
       const buildLevel = (level: Future<number>[]): Future<number>[] => {
@@ -445,9 +430,9 @@ describe("nested combinators — out-of-order resolution", () => {
           const a = level[i]!;
           const b = level[i + 1]!;
           out.push(
-            sched.spawnDetached(
-              gen(function* (): Generator<unknown, number, unknown> {
-                const vs = (yield* sched.all([a, b])) as number[];
+            sched.spawn(
+              gen(function* () {
+                const vs = yield* sched.all([a, b]);
                 return vs.reduce((x, y) => x + y, 0);
               })
             )
@@ -457,7 +442,7 @@ describe("nested combinators — out-of-order resolution", () => {
       };
       let cur = futures;
       while (cur.length > 1) cur = buildLevel(cur);
-      return (yield* cur[0]!) as number;
+      return yield* cur[0]!;
     });
 
     const result = sched.run(op);
@@ -473,31 +458,23 @@ describe("nested combinators — out-of-order resolution", () => {
     const dA = [deferred<number>(), deferred<number>()];
     const dB = [deferred<number>(), deferred<number>()];
 
-    const branchA: Operation<number> = gen(function* (): Generator<
-      unknown,
-      number,
-      unknown
-    > {
+    const branchA: Operation<number> = gen(function* () {
       const fs = dA.map((d) => sched.makeJournalFuture(d.promise));
-      const vs = (yield* sched.all(fs)) as number[];
+      const vs = yield* sched.all(fs);
       return vs.reduce((a, b) => a + b, 0);
     });
 
-    const branchB: Operation<number> = gen(function* (): Generator<
-      unknown,
-      number,
-      unknown
-    > {
+    const branchB: Operation<number> = gen(function* () {
       const fs = dB.map((d) => sched.makeJournalFuture(d.promise));
-      const vs = (yield* sched.all(fs)) as number[];
+      const vs = yield* sched.all(fs);
       return vs.reduce((a, b) => a + b, 0);
     });
 
-    const op = gen(function* (): Generator<unknown, number, unknown> {
-      const fa = (yield* spawn(branchA)) as Future<number>;
-      const fb = (yield* spawn(branchB)) as Future<number>;
+    const op = gen(function* () {
+      const fa = spawn(branchA);
+      const fb = spawn(branchB);
       // Drain loser eventually so scheduler can complete.
-      const winner = (yield* sched.race([fa, fb])) as number;
+      const winner = yield* sched.race([fa, fb]);
       return winner;
     });
 

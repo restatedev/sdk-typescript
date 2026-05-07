@@ -33,7 +33,7 @@ describe("workflow-patterns — retry with bounded attempts", () => {
     const sched = new Scheduler(testLib);
     let attempts = 0;
     const flaky = (): Operation<string> =>
-      gen(function* (): Generator<unknown, string, unknown> {
+      gen(function* () {
         attempts++;
         if (attempts < 3) {
           // Simulate work via journal yield, then fail.
@@ -45,11 +45,11 @@ describe("workflow-patterns — retry with bounded attempts", () => {
       });
 
     const retry = (max: number): Operation<string> =>
-      gen(function* (): Generator<unknown, string, unknown> {
+      gen(function* () {
         let lastErr: unknown;
         for (let i = 0; i < max; i++) {
           try {
-            return (yield* flaky()) as string;
+            return yield* flaky();
           } catch (e) {
             lastErr = e;
           }
@@ -63,21 +63,17 @@ describe("workflow-patterns — retry with bounded attempts", () => {
 
   test("retry exhausts attempts and rethrows", async () => {
     const sched = new Scheduler(testLib);
-    const alwaysFails: Operation<string> = gen(function* (): Generator<
-      unknown,
-      string,
-      unknown
-    > {
+    const alwaysFails: Operation<string> = gen(function* () {
       yield* sched.makeJournalFuture(resolved<void>(undefined));
       throw new Error("permanent");
     });
 
     const retry = (max: number): Operation<string> =>
-      gen(function* (): Generator<unknown, string, unknown> {
+      gen(function* () {
         let lastErr: unknown = new Error("never-attempted");
         for (let i = 0; i < max; i++) {
           try {
-            return (yield* alwaysFails) as string;
+            return yield* alwaysFails;
           } catch (e) {
             lastErr = e;
           }
@@ -92,7 +88,7 @@ describe("workflow-patterns — retry with bounded attempts", () => {
 describe("workflow-patterns — timeout with fallback", () => {
   test("operation finishes before timeout, returns its value", async () => {
     const sched = new Scheduler(testLib);
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       const dWork = deferred<string>();
       const dTimeout = deferred<string>();
       const fWork = sched.makeJournalFuture(dWork.promise);
@@ -104,7 +100,7 @@ describe("workflow-patterns — timeout with fallback", () => {
       queueMicrotask(() => dTimeout.resolve("late timeout"));
       switch (r.tag) {
         case "work":
-          return (yield* r.future) as string;
+          return yield* r.future;
         case "timeout":
           return "fallback";
       }
@@ -114,7 +110,7 @@ describe("workflow-patterns — timeout with fallback", () => {
 
   test("timeout fires before operation, returns fallback", async () => {
     const sched = new Scheduler(testLib);
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       const dWork = deferred<string>();
       const dTimeout = deferred<void>();
       const fWork = sched.makeJournalFuture(dWork.promise);
@@ -124,7 +120,7 @@ describe("workflow-patterns — timeout with fallback", () => {
       queueMicrotask(() => dWork.resolve("late work"));
       switch (r.tag) {
         case "work":
-          return (yield* r.future) as string;
+          return yield* r.future;
         case "timeout":
           return "fallback";
       }
@@ -139,32 +135,32 @@ describe("workflow-patterns — saga-style compensation", () => {
     const log: string[] = [];
 
     const reserveInventory = (): Operation<string> =>
-      gen(function* (): Generator<unknown, string, unknown> {
+      gen(function* () {
         yield* sched.makeJournalFuture(resolved<void>(undefined));
         log.push("reserve");
         return "res-1";
       });
 
     const charge = (): Operation<string> =>
-      gen(function* (): Generator<unknown, string, unknown> {
+      gen(function* () {
         yield* sched.makeJournalFuture(resolved<void>(undefined));
         log.push("charge");
         return "ch-1";
       });
 
     const ship = (): Operation<string> =>
-      gen(function* (): Generator<unknown, string, unknown> {
+      gen(function* () {
         yield* sched.makeJournalFuture(resolved<void>(undefined));
         log.push("ship");
         return "shipped";
       });
 
-    const saga = gen(function* (): Generator<unknown, string, unknown> {
-      const r = (yield* reserveInventory()) as string;
+    const saga = gen(function* () {
+      const r = yield* reserveInventory();
       try {
-        const c = (yield* charge()) as string;
+        const c = yield* charge();
         try {
-          return (yield* ship()) as string;
+          return yield* ship();
         } catch {
           // refund charge
           log.push(`refund ${c}`);
@@ -186,32 +182,32 @@ describe("workflow-patterns — saga-style compensation", () => {
     const log: string[] = [];
 
     const reserve = (): Operation<string> =>
-      gen(function* (): Generator<unknown, string, unknown> {
+      gen(function* () {
         yield* sched.makeJournalFuture(resolved<void>(undefined));
         log.push("reserve");
         return "res-1";
       });
 
     const charge = (): Operation<string> =>
-      gen(function* (): Generator<unknown, string, unknown> {
+      gen(function* () {
         yield* sched.makeJournalFuture(resolved<void>(undefined));
         log.push("charge");
         return "ch-1";
       });
 
     const ship = (): Operation<string> =>
-      gen(function* (): Generator<unknown, string, unknown> {
+      gen(function* () {
         yield* sched.makeJournalFuture(resolved<void>(undefined));
         log.push("ship-attempt");
         throw new Error("warehouse down");
       });
 
-    const saga = gen(function* (): Generator<unknown, string, unknown> {
-      const r = (yield* reserve()) as string;
+    const saga = gen(function* () {
+      const r = yield* reserve();
       try {
-        const c = (yield* charge()) as string;
+        const c = yield* charge();
         try {
-          return (yield* ship()) as string;
+          return yield* ship();
         } catch (e) {
           log.push(`refund ${c}`);
           throw e;
@@ -239,31 +235,20 @@ describe("workflow-patterns — work-stealing fan-out", () => {
     const tasks = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
     const worker = (id: number): Operation<{ id: number; result: number }> =>
-      gen(function* (): Generator<
-        unknown,
-        { id: number; result: number },
-        unknown
-      > {
+      gen(function* () {
         // Simulate work.
         yield* sched.makeJournalFuture(resolved<void>(undefined));
         return { id, result: id * id };
       });
 
-    const op = gen(function* (): Generator<
-      unknown,
-      Array<{ id: number; result: number }>,
-      unknown
-    > {
+    const op = gen(function* () {
       const futures: Future<{ id: number; result: number }>[] = [];
       for (const t of tasks) {
         futures.push(
-          (yield* spawn(worker(t))) as Future<{ id: number; result: number }>
+          spawn(worker(t))
         );
       }
-      return (yield* sched.all(futures)) as Array<{
-        id: number;
-        result: number;
-      }>;
+      return yield* sched.all(futures);
     });
 
     const results = await sched.run(op);
@@ -278,7 +263,7 @@ describe("workflow-patterns — polling loop with cancellation signal", () => {
     let polls = 0;
     const dStop = deferred<void>();
 
-    const op = gen(function* (): Generator<unknown, number, unknown> {
+    const op = gen(function* () {
       const fStop = sched.makeJournalFuture(dStop.promise);
       while (true) {
         const fPoll = sched.makeJournalFuture(resolved<number>(polls));
@@ -310,12 +295,12 @@ describe("workflow-patterns — sequential-vs-parallel composition", () => {
     const sched = new Scheduler(testLib);
     const order: number[] = [];
     const step = (n: number): Operation<void> =>
-      gen(function* (): Generator<unknown, void, unknown> {
+      gen(function* () {
         yield* sched.makeJournalFuture(resolved<void>(undefined));
         order.push(n);
       });
 
-    const op = gen(function* (): Generator<unknown, void, unknown> {
+    const op = gen(function* () {
       yield* step(1);
       yield* step(2);
       yield* step(3);
@@ -329,17 +314,17 @@ describe("workflow-patterns — sequential-vs-parallel composition", () => {
     const sched = new Scheduler(testLib);
     const results: number[] = [];
     const step = (n: number): Operation<number> =>
-      gen(function* (): Generator<unknown, number, unknown> {
+      gen(function* () {
         yield* sched.makeJournalFuture(resolved<void>(undefined));
         results.push(n);
         return n;
       });
 
-    const op = gen(function* (): Generator<unknown, number[], unknown> {
-      const f1 = (yield* spawn(step(1))) as Future<number>;
-      const f2 = (yield* spawn(step(2))) as Future<number>;
-      const f3 = (yield* spawn(step(3))) as Future<number>;
-      return (yield* sched.all([f1, f2, f3])) as number[];
+    const op = gen(function* () {
+      const f1 = spawn(step(1));
+      const f2 = spawn(step(2));
+      const f3 = spawn(step(3));
+      return yield* sched.all([f1, f2, f3]);
     });
 
     const out = await sched.run(op);

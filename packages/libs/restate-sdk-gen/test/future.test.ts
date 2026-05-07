@@ -18,8 +18,8 @@ describe("Future — journal-backed", () => {
   test("yields the underlying value", async () => {
     const sched = new Scheduler(testLib);
     const f = sched.makeJournalFuture(resolved("hi"));
-    const op = gen(function* (): Generator<unknown, string, unknown> {
-      return (yield* f) as string;
+    const op = gen(function* () {
+      return yield* f;
     });
     expect(await sched.run(op)).toBe("hi");
   });
@@ -27,7 +27,7 @@ describe("Future — journal-backed", () => {
   test("propagates rejection as a thrown error", async () => {
     const sched = new Scheduler(testLib);
     const f = sched.makeJournalFuture(rejected(new Error("boom")));
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       try {
         yield* f;
         return "no-throw";
@@ -41,9 +41,9 @@ describe("Future — journal-backed", () => {
   test("can be yielded twice; both yields produce the same value", async () => {
     const sched = new Scheduler(testLib);
     const f = sched.makeJournalFuture(resolved(123));
-    const op = gen(function* (): Generator<unknown, [number, number], unknown> {
-      const a = (yield* f) as number;
-      const b = (yield* f) as number;
+    const op = gen(function* () {
+      const a = yield* f;
+      const b = yield* f;
       return [a, b];
     });
     expect(await sched.run(op)).toEqual([123, 123]);
@@ -53,8 +53,8 @@ describe("Future — journal-backed", () => {
     const sched = new Scheduler(testLib);
     const d = deferred<string>();
     const f = sched.makeJournalFuture(d.promise);
-    const op = gen(function* (): Generator<unknown, string, unknown> {
-      return (yield* f) as string;
+    const op = gen(function* () {
+      return yield* f;
     });
     const result = sched.run(op);
     // Resolve in a later microtask — the run() promise should eventually
@@ -67,7 +67,7 @@ describe("Future — journal-backed", () => {
     const sched = new Scheduler(testLib);
     const d = deferred<string>();
     const f = sched.makeJournalFuture(d.promise);
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       try {
         yield* f;
         return "no-throw";
@@ -84,23 +84,23 @@ describe("Future — journal-backed", () => {
 describe("Future — routine-backed (via spawn)", () => {
   test("yields the spawned routine's return value", async () => {
     const sched = new Scheduler(testLib);
-    const inner = gen(function* (): Generator<unknown, string, unknown> {
+    const inner = gen(function* () {
       return "from-inner";
     });
-    const op = gen(function* (): Generator<unknown, string, unknown> {
-      const f = (yield* spawn(inner)) as Future<string>;
-      return (yield* f) as string;
+    const op = gen(function* () {
+      const f = spawn(inner);
+      return yield* f;
     });
     expect(await sched.run(op)).toBe("from-inner");
   });
 
   test("propagates routine errors", async () => {
     const sched = new Scheduler(testLib);
-    const inner = gen(function* (): Generator<unknown, never, unknown> {
+    const inner = gen(function* () {
       throw new Error("inner-fail");
     });
-    const op = gen(function* (): Generator<unknown, string, unknown> {
-      const f = (yield* spawn(inner)) as Future<never>;
+    const op = gen(function* () {
+      const f = spawn(inner);
       try {
         yield* f;
         return "no-throw";
@@ -114,14 +114,14 @@ describe("Future — routine-backed (via spawn)", () => {
   test("memoization: yielding twice gives the same value", async () => {
     const sched = new Scheduler(testLib);
     let inner_runs = 0;
-    const inner = gen(function* (): Generator<unknown, number, unknown> {
+    const inner = gen(function* () {
       inner_runs++;
       return 42;
     });
-    const op = gen(function* (): Generator<unknown, [number, number], unknown> {
-      const f = (yield* spawn(inner)) as Future<number>;
-      const a = (yield* f) as number;
-      const b = (yield* f) as number;
+    const op = gen(function* () {
+      const f = spawn(inner);
+      const a = yield* f;
+      const b = yield* f;
       return [a, b];
     });
     expect(await sched.run(op)).toEqual([42, 42]);
@@ -135,15 +135,15 @@ describe("Future — routine-backed (via spawn)", () => {
     // can confirm it returns the value without needing any awaitable to
     // resolve.
     const sched = new Scheduler(testLib);
-    const inner = gen(function* (): Generator<unknown, number, unknown> {
+    const inner = gen(function* () {
       return 99;
     });
-    const op = gen(function* (): Generator<unknown, number, unknown> {
-      const f = (yield* spawn(inner)) as Future<number>;
+    const op = gen(function* () {
+      const f = spawn(inner);
       // First await drives the inner to done.
       yield* f;
       // Second await on the already-done future.
-      return (yield* f) as number;
+      return yield* f;
     });
     expect(await sched.run(op)).toBe(99);
   });
@@ -155,10 +155,10 @@ describe("Future — yield* delegation propagates settled state correctly", () =
     const f1 = sched.makeJournalFuture(resolved(1));
     const f2 = sched.makeJournalFuture(resolved(2));
     const f3 = sched.makeJournalFuture(resolved(3));
-    const op = gen(function* (): Generator<unknown, number, unknown> {
-      const a = (yield* f1) as number;
-      const b = (yield* f2) as number;
-      const c = (yield* f3) as number;
+    const op = gen(function* () {
+      const a = yield* f1;
+      const b = yield* f2;
+      const c = yield* f3;
       return a + b + c;
     });
     expect(await sched.run(op)).toBe(6);
@@ -170,7 +170,7 @@ describe("Future — yield* delegation propagates settled state correctly", () =
     const f2 = sched.makeJournalFuture(rejected(new Error("middle")));
     let f3_awaited = false;
     const f3 = sched.makeJournalFuture(resolved(3));
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       yield* f1;
       try {
         yield* f2;

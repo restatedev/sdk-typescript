@@ -33,17 +33,17 @@ describe("mixing — flat journal+routine inputs", () => {
   test("all over alternating journal/routine sources, all in input order", async () => {
     const sched = new Scheduler(testLib);
     const tag = (label: string): Operation<string> =>
-      gen(function* (): Generator<unknown, string, unknown> {
+      gen(function* () {
         yield* sched.makeJournalFuture(resolved<void>(undefined));
         return label;
       });
-    const op = gen(function* (): Generator<unknown, string[], unknown> {
+    const op = gen(function* () {
       const j1 = sched.makeJournalFuture(resolved("j1"));
-      const r1 = (yield* spawn(tag("r1"))) as Future<string>;
+      const r1 = spawn(tag("r1"));
       const j2 = sched.makeJournalFuture(resolved("j2"));
-      const r2 = (yield* spawn(tag("r2"))) as Future<string>;
+      const r2 = spawn(tag("r2"));
       const j3 = sched.makeJournalFuture(resolved("j3"));
-      return (yield* sched.all([j1, r1, j2, r2, j3])) as string[];
+      return yield* sched.all([j1, r1, j2, r2, j3]);
     });
     expect(await sched.run(op)).toEqual(["j1", "r1", "j2", "r2", "j3"]);
   });
@@ -52,18 +52,14 @@ describe("mixing — flat journal+routine inputs", () => {
     const sched = new Scheduler(testLib);
     const dJ1 = deferred<string>();
     const dJ2 = deferred<string>();
-    const fastRoutine: Operation<string> = gen(function* (): Generator<
-      unknown,
-      string,
-      unknown
-    > {
+    const fastRoutine: Operation<string> = gen(function* () {
       return "routine-wins";
     });
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       const j1 = sched.makeJournalFuture(dJ1.promise);
-      const r1 = (yield* spawn(fastRoutine)) as Future<string>;
+      const r1 = spawn(fastRoutine);
       const j2 = sched.makeJournalFuture(dJ2.promise);
-      const winner = (yield* sched.race([j1, r1, j2])) as string;
+      const winner = yield* sched.race([j1, r1, j2]);
       // Drain losers.
       queueMicrotask(() => {
         dJ1.resolve("late-j1");
@@ -78,18 +74,14 @@ describe("mixing — flat journal+routine inputs", () => {
     const sched = new Scheduler(testLib);
     const dRoutine = deferred<string>();
     const dJournal = deferred<string>();
-    const slow: Operation<string> = gen(function* (): Generator<
-      unknown,
-      string,
-      unknown
-    > {
-      return (yield* sched.makeJournalFuture(dRoutine.promise)) as string;
+    const slow: Operation<string> = gen(function* () {
+      return yield* sched.makeJournalFuture(dRoutine.promise);
     });
-    const op = gen(function* (): Generator<unknown, string, unknown> {
-      const fr = (yield* spawn(slow)) as Future<string>;
+    const op = gen(function* () {
+      const fr = spawn(slow);
       const fjSlow = sched.makeJournalFuture(dJournal.promise);
       const fjFast = sched.makeJournalFuture(resolved("fast"));
-      const winner = (yield* sched.race([fr, fjSlow, fjFast])) as string;
+      const winner = yield* sched.race([fr, fjSlow, fjFast]);
       queueMicrotask(() => {
         dRoutine.resolve("late-routine");
         dJournal.resolve("late-journal");
@@ -106,16 +98,16 @@ describe("mixing — futures handed across spawn boundaries", () => {
     const d = deferred<number>();
 
     const consumer = (input: Future<number>): Operation<number> =>
-      gen(function* (): Generator<unknown, number, unknown> {
-        const v = (yield* input) as number;
+      gen(function* () {
+        const v = yield* input;
         return v * 10;
       });
 
-    const op = gen(function* (): Generator<unknown, number, unknown> {
+    const op = gen(function* () {
       const f = sched.makeJournalFuture(d.promise);
-      const fc = (yield* spawn(consumer(f))) as Future<number>;
+      const fc = spawn(consumer(f));
       queueMicrotask(() => d.resolve(7));
-      return (yield* fc) as number;
+      return yield* fc;
     });
 
     expect(await sched.run(op)).toBe(70);
@@ -126,18 +118,18 @@ describe("mixing — futures handed across spawn boundaries", () => {
     const d = deferred<number>();
 
     const reader = (id: number, input: Future<number>): Operation<string> =>
-      gen(function* (): Generator<unknown, string, unknown> {
-        const v = (yield* input) as number;
+      gen(function* () {
+        const v = yield* input;
         return `${id}=${v}`;
       });
 
-    const op = gen(function* (): Generator<unknown, string[], unknown> {
+    const op = gen(function* () {
       const f = sched.makeJournalFuture(d.promise);
-      const fr1 = (yield* spawn(reader(1, f))) as Future<string>;
-      const fr2 = (yield* spawn(reader(2, f))) as Future<string>;
-      const fr3 = (yield* spawn(reader(3, f))) as Future<string>;
+      const fr1 = spawn(reader(1, f));
+      const fr2 = spawn(reader(2, f));
+      const fr3 = spawn(reader(3, f));
       queueMicrotask(() => d.resolve(99));
-      return (yield* sched.all([fr1, fr2, fr3])) as string[];
+      return yield* sched.all([fr1, fr2, fr3]);
     });
 
     expect(await sched.run(op)).toEqual(["1=99", "2=99", "3=99"]);
@@ -147,24 +139,20 @@ describe("mixing — futures handed across spawn boundaries", () => {
     const sched = new Scheduler(testLib);
     const d = deferred<string>();
 
-    const producer: Operation<Future<string>> = gen(function* (): Generator<
-      unknown,
-      Future<string>,
-      unknown
-    > {
+    const producer: Operation<Future<string>> = gen(function* () {
       // Some "preparation" yield.
       yield* sched.makeJournalFuture(resolved<void>(undefined));
       // Hand back a future the parent can await later.
       return sched.makeJournalFuture(d.promise);
     });
 
-    const op = gen(function* (): Generator<unknown, string, unknown> {
-      const fp = (yield* spawn(producer)) as Future<Future<string>>;
+    const op = gen(function* () {
+      const fp = spawn(producer);
       // Get the inner future from the producer.
-      const inner = (yield* fp) as Future<string>;
+      const inner = yield* fp;
       // Now actually wait on the inner future.
       queueMicrotask(() => d.resolve("delivered"));
-      return (yield* inner) as string;
+      return yield* inner;
     });
 
     expect(await sched.run(op)).toBe("delivered");
@@ -173,27 +161,19 @@ describe("mixing — futures handed across spawn boundaries", () => {
   test("child returns a routine-backed future via re-spawn", async () => {
     const sched = new Scheduler(testLib);
 
-    const inner: Operation<number> = gen(function* (): Generator<
-      unknown,
-      number,
-      unknown
-    > {
+    const inner: Operation<number> = gen(function* () {
       return 42;
     });
 
-    const outer: Operation<Future<number>> = gen(function* (): Generator<
-      unknown,
-      Future<number>,
-      unknown
-    > {
+    const outer: Operation<Future<number>> = gen(function* () {
       // Spawn inner inside outer; return its future.
-      return (yield* spawn(inner)) as Future<number>;
+      return spawn(inner);
     });
 
-    const op = gen(function* (): Generator<unknown, number, unknown> {
-      const fo = (yield* spawn(outer)) as Future<Future<number>>;
-      const fi = (yield* fo) as Future<number>;
-      return (yield* fi) as number;
+    const op = gen(function* () {
+      const fo = spawn(outer);
+      const fi = yield* fo;
+      return yield* fi;
     });
 
     expect(await sched.run(op)).toBe(42);
@@ -203,7 +183,7 @@ describe("mixing — futures handed across spawn boundaries", () => {
 describe("mixing — combinators of combinators", () => {
   test("all of races", async () => {
     const sched = new Scheduler(testLib);
-    const op = gen(function* (): Generator<unknown, string[], unknown> {
+    const op = gen(function* () {
       // Build three "race winners" — each race resolves to one of its inputs.
       const r1 = sched.race([
         sched.makeJournalFuture(resolved("a1")),
@@ -217,7 +197,7 @@ describe("mixing — combinators of combinators", () => {
         sched.makeJournalFuture(resolved("c1")),
         sched.makeJournalFuture(resolved("c2")),
       ]);
-      return (yield* sched.all([r1, r2, r3])) as string[];
+      return yield* sched.all([r1, r2, r3]);
     });
     const result = await sched.run(op);
     expect(result).toHaveLength(3);
@@ -230,7 +210,7 @@ describe("mixing — combinators of combinators", () => {
     const sched = new Scheduler(testLib);
     const dGroup1 = deferred<string>();
     const dGroup2 = deferred<string>();
-    const op = gen(function* (): Generator<unknown, string[], unknown> {
+    const op = gen(function* () {
       // Group 1: blocks on dGroup1.
       const g1 = sched.all([
         sched.makeJournalFuture(resolved("g1a")),
@@ -242,7 +222,7 @@ describe("mixing — combinators of combinators", () => {
         sched.makeJournalFuture(dGroup2.promise),
       ]);
       // Race: whichever group completes first wins.
-      const winner = (yield* sched.race([g1, g2])) as string[];
+      const winner = yield* sched.race([g1, g2]);
       queueMicrotask(() => {
         dGroup1.resolve("g1-late");
         dGroup2.resolve("g2-late");
@@ -256,7 +236,7 @@ describe("mixing — combinators of combinators", () => {
 
   test("nested race-of-race-of-race", async () => {
     const sched = new Scheduler(testLib);
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       const inner = sched.race([
         sched.makeJournalFuture(resolved("inner-a")),
         sched.makeJournalFuture(resolved("inner-b")),
@@ -269,7 +249,7 @@ describe("mixing — combinators of combinators", () => {
         middle,
         sched.makeJournalFuture(resolved("outer-d")),
       ]);
-      return (yield* outer) as string;
+      return yield* outer;
     });
     const result = await sched.run(op);
     expect(["inner-a", "inner-b", "middle-c", "outer-d"]).toContain(result);
@@ -277,7 +257,7 @@ describe("mixing — combinators of combinators", () => {
 
   test("all of `all`s (matrix-shaped)", async () => {
     const sched = new Scheduler(testLib);
-    const op = gen(function* (): Generator<unknown, number[][], unknown> {
+    const op = gen(function* () {
       // 3x3 matrix of journal futures; all rows, then all the row-`all`s.
       const rows: Future<number[]>[] = [];
       for (let i = 0; i < 3; i++) {
@@ -287,7 +267,7 @@ describe("mixing — combinators of combinators", () => {
         }
         rows.push(sched.all(row));
       }
-      return (yield* sched.all(rows)) as number[][];
+      return yield* sched.all(rows);
     });
     expect(await sched.run(op)).toEqual([
       [0, 1, 2],
@@ -304,7 +284,7 @@ describe("mixing — select inside spawned routines", () => {
     const counts: number[] = [0, 0, 0];
 
     const worker = (id: number): Operation<number> =>
-      gen(function* (): Generator<unknown, number, unknown> {
+      gen(function* () {
         const fStop = sched.makeJournalFuture(stops[id]!.promise);
         while (true) {
           const fTick = sched.makeJournalFuture(resolved<void>(undefined));
@@ -319,12 +299,12 @@ describe("mixing — select inside spawned routines", () => {
         }
       });
 
-    const op = gen(function* (): Generator<unknown, number[], unknown> {
+    const op = gen(function* () {
       const futures: Future<number>[] = [];
       for (let i = 0; i < 3; i++) {
-        futures.push((yield* spawn(worker(i))) as Future<number>);
+        futures.push(spawn(worker(i)));
       }
-      return (yield* sched.all(futures)) as number[];
+      return yield* sched.all(futures);
     });
 
     const results = await sched.run(op);
@@ -341,7 +321,7 @@ describe("mixing — select inside spawned routines", () => {
     const dDone = deferred<string>();
 
     const observer = (id: number): Operation<string> =>
-      gen(function* (): Generator<unknown, string, unknown> {
+      gen(function* () {
         const fDone = sched.makeJournalFuture(dDone.promise);
         const fOther = sched.makeJournalFuture(resolved("noop"));
         const r = yield* select({ done: fDone, other: fOther });
@@ -349,16 +329,16 @@ describe("mixing — select inside spawned routines", () => {
         return `o${id}:${r.tag}`;
       });
 
-    const op = gen(function* (): Generator<unknown, string, unknown> {
-      const f1 = (yield* spawn(observer(1))) as Future<string>;
-      const f2 = (yield* spawn(observer(2))) as Future<string>;
+    const op = gen(function* () {
+      const f1 = spawn(observer(1));
+      const f2 = spawn(observer(2));
       const fDone = sched.makeJournalFuture(dDone.promise);
       const fOther = sched.makeJournalFuture(resolved("parent-noop"));
       // Resolve done so any observer that hasn't seen "other" win sees "done".
       queueMicrotask(() => dDone.resolve("payload"));
       const r = yield* select({ done: fDone, other: fOther });
-      const r1 = (yield* f1) as string;
-      const r2 = (yield* f2) as string;
+      const r1 = yield* f1;
+      const r2 = yield* f2;
       return `parent:${r.tag} ${r1} ${r2}`;
     });
 
@@ -382,17 +362,17 @@ describe("mixing — deep trees of spawn+combine", () => {
       }
       const left = node(depth - 1);
       const right = node(depth - 1);
-      return sched.spawnDetached(
-        gen(function* (): Generator<unknown, number, unknown> {
-          const [a, b] = (yield* sched.all([left, right])) as number[];
+      return sched.spawn(
+        gen(function* () {
+          const [a, b] = yield* sched.all([left, right]);
           return (a as number) + (b as number);
         })
       );
     };
 
     const root = node(5);
-    const op = gen(function* (): Generator<unknown, number, unknown> {
-      return (yield* root) as number;
+    const op = gen(function* () {
+      return yield* root;
     });
     // Sum of 0..31 = 496.
     expect(await sched.run(op)).toBe(496);
@@ -415,8 +395,8 @@ describe("mixing — deep trees of spawn+combine", () => {
     };
 
     const root = node(3);
-    const op = gen(function* (): Generator<unknown, number, unknown> {
-      return (yield* root) as number;
+    const op = gen(function* () {
+      return yield* root;
     });
     const result = await sched.run(op);
     // The root is a race over 3 races over 3 races over 3 leaves = 27 leaves.
@@ -438,21 +418,21 @@ describe("mixing — deep trees of spawn+combine", () => {
         node(depth - 1, childMode, label * 10 + 1),
         node(depth - 1, childMode, label * 10 + 2),
       ];
-      return sched.spawnDetached(
-        gen(function* (): Generator<unknown, number, unknown> {
+      return sched.spawn(
+        gen(function* () {
           if (mode === "all") {
-            const xs = (yield* sched.all(children)) as number[];
+            const xs = yield* sched.all(children);
             return xs.reduce((a, b) => a + b, 0);
           } else {
-            return (yield* sched.race(children)) as number;
+            return yield* sched.race(children);
           }
         })
       );
     };
 
     const root = node(4, "all", 1);
-    const op = gen(function* (): Generator<unknown, number, unknown> {
-      return (yield* root) as number;
+    const op = gen(function* () {
+      return yield* root;
     });
     // Just ensure it completes without crashing or timing out.
     const result = await sched.run(op);
@@ -464,10 +444,10 @@ describe("mixing — deep trees of spawn+combine", () => {
     const D = 50;
 
     const chain = (n: number): Operation<number> =>
-      gen(function* (): Generator<unknown, number, unknown> {
+      gen(function* () {
         if (n === 0) return 0;
-        const f = (yield* spawn(chain(n - 1))) as Future<number>;
-        const v = (yield* f) as number;
+        const f = spawn(chain(n - 1));
+        const v = yield* f;
         return v + 1;
       });
 
@@ -479,12 +459,12 @@ describe("mixing — re-yielding the same future in different contexts", () => {
   test("the same journal future awaited directly and inside an all", async () => {
     const sched = new Scheduler(testLib);
     const d = deferred<number>();
-    const op = gen(function* (): Generator<unknown, number, unknown> {
+    const op = gen(function* () {
       const f = sched.makeJournalFuture(d.promise);
       // First context: direct yield. Resolves once d resolves.
       // Second context: inside all with another future. Same f, awaited again.
       queueMicrotask(() => d.resolve(7));
-      const v1 = (yield* f) as number;
+      const v1 = yield* f;
       const both = (yield* sched.all([
         f,
         sched.makeJournalFuture(resolved(100)),
@@ -497,18 +477,14 @@ describe("mixing — re-yielding the same future in different contexts", () => {
 
   test("the same routine-backed future awaited multiple times", async () => {
     const sched = new Scheduler(testLib);
-    const child: Operation<number> = gen(function* (): Generator<
-      unknown,
-      number,
-      unknown
-    > {
+    const child: Operation<number> = gen(function* () {
       return 5;
     });
-    const op = gen(function* (): Generator<unknown, number, unknown> {
-      const f = (yield* spawn(child)) as Future<number>;
-      const a = (yield* f) as number;
-      const b = (yield* f) as number;
-      const c = (yield* f) as number;
+    const op = gen(function* () {
+      const f = spawn(child);
+      const a = yield* f;
+      const b = yield* f;
+      const c = yield* f;
       return a + b + c;
     });
     expect(await sched.run(op)).toBe(15);

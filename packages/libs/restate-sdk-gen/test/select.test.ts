@@ -25,7 +25,7 @@ describe("select — basics", () => {
     const sched = new Scheduler(testLib);
     const dA = deferred<string>();
     const dB = deferred<string>();
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       const fA = sched.makeJournalFuture(dA.promise);
       const fB = sched.makeJournalFuture(dB.promise);
       const r = yield* select({ a: fA, b: fB });
@@ -40,12 +40,12 @@ describe("select — basics", () => {
   test("returns the future itself, which the user can unwrap", async () => {
     const sched = new Scheduler(testLib);
     const dA = deferred<string>();
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       const fA = sched.makeJournalFuture(dA.promise);
       const fB = sched.makeJournalFuture(resolved("instant"));
       const r = yield* select({ a: fA, b: fB });
       // Unwrap the chosen future.
-      const v = (yield* r.future) as string;
+      const v = yield* r.future;
       return `${r.tag}=${v}`;
     });
     expect(await sched.run(op)).toBe("b=instant");
@@ -55,7 +55,7 @@ describe("select — basics", () => {
   test("an already-settled branch wins immediately (sync short-circuit)", async () => {
     const sched = new Scheduler(testLib);
     const dA = deferred<string>();
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       const fA = sched.makeJournalFuture(dA.promise);
       const fB = sched.makeJournalFuture(resolved("ready"));
       const r = yield* select({ slow: fA, fast: fB });
@@ -67,7 +67,7 @@ describe("select — basics", () => {
 
   test("rejection only surfaces when the user unwraps the future", async () => {
     const sched = new Scheduler(testLib);
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       const fGood = sched.makeJournalFuture(resolved<string>("good"));
       const fBad = sched.makeJournalFuture(rejected<string>(new Error("bad")));
       // Both branches are ready synchronously; either could win the sync
@@ -75,7 +75,7 @@ describe("select — basics", () => {
       // happens on unwrap.
       const r = yield* select({ good: fGood, bad: fBad });
       try {
-        const v = (yield* r.future) as string;
+        const v = yield* r.future;
         return `ok:${r.tag}:${v}`;
       } catch (e) {
         return `err:${r.tag}:${(e as Error).message}`;
@@ -93,14 +93,14 @@ describe("select — Tokio-style loops", () => {
     const sched = new Scheduler(testLib);
     let ticks = 0;
     const dDone = deferred<string>();
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       const fDone = sched.makeJournalFuture(dDone.promise);
       while (true) {
         const r = yield* select({
           done: fDone,
           tick: sched.makeJournalFuture(resolved<void>(undefined)),
         });
-        if (r.tag === "done") return (yield* r.future) as string;
+        if (r.tag === "done") return yield* r.future;
         ticks++;
         if (ticks > 5) {
           queueMicrotask(() => dDone.resolve("finished"));
@@ -116,7 +116,7 @@ describe("select — Tokio-style loops", () => {
 
   test("multiple consecutive selects resolve to different branches as expected", async () => {
     const sched = new Scheduler(testLib);
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       const fA = sched.makeJournalFuture(resolved("a"));
       const fB = sched.makeJournalFuture(resolved("b"));
       const fC = sched.makeJournalFuture(resolved("c"));
@@ -134,15 +134,11 @@ describe("select — spawn-backed branches", () => {
   test("can mix journal and routine-backed branches", async () => {
     const sched = new Scheduler(testLib);
     const dJournal = deferred<string>();
-    const slowRoutine: Operation<string> = gen(function* (): Generator<
-      unknown,
-      string,
-      unknown
-    > {
-      return (yield* sched.makeJournalFuture(dJournal.promise)) as string;
+    const slowRoutine: Operation<string> = gen(function* () {
+      return yield* sched.makeJournalFuture(dJournal.promise);
     });
-    const op = gen(function* (): Generator<unknown, string, unknown> {
-      const fRoutine = (yield* spawn(slowRoutine)) as Future<string>;
+    const op = gen(function* () {
+      const fRoutine = spawn(slowRoutine);
       const fJournal = sched.makeJournalFuture(resolved("journal-fast"));
       const r = yield* select({ task: fRoutine, j: fJournal });
       return r.tag;
@@ -155,19 +151,15 @@ describe("select — spawn-backed branches", () => {
 
   test("returns the spawned future when it wins, value retrievable", async () => {
     const sched = new Scheduler(testLib);
-    const fast: Operation<number> = gen(function* (): Generator<
-      unknown,
-      number,
-      unknown
-    > {
+    const fast: Operation<number> = gen(function* () {
       return 42;
     });
-    const op = gen(function* (): Generator<unknown, number, unknown> {
-      const fFast = (yield* spawn(fast)) as Future<number>;
+    const op = gen(function* () {
+      const fFast = spawn(fast);
       const dSlow = deferred<number>();
       const fSlow = sched.makeJournalFuture(dSlow.promise);
       const r = yield* select({ fast: fFast, slow: fSlow });
-      const v = (yield* r.future) as number;
+      const v = yield* r.future;
       queueMicrotask(() => dSlow.resolve(0));
       return v;
     });
@@ -180,17 +172,17 @@ describe("select — type narrowing (compile-time only)", () => {
   // story executable as code. If the types regress, tsc will catch it.
   test("the SelectResult tag/future pairing typechecks correctly", async () => {
     const sched = new Scheduler(testLib);
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       const fStr = sched.makeJournalFuture(resolved<string>("s"));
       const fNum = sched.makeJournalFuture(resolved<number>(7));
       const r = yield* select({ s: fStr, n: fNum });
       switch (r.tag) {
         case "s": {
-          const v = (yield* r.future) as string;
+          const v = yield* r.future;
           return `s:${v}`;
         }
         case "n": {
-          const v = (yield* r.future) as number;
+          const v = yield* r.future;
           return `n:${v}`;
         }
       }

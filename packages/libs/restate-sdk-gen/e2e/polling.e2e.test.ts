@@ -103,7 +103,7 @@ const pollingSvc = service({
 
     *pollWithStop(req: { jobId: string; budgetMs: number }) {
       const stop = channel<void>();
-      const t = yield* spawn(pollWorker(req.jobId, stop));
+      const t = spawn(pollWorker(req.jobId, stop));
       const r = yield* select({
         done: t,
         budget: sleep({ milliseconds: req.budgetMs }),

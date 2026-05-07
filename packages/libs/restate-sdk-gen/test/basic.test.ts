@@ -17,7 +17,7 @@ import { testLib } from "./test-promise.js";
 describe("gen — basics", () => {
   test("body runs to completion and returns its value", async () => {
     const sched = new Scheduler(testLib);
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       return "hello";
     });
     expect(await sched.run(op)).toBe("hello");
@@ -25,7 +25,7 @@ describe("gen — basics", () => {
 
   test("body that does no yields returns its value directly", async () => {
     const sched = new Scheduler(testLib);
-    const op = gen(function* (): Generator<unknown, number, unknown> {
+    const op = gen(function* () {
       return 42;
     });
     expect(await sched.run(op)).toBe(42);
@@ -33,13 +33,13 @@ describe("gen — basics", () => {
 
   test("empty body returns undefined", async () => {
     const sched = new Scheduler(testLib);
-    const op = gen(function* (): Generator<unknown, void, unknown> {});
+    const op = gen(function* () {});
     expect(await sched.run(op)).toBeUndefined();
   });
 
   test("error thrown in body propagates", async () => {
     const sched = new Scheduler(testLib);
-    const op = gen(function* (): Generator<unknown, never, unknown> {
+    const op = gen(function* () {
       throw new Error("nope");
     });
     await expect(sched.run(op)).rejects.toThrow("nope");
@@ -49,21 +49,21 @@ describe("gen — basics", () => {
     const sched = new Scheduler(testLib);
     expect(
       await sched.run(
-        gen(function* (): Generator<unknown, null, unknown> {
+        gen(function* () {
           return null;
         })
       )
     ).toBeNull();
     expect(
       await sched.run(
-        gen(function* (): Generator<unknown, number, unknown> {
+        gen(function* () {
           return 0;
         })
       )
     ).toBe(0);
     expect(
       await sched.run(
-        gen(function* (): Generator<unknown, boolean, unknown> {
+        gen(function* () {
           return false;
         })
       )
@@ -76,7 +76,7 @@ describe("gen — reusability", () => {
     const sched1 = new Scheduler(testLib);
     const sched2 = new Scheduler(testLib);
     let calls = 0;
-    const op = gen(function* (): Generator<unknown, number, unknown> {
+    const op = gen(function* () {
       calls++;
       return calls;
     });
@@ -89,7 +89,7 @@ describe("gen — reusability", () => {
     const sched1 = new Scheduler(testLib);
     const sched2 = new Scheduler(testLib);
     let calls = 0;
-    const op = gen(function* (): Generator<unknown, number, unknown> {
+    const op = gen(function* () {
       const myCall = ++calls;
       return myCall;
     });
@@ -102,15 +102,11 @@ describe("gen — reusability", () => {
 describe("gen — nesting via yield*", () => {
   test("yield* on a nested gen op flows the return value through", async () => {
     const sched = new Scheduler(testLib);
-    const inner: Operation<number> = gen(function* (): Generator<
-      unknown,
-      number,
-      unknown
-    > {
+    const inner: Operation<number> = gen(function* () {
       return 7;
     });
-    const outer = gen(function* (): Generator<unknown, number, unknown> {
-      const v = (yield* inner) as number;
+    const outer = gen(function* () {
+      const v = yield* inner;
       return v * 2;
     });
     expect(await sched.run(outer)).toBe(14);
@@ -118,10 +114,10 @@ describe("gen — nesting via yield*", () => {
 
   test("yield* on a nested gen propagates errors", async () => {
     const sched = new Scheduler(testLib);
-    const inner = gen(function* (): Generator<unknown, never, unknown> {
+    const inner = gen(function* () {
       throw new Error("inner-fail");
     });
-    const outer = gen(function* (): Generator<unknown, string, unknown> {
+    const outer = gen(function* () {
       try {
         yield* inner;
         return "no-throw";
@@ -135,9 +131,9 @@ describe("gen — nesting via yield*", () => {
   test("deeply nested gen (10 levels) propagates a value through", async () => {
     const sched = new Scheduler(testLib);
     const buildLevel = (n: number): Operation<number> =>
-      gen(function* (): Generator<unknown, number, unknown> {
+      gen(function* () {
         if (n === 0) return 0;
-        const inner = (yield* buildLevel(n - 1)) as number;
+        const inner = yield* buildLevel(n - 1);
         return inner + 1;
       });
     expect(await sched.run(buildLevel(10))).toBe(10);
@@ -145,15 +141,15 @@ describe("gen — nesting via yield*", () => {
 
   test("two sequential yield* of different ops chain values", async () => {
     const sched = new Scheduler(testLib);
-    const a = gen(function* (): Generator<unknown, string, unknown> {
+    const a = gen(function* () {
       return "a";
     });
-    const b = gen(function* (): Generator<unknown, string, unknown> {
+    const b = gen(function* () {
       return "b";
     });
-    const op = gen(function* (): Generator<unknown, string, unknown> {
-      const x = (yield* a) as string;
-      const y = (yield* b) as string;
+    const op = gen(function* () {
+      const x = yield* a;
+      const y = yield* b;
       return x + y;
     });
     expect(await sched.run(op)).toBe("ab");

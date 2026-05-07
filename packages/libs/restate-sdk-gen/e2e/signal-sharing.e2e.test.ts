@@ -101,7 +101,7 @@ const combinatorSvc = service({
       // Equivalent of `p1.map(() => { throw new TerminalError(...) })`:
       // a spawned routine that parks on p1, then throws regardless of
       // whether p1 fulfilled or rejected.
-      const p1Throws = yield* spawn(
+      const p1Throws = spawn(
         (function* () {
           try {
             yield* p1;

@@ -16,7 +16,8 @@
 // creation, ready-queue churn, advance-once-and-finish, waiter wakeup.
 
 import { bench, describe } from "vitest";
-import { gen, spawn } from "../src/operation.js";
+import { gen } from "../src/operation.js";
+import { spawn } from "../src/free.js";
 import type { Future } from "../src/future.js";
 import { newSched, BENCH_OPTS } from "./_helpers.js";
 
@@ -32,7 +33,7 @@ for (const N of sizes) {
           gen(function* () {
             const ts = new Array<Future<number>>(N);
             for (let i = 0; i < N; i++) {
-              ts[i] = yield* spawn(
+              ts[i] = spawn(
                 gen(function* () {
                   return i;
                 })

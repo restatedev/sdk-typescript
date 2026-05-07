@@ -35,20 +35,16 @@ describe("select — mixing journal and routine branches", () => {
   test("select with one journal and one routine branch, routine wins", async () => {
     const sched = new Scheduler(testLib);
     const dJournal = deferred<string>();
-    const fastRoutine: Operation<string> = gen(function* (): Generator<
-      unknown,
-      string,
-      unknown
-    > {
+    const fastRoutine: Operation<string> = gen(function* () {
       return "from-routine";
     });
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       const fJ = sched.makeJournalFuture(dJournal.promise);
-      const fR = (yield* spawn(fastRoutine)) as Future<string>;
+      const fR = spawn(fastRoutine);
       const r = yield* select({ j: fJ, r: fR });
       // Drain loser.
       queueMicrotask(() => dJournal.resolve("late"));
-      return `${r.tag}:${(yield* r.future) as string}`;
+      return `${r.tag}:${yield* r.future}`;
     });
     expect(await sched.run(op)).toBe("r:from-routine");
   });
@@ -57,30 +53,22 @@ describe("select — mixing journal and routine branches", () => {
     const sched = new Scheduler(testLib);
     const dJ = deferred<number>();
     const dR1 = deferred<number>();
-    const r1: Operation<number> = gen(function* (): Generator<
-      unknown,
-      number,
-      unknown
-    > {
-      return (yield* sched.makeJournalFuture(dR1.promise)) as number;
+    const r1: Operation<number> = gen(function* () {
+      return yield* sched.makeJournalFuture(dR1.promise);
     });
-    const r2: Operation<number> = gen(function* (): Generator<
-      unknown,
-      number,
-      unknown
-    > {
+    const r2: Operation<number> = gen(function* () {
       return 99; // sync-fast
     });
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       const fJ = sched.makeJournalFuture(dJ.promise);
-      const fR1 = (yield* spawn(r1)) as Future<number>;
-      const fR2 = (yield* spawn(r2)) as Future<number>;
+      const fR1 = spawn(r1);
+      const fR2 = spawn(r2);
       const r = yield* select({ j: fJ, slow: fR1, fast: fR2 });
       queueMicrotask(() => {
         dJ.resolve(0);
         dR1.resolve(0);
       });
-      return `${r.tag}:${(yield* r.future) as number}`;
+      return `${r.tag}:${yield* r.future}`;
     });
     expect(await sched.run(op)).toBe("fast:99");
   });
@@ -90,28 +78,20 @@ describe("select — mixing journal and routine branches", () => {
     const dPair1 = [deferred<number>(), deferred<number>()];
     const dPair2 = [deferred<number>(), deferred<number>()];
 
-    const sumBranch: Operation<number> = gen(function* (): Generator<
-      unknown,
-      number,
-      unknown
-    > {
+    const sumBranch: Operation<number> = gen(function* () {
       const fs = dPair1.map((d) => sched.makeJournalFuture(d.promise));
-      const vs = (yield* sched.all(fs)) as number[];
+      const vs = yield* sched.all(fs);
       return vs.reduce((a, b) => a + b, 0);
     });
 
-    const firstBranch: Operation<number> = gen(function* (): Generator<
-      unknown,
-      number,
-      unknown
-    > {
+    const firstBranch: Operation<number> = gen(function* () {
       const fs = dPair2.map((d) => sched.makeJournalFuture(d.promise));
-      return (yield* sched.race(fs)) as number;
+      return yield* sched.race(fs);
     });
 
-    const op = gen(function* (): Generator<unknown, string, unknown> {
-      const fSum = (yield* spawn(sumBranch)) as Future<number>;
-      const fFirst = (yield* spawn(firstBranch)) as Future<number>;
+    const op = gen(function* () {
+      const fSum = spawn(sumBranch);
+      const fFirst = spawn(firstBranch);
       // Resolve early so the inner combinators can fire. This must happen
       // before the outer select is awaited — schedule via microtask.
       queueMicrotask(() => {
@@ -124,7 +104,7 @@ describe("select — mixing journal and routine branches", () => {
         });
       });
       const r = yield* select({ sum: fSum, first: fFirst });
-      const v = (yield* r.future) as number;
+      const v = yield* r.future;
       return `${r.tag}:${v}`;
     });
 
@@ -144,11 +124,11 @@ describe("select — mixing journal and routine branches", () => {
     const f1 = sched.makeJournalFuture(resolved(10));
     const f2 = sched.makeJournalFuture(resolved(20));
     const f3 = sched.makeJournalFuture(resolved(30));
-    const op = gen(function* (): Generator<unknown, number, unknown> {
+    const op = gen(function* () {
       // Select picks one (we don't care which here — we re-collect every
       // future via all afterwards to verify memoization).
       yield* select({ a: f1, b: f2, c: f3 });
-      const all = (yield* sched.all([f1, f2, f3])) as number[];
+      const all = yield* sched.all([f1, f2, f3]);
       // Memoization: re-yielding f1/f2/f3 gives the same values (journal-
       // backed, journal entries are stable).
       return all.reduce((a, b) => a + b, 0);
@@ -165,39 +145,31 @@ describe("select — pumping a stable future-pool in a loop", () => {
     // Two long-running spawned routines that resolve at different points.
     const dA = deferred<string>();
     const dB = deferred<string>();
-    const taskA: Operation<string> = gen(function* (): Generator<
-      unknown,
-      string,
-      unknown
-    > {
-      const v = (yield* sched.makeJournalFuture(dA.promise)) as string;
+    const taskA: Operation<string> = gen(function* () {
+      const v = yield* sched.makeJournalFuture(dA.promise);
       events.push(`A:${v}`);
       return v;
     });
-    const taskB: Operation<string> = gen(function* (): Generator<
-      unknown,
-      string,
-      unknown
-    > {
-      const v = (yield* sched.makeJournalFuture(dB.promise)) as string;
+    const taskB: Operation<string> = gen(function* () {
+      const v = yield* sched.makeJournalFuture(dB.promise);
       events.push(`B:${v}`);
       return v;
     });
 
-    const op = gen(function* (): Generator<unknown, string[], unknown> {
-      const fA = (yield* spawn(taskA)) as Future<string>;
-      const fB = (yield* spawn(taskB)) as Future<string>;
+    const op = gen(function* () {
+      const fA = spawn(taskA);
+      const fB = spawn(taskB);
       // Trigger both; A should fire first.
       queueMicrotask(() => dA.resolve("a-payload"));
       queueMicrotask(() => queueMicrotask(() => dB.resolve("b-payload")));
       const out: string[] = [];
       // First iteration: A wins.
       const r1 = yield* select({ a: fA, b: fB });
-      out.push(`${r1.tag}:${(yield* r1.future) as string}`);
+      out.push(`${r1.tag}:${yield* r1.future}`);
       // Second iteration: A is already done, B may also be done by now.
       // Whichever wins must produce a sensible pair.
       const r2 = yield* select({ a: fA, b: fB });
-      out.push(`${r2.tag}:${(yield* r2.future) as string}`);
+      out.push(`${r2.tag}:${yield* r2.future}`);
       return out;
     });
 
@@ -219,30 +191,22 @@ describe("select — inside spawned routines that also yield mixed futures", () 
     const sched = new Scheduler(testLib);
     const dExternal = deferred<string>();
 
-    const inner: Operation<string> = gen(function* (): Generator<
-      unknown,
-      string,
-      unknown
-    > {
+    const inner: Operation<string> = gen(function* () {
       // Internal spawned helper: completes synchronously.
-      const helper: Operation<string> = gen(function* (): Generator<
-        unknown,
-        string,
-        unknown
-      > {
+      const helper: Operation<string> = gen(function* () {
         return "helper-fast";
       });
-      const fHelper = (yield* spawn(helper)) as Future<string>;
+      const fHelper = spawn(helper);
       const fExternal = sched.makeJournalFuture(dExternal.promise);
       const r = yield* select({ helper: fHelper, external: fExternal });
       // Drain whichever loser.
       queueMicrotask(() => dExternal.resolve("never-mind"));
-      return `${r.tag}:${(yield* r.future) as string}`;
+      return `${r.tag}:${yield* r.future}`;
     });
 
-    const op = gen(function* (): Generator<unknown, string, unknown> {
-      const fInner = (yield* spawn(inner)) as Future<string>;
-      return (yield* fInner) as string;
+    const op = gen(function* () {
+      const fInner = spawn(inner);
+      return yield* fInner;
     });
 
     expect(await sched.run(op)).toBe("helper:helper-fast");

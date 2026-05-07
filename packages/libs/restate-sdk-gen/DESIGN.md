@@ -73,10 +73,10 @@ You yield a Future to wait for it. `yield* future` returns the value
 when the future settles, or throws if it rejected. Futures can be
 yielded repeatedly with the same result.
 
-You spawn an Operation with `ops.spawn`:
+You spawn an Operation with `spawn(op)`:
 
 ```ts
-const f = yield* ops.spawn(myWorkflow);  // f: Future<...>
+const f = spawn(myWorkflow);  // f: Future<...>
 // ... do other things ...
 const result = yield* f;
 ```

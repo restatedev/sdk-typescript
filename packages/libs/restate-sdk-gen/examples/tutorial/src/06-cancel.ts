@@ -79,7 +79,7 @@ export const cancel = service({
     // budgetSeconds, or null if budget elapsed first.
     *pollWithStop(req: { jobId: string; budgetSeconds: number }) {
       const stop = channel<void>();
-      const t = yield* spawn(pollWorker(req.jobId, stop));
+      const t = spawn(pollWorker(req.jobId, stop));
 
       const r = yield* select({
         done: t,

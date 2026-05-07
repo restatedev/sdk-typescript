@@ -31,7 +31,6 @@ import {
   type Operation,
   select as selectOp,
   type SelectResult,
-  spawn as spawnOp,
 } from "./operation.js";
 import type { Scheduler } from "./scheduler.js";
 import { Scheduler as SchedulerClass } from "./scheduler.js";
@@ -448,7 +447,7 @@ export class RestateOperations {
     const idFuture = this.toFuture(
       handle.invocationId as unknown as restate.RestatePromise<restate.InvocationId>
     );
-    return this.sched.spawnDetached(
+    return this.sched.spawn(
       gen(function* (): Generator<unknown, InvocationReference<O>, unknown> {
         const id = (yield* idFuture) as string;
         return new InvocationReferenceImpl<O>(id, outputSerde);
@@ -498,8 +497,15 @@ export class RestateOperations {
 
   // ---- spawn ----
 
-  spawn<T>(op: Operation<T>): Operation<Future<T>> {
-    return spawnOp(op);
+  /**
+   * Register `op` as a fresh routine and return a `Future<T>` for its
+   * eventual outcome. Eager: by the time `spawn` returns, the child is
+   * already queued and will advance on the next scheduler tick — same
+   * model as `run`/`sleep`/`awakeable`. The returned Future can be
+   * yielded on, handed to combinators, or stored.
+   */
+  spawn<T>(op: Operation<T>): Future<T> {
+    return this.sched.spawn(op);
   }
 
   // ---- channels ----

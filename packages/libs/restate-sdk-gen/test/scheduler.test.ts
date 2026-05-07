@@ -30,12 +30,8 @@ describe("scheduler — deadlock detection", () => {
     // but live routines exist" branch — the same code path that would
     // catch a true wait cycle.
     const dNever = deferred<string>();
-    const stuck: Operation<string> = gen(function* (): Generator<
-      unknown,
-      string,
-      unknown
-    > {
-      return (yield* sched.makeJournalFuture(dNever.promise)) as string;
+    const stuck: Operation<string> = gen(function* () {
+      return yield* sched.makeJournalFuture(dNever.promise);
     });
     // We don't directly construct a deadlock — instead, this test
     // verifies the scheduler tolerates a routine parked on a journal
@@ -43,11 +39,11 @@ describe("scheduler — deadlock detection", () => {
     // we *don't* want is the scheduler claiming "stuck" when there's a
     // pending journal source (even one that may never resolve from
     // the test's perspective).
-    const op = gen(function* (): Generator<unknown, string, unknown> {
-      const f = (yield* spawn(stuck)) as Future<string>;
+    const op = gen(function* () {
+      const f = spawn(stuck);
       // Resolve so the test can complete.
       queueMicrotask(() => dNever.resolve("eventually"));
-      return (yield* f) as string;
+      return yield* f;
     });
     expect(await sched.run(op)).toBe("eventually");
   });
@@ -61,22 +57,18 @@ describe("scheduler — routine cleanup", () => {
     // We can observe this only indirectly: that the scheduler completes
     // at all (and quickly) for a large N.
     const N = 1000;
-    const op = gen(function* (): Generator<unknown, number, unknown> {
+    const op = gen(function* () {
       const futures: Future<number>[] = [];
       for (let i = 0; i < N; i++) {
         const ii = i;
-        const child: Operation<number> = gen(function* (): Generator<
-          unknown,
-          number,
-          unknown
-        > {
+        const child: Operation<number> = gen(function* () {
           return ii;
         });
-        futures.push((yield* spawn(child)) as Future<number>);
+        futures.push(spawn(child));
       }
       // Drive them all.
       let sum = 0;
-      for (const f of futures) sum += (yield* f) as number;
+      for (const f of futures) sum += yield* f;
       return sum;
     });
     const result = await sched.run(op);
@@ -89,30 +81,22 @@ describe("scheduler — routine cleanup", () => {
     // the first iteration). The test passes if the scheduler doesn't OOM
     // or hang.
     const sched = new Scheduler(testLib);
-    const a: Operation<string> = gen(function* (): Generator<
-      unknown,
-      string,
-      unknown
-    > {
+    const a: Operation<string> = gen(function* () {
       return "a";
     });
-    const b: Operation<string> = gen(function* (): Generator<
-      unknown,
-      string,
-      unknown
-    > {
+    const b: Operation<string> = gen(function* () {
       return "b";
     });
-    const op = gen(function* (): Generator<unknown, number, unknown> {
-      const fa = (yield* spawn(a)) as Future<string>;
-      const fb = (yield* spawn(b)) as Future<string>;
+    const op = gen(function* () {
+      const fa = spawn(a);
+      const fb = spawn(b);
       // Drive both to completion.
       yield* fa;
       yield* fb;
       // Now race them repeatedly. Sync short-circuit each time.
       let count = 0;
       for (let i = 0; i < 100; i++) {
-        const winner = (yield* sched.race([fa, fb])) as string;
+        const winner = yield* sched.race([fa, fb]);
         if (winner === "a" || winner === "b") count++;
       }
       return count;
@@ -129,10 +113,10 @@ describe("scheduler — won-flag under simultaneous settles", () => {
     const sched = new Scheduler(testLib);
     const d1 = deferred<string>();
     const d2 = deferred<string>();
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       const f1 = sched.makeJournalFuture(d1.promise);
       const f2 = sched.makeJournalFuture(d2.promise);
-      return (yield* sched.race([f1, f2])) as string;
+      return yield* sched.race([f1, f2]);
     });
     // Resolve both before the scheduler sees them. They go into the
     // microtask queue; one wins via Promise.race.
@@ -151,19 +135,15 @@ describe("scheduler — ordering and re-entry", () => {
     // should observe its result without an await tick. (Sync short-circuit
     // path in Leaf dispatch.)
     const sched = new Scheduler(testLib);
-    const child: Operation<number> = gen(function* (): Generator<
-      unknown,
-      number,
-      unknown
-    > {
+    const child: Operation<number> = gen(function* () {
       return 7;
     });
-    const op = gen(function* (): Generator<unknown, number, unknown> {
-      const f = (yield* spawn(child)) as Future<number>;
+    const op = gen(function* () {
+      const f = spawn(child);
       // Spawn just returned; child is in ready queue. drainReady will
       // process it, finishing it, before this routine's next yield is
       // reached. So this yield will see child as `done`.
-      return (yield* f) as number;
+      return yield* f;
     });
     expect(await sched.run(op)).toBe(7);
   });
@@ -172,20 +152,20 @@ describe("scheduler — ordering and re-entry", () => {
     const sched = new Scheduler(testLib);
     const order: number[] = [];
     const grandchild = (n: number): Operation<void> =>
-      gen(function* (): Generator<unknown, void, unknown> {
+      gen(function* () {
         order.push(n);
       });
     const child = (n: number): Operation<void> =>
-      gen(function* (): Generator<unknown, void, unknown> {
-        const f1 = (yield* spawn(grandchild(n * 10 + 1))) as Future<void>;
-        const f2 = (yield* spawn(grandchild(n * 10 + 2))) as Future<void>;
+      gen(function* () {
+        const f1 = spawn(grandchild(n * 10 + 1));
+        const f2 = spawn(grandchild(n * 10 + 2));
         yield* f1;
         yield* f2;
         order.push(n);
       });
-    const op = gen(function* (): Generator<unknown, void, unknown> {
-      const fa = (yield* spawn(child(1))) as Future<void>;
-      const fb = (yield* spawn(child(2))) as Future<void>;
+    const op = gen(function* () {
+      const fa = spawn(child(1));
+      const fb = spawn(child(2));
       yield* fa;
       yield* fb;
     });
@@ -204,10 +184,10 @@ describe("scheduler — multiple await points in one routine", () => {
     const d1 = deferred<number>();
     const d2 = deferred<number>();
     const d3 = deferred<number>();
-    const op = gen(function* (): Generator<unknown, number, unknown> {
-      const a = (yield* sched.makeJournalFuture(d1.promise)) as number;
-      const b = (yield* sched.makeJournalFuture(d2.promise)) as number;
-      const c = (yield* sched.makeJournalFuture(d3.promise)) as number;
+    const op = gen(function* () {
+      const a = yield* sched.makeJournalFuture(d1.promise);
+      const b = yield* sched.makeJournalFuture(d2.promise);
+      const c = yield* sched.makeJournalFuture(d3.promise);
       return a + b + c;
     });
     const result = sched.run(op);
@@ -225,11 +205,11 @@ describe("scheduler — multiple await points in one routine", () => {
     const d2 = deferred<string>();
     const d3 = deferred<string>();
     let reached3 = false;
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       yield* sched.makeJournalFuture(d1.promise);
       yield* sched.makeJournalFuture(d2.promise);
       reached3 = true;
-      return (yield* sched.makeJournalFuture(d3.promise)) as string;
+      return yield* sched.makeJournalFuture(d3.promise);
     });
     const result = sched.run(op);
     queueMicrotask(() => d1.resolve("a"));
@@ -244,11 +224,7 @@ describe("scheduler — multiple await points in one routine", () => {
 
 describe("scheduler — running the same Operation across schedulers", () => {
   test("an Operation is reusable across independent Scheduler instances", async () => {
-    const op: Operation<number> = gen(function* (): Generator<
-      unknown,
-      number,
-      unknown
-    > {
+    const op: Operation<number> = gen(function* () {
       return 42;
     });
     const sched1 = new Scheduler(testLib);
@@ -268,8 +244,8 @@ describe("scheduler — running the same Operation across schedulers", () => {
 describe("scheduler — empty/edge inputs", () => {
   test("all of empty array resolves immediately to []", async () => {
     const sched = new Scheduler(testLib);
-    const op = gen(function* (): Generator<unknown, number[], unknown> {
-      return (yield* sched.all([])) as number[];
+    const op = gen(function* () {
+      return yield* sched.all([]);
     });
     expect(await sched.run(op)).toEqual([]);
   });
@@ -277,7 +253,7 @@ describe("scheduler — empty/edge inputs", () => {
   test("an Operation that yields nothing returns synchronously", async () => {
     const sched = new Scheduler(testLib);
     let sideEffect = false;
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       sideEffect = true;
       return "no-yields";
     });
@@ -287,9 +263,9 @@ describe("scheduler — empty/edge inputs", () => {
 
   test("a Future yielded that's already done with a value short-circuits", async () => {
     const sched = new Scheduler(testLib);
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       const f = sched.makeJournalFuture(resolved("ready"));
-      return (yield* f) as string;
+      return yield* f;
     });
     expect(await sched.run(op)).toBe("ready");
   });
