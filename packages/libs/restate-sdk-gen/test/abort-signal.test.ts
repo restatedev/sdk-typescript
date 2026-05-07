@@ -63,14 +63,14 @@ describe("abortSignal — initial state and cancellation observation", () => {
     const cancelErr = new CancelError();
     let capturedSignal: AbortSignal | null = null;
 
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       // Capture the signal *before* cancellation. This represents the
       // typical pattern: an ops.run closure receives signal at the
       // moment its work is constructed; when cancellation arrives,
       // that captured signal aborts.
       capturedSignal = sched.abortSignal;
       try {
-        return (yield* sched.makeJournalFuture(dWork.promise)) as string;
+        return yield* sched.makeJournalFuture(dWork.promise);
       } catch {
         // The captured signal must now report aborted with the cancel
         // error as reason. (We don't query sched.abortSignal here —
@@ -99,7 +99,7 @@ describe("abortSignal — initial state and cancellation observation", () => {
     let signalBeforeCancel: AbortSignal | null = null;
     let signalAfterRecovery: AbortSignal | null = null;
 
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       // Capture the signal that the first ops.run-style work would see.
       signalBeforeCancel = sched.abortSignal;
       try {
@@ -111,7 +111,7 @@ describe("abortSignal — initial state and cancellation observation", () => {
       // again. It must be a *different*, unaborted signal — cancellation
       // is not a sticky state.
       signalAfterRecovery = sched.abortSignal;
-      const v = (yield* sched.makeJournalFuture(d2.promise)) as string;
+      const v = yield* sched.makeJournalFuture(d2.promise);
       return v;
     });
 
@@ -145,10 +145,10 @@ describe("abortSignal — timing relative to fan-out", () => {
     let capturedSignal: AbortSignal | null = null;
     let abortedAtCatch = false;
 
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       capturedSignal = sched.abortSignal;
       try {
-        return (yield* sched.makeJournalFuture(dWork.promise)) as string;
+        return yield* sched.makeJournalFuture(dWork.promise);
       } catch {
         abortedAtCatch = capturedSignal?.aborted ?? false;
         return "x";
@@ -177,7 +177,7 @@ describe("abortSignal — idempotence and multi-cancel", () => {
     const d3 = deferred<string>();
     const captures: { signal: AbortSignal; reason: unknown }[] = [];
 
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       const s1 = sched.abortSignal;
       try {
         yield* sched.makeJournalFuture(d1.promise);
@@ -190,7 +190,7 @@ describe("abortSignal — idempotence and multi-cancel", () => {
       } catch {
         captures.push({ signal: s2, reason: s2.reason });
       }
-      const v = (yield* sched.makeJournalFuture(d3.promise)) as string;
+      const v = yield* sched.makeJournalFuture(d3.promise);
       return v;
     });
 
@@ -232,9 +232,9 @@ describe("abortSignal — listener-based observation", () => {
       listenerCalls++;
     });
 
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       try {
-        return (yield* sched.makeJournalFuture(dWork.promise)) as string;
+        return yield* sched.makeJournalFuture(dWork.promise);
       } catch {
         return "caught";
       }
@@ -276,17 +276,17 @@ describe("abortSignal — closure receives signal as argument", () => {
         dClosureReady.resolve("aborted-result");
         dDone.resolve();
       });
-      return gen(function* (): Generator<unknown, void, unknown> {
+      return gen(function* () {
         yield* sched.makeJournalFuture(dDone.promise);
       });
     };
 
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       // Set up the watchdog before yielding.
-      const wf = sched.spawnDetached(watchdog(sched.abortSignal));
+      const wf = sched.spawn(watchdog(sched.abortSignal));
       void wf;
       try {
-        return (yield* closureFuture) as string;
+        return yield* closureFuture;
       } catch {
         return "caught-via-yield";
       }
@@ -334,10 +334,10 @@ describe("abortSignal — only cancellation errors trigger the abort controller"
     const cancelErr = new CancelError();
     let captured: AbortSignal | null = null;
 
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       captured = sched.abortSignal;
       try {
-        return (yield* sched.makeJournalFuture(dWork.promise)) as string;
+        return yield* sched.makeJournalFuture(dWork.promise);
       } catch {
         return "caught";
       }
@@ -364,10 +364,10 @@ describe("abortSignal — only cancellation errors trigger the abort controller"
     let captured: AbortSignal | null = null;
     let caughtMessage: string | null = null;
 
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       captured = sched.abortSignal;
       try {
-        return (yield* sched.makeJournalFuture(dWork.promise)) as string;
+        return yield* sched.makeJournalFuture(dWork.promise);
       } catch (e) {
         caughtMessage = (e as Error).message;
         return "caught";
@@ -399,7 +399,7 @@ describe("abortSignal — only cancellation errors trigger the abort controller"
     let beforeReject: AbortSignal | null = null;
     let afterReject: AbortSignal | null = null;
 
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       beforeReject = sched.abortSignal;
       try {
         yield* sched.makeJournalFuture(d1.promise);
@@ -407,7 +407,7 @@ describe("abortSignal — only cancellation errors trigger the abort controller"
         // expected
       }
       afterReject = sched.abortSignal;
-      const v = (yield* sched.makeJournalFuture(d2.promise)) as string;
+      const v = yield* sched.makeJournalFuture(d2.promise);
       return v;
     });
 
@@ -437,7 +437,7 @@ describe("abortSignal — only cancellation errors trigger the abort controller"
     let afterNonCancel: AbortSignal | null = null;
     let afterCancel: AbortSignal | null = null;
 
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       beforeNonCancel = sched.abortSignal;
       try {
         yield* sched.makeJournalFuture(d1.promise);
@@ -495,7 +495,7 @@ describe("abortSignal — only cancellation errors trigger the abort controller"
       listenerCalls++;
     });
 
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       try {
         yield* sched.makeJournalFuture(d1.promise);
       } catch {

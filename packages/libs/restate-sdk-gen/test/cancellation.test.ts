@@ -47,9 +47,9 @@ describe("cancellation — basic delivery", () => {
     const { lib, cancel } = cancellingLib();
     const sched = new Scheduler(lib);
     const dWork = deferred<string>();
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       try {
-        const v = (yield* sched.makeJournalFuture(dWork.promise)) as string;
+        const v = yield* sched.makeJournalFuture(dWork.promise);
         return `done:${v}`;
       } catch (e) {
         return `caught:${(e as Error).message}`;
@@ -66,8 +66,8 @@ describe("cancellation — basic delivery", () => {
     const { lib, cancel } = cancellingLib();
     const sched = new Scheduler(lib);
     const dWork = deferred<string>();
-    const op = gen(function* (): Generator<unknown, string, unknown> {
-      return (yield* sched.makeJournalFuture(dWork.promise)) as string;
+    const op = gen(function* () {
+      return yield* sched.makeJournalFuture(dWork.promise);
     });
     const result = sched.run(op);
     queueMicrotask(() => cancel(new CancelError()));
@@ -82,15 +82,15 @@ describe("cancellation — recovery", () => {
     const sched = new Scheduler(lib);
     const dWork = deferred<string>();
     const dCleanup = deferred<string>();
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       try {
-        return (yield* sched.makeJournalFuture(dWork.promise)) as string;
+        return yield* sched.makeJournalFuture(dWork.promise);
       } catch (e) {
         // After catching, the next yield must work normally — cancellation
         // is delivered once and the next race promise is fresh.
-        const cleanup = (yield* sched.makeJournalFuture(
+        const cleanup = yield* sched.makeJournalFuture(
           dCleanup.promise
-        )) as string;
+        );
         return `recovered:${cleanup}:${(e as Error).message}`;
       }
     });
@@ -109,7 +109,7 @@ describe("cancellation — recovery", () => {
     const d3 = deferred<string>();
     const log: string[] = [];
 
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       try {
         yield* sched.makeJournalFuture(d1.promise);
       } catch (e) {
@@ -120,7 +120,7 @@ describe("cancellation — recovery", () => {
       } catch (e) {
         log.push(`c2:${(e as Error).message}`);
       }
-      const v = (yield* sched.makeJournalFuture(d3.promise)) as string;
+      const v = yield* sched.makeJournalFuture(d3.promise);
       log.push(`d3:${v}`);
       return log.join("|");
     });
@@ -159,9 +159,9 @@ describe("cancellation — fan-out across multiple parked routines", () => {
     const log: string[] = [];
 
     const child = (label: string, d: typeof d1): Operation<string> =>
-      gen(function* (): Generator<unknown, string, unknown> {
+      gen(function* () {
         try {
-          const v = (yield* sched.makeJournalFuture(d.promise)) as string;
+          const v = yield* sched.makeJournalFuture(d.promise);
           log.push(`${label}:done:${v}`);
           return v;
         } catch {
@@ -170,11 +170,11 @@ describe("cancellation — fan-out across multiple parked routines", () => {
         }
       });
 
-    const op = gen(function* (): Generator<unknown, string, unknown> {
-      const fa = (yield* spawn(child("A", d1))) as Future<string>;
-      const fb = (yield* spawn(child("B", d2))) as Future<string>;
-      const a = (yield* fa) as string;
-      const b = (yield* fb) as string;
+    const op = gen(function* () {
+      const fa = spawn(child("A", d1));
+      const fb = spawn(child("B", d2));
+      const a = yield* fa;
+      const b = yield* fb;
       return `${a},${b}`;
     });
 
@@ -193,12 +193,12 @@ describe("cancellation — fan-out across multiple parked routines", () => {
     const d2 = deferred<string>();
     const d3 = deferred<string>();
 
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       const f1 = sched.makeJournalFuture(d1.promise);
       const f2 = sched.makeJournalFuture(d2.promise);
       const f3 = sched.makeJournalFuture(d3.promise);
       try {
-        return (yield* sched.race([f1, f2, f3])) as string;
+        return yield* sched.race([f1, f2, f3]);
       } catch (e) {
         return `race-cancelled:${(e as Error).message}`;
       }
@@ -219,35 +219,27 @@ describe("cancellation — fan-out across multiple parked routines", () => {
     const d2 = deferred<string>();
     const d3 = deferred<string>();
 
-    const recoveringChild: Operation<string> = gen(function* (): Generator<
-      unknown,
-      string,
-      unknown
-    > {
+    const recoveringChild: Operation<string> = gen(function* () {
       try {
-        return (yield* sched.makeJournalFuture(d1.promise)) as string;
+        return yield* sched.makeJournalFuture(d1.promise);
       } catch {
         // Recover by reading another deferred.
-        const v = (yield* sched.makeJournalFuture(d2.promise)) as string;
+        const v = yield* sched.makeJournalFuture(d2.promise);
         return `recovered:${v}`;
       }
     });
 
-    const propagatingChild: Operation<string> = gen(function* (): Generator<
-      unknown,
-      string,
-      unknown
-    > {
+    const propagatingChild: Operation<string> = gen(function* () {
       // No try/catch — cancellation propagates out.
-      return (yield* sched.makeJournalFuture(d3.promise)) as string;
+      return yield* sched.makeJournalFuture(d3.promise);
     });
 
-    const op = gen(function* (): Generator<unknown, string, unknown> {
-      const fr = (yield* spawn(recoveringChild)) as Future<string>;
-      const fp = (yield* spawn(propagatingChild)) as Future<string>;
-      const r = (yield* fr) as string;
+    const op = gen(function* () {
+      const fr = spawn(recoveringChild);
+      const fp = spawn(propagatingChild);
+      const r = yield* fr;
       try {
-        const p = (yield* fp) as string;
+        const p = yield* fp;
         return `${r}|${p}`;
       } catch (e) {
         return `${r}|propagated:${(e as Error).message}`;
@@ -273,10 +265,10 @@ describe("cancellation — interaction with all", () => {
     const d2 = deferred<number>();
     const d3 = deferred<number>();
 
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       const fs = [d1, d2, d3].map((d) => sched.makeJournalFuture(d.promise));
       try {
-        const vs = (yield* sched.all(fs)) as number[];
+        const vs = yield* sched.all(fs);
         return `done:${vs.join(",")}`;
       } catch (e) {
         return `cancelled:${(e as Error).message}`;
@@ -304,19 +296,19 @@ describe("cancellation — non-cancellation race rejections also fan out", () =>
     const d1 = deferred<string>();
     const d2 = deferred<string>();
 
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       const child = (label: string, d: typeof d1): Operation<string> =>
-        gen(function* (): Generator<unknown, string, unknown> {
+        gen(function* () {
           try {
-            return (yield* sched.makeJournalFuture(d.promise)) as string;
+            return yield* sched.makeJournalFuture(d.promise);
           } catch (e) {
             return `${label}:${(e as Error).message}`;
           }
         });
-      const fa = (yield* spawn(child("A", d1))) as Future<string>;
-      const fb = (yield* spawn(child("B", d2))) as Future<string>;
-      const a = (yield* fa) as string;
-      const b = (yield* fb) as string;
+      const fa = spawn(child("A", d1));
+      const fb = spawn(child("B", d2));
+      const a = yield* fa;
+      const b = yield* fb;
       return `${a}|${b}`;
     });
 

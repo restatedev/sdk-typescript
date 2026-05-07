@@ -38,13 +38,13 @@ const tracingChild = (
   label: string,
   steps: number
 ): Operation<string> =>
-  gen(function* (): Generator<unknown, string, unknown> {
+  gen(function* () {
     trace.push(`${label}:start`);
     for (let i = 0; i < steps; i++) {
       trace.push(`${label}:step${i}:before`);
       yield* {
         // bare op: yield a journal future built inline from a fresh Promise
-        [Symbol.iterator]: function* (): Generator<unknown, void, unknown> {
+        [Symbol.iterator]: function* () {
           // (kept inline to keep the helper self-contained, but tests
           // will use the proper sched.makeJournalFuture in their bodies)
         },
@@ -67,15 +67,15 @@ describe("observability — drainReady runs siblings to completion before the pa
     const trace: string[] = [];
 
     const fast = (label: string): Operation<void> =>
-      gen(function* (): Generator<unknown, void, unknown> {
+      gen(function* () {
         trace.push(`${label}:body`);
       });
 
-    const op = gen(function* (): Generator<unknown, void, unknown> {
+    const op = gen(function* () {
       trace.push("parent:before-spawn-a");
-      const fa = (yield* spawn(fast("a"))) as Future<void>;
+      const fa = spawn(fast("a"));
       trace.push("parent:between-spawns");
-      const fb = (yield* spawn(fast("b"))) as Future<void>;
+      const fb = spawn(fast("b"));
       trace.push("parent:after-spawns");
       yield* fa;
       trace.push("parent:after-await-a");
@@ -117,15 +117,15 @@ describe("observability — drainReady runs siblings to completion before the pa
     const trace: string[] = [];
 
     const child = (label: string): Operation<void> =>
-      gen(function* (): Generator<unknown, void, unknown> {
+      gen(function* () {
         trace.push(`${label}:before-yield`);
         yield* sched.makeJournalFuture(resolved<void>(undefined));
         trace.push(`${label}:after-yield`);
       });
 
-    const op = gen(function* (): Generator<unknown, void, unknown> {
-      const fa = (yield* spawn(child("a"))) as Future<void>;
-      const fb = (yield* spawn(child("b"))) as Future<void>;
+    const op = gen(function* () {
+      const fa = spawn(child("a"));
+      const fb = spawn(child("b"));
       yield* fa;
       yield* fb;
     });
@@ -157,22 +157,18 @@ describe("observability — race winner identity", () => {
     const trace: string[] = [];
     const dJournal = deferred<string>();
 
-    const syncRoutine: Operation<string> = gen(function* (): Generator<
-      unknown,
-      string,
-      unknown
-    > {
+    const syncRoutine: Operation<string> = gen(function* () {
       trace.push("routine:running");
       return "routine";
     });
 
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       trace.push("op:before-spawn");
-      const fr = (yield* spawn(syncRoutine)) as Future<string>;
+      const fr = spawn(syncRoutine);
       trace.push("op:after-spawn");
       const fj = sched.makeJournalFuture(dJournal.promise);
       trace.push("op:before-race");
-      const winner = (yield* sched.race([fj, fr])) as string;
+      const winner = yield* sched.race([fj, fr]);
       trace.push(`op:race-won=${winner}`);
       // Drain the loser so scheduler can complete.
       queueMicrotask(() => dJournal.resolve("late"));
@@ -202,18 +198,18 @@ describe("observability — race winner identity", () => {
     const sched = new Scheduler(testLib);
     const observations: string[] = [];
 
-    const op = gen(function* (): Generator<unknown, void, unknown> {
+    const op = gen(function* () {
       for (let i = 0; i < 4; i++) {
         // Fresh routines each iteration.
-        const a = gen(function* (): Generator<unknown, string, unknown> {
+        const a = gen(function* () {
           return `a${i}`;
         });
-        const b = gen(function* (): Generator<unknown, string, unknown> {
+        const b = gen(function* () {
           return `b${i}`;
         });
-        const fa = (yield* spawn(a)) as Future<string>;
-        const fb = (yield* spawn(b)) as Future<string>;
-        const winner = (yield* sched.race([fa, fb])) as string;
+        const fa = spawn(a);
+        const fb = spawn(b);
+        const winner = yield* sched.race([fa, fb]);
         observations.push(winner);
       }
     });
@@ -240,17 +236,17 @@ describe("observability — all settle-order vs return-order", () => {
     const ds = [deferred<number>(), deferred<number>(), deferred<number>()];
 
     const watcher = (id: number): Operation<number> =>
-      gen(function* (): Generator<unknown, number, unknown> {
-        const v = (yield* sched.makeJournalFuture(ds[id]!.promise)) as number;
+      gen(function* () {
+        const v = yield* sched.makeJournalFuture(ds[id]!.promise);
         settledOrder.push(id);
         return v;
       });
 
-    const op = gen(function* (): Generator<unknown, number[], unknown> {
-      const f1 = (yield* spawn(watcher(0))) as Future<number>;
-      const f2 = (yield* spawn(watcher(1))) as Future<number>;
-      const f3 = (yield* spawn(watcher(2))) as Future<number>;
-      return (yield* sched.all([f1, f2, f3])) as number[];
+    const op = gen(function* () {
+      const f1 = spawn(watcher(0));
+      const f2 = spawn(watcher(1));
+      const f3 = spawn(watcher(2));
+      return yield* sched.all([f1, f2, f3]);
     });
 
     const promise = sched.run(op);
@@ -278,13 +274,13 @@ describe("observability — all settle-order vs return-order", () => {
   test("all with one slow input: fast inputs settle first but result ordering preserved", async () => {
     const sched = new Scheduler(testLib);
     const dSlow = deferred<string>();
-    const op = gen(function* (): Generator<unknown, string[], unknown> {
+    const op = gen(function* () {
       const fast1 = sched.makeJournalFuture(resolved("fast1"));
       const slow = sched.makeJournalFuture(dSlow.promise);
       const fast2 = sched.makeJournalFuture(resolved("fast2"));
       // Resolve slow eventually.
       queueMicrotask(() => dSlow.resolve("slow"));
-      return (yield* sched.all([fast1, slow, fast2])) as string[];
+      return yield* sched.all([fast1, slow, fast2]);
     });
     expect(await sched.run(op)).toEqual(["fast1", "slow", "fast2"]);
   });
@@ -300,14 +296,14 @@ describe("observability — select-loop cadence", () => {
     const tickHistory: number[] = [];
     const dDone = deferred<string>();
 
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       const fDone = sched.makeJournalFuture(dDone.promise);
       let tick = 0;
       while (true) {
         const fTick = sched.makeJournalFuture(resolved(tick));
         const r = yield* select({ done: fDone, tick: fTick });
         if (r.tag === "done") {
-          return (yield* r.future) as string;
+          return yield* r.future;
         }
         tickHistory.push(tick);
         tick++;
@@ -331,7 +327,7 @@ describe("observability — select-loop cadence", () => {
     const sched = new Scheduler(testLib);
     const counts: Record<string, number> = { a: 0, b: 0 };
 
-    const op = gen(function* (): Generator<unknown, void, unknown> {
+    const op = gen(function* () {
       for (let i = 0; i < 100; i++) {
         const fa = sched.makeJournalFuture(resolved("a"));
         const fb = sched.makeJournalFuture(resolved("b"));
@@ -356,26 +352,26 @@ describe("observability — deep tree side effects", () => {
     const leaves: number[] = [];
 
     const leaf = (n: number): Operation<number> =>
-      gen(function* (): Generator<unknown, number, unknown> {
+      gen(function* () {
         leaves.push(n);
         return n;
       });
 
     const subtree = (label: number, count: number): Operation<number> =>
-      gen(function* (): Generator<unknown, number, unknown> {
+      gen(function* () {
         const futures: Future<number>[] = [];
         for (let i = 0; i < count; i++) {
-          futures.push((yield* spawn(leaf(label * 100 + i))) as Future<number>);
+          futures.push(spawn(leaf(label * 100 + i)));
         }
-        const vals = (yield* sched.all(futures)) as number[];
+        const vals = yield* sched.all(futures);
         return vals.reduce((a, b) => a + b, 0);
       });
 
-    const op = gen(function* (): Generator<unknown, number, unknown> {
-      const t1 = (yield* spawn(subtree(1, 3))) as Future<number>;
-      const t2 = (yield* spawn(subtree(2, 4))) as Future<number>;
-      const t3 = (yield* spawn(subtree(3, 5))) as Future<number>;
-      const all = (yield* sched.all([t1, t2, t3])) as number[];
+    const op = gen(function* () {
+      const t1 = spawn(subtree(1, 3));
+      const t2 = spawn(subtree(2, 4));
+      const t3 = spawn(subtree(3, 5));
+      const all = yield* sched.all([t1, t2, t3]);
       return all.reduce((a, b) => a + b, 0);
     });
 
@@ -404,20 +400,16 @@ describe("observability — race winner depends on settlement timing", () => {
     const sched = new Scheduler(testLib);
     const winners: string[] = [];
 
-    const op = gen(function* (): Generator<unknown, void, unknown> {
+    const op = gen(function* () {
       for (let i = 0; i < 10; i++) {
         const dSlow = deferred<string>();
-        const sync: Operation<string> = gen(function* (): Generator<
-          unknown,
-          string,
-          unknown
-        > {
+        const sync: Operation<string> = gen(function* () {
           return "sync";
         });
         const fSlow = sched.makeJournalFuture(dSlow.promise);
-        const fSync = (yield* spawn(sync)) as Future<string>;
+        const fSync = spawn(sync);
         queueMicrotask(() => dSlow.resolve("late"));
-        const winner = (yield* sched.race([fSlow, fSync])) as string;
+        const winner = yield* sched.race([fSlow, fSync]);
         winners.push(winner);
       }
     });

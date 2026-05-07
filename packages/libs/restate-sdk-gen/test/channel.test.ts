@@ -49,9 +49,9 @@ describe("channel — basic send/receive", () => {
   test("send-then-receive: receiver gets the sent value", async () => {
     const sched = new Scheduler(testLib);
     const ch = sched.makeChannel<string>();
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       yield* ch.send("hello");
-      return (yield* ch.receive) as string;
+      return yield* ch.receive;
     });
     expect(await sched.run(op)).toBe("hello");
   });
@@ -59,12 +59,12 @@ describe("channel — basic send/receive", () => {
   test("receive-then-send: receiver wakes when send arrives", async () => {
     const sched = new Scheduler(testLib);
     const ch = sched.makeChannel<string>();
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       // The coordinator fiber sits in the ready queue while we yield on
       // receive and park. Then drainReady advances the coordinator,
       // which sends and wakes us.
-      yield* spawn(sender(ch, "delayed"));
-      return (yield* ch.receive) as string;
+      spawn(sender(ch, "delayed"));
+      return yield* ch.receive;
     });
     expect(await sched.run(op)).toBe("delayed");
   });
@@ -80,11 +80,11 @@ describe("channel — idempotence of send", () => {
   test("subsequent send calls are dropped; first value wins", async () => {
     const sched = new Scheduler(testLib);
     const ch = sched.makeChannel<string>();
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       yield* ch.send("first");
       yield* ch.send("second"); // dropped
       yield* ch.send("third"); // dropped
-      return (yield* ch.receive) as string;
+      return yield* ch.receive;
     });
     expect(await sched.run(op)).toBe("first");
   });
@@ -92,11 +92,11 @@ describe("channel — idempotence of send", () => {
   test("multiple yields of receive after send all see the same value", async () => {
     const sched = new Scheduler(testLib);
     const ch = sched.makeChannel<number>();
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       yield* ch.send(42);
-      const a = (yield* ch.receive) as number;
-      const b = (yield* ch.receive) as number;
-      const c = (yield* ch.receive) as number;
+      const a = yield* ch.receive;
+      const b = yield* ch.receive;
+      const c = yield* ch.receive;
       return `${a}-${b}-${c}`;
     });
     expect(await sched.run(op)).toBe("42-42-42");
@@ -108,14 +108,14 @@ describe("channel — composition with select for cancellation", () => {
     const sched = new Scheduler(testLib);
     const stop = sched.makeChannel<void>();
     const dWork = deferred<string>();
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       const r = yield* select({
         done: sched.makeJournalFuture(dWork.promise),
         stop: stop.receive,
       });
       switch (r.tag) {
         case "done":
-          return `done:${(yield* r.future) as string}`;
+          return `done:${yield* r.future}`;
         case "stop":
           return "stopped";
       }
@@ -129,15 +129,15 @@ describe("channel — composition with select for cancellation", () => {
     const sched = new Scheduler(testLib);
     const stop = sched.makeChannel<void>();
     const dWork = deferred<string>();
-    const op = gen(function* (): Generator<unknown, string, unknown> {
-      yield* spawn(sender(stop, undefined));
+    const op = gen(function* () {
+      spawn(sender(stop, undefined));
       const r = yield* select({
         done: sched.makeJournalFuture(dWork.promise),
         stop: stop.receive,
       });
       switch (r.tag) {
         case "done":
-          return `done:${(yield* r.future) as string}`;
+          return `done:${yield* r.future}`;
         case "stop":
           return "stopped";
       }
@@ -162,11 +162,7 @@ describe("channel — composition with select for cancellation", () => {
     const dStep1 = deferred<string>();
     const dStep2 = deferred<string>();
 
-    const worker: Operation<string> = gen(function* (): Generator<
-      unknown,
-      string,
-      unknown
-    > {
+    const worker: Operation<string> = gen(function* () {
       const collected: string[] = [];
       // Step 1.
       {
@@ -175,7 +171,7 @@ describe("channel — composition with select for cancellation", () => {
           stop: stop.receive,
         });
         if (r.tag === "stop") return `stopped-after:${collected.join(",")}`;
-        collected.push((yield* r.future) as string);
+        collected.push(yield* r.future);
       }
       // Step 2.
       {
@@ -184,7 +180,7 @@ describe("channel — composition with select for cancellation", () => {
           stop: stop.receive,
         });
         if (r.tag === "stop") return `stopped-after:${collected.join(",")}`;
-        collected.push((yield* r.future) as string);
+        collected.push(yield* r.future);
       }
       return `complete:${collected.join(",")}`;
     });
@@ -198,13 +194,13 @@ describe("channel — composition with select for cancellation", () => {
       yield* stop.send();
     });
 
-    const op = gen(function* (): Generator<unknown, string, unknown> {
-      const t = (yield* spawn(worker)) as Future<string>;
-      yield* spawn(coordinator);
+    const op = gen(function* () {
+      const t = spawn(worker);
+      spawn(coordinator);
       // dStep1 is a deferred (journal-backed) — resolving from a
       // microtask is fine.
       queueMicrotask(() => dStep1.resolve("a"));
-      return (yield* t) as string;
+      return yield* t;
     });
     expect(await sched.run(op)).toBe("stopped-after:a");
     dStep2.resolve("never");
@@ -218,30 +214,26 @@ describe("channel — composition with select for cancellation", () => {
     const stop = sched.makeChannel<void>();
     const dWork = deferred<string>();
 
-    const stubborn: Operation<string> = gen(function* (): Generator<
-      unknown,
-      string,
-      unknown
-    > {
+    const stubborn: Operation<string> = gen(function* () {
       const r = yield* select({
         done: sched.makeJournalFuture(dWork.promise),
         stop: stop.receive,
       });
       if (r.tag === "stop") {
-        const v = (yield* sched.makeJournalFuture(dWork.promise)) as string;
+        const v = yield* sched.makeJournalFuture(dWork.promise);
         return `ignored-stop:${v}`;
       }
-      return `done:${(yield* r.future) as string}`;
+      return `done:${yield* r.future}`;
     });
 
-    const op = gen(function* (): Generator<unknown, string, unknown> {
-      const t = (yield* spawn(stubborn)) as Future<string>;
-      yield* spawn(sender(stop, undefined));
+    const op = gen(function* () {
+      const t = spawn(stubborn);
+      spawn(sender(stop, undefined));
       // dWork is a deferred — resolving via queueMicrotask is fine.
       queueMicrotask(() =>
         queueMicrotask(() => queueMicrotask(() => dWork.resolve("finished")))
       );
-      return (yield* t) as string;
+      return yield* t;
     });
     expect(await sched.run(op)).toBe("ignored-stop:finished");
   });
@@ -253,7 +245,7 @@ describe("channel — composition with select for cancellation", () => {
     const sched = new Scheduler(testLib);
     const stop = sched.makeChannel<void>();
     const dWork = deferred<string>();
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       yield* stop.send(); // settle synchronously inside the gen body
       const r = yield* select({
         done: sched.makeJournalFuture(dWork.promise),
@@ -271,12 +263,12 @@ describe("channel — race composition", () => {
     const sched = new Scheduler(testLib);
     const stop = sched.makeChannel<string>();
     const dWork = deferred<string>();
-    const op = gen(function* (): Generator<unknown, string, unknown> {
-      yield* spawn(sender(stop, "interrupt"));
-      const winner = (yield* sched.race([
+    const op = gen(function* () {
+      spawn(sender(stop, "interrupt"));
+      const winner = yield* sched.race([
         sched.makeJournalFuture(dWork.promise),
         stop.receive,
-      ])) as string;
+      ]);
       return winner;
     });
     expect(await sched.run(op)).toBe("interrupt");
@@ -287,37 +279,29 @@ describe("channel — race composition", () => {
     const sched = new Scheduler(testLib);
     const stop = sched.makeChannel<string>();
 
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       // Two children, both racing their own work against the same stop.
       const dWorkA = deferred<string>();
       const dWorkB = deferred<string>();
-      const childA: Operation<string> = gen(function* (): Generator<
-        unknown,
-        string,
-        unknown
-      > {
-        const v = (yield* sched.race([
+      const childA: Operation<string> = gen(function* () {
+        const v = yield* sched.race([
           sched.makeJournalFuture(dWorkA.promise),
           stop.receive,
-        ])) as string;
+        ]);
         return `A:${v}`;
       });
-      const childB: Operation<string> = gen(function* (): Generator<
-        unknown,
-        string,
-        unknown
-      > {
-        const v = (yield* sched.race([
+      const childB: Operation<string> = gen(function* () {
+        const v = yield* sched.race([
           sched.makeJournalFuture(dWorkB.promise),
           stop.receive,
-        ])) as string;
+        ]);
         return `B:${v}`;
       });
-      const ta = (yield* spawn(childA)) as Future<string>;
-      const tb = (yield* spawn(childB)) as Future<string>;
-      yield* spawn(sender(stop, "halt"));
-      const a = (yield* ta) as string;
-      const b = (yield* tb) as string;
+      const ta = spawn(childA);
+      const tb = spawn(childB);
+      spawn(sender(stop, "halt"));
+      const a = yield* ta;
+      const b = yield* tb;
       // Both children see the same stop value because receive is the
       // same Future on both.
       dWorkA.resolve("never1");
@@ -333,19 +317,15 @@ describe("channel — sharing across routines", () => {
     const sched = new Scheduler(testLib);
     const ch = sched.makeChannel<string>();
 
-    const reader: Operation<string> = gen(function* (): Generator<
-      unknown,
-      string,
-      unknown
-    > {
-      const v = (yield* ch.receive) as string;
+    const reader: Operation<string> = gen(function* () {
+      const v = yield* ch.receive;
       return `read:${v}`;
     });
 
-    const op = gen(function* (): Generator<unknown, string, unknown> {
-      const t = (yield* spawn(reader)) as Future<string>;
-      yield* spawn(sender(ch, "from-parent"));
-      return (yield* t) as string;
+    const op = gen(function* () {
+      const t = spawn(reader);
+      spawn(sender(ch, "from-parent"));
+      return yield* t;
     });
     expect(await sched.run(op)).toBe("read:from-parent");
   });
@@ -358,19 +338,19 @@ describe("channel — sharing across routines", () => {
     const ch = sched.makeChannel<string>();
 
     const reader = (label: string): Operation<string> =>
-      gen(function* (): Generator<unknown, string, unknown> {
-        const v = (yield* ch.receive) as string;
+      gen(function* () {
+        const v = yield* ch.receive;
         return `${label}:${v}`;
       });
 
-    const op = gen(function* (): Generator<unknown, string, unknown> {
-      const ta = (yield* spawn(reader("A"))) as Future<string>;
-      const tb = (yield* spawn(reader("B"))) as Future<string>;
-      const tc = (yield* spawn(reader("C"))) as Future<string>;
-      yield* spawn(sender(ch, "broadcast"));
-      const a = (yield* ta) as string;
-      const b = (yield* tb) as string;
-      const c = (yield* tc) as string;
+    const op = gen(function* () {
+      const ta = spawn(reader("A"));
+      const tb = spawn(reader("B"));
+      const tc = spawn(reader("C"));
+      spawn(sender(ch, "broadcast"));
+      const a = yield* ta;
+      const b = yield* tb;
+      const c = yield* tc;
       return `${a}|${b}|${c}`;
     });
     expect(await sched.run(op)).toBe("A:broadcast|B:broadcast|C:broadcast");

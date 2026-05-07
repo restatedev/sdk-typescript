@@ -57,17 +57,21 @@ export class Scheduler implements SchedulerOps {
   // unaborted signal.
   private abortController: AbortController = new AbortController();
   /**
-   * Slot for the RestateOperations bound to this scheduler. Set by
-   * `execute()` after construction (we can't pass it into the ctor
-   * because RestateOperations needs the scheduler to construct itself).
+   * Slot for the operations object bound to this scheduler. Defaults
+   * to the scheduler itself so tests (which don't construct a
+   * `RestateOperations`) still get a slot exposing `.spawn`. Production
+   * `execute()` overrides this with a `RestateOperations` instance
+   * after construction (we can't pass it into the ctor because
+   * `RestateOperations` needs the scheduler to construct itself).
    * `Fiber.advance` publishes this to the module-level current-fiber
    * slot read by free-standing API functions. Typed `unknown` here to
    * keep this module independent of `restate-operations.ts`.
    */
-  contextSlot: unknown = null;
+  contextSlot: unknown;
 
   constructor(lib: AwaitableLib) {
     this.lib = lib;
+    this.contextSlot = this;
   }
 
   /**
@@ -103,11 +107,6 @@ export class Scheduler implements SchedulerOps {
     this.fibers.delete(f);
   }
 
-  spawnFuture<U>(op: Operation<U>): Future<U> {
-    const f = this.createFiber(op);
-    return makeFuture<U>({ kind: "local", target: f });
-  }
-
   private createFiber<U>(op: Operation<U>): Fiber<U> {
     const f = new Fiber<U>(op, this);
     this.fibers.add(f as Fiber<unknown>);
@@ -122,13 +121,17 @@ export class Scheduler implements SchedulerOps {
   }
 
   /**
-   * Spawn an operation as a fresh fiber and return a Future that
-   * resolves with its eventual value. Same as the SchedulerOps method;
-   * exposed publicly for external callers (combinator helpers, the
-   * main run() entry point).
+   * Register an Operation as a fresh fiber and return a Future that
+   * resolves with its eventual value. Eager: by the time this returns,
+   * the fiber is queued ready and will be advanced on the next drain.
+   *
+   * Used by combinator fallbacks (race, allSettled, …), by
+   * `RestateOperations.spawn`, and via the slot interface by the free
+   * `spawn` function.
    */
-  spawnDetached<U>(op: Operation<U>): Future<U> {
-    return this.spawnFuture(op);
+  spawn<U>(op: Operation<U>): Future<U> {
+    const f = this.createFiber(op);
+    return makeFuture<U>({ kind: "local", target: f });
   }
 
   /**
@@ -166,7 +169,7 @@ export class Scheduler implements SchedulerOps {
         FutureValues<T>
       >;
     }
-    return this.spawnDetached(
+    return this.spawn(
       gen<FutureValues<T>>(function* () {
         const out: unknown[] = new Array(fs.length);
         for (let i = 0; i < fs.length; i++) {
@@ -184,7 +187,7 @@ export class Scheduler implements SchedulerOps {
     type R = FutureValues<T>[number];
     const fs = futures as ReadonlyArray<Future<unknown>>;
     // No need here to try downcasting to RestateFuture's, awaitRace will anyway produce the same UnresolvedFuture tree!
-    return this.spawnDetached(
+    return this.spawn(
       gen<R>(function* () {
         const result = yield* awaitRace(fs);
         if (result.settled.ok) return result.settled.v as R;
@@ -217,7 +220,7 @@ export class Scheduler implements SchedulerOps {
       const promises = fs.map((f) => f[futureBacking].promise);
       return this.makeJournalFuture(this.lib.any(promises)) as Future<R>;
     }
-    return this.spawnDetached(
+    return this.spawn(
       gen<R>(function* () {
         const errors: unknown[] = new Array(fs.length);
         const remaining = new Set<number>();
@@ -262,7 +265,7 @@ export class Scheduler implements SchedulerOps {
       const promises = fs.map((f) => f[futureBacking].promise);
       return this.makeJournalFuture(this.lib.allSettled(promises)) as Future<R>;
     }
-    return this.spawnDetached(
+    return this.spawn(
       gen<R>(function* () {
         const out = new Array<FutureSettledResult<unknown>>(fs.length);
         for (let i = 0; i < fs.length; i++) {

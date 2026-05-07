@@ -25,21 +25,17 @@ describe("stress — many concurrent spawns", () => {
   test("10,000 concurrent spawned routines all complete", async () => {
     const sched = new Scheduler(testLib);
     const N = 10_000;
-    const op = gen(function* (): Generator<unknown, number, unknown> {
+    const op = gen(function* () {
       const futures: Future<number>[] = [];
       for (let i = 0; i < N; i++) {
         const ii = i;
-        const child: Operation<number> = gen(function* (): Generator<
-          unknown,
-          number,
-          unknown
-        > {
+        const child: Operation<number> = gen(function* () {
           return ii;
         });
-        futures.push((yield* spawn(child)) as Future<number>);
+        futures.push(spawn(child));
       }
       let sum = 0;
-      for (const f of futures) sum += (yield* f) as number;
+      for (const f of futures) sum += yield* f;
       return sum;
     });
     const result = await sched.run(op);
@@ -49,22 +45,18 @@ describe("stress — many concurrent spawns", () => {
   test("1,000 spawns each yielding once, then awaited", async () => {
     const sched = new Scheduler(testLib);
     const N = 1_000;
-    const op = gen(function* (): Generator<unknown, number, unknown> {
+    const op = gen(function* () {
       const futures: Future<number>[] = [];
       for (let i = 0; i < N; i++) {
         const ii = i;
-        const child: Operation<number> = gen(function* (): Generator<
-          unknown,
-          number,
-          unknown
-        > {
+        const child: Operation<number> = gen(function* () {
           // One real journal yield per child.
           yield* sched.makeJournalFuture(resolved<void>(undefined));
           return ii;
         });
-        futures.push((yield* spawn(child)) as Future<number>);
+        futures.push(spawn(child));
       }
-      const results = (yield* sched.all(futures)) as number[];
+      const results = yield* sched.all(futures);
       return results.reduce((a, b) => a + b, 0);
     });
     expect(await sched.run(op)).toBe((N * (N - 1)) / 2);
@@ -75,10 +67,10 @@ describe("stress — long sequential yield chains", () => {
   test("a single routine yielding 1,000 journal futures in sequence", async () => {
     const sched = new Scheduler(testLib);
     const N = 1_000;
-    const op = gen(function* (): Generator<unknown, number, unknown> {
+    const op = gen(function* () {
       let sum = 0;
       for (let i = 0; i < N; i++) {
-        const v = (yield* sched.makeJournalFuture(resolved(i))) as number;
+        const v = yield* sched.makeJournalFuture(resolved(i));
         sum += v;
       }
       return sum;
@@ -90,9 +82,9 @@ describe("stress — long sequential yield chains", () => {
     const sched = new Scheduler(testLib);
     const D = 100;
     const build = (n: number): Operation<number> =>
-      gen(function* (): Generator<unknown, number, unknown> {
+      gen(function* () {
         if (n === 0) return 0;
-        const inner = (yield* build(n - 1)) as number;
+        const inner = yield* build(n - 1);
         return inner + 1;
       });
     expect(await sched.run(build(D))).toBe(D);
@@ -103,19 +95,15 @@ describe("stress — high turnover", () => {
   test("loop spawning and awaiting routines 500 times", async () => {
     const sched = new Scheduler(testLib);
     const ITER = 500;
-    const op = gen(function* (): Generator<unknown, number, unknown> {
+    const op = gen(function* () {
       let total = 0;
       for (let i = 0; i < ITER; i++) {
         const ii = i;
-        const child: Operation<number> = gen(function* (): Generator<
-          unknown,
-          number,
-          unknown
-        > {
+        const child: Operation<number> = gen(function* () {
           return ii;
         });
-        const f = (yield* spawn(child)) as Future<number>;
-        total += (yield* f) as number;
+        const f = spawn(child);
+        total += yield* f;
       }
       return total;
     });
@@ -125,12 +113,12 @@ describe("stress — high turnover", () => {
   test("nested race in a loop with fresh futures each iteration", async () => {
     const sched = new Scheduler(testLib);
     const ITER = 200;
-    const op = gen(function* (): Generator<unknown, number, unknown> {
+    const op = gen(function* () {
       let count = 0;
       for (let i = 0; i < ITER; i++) {
         const f1 = sched.makeJournalFuture(resolved(i));
         const f2 = sched.makeJournalFuture(resolved(i + 1000));
-        const winner = (yield* sched.race([f1, f2])) as number;
+        const winner = yield* sched.race([f1, f2]);
         if (winner === i || winner === i + 1000) count++;
       }
       return count;
@@ -144,24 +132,20 @@ describe("stress — fan-out fan-in patterns", () => {
     const sched = new Scheduler(testLib);
     const PARALLEL = 100;
     const CHAIN = 10;
-    const chain: Operation<number> = gen(function* (): Generator<
-      unknown,
-      number,
-      unknown
-    > {
+    const chain: Operation<number> = gen(function* () {
       const futures: Future<number>[] = [];
       for (let i = 0; i < CHAIN; i++) {
         futures.push(sched.makeJournalFuture(resolved(i)));
       }
-      const results = (yield* sched.all(futures)) as number[];
+      const results = yield* sched.all(futures);
       return results.reduce((a, b) => a + b, 0);
     });
-    const op = gen(function* (): Generator<unknown, number, unknown> {
+    const op = gen(function* () {
       const futures: Future<number>[] = [];
       for (let i = 0; i < PARALLEL; i++) {
-        futures.push((yield* spawn(chain)) as Future<number>);
+        futures.push(spawn(chain));
       }
-      const results = (yield* sched.all(futures)) as number[];
+      const results = yield* sched.all(futures);
       return results.reduce((a, b) => a + b, 0);
     });
     // PARALLEL chains, each summing 0..CHAIN-1 = (CHAIN * (CHAIN-1))/2 = 45
@@ -175,9 +159,9 @@ describe("stress — settle order doesn't matter", () => {
     const sched = new Scheduler(testLib);
     const N = 100;
     const ds = Array.from({ length: N }, () => deferred<number>());
-    const op = gen(function* (): Generator<unknown, number[], unknown> {
+    const op = gen(function* () {
       const futures = ds.map((d) => sched.makeJournalFuture(d.promise));
-      return (yield* sched.all(futures)) as number[];
+      return yield* sched.all(futures);
     });
     const result = sched.run(op);
     // Resolve in reverse.

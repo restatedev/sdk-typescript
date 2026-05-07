@@ -32,10 +32,10 @@ import { deferred, resolved, testLib } from "./test-promise.js";
 describe("won-flag — multiple journal sources ready at once", () => {
   test("when both journal sources are pre-resolved, exactly one wins", async () => {
     const sched = new Scheduler(testLib);
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       const f1 = sched.makeJournalFuture(resolved("first"));
       const f2 = sched.makeJournalFuture(resolved("second"));
-      const winner = (yield* sched.race([f1, f2])) as string;
+      const winner = yield* sched.race([f1, f2]);
       // Whichever wins is fine; the test ensures we don't crash or hang.
       return winner;
     });
@@ -48,12 +48,12 @@ describe("won-flag — multiple journal sources ready at once", () => {
     // it must return one of the values every time, never undefined or
     // crash.
     const sched = new Scheduler(testLib);
-    const op = gen(function* (): Generator<unknown, string[], unknown> {
+    const op = gen(function* () {
       const out: string[] = [];
       for (let i = 0; i < 50; i++) {
         const f1 = sched.makeJournalFuture(resolved("a"));
         const f2 = sched.makeJournalFuture(resolved("b"));
-        out.push((yield* sched.race([f1, f2])) as string);
+        out.push(yield* sched.race([f1, f2]));
       }
       return out;
     });
@@ -64,11 +64,11 @@ describe("won-flag — multiple journal sources ready at once", () => {
 
   test("AwaitAny with three pre-resolved sources picks one", async () => {
     const sched = new Scheduler(testLib);
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       const f1 = sched.makeJournalFuture(resolved("alpha"));
       const f2 = sched.makeJournalFuture(resolved("beta"));
       const f3 = sched.makeJournalFuture(resolved("gamma"));
-      return (yield* sched.race([f1, f2, f3])) as string;
+      return yield* sched.race([f1, f2, f3]);
     });
     const result = await sched.run(op);
     expect(["alpha", "beta", "gamma"]).toContain(result);
@@ -81,18 +81,14 @@ describe("won-flag — same future used twice in one AwaitAny", () => {
     // RestatePromise.race directly, which handles dupes natively. But the
     // slow path (with routine sources) should also handle this correctly.
     const sched = new Scheduler(testLib);
-    const fast: Operation<string> = gen(function* (): Generator<
-      unknown,
-      string,
-      unknown
-    > {
+    const fast: Operation<string> = gen(function* () {
       return "shared";
     });
-    const op = gen(function* (): Generator<unknown, string, unknown> {
-      const f = (yield* spawn(fast)) as Future<string>;
+    const op = gen(function* () {
+      const f = spawn(fast);
       // Pass the same Future twice into race. Sync short-circuit picks
       // the routine source; both indices point to the same fire callback.
-      const winner = (yield* sched.race([f, f])) as string;
+      const winner = yield* sched.race([f, f]);
       return winner;
     });
     expect(await sched.run(op)).toBe("shared");
@@ -100,9 +96,9 @@ describe("won-flag — same future used twice in one AwaitAny", () => {
 
   test("same journal future twice in race doesn't crash", async () => {
     const sched = new Scheduler(testLib);
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       const f = sched.makeJournalFuture(resolved("once"));
-      return (yield* sched.race([f, f, f])) as string;
+      return yield* sched.race([f, f, f]);
     });
     expect(await sched.run(op)).toBe("once");
   });
@@ -112,19 +108,15 @@ describe("won-flag — mixed sources with sync short-circuit", () => {
   test("a routine source that's already done wins before any journal park happens", async () => {
     const sched = new Scheduler(testLib);
     const dJournal = deferred<string>();
-    const fast: Operation<string> = gen(function* (): Generator<
-      unknown,
-      string,
-      unknown
-    > {
+    const fast: Operation<string> = gen(function* () {
       return "routine-sync";
     });
-    const op = gen(function* (): Generator<unknown, string, unknown> {
-      const fr = (yield* spawn(fast)) as Future<string>;
+    const op = gen(function* () {
+      const fr = spawn(fast);
       // Drain so fr is "done" before the race.
       yield* fr;
       const fj = sched.makeJournalFuture(dJournal.promise);
-      const winner = (yield* sched.race([fj, fr])) as string;
+      const winner = yield* sched.race([fj, fr]);
       // Resolve loser so scheduler can drain.
       queueMicrotask(() => dJournal.resolve("never-seen"));
       return winner;
@@ -136,18 +128,14 @@ describe("won-flag — mixed sources with sync short-circuit", () => {
     const sched = new Scheduler(testLib);
     const dSlow = deferred<string>();
     const dRoutine = deferred<string>();
-    const slowRoutine: Operation<string> = gen(function* (): Generator<
-      unknown,
-      string,
-      unknown
-    > {
-      return (yield* sched.makeJournalFuture(dRoutine.promise)) as string;
+    const slowRoutine: Operation<string> = gen(function* () {
+      return yield* sched.makeJournalFuture(dRoutine.promise);
     });
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       const ffast = sched.makeJournalFuture(resolved("fast"));
       const fslow = sched.makeJournalFuture(dSlow.promise);
-      const fr = (yield* spawn(slowRoutine)) as Future<string>;
-      const winner = (yield* sched.race([ffast, fslow, fr])) as string;
+      const fr = spawn(slowRoutine);
+      const winner = yield* sched.race([ffast, fslow, fr]);
       // Drain losers.
       queueMicrotask(() => {
         dSlow.resolve("slow-late");
@@ -162,12 +150,12 @@ describe("won-flag — mixed sources with sync short-circuit", () => {
 describe("won-flag — race chained sequentially", () => {
   test("running race twice in sequence with overlapping futures", async () => {
     const sched = new Scheduler(testLib);
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       const fa = sched.makeJournalFuture(resolved("a"));
       const fb = sched.makeJournalFuture(resolved("b"));
       const fc = sched.makeJournalFuture(resolved("c"));
-      const w1 = (yield* sched.race([fa, fb])) as string;
-      const w2 = (yield* sched.race([fb, fc])) as string;
+      const w1 = yield* sched.race([fa, fb]);
+      const w2 = yield* sched.race([fb, fc]);
       return `${w1},${w2}`;
     });
     const result = await sched.run(op);

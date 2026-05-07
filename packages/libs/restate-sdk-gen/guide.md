@@ -178,8 +178,8 @@ fired; you unwrap with `yield* r.future` to get the value.
 Yields a `Future<T>` that settles when the routine returns or throws.
 
 ```ts
-const t1 = yield* spawn(workflowA);
-const t2 = yield* spawn(workflowB);
+const t1 = spawn(workflowA);
+const t2 = spawn(workflowB);
 // Both are running in parallel now.
 const a = yield* t1;
 const b = yield* t2;
@@ -301,7 +301,7 @@ function workerOp(stop: Channel<void>): Operation<string> {
 
 // Caller:
 const stop = channel<void>();
-const t = yield* spawn(workerOp(stop));
+const t = spawn(workerOp(stop));
 // ... decide to stop ...
 yield* stop.send();
 const result = yield* t;
@@ -331,7 +331,7 @@ that's a different primitive (see "What's not here" at the end).
 
 ```ts
 const stop = channel<void>();
-const tasks = workers.map(w => yield* spawn(workerOp(stop, w)));
+const tasks = workers.map(w => spawn(workerOp(stop, w)));
 // ... later ...
 yield* stop.send();
 const results = yield* all(tasks);
@@ -583,8 +583,8 @@ loop and race it against something, your handler will hang forever.
 ```ts
 // WRONG
 const g = myWorkflow();
-yield* spawn(g);
-yield* spawn(g); // generator is exhausted, second spawn does nothing
+spawn(g);
+spawn(g); // generator is exhausted, second spawn does nothing
 ```
 
 `gen()` takes a *factory function*. Pass the factory, not the
@@ -596,8 +596,8 @@ const myWorkflow = (): Operation<string> =>
     // ...
   });
 
-yield* spawn(myWorkflow());
-yield* spawn(myWorkflow()); // fresh generator
+spawn(myWorkflow());
+spawn(myWorkflow()); // fresh generator
 ```
 
 The type system already enforces this — you can't pass a bare

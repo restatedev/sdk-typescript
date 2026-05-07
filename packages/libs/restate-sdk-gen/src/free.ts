@@ -37,9 +37,9 @@
 //   // Handler:
 //   execute(ctx, myWorkflow);
 //
-// `select` and `spawn` are already free functions in `operation.ts`
-// and require no slot — they yield markers the scheduler dispatches.
-// They are re-exported from `index.ts`.
+// `select` is already a free function in `operation.ts` and requires no
+// slot — it yields a marker the scheduler dispatches. It is re-exported
+// from `index.ts`.
 
 import type * as restate from "@restatedev/restate-sdk";
 import type { Future, FutureValues, FutureSettledResult } from "./future.js";
@@ -53,6 +53,7 @@ import type {
 } from "./restate-operations.js";
 import type { Descriptor, HandlerDescriptor } from "./define.js";
 import type { GenClient, GenSendClient } from "./clients.js";
+import type { Operation } from "./operation.js";
 import {
   InvocationReferenceImpl,
   type InvocationReference,
@@ -254,6 +255,14 @@ export const allSettled = <const T extends readonly Future<unknown>[] | []>(
   >;
 }> => currentOps().allSettled(futures);
 
-// `select` and `spawn` are already free functions in `operation.ts`
-// (they yield markers the scheduler dispatches). They are re-exported
-// from `index.ts` directly.
+/**
+ * Register `op` as a fresh routine and return a `Future<T>` for its
+ * eventual outcome. Eager — the child is already in flight by the time
+ * `spawn` returns. See `RestateOperations.spawn` for full semantics.
+ */
+export const spawn = <T>(op: Operation<T>): Future<T> =>
+  currentOps().spawn(op);
+
+// `select` is already a free function in `operation.ts` (it yields a
+// marker the scheduler dispatches). It is re-exported from `index.ts`
+// directly.

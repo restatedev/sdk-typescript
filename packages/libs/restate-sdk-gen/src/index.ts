@@ -39,6 +39,7 @@ export {
   sharedState,
   signal,
   sleep,
+  spawn,
   state,
   workflowPromise,
 } from "./free.js";
@@ -56,7 +57,6 @@ export {
   type Operation,
   select,
   type SelectResult,
-  spawn,
 } from "./operation.js";
 export {
   type RetryOptions,

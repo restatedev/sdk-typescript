@@ -20,7 +20,7 @@
 // Design boundary:
 //
 //   Fiber owns:    iterator, state transitions, dispatch of yielded
-//                  Leaf/Spawn/AwaitAny ops, waiter notification.
+//                  Leaf/AwaitRace ops, waiter notification.
 //   Scheduler owns: the set of live fibers, the ready queue, the
 //                  Awaitable lib (race/all primitives), the main loop,
 //                  and cancellation broadcast.
@@ -31,8 +31,7 @@
 //                         fiber.wake(resume), fiber.parkedSources(),
 //                         fiber.awaitCompletion(waiter), fiber.isDone(),
 //                         fiber.settledValue().
-//   Fiber → Scheduler:    sched.markReady(this), sched.markDone(this),
-//                         sched.spawn(childOp).
+//   Fiber → Scheduler:    sched.markReady(this), sched.markDone(this).
 
 import type { Operation, PrimitiveOp, LeafNode } from "./operation.js";
 import { opTag } from "./operation.js";
@@ -43,17 +42,11 @@ import { setCurrent, clearCurrent } from "./current.js";
 
 /**
  * Narrow interface a Fiber needs from its scheduler. Avoids a wide
- * coupling to Scheduler's full API; Fiber only ever calls these three.
+ * coupling to Scheduler's full API; Fiber only ever calls these.
  */
 export interface SchedulerOps {
   markReady(f: Fiber<unknown>): void;
   markDone(f: Fiber<unknown>): void;
-  /**
-   * Spawn an operation as a fresh fiber and return a Future that
-   * resolves with the fiber's eventual outcome. The fiber is added to
-   * the scheduler's live set; the Future is what user code yields on.
-   */
-  spawnFuture<U>(op: Operation<U>): Future<U>;
   /**
    * The "current fiber" slot — the value installed by `execute()` as
    * the active `RestateOperations`. `Fiber.advance` publishes this to
@@ -169,19 +162,12 @@ export class Fiber<T = unknown> implements WaitTarget<T> {
         const node = op[opTag];
         // Each branch returns null to mean "I parked, the fiber is
         // suspended" or a Settled to mean "resume the iterator with
-        // this value." The Spawn case never parks; Leaf and AwaitAny
-        // may or may not depending on whether their target is already
-        // settled.
+        // this value." Leaf and AwaitRace may or may not park
+        // depending on whether their target is already settled.
         let outcome: Settled | null;
         switch (node._tag) {
           case "Leaf":
             outcome = this.parkOnLeaf(node);
-            break;
-          case "Spawn":
-            outcome = {
-              ok: true,
-              v: this.sched.spawnFuture(node.child),
-            };
             break;
           case "AwaitRace":
             outcome = this.parkOnAwaitRace(node.futures);

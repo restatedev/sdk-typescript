@@ -24,16 +24,16 @@ describe("cross-routine — one signals another", () => {
     const sched = new Scheduler(testLib);
     const channel = deferred<string>();
 
-    const consumer = gen(function* (): Generator<unknown, string, unknown> {
-      return (yield* sched.makeJournalFuture(channel.promise)) as string;
+    const consumer = gen(function* () {
+      return yield* sched.makeJournalFuture(channel.promise);
     });
 
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       // Wire up the consumer first, then trigger via external signal.
-      const fc = (yield* spawn(consumer)) as Future<string>;
+      const fc = spawn(consumer);
       // Simulate "external" resolution via microtask.
       queueMicrotask(() => channel.resolve("payload"));
-      return (yield* fc) as string;
+      return yield* fc;
     });
 
     expect(await sched.run(op)).toBe("payload");
@@ -44,17 +44,17 @@ describe("cross-routine — one signals another", () => {
     const channel = deferred<number>();
 
     const consumer = (id: number): Operation<string> =>
-      gen(function* (): Generator<unknown, string, unknown> {
-        const v = (yield* sched.makeJournalFuture(channel.promise)) as number;
+      gen(function* () {
+        const v = yield* sched.makeJournalFuture(channel.promise);
         return `c${id}=${v}`;
       });
 
-    const op = gen(function* (): Generator<unknown, string[], unknown> {
-      const f1 = (yield* spawn(consumer(1))) as Future<string>;
-      const f2 = (yield* spawn(consumer(2))) as Future<string>;
-      const f3 = (yield* spawn(consumer(3))) as Future<string>;
+    const op = gen(function* () {
+      const f1 = spawn(consumer(1));
+      const f2 = spawn(consumer(2));
+      const f3 = spawn(consumer(3));
       queueMicrotask(() => channel.resolve(99));
-      return (yield* sched.all([f1, f2, f3])) as string[];
+      return yield* sched.all([f1, f2, f3]);
     });
 
     expect(await sched.run(op)).toEqual(["c1=99", "c2=99", "c3=99"]);
@@ -66,19 +66,19 @@ describe("cross-routine — pipelining", () => {
     const sched = new Scheduler(testLib);
     // stage1 -> stage2 -> stage3, each transforming the previous output.
     const stage = (label: string, input: Future<number>): Operation<number> =>
-      gen(function* (): Generator<unknown, number, unknown> {
-        const v = (yield* input) as number;
+      gen(function* () {
+        const v = yield* input;
         return v + label.length;
       });
 
-    const op = gen(function* (): Generator<unknown, number, unknown> {
+    const op = gen(function* () {
       const d0 = deferred<number>();
       const f0 = sched.makeJournalFuture(d0.promise);
-      const f1 = (yield* spawn(stage("aa", f0))) as Future<number>;
-      const f2 = (yield* spawn(stage("bbb", f1))) as Future<number>;
-      const f3 = (yield* spawn(stage("cccc", f2))) as Future<number>;
+      const f1 = spawn(stage("aa", f0));
+      const f2 = spawn(stage("bbb", f1));
+      const f3 = spawn(stage("cccc", f2));
       queueMicrotask(() => d0.resolve(10));
-      return (yield* f3) as number;
+      return yield* f3;
     });
 
     // 10 + 2 + 3 + 4 = 19
@@ -88,17 +88,17 @@ describe("cross-routine — pipelining", () => {
   test("fan-out then fan-in", async () => {
     const sched = new Scheduler(testLib);
     const compute = (n: number): Operation<number> =>
-      gen(function* (): Generator<unknown, number, unknown> {
+      gen(function* () {
         return n * n;
       });
-    const op = gen(function* (): Generator<unknown, number, unknown> {
+    const op = gen(function* () {
       // Fan-out: spawn N workers.
       const futures: Future<number>[] = [];
       for (let i = 1; i <= 5; i++) {
-        futures.push((yield* spawn(compute(i))) as Future<number>);
+        futures.push(spawn(compute(i)));
       }
       // Fan-in: collect all.
-      const results = (yield* sched.all(futures)) as number[];
+      const results = yield* sched.all(futures);
       return results.reduce((a, b) => a + b, 0);
     });
     // 1 + 4 + 9 + 16 + 25 = 55
@@ -110,18 +110,14 @@ describe("cross-routine — racing across spawn boundaries", () => {
   test("racing the parent's local future against a spawned child", async () => {
     const sched = new Scheduler(testLib);
     const dParent = deferred<string>();
-    const childOp: Operation<string> = gen(function* (): Generator<
-      unknown,
-      string,
-      unknown
-    > {
+    const childOp: Operation<string> = gen(function* () {
       return "from-child";
     });
-    const op = gen(function* (): Generator<unknown, string, unknown> {
+    const op = gen(function* () {
       const fParent = sched.makeJournalFuture(dParent.promise);
-      const fChild = (yield* spawn(childOp)) as Future<string>;
+      const fChild = spawn(childOp);
       // child completes synchronously; parent is deferred.
-      const winner = (yield* sched.race([fParent, fChild])) as string;
+      const winner = yield* sched.race([fParent, fChild]);
       // Resolve parent so scheduler can drain the loser.
       queueMicrotask(() => dParent.resolve("from-parent"));
       return winner;
@@ -134,17 +130,17 @@ describe("cross-routine — racing across spawn boundaries", () => {
     const shared = deferred<number>();
 
     const observer = (label: string): Operation<string> =>
-      gen(function* (): Generator<unknown, string, unknown> {
-        const v = (yield* sched.makeJournalFuture(shared.promise)) as number;
+      gen(function* () {
+        const v = yield* sched.makeJournalFuture(shared.promise);
         return `${label}:${v}`;
       });
 
-    const op = gen(function* (): Generator<unknown, string, unknown> {
-      const fa = (yield* spawn(observer("A"))) as Future<string>;
-      const fb = (yield* spawn(observer("B"))) as Future<string>;
+    const op = gen(function* () {
+      const fa = spawn(observer("A"));
+      const fb = spawn(observer("B"));
       queueMicrotask(() => shared.resolve(7));
-      const a = (yield* fa) as string;
-      const b = (yield* fb) as string;
+      const a = yield* fa;
+      const b = yield* fb;
       return `${a},${b}`;
     });
 
@@ -156,12 +152,12 @@ describe("cross-routine — recursive patterns", () => {
   test("a routine spawning itself recursively", async () => {
     const sched = new Scheduler(testLib);
     const fib = (n: number): Operation<number> =>
-      gen(function* (): Generator<unknown, number, unknown> {
+      gen(function* () {
         if (n < 2) return n;
-        const f1 = (yield* spawn(fib(n - 1))) as Future<number>;
-        const f2 = (yield* spawn(fib(n - 2))) as Future<number>;
-        const a = (yield* f1) as number;
-        const b = (yield* f2) as number;
+        const f1 = spawn(fib(n - 1));
+        const f2 = spawn(fib(n - 2));
+        const a = yield* f1;
+        const b = yield* f2;
         return a + b;
       });
     expect(await sched.run(fib(10))).toBe(55);
@@ -170,15 +166,15 @@ describe("cross-routine — recursive patterns", () => {
   test("a routine spawning N children that themselves spawn N grandchildren", async () => {
     const sched = new Scheduler(testLib);
     const branch = (depth: number, label: number): Operation<number> =>
-      gen(function* (): Generator<unknown, number, unknown> {
+      gen(function* () {
         if (depth === 0) return label;
         const futures: Future<number>[] = [];
         for (let i = 0; i < 3; i++) {
           futures.push(
-            (yield* spawn(branch(depth - 1, label * 10 + i))) as Future<number>
+            spawn(branch(depth - 1, label * 10 + i))
           );
         }
-        const results = (yield* sched.all(futures)) as number[];
+        const results = yield* sched.all(futures);
         return results.reduce((a, b) => a + b, 0);
       });
     // Tree of depth 2, branching factor 3 = 9 leaves with labels 0,1,2,10,11,12,...
