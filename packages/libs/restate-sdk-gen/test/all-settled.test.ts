@@ -27,11 +27,7 @@ describe("allSettled — journal sources (fast path)", () => {
     const f2 = sched.makeJournalFuture(rejected(new Error("middle")));
     const f3 = sched.makeJournalFuture(resolved("c"));
     const op = gen(function* () {
-      return yield* sched.allSettled([
-        f1,
-        f2,
-        f3,
-      ]);
+      return yield* sched.allSettled([f1, f2, f3]);
     });
     const out = await sched.run(op);
     expect(out[0]).toEqual({ status: "fulfilled", value: "a" });
@@ -52,11 +48,7 @@ describe("allSettled — journal sources (fast path)", () => {
     const f2 = sched.makeJournalFuture(d2.promise);
     const f3 = sched.makeJournalFuture(d3.promise);
     const op = gen(function* () {
-      return yield* sched.allSettled([
-        f1,
-        f2,
-        f3,
-      ]);
+      return yield* sched.allSettled([f1, f2, f3]);
     });
     const result = sched.run(op);
     queueMicrotask(() => {
@@ -95,11 +87,7 @@ describe("allSettled — routine sources (synthesized join)", () => {
       const f1 = spawn(ok("a"));
       const f2 = spawn(fail("b-fail"));
       const f3 = spawn(ok("c"));
-      return yield* sched.allSettled([
-        f1,
-        f2,
-        f3,
-      ]);
+      return yield* sched.allSettled([f1, f2, f3]);
     });
     const out = await sched.run(op);
     expect(out[0]).toEqual({ status: "fulfilled", value: "a" });
@@ -121,10 +109,7 @@ describe("allSettled — mixed sources", () => {
 
     const op = gen(function* () {
       const rf = spawn(r);
-      return yield* sched.allSettled([
-        j,
-        rf,
-      ]);
+      return yield* sched.allSettled([j, rf]);
     });
     const out = await sched.run(op);
     expect(out).toEqual([

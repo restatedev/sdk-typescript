@@ -244,9 +244,7 @@ describe("workflow-patterns — work-stealing fan-out", () => {
     const op = gen(function* () {
       const futures: Future<{ id: number; result: number }>[] = [];
       for (const t of tasks) {
-        futures.push(
-          spawn(worker(t))
-        );
+        futures.push(spawn(worker(t)));
       }
       return yield* sched.all(futures);
     });

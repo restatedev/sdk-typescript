@@ -42,6 +42,7 @@ import {
   type UntypedState,
 } from "./state.js";
 import {
+  type ClientFuture,
   type GenClient,
   type GenSendClient,
   makeClient,
@@ -387,14 +388,7 @@ export class RestateOperations {
     key: string
   ): GenClient<H>;
   client(def: Descriptor<string, any, any>, key?: string): GenClient<any> {
-    return makeClient(
-      def,
-      key,
-      (o) => this.ctx.genericCall(o as any),
-      (p) => this.toFuture(p),
-      (h, s) =>
-        this.invocationReferenceFromHandle(h as restate.InvocationHandle, s)
-    ) as any;
+    return makeClient(def, key, (o) => this.call(o as any)) as any;
   }
 
   /**
@@ -412,28 +406,33 @@ export class RestateOperations {
     def: Descriptor<string, any, any>,
     key?: string
   ): GenSendClient<any> {
-    return makeSendClient(
-      def,
-      key,
-      (o) => this.ctx.genericSend(o as any),
-      (h, s) =>
-        this.invocationReferenceFromHandle(h as restate.InvocationHandle, s)
+    return makeSendClient(def, key, (o, serde) =>
+      this.send(o as any, serde)
     ) as any;
   }
 
   // ---- generic call/send (renamed from genericCall/genericSend) ----
 
   call<REQ = Uint8Array, RES = Uint8Array>(
-    call: restate.GenericCall<REQ, RES>
-  ): Future<RES> {
-    return this.toFuture(this.ctx.genericCall<REQ, RES>(call));
+    opts: restate.GenericCall<REQ, RES>
+  ): ClientFuture<RES> {
+    const restatePromise = this.ctx.genericCall<REQ, RES>(opts);
+    const resultFuture = this.toFuture(restatePromise);
+    const invocation = this.invocationReferenceFromHandle(
+      restatePromise as unknown as restate.InvocationHandle,
+      opts.outputSerde
+    ) as Future<InvocationReference<RES>>;
+    return Object.assign(resultFuture, { invocation }) as ClientFuture<RES>;
   }
 
-  send<REQ = Uint8Array>(
-    call: restate.GenericSend<REQ>
-  ): Future<InvocationReference<unknown>> {
-    const handle = this.ctx.genericSend<REQ>(call);
-    return this.invocationReferenceFromHandle(handle, undefined);
+  send<REQ = Uint8Array, RES = unknown>(
+    opts: restate.GenericSend<REQ>,
+    outputSerde?: restate.Serde<RES>
+  ): Future<InvocationReference<RES>> {
+    const handle = this.ctx.genericSend<REQ>(opts);
+    return this.invocationReferenceFromHandle(handle, outputSerde) as Future<
+      InvocationReference<RES>
+    >;
   }
 
   // ---- invocation reference helpers ----

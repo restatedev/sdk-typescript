@@ -220,12 +220,7 @@ describe("nested combinators — all inside race", () => {
         });
         return sched.all([d1.future, d2.future]);
       };
-      const winner = yield* sched.race([
-        slow(10),
-        slow(20),
-        fast,
-        slow(30),
-      ]);
+      const winner = yield* sched.race([slow(10), slow(20), fast, slow(30)]);
       return winner;
     });
     expect(await sched.run(op)).toEqual([1, 2]);
@@ -359,9 +354,7 @@ describe("nested combinators — routines that themselves use combinators", () =
     const op = gen(function* () {
       const workerFutures: Future<{ id: number; total: number }>[] = [];
       for (let i = 0; i < N; i++) {
-        workerFutures.push(
-          spawn(worker(i))
-        );
+        workerFutures.push(spawn(worker(i)));
       }
       return yield* sched.all(workerFutures);
     });
