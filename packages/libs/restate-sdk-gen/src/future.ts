@@ -45,6 +45,12 @@ import type { Settled, Waiter } from "./scheduler-types.js";
 // the scheduler/fiber via the internal `getBacking` helper below.
 export const futureBacking = Symbol("restateFutureBacking");
 
+// Nominal brand that prevents arbitrary iterables (e.g. `Future<T>[]`) from
+// accidentally satisfying `Future<unknown>`. The symbol is NOT exported, so
+// external code cannot construct a value that satisfies the property without
+// a deliberate type assertion.
+declare const futureBrand: unique symbol;
+
 export type JournalBacking<T> = {
   readonly kind: "journal";
   readonly promise: Awaitable<T>;
@@ -83,7 +89,9 @@ export type Backing<T> = JournalBacking<T> | LocalBacking<T>;
 // `[futureBacking]: Backing<T>` storage lives on the internal type, kept
 // off the published API so we don't drag JournalBacking/LocalBacking/
 // WaitTarget/Awaitable/Settled/Waiter into the public surface.
-export interface Future<T> extends Operation<T> {}
+export interface Future<T> extends Operation<T> {
+  readonly [futureBrand]: unknown;
+}
 
 /**
  * Internal shape — Future plus its symbol-keyed backing slot. Kept off
@@ -116,12 +124,12 @@ export function makeFuture<T>(backing: Backing<T>): Future<T> {
   // The forward-reference inside the iterator closure is safe: the
   // generator body only runs when [Symbol.iterator]() is iterated, which
   // can only happen after this function returns and `leafOp` is bound.
-  const future: FutureWithBacking<T> = {
+  const future = {
     [futureBacking]: backing,
     *[Symbol.iterator]() {
       return (yield leafOp) as T;
     },
-  };
+  } as unknown as FutureWithBacking<T>;
   const leafOp: PrimitiveOp<T> = makePrimitive<T>({
     _tag: "Leaf",
     future,
