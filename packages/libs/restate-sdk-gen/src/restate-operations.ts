@@ -253,6 +253,16 @@ function asTerminalError(reason: unknown): restate.TerminalError {
   return new restate.CancelledError();
 }
 
+/**
+ * Deterministic date methods that return journal-backed Futures.
+ * Wraps the SDK's `ContextDate` (which returns Promises via internal
+ * `ctx.run()` calls) so that gen-SDK user code can `yield*` them.
+ */
+export interface GenContextDate {
+  now(): Future<number>;
+  toJSON(): Future<string>;
+}
+
 export class RestateOperations {
   private readonly ctx: restate.internal.ContextInternal;
   private readonly sched: Scheduler;
@@ -269,6 +279,24 @@ export class RestateOperations {
   // stays in one place.
   private toFuture<T>(p: restate.RestatePromise<T>): Future<T> {
     return this.sched.makeJournalFuture(adapt(p));
+  }
+
+  // ---- context properties (rand / date / console) ----
+
+  get rand(): restate.Rand {
+    return this.ctx.rand;
+  }
+
+  get date(): GenContextDate {
+    return {
+      now: () => this.run(async () => Date.now(), { name: "date.now" }),
+      toJSON: () =>
+        this.run(async () => new Date().toJSON(), { name: "date.toJSON" }),
+    };
+  }
+
+  get console(): Console {
+    return this.ctx.console;
   }
 
   // ---- journal-backed Futures ----

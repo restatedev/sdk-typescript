@@ -47,6 +47,7 @@ import type { Channel } from "./channel.js";
 import type { State, SharedState, TypedState, UntypedState } from "./state.js";
 import type { GenDurablePromise } from "./durable-promise.js";
 import type {
+  GenContextDate,
   RestateOperations,
   RunAction,
   RunOpts,
@@ -71,16 +72,14 @@ export function currentOps(): RestateOperations {
   return getCurrent() as RestateOperations;
 }
 
-// ---- journal-backed Futures ----
+// ---- context properties (rand / date / console) ----
 
-/**
- * Run a side-effecting closure as a journal entry. See
- * `RestateOperations.run` for full semantics.
- *
- * `name` is derived from `action.name` (works for named functions and
- * arrow functions assigned to a `const`) or specified explicitly via
- * `opts.name`. If neither resolves, throws.
- */
+export const rand = (): restate.Rand => currentOps().rand;
+
+export const date = (): GenContextDate => currentOps().date;
+
+export const logger = (): Console => currentOps().console;
+
 // ---- context accessor ----
 
 /**
@@ -93,6 +92,14 @@ export const handlerRequest = (): HandlerRequest =>
 
 // ---- journal-backed Futures ----
 
+/**
+ * Run a side-effecting closure as a journal entry. See
+ * `RestateOperations.run` for full semantics.
+ *
+ * `name` is derived from `action.name` (works for named functions and
+ * arrow functions assigned to a `const`) or specified explicitly via
+ * `opts.name`. If neither resolves, throws.
+ */
 export const run = <T>(action: RunAction<T>, opts?: RunOpts<T>): Future<T> =>
   currentOps().run(action, opts);
 
