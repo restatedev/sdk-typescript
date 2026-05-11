@@ -71,7 +71,7 @@ const modes = [
 
 describe.each(modes)("terminal errors — $name mode", ({ alwaysReplay }) => {
   let env: RestateTestEnvironment;
-  let ingress: clients.Ingress;
+  let ingress: clients.GenIngress;
 
   beforeAll(async () => {
     env = await RestateTestEnvironment.start({

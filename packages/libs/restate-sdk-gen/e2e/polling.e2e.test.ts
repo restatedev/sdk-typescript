@@ -123,7 +123,7 @@ const modes = [
 
 describe.each(modes)("polling — $name mode", ({ alwaysReplay }) => {
   let env: RestateTestEnvironment;
-  let ingress: clients.Ingress;
+  let ingress: clients.GenIngress;
 
   beforeAll(async () => {
     env = await RestateTestEnvironment.start({
@@ -158,7 +158,7 @@ describe.each(modes)(
   "polling — channel-based stop — $name mode",
   ({ alwaysReplay }) => {
     let env: RestateTestEnvironment;
-    let ingress: clients.Ingress;
+    let ingress: clients.GenIngress;
 
     beforeAll(async () => {
       env = await RestateTestEnvironment.start({

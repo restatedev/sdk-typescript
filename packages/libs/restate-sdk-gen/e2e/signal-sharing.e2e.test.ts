@@ -139,7 +139,7 @@ describe.each(modes)(
   "signal-sharing combinators — $name mode",
   ({ alwaysReplay }) => {
     let env: RestateTestEnvironment;
-    let ingress: clients.Ingress;
+    let ingress: clients.GenIngress;
 
     beforeAll(async () => {
       env = await RestateTestEnvironment.start({

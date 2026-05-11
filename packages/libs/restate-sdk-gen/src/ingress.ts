@@ -18,14 +18,15 @@ import {
   type IngressClient,
   type IngressWorkflowClient,
   type IngressSendClient,
-  connect,
+  type ConnectionOpts,
+  connect as clientsConnect,
 } from "@restatedev/restate-sdk-clients";
 import type { HandlerDescriptor, Descriptor } from "./define.js";
 
 // Re-export connect, Ingress, SendOpts so consumers can use clients.connect / clients.Ingress
 export {
-  connect,
   SendOpts,
+  type ConnectionOpts,
   type Ingress,
   type Send,
   type Opts,
@@ -35,26 +36,28 @@ export {
 };
 
 /**
+ * Connect to the Restate Ingress.
+ *
+ * @param opts connection options
+ * @returns a connection the the restate ingress
+ */
+export function connect(opts: ConnectionOpts): GenIngress {
+  return clientsConnect(opts);
+}
+
+/**
  * Minimal ingress interface required by the sdk-gen ingress helpers.
  * Structurally compatible with `Ingress` from `@restatedev/restate-sdk-clients`
  * — any object returned by `connect()` satisfies this.
  */
-export interface GenIngress {
-  call<I, O>(opts: {
-    service: string;
-    handler: string;
-    parameter: I;
-    key?: string;
-    opts?: Opts<I, O>;
-  }): Promise<O>;
-  send<I>(opts: {
-    service: string;
-    handler: string;
-    parameter: I;
-    key?: string;
-    opts?: SendOpts<I>;
-  }): Promise<Send>;
-}
+export type GenIngress = Omit<
+  Ingress,
+  | "serviceClient"
+  | "serviceSendClient"
+  | "objectClient"
+  | "objectSendClient"
+  | "workflowClient"
+>;
 
 // =============================================================================
 // Typed ingress client types
