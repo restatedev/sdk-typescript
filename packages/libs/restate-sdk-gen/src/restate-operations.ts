@@ -59,7 +59,7 @@ import {
   type SignalReference,
 } from "./invocation-reference.js";
 import { defaultLib } from "./default-lib.js";
-import { InvocationId, Target } from "@restatedev/restate-sdk";
+import { InvocationId, RestatePromise, Target } from "@restatedev/restate-sdk";
 
 // Adapt a real RestatePromise to our Awaitable interface. RestatePromise
 // already has `.map((v, e) => U)` and is thenable, so the adapter is a
@@ -289,9 +289,9 @@ export class RestateOperations {
 
   get date(): GenContextDate {
     return {
-      now: () => this.run(async () => Date.now(), { name: "date.now" }),
+      now: () => this.toFuture(this.ctx.date.now() as RestatePromise<number>),
       toJSON: () =>
-        this.run(async () => new Date().toJSON(), { name: "date.toJSON" }),
+        this.toFuture(this.ctx.date.toJSON() as RestatePromise<string>),
     };
   }
 
