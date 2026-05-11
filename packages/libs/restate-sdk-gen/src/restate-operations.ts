@@ -59,7 +59,7 @@ import {
   type SignalReference,
 } from "./invocation-reference.js";
 import { defaultLib } from "./default-lib.js";
-import { InvocationId, Target } from "@restatedev/restate-sdk";
+import { InvocationId, RestatePromise, Target } from "@restatedev/restate-sdk";
 
 // Adapt a real RestatePromise to our Awaitable interface. RestatePromise
 // already has `.map((v, e) => U)` and is thenable, so the adapter is a
@@ -253,6 +253,16 @@ function asTerminalError(reason: unknown): restate.TerminalError {
   return new restate.CancelledError();
 }
 
+/**
+ * Deterministic date methods that return journal-backed Futures.
+ * Wraps the SDK's `ContextDate` (which returns Promises via internal
+ * `ctx.run()` calls) so that gen-SDK user code can `yield*` them.
+ */
+export interface GenContextDate {
+  now(): Future<number>;
+  toJSON(): Future<string>;
+}
+
 export class RestateOperations {
   private readonly ctx: restate.internal.ContextInternal;
   private readonly sched: Scheduler;
@@ -269,6 +279,24 @@ export class RestateOperations {
   // stays in one place.
   private toFuture<T>(p: restate.RestatePromise<T>): Future<T> {
     return this.sched.makeJournalFuture(adapt(p));
+  }
+
+  // ---- context properties (rand / date / console) ----
+
+  get rand(): restate.Rand {
+    return this.ctx.rand;
+  }
+
+  get date(): GenContextDate {
+    return {
+      now: () => this.toFuture(this.ctx.date.now() as RestatePromise<number>),
+      toJSON: () =>
+        this.toFuture(this.ctx.date.toJSON() as RestatePromise<string>),
+    };
+  }
+
+  get console(): Console {
+    return this.ctx.console;
   }
 
   // ---- journal-backed Futures ----

@@ -28,9 +28,12 @@ export {
   cancel,
   channel,
   client,
+  date,
   handlerRequest,
   invocation,
+  logger,
   race,
+  rand,
   rejectAwakeable,
   resolveAwakeable,
   run,
@@ -54,6 +57,7 @@ export type {
 } from "./future.js";
 export { gen, type Operation, select, type SelectResult } from "./operation.js";
 export {
+  type GenContextDate,
   type RetryOptions,
   type RunAction,
   type RunActionOpts,
@@ -112,6 +116,8 @@ export type {
   Duration,
   StandardTypedV1,
 } from "@restatedev/restate-sdk-core";
+
+export type { ContextDate, Rand } from "@restatedev/restate-sdk";
 
 // Internal types exposed only for API Extractor traceability — not part of the public API
 /** @internal */
