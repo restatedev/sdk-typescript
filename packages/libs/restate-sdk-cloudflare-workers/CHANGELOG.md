@@ -1,5 +1,13 @@
 # @restatedev/restate-sdk-cloudflare-workers
 
+## 1.14.3
+
+### Patch Changes
+
+- Added Ingress.call/send to do generic calls/sends using the Ingress client
+- Updated dependencies
+  - @restatedev/restate-sdk-core@1.14.3
+
 ## 1.14.2
 
 ### Bug fixes

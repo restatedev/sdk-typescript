@@ -1,5 +1,11 @@
 # @restatedev/restate-sdk-zod
 
+## 1.14.3
+
+### Patch Changes
+
+- Added Ingress.call/send to do generic calls/sends using the Ingress client
+
 ## 1.14.2
 
 ### Bug fixes
