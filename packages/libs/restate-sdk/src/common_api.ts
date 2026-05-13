@@ -31,6 +31,7 @@ export type {
   KeyValueStore,
   DurablePromise,
   Request,
+  ScopedContext,
   Target,
   InvocationReference,
   SignalReference,
