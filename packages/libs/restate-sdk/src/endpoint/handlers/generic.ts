@@ -419,6 +419,9 @@ class RestateInvokeResponse implements RestateResponse {
         ),
         body: input.input,
         extraArgs: this.extraArgs,
+        idempotencyKey: input.idempotency_key || undefined,
+        scope: input.scope || undefined,
+        limitKey: input.limit_key || undefined,
         attemptCompletedSignal: abortSignal,
       };
 

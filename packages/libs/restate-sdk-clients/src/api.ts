@@ -92,6 +92,7 @@ export interface Ingress {
     handler: string;
     parameter: I;
     key?: string;
+    scope?: string;
     opts?: Opts<I, O>;
   }): Promise<O>;
 
@@ -101,8 +102,40 @@ export interface Ingress {
     handler: string;
     parameter: I;
     key?: string;
+    scope?: string;
     opts?: SendOpts<I>;
   }): Promise<Send>;
+
+  /**
+   * Returns a {@link ScopedIngress} that routes all calls within the given scope.
+   *
+   * A scope is a sub-grouping of resources (invocations, virtual object instances, workflow
+   * instances, concurrency limits) within the Restate cluster. The scope key contributes to
+   * the partition key, so all resources in a scope are co-located.
+   *
+   * The scope key must consist only of `[a-zA-Z0-9_.-]` characters and be non-empty.
+   *
+   * @param scopeKey the scope identifier; must match `[a-zA-Z0-9_.-]+`
+   */
+  scope(scopeKey: string): ScopedIngress;
+}
+
+/**
+ * An ingress client for making calls within a specific scope.
+ * Obtain via {@link Ingress.scope}.
+ *
+ * All invocations made through a `ScopedIngress` carry the scope key as part of their identity.
+ * See {@link Ingress.scope} for a full description of scopes.
+ */
+export interface ScopedIngress {
+  serviceClient<D>(opts: ServiceDefinitionFrom<D>): IngressClient<Service<D>>;
+  serviceSendClient<D>(
+    opts: ServiceDefinitionFrom<D>
+  ): IngressSendClient<Service<D>>;
+  workflowClient<D>(
+    opts: WorkflowDefinitionFrom<D>,
+    key: string
+  ): IngressWorkflowClient<Workflow<D>>;
 }
 
 export interface IngressCallOptions<I = unknown, O = unknown> {
@@ -112,6 +145,24 @@ export interface IngressCallOptions<I = unknown, O = unknown> {
    * See https://docs.restate.dev/operate/invocation#invoke-a-handler-idempotently for more details.
    */
   idempotencyKey?: string;
+
+  /**
+   * An optional concurrency limit key within the scope.
+   *
+   * The limit key enforces hierarchical concurrency limits on invocations sharing the same scope.
+   * It can have one or two levels separated by `/` (e.g. `"tenant1"` or `"tenant1/user42"`).
+   * Each level must consist only of `[a-zA-Z0-9_.-]` characters and be non-empty.
+   *
+   * Requires a scope to be set (via {@link Ingress.scope} or the `scope` field on `call`/`send`).
+   * Requests that carry a limit key but no scope will be rejected by the runtime.
+   *
+   * The limit key is **not** part of the request identity: two calls to the same target with the
+   * same scope and object key but different limit keys refer to the **same** resource instance.
+   * The limit key only affects concurrency limits, not resource addressing.
+   *
+   * Sent as the `x-restate-limit-key` HTTP header.
+   */
+  limitKey?: string;
 
   /**
    * Headers to attach to the request.

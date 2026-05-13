@@ -27,6 +27,7 @@ import type {
   RunAction,
   RunOptions,
   SignalReference,
+  ScopedContext,
   WorkflowContext,
 } from "./context.js";
 import type * as vm from "./endpoint/handlers/vm/sdk_shared_core_wasm_bindings.js";
@@ -283,6 +284,8 @@ export class ContextImpl
             )
           : [],
         call.idempotencyKey,
+        call.scope,
+        call.limitKey,
         call.name
       );
       const commandIndex = this.coreVm.last_command_index();
@@ -356,6 +359,8 @@ export class ContextImpl
           : [],
         delay !== undefined && delay > 0 ? BigInt(delay) : undefined,
         send.idempotencyKey,
+        send.scope,
+        send.limitKey,
         send.name
       );
       const commandIndex = this.coreVm.last_command_index();
@@ -445,6 +450,46 @@ export class ContextImpl
       name,
       key
     );
+  }
+
+  scope(scopeKey: string): ScopedContext {
+    return {
+      serviceClient: <D>({ name }: ServiceDefinitionFrom<D>) =>
+        makeRpcCallProxy<Client<Service<D>>>(
+          (call) => this.genericCall(call),
+          this.defaultSerde,
+          name,
+          undefined,
+          scopeKey
+        ),
+      serviceSendClient: <D>({ name }: ServiceDefinitionFrom<D>) =>
+        makeRpcSendProxy<SendClient<Service<D>>>(
+          (send) => this.genericSend(send),
+          this.defaultSerde,
+          name,
+          undefined,
+          scopeKey
+        ),
+      workflowClient: <D>({ name }: WorkflowDefinitionFrom<D>, key: string) =>
+        makeRpcCallProxy<Client<Workflow<D>>>(
+          (call) => this.genericCall(call),
+          this.defaultSerde,
+          name,
+          key,
+          scopeKey
+        ),
+      workflowSendClient: <D>(
+        { name }: WorkflowDefinitionFrom<D>,
+        key: string
+      ) =>
+        makeRpcSendProxy<SendClient<Workflow<D>>>(
+          (send) => this.genericSend(send),
+          this.defaultSerde,
+          name,
+          key,
+          scopeKey
+        ),
+    };
   }
 
   // DON'T make this function async!!!

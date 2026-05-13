@@ -51,6 +51,22 @@ export type ClientCallOptions<I, O> = {
   idempotencyKey?: string;
 
   /**
+   * An optional concurrency limit key within the scope.
+   *
+   * The limit key enforces hierarchical concurrency limits on invocations sharing the same scope.
+   * It can have one or two levels separated by `/` (e.g. `"tenant1"` or `"tenant1/user42"`).
+   * Each level must consist only of `[a-zA-Z0-9_.-]` characters and be non-empty.
+   *
+   * A limit key can only be used in conjunction with a scope (set via {@link Context.scope}).
+   * Requests that carry a limit key but no scope will be rejected by the runtime.
+   *
+   * The limit key is **not** part of the request identity: two calls to the same target with the
+   * same scope and object key but different limit keys refer to the **same** resource instance.
+   * The limit key only affects concurrency limits, not resource addressing.
+   */
+  limitKey?: string;
+
+  /**
    * Observability name, recorded in the Restate journal.
    */
   name?: string;
@@ -103,6 +119,22 @@ export type ClientSendOptions<I> = {
   delay?: Duration | number;
   headers?: Record<string, string>;
   idempotencyKey?: string;
+
+  /**
+   * An optional concurrency limit key within the scope.
+   *
+   * The limit key enforces hierarchical concurrency limits on invocations sharing the same scope.
+   * It can have one or two levels separated by `/` (e.g. `"tenant1"` or `"tenant1/user42"`).
+   * Each level must consist only of `[a-zA-Z0-9_.-]` characters and be non-empty.
+   *
+   * A limit key can only be used in conjunction with a scope (set via {@link Context.scope}).
+   * Requests that carry a limit key but no scope will be rejected by the runtime.
+   *
+   * The limit key is **not** part of the request identity: two calls to the same target with the
+   * same scope and object key but different limit keys refer to the **same** resource instance.
+   * The limit key only affects concurrency limits, not resource addressing.
+   */
+  limitKey?: string;
 
   /**
    * Observability name, recorded in the Restate journal.
@@ -182,7 +214,8 @@ export const makeRpcCallProxy = <T>(
   genericCall: (call: GenericCall<unknown, unknown>) => Promise<unknown>,
   defaultSerde: Serde<any>,
   service: string,
-  key?: string
+  key?: string,
+  scope?: string
 ): T => {
   const clientProxy = new Proxy(
     {},
@@ -204,6 +237,8 @@ export const makeRpcCallProxy = <T>(
             inputSerde: requestSerde,
             outputSerde: responseSerde,
             idempotencyKey: opts?.idempotencyKey,
+            scope,
+            limitKey: opts?.limitKey,
             name: opts?.name,
           });
         };
@@ -218,7 +253,8 @@ export const makeRpcSendProxy = <T>(
   genericSend: (send: GenericSend<unknown>) => void,
   defaultSerde: Serde<any>,
   service: string,
-  key?: string
+  key?: string,
+  scope?: string
 ): T => {
   const clientProxy = new Proxy(
     {},
@@ -238,6 +274,8 @@ export const makeRpcSendProxy = <T>(
             delay,
             inputSerde: requestSerde,
             idempotencyKey: opts?.idempotencyKey,
+            scope,
+            limitKey: opts?.limitKey,
             name: opts?.name,
           });
         };

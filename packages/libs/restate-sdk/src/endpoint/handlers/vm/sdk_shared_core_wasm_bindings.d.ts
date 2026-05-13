@@ -110,10 +110,13 @@ export class WasmInput {
   free(): void;
   [Symbol.dispose](): void;
   readonly headers: WasmHeader[];
+  readonly idempotency_key: string | undefined;
   readonly input: Uint8Array;
   readonly invocation_id: string;
   readonly key: string;
+  readonly limit_key: string | undefined;
   readonly random_seed: bigint;
+  readonly scope: string | undefined;
 }
 
 /**
@@ -212,6 +215,8 @@ export class WasmVM {
     key: string | null | undefined,
     headers: WasmHeader[],
     idempotency_key?: string | null,
+    scope?: string | null,
+    limit_key?: string | null,
     name?: string | null
   ): WasmCallHandle;
   sys_cancel_invocation(target_invocation_id: string): void;
@@ -247,6 +252,8 @@ export class WasmVM {
     headers: WasmHeader[],
     delay?: bigint | null,
     idempotency_key?: string | null,
+    scope?: string | null,
+    limit_key?: string | null,
     name?: string | null
   ): WasmSendHandle;
   sys_set_state(key: string, buffer: Uint8Array): void;

@@ -28,6 +28,7 @@ export { serde } from "@restatedev/restate-sdk-core";
 
 export type {
   Ingress,
+  ScopedIngress,
   ConnectionOpts,
   IngressClient,
   IngressSendClient,
