@@ -84,6 +84,21 @@ export interface Request {
   readonly extraArgs: unknown[];
 
   /**
+   * The idempotency key with which this invocation was submitted, if any.
+   */
+  readonly idempotencyKey?: string;
+
+  /**
+   * The scope key with which this invocation was submitted, if any.
+   */
+  readonly scope?: string;
+
+  /**
+   * The limit key with which this invocation was submitted, if any.
+   */
+  readonly limitKey?: string;
+
+  /**
    * This is a signal that is aborted when the current attempt has been completed either successful or unsuccessfully.
    * When the signal is aborted, the current attempt has been completed and the handler should not perform any more work, other
    * than cleanup any external resources that might be shared across attempts (e.g. database connections).
@@ -231,6 +246,8 @@ export type GenericCall<REQ, RES> = {
   inputSerde?: Serde<REQ>;
   outputSerde?: Serde<RES>;
   idempotencyKey?: string;
+  scope?: string;
+  limitKey?: string;
   /**
    * Observability name, recorded in the Restate journal.
    */
@@ -251,11 +268,35 @@ export type GenericSend<REQ> = {
   inputSerde?: Serde<REQ>;
   delay?: Duration | number;
   idempotencyKey?: string;
+  scope?: string;
+  limitKey?: string;
   /**
    * Observability name, recorded in the Restate journal.
    */
   name?: string;
 };
+
+/**
+ * A context for making RPC calls within a specific scope.
+ * Obtain via {@link Context.scope}.
+ *
+ * All invocations made through a `ScopedContext` carry the scope key as part of their identity.
+ * See {@link Context.scope} for a full description of scopes.
+ */
+export interface ScopedContext {
+  serviceClient<D>(opts: ServiceDefinitionFrom<D>): Client<Service<D>>;
+  serviceSendClient<D>(
+    service: ServiceDefinitionFrom<D>
+  ): SendClient<Service<D>>;
+  workflowClient<D>(
+    opts: WorkflowDefinitionFrom<D>,
+    key: string
+  ): Client<Workflow<D>>;
+  workflowSendClient<D>(
+    opts: WorkflowDefinitionFrom<D>,
+    key: string
+  ): SendClient<Workflow<D>>;
+}
 
 /**
  * The context that gives access to all Restate-backed operations, for example
@@ -472,6 +513,41 @@ export interface Context extends RestateContext {
    * ```
    */
   serviceClient<D>(opts: ServiceDefinitionFrom<D>): Client<Service<D>>;
+
+  /**
+   * Returns a {@link ScopedContext} that routes all outgoing calls within the given scope.
+   *
+   * A scope is a sub-grouping of resources (invocations, virtual object instances, workflow
+   * instances, concurrency limits) within the Restate cluster. The scope key contributes to
+   * the partition key, so all resources in a scope are co-located.
+   *
+   * The scope key becomes part of the target identity tuple:
+   * - `scope, service, handler, idempotencyKey?`
+   * - `scope, virtualObject, objectKey, handler, idempotencyKey?`
+   * - `scope, workflow, workflowKey, handler`
+   *
+   * Omitting the scope (i.e. using the regular `serviceClient` / `workflowClient` methods)
+   * is equivalent to calling with no scope, which is the existing behavior.
+   *
+   * The scope key must consist only of `[a-zA-Z0-9_.-]` characters and be non-empty.
+   *
+   * @example
+   * ```ts
+   * // Route a call into a named scope
+   * await ctx.scope("tenant-123").serviceClient(MyService).process(payload);
+   *
+   * // Idempotency keys are scoped — "req-1" in "tenant-123" is distinct from "req-1" in "tenant-456"
+   * await ctx.scope("tenant-123").serviceClient(MyService)
+   *   .process(payload, rpc.opts({ idempotencyKey: "req-1" }));
+   *
+   * // Combine with a limit key to enforce per-scope concurrency limits
+   * await ctx.scope("tenant-123").workflowClient(MyWorkflow, "wf-key")
+   *   .run(input, rpc.opts({ limitKey: "api-key/user42" }));
+   * ```
+   *
+   * @param scopeKey the scope identifier; must match `[a-zA-Z0-9_.-]+`
+   */
+  scope(scopeKey: string): ScopedContext;
 
   /**
    * Same as {@link serviceClient} but for virtual objects.

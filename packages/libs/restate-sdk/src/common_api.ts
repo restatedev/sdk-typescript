@@ -31,6 +31,7 @@ export type {
   KeyValueStore,
   DurablePromise,
   Request,
+  ScopedContext,
   Target,
 } from "./context.js";
 export { InvocationIdParser, RestatePromise } from "./context.js";
