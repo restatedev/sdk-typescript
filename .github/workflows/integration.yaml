@@ -51,7 +51,7 @@ on:
         description: name of the test artifact output
       sdkRepoRef:
         required: false
-        default: ''
+        default: ""
         type: string
         description: REF to the sdk repo branch/commit, passed to github action ref
 

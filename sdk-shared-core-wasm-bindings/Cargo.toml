@@ -11,18 +11,17 @@ crate-type = ["cdylib", "rlib"]
 default = ["console_error_panic_hook"]
 
 [dependencies]
-wasm-bindgen = "0.2.100"
-restate-sdk-shared-core = { git = "https://github.com/restatedev/sdk-shared-core.git", branch = "awaiting_on", features = ["request_identity", "rust_crypto"] }
+wasm-bindgen = "0.2.121"
+restate-sdk-shared-core = { git = "https://github.com/restatedev/sdk-shared-core.git", rev = "d8a42ecceab6e7874138b6316e128a09f2de76d1", features = ["request_identity", "rust_crypto", "tracing_pretty"] }
 console_error_panic_hook = { version = "0.1.7", optional = true }
 serde = { version = "1.0.210", features = ["derive"] }
-serde-wasm-bindgen = "0.6.5"
-tsify = { version = "0.4.5", default-features = false, features = ["js"] }
+tsify = { version = "0.5.6", default-features = false, features = ["js"] }
 getrandom = { version = "0.2", features = ["js"] }
-js-sys = "0.3.77"
-serde_bytes = "0.11.15"
-tracing = "0.1.40"
-tracing-subscriber = { version = "0.3.18", default-features = false, features = ["fmt", "std"] }
+js-sys = "0.3.98"
+serde_bytes = "0.11.19"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.18", default-features = false, features = ["fmt"] }
 
 [profile.release]
-# Tell `rustc` to optimize for small code size.
-opt-level = "s"
+opt-level = 3
+lto = true

@@ -291,12 +291,6 @@ impl From<Error> for WasmFailure {
     }
 }
 
-impl From<WasmFailure> for JsValue {
-    fn from(value: WasmFailure) -> Self {
-        serde_wasm_bindgen::to_value(&value).unwrap_or_else(|e| e.into())
-    }
-}
-
 #[derive(Tsify, Serialize, Deserialize)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct WasmExponentialRetryConfig {
