@@ -7,13 +7,22 @@
 // directory of this repository or package, or at
 // https://github.com/restatedev/e2e/blob/main/LICENSE
 
+import { randomUUID } from "node:crypto";
 import { describe, it, expect } from "vitest";
+import { rpc } from "@restatedev/restate-sdk-clients";
 import { ingressClient } from "./utils.js";
 import type { PromiseCombinators } from "../src/promise_combinators.js";
+import type { SignalTest } from "../src/signals.js";
 
 const PromiseCombinators: PromiseCombinators = {
   name: "PromiseCombinators",
 };
+
+const SignalTest: SignalTest = { name: "SignalTest" };
+
+function idempotentSend() {
+  return rpc.sendOpts({ idempotencyKey: randomUUID() });
+}
 
 describe("PromiseCombinators", () => {
   const ingress = ingressClient();
@@ -84,6 +93,55 @@ describe("PromiseCombinators", () => {
     expect(result[1]).toMatchObject({ status: "rejected" });
     expect(result[2]).toEqual({ status: "fulfilled", value: "ok2" });
   });
+
+  // --- allSettled(race(p1, p2), race(p1, p3)) sharing p1 signal ---
+
+  it("allSettled(race(p1, p2), race(p1, p3)) settles both races with p1 when p1 completes first", async () => {
+    const send = await ingress
+      .serviceSendClient(PromiseCombinators)
+      .allSettledOfRacesSharingSignal(idempotentSend());
+
+    // Resolve p1 first — both races should settle with p1.
+    await ingress.serviceClient(SignalTest).resolveSignal({
+      invocationId: send.invocationId,
+      name: "p1",
+      value: "from-p1",
+    });
+
+    // Resolve p3 afterwards — must not affect the already-settled races.
+    await ingress.serviceClient(SignalTest).resolveSignal({
+      invocationId: send.invocationId,
+      name: "p3",
+      value: "from-p3",
+    });
+
+    const result = await ingress.result(send);
+    expect(result).toHaveLength(2);
+    expect(result[0]).toEqual({ status: "fulfilled", value: "from-p1" });
+    expect(result[1]).toEqual({ status: "fulfilled", value: "from-p1" });
+  }, 30_000);
+
+  it("all(race(map(p1), p2), race(p1, p3))", async () => {
+    const send = await ingress
+      .serviceSendClient(PromiseCombinators)
+      .allOfRacesSharingSignalWithMapping(idempotentSend());
+
+    // Resolve p1 first — both races should settle with p1.
+    await ingress.serviceClient(SignalTest).resolveSignal({
+      invocationId: send.invocationId,
+      name: "p1",
+      value: "from-p1",
+    });
+
+    // Resolve p3 afterwards — must not affect the already-settled races.
+    await ingress.serviceClient(SignalTest).resolveSignal({
+      invocationId: send.invocationId,
+      name: "p3",
+      value: "from-p3",
+    });
+
+    await expect(ingress.result(send)).rejects.toThrow("p1 completed");
+  }, 30_000);
 
   // --- Empty array combinators ---
 
