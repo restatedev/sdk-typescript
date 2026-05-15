@@ -19,9 +19,17 @@ import {
   awakeable,
   sleep,
   run,
+  signal,
   resolveAwakeable,
   rejectAwakeable,
+  all,
+  allSettled,
+  any,
+  race,
+  spawn,
+  gen,
 } from "@restatedev/restate-sdk-gen";
+import { setTimeout } from "node:timers/promises";
 
 type AwaitAwakeableOrTimeoutCmd = {
   type: "awaitAwakeableOrTimeout";
@@ -45,6 +53,22 @@ type AwaitAnySuccessfulCmd = {
   type: "awaitAnySuccessful";
   commands: SubCommand[];
 };
+type AwaitFirstSucceededOrAllFailedCmd = {
+  type: "awaitFirstSucceededOrAllFailed";
+  commands: SubCommand[];
+};
+type AwaitFirstCompletedCmd = {
+  type: "awaitFirstCompleted";
+  commands: SubCommand[];
+};
+type AwaitAllSucceededOrFirstFailedCmd = {
+  type: "awaitAllSucceededOrFirstFailed";
+  commands: SubCommand[];
+};
+type AwaitAllCompletedCmd = {
+  type: "awaitAllCompleted";
+  commands: SubCommand[];
+};
 
 type Command =
   | AwaitAwakeableOrTimeoutCmd
@@ -53,20 +77,31 @@ type Command =
   | GetEnvVarCmd
   | AwaitOneCmd
   | AwaitAnyCmd
-  | AwaitAnySuccessfulCmd;
+  | AwaitAnySuccessfulCmd
+  | AwaitFirstSucceededOrAllFailedCmd
+  | AwaitFirstCompletedCmd
+  | AwaitAllSucceededOrFirstFailedCmd
+  | AwaitAllCompletedCmd;
 
 type CreateAwakeableSub = { type: "createAwakeable"; awakeableKey: string };
 type SleepSub = { type: "sleep"; timeoutMillis: number };
+type RunReturnsSub = { type: "runReturns"; value: string };
 type RunThrowTerminalSub = {
   type: "runThrowTerminalException";
   reason: string;
 };
-type SubCommand = CreateAwakeableSub | SleepSub | RunThrowTerminalSub;
+type CreateSignalSub = { type: "createSignal"; signalName: string };
+type SubCommand =
+  | CreateAwakeableSub
+  | SleepSub
+  | RunReturnsSub
+  | RunThrowTerminalSub
+  | CreateSignalSub;
 
 type State = { results: string[]; [k: `awk-${string}`]: string };
 
 type SubFutureKind = "awakeable" | "sleep" | "run";
-type SubEntry = { kind: SubFutureKind; future: Future<unknown> };
+type SubEntry = { kind: SubFutureKind; future: Future<string> };
 
 export const virtualObjectCommandInterpreter = object({
   name: "VirtualObjectCommandInterpreter",
@@ -105,7 +140,26 @@ export const virtualObjectCommandInterpreter = object({
             return { kind: "awakeable", future: promise };
           }
           case "sleep":
-            return { kind: "sleep", future: sleep(cmd.timeoutMillis) };
+            return {
+              kind: "sleep",
+              future: spawn(
+                gen(function* () {
+                  yield* sleep(cmd.timeoutMillis);
+                  return "sleep";
+                })
+              ),
+            };
+          case "runReturns":
+            return {
+              kind: "run",
+              future: run(
+                async () => {
+                  await setTimeout(1);
+                  return cmd.value;
+                },
+                { name: "runReturns" }
+              ),
+            };
           case "runThrowTerminalException":
             return {
               kind: "run",
@@ -115,6 +169,11 @@ export const virtualObjectCommandInterpreter = object({
                 },
                 { name: "run should fail command" }
               ),
+            };
+          case "createSignal":
+            return {
+              kind: "awakeable",
+              future: signal<string>(cmd.signalName),
             };
         }
       }
@@ -206,6 +265,40 @@ export const virtualObjectCommandInterpreter = object({
               }
             }
             if (!found) throw new restate.TerminalError("All commands failed");
+            break;
+          }
+          case "awaitFirstSucceededOrAllFailed": {
+            const subs: SubEntry[] = [];
+            for (const c of cmd.commands) subs.push(yield* createSub(c));
+            // any() rejects only when ALL fail; first success wins.
+            result = yield* any(subs.map((s) => s.future));
+            break;
+          }
+          case "awaitFirstCompleted": {
+            const subs: SubEntry[] = [];
+            for (const c of cmd.commands) subs.push(yield* createSub(c));
+            // race() settles with the first future to complete.
+            result = yield* race(subs.map((s) => s.future));
+            break;
+          }
+          case "awaitAllSucceededOrFirstFailed": {
+            const subs: SubEntry[] = [];
+            for (const c of cmd.commands) subs.push(yield* createSub(c));
+            const results = yield* all(subs.map((s) => s.future));
+            result = results.join("|");
+            break;
+          }
+          case "awaitAllCompleted": {
+            const subs: SubEntry[] = [];
+            for (const c of cmd.commands) subs.push(yield* createSub(c));
+            const settled = yield* allSettled(subs.map((s) => s.future));
+            result = settled
+              .map((r) =>
+                r.status === "rejected"
+                  ? `err:${(r.reason as Error).message}`
+                  : `ok:${r.value}`
+              )
+              .join("|");
             break;
           }
         }
