@@ -44,7 +44,7 @@
     "generate:configs": "node scripts/generate-example-configs.mjs",
     "deps:check": "pnpm outdated",
     "deps:update": "pnpm update --latest --recursive",
-    "build:core": "./.tools/build_core.sh",
+    "build:core": "./.tools/build-core.sh",
     "postbuild:core": "pnpm format"
   },
   "devDependencies": {
