@@ -8,51 +8,60 @@ user-invocable: true
 
 The conformance test suite lives in a separate repo (`restatedev/e2e`). It's a Gradle/Kotlin test runner that starts Restate and the SDK service in containers and drives them through the ingress API.
 
+## Quick start — use the script
+
+```bash
+# Build image + run all default suite tests
+./.tools/run-sdk-tests.sh
+
+# Skip rebuild if you haven't changed service code
+./.tools/run-sdk-tests.sh --skip-build
+
+# Test the restate-sdk-gen services
+./.tools/run-sdk-tests.sh --gen
+
+# Run a single test class (extra flags pass through to the runner)
+./.tools/run-sdk-tests.sh --skip-build --test-suite=default --test-name=Combinators
+```
+
 ## Prerequisites
 
-- The e2e repo must be cloned alongside this one: `../e2e`
-- Podman (or Docker — swap `podman` for `docker` in all commands)
+- Java 21+
+- Podman or Docker
 
-## Step 1: Build the Docker image
+## What the script does
 
-Build from the **repo root** (the Dockerfile copies the entire monorepo for its build):
+1. Reads the suite version from `.github/workflows/integration.yaml` (single source of truth — no version to keep in sync manually)
+2. Builds the service Docker image from the repo root
+3. Downloads the `sdk-tests.jar` from GitHub releases and caches it in `tmp/` (version-pinned filename)
+4. Pulls the Restate runtime image explicitly
+5. Runs `java -jar sdk-tests.jar run ...` directly — no Docker wrapper, Java runs on the host
 
-```bash
-# Main e2e-services (restate-sdk-based services)
-podman build -t e2e-ts:local -f packages/tests/restate-e2e-services/Dockerfile .
+## Manual invocation (without the script)
 
-# Gen test-services (restate-sdk-gen-based services) — only if testing gen SDK
-podman build -t e2e-ts-gen:local -f packages/libs/restate-sdk-gen/test-services/Dockerfile .
-```
-
-The build does a full `pnpm install + build` inside the container, so it takes a few minutes on first run but later builds are fast thanks to layer caching.
-
-## Step 2: Run the tests from the e2e repo
+If you need more control, download the JAR and run it directly:
 
 ```bash
-cd ../e2e
+# Check current version
+grep -m1 'uses: restatedev/e2e/sdk-tests@' .github/workflows/integration.yaml
 
-# Run all suites (slow — use targeted runs during development)
-./gradlew :sdk-tests:run --args='run --sequential --image-pull-policy=CACHED --service-container-image=localhost/e2e-ts:local'
-
-# Run a single suite
-./gradlew :sdk-tests:run --args='run --sequential --image-pull-policy=CACHED --test-suite=default --service-container-image=localhost/e2e-ts:local'
-
-# Run a single test class
-./gradlew :sdk-tests:run --args='run --sequential --image-pull-policy=CACHED --test-suite=default --test-name=Combinators --service-container-image=localhost/e2e-ts:local'
+# Run
+RESTATE_CONTAINER_IMAGE=ghcr.io/restatedev/restate:main \
+  java -jar tmp/sdk-tests-<version>.jar run \
+  --sequential \
+  --image-pull-policy=CACHED \
+  --test-suite=default \
+  --test-name=Combinators \
+  --service-container-image=localhost/e2e-ts-test-services:local
 ```
 
-For the gen SDK image, replace `localhost/e2e-ts:local` with `localhost/e2e-ts-gen:local`.
-
-## Key flags
+## Key flags (passed through to the runner)
 
 | Flag | Purpose |
 |------|---------|
-| `--sequential` | Required on Podman (no parallel containers) |
-| `--image-pull-policy=CACHED` | Uses locally built image; skips registry pull |
 | `--test-suite=default` | Which suite to run (`default`, `alwaysSuspending`, `threeNodes`, etc.) |
 | `--test-name=ClassName` | Run only one test class (requires `--test-suite`) |
-| `--service-container-image=localhost/...` | The image to test against |
+| `--exclusions-file=path` | YAML file listing tests to skip |
 
 ## Available test suites
 
