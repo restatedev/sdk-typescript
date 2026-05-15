@@ -71,6 +71,30 @@ const o = restate.service({
       ctx.cancel(id);
       return Promise.resolve();
     },
+
+    resolveSignal(
+      ctx: restate.Context,
+      req: { invocationId: string; signalName: string; value: string }
+    ): Promise<void> {
+      const ctxInternal = ctx as unknown as restate.internal.ContextInternal;
+      ctxInternal
+        .invocation(restate.InvocationIdParser.fromString(req.invocationId))
+        .signal(req.signalName)
+        .resolve(req.value);
+      return Promise.resolve();
+    },
+
+    rejectSignal(
+      ctx: restate.Context,
+      req: { invocationId: string; signalName: string; reason: string }
+    ): Promise<void> {
+      const ctxInternal = ctx as unknown as restate.internal.ContextInternal;
+      ctxInternal
+        .invocation(restate.InvocationIdParser.fromString(req.invocationId))
+        .signal(req.signalName)
+        .reject(req.reason);
+      return Promise.resolve();
+    },
   },
 });
 
