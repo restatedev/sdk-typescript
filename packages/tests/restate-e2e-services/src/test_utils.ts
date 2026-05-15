@@ -35,17 +35,6 @@ const o = restate.service({
       }
     ),
 
-    async sleepConcurrently(
-      ctx: restate.Context,
-      millisDuration: number[]
-    ): Promise<void> {
-      const timers = millisDuration.map((duration) => ctx.sleep(duration));
-
-      for (const timer of timers) {
-        await timer;
-      }
-    },
-
     async countExecutedSideEffects(
       ctx: restate.Context,
       increments: number
