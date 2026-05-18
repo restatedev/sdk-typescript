@@ -19,9 +19,17 @@ import {
   awakeable,
   sleep,
   run,
+  signal,
   resolveAwakeable,
   rejectAwakeable,
+  all,
+  allSettled,
+  any,
+  race,
+  spawn,
+  gen,
 } from "@restatedev/restate-sdk-gen";
+import { setTimeout } from "node:timers/promises";
 
 type AwaitAwakeableOrTimeoutCmd = {
   type: "awaitAwakeableOrTimeout";
@@ -45,6 +53,22 @@ type AwaitAnySuccessfulCmd = {
   type: "awaitAnySuccessful";
   commands: SubCommand[];
 };
+type AwaitFirstSucceededOrAllFailedCmd = {
+  type: "awaitFirstSucceededOrAllFailed";
+  commands: SubCommand[];
+};
+type AwaitFirstCompletedCmd = {
+  type: "awaitFirstCompleted";
+  commands: SubCommand[];
+};
+type AwaitAllSucceededOrFirstFailedCmd = {
+  type: "awaitAllSucceededOrFirstFailed";
+  commands: SubCommand[];
+};
+type AwaitAllCompletedCmd = {
+  type: "awaitAllCompleted";
+  commands: SubCommand[];
+};
 
 type Command =
   | AwaitAwakeableOrTimeoutCmd
@@ -53,20 +77,28 @@ type Command =
   | GetEnvVarCmd
   | AwaitOneCmd
   | AwaitAnyCmd
-  | AwaitAnySuccessfulCmd;
+  | AwaitAnySuccessfulCmd
+  | AwaitFirstSucceededOrAllFailedCmd
+  | AwaitFirstCompletedCmd
+  | AwaitAllSucceededOrFirstFailedCmd
+  | AwaitAllCompletedCmd;
 
 type CreateAwakeableSub = { type: "createAwakeable"; awakeableKey: string };
 type SleepSub = { type: "sleep"; timeoutMillis: number };
+type RunReturnsSub = { type: "runReturns"; value: string };
 type RunThrowTerminalSub = {
   type: "runThrowTerminalException";
   reason: string;
 };
-type SubCommand = CreateAwakeableSub | SleepSub | RunThrowTerminalSub;
+type CreateSignalSub = { type: "createSignal"; signalName: string };
+type SubCommand =
+  | CreateAwakeableSub
+  | SleepSub
+  | RunReturnsSub
+  | RunThrowTerminalSub
+  | CreateSignalSub;
 
 type State = { results: string[]; [k: `awk-${string}`]: string };
-
-type SubFutureKind = "awakeable" | "sleep" | "run";
-type SubEntry = { kind: SubFutureKind; future: Future<unknown> };
 
 export const virtualObjectCommandInterpreter = object({
   name: "VirtualObjectCommandInterpreter",
@@ -95,39 +127,38 @@ export const virtualObjectCommandInterpreter = object({
     *interpretCommands(req: { commands: Command[] }) {
       let result = "";
 
-      function* createSub(
-        cmd: SubCommand
-      ): Generator<unknown, SubEntry, unknown> {
+      function createSub(cmd: SubCommand): Future<string> {
         switch (cmd.type) {
           case "createAwakeable": {
             const { id, promise } = awakeable<string>();
             state<State>().set(`awk-${cmd.awakeableKey}`, id);
-            return { kind: "awakeable", future: promise };
+            return promise;
           }
           case "sleep":
-            return { kind: "sleep", future: sleep(cmd.timeoutMillis) };
+            return spawn(
+              gen(function* () {
+                yield* sleep(cmd.timeoutMillis);
+                return "sleep";
+              })
+            );
+          case "runReturns":
+            return run(
+              async () => {
+                await setTimeout(1);
+                return cmd.value;
+              },
+              { name: "runReturns" }
+            );
           case "runThrowTerminalException":
-            return {
-              kind: "run",
-              future: run(
-                async () => {
-                  throw new restate.TerminalError(cmd.reason);
-                },
-                { name: "run should fail command" }
-              ),
-            };
+            return run(
+              async () => {
+                throw new restate.TerminalError(cmd.reason);
+              },
+              { name: "run should fail command" }
+            );
+          case "createSignal":
+            return signal<string>(cmd.signalName);
         }
-      }
-
-      function* awaitSub(
-        kind: SubFutureKind,
-        future: Future<unknown>
-      ): Generator<unknown, string, unknown> {
-        if (kind === "sleep") {
-          yield* future;
-          return "sleep";
-        }
-        return (yield* future) as string;
       }
 
       for (const cmd of req.commands) {
@@ -167,36 +198,35 @@ export const virtualObjectCommandInterpreter = object({
             });
             break;
           case "awaitOne": {
-            const sub = yield* createSub(cmd.command);
-            result = yield* awaitSub(sub.kind, sub.future);
+            result = yield* createSub(cmd.command);
             break;
           }
           case "awaitAny": {
-            const subs: SubEntry[] = [];
-            for (const c of cmd.commands) subs.push(yield* createSub(c));
+            const subs: Future<string>[] = [];
+            for (const c of cmd.commands) subs.push(createSub(c));
             const branches: Record<string, Future<unknown>> = {};
             subs.forEach((s, i) => {
-              branches[String(i)] = s.future;
+              branches[String(i)] = s;
             });
             const r = yield* select(branches);
             const winner = subs[Number(r.tag)]!;
-            result = yield* awaitSub(winner.kind, winner.future);
+            result = yield* winner;
             break;
           }
           case "awaitAnySuccessful": {
-            const remaining: SubEntry[] = [];
-            for (const c of cmd.commands) remaining.push(yield* createSub(c));
+            const remaining: Future<string>[] = [];
+            for (const c of cmd.commands) remaining.push(createSub(c));
             let found = false;
             while (remaining.length > 0) {
               const branches: Record<string, Future<unknown>> = {};
               remaining.forEach((s, i) => {
-                branches[String(i)] = s.future;
+                branches[String(i)] = s;
               });
               const r = yield* select(branches);
               const idx = Number(r.tag);
               const winner = remaining[idx]!;
               try {
-                result = yield* awaitSub(winner.kind, winner.future);
+                result = yield* winner;
                 found = true;
                 break;
               } catch (e) {
@@ -206,6 +236,32 @@ export const virtualObjectCommandInterpreter = object({
               }
             }
             if (!found) throw new restate.TerminalError("All commands failed");
+            break;
+          }
+          case "awaitFirstSucceededOrAllFailed": {
+            // any() rejects only when ALL fail; first success wins.
+            result = yield* any(cmd.commands.map(createSub));
+            break;
+          }
+          case "awaitFirstCompleted": {
+            // race() settles with the first future to complete.
+            result = yield* race(cmd.commands.map(createSub));
+            break;
+          }
+          case "awaitAllSucceededOrFirstFailed": {
+            const results = yield* all(cmd.commands.map(createSub));
+            result = results.join("|");
+            break;
+          }
+          case "awaitAllCompleted": {
+            const settled = yield* allSettled(cmd.commands.map(createSub));
+            result = settled
+              .map((r) =>
+                r.status === "rejected"
+                  ? `err:${(r.reason as Error).message}`
+                  : `ok:${r.value}`
+              )
+              .join("|");
             break;
           }
         }

@@ -16,8 +16,7 @@ import {
   handlerRequest,
   cancel,
   run,
-  sleep,
-  all,
+  invocation,
 } from "@restatedev/restate-sdk-gen";
 
 export const testUtilsService = service({
@@ -61,8 +60,20 @@ export const testUtilsService = service({
       cancel(invocationId as restate.InvocationId);
     },
 
-    *sleepConcurrently(millisList: number[]) {
-      yield* all(millisList.map((ms) => sleep(ms)));
+    *resolveSignal(req: {
+      invocationId: string;
+      signalName: string;
+      value: string;
+    }) {
+      invocation(req.invocationId).signal(req.signalName).resolve(req.value);
+    },
+
+    *rejectSignal(req: {
+      invocationId: string;
+      signalName: string;
+      reason: string;
+    }) {
+      invocation(req.invocationId).signal(req.signalName).reject(req.reason);
     },
   },
 });

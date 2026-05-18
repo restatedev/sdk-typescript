@@ -70,7 +70,6 @@ jobs:
             }
 
       ### Download the Restate container image, if needed
-      # Setup restate snapshot if necessary
       # Due to https://github.com/actions/upload-artifact/issues/53
       # We must use download-artifact to get artifacts created during *this* workflow run, ie by workflow call
       - name: Download restate snapshot from in-progress workflow
@@ -132,39 +131,14 @@ jobs:
           printf "SERVICES=MemoryLeakProbe\n" >> "$env_file"
           echo "path=$env_file" >> "$GITHUB_OUTPUT"
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: "temurin"
-          java-version: "21"
-
-      - name: Download test tool
-        shell: bash
-        run: wget --no-verbose https://github.com/restatedev/sdk-test-suite/releases/download/v4.1/restate-sdk-test-suite.jar
-
       - name: Run test tool
-        env:
-          RESTATE_CONTAINER_IMAGE: ${{ inputs.restateCommit != '' && 'localhost/restatedev/restate-commit-download:latest' || (inputs.restateImage != '' && inputs.restateImage || 'ghcr.io/restatedev/restate:main') }}
-        shell: bash
-        run: |
-          java -jar restate-sdk-test-suite.jar run \
-            --exclusions-file=packages/tests/restate-e2e-services/exclusions.yaml \
-            --service-container-env-file=${{ steps.service-env.outputs.path }} \
-            --custom-tests-file=packages/tests/restate-e2e-services/custom_tests_fetch.yaml \
-            --test-suite=default \
-            --test-name=Custom \
-            --report-dir=test-report \
-            ${{ inputs.serviceImage != '' && inputs.serviceImage || 'restatedev/typescript-test-services' }}
-
-      - uses: actions/upload-artifact@v4
-        if: ${{ always() }}
+        uses: restatedev/e2e/sdk-tests@v2.0
         with:
-          name: sdk-typescript-fetch-integration-test-report
-          path: test-report
-
-      - name: Publish Test Results
-        uses: EnricoMi/publish-unit-test-result-action@v2
-        if: ${{ always() }}
-        with:
-          files: |
-            test-report/*/*.xml
+          restateContainerImage: ${{ inputs.restateCommit != '' && 'localhost/restatedev/restate-commit-download:latest' || (inputs.restateImage != '' && inputs.restateImage || 'ghcr.io/restatedev/restate:main') }}
+          serviceContainerImage: ${{ inputs.serviceImage != '' && inputs.serviceImage || 'restatedev/typescript-test-services' }}
+          exclusionsFile: "packages/tests/restate-e2e-services/exclusions.yaml"
+          customTestsFile: "packages/tests/restate-e2e-services/custom_tests_fetch.yaml"
+          serviceContainerEnvFile: ${{ steps.service-env.outputs.path }}
+          testSuite: default
+          testName: Custom
+          testArtifactOutput: sdk-typescript-fetch-integration-test-report

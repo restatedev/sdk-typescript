@@ -49,6 +49,11 @@ on:
         required: false
         type: string
         description: name of the test artifact output
+      sdkRepoRef:
+        required: false
+        default: ""
+        type: string
+        description: REF to the sdk repo branch/commit, passed to github action ref
 
 jobs:
   sdk-test-suite:
@@ -69,6 +74,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: restatedev/sdk-typescript
+          ref: ${{ inputs.sdkRepoRef }}
 
       - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
@@ -147,7 +153,7 @@ jobs:
           cache-to: type=gha,url=http://127.0.0.1:49160/,mode=max,version=1,scope=${{ github.workflow }}
 
       - name: Run test tool
-        uses: restatedev/sdk-test-suite@v4.1
+        uses: restatedev/e2e/sdk-tests@v2.0
         with:
           restateContainerImage: ${{ inputs.restateCommit != '' && 'localhost/restatedev/restate-commit-download:latest' || (inputs.restateImage != '' && inputs.restateImage || 'ghcr.io/restatedev/restate:main') }}
           serviceContainerImage: ${{ inputs.serviceImage != '' && inputs.serviceImage || 'restatedev/typescript-test-services' }}
