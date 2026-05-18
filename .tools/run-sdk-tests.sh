@@ -22,10 +22,11 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SDK_TEST_SUITE_VERSION="$(grep -m1 'uses: restatedev/e2e/sdk-tests@' \
   "${REPO_ROOT}/.github/workflows/integration.yaml" | sed 's/.*@//' | tr -d ' ')"
 
-JAR_PATH="${REPO_ROOT}/tmp/sdk-tests-${SDK_TEST_SUITE_VERSION}.jar"
+JAR_PATH="${REPO_ROOT}/sdk-tests.jar"
 JAR_URL="https://github.com/restatedev/e2e/releases/download/${SDK_TEST_SUITE_VERSION}/sdk-tests.jar"
 RESTATE_IMAGE="${RESTATE_CONTAINER_IMAGE:-ghcr.io/restatedev/restate:main}"
-REPORT_DIR="${REPO_ROOT}/tmp/test-report"
+DATE="$(date +%Y%m%d-%H%M%S)"
+REPORT_DIR="${REPO_ROOT}/test-report/${DATE}"
 
 # ---- Detect container runtime ----
 if command -v podman &>/dev/null; then

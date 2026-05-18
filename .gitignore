@@ -15,8 +15,9 @@ packages/*/buf.lock
 .api/*
 !.api/.gitkeep
 
-test_report
+test-report
 restate-sdk-test-suite.jar
+sdk-tests.jar
 
 .restate
 
