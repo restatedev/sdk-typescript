@@ -10,11 +10,17 @@
 import * as restate from "@restatedev/restate-sdk";
 import { REGISTRY } from "./services.js";
 
+import { setTimeout } from "node:timers/promises";
 import * as process from "node:process";
 import type { ObjectContext } from "@restatedev/restate-sdk";
 import { RestatePromise, TerminalError } from "@restatedev/restate-sdk";
 
-type AwaitableCommand = CreateAwakeable | Sleep | RunThrowTerminalException;
+type AwaitableCommand =
+  | CreateAwakeable
+  | Sleep
+  | RunReturns
+  | RunThrowTerminalException
+  | CreateSignal;
 
 interface CreateAwakeable {
   type: "createAwakeable";
@@ -26,9 +32,19 @@ interface Sleep {
   timeoutMillis: number;
 }
 
+interface RunReturns {
+  type: "runReturns";
+  value: string;
+}
+
 interface RunThrowTerminalException {
   type: "runThrowTerminalException";
   reason: string;
+}
+
+interface CreateSignal {
+  type: "createSignal";
+  signalName: string;
 }
 
 type Command =
@@ -36,6 +52,10 @@ type Command =
   | AwaitAny
   | AwaitOne
   | AwaitAwakeableOrTimeout
+  | AwaitFirstSucceededOrAllFailed
+  | AwaitFirstCompleted
+  | AwaitAllSucceededOrFirstFailed
+  | AwaitAllCompleted
   | ResolveAwakeable
   | RejectAwakeable
   | GetEnvVariable;
@@ -59,6 +79,26 @@ interface AwaitAwakeableOrTimeout {
   type: "awaitAwakeableOrTimeout";
   awakeableKey: string;
   timeoutMillis: number;
+}
+
+interface AwaitFirstSucceededOrAllFailed {
+  type: "awaitFirstSucceededOrAllFailed";
+  commands: AwaitableCommand[];
+}
+
+interface AwaitFirstCompleted {
+  type: "awaitFirstCompleted";
+  commands: AwaitableCommand[];
+}
+
+interface AwaitAllSucceededOrFirstFailed {
+  type: "awaitAllSucceededOrFirstFailed";
+  commands: AwaitableCommand[];
+}
+
+interface AwaitAllCompleted {
+  type: "awaitAllCompleted";
+  commands: AwaitableCommand[];
 }
 
 interface ResolveAwakeable {
@@ -97,10 +137,19 @@ function parseAwaitableCommand(
       return createAwakeable(ctx, command.awakeableKey);
     case "sleep":
       return ctx.sleep(command.timeoutMillis).map(() => "sleep");
+    case "runReturns":
+      return ctx.run<string>(async () => {
+        await setTimeout(1);
+        return command.value;
+      });
     case "runThrowTerminalException":
       return ctx.run<string>(() => {
         throw new TerminalError(command.reason);
       });
+    case "createSignal": {
+      const ctxInternal = ctx as unknown as restate.internal.ContextInternal;
+      return ctxInternal.signal<string>(command.signalName);
+    }
   }
 }
 
@@ -186,11 +235,41 @@ const virtualObjectCommandInterpreter = restate.object({
               lastResult = await parseAwaitableCommand(ctx, command.command);
               break;
             case "awaitAwakeableOrTimeout":
-              await awaitAwakeableOrTimeout(ctx, {
+              lastResult = await awaitAwakeableOrTimeout(ctx, {
                 awakeableKey: command.awakeableKey,
                 timeoutMillis: command.timeoutMillis,
               });
               break;
+            case "awaitFirstSucceededOrAllFailed":
+              lastResult = await RestatePromise.any(
+                command.commands.map((cmd) => parseAwaitableCommand(ctx, cmd))
+              );
+              break;
+            case "awaitFirstCompleted":
+              lastResult = await RestatePromise.race(
+                command.commands.map((cmd) => parseAwaitableCommand(ctx, cmd))
+              );
+              break;
+            case "awaitAllSucceededOrFirstFailed": {
+              const results = await RestatePromise.all(
+                command.commands.map((cmd) => parseAwaitableCommand(ctx, cmd))
+              );
+              lastResult = results.join("|");
+              break;
+            }
+            case "awaitAllCompleted": {
+              const settled = await RestatePromise.allSettled(
+                command.commands.map((cmd) => parseAwaitableCommand(ctx, cmd))
+              );
+              lastResult = settled
+                .map((r) =>
+                  r.status === "fulfilled"
+                    ? `ok:${r.value}`
+                    : `err:${(r.reason as Error).message}`
+                )
+                .join("|");
+              break;
+            }
             case "resolveAwakeable":
               await resolveAwakeable(ctx, {
                 awakeableKey: command.awakeableKey,

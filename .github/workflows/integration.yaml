@@ -153,7 +153,7 @@ jobs:
           cache-to: type=gha,url=http://127.0.0.1:49160/,mode=max,version=1,scope=${{ github.workflow }}
 
       - name: Run test tool
-        uses: restatedev/e2e/sdk-tests@v1.0
+        uses: restatedev/e2e/sdk-tests@v2.0
         with:
           restateContainerImage: ${{ inputs.restateCommit != '' && 'localhost/restatedev/restate-commit-download:latest' || (inputs.restateImage != '' && inputs.restateImage || 'ghcr.io/restatedev/restate:main') }}
           serviceContainerImage: ${{ inputs.serviceImage != '' && inputs.serviceImage || 'restatedev/typescript-test-services' }}
