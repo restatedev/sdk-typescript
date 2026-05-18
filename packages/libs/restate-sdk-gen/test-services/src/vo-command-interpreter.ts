@@ -100,9 +100,6 @@ type SubCommand =
 
 type State = { results: string[]; [k: `awk-${string}`]: string };
 
-type SubFutureKind = "awakeable" | "sleep" | "run";
-type SubEntry = { kind: SubFutureKind; future: Future<string> };
-
 export const virtualObjectCommandInterpreter = object({
   name: "VirtualObjectCommandInterpreter",
   handlers: {
@@ -130,51 +127,37 @@ export const virtualObjectCommandInterpreter = object({
     *interpretCommands(req: { commands: Command[] }) {
       let result = "";
 
-      function* createSub(
-        cmd: SubCommand
-      ): Generator<unknown, SubEntry, unknown> {
+      function createSub(cmd: SubCommand): Future<string> {
         switch (cmd.type) {
           case "createAwakeable": {
             const { id, promise } = awakeable<string>();
             state<State>().set(`awk-${cmd.awakeableKey}`, id);
-            return { kind: "awakeable", future: promise };
+            return promise;
           }
           case "sleep":
-            return {
-              kind: "sleep",
-              future: spawn(
-                gen(function* () {
-                  yield* sleep(cmd.timeoutMillis);
-                  return "sleep";
-                })
-              ),
-            };
+            return spawn(
+              gen(function* () {
+                yield* sleep(cmd.timeoutMillis);
+                return "sleep";
+              })
+            );
           case "runReturns":
-            return {
-              kind: "run",
-              future: run(
-                async () => {
-                  await setTimeout(1);
-                  return cmd.value;
-                },
-                { name: "runReturns" }
-              ),
-            };
+            return run(
+              async () => {
+                await setTimeout(1);
+                return cmd.value;
+              },
+              { name: "runReturns" }
+            );
           case "runThrowTerminalException":
-            return {
-              kind: "run",
-              future: run(
-                async () => {
-                  throw new restate.TerminalError(cmd.reason);
-                },
-                { name: "run should fail command" }
-              ),
-            };
+            return run(
+              async () => {
+                throw new restate.TerminalError(cmd.reason);
+              },
+              { name: "run should fail command" }
+            );
           case "createSignal":
-            return {
-              kind: "awakeable",
-              future: signal<string>(cmd.signalName),
-            };
+            return signal<string>(cmd.signalName);
         }
       }
 
@@ -215,36 +198,35 @@ export const virtualObjectCommandInterpreter = object({
             });
             break;
           case "awaitOne": {
-            const sub = yield* createSub(cmd.command);
-            result = yield* sub.future;
+            result = yield* createSub(cmd.command);
             break;
           }
           case "awaitAny": {
-            const subs: SubEntry[] = [];
-            for (const c of cmd.commands) subs.push(yield* createSub(c));
+            const subs: Future<string>[] = [];
+            for (const c of cmd.commands) subs.push(createSub(c));
             const branches: Record<string, Future<unknown>> = {};
             subs.forEach((s, i) => {
-              branches[String(i)] = s.future;
+              branches[String(i)] = s;
             });
             const r = yield* select(branches);
             const winner = subs[Number(r.tag)]!;
-            result = yield* winner.future;
+            result = yield* winner;
             break;
           }
           case "awaitAnySuccessful": {
-            const remaining: SubEntry[] = [];
-            for (const c of cmd.commands) remaining.push(yield* createSub(c));
+            const remaining: Future<string>[] = [];
+            for (const c of cmd.commands) remaining.push(createSub(c));
             let found = false;
             while (remaining.length > 0) {
               const branches: Record<string, Future<unknown>> = {};
               remaining.forEach((s, i) => {
-                branches[String(i)] = s.future;
+                branches[String(i)] = s;
               });
               const r = yield* select(branches);
               const idx = Number(r.tag);
               const winner = remaining[idx]!;
               try {
-                result = yield* winner.future;
+                result = yield* winner;
                 found = true;
                 break;
               } catch (e) {
@@ -257,30 +239,22 @@ export const virtualObjectCommandInterpreter = object({
             break;
           }
           case "awaitFirstSucceededOrAllFailed": {
-            const subs: SubEntry[] = [];
-            for (const c of cmd.commands) subs.push(yield* createSub(c));
             // any() rejects only when ALL fail; first success wins.
-            result = yield* any(subs.map((s) => s.future));
+            result = yield* any(cmd.commands.map(createSub));
             break;
           }
           case "awaitFirstCompleted": {
-            const subs: SubEntry[] = [];
-            for (const c of cmd.commands) subs.push(yield* createSub(c));
             // race() settles with the first future to complete.
-            result = yield* race(subs.map((s) => s.future));
+            result = yield* race(cmd.commands.map(createSub));
             break;
           }
           case "awaitAllSucceededOrFirstFailed": {
-            const subs: SubEntry[] = [];
-            for (const c of cmd.commands) subs.push(yield* createSub(c));
-            const results = yield* all(subs.map((s) => s.future));
+            const results = yield* all(cmd.commands.map(createSub));
             result = results.join("|");
             break;
           }
           case "awaitAllCompleted": {
-            const subs: SubEntry[] = [];
-            for (const c of cmd.commands) subs.push(yield* createSub(c));
-            const settled = yield* allSettled(subs.map((s) => s.future));
+            const settled = yield* allSettled(cmd.commands.map(createSub));
             result = settled
               .map((r) =>
                 r.status === "rejected"
