@@ -161,4 +161,3 @@ jobs:
           customTestsFile: "packages/tests/restate-e2e-services/custom_tests.yaml"
           envVars: ${{ inputs.envVars }}
           testArtifactOutput: ${{ inputs.testArtifactOutput != '' && inputs.testArtifactOutput || 'sdk-typescript-integration-test-report' }}
-          serviceContainerEnvFile: "packages/tests/restate-e2e-services/.env"
