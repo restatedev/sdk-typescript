@@ -178,17 +178,6 @@ export const virtualObjectCommandInterpreter = object({
         }
       }
 
-      function* awaitSub(
-        kind: SubFutureKind,
-        future: Future<unknown>
-      ): Generator<unknown, string, unknown> {
-        if (kind === "sleep") {
-          yield* future;
-          return "sleep";
-        }
-        return (yield* future) as string;
-      }
-
       for (const cmd of req.commands) {
         switch (cmd.type) {
           case "awaitAwakeableOrTimeout": {
@@ -227,7 +216,7 @@ export const virtualObjectCommandInterpreter = object({
             break;
           case "awaitOne": {
             const sub = yield* createSub(cmd.command);
-            result = yield* awaitSub(sub.kind, sub.future);
+            result = yield* sub.future;
             break;
           }
           case "awaitAny": {
@@ -239,7 +228,7 @@ export const virtualObjectCommandInterpreter = object({
             });
             const r = yield* select(branches);
             const winner = subs[Number(r.tag)]!;
-            result = yield* awaitSub(winner.kind, winner.future);
+            result = yield* winner.future;
             break;
           }
           case "awaitAnySuccessful": {
@@ -255,7 +244,7 @@ export const virtualObjectCommandInterpreter = object({
               const idx = Number(r.tag);
               const winner = remaining[idx]!;
               try {
-                result = yield* awaitSub(winner.kind, winner.future);
+                result = yield* winner.future;
                 found = true;
                 break;
               } catch (e) {
