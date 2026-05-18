@@ -10,7 +10,7 @@ on:
   push:
     branches: [main, release-**]
   schedule:
-    - cron: "0 */6 * * *" # Every 6 hours
+    - cron: "*/30 * * * *"
   workflow_dispatch:
     inputs:
       restateCommit:
