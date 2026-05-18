@@ -158,3 +158,4 @@ jobs:
           exclusionsFile: "packages/libs/restate-sdk-gen/test-services/exclusions.yaml"
           envVars: ${{ inputs.envVars }}
           testArtifactOutput: ${{ inputs.testArtifactOutput != '' && inputs.testArtifactOutput || 'sdk-typescript-restate-sdk-gen-integration-test-report' }}
+          serviceContainerEnvFile: "packages/libs/restate-sdk-gen/test-services/.env"
