@@ -3,6 +3,16 @@ packages:
   - packages/tests/*
   - packages/examples/*
 
+allowBuilds:
+  cpu-features: false
+  esbuild: false
+  heapdump: true
+  protobufjs: false
+  sharp: false
+  ssh2: false
+  unrs-resolver: false
+  workerd: false
+
 catalog:
   zod: ^4.2.0
 
