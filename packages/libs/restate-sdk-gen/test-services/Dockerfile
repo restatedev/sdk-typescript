@@ -2,7 +2,7 @@
 # sdk-test-suite (the same harness that exercises restate-e2e-services).
 # Build context MUST be the sdk-typescript workspace root.
 
-FROM node:20
+FROM node:22
 
 WORKDIR /usr/src/app
 
@@ -10,7 +10,7 @@ WORKDIR /usr/src/app
 # endpoint down cleanly between scenarios.
 RUN apt-get update && apt-get install -y tini && rm -rf /var/lib/apt/lists/*
 
-RUN corepack enable && corepack prepare pnpm@10.13.1 --activate
+RUN corepack enable && corepack prepare pnpm@11.1.3 --activate
 
 # Whole workspace — needed because @restatedev/restate-sdk-gen has
 # workspace deps (@restatedev/restate-sdk, restate-sdk-clients, …) that

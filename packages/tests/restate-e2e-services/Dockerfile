@@ -1,12 +1,12 @@
-FROM node:20
+FROM node:22
 
 WORKDIR /usr/src/app
 
-# Install Tini (node:20 already includes python3, make, g++ for native modules)
+# Install Tini (node:22 already includes python3, make, g++ for native modules)
 RUN apt-get update && apt-get install -y tini
 
 # Install pnpm
-RUN corepack enable && corepack prepare pnpm@10.13.1 --activate
+RUN corepack enable && corepack prepare pnpm@11.1.3 --activate
 
 COPY . .
 
