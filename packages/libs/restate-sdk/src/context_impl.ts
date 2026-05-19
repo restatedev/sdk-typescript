@@ -70,6 +70,7 @@ import {
   SingleRestatePromise,
 } from "./promises.js";
 import { InputPump, OutputPump } from "./io.js";
+import { ExternalProgressChannel } from "./utils/external_progress_channel.js";
 import type {
   ContextInternal,
   InvocationReference,
@@ -94,6 +95,7 @@ export class ContextImpl
   };
 
   private readonly outputPump: OutputPump;
+  readonly inputPump: InputPump;
   private readonly runClosuresTracker: RunClosuresTracker;
   readonly promisesExecutor: PromisesExecutor;
   private readonly serviceKey: string;
@@ -130,12 +132,19 @@ export class ContextImpl
       // }
     });
     this.outputPump = new OutputPump(coreVm, outputWriter);
-    this.runClosuresTracker = new RunClosuresTracker();
+    const externalProgressChannel = new ExternalProgressChannel();
+    this.runClosuresTracker = new RunClosuresTracker(externalProgressChannel);
+    this.inputPump = new InputPump(
+      coreVm,
+      inputReader,
+      externalProgressChannel,
+      this.abortAttempt.bind(this)
+    );
     this.promisesExecutor = new PromisesExecutor(
       coreVm,
-      new InputPump(coreVm, inputReader, this.abortAttempt.bind(this)),
       this.outputPump,
       this.runClosuresTracker,
+      externalProgressChannel,
       this.abortAttempt.bind(this)
     );
     this.serviceKey = input.key;
@@ -965,11 +974,12 @@ class DurablePromiseImpl<T> implements DurablePromise<T> {
 
 /// Tracker of run closures to run
 export class RunClosuresTracker {
-  private currentRunWaitPoint?: CompletablePromise<void>;
   private runsToExecute: Map<number, () => Promise<any>> = new Map<
     number,
     () => Promise<any>
   >();
+
+  constructor(private readonly channel: ExternalProgressChannel) {}
 
   executeRun(handle: number) {
     const runClosure = this.runsToExecute.get(handle);
@@ -977,29 +987,12 @@ export class RunClosuresTracker {
       throw new Error(`Handle ${handle} doesn't exist`);
     }
     runClosure()
-      .finally(() => {
-        this.unblockCurrentRunWaitPoint();
-      })
+      .finally(() => this.channel.signal())
       .catch(() => {});
   }
 
   registerRunClosure(handle: number, runClosure: () => Promise<any>) {
     this.runsToExecute.set(handle, runClosure);
-  }
-
-  awaitNextCompletedRun(): Promise<void> {
-    if (this.currentRunWaitPoint === undefined) {
-      this.currentRunWaitPoint = new CompletablePromise();
-    }
-    return this.currentRunWaitPoint.promise;
-  }
-
-  private unblockCurrentRunWaitPoint() {
-    if (this.currentRunWaitPoint !== undefined) {
-      const p = this.currentRunWaitPoint;
-      this.currentRunWaitPoint = undefined;
-      p.resolve();
-    }
   }
 }
 

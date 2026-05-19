@@ -26,7 +26,8 @@ import {
 import { CompletablePromise } from "./utils/completable_promise.js";
 import type { ContextImpl, RunClosuresTracker } from "./context_impl.js";
 import { setImmediate } from "node:timers/promises";
-import type { InputPump, OutputPump } from "./io.js";
+import type { OutputPump } from "./io.js";
+import type { ExternalProgressChannel } from "./utils/external_progress_channel.js";
 import type { Duration } from "@restatedev/restate-sdk-core";
 
 // A promise that is never completed
@@ -504,9 +505,9 @@ export class ConstRestatePromise<T> extends InternalRestatePromise<T> {
 export class PromisesExecutor {
   constructor(
     private readonly coreVm: vm.WasmVM,
-    private readonly inputPump: InputPump,
     private readonly outputPump: OutputPump,
     private readonly runClosuresTracker: RunClosuresTracker,
+    private readonly externalProgressChannel: ExternalProgressChannel,
     private readonly errorCallback: (e: any) => void
   ) {}
 
@@ -561,10 +562,8 @@ export class PromisesExecutor {
           // In this scenario, we might need to write some stuff out which might be in the shared-core buffer.
           await this.outputPump.awaitNextProgress();
 
-          await Promise.race([
-            this.inputPump.awaitNextProgress(),
-            this.runClosuresTracker.awaitNextCompletedRun(),
-          ]);
+          // Await next external progress
+          await this.externalProgressChannel.awaitNext();
         } else if (doProgressResult === "CancelSignalReceived") {
           restatePromise.tryCancel();
           return;

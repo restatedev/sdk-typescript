@@ -12,56 +12,59 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import type * as vm from "./endpoint/handlers/vm/sdk_shared_core_wasm_bindings.js";
-import { pendingPromise } from "./promises.js";
 import { InputReader, OutputWriter } from "./endpoint/handlers/types.js";
+import { ExternalProgressChannel } from "./utils/external_progress_channel.js";
 
 /**
- * Adapter between input stream and vm. It moves forward when [awaitNextProgress] is invoked.
+ * Adapter between input stream and vm.
+ *
+ * It starts a detached promise that fills the vm with input.
+ * Each read (value or input-closed) emits a signal on the shared {@link ExternalProgressChannel}.
  */
 export class InputPump {
-  private currentRead?: Promise<void>;
-  private closed: boolean;
+  private stopped = false;
+  private readonly runDone: Promise<InputReader>;
 
   constructor(
     private readonly coreVm: vm.WasmVM,
     private readonly inputReader: InputReader,
+    private readonly channel: ExternalProgressChannel,
     private readonly errorCallback: (e: any) => void
   ) {
-    this.closed = false;
+    this.runDone = this.run()
+      .catch(() => {})
+      .then(() => this.inputReader);
   }
 
-  // This function triggers a read on the input reader,
-  // and will notify the caller that a read was executed
-  // and the result was piped in the state machine.
-  awaitNextProgress(): Promise<void> {
-    if (this.currentRead === undefined) {
-      // Register a new read
-      this.currentRead = this.readNext().finally(() => {
-        this.currentRead = undefined;
-      });
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-misused-promises
-    return new Promise<void>((resolve) => this.currentRead?.finally(resolve));
+  /**
+   * Stop the pump.
+   * Once finished, returns back the ownership of the input reader for further usage.
+   */
+  stop(): Promise<InputReader> {
+    this.stopped = true;
+    return this.runDone;
   }
 
-  private async readNext(): Promise<void> {
-    if (this.closed) {
-      return pendingPromise<void>();
-    }
-    // Take input, and notify it to the vm
-    let nextValue;
-    try {
-      nextValue = await this.inputReader.next();
-    } catch (e) {
-      this.errorCallback(e);
-      return pendingPromise<void>();
-    }
-    if (nextValue.done) {
-      this.closed = true;
-      this.coreVm.notify_input_closed();
-    } else if (nextValue.value !== undefined) {
-      this.coreVm.notify_input(nextValue.value);
+  private async run(): Promise<void> {
+    while (!this.stopped) {
+      let nextValue;
+      try {
+        nextValue = await this.inputReader.next();
+      } catch (e) {
+        if (this.stopped) return;
+        this.errorCallback(e);
+        return;
+      }
+      if (this.stopped) return;
+      if (nextValue.done) {
+        this.coreVm.notify_input_closed();
+        this.channel.signal();
+        return;
+      }
+      if (nextValue.value !== undefined) {
+        this.coreVm.notify_input(nextValue.value);
+        this.channel.signal();
+      }
     }
   }
 }
