@@ -13,7 +13,7 @@ jobs:
     runs-on: warp-ubuntu-latest-x64-4x
     strategy:
       matrix:
-        node-version: [20.x]
+        node-version: [22.x]
 
     steps:
       - uses: actions/checkout@v4
@@ -75,7 +75,7 @@ jobs:
     runs-on: warp-ubuntu-latest-x64-4x
     strategy:
       matrix:
-        node-version: [20.x]
+        node-version: [22.x]
 
     steps:
       - uses: actions/checkout@v4

@@ -23,7 +23,6 @@ import {
   TerminalError,
   TimeoutError,
 } from "./types/errors.js";
-import { CompletablePromise } from "./utils/completable_promise.js";
 import type { ContextImpl, RunClosuresTracker } from "./context_impl.js";
 import { setImmediate } from "node:timers/promises";
 import type { OutputPump } from "./io.js";
@@ -103,7 +102,7 @@ function extractContext(n: any): ContextImpl | undefined {
 abstract class BaseRestatePromise<T> extends InternalRestatePromise<T> {
   [RESTATE_CTX_SYMBOL]: ContextImpl;
   private pollingPromise?: Promise<any>;
-  private cancelPromise: CompletablePromise<any> = new CompletablePromise();
+  private cancelPromise: PromiseWithResolvers<any> = Promise.withResolvers();
 
   protected constructor(ctx: ContextImpl) {
     super();
@@ -191,14 +190,15 @@ abstract class BaseRestatePromise<T> extends InternalRestatePromise<T> {
 
 export class SingleRestatePromise<T> extends BaseRestatePromise<T> {
   private state: PromiseState = PromiseState.NOT_COMPLETED;
-  private completablePromise: CompletablePromise<T> = new CompletablePromise();
+  private completablePromise: PromiseWithResolvers<T> =
+    Promise.withResolvers();
 
   constructor(
     ctx: ContextImpl,
     readonly handle: number,
     private readonly completer: (
       value: AsyncResultValue,
-      prom: CompletablePromise<T>
+      prom: PromiseWithResolvers<T>
     ) => Promise<void>
   ) {
     super(ctx);
@@ -244,7 +244,7 @@ export class InvocationRestatePromise<T>
     handle: number,
     completer: (
       value: AsyncResultValue,
-      prom: CompletablePromise<T>
+      prom: PromiseWithResolvers<T>
     ) => Promise<void>,
     private readonly invocationIdPromise: Promise<InvocationId>
   ) {

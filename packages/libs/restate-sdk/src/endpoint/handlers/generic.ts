@@ -31,7 +31,6 @@ import { CommandError, ContextImpl } from "../../context_impl.js";
 import { restoreError, sanitizeError } from "../../error_sanitization.js";
 import type { InvocationId, Request } from "../../context.js";
 import * as vm from "./vm/sdk_shared_core_wasm_bindings.js";
-import { CompletablePromise } from "../../utils/completable_promise.js";
 import { HandlerKind } from "../../types/rpc.js";
 import { createLogger, type Logger } from "../../logging/logger.js";
 import { DEFAULT_CONSOLE_LOGGER_LOG_LEVEL } from "../../logging/console_logger_transport.js";
@@ -376,7 +375,7 @@ class RestateInvokeResponse implements RestateResponse {
     // or an exception gets caught, or the state machine fails/suspends.
     //
     // The last case is handled internally within the ContextImpl.
-    const invocationEndPromise = new CompletablePromise<void>();
+    const invocationEndPromise = Promise.withResolvers<void>();
     let ctx: ContextImpl;
 
     // Initial phase before running user code

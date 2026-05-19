@@ -60,7 +60,6 @@ import type {
 } from "@restatedev/restate-sdk-core";
 import { millisOrDurationToMillis, serde } from "@restatedev/restate-sdk-core";
 import { RandImpl } from "./utils/rand.js";
-import { CompletablePromise } from "./utils/completable_promise.js";
 import { AsyncResultValue, CombinatorRestatePromise } from "./promises.js";
 import {
   ConstRestatePromise,
@@ -117,7 +116,7 @@ export class ContextImpl
     public readonly handlerKind: HandlerKind,
     readonly vmLogger: Console,
     private readonly invocationRequest: Request,
-    readonly invocationEndPromise: CompletablePromise<void>,
+    readonly invocationEndPromise: PromiseWithResolvers<void>,
     inputReader: InputReader,
     outputWriter: OutputWriter,
     readonly journalValueCodec: JournalValueCodec,
@@ -1000,7 +999,7 @@ export class RunClosuresTracker {
 
 type Completer = (
   value: AsyncResultValue,
-  prom: CompletablePromise<any>
+  prom: PromiseWithResolvers<any>
 ) => Promise<boolean>;
 
 // Wraps an error with command metadata so the centralized catch in
@@ -1036,8 +1035,8 @@ function completeCommandPromiseUsing<T>(
   commandType: WasmCommandType,
   commandIndex: number,
   ...completers: Array<Completer>
-): (value: AsyncResultValue, prom: CompletablePromise<T>) => Promise<void> {
-  return async (value: AsyncResultValue, prom: CompletablePromise<any>) => {
+): (value: AsyncResultValue, prom: PromiseWithResolvers<T>) => Promise<void> {
+  return async (value: AsyncResultValue, prom: PromiseWithResolvers<any>) => {
     try {
       for (const completer of completers) {
         if (await completer(value, prom)) {
@@ -1058,8 +1057,8 @@ function completeCommandPromiseUsing<T>(
 // This is like the function above, but won't decorate the error with the command metadata
 function completeSignalPromiseUsing<T>(
   ...completers: Array<Completer>
-): (value: AsyncResultValue, prom: CompletablePromise<T>) => Promise<void> {
-  return async (value: AsyncResultValue, prom: CompletablePromise<any>) => {
+): (value: AsyncResultValue, prom: PromiseWithResolvers<T>) => Promise<void> {
+  return async (value: AsyncResultValue, prom: PromiseWithResolvers<any>) => {
     for (const completer of completers) {
       if (await completer(value, prom)) {
         return;
