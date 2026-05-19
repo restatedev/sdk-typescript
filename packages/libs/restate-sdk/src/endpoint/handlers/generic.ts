@@ -473,7 +473,7 @@ class RestateInvokeResponse implements RestateResponse {
         await flushAndClose(
           this.coreVm,
           this.vmLogger,
-          inputReader,
+          Promise.resolve(inputReader),
           outputWriter
         );
       } finally {
@@ -505,7 +505,7 @@ class RestateInvokeResponse implements RestateResponse {
         await flushAndClose(
           this.coreVm,
           this.vmLogger,
-          inputReader,
+          ctx.inputPump.stop(),
           outputWriter
         );
       } finally {
@@ -674,7 +674,7 @@ function notifyError(
 async function flushAndClose(
   coreVm: vm.WasmVM,
   vmLogger: Logger,
-  inputReader: InputReader,
+  inputReaderGetter: Promise<InputReader>,
   outputWriter: OutputWriter
 ): Promise<void> {
   let inputClosed = false;
@@ -687,6 +687,11 @@ async function flushAndClose(
     }
 
     // --- After this point, we should have flushed the shared core internal buffer
+
+    // Wait for the input reader.
+    // In case we executed the user code, this is wired up to the InputPump.stop()
+    // to make sure there is only one reader for inputReader.
+    const inputReader = await inputReaderGetter;
 
     // Let's make sure we properly close the request stream before closing the response stream
     while (!inputClosed) {
