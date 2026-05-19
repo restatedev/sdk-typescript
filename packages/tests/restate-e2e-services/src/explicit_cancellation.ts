@@ -99,6 +99,12 @@ const explicitCancellationService = restate.service({
         runPromises.push(
           ctx.run(`long-running-${i}`, () => {
             return new Promise<string>((resolve) => {
+              // If the abort signal was already fired, adding the event listener later on wont fire it...
+              if (controller.signal.aborted) {
+                resolve("run-cancelled");
+                return;
+              }
+
               const timeout = globalThis.setTimeout(
                 () => resolve("not-cancelled"),
                 86400000
