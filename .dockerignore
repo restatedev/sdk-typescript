@@ -1,3 +1,9 @@
 node_modules
 build
 dist
+.restate
+tmp
+sdk-tests.jar
+sdk-shared-core-wasm-bindings/pkg
+sdk-shared-core-wasm-bindings/target
+.git
