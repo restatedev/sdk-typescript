@@ -19,12 +19,14 @@ import type {
   InvocationHandle,
   InvocationId,
   InvocationPromise,
+  InvocationReference,
   ObjectContext,
   Rand,
   Request,
   RestatePromise,
   RunAction,
   RunOptions,
+  SignalReference,
   WorkflowContext,
 } from "./context.js";
 import type * as vm from "./endpoint/handlers/vm/sdk_shared_core_wasm_bindings.js";
@@ -71,11 +73,7 @@ import {
 } from "./promises.js";
 import { InputPump, OutputPump } from "./io.js";
 import { ExternalProgressChannel } from "./utils/external_progress_channel.js";
-import type {
-  ContextInternal,
-  InvocationReference,
-  SignalReference,
-} from "./internal.js";
+import type { ContextInternal } from "./internal.js";
 import { InputReader, OutputWriter } from "./endpoint/handlers/types.js";
 import { ExecutionOptions } from "./endpoint/components.js";
 

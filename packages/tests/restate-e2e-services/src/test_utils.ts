@@ -57,7 +57,7 @@ const o = restate.service({
       invocationId: string
     ): Promise<void> {
       const id = restate.InvocationIdParser.fromString(invocationId);
-      ctx.cancel(id);
+      ctx.invocation(id).cancel();
       return Promise.resolve();
     },
 
@@ -65,8 +65,7 @@ const o = restate.service({
       ctx: restate.Context,
       req: { invocationId: string; signalName: string; value: string }
     ): Promise<void> {
-      const ctxInternal = ctx as unknown as restate.internal.ContextInternal;
-      ctxInternal
+      ctx
         .invocation(restate.InvocationIdParser.fromString(req.invocationId))
         .signal(req.signalName)
         .resolve(req.value);
@@ -77,8 +76,7 @@ const o = restate.service({
       ctx: restate.Context,
       req: { invocationId: string; signalName: string; reason: string }
     ): Promise<void> {
-      const ctxInternal = ctx as unknown as restate.internal.ContextInternal;
-      ctxInternal
+      ctx
         .invocation(restate.InvocationIdParser.fromString(req.invocationId))
         .signal(req.signalName)
         .reject(req.reason);
