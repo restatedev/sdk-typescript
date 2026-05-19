@@ -1,11 +1,16 @@
 use js_sys::Uint8Array;
-use restate_sdk_shared_core::{AwaitResponse, CallHandle, CommandRelationship, CommandType, CoreVM, Error, Header, HeaderMap, IdentityVerifier, ImplicitCancellationOption, Input, NonDeterministicChecksOption, NonEmptyValue, ResponseHead, RetryPolicy, RunExitResult, SendHandle, TakeOutputResult, Target, TerminalFailure, UnresolvedFuture, VMOptions, Value, CANCEL_NOTIFICATION_HANDLE, VM};
+use restate_sdk_shared_core::tracing_pretty::{Pretty, PrettyFields};
+use restate_sdk_shared_core::{
+    AwaitResponse, CallHandle, CommandRelationship, CommandType, CoreVM, Error, Header, HeaderMap,
+    IdentityVerifier, ImplicitCancellationOption, Input, NonDeterministicChecksOption,
+    NonEmptyValue, ResponseHead, RetryPolicy, RunExitResult, SendHandle, TakeOutputResult, Target,
+    TerminalFailure, UnresolvedFuture, VMOptions, Value, CANCEL_NOTIFICATION_HANDLE, VM,
+};
 use serde::{Deserialize, Serialize};
 use std::cmp;
 use std::convert::{Infallible, Into};
 use std::io::Write;
 use std::time::Duration;
-use restate_sdk_shared_core::tracing_pretty::{Pretty, PrettyFields};
 use tracing::metadata::LevelFilter;
 use tracing::{Dispatch, Level, Subscriber};
 use tracing_subscriber::fmt::format::FmtSpan;
@@ -120,18 +125,18 @@ fn log_subscriber(
         tracing_subscriber::fmt::layer()
             .with_ansi(false)
             .without_time()
-            .with_span_events(
-                FmtSpan::ENTER
-            )
+            .with_span_events(FmtSpan::ENTER)
             .with_writer(MakeWebConsoleWriter { logger_id })
-            .event_format(Pretty::default()
-                .without_time()
-                .with_thread_names(false)
-                .with_thread_ids(false)
-                .with_target(true)
-                .with_level(true)
+            .event_format(
+                Pretty::default()
+                    .without_time()
+                    .with_thread_names(false)
+                    .with_thread_ids(false)
+                    .with_target(true)
+                    .with_level(true),
             )
-            .fmt_fields(PrettyFields::default()).boxed()
+            .fmt_fields(PrettyFields::default())
+            .boxed()
     } else {
         tracing_subscriber::fmt::layer()
             .with_ansi(false)
@@ -143,16 +148,17 @@ fn log_subscriber(
             .with_target(false)
             .with_level(false)
             .with_span_events(FmtSpan::NONE)
-            .with_writer(MakeWebConsoleWriter { logger_id }).boxed()
+            .with_writer(MakeWebConsoleWriter { logger_id })
+            .boxed()
     };
 
-
-        Registry::default().with(fmt_layer
-                                     // We do filtering here too,
-                                     // as it might get expensive to pass logs through
-                                     // the various layers even though we don't need them
-                                     .with_filter(LevelFilter::from_level(level))
-        )
+    Registry::default().with(
+        fmt_layer
+            // We do filtering here too,
+            // as it might get expensive to pass logs through
+            // the various layers even though we don't need them
+            .with_filter(LevelFilter::from_level(level)),
+    )
 }
 
 //--- Data model
@@ -406,7 +412,9 @@ impl From<AwaitResponse> for WasmDoProgressResult {
     fn from(value: AwaitResponse) -> Self {
         match value {
             AwaitResponse::AnyCompleted => WasmDoProgressResult::AnyCompleted,
-            AwaitResponse::WaitingExternalProgress {..} => WasmDoProgressResult::WaitExternalProgress,
+            AwaitResponse::WaitingExternalProgress { .. } => {
+                WasmDoProgressResult::WaitExternalProgress
+            }
             AwaitResponse::ExecuteRun(n) => WasmDoProgressResult::ExecuteRun(n.into()),
             AwaitResponse::CancelSignalReceived => WasmDoProgressResult::CancelSignalReceived,
         }
@@ -435,14 +443,10 @@ impl From<WasmUnresolvedFuture> for UnresolvedFuture {
                 UnresolvedFuture::AllCompleted(c.into_iter().map(Into::into).collect())
             }
             WasmUnresolvedFuture::FirstSucceededOrAllFailed(c) => {
-                UnresolvedFuture::FirstSucceededOrAllFailed(
-                    c.into_iter().map(Into::into).collect(),
-                )
+                UnresolvedFuture::FirstSucceededOrAllFailed(c.into_iter().map(Into::into).collect())
             }
             WasmUnresolvedFuture::AllSucceededOrFirstFailed(c) => {
-                UnresolvedFuture::AllSucceededOrFirstFailed(
-                    c.into_iter().map(Into::into).collect(),
-                )
+                UnresolvedFuture::AllSucceededOrFirstFailed(c.into_iter().map(Into::into).collect())
             }
             WasmUnresolvedFuture::Unknown(c) => {
                 UnresolvedFuture::Unknown(c.into_iter().map(Into::into).collect())
@@ -757,6 +761,8 @@ impl WasmVM {
                 handler,
                 key,
                 idempotency_key,
+                scope: None,
+                limit_key: None,
                 headers: headers.into_iter().map(Header::from).collect(),
             },
             buffer.to_vec().into(),
@@ -786,6 +792,8 @@ impl WasmVM {
                 handler,
                 key,
                 idempotency_key,
+                scope: None,
+                limit_key: None,
                 headers: headers.into_iter().map(Header::from).collect(),
             },
             buffer.to_vec().into(),
@@ -834,8 +842,12 @@ impl WasmVM {
         .map_err(Into::into)
     }
 
-    pub fn sys_signal(&mut self,signal_name: String,) -> Result<WasmNotificationHandle, WasmFailure> {
-        use_log_dispatcher!(self, |vm| CoreVM::create_signal_handle(vm, signal_name))       .map(Into::into)
+    pub fn sys_signal(
+        &mut self,
+        signal_name: String,
+    ) -> Result<WasmNotificationHandle, WasmFailure> {
+        use_log_dispatcher!(self, |vm| CoreVM::create_signal_handle(vm, signal_name))
+            .map(Into::into)
             .map_err(Into::into)
     }
 
@@ -851,7 +863,7 @@ impl WasmVM {
             signal_name,
             NonEmptyValue::Success(buffer.to_vec().into()),
         ))
-            .map_err(Into::into)
+        .map_err(Into::into)
     }
 
     pub fn sys_complete_signal_failure(
@@ -862,11 +874,11 @@ impl WasmVM {
     ) -> Result<(), WasmFailure> {
         use_log_dispatcher!(self, |vm| CoreVM::sys_complete_signal(
             vm,
-              invocation_id,
+            invocation_id,
             signal_name,
             NonEmptyValue::Failure(value.into()),
         ))
-            .map_err(Into::into)
+        .map_err(Into::into)
     }
 
     pub fn sys_get_promise(&mut self, key: String) -> Result<WasmNotificationHandle, WasmFailure> {
