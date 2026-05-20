@@ -1,5 +1,11 @@
 # @restatedev/restate-sdk-zod
 
+## 1.14.4
+
+### Patch Changes
+
+- Fixed issue when waiting multiple ctx.run
+
 ## 1.14.3
 
 ### Patch Changes

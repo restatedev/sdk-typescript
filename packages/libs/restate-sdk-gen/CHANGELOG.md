@@ -1,5 +1,15 @@
 # @restatedev/restate-sdk-gen
 
+## 1.14.4
+
+### Patch Changes
+
+- Fixed issue when waiting multiple ctx.run
+- Updated dependencies
+  - @restatedev/restate-sdk@1.14.4
+  - @restatedev/restate-sdk-clients@1.14.4
+  - @restatedev/restate-sdk-core@1.14.4
+
 ## 1.14.3
 
 ### Patch Changes

@@ -1,5 +1,13 @@
 # @restatedev/restate-sdk-opentelemetry
 
+## 1.14.4
+
+### Patch Changes
+
+- Fixed issue when waiting multiple ctx.run
+- Updated dependencies
+  - @restatedev/restate-sdk@1.14.4
+
 ## 1.14.3
 
 ### Patch Changes
