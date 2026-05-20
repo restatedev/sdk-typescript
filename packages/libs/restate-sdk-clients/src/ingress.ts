@@ -28,6 +28,7 @@ import {
   IngressWorkflowClient,
   Output,
   Send,
+  ScopedIngress,
   WorkflowSubmission,
 } from "./api.js";
 
@@ -61,6 +62,7 @@ type InvocationParameters<I> = {
   opts?: Opts<I, unknown> | SendOpts<I>;
   parameter?: I;
   method?: string;
+  scope?: string;
 };
 
 function optsFromArgs(args: unknown[]): {
@@ -107,39 +109,50 @@ function optsFromArgs(args: unknown[]): {
 }
 
 const IDEMPOTENCY_KEY_HEADER = "idempotency-key";
+const LIMIT_KEY_HEADER = "x-restate-limit-key";
 
 const doComponentInvocation = async <I, O>(
   opts: ConnectionOpts,
   params: InvocationParameters<I>
 ): Promise<O> => {
   let attachable = false;
-  const fragments = [];
   //
   // ingress URL
   //
-  fragments.push(opts.url);
-  //
-  // component
-  //
-  fragments.push(params.component);
-  //
-  // has key?
-  //
-  if (params.key) {
-    const key = encodeURIComponent(params.key);
-    fragments.push(key);
-  }
-  //
-  // handler
-  //
-  fragments.push(params.handler);
-  if (params.send ?? false) {
-    if (params.opts instanceof SendOpts) {
-      const sendString = computeDelayAsIso(params.opts);
-      fragments.push(sendString);
-    } else {
-      fragments.push("send");
+  let url: string;
+  if (params.scope) {
+    // Scoped path: /restate/scope/{scope}/{call|send}/{service}/{key?}/{handler}
+    const pathType = params.send ? "send" : "call";
+    const parts = [
+      opts.url,
+      "restate/scope",
+      encodeURIComponent(params.scope),
+      pathType,
+      params.component,
+    ];
+    if (params.key) {
+      parts.push(encodeURIComponent(params.key));
     }
+    parts.push(params.handler);
+    url = parts.join("/");
+    if (params.send && params.opts instanceof SendOpts) {
+      const delay = params.opts.delay();
+      if (delay) url += `?delay=${delay}ms`;
+    }
+  } else {
+    const fragments = [opts.url, params.component];
+    if (params.key) {
+      fragments.push(encodeURIComponent(params.key));
+    }
+    fragments.push(params.handler);
+    if (params.send ?? false) {
+      if (params.opts instanceof SendOpts) {
+        fragments.push(computeDelayAsIso(params.opts));
+      } else {
+        fragments.push("send");
+      }
+    }
+    url = fragments.join("/");
   }
   //
   // request body
@@ -162,12 +175,19 @@ const doComponentInvocation = async <I, O>(
     headers["Content-Type"] = contentType;
   }
   //
-  //idempotency
+  // idempotency
   //
   const idempotencyKey = params.opts?.opts.idempotencyKey;
   if (idempotencyKey) {
     headers[IDEMPOTENCY_KEY_HEADER] = idempotencyKey;
     attachable = true;
+  }
+  //
+  // limit key
+  //
+  const limitKey = params.opts?.opts.limitKey;
+  if (limitKey) {
+    headers[LIMIT_KEY_HEADER] = limitKey;
   }
 
   // Abort signal, if any
@@ -188,7 +208,6 @@ const doComponentInvocation = async <I, O>(
   //
   // make the call
   //
-  const url = fragments.join("/");
   const httpResponse = await fetch(url, {
     method: params.method ?? "POST",
     headers,
@@ -412,17 +431,134 @@ class HttpIngress implements Ingress {
     >;
   }
 
+  scope(scopeKey: string): ScopedIngress {
+    const conn = this.opts;
+    const scopedProxy = (component: string, key?: string, send?: boolean) =>
+      new Proxy(
+        {},
+        {
+          get: (_target, prop) => {
+            const handler = prop as string;
+            return (...args: unknown[]) => {
+              const { parameter, opts } = optsFromArgs(args);
+              return doComponentInvocation<unknown, unknown>(conn, {
+                component,
+                handler,
+                key,
+                parameter,
+                opts,
+                send,
+                scope: scopeKey,
+              });
+            };
+          },
+        }
+      );
+
+    return {
+      serviceClient: <D>(opts: ServiceDefinitionFrom<D>) =>
+        scopedProxy(opts.name) as IngressClient<Service<D>>,
+      serviceSendClient: <D>(opts: ServiceDefinitionFrom<D>) =>
+        scopedProxy(opts.name, undefined, true) as IngressSendClient<
+          Service<D>
+        >,
+      workflowClient: <D>(
+        opts: WorkflowDefinitionFrom<D>,
+        key: string
+      ): IngressWorkflowClient<Workflow<D>> => {
+        const component = opts.name;
+
+        const workflowSubmit = async (
+          ...args: unknown[]
+        ): Promise<WorkflowSubmission<unknown>> => {
+          const { parameter, opts } = optsFromArgs(args);
+          const res: Send = await doComponentInvocation(conn, {
+            component,
+            handler: "run",
+            key,
+            send: true,
+            parameter,
+            opts,
+            scope: scopeKey,
+          });
+          return {
+            invocationId: res.invocationId,
+            status: res.status,
+            attachable: true,
+          };
+        };
+
+        const workflowAttach = (opts?: Opts<void, unknown>) =>
+          doWorkflowHandleCall(conn, component, key, "attach", opts);
+
+        const workflowOutput = async (
+          opts?: Opts<void, unknown>
+        ): Promise<Output<unknown>> => {
+          try {
+            const result = await doWorkflowHandleCall(
+              conn,
+              component,
+              key,
+              "output",
+              opts
+            );
+            return { ready: true, result };
+          } catch (e) {
+            if (!(e instanceof HttpCallError) || e.status !== 470) {
+              throw e;
+            }
+            return {
+              ready: false,
+              get result() {
+                throw new Error("Calling result() on a non ready workflow");
+              },
+            };
+          }
+        };
+
+        return new Proxy(
+          {},
+          {
+            get: (_target, prop) => {
+              const handler = prop as string;
+              if (handler === "workflowSubmit") {
+                return workflowSubmit;
+              } else if (handler === "workflowAttach") {
+                return workflowAttach;
+              } else if (handler === "workflowOutput") {
+                return workflowOutput;
+              }
+              return (...args: unknown[]) => {
+                const { parameter, opts } = optsFromArgs(args);
+                return doComponentInvocation(conn, {
+                  component,
+                  handler,
+                  key,
+                  parameter,
+                  opts,
+                  scope: scopeKey,
+                });
+              };
+            },
+          }
+        ) as IngressWorkflowClient<Workflow<D>>;
+      },
+    };
+  }
+
   async call<I, O>(opts: {
     service: string;
     handler: string;
     parameter: I;
     key?: string;
+    scope?: string;
     opts?: Opts<I, O>;
   }): Promise<O> {
     return doComponentInvocation<I, O>(this.opts, {
       component: opts.service,
       handler: opts.handler,
       key: opts.key,
+      scope: opts.scope,
       parameter: opts.parameter,
       send: false,
       opts: opts.opts,
@@ -434,12 +570,14 @@ class HttpIngress implements Ingress {
     handler: string;
     parameter: I;
     key?: string;
+    scope?: string;
     opts?: SendOpts<I>;
   }): Promise<Send> {
     return doComponentInvocation<I, Send>(this.opts, {
       component: opts.service,
       handler: opts.handler,
       key: opts.key,
+      scope: opts.scope,
       parameter: opts.parameter,
       send: true,
       opts: opts.opts,
