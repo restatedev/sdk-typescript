@@ -1,8 +1,8 @@
 # Development Guidelines
 
 ## Prerequisites
-- [NodeJS](https://nodejs.org) (v20 or later)
-- [pnpm](https://pnpm.io) (v10 or later)
+- [NodeJS](https://nodejs.org) (v22 or later)
+- [pnpm](https://pnpm.io) (v11 or later)
 
 ## Project Structure
 

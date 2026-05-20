@@ -13,7 +13,7 @@ jobs:
     runs-on: warp-ubuntu-latest-x64-4x
     strategy:
       matrix:
-        node-version: [20.x]
+        node-version: [22.x]
 
     steps:
       - uses: actions/checkout@v4
@@ -24,7 +24,7 @@ jobs:
           registry-url: "https://registry.npmjs.org"
       - uses: pnpm/action-setup@v4
         with:
-          version: 10.13.1
+          version: 11.1.3
       - name: Setup Deno
         uses: denoland/setup-deno@v1
         with:
@@ -75,7 +75,7 @@ jobs:
     runs-on: warp-ubuntu-latest-x64-4x
     strategy:
       matrix:
-        node-version: [20.x]
+        node-version: [22.x]
 
     steps:
       - uses: actions/checkout@v4
@@ -86,7 +86,7 @@ jobs:
           registry-url: "https://registry.npmjs.org"
       - uses: pnpm/action-setup@v4
         with:
-          version: 10.13.1
+          version: 11.1.3
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - name: Run e2e tests
