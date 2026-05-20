@@ -13,7 +13,6 @@ import {
   service,
   serve,
   serde,
-  internal,
   InvocationIdParser,
   createServiceHandler,
   type Context,
@@ -38,19 +37,16 @@ const signals = service({
   },
   handlers: {
     wait: async (ctx: Context) => {
-      const ctxInternal = ctx as restate.internal.ContextInternal;
-      const p1 = ctxInternal.signal<string>("p1");
-      const p2 = ctxInternal.signal<string>("p2");
-      const p3 = ctxInternal.signal<string>("p3");
+      const p1 = ctx.signal<string>("p1");
+      const p2 = ctx.signal<string>("p2");
+      const p3 = ctx.signal<string>("p3");
       return await restate.RestatePromise.all([p1, p2, p3]);
     },
 
     resolve: createServiceHandler(
       { input: serde.schema(ResolveRequest), output: serde.empty },
       async (ctx: Context, req) => {
-        const ctxInternal = ctx as internal.ContextInternal;
-
-        ctxInternal
+        ctx
           .invocation(InvocationIdParser.fromString(req.invocationId))
           .signal(req.signal, serde.schema(SignalPayload))
           .resolve({ value: req.value });
@@ -60,9 +56,7 @@ const signals = service({
     reject: createServiceHandler(
       { input: serde.schema(ResolveRequest), output: serde.empty },
       async (ctx: Context, req) => {
-        const ctxInternal = ctx as internal.ContextInternal;
-
-        ctxInternal
+        ctx
           .invocation(InvocationIdParser.fromString(req.invocationId))
           .signal(req.signal, serde.schema(SignalPayload))
           .reject(req.value);

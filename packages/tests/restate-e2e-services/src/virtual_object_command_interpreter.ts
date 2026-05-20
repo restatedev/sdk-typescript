@@ -147,8 +147,7 @@ function parseAwaitableCommand(
         throw new TerminalError(command.reason);
       });
     case "createSignal": {
-      const ctxInternal = ctx as unknown as restate.internal.ContextInternal;
-      return ctxInternal.signal<string>(command.signalName);
+      return ctx.signal<string>(command.signalName);
     }
   }
 }

@@ -98,10 +98,9 @@ const promiseCombinators = restate.service({
         inactivityTimeout: 0,
       },
       async (ctx: restate.Context) => {
-        const ctxInternal = ctx as restate.internal.ContextInternal;
-        const p1 = ctxInternal.signal<string>("p1");
-        const p2 = ctxInternal.signal<string>("p2");
-        const p3 = ctxInternal.signal<string>("p3");
+        const p1 = ctx.signal<string>("p1");
+        const p2 = ctx.signal<string>("p2");
+        const p3 = ctx.signal<string>("p3");
         const res = await RestatePromise.allSettled([
           RestatePromise.race([p1, p2]),
           RestatePromise.race([p1, p3]),
@@ -119,10 +118,9 @@ const promiseCombinators = restate.service({
         inactivityTimeout: 0,
       },
       async (ctx: restate.Context) => {
-        const ctxInternal = ctx as restate.internal.ContextInternal;
-        const p1 = ctxInternal.signal<string>("p1");
-        const p2 = ctxInternal.signal<string>("p2");
-        const p3 = ctxInternal.signal<string>("p3");
+        const p1 = ctx.signal<string>("p1");
+        const p2 = ctx.signal<string>("p2");
+        const p3 = ctx.signal<string>("p3");
         let result;
         try {
           result = await RestatePromise.all([
