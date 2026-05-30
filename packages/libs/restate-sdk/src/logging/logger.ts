@@ -59,9 +59,6 @@ export function createLogger(
     );
   }
 
-  /**
-   * Creates a lazily-bound console method for a specific log level.
-   */
   function loggerForLevel(
     loggerTransport: LoggerTransport,
     source: LogSource,
