@@ -258,6 +258,17 @@ export type GenericSend<REQ> = {
 };
 
 /**
+ * Console to use for logging
+ */
+export type RestateConsole = Console & {
+  /**
+   * Creates a child console that attaches the provided contextual fields to each
+   * log event
+   */
+  child(context: Record<string, string>): RestateConsole;
+};
+
+/**
  * The context that gives access to all Restate-backed operations, for example
  *   - sending reliable messages / RPC through Restate
  *   - execute non-deterministic closures and memoize their result
@@ -284,7 +295,7 @@ export interface Context extends RestateContext {
    * Console to use for logging. It attaches to each log message some contextual information,
    * such as invoked service method and invocation id, and automatically excludes logs during replay.
    */
-  console: Console;
+  console: RestateConsole;
 
   /**
    * Deterministic date.

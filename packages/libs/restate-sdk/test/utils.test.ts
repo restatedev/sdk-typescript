@@ -11,6 +11,25 @@
 
 import { RandImpl } from "../src/utils/rand.js";
 import { describe, expect, it } from "vitest";
+import { createLogger } from "../src/logging/logger.js";
+import {
+  LoggerContext,
+  type LogMetadata,
+  LogSource,
+  type LoggerTransport,
+} from "../src/logging/logger_transport.js";
+
+type LogEvent = {
+  meta: LogMetadata;
+  message?: unknown;
+  optionalParams: unknown[];
+};
+
+function collectingTransport(events: LogEvent[]): LoggerTransport {
+  return (meta, message, ...optionalParams) => {
+    events.push({ meta, message, optionalParams });
+  };
+}
 
 describe("rand", () => {
   it("accepts seed", () => {
@@ -93,5 +112,98 @@ describe("rand", () => {
     ];
 
     expect(actual).toStrictEqual(expected);
+  });
+});
+
+describe("createLogger", () => {
+  it("adds child context to log metadata", () => {
+    const events: LogEvent[] = [];
+    const logger = createLogger(
+      collectingTransport(events),
+      LogSource.USER,
+      new LoggerContext(
+        "invocation-1",
+        "Greeter",
+        "greet",
+        undefined,
+        undefined,
+        { orderId: "order-1" }
+      )
+    );
+
+    logger.child({ paymentId: "payment-1" }).info("charged");
+
+    expect(events).toHaveLength(1);
+    const event = events[0]!;
+    expect(event.message).toBe("charged");
+    expect(event.meta.context?.additionalContext).toEqual({
+      orderId: "order-1",
+      paymentId: "payment-1",
+    });
+  });
+
+  it("accumulates nested child context without mutating parent loggers", () => {
+    const events: LogEvent[] = [];
+    const parentContext = new LoggerContext(
+      "invocation-1",
+      "Greeter",
+      "greet",
+      undefined,
+      undefined,
+      { orderId: "order-1", stage: "accepted" }
+    );
+    const logger = createLogger(
+      collectingTransport(events),
+      LogSource.USER,
+      parentContext
+    );
+    const paymentLogger = logger.child({ stage: "payment" });
+    const authorizationLogger = paymentLogger.child({
+      authorizationId: "authorization-1",
+    });
+
+    logger.info("parent");
+    paymentLogger.info("payment");
+    authorizationLogger.info("authorized");
+
+    expect(parentContext.additionalContext).toEqual({
+      orderId: "order-1",
+      stage: "accepted",
+    });
+    expect(events).toHaveLength(3);
+    expect(events[0]!.meta.context?.additionalContext).toEqual({
+      orderId: "order-1",
+      stage: "accepted",
+    });
+    expect(events[1]!.meta.context?.additionalContext).toEqual({
+      orderId: "order-1",
+      stage: "payment",
+    });
+    expect(events[2]!.meta.context?.additionalContext).toEqual({
+      orderId: "order-1",
+      stage: "payment",
+      authorizationId: "authorization-1",
+    });
+  });
+
+  it("evaluates replaying at log-call time for child loggers", () => {
+    const events: LogEvent[] = [];
+    let replaying = false;
+    const logger = createLogger(
+      collectingTransport(events),
+      LogSource.USER,
+      new LoggerContext("invocation-1", "Greeter", "greet"),
+      () => replaying
+    );
+    const childLogger = logger.child({ orderId: "order-1" });
+
+    replaying = true;
+    childLogger.info("replay");
+    replaying = false;
+    childLogger.info("processing");
+
+    expect(events).toHaveLength(2);
+    expect(events[0]!.meta.replaying).toBe(true);
+    expect(events[1]!.meta.replaying).toBe(false);
   });
 });
