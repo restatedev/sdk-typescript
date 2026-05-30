@@ -48,6 +48,38 @@ npx -y @restatedev/create-app@latest
 
 Check the [Quickstart](https://docs.restate.dev/get_started/quickstart) for more info.
 
+## Logging with Context
+
+Use `ctx.console` for handler logs. It behaves like `console`, but Restate attaches invocation metadata and suppresses user logs while replaying already-journaled work.
+
+You can create child loggers to add fields that should appear on every later log line:
+
+```typescript
+const checkout = restate.service({
+    name: "checkout",
+    handlers: {
+        submit: async (ctx: restate.Context, input: CheckoutRequest) => {
+            let log = ctx.console.child({ orderId: input.orderId });
+
+            log.info("checkout started");
+
+            const payment = await ctx.run("charge payment", async () => {
+                return await chargePayment(input);
+            });
+
+            log = log.child({ paymentId: payment.paymentId });
+            log.info("payment charged");
+
+            return "ok";
+        },
+    },
+});
+```
+
+Child loggers are immutable: `log.child(...)` returns a new logger with merged fields, and later fields override earlier fields with the same key. The logger object itself is not persisted between workers, so build child loggers from durable values such as handler input, object/workflow keys, state, request metadata, and `ctx.run` results. Do not add logger context only inside a `ctx.run` closure, because replay skips closures whose results are already journaled.
+
+Custom logger transports receive these fields as `meta.context?.additionalContext`, so Winston, Pino, or any structured logger can include them in emitted records.
+
 ## Versions
 
 This library follows [Semantic Versioning](https://semver.org/).
