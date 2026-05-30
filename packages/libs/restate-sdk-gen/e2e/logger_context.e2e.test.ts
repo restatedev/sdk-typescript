@@ -23,6 +23,23 @@ type LoggerContextHandoffInput = {
   paymentId: string;
 };
 
+const retryStepCount = 5;
+
+type LoggerContextRetryInput = {
+  workflowId: string;
+};
+
+type RetryContext = Record<string, string>;
+
+const retryAttempts = new Map<string, number>();
+
+function bumpRetryAttempt(workflowId: string, step: number): number {
+  const key = `${workflowId}:step-${step}`;
+  const attempt = (retryAttempts.get(key) ?? 0) + 1;
+  retryAttempts.set(key, attempt);
+  return attempt;
+}
+
 const loggerContextHandoff = restate.service({
   name: "loggerContextHandoff",
   handlers: {
@@ -46,6 +63,42 @@ const loggerContextHandoff = restate.service({
   },
 });
 
+const loggerContextRetry = restate.service({
+  name: "loggerContextRetry",
+  handlers: {
+    run: async (
+      ctx: restate.Context,
+      input: LoggerContextRetryInput
+    ): Promise<RetryContext> => {
+      let log = ctx.console.child({ workflowId: input.workflowId });
+      const context: RetryContext = { workflowId: input.workflowId };
+
+      for (let step = 1; step <= retryStepCount; step++) {
+        const fieldName = `step${step}`;
+        const fieldValue = `value-${step}`;
+
+        const result = await ctx.run(
+          `step-${step}`,
+          () => {
+            const attempt = bumpRetryAttempt(input.workflowId, step);
+            if (attempt === 1) {
+              throw new Error(`step-${step} failed once`);
+            }
+            return { fieldName, fieldValue };
+          },
+          { maxRetryAttempts: 3, initialRetryInterval: 25 }
+        );
+
+        context[result.fieldName] = result.fieldValue;
+        log = log.child({ [result.fieldName]: result.fieldValue });
+        log.info(`after-step-${step}`);
+      }
+
+      return context;
+    },
+  },
+});
+
 type CapturedLogEvent = {
   worker: string;
   message: string;
@@ -56,10 +109,11 @@ type CapturedLogEvent = {
 
 function captureLogger(
   worker: string,
-  events: CapturedLogEvent[]
+  events: CapturedLogEvent[],
+  messages = new Set(["before-handoff", "after-handoff"])
 ): restate.LoggerTransport {
   return (meta, message) => {
-    if (message !== "before-handoff" && message !== "after-handoff") {
+    if (!messages.has(String(message))) {
       return;
     }
 
@@ -152,6 +206,26 @@ async function startLoggerContextWorker(
   return server;
 }
 
+function expectedRetryContext(upToStep = retryStepCount): RetryContext {
+  const context: RetryContext = {
+    workflowId: "retry-context-workflow",
+  };
+
+  for (let step = 1; step <= upToStep; step++) {
+    context[`step${step}`] = `value-${step}`;
+  }
+
+  return context;
+}
+
+function retryLogMessages(): Set<string> {
+  return new Set(
+    Array.from({ length: retryStepCount }, (_, index) => {
+      return `after-step-${index + 1}`;
+    })
+  );
+}
+
 describe("logger context worker handoff", () => {
   test("rebuilds child logger context after worker restart", async () => {
     const events: CapturedLogEvent[] = [];
@@ -232,6 +306,55 @@ describe("logger context worker handoff", () => {
         await closeHttp2Server(env.startedRestateHttpServer, originalTracker);
         await env.startedRestateContainer.stop();
       }
+    }
+  }, 30_000);
+});
+
+describe("logger context retry recovery", () => {
+  test("emits each visible log once and keeps accumulated context after retries", async () => {
+    retryAttempts.clear();
+    const events: CapturedLogEvent[] = [];
+    let env: RestateTestEnvironment | undefined;
+
+    try {
+      env = await RestateTestEnvironment.start({
+        services: [loggerContextRetry],
+        logger: captureLogger("worker", events, retryLogMessages()),
+        alwaysReplay: true,
+      });
+      const rs = sdkClients.connect({ url: env.baseUrl() });
+      const client = rs.serviceClient(loggerContextRetry);
+
+      await expect(
+        client.run({ workflowId: "retry-context-workflow" })
+      ).resolves.toStrictEqual(expectedRetryContext());
+
+      for (let step = 1; step <= retryStepCount; step++) {
+        expect(retryAttempts.get(`retry-context-workflow:step-${step}`)).toBe(
+          2
+        );
+      }
+
+      const visibleUserLogs = events.filter((event) => {
+        return event.source === "USER" && !event.replaying;
+      });
+
+      expect(visibleUserLogs.map((event) => event.message)).toStrictEqual([
+        "after-step-1",
+        "after-step-2",
+        "after-step-3",
+        "after-step-4",
+        "after-step-5",
+      ]);
+
+      for (let step = 1; step <= retryStepCount; step++) {
+        expect(visibleUserLogs[step - 1]?.additionalContext).toStrictEqual(
+          expectedRetryContext(step)
+        );
+      }
+    } finally {
+      retryAttempts.clear();
+      await env?.stop();
     }
   }, 30_000);
 });
