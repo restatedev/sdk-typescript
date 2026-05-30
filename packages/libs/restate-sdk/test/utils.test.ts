@@ -25,6 +25,9 @@ type LogEvent = {
   optionalParams: unknown[];
 };
 
+/**
+ * Creates a logger transport that records emitted log events for assertions.
+ */
 function collectingTransport(events: LogEvent[]): LoggerTransport {
   return (meta, message, ...optionalParams) => {
     events.push({ meta, message, optionalParams });

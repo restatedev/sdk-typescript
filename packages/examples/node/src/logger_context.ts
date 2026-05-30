@@ -44,7 +44,9 @@ const checkout = service({
         return await createShipment(input.orderId);
       });
 
-      contextLogger.child({ shipmentId: shipment.shipmentId }).info("shipment created");
+      contextLogger
+        .child({ shipmentId: shipment.shipmentId })
+        .info("shipment created");
 
       return {
         orderId: input.orderId,
@@ -57,12 +59,18 @@ const checkout = service({
 
 export type Checkout = typeof checkout;
 
+/**
+ * Simulates charging a payment provider and returns a durable payment id.
+ */
 async function chargePayment(input: CheckoutRequest): Promise<PaymentResult> {
   return {
     paymentId: `payment-${input.paymentMethodId}`,
   };
 }
 
+/**
+ * Simulates creating a shipment and returns a durable shipment id.
+ */
 async function createShipment(
   orderId: string
 ): Promise<{ shipmentId: string }> {

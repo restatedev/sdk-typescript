@@ -16,9 +16,12 @@ import * as restate from "@restatedev/restate-sdk";
 import * as sdkClients from "@restatedev/restate-sdk-clients";
 import { RestateTestEnvironment } from "@restatedev/restate-sdk-testcontainers";
 
+/**
+ * Waits for asynchronous Restate processing to advance in polling-based tests.
+ */
 const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
-type LoggerContextHandoffInput = {
+type LoggerContextWorkerRestartInput = {
   orderId: string;
   paymentId: string;
 };
@@ -33,6 +36,14 @@ type RetryContext = Record<string, string>;
 
 const retryAttempts = new Map<string, number>();
 
+const workerRestartMessages = new Set([
+  "before-worker-restart",
+  "after-worker-restart",
+]);
+
+/**
+ * Records and returns the next attempt number for a retrying durable step.
+ */
 function bumpRetryAttempt(workflowId: string, step: number): number {
   const key = `${workflowId}:step-${step}`;
   const attempt = (retryAttempts.get(key) ?? 0) + 1;
@@ -40,12 +51,12 @@ function bumpRetryAttempt(workflowId: string, step: number): number {
   return attempt;
 }
 
-const loggerContextHandoff = restate.service({
-  name: "loggerContextHandoff",
+const loggerContextWorkerRestart = restate.service({
+  name: "loggerContextWorkerRestart",
   handlers: {
     run: async (
       ctx: restate.Context,
-      input: LoggerContextHandoffInput
+      input: LoggerContextWorkerRestartInput
     ): Promise<string> => {
       let log = ctx.console.child({ orderId: input.orderId });
 
@@ -54,9 +65,9 @@ const loggerContextHandoff = restate.service({
       }));
       log = log.child({ paymentId: payment.paymentId });
 
-      log.info("before-handoff");
-      await ctx.sleep(2_000, "worker-handoff");
-      log.info("after-handoff");
+      log.info("before-worker-restart");
+      await ctx.sleep(2_000, "worker-restart");
+      log.info("after-worker-restart");
 
       return "done";
     },
@@ -107,13 +118,23 @@ type CapturedLogEvent = {
   additionalContext: Record<string, string>;
 };
 
+/**
+ * Creates a logger transport that captures selected user log messages together
+ * with the worker label and copied logger context.
+ *
+ * By default it captures the worker restart service logs:
+ * `before-worker-restart` is emitted by worker 1 immediately before the
+ * invocation suspends on `ctx.sleep`, and `after-worker-restart` is emitted
+ * after Restate resumes the same invocation on worker 2. Tests that assert
+ * different log points pass their own message set.
+ */
 function captureLogger(
   worker: string,
   events: CapturedLogEvent[],
-  messages = new Set(["before-handoff", "after-handoff"])
+  capturedMessages = workerRestartMessages
 ): restate.LoggerTransport {
   return (meta, message) => {
-    if (!messages.has(String(message))) {
+    if (!capturedMessages.has(String(message))) {
       return;
     }
 
@@ -127,6 +148,9 @@ function captureLogger(
   };
 }
 
+/**
+ * Polls until a captured log event matching the predicate is observed.
+ */
 async function waitForLogEvent(
   events: CapturedLogEvent[],
   predicate: (event: CapturedLogEvent) => boolean,
@@ -146,6 +170,10 @@ async function waitForLogEvent(
   );
 }
 
+/**
+ * Tracks active HTTP/2 sessions so worker shutdown can force lingering sessions
+ * closed when the server is intentionally restarted.
+ */
 function trackHttp2Sessions(server: http2.Http2Server): {
   destroySessions: () => void;
 } {
@@ -166,6 +194,10 @@ function trackHttp2Sessions(server: http2.Http2Server): {
   };
 }
 
+/**
+ * Closes an HTTP/2 server and optionally destroys tracked sessions if graceful
+ * shutdown stalls.
+ */
 async function closeHttp2Server(
   server: http2.Http2Server,
   tracker?: { destroySessions: () => void }
@@ -186,12 +218,15 @@ async function closeHttp2Server(
   });
 }
 
+/**
+ * Starts a replacement SDK worker on the same port as the original worker.
+ */
 async function startLoggerContextWorker(
   port: number,
   logger: restate.LoggerTransport
 ): Promise<http2.Http2Server> {
   const handler = restate.createEndpointHandler({
-    services: [loggerContextHandoff],
+    services: [loggerContextWorkerRestart],
     logger,
   });
   const server = http2.createServer(handler);
@@ -206,6 +241,9 @@ async function startLoggerContextWorker(
   return server;
 }
 
+/**
+ * Builds the expected accumulated retry logger context up to the requested step.
+ */
 function expectedRetryContext(upToStep = retryStepCount): RetryContext {
   const context: RetryContext = {
     workflowId: "retry-context-workflow",
@@ -218,6 +256,9 @@ function expectedRetryContext(upToStep = retryStepCount): RetryContext {
   return context;
 }
 
+/**
+ * Returns the retry test log messages that should be captured by the transport.
+ */
 function retryLogMessages(): Set<string> {
   return new Set(
     Array.from({ length: retryStepCount }, (_, index) => {
@@ -226,7 +267,7 @@ function retryLogMessages(): Set<string> {
   );
 }
 
-describe("logger context worker handoff", () => {
+describe("logger context worker restart", () => {
   test("rebuilds child logger context after worker restart", async () => {
     const events: CapturedLogEvent[] = [];
     let env: RestateTestEnvironment | undefined;
@@ -236,7 +277,7 @@ describe("logger context worker handoff", () => {
 
     try {
       env = await RestateTestEnvironment.start({
-        services: [loggerContextHandoff],
+        services: [loggerContextWorkerRestart],
         logger: captureLogger("worker-1", events),
       });
       originalTracker = trackHttp2Sessions(env.startedRestateHttpServer);
@@ -244,10 +285,10 @@ describe("logger context worker handoff", () => {
         env.startedRestateHttpServer.address() as net.AddressInfo;
       const workerPort = workerAddress.port;
       const rs = sdkClients.connect({ url: env.baseUrl() });
-      const client = rs.serviceClient(loggerContextHandoff);
+      const client = rs.serviceClient(loggerContextWorkerRestart);
       const input = {
-        orderId: "order-worker-handoff",
-        paymentId: "payment-worker-handoff",
+        orderId: "order-worker-restart",
+        paymentId: "payment-worker-restart",
       };
 
       const result = client.run(input);
@@ -255,7 +296,7 @@ describe("logger context worker handoff", () => {
         events,
         (event) =>
           event.worker === "worker-1" &&
-          event.message === "before-handoff" &&
+          event.message === "before-worker-restart" &&
           !event.replaying
       );
 
@@ -277,14 +318,14 @@ describe("logger context worker handoff", () => {
         events,
         (event) =>
           event.worker === "worker-2" &&
-          event.message === "before-handoff" &&
+          event.message === "before-worker-restart" &&
           event.replaying
       );
       const worker2After = await waitForLogEvent(
         events,
         (event) =>
           event.worker === "worker-2" &&
-          event.message === "after-handoff" &&
+          event.message === "after-worker-restart" &&
           !event.replaying
       );
 
@@ -295,7 +336,8 @@ describe("logger context worker handoff", () => {
       expect(
         events.some(
           (event) =>
-            event.worker === "worker-1" && event.message === "after-handoff"
+            event.worker === "worker-1" &&
+            event.message === "after-worker-restart"
         )
       ).toBe(false);
     } finally {

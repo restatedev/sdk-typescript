@@ -19,6 +19,9 @@ import type { RestateConsole } from "../context.js";
  * Logging facade used internally by the Restate SDK.
  */
 export interface Logger extends RestateConsole {
+  /**
+   * Emits a log event at the provided Restate log level
+   */
   logForLevel(
     level: RestateLogLevel,
     message?: any,
@@ -32,6 +35,10 @@ export function createLogger(
   context?: LoggerContext,
   isReplaying: () => boolean = () => false
 ): Logger {
+  /**
+   * Builds the immutable context for a child logger by merging parent and child
+   * fields without mutating the parent logger context.
+   */
   function childLoggerContext(
     context: LoggerContext | undefined,
     additionalContext: Record<string, string>
@@ -52,6 +59,9 @@ export function createLogger(
     );
   }
 
+  /**
+   * Creates a lazily-bound console method for a specific log level.
+   */
   function loggerForLevel(
     loggerTransport: LoggerTransport,
     source: LogSource,

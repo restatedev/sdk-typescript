@@ -268,6 +268,7 @@ export type RestateConsole = Console & {
   /**
    * Creates a child console that attaches the provided contextual fields to each
    * log event.
+   * Context values must be serializable.
    *
    * Child consoles are immutable: this method returns a new console and does not
    * mutate the parent console. Nested children merge their fields, and later
