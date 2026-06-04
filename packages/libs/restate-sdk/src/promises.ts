@@ -190,8 +190,7 @@ abstract class BaseRestatePromise<T> extends InternalRestatePromise<T> {
 
 export class SingleRestatePromise<T> extends BaseRestatePromise<T> {
   private state: PromiseState = PromiseState.NOT_COMPLETED;
-  private completablePromise: PromiseWithResolvers<T> =
-    Promise.withResolvers();
+  private completablePromise: PromiseWithResolvers<T> = Promise.withResolvers();
 
   constructor(
     ctx: ContextImpl,

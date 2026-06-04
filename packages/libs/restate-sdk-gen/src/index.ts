@@ -99,6 +99,9 @@ export { _iface as iface };
 import * as _ingress from "./ingress.js";
 export { _ingress as clients };
 
+// Internal functions
+export * as internal from "./internal-operations.js";
+
 // External types that appear in our public API surface — re-exported for consumers
 export { serde } from "@restatedev/restate-sdk-core";
 export type {

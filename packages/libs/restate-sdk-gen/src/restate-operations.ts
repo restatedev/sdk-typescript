@@ -299,6 +299,10 @@ export class RestateOperations {
     return this.ctx.console;
   }
 
+  isProcessing(): boolean {
+    return this.ctx.isProcessing();
+  }
+
   // ---- journal-backed Futures ----
 
   /**
