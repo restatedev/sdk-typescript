@@ -1,6 +1,6 @@
 {
   "name": "@restatedev/restate-sdk-gen",
-  "version": "1.14.4",
+  "version": "1.14.5",
   "description": "Generator-based DSL for composing Restate workflows",
   "author": "Restate Developers",
   "email": "code@restate.dev",
@@ -62,6 +62,6 @@
     "zod": "catalog:"
   },
   "peerDependencies": {
-    "@restatedev/restate-sdk": "^1.14.4"
+    "@restatedev/restate-sdk": "^1.14.5"
   }
 }

@@ -1,5 +1,13 @@
 # @restatedev/restate-sdk
 
+## 1.14.5
+
+### Patch Changes
+
+- Add isReplaying() to gen SDK
+- Updated dependencies
+  - @restatedev/restate-sdk-core@1.14.5
+
 ## 1.14.4
 
 ### Patch Changes

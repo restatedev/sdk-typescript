@@ -1,5 +1,11 @@
 # @restatedev/restate-sdk-zod
 
+## 1.14.5
+
+### Patch Changes
+
+- Add isReplaying() to gen SDK
+
 ## 1.14.4
 
 ### Patch Changes
