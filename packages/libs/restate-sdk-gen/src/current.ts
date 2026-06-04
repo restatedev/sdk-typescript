@@ -55,6 +55,16 @@ export function clearCurrent(prev: unknown): void {
 }
 
 /**
+ * Read the slot without throwing — returns `null` when no fiber is
+ * currently advancing. For callers that need to distinguish "inside a
+ * fiber" from "outside" rather than fail loudly (e.g. the internal
+ * `isProcessing()` probe).
+ */
+export function peekCurrent(): unknown {
+  return CURRENT;
+}
+
+/**
  * Read the slot, throwing if no fiber is currently advancing. Callers
  * cast the return type — the slot is intentionally `unknown` here so
  * this module stays free of cycles.
