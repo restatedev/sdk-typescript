@@ -12,7 +12,7 @@ default = ["console_error_panic_hook"]
 
 [dependencies]
 wasm-bindgen = "0.2.121"
-restate-sdk-shared-core = { git = "https://github.com/restatedev/sdk-shared-core.git", rev = "f6f6e4830226161a441dd7f1063e255cdc4052c1", features = ["request_identity", "rust_crypto", "tracing_pretty"] }
+restate-sdk-shared-core = { git = "https://github.com/restatedev/sdk-shared-core.git", rev = "bf73b9900744d47e1daed0134e049d2526499d5c", features = ["request_identity", "rust_crypto", "tracing_pretty"] }
 console_error_panic_hook = { version = "0.1.7", optional = true }
 serde = { version = "1.0.210", features = ["derive"] }
 tsify = { version = "0.5.6", default-features = false, features = ["js"] }

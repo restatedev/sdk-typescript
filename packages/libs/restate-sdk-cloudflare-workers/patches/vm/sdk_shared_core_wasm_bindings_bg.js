@@ -707,7 +707,7 @@ export class WasmVM {
     }
     /**
      * @param {string} name
-     * @returns {number}
+     * @returns {WasmRun}
      */
     sys_run(name) {
         const ptr0 = passStringToWasm0(name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
@@ -716,7 +716,7 @@ export class WasmVM {
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }
-        return ret[0] >>> 0;
+        return takeFromExternrefTable0(ret[0]);
     }
     /**
      * @param {string} service
