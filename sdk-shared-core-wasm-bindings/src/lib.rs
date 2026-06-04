@@ -1,10 +1,11 @@
 use js_sys::Uint8Array;
 use restate_sdk_shared_core::tracing_pretty::{Pretty, PrettyFields};
 use restate_sdk_shared_core::{
-    AwaitResponse, CallHandle, CommandRelationship, CommandType, CoreVM, Error, Header, HeaderMap,
-    IdentityVerifier, ImplicitCancellationOption, Input, NonDeterministicChecksOption,
-    NonEmptyValue, ResponseHead, RetryPolicy, RunExitResult, SendHandle, TakeOutputResult, Target,
-    TerminalFailure, UnresolvedFuture, VMOptions, Value, CANCEL_NOTIFICATION_HANDLE, VM,
+    AwaitResponse, AwakeableHandle, CallHandle, CommandRelationship, CommandType, CoreVM, Error,
+    Header, HeaderMap, IdentityVerifier, ImplicitCancellationOption, Input,
+    NonDeterministicChecksOption, NonEmptyValue, OnMaxAttempts, ResponseHead, RetryPolicy,
+    RunExitResult, RunHandle, SendHandle, TakeOutputResult, Target, TerminalFailure,
+    UnresolvedFuture, VMOptions, Value, CANCEL_NOTIFICATION_HANDLE, VM,
 };
 use serde::{Deserialize, Serialize};
 use std::cmp;
@@ -315,6 +316,7 @@ impl From<WasmExponentialRetryConfig> for RetryPolicy {
             max_duration: value.max_duration.map(Duration::from_millis),
             factor: value.factor,
             max_interval: value.max_interval.map(Duration::from_millis),
+            on_max_attempts: OnMaxAttempts::FailAsTerminal,
         }
     }
 }
@@ -351,6 +353,14 @@ impl From<WasmFailure> for TerminalFailure {
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct WasmAwakeable {
     pub id: String,
+    // Due to a bug in tsify, this doesn't correctly resolve the type alias WasmAsyncResultHandle, thus we use the u32 type directly.
+    pub handle: u32,
+}
+
+#[derive(Tsify, Serialize, Deserialize)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct WasmRun {
+    pub replayed: bool,
     // Due to a bug in tsify, this doesn't correctly resolve the type alias WasmAsyncResultHandle, thus we use the u32 type directly.
     pub handle: u32,
 }
@@ -807,10 +817,12 @@ impl WasmVM {
 
     pub fn sys_awakeable(&mut self) -> Result<WasmAwakeable, WasmFailure> {
         use_log_dispatcher!(self, CoreVM::sys_awakeable)
-            .map(|(id, handle)| WasmAwakeable {
-                id,
-                handle: handle.into(),
-            })
+            .map(
+                |AwakeableHandle { id, handle }: AwakeableHandle| WasmAwakeable {
+                    id,
+                    handle: handle.into(),
+                },
+            )
             .map_err(Into::into)
     }
 
@@ -923,9 +935,12 @@ impl WasmVM {
         .map_err(Into::into)
     }
 
-    pub fn sys_run(&mut self, name: String) -> Result<WasmNotificationHandle, WasmFailure> {
+    pub fn sys_run(&mut self, name: String) -> Result<WasmRun, WasmFailure> {
         use_log_dispatcher!(self, |vm| CoreVM::sys_run(vm, name))
-            .map(Into::into)
+            .map(|RunHandle { replayed, handle }: RunHandle| WasmRun {
+                replayed,
+                handle: handle.into(),
+            })
             .map_err(Into::into)
     }
 
@@ -998,6 +1013,7 @@ impl WasmVM {
                 interval: delay_override.map(Duration::from_millis),
                 max_attempts: max_retry_attempts_override,
                 max_duration: max_retry_duration_override.map(Duration::from_millis),
+                on_max_attempts: OnMaxAttempts::FailAsTerminal,
             }
         } else {
             RetryPolicy::Infinite
@@ -1054,7 +1070,7 @@ impl WasmVM {
     }
 
     pub fn is_processing(&self) -> bool {
-        use_log_dispatcher!(self, CoreVM::is_processing)
+        use_log_dispatcher!(self, |vm| CoreVM::state(vm).is_processing())
     }
 
     pub fn last_command_index(&self) -> i32 {

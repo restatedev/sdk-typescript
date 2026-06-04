@@ -464,110 +464,113 @@ export class ContextImpl
     const serde = options?.serde ?? this.defaultSerde;
 
     // Prepare the handle
-    let handle: number;
+    let wasmRun: vm.WasmRun;
     try {
-      handle = this.coreVm.sys_run(name ?? "");
+      wasmRun = this.coreVm.sys_run(name ?? "");
     } catch (e) {
       this.abortAttempt(e);
       return ConstRestatePromise.pending();
     }
+    const handle = wasmRun.handle;
     const commandIndex = this.coreVm.last_command_index();
 
-    // Now prepare the run task
-    const doRun: () => Promise<any> = async () => {
-      // Execute the user code, wrapping with run interceptor hooks
-      const startTime = Date.now();
-      let res: T;
-      let err;
-      try {
-        await this.runInterceptor(name ?? "", async () => {
-          res = await action();
-        });
-      } catch (e) {
-        err = ensureError(e, this.asTerminalError);
-      }
-      const attemptDuration = Date.now() - startTime;
-
-      // Propose the completion to the VM
-      try {
-        if (err !== undefined) {
-          if (err instanceof TerminalError) {
-            // Record failure, go ahead
-            this.coreVm.propose_run_completion_failure(handle, {
-              code: err.code,
-              message: err.message,
-              metadata: Object.entries(err.metadata ?? {}).map(
-                ([key, value]) => ({ key, value })
-              ),
-            });
-          } else if (err instanceof RetryableError) {
-            this.coreVm.propose_run_completion_failure_transient_with_delay_override(
-              handle,
-              err.message,
-              err.stack,
-              BigInt(attemptDuration),
-              err.retryAfter !== undefined
-                ? BigInt(millisOrDurationToMillis(err.retryAfter))
-                : undefined,
-              options?.maxRetryAttempts,
-              options?.maxRetryDuration !== undefined
-                ? BigInt(millisOrDurationToMillis(options?.maxRetryDuration))
-                : undefined
-            );
-          } else {
-            this.vmLogger.warn(
-              `Error when processing ctx.run '${name}'.\n`,
-              err
-            );
-
-            // Configure the retry policy if any of the parameters are set.
-            let retryPolicy;
-            if (
-              options?.retryIntervalFactor !== undefined ||
-              options?.maxRetryAttempts !== undefined ||
-              options?.initialRetryInterval !== undefined ||
-              options?.maxRetryDuration !== undefined ||
-              options?.maxRetryInterval !== undefined
-            ) {
-              retryPolicy = {
-                factor: options?.retryIntervalFactor ?? 2.0,
-                initial_interval: millisOrDurationToMillis(
-                  options?.initialRetryInterval ?? 50
-                ),
-                max_attempts: options?.maxRetryAttempts,
-                max_duration:
-                  options?.maxRetryDuration === undefined
-                    ? undefined
-                    : millisOrDurationToMillis(options?.maxRetryDuration),
-                max_interval: millisOrDurationToMillis(
-                  options?.maxRetryInterval ?? { seconds: 10 }
-                ),
-              };
-            }
-            this.coreVm.propose_run_completion_failure_transient(
-              handle,
-              err.message,
-              err.stack,
-              BigInt(attemptDuration),
-              retryPolicy
-            );
-          }
-        } else {
-          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-          // @ts-expect-error
-          const serializedRes = serde.serialize(res);
-          const encodedRes = this.journalValueCodec.encode(serializedRes);
-          this.coreVm.propose_run_completion_success(handle, encodedRes);
+    if (!wasmRun.replayed) {
+      // Let's prepare the run task only if the run wasnt replayed.
+      const doRun: () => Promise<any> = async () => {
+        // Execute the user code, wrapping with run interceptor hooks
+        const startTime = Date.now();
+        let res: T;
+        let err;
+        try {
+          await this.runInterceptor(name ?? "", async () => {
+            res = await action();
+          });
+        } catch (e) {
+          err = ensureError(e, this.asTerminalError);
         }
-      } catch (e) {
-        this.abortAttempt(e);
-        return pendingPromise<T>();
-      }
-      await this.outputPump.awaitNextProgress();
-    };
+        const attemptDuration = Date.now() - startTime;
 
-    // Register the run to execute
-    this.runClosuresTracker.registerRunClosure(handle, doRun);
+        // Propose the completion to the VM
+        try {
+          if (err !== undefined) {
+            if (err instanceof TerminalError) {
+              // Record failure, go ahead
+              this.coreVm.propose_run_completion_failure(handle, {
+                code: err.code,
+                message: err.message,
+                metadata: Object.entries(err.metadata ?? {}).map(
+                  ([key, value]) => ({ key, value })
+                ),
+              });
+            } else if (err instanceof RetryableError) {
+              this.coreVm.propose_run_completion_failure_transient_with_delay_override(
+                handle,
+                err.message,
+                err.stack,
+                BigInt(attemptDuration),
+                err.retryAfter !== undefined
+                  ? BigInt(millisOrDurationToMillis(err.retryAfter))
+                  : undefined,
+                options?.maxRetryAttempts,
+                options?.maxRetryDuration !== undefined
+                  ? BigInt(millisOrDurationToMillis(options?.maxRetryDuration))
+                  : undefined
+              );
+            } else {
+              this.vmLogger.warn(
+                `Error when processing ctx.run '${name}'.\n`,
+                err
+              );
+
+              // Configure the retry policy if any of the parameters are set.
+              let retryPolicy;
+              if (
+                options?.retryIntervalFactor !== undefined ||
+                options?.maxRetryAttempts !== undefined ||
+                options?.initialRetryInterval !== undefined ||
+                options?.maxRetryDuration !== undefined ||
+                options?.maxRetryInterval !== undefined
+              ) {
+                retryPolicy = {
+                  factor: options?.retryIntervalFactor ?? 2.0,
+                  initial_interval: millisOrDurationToMillis(
+                    options?.initialRetryInterval ?? 50
+                  ),
+                  max_attempts: options?.maxRetryAttempts,
+                  max_duration:
+                    options?.maxRetryDuration === undefined
+                      ? undefined
+                      : millisOrDurationToMillis(options?.maxRetryDuration),
+                  max_interval: millisOrDurationToMillis(
+                    options?.maxRetryInterval ?? { seconds: 10 }
+                  ),
+                };
+              }
+              this.coreVm.propose_run_completion_failure_transient(
+                handle,
+                err.message,
+                err.stack,
+                BigInt(attemptDuration),
+                retryPolicy
+              );
+            }
+          } else {
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-expect-error
+            const serializedRes = serde.serialize(res);
+            const encodedRes = this.journalValueCodec.encode(serializedRes);
+            this.coreVm.propose_run_completion_success(handle, encodedRes);
+          }
+        } catch (e) {
+          this.abortAttempt(e);
+          return pendingPromise<T>();
+        }
+        await this.outputPump.awaitNextProgress();
+      };
+
+      // Register the run to execute
+      this.runClosuresTracker.registerRunClosure(handle, doRun);
+    }
 
     // TODO: here as well
     // Return the promise

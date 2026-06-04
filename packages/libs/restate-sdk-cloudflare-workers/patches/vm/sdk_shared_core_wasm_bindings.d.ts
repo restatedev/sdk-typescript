@@ -29,6 +29,11 @@ export interface WasmFailureMetadata {
     value: string;
 }
 
+export interface WasmRun {
+    replayed: boolean;
+    handle: number;
+}
+
 export interface WasmSendHandle {
     invocation_id_completion_id: number;
 }
@@ -143,7 +148,7 @@ export class WasmVM {
     sys_get_state_keys(): number;
     sys_input(): WasmInput;
     sys_peek_promise(key: string): number;
-    sys_run(name: string): number;
+    sys_run(name: string): WasmRun;
     sys_send(service: string, handler: string, buffer: Uint8Array, key: string | null | undefined, headers: WasmHeader[], delay?: bigint | null, idempotency_key?: string | null, name?: string | null): WasmSendHandle;
     sys_set_state(key: string, buffer: Uint8Array): void;
     sys_signal(signal_name: string): number;
