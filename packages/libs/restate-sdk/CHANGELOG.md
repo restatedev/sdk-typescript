@@ -1,5 +1,16 @@
 # @restatedev/restate-sdk
 
+## 1.15.0-rc.1
+
+### Minor Changes
+
+- Changes for Restate SDK 1.15.0-rc.1
+
+### Patch Changes
+
+- Updated dependencies
+  - @restatedev/restate-sdk-core@1.15.0-rc.1
+
 ## 1.15.0-rc.0
 
 ### Minor Changes
