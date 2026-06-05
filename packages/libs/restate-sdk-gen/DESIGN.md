@@ -94,8 +94,10 @@ routine-construction primitive.
 input order. Throws if any future rejects.
 
 **`race(futures)`** — wait for the first future to settle, return its
-value (or throw if it rejected). Other futures keep running in the
-background; their results are not delivered.
+value (or throw if it rejected). Other futures keep running while the
+main operation is still in flight; their results are not delivered. If
+they are still running when the main operation settles they are
+abandoned (see *Concurrency* below).
 
 **`any(futures)`** — wait for the first future that *succeeds*
 (non-rejected), return its value. If every future rejects, throws
@@ -167,9 +169,10 @@ finishes). The routine's Future settles when the routine returns.
 
 The important property is what happens to *losers* of a `race`. A
 race returns the winner's value to your code, but the losing routines
-keep running. They don't get cancelled. Their results are delivered to
-their own Futures, which nobody is awaiting; if nobody ever yields
-those Futures again, the values are dropped on the floor.
+keep running while the main operation is still in flight. They don't
+get cancelled. Their results are delivered to their own Futures, which
+nobody is awaiting; if nobody ever yields those Futures again, the
+values are dropped on the floor.
 
 This is intentional. The losing routine has a Future; it's still a
 first-class handle. You can yield it later if you want both results,
@@ -179,12 +182,58 @@ you'd reach for — but cancellation in this system means something
 specific (see below) and isn't the right tool for "stop work I'm no
 longer interested in."
 
-The practical consequence: `Scheduler.run(op)` doesn't return until
-*every* spawned routine has finished. If a race loser is parked on a
-journal source that never resolves, `run` doesn't return. In tests
-this means resolving every deferred you constructed; in production it
-means designing your routines to terminate even if their results are
-unused.
+### When the main operation settles: `onMainExit`
+
+The lifetime of every spawned routine is bounded by the *main*
+operation — the one you handed to `execute`/`Scheduler.run`. What
+happens to routines still running when the main operation settles is
+governed by `onMainExit`, an option on `execute`/`Scheduler` with two
+values:
+
+- **`"abandon"` (the default).** `run(op)` returns as soon as the main
+  fiber settles. Any spawned routine still running at that point is
+  *abandoned* at its current suspension point: it is never resumed, so
+  no `catch`/`finally` blocks run, and the journal sources it was
+  parked on are dropped. The stop is *prompt* — the scheduler checks
+  `mainExited()` not only in the main loop but in the middle of
+  draining the ready queue, so nothing observable (journal writes,
+  channel sends, side effects) happens after the main fiber's outcome
+  is decided. Durable work a routine already performed is journaled as
+  usual; only its in-memory continuation is discarded.
+- **`"join"`.** `run(op)` keeps driving until *every* spawned routine
+  has finished. This is the pre-`onMainExit` behavior.
+
+The loop condition is `while (\!this.mainExited() && this.fibers.size >
+0)`, where `mainExited()` is true only when `onMainExit === "abandon"`
+and the main fiber is done. Under `"join"`, `mainExited()` is always
+false, so the loop runs until no fiber is alive (the old condition).
+Under `"abandon"`, the main fiber is a member of `fibers` while it is
+alive, so the conjunction reduces to `\!main.isDone()`.
+
+Why is `"abandon"` the default? Because the alternative is a footgun.
+A spawned routine — a race loser, a fire-and-forget background task —
+parked on a journal source that never resolves would otherwise keep
+the handler alive forever. Under `"abandon"` the handler returns the
+moment its own logic is done; routines whose results nobody is waiting
+for can't strand the invocation. Abandoned routines get no
+`catch`/`finally` because the scheduler that would have to resume them
+to run those blocks has already stopped — there is no driver left, and
+resuming them would by definition perform observable work *after* the
+handler's outcome was decided, which prompt-stop forbids. If you need
+finalization to run, the routine has to settle before the main
+operation does.
+
+The practical consequence: fire-and-forget spawns are **no longer
+guaranteed to complete**. A routine you `spawn` but never `yield*` may
+be abandoned before it finishes. If you rely on it completing, either
+`yield*` its Future before returning from the main operation, or pass
+`{ onMainExit: "join" }` to `execute`. Under `"abandon"` the
+race-loser-hangs-the-handler footgun is gone: a loser parked on a
+never-settling source is simply abandoned when the main operation
+settles. Under `"join"` the old caveat still applies — a routine
+parked on a source that never resolves keeps `run` from returning, so
+design routines to terminate even when their results are unused (in
+tests, resolve every deferred you constructed).
 
 ---
 
@@ -295,6 +344,19 @@ the earliest possible moment, slightly before user catch handlers
 run. The order is microseconds different from any user-observable
 behavior, but it minimizes wasted work.
 
+Cancellation is not the only trigger. Production `execute()` passes
+the SDK's `ctx.request().attemptCompletedSignal` to the scheduler as
+its *parent* signal, so the signal also fires when the current
+*attempt* ends — suspension, stream close, or completion. Without the
+link, a `run` closure still in flight when the attempt dies would keep
+running detached, doing work nobody can journal. Every controller the
+scheduler creates is born linked to the parent (subscribed with
+`{ once, signal }` so retired controllers self-detach — no listener
+accumulation across cancel/recover cycles). One asymmetry:
+cancellation is recoverable, so each cancel event replaces the
+controller with a fresh unaborted one; an ended attempt is not — once
+the parent has fired, replacement controllers are born aborted.
+
 ### Cancellation hygiene in `ops.run`
 
 `ops.run` wraps user closures with cancellation-aware error handling.
@@ -351,9 +413,11 @@ here, with the reasoning:
 an invocation-level event delivered by the SDK. We don't expose a way
 to cancel an individual spawned routine. If you need to stop a single
 sub-task, that's a different operation — currently best modeled as
-"don't await its Future and let it complete on its own time." If
-genuine per-routine cancellation becomes necessary, it will be a
-separate primitive with its own design.
+"don't await its Future"; under the default `"abandon"` policy it is
+discarded when the main operation settles (see *Concurrency* above),
+so you don't pay for work whose result you never read. If genuine
+per-routine cancellation becomes necessary, it will be a separate
+primitive with its own design.
 
 **No automatic propagation of cancellation across structured
 concurrency.** Cancellation arrives at every parked routine
@@ -442,6 +506,19 @@ restate.serve({ services: [greeter] });
 calls `build(ops)` to get the root Operation, and runs it. The result
 is awaited and returned to the SDK as the handler's return value.
 
+`execute` takes an optional third argument, `ExecuteOptions` (an alias
+for `SchedulerOptions`), carrying the `onMainExit` policy described in
+*Concurrency* above. By default (`"abandon"`) `execute` resolves as
+soon as the main operation settles, abandoning any spawned routines
+(and race losers) still running at that point; pass
+`{ onMainExit: "join" }` to instead keep driving until every spawned
+routine has finished. `execute`, `ExecuteOptions`, `OnMainExit`, and
+`SchedulerOptions` are exported from `@restatedev/restate-sdk-gen`.
+
+```ts
+execute(ctx, build, { onMainExit: "join" });
+```
+
 Note: `execute` uses the SDK's *default* cancellation mode
 (`explicitCancellation: false`). This is the mode where the SDK rejects
 race promises with TerminalError on cancellation, which is what our
@@ -462,5 +539,9 @@ services that use this scheduler — the cancellation path won't work.
   (CancelledError, code 409). Restate doesn't retry it.
 - An AbortSignal lets `ops.run` closures respond to cancellation
   promptly; the abort fires before user catch handlers run.
-- Routine losers in a race continue running in the background; the
-  scheduler waits for them to complete before returning.
+- A spawned routine's lifetime is bounded by the main operation. Under
+  the default `onMainExit: "abandon"`, the scheduler returns as soon as
+  the main operation settles and abandons any routine (including race
+  losers) still running — promptly, with no `catch`/`finally`. Pass
+  `onMainExit: "join"` to keep driving until every spawned routine has
+  finished.

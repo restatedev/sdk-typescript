@@ -73,9 +73,11 @@ export const spawnSvc = service({
     },
 
     // 2.3 race over spawned futures: first to settle wins.
-    // The losing routine keeps running in the background; its result
-    // is journaled but no one reads it. Use this for hedged calls or
-    // fastest-replica-wins patterns.
+    // The losing routine keeps running only while the handler is live;
+    // once the main operation settles it is abandoned (the default
+    // `onMainExit: "abandon"`). If you need the loser to finish,
+    // `yield*` it too, or run with `{ onMainExit: "join" }`. Use this
+    // for hedged calls or fastest-replica-wins patterns.
     *raceSpawned(): Operation<string> {
       const fast = spawn(labeledWork("fast", 30));
       const slow = spawn(labeledWork("slow", 200));

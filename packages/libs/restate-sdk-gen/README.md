@@ -42,6 +42,17 @@ restate.endpoint().bind(greeter).listen();
 the generator body read the active scheduler from a synchronous current-fiber
 slot — no `ops` parameter, no `AsyncLocalStorage`.
 
+By default `execute` resolves the moment the main operation settles. Any
+spawned fibers (and race losers) still running at that point are *abandoned*:
+they are never resumed, their `catch`/`finally` blocks never run, and the
+sources they were parked on are dropped. The stop is prompt — nothing
+observable (journal writes, channel sends, side effects) happens after the
+main operation's outcome is decided. Durable work a fiber already performed is
+journaled as usual; only the in-memory continuation is discarded. Pass
+`{ onMainExit: "join" }` as a third argument to instead keep driving until
+every spawned fiber has finished (`ExecuteOptions = { onMainExit?: "abandon" |
+"join" }`, both re-exported from the package).
+
 ## Two tiers, one user-visible Future
 
 - **`Operation<T>`** — lazy, one-shot. Constructed via `gen()` for user-authored
@@ -70,9 +81,9 @@ Imported directly from `@restatedev/restate-sdk-gen`:
 ## Combinators
 
 - **`all(futures)`** — wait for every future, return their values in order. Heterogeneous-tuple typed (mirrors `Promise.all`).
-- **`race(futures)`** — return the first to settle. Race losers continue running; their results are discarded.
+- **`race(futures)`** — return the first to settle; the losing routines are abandoned once the main operation settles (under the default `onMainExit: "abandon"`), so their results are discarded. Under `onMainExit: "join"` the losers keep running and a loser parked on a never-settling source keeps the handler alive (see Cancellation).
 - **`select({ tag1: future1, tag2: future2, ... })`** — Tokio/Go-style. Returns `{ tag, future }` of the winning branch; switch on `tag` and unwrap `future`.
-- **`spawn(op)`** — register an `Operation` as a new routine; returns a `Future<T>` for its result.
+- **`spawn(op)`** — register an `Operation` as a new routine; returns a `Future<T>` for its result. Under the default `onMainExit: "abandon"`, a spawned routine still running when the main operation settles is abandoned — fire-and-forget spawns are **not** guaranteed to complete. To ensure completion, `yield*` the returned future before returning, or run with `{ onMainExit: "join" }`.
 
 Combinators have a fast path: when every input Future is journal-backed, they collapse to a single `RestatePromise.all/race`. Otherwise they fall back to a synthesized fiber. Same semantics either way.
 
@@ -82,7 +93,11 @@ Invocation-level cancellation (from outside, via the SDK) is delivered as a `Ter
 
 Each `run` closure receives an `{ signal }` argument — an `AbortSignal` that aborts *before* the `TerminalError` fans out to parked routines. Plumb it into AbortSignal-aware APIs (`fetch(url, { signal })`) so in-flight syscalls cancel immediately instead of waiting for cancellation to surface at the next yield.
 
+On a cancellation fan-out the parked fibers are woken FIFO; if the main fiber catches the cancellation and returns, the remaining fibers are abandoned (their `catch` blocks may never run) under the default `onMainExit: "abandon"`.
+
 For routine-level "stop": use a `Channel<void>` plus `select({ work, stop: stop.receive })`. Per-routine cancellation primitives are deferred — see `DESIGN.md`.
+
+Under the default `onMainExit: "abandon"` a spawned routine or race loser parked on a never-settling source does **not** hang the handler: the handler returns as soon as the main operation settles and the parked routine is abandoned. That hang only applies under `onMainExit: "join"`, where the scheduler keeps driving until every fiber finishes.
 
 ## Repository layout
 

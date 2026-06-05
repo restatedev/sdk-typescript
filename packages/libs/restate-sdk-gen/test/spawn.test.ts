@@ -70,8 +70,23 @@ describe("spawn — concurrency", () => {
 });
 
 describe("spawn — fire and forget", () => {
-  test("parent can return without awaiting the spawn; child still runs", async () => {
+  test("parent return abandons an unawaited child by default (onMainExit: 'abandon')", async () => {
     const sched = new Scheduler(testLib);
+    let childRan = false;
+    const child = gen(function* () {
+      yield* sched.makeJournalFuture(resolved("ok"));
+      childRan = true;
+    });
+    const op = gen(function* () {
+      spawn(child);
+      return "parent-done";
+    });
+    expect(await sched.run(op)).toBe("parent-done");
+    expect(childRan).toBe(false);
+  });
+
+  test("parent can return without awaiting the spawn; child still runs under onMainExit: 'join'", async () => {
+    const sched = new Scheduler(testLib, undefined, { onMainExit: "join" });
     let childRan = false;
     const child = gen(function* () {
       yield* sched.makeJournalFuture(resolved("ok"));

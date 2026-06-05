@@ -43,10 +43,42 @@ import type { Settled, PromiseSource } from "./scheduler-types.js";
 import { Fiber, type SchedulerOps } from "./fiber.js";
 import { type Channel, makeChannel } from "./channel.js";
 
+/**
+ * Policy for what happens to still-running spawned routines when the
+ * main operation settles.
+ *
+ * - `"abandon"` (default): `run()` returns as soon as the main
+ *   operation settles. Still-running spawned routines (including
+ *   fibers synthesized internally by combinator fallbacks) are
+ *   abandoned at their current suspension point — they are never
+ *   resumed again, so no `catch`/`finally` blocks run and the sources
+ *   they were parked on are dropped. Durable work they already
+ *   started is journaled as usual; only the in-memory continuation is
+ *   discarded.
+ * - `"join"`: `run()` keeps driving until *every* routine has
+ *   finished. A spawned routine parked on a source that never settles
+ *   keeps the handler from returning forever — prefer `"abandon"`
+ *   unless the workflow relies on fire-and-forget routines completing.
+ */
+export type OnMainExit = "abandon" | "join";
+
+export interface SchedulerOptions {
+  /** See {@link OnMainExit}. Defaults to `"abandon"`. */
+  onMainExit?: OnMainExit;
+}
+
 export class Scheduler implements SchedulerOps {
   private readonly fibers: Set<Fiber<unknown>> = new Set();
   private readonly ready: Fiber<unknown>[] = [];
   private readonly lib: AwaitableLib;
+  private readonly onMainExit: OnMainExit;
+  /**
+   * The root fiber of the current `run()`. Assigned at the top of each
+   * `run` call. Note the scheduler does not support concurrent `run`
+   * calls (`fibers`/`ready`/`abortController` are equally shared);
+   * production `execute()` always constructs a fresh scheduler.
+   */
+  private main: Fiber<unknown> | null = null;
   // Replaced (not just re-aborted) each time the scheduler observes
   // invocation cancellation. AbortControllers are one-way — once
   // aborted, signal.aborted stays true forever — so the scheduler-
@@ -55,7 +87,18 @@ export class Scheduler implements SchedulerOps {
   // still see it as aborted (correctly, since their work was caught
   // by the cancellation); closures created after recovery see the new,
   // unaborted signal.
-  private abortController: AbortController = new AbortController();
+  private abortController: AbortController;
+
+  /**
+   * Parent AbortSignal supplied at construction (production: the SDK's
+   * `attemptCompletedSignal`). Every controller this scheduler creates
+   * is a child of it — born aborted if the parent has already fired,
+   * aborted the moment it fires otherwise. Unlike cancellation, a
+   * parent abort is sticky: an ended attempt never resumes. Defaults
+   * to a signal that never fires.
+   */
+  private readonly parentSignal: AbortSignal;
+
   /**
    * Slot for the operations object bound to this scheduler. Defaults
    * to the scheduler itself so tests (which don't construct a
@@ -69,16 +112,25 @@ export class Scheduler implements SchedulerOps {
    */
   contextSlot: unknown;
 
-  constructor(lib: AwaitableLib) {
+  constructor(
+    lib: AwaitableLib,
+    parentSignal?: AbortSignal,
+    options?: SchedulerOptions
+  ) {
     this.lib = lib;
+    this.onMainExit = options?.onMainExit ?? "abandon";
     this.contextSlot = this;
+    this.parentSignal = parentSignal ?? new AbortController().signal;
+    this.abortController = this.newAbortController();
   }
 
   /**
    * The scheduler's current AbortSignal. Aborts when invocation
    * cancellation is observed (the SDK rejects the main race promise
-   * with TerminalError). After cancellation has been delivered to
-   * fibers and the scheduler has resumed, this getter returns a
+   * with TerminalError), or when the parent signal passed at
+   * construction fires (production passes the SDK's
+   * `attemptCompletedSignal`). After cancellation has been delivered
+   * to fibers and the scheduler has resumed, this getter returns a
    * *fresh* signal — one that is not aborted, even though the previous
    * cancel was just delivered.
    *
@@ -90,6 +142,33 @@ export class Scheduler implements SchedulerOps {
    */
   get abortSignal(): AbortSignal {
     return this.abortController.signal;
+  }
+
+  /**
+   * Fresh controller, born linked to the parent signal: pre-aborted if
+   * the parent has already fired, otherwise subscribed to it. Births
+   * the initial controller and each cancellation-recovery replacement.
+   * Recovery closures must not see an unaborted signal once the
+   * attempt itself is over — a parent abort is sticky.
+   */
+  private newAbortController(): AbortController {
+    const c = new AbortController();
+    if (this.parentSignal.aborted) {
+      c.abort(this.parentSignal.reason);
+    } else {
+      this.parentSignal.addEventListener(
+        "abort",
+        () => c.abort(this.parentSignal.reason),
+        // `once`: the registration drops after the parent fires.
+        // `signal: c.signal`: it also drops the moment this controller
+        // is aborted by any other path (cancellation retiring it) — so
+        // replaced controllers self-detach and at most one listener
+        // lives on the parent at any time, no accumulation across
+        // cancel/recover cycles.
+        { once: true, signal: c.signal }
+      );
+    }
+    return c;
   }
 
   // ---- SchedulerOps: narrow interface for Fiber ----
@@ -124,6 +203,11 @@ export class Scheduler implements SchedulerOps {
    * Register an Operation as a fresh fiber and return a Future that
    * resolves with its eventual value. Eager: by the time this returns,
    * the fiber is queued ready and will be advanced on the next drain.
+   *
+   * Lifetime is bounded by the main fiber under the default
+   * `"abandon"` policy: a spawned fiber still running when the main
+   * fiber settles is abandoned (see {@link OnMainExit}). Under
+   * `"join"` it keeps the scheduler alive until it finishes.
    *
    * Used by combinator fallbacks (race, allSettled, …), by
    * `RestateOperations.spawn`, and via the slot interface by the free
@@ -283,21 +367,45 @@ export class Scheduler implements SchedulerOps {
 
   // ---- driving ----
 
+  /**
+   * True once the main fiber has settled under the `"abandon"` policy —
+   * the signal to stop driving everything else. Checked by the main
+   * loop *and* by `drainReady`, so the drain stops promptly mid-queue:
+   * nothing observable (journal writes, channel sends, side effects)
+   * happens after the main fiber's outcome is decided. Always false
+   * under `"join"`.
+   */
+  private mainExited(): boolean {
+    return (
+      this.onMainExit === "abandon" && this.main !== null && this.main.isDone()
+    );
+  }
+
   private drainReady(): void {
-    while (this.ready.length > 0) this.ready.shift()!.advance();
+    while (this.ready.length > 0 && !this.mainExited()) {
+      this.ready.shift()!.advance();
+    }
   }
 
   /**
    * Run an operation to completion. Drain the ready queue, then loop:
    * collect every PromiseSource from every parked fiber, race them,
-   * dispatch the winner via its fire callback, drain. Stop when no
-   * fiber is alive.
+   * dispatch the winner via its fire callback, drain.
+   *
+   * When to stop is governed by `onMainExit`: under `"abandon"` (the
+   * default) the loop ends as soon as the main fiber settles and any
+   * still-running spawned fibers are abandoned; under `"join"` it ends
+   * only when no fiber is alive.
    */
   async run<T>(op: Operation<T>): Promise<T> {
     const main = this.createFiber(op);
+    this.main = main as Fiber<unknown>;
     this.drainReady();
 
-    while (this.fibers.size > 0) {
+    // Under "join", mainExited() is always false and the loop runs
+    // until every fiber is done. Under "abandon", main ∈ fibers while
+    // it is alive, so the conjunction reduces to !main.isDone().
+    while (!this.mainExited() && this.fibers.size > 0) {
       const items: PromiseSource[] = [];
       for (const f of this.fibers) {
         for (const src of f.parkedSources()) items.push(src);
@@ -339,7 +447,7 @@ export class Scheduler implements SchedulerOps {
       } catch (e) {
         if (this.lib.isCancellation(e)) {
           this.abortController.abort(e);
-          this.abortController = new AbortController();
+          this.abortController = this.newAbortController();
         }
         const errSettled: Settled = { ok: false, e };
         for (const it of items) it.fire(errSettled);

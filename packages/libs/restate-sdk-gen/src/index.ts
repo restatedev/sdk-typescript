@@ -57,6 +57,8 @@ export type {
 } from "./future.js";
 export { gen, type Operation, select, type SelectResult } from "./operation.js";
 export {
+  execute,
+  type ExecuteOptions,
   type GenContextDate,
   type RetryOptions,
   type RunAction,
@@ -65,6 +67,7 @@ export {
   wrapActionForCancellation,
   type HandlerRequest,
 } from "./restate-operations.js";
+export type { OnMainExit, SchedulerOptions } from "./scheduler.js";
 export type { SharedState, State, TypedState, UntypedState } from "./state.js";
 
 // Service/object/workflow definition API

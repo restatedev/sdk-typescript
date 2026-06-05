@@ -35,10 +35,11 @@
 //   - Idempotent: multiple cancellations don't re-abort an already-
 //     aborted signal.
 
+import { getEventListeners } from "node:events";
 import { describe, expect, test } from "vitest";
 import { gen, type Operation } from "../src/index.js";
 import { Scheduler } from "../src/internal.js";
-import { cancellingLib, deferred } from "./test-promise.js";
+import { cancellingLib, deferred, testLib } from "./test-promise.js";
 
 class CancelError extends Error {
   readonly code = "CANCELLED";
@@ -516,6 +517,129 @@ describe("abortSignal — only cancellation errors trigger the abort controller"
     );
     await result;
     expect(listenerCalls).toBe(1);
+    d1.resolve("late1");
+    d2.resolve("late2");
+  });
+});
+
+describe("abortSignal — parent signal (attemptCompletedSignal)", () => {
+  // Production `execute()` passes `ctx.request().attemptCompletedSignal`
+  // as the scheduler's parent signal: when the current attempt ends
+  // (suspension, stream close, completion), in-flight run closures
+  // listening on the scheduler signal must stop promptly — not just on
+  // invocation cancellation. Every controller the scheduler creates is
+  // a child of the parent.
+
+  test("an unfired parent signal leaves the scheduler signal unaborted", () => {
+    const attempt = new AbortController();
+    const sched = new Scheduler(testLib, attempt.signal);
+    expect(sched.abortSignal.aborted).toBe(false);
+  });
+
+  test("parent firing aborts the current scheduler signal with the same reason", async () => {
+    const attempt = new AbortController();
+    const sched = new Scheduler(testLib, attempt.signal);
+    const d = deferred<string>();
+    const reason = new Error("attempt completed");
+    let capturedSignal: AbortSignal | null = null;
+
+    const op = gen(function* () {
+      // Capture the signal an ops.run closure would receive.
+      capturedSignal = sched.abortSignal;
+      return yield* sched.makeJournalFuture(d.promise);
+    });
+    const result = sched.run(op);
+    queueMicrotask(() => {
+      attempt.abort(reason);
+      d.resolve("done");
+    });
+    expect(await result).toBe("done");
+    const captured = capturedSignal as AbortSignal | null;
+    expect(captured).not.toBeNull();
+    expect(captured!.aborted).toBe(true);
+    expect(captured!.reason).toBe(reason);
+  });
+
+  test("an already-aborted parent births the scheduler signal aborted", () => {
+    const attempt = new AbortController();
+    const reason = new Error("attempt already over");
+    attempt.abort(reason);
+    const sched = new Scheduler(testLib, attempt.signal);
+    expect(sched.abortSignal.aborted).toBe(true);
+    expect(sched.abortSignal.reason).toBe(reason);
+  });
+
+  test("parent abort is sticky: the recovery controller after a cancellation is born aborted", async () => {
+    // Cancellation is non-sticky (fresh controller per cancel event),
+    // but an ended attempt never resumes — so once the parent has
+    // fired, the replacement controller must be born aborted, and
+    // cleanup closures must not see an unaborted signal.
+    const { lib, cancel } = cancellingLib();
+    const attempt = new AbortController();
+    const sched = new Scheduler(lib, attempt.signal);
+    const d1 = deferred<string>();
+    const d2 = deferred<string>();
+    let signalAfterRecovery: AbortSignal | null = null;
+
+    const op = gen(function* () {
+      try {
+        yield* sched.makeJournalFuture(d1.promise);
+      } catch {
+        // Expected: the cancellation fan-out lands here.
+      }
+      signalAfterRecovery = sched.abortSignal;
+      return yield* sched.makeJournalFuture(d2.promise);
+    });
+
+    const result = sched.run(op);
+    queueMicrotask(() => {
+      // The attempt ends first, then cancellation is observed — the
+      // recovery path replaces the controller *after* the attempt died.
+      attempt.abort(new Error("attempt completed"));
+      cancel(new CancelError());
+    });
+    queueMicrotask(() => queueMicrotask(() => d2.resolve("v")));
+    expect(await result).toBe("v");
+    const after = signalAfterRecovery as AbortSignal | null;
+    expect(after).not.toBeNull();
+    expect(after!.aborted).toBe(true);
+    d1.resolve("late");
+  });
+
+  test("retired controllers self-detach: cancel/recover cycles do not accumulate listeners on the parent", async () => {
+    // Each controller subscribes to the parent with
+    // `{ once, signal: c.signal }`, so when cancellation aborts and
+    // replaces a controller, its registration is auto-removed from the
+    // parent. After any number of cancel/recover cycles, exactly one
+    // listener (the current controller's) remains.
+    const { lib, cancel } = cancellingLib();
+    const attempt = new AbortController();
+    const sched = new Scheduler(lib, attempt.signal);
+    const d1 = deferred<string>();
+    const d2 = deferred<string>();
+    const d3 = deferred<string>();
+
+    const op = gen(function* () {
+      for (const d of [d1, d2]) {
+        try {
+          yield* sched.makeJournalFuture(d.promise);
+        } catch {
+          // Two cancel/recover cycles.
+        }
+      }
+      return yield* sched.makeJournalFuture(d3.promise);
+    });
+
+    const result = sched.run(op);
+    queueMicrotask(() => cancel(new CancelError("first")));
+    queueMicrotask(() =>
+      queueMicrotask(() => cancel(new CancelError("second")))
+    );
+    queueMicrotask(() =>
+      queueMicrotask(() => queueMicrotask(() => d3.resolve("done")))
+    );
+    expect(await result).toBe("done");
+    expect(getEventListeners(attempt.signal, "abort")).toHaveLength(1);
     d1.resolve("late1");
     d2.resolve("late2");
   });
