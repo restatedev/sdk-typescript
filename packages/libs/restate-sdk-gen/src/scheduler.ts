@@ -87,15 +87,18 @@ export class Scheduler implements SchedulerOps {
   // still see it as aborted (correctly, since their work was caught
   // by the cancellation); closures created after recovery see the new,
   // unaborted signal.
-  private abortController: AbortController = new AbortController();
+  private abortController: AbortController;
+
   /**
-   * External AbortSignals linked via {@link linkAbortSignal}. When any
-   * of them fires, the *current* controller is aborted; replacement
-   * controllers (cancellation recovery) are born pre-aborted if a
-   * linked signal has already fired — an attempt that is over stays
-   * over, unlike cancellation, which is recoverable.
+   * Parent AbortSignal supplied at construction (production: the SDK's
+   * `attemptCompletedSignal`). Every controller this scheduler creates
+   * is a child of it — born aborted if the parent has already fired,
+   * aborted the moment it fires otherwise. Unlike cancellation, a
+   * parent abort is sticky: an ended attempt never resumes. Defaults
+   * to a signal that never fires.
    */
-  private readonly linkedSignals: AbortSignal[] = [];
+  private readonly parentSignal: AbortSignal;
+
   /**
    * Slot for the operations object bound to this scheduler. Defaults
    * to the scheduler itself so tests (which don't construct a
@@ -109,17 +112,23 @@ export class Scheduler implements SchedulerOps {
    */
   contextSlot: unknown;
 
-  constructor(lib: AwaitableLib, options?: SchedulerOptions) {
+  constructor(
+    lib: AwaitableLib,
+    parentSignal?: AbortSignal,
+    options?: SchedulerOptions
+  ) {
     this.lib = lib;
     this.onMainExit = options?.onMainExit ?? "abandon";
     this.contextSlot = this;
+    this.parentSignal = parentSignal ?? new AbortController().signal;
+    this.abortController = this.newAbortController();
   }
 
   /**
    * The scheduler's current AbortSignal. Aborts when invocation
    * cancellation is observed (the SDK rejects the main race promise
-   * with TerminalError), or when any signal linked via
-   * {@link linkAbortSignal} fires (production links the SDK's
+   * with TerminalError), or when the parent signal passed at
+   * construction fires (production passes the SDK's
    * `attemptCompletedSignal`). After cancellation has been delivered
    * to fibers and the scheduler has resumed, this getter returns a
    * *fresh* signal — one that is not aborted, even though the previous
@@ -136,41 +145,29 @@ export class Scheduler implements SchedulerOps {
   }
 
   /**
-   * Link an external AbortSignal to this scheduler: when `signal`
-   * fires, the scheduler's current AbortSignal aborts with the same
-   * reason. Production `execute()` links the SDK's
-   * `ctx.request().attemptCompletedSignal` so in-flight `run` closures
-   * stop promptly when the current attempt ends (suspension, stream
-   * close, completion) — not just on invocation cancellation.
-   *
-   * Unlike cancellation, a linked abort is sticky: controllers created
-   * afterwards (the cancellation-recovery replacement) are born
-   * aborted, because an attempt that has ended never resumes.
-   */
-  linkAbortSignal(signal: AbortSignal): void {
-    this.linkedSignals.push(signal);
-    if (signal.aborted) {
-      this.abortController.abort(signal.reason);
-      return;
-    }
-    signal.addEventListener(
-      "abort",
-      // Abort whatever controller is current at fire time — the
-      // controller may have been replaced since linking.
-      () => this.abortController.abort(signal.reason),
-      { once: true }
-    );
-  }
-
-  /**
-   * Fresh controller for the cancellation-recovery path. Born aborted
-   * if any linked signal already fired: recovery closures must not see
-   * an unaborted signal once the attempt itself is over.
+   * Fresh controller, born linked to the parent signal: pre-aborted if
+   * the parent has already fired, otherwise subscribed to it. Births
+   * the initial controller and each cancellation-recovery replacement.
+   * Recovery closures must not see an unaborted signal once the
+   * attempt itself is over — a parent abort is sticky.
    */
   private newAbortController(): AbortController {
     const c = new AbortController();
-    const fired = this.linkedSignals.find((s) => s.aborted);
-    if (fired) c.abort(fired.reason);
+    if (this.parentSignal.aborted) {
+      c.abort(this.parentSignal.reason);
+    } else {
+      this.parentSignal.addEventListener(
+        "abort",
+        () => c.abort(this.parentSignal.reason),
+        // `once`: the registration drops after the parent fires.
+        // `signal: c.signal`: it also drops the moment this controller
+        // is aborted by any other path (cancellation retiring it) — so
+        // replaced controllers self-detach and at most one listener
+        // lives on the parent at any time, no accumulation across
+        // cancel/recover cycles.
+        { once: true, signal: c.signal }
+      );
+    }
     return c;
   }
 

@@ -142,7 +142,7 @@ describe("select — pumping a stable future-pool in a loop", () => {
     // "others observed later" relies on the scheduler driving spawned
     // routines to completion after the main fiber returns — join mode.
     // (Under the default "abandon", B would be dropped once main settles.)
-    const sched = new Scheduler(testLib, { onMainExit: "join" });
+    const sched = new Scheduler(testLib, undefined, { onMainExit: "join" });
     const events: string[] = [];
 
     // Two long-running spawned routines that resolve at different points.

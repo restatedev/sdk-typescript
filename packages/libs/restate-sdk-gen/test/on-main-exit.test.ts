@@ -186,7 +186,7 @@ describe("onMainExit: 'abandon' (default)", () => {
 
 describe("onMainExit: 'join'", () => {
   test("run waits for fire-and-forget children to finish", async () => {
-    const sched = new Scheduler(testLib, { onMainExit: "join" });
+    const sched = new Scheduler(testLib, undefined, { onMainExit: "join" });
     let childRan = false;
     const child = gen(function* () {
       yield* sched.makeJournalFuture(resolved("ok"));
@@ -201,7 +201,7 @@ describe("onMainExit: 'join'", () => {
   });
 
   test("run waits for a parked child whose source settles after main returns", async () => {
-    const sched = new Scheduler(testLib, { onMainExit: "join" });
+    const sched = new Scheduler(testLib, undefined, { onMainExit: "join" });
     const d = deferred<void>();
     let childDone = false;
     const op = gen(function* () {

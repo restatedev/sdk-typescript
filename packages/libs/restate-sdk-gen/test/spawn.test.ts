@@ -86,7 +86,7 @@ describe("spawn — fire and forget", () => {
   });
 
   test("parent can return without awaiting the spawn; child still runs under onMainExit: 'join'", async () => {
-    const sched = new Scheduler(testLib, { onMainExit: "join" });
+    const sched = new Scheduler(testLib, undefined, { onMainExit: "join" });
     let childRan = false;
     const child = gen(function* () {
       yield* sched.makeJournalFuture(resolved("ok"));
