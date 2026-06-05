@@ -81,6 +81,21 @@ jobs:
                   echo "New version detected: $NAME@$VERSION"
                   echo "create_release=true" >> "$GITHUB_OUTPUT"
                   echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+                  # Pre-release versions (e.g. 1.2.3-rc.1, 1.2.3-alpha.0) MUST NOT be published
+                  # with the latest npm dist-tag (omitting --tag defaults to latest), otherwise
+                  # users would get the pre-release on a plain install.
+                  # We use the pre-release identifier (rc, alpha, beta, ...) as the dist-tag.
+                  if [[ "$VERSION" == *-* ]]; then
+                    PRERELEASE_ID="${VERSION#*-}"
+                    PRERELEASE_ID="${PRERELEASE_ID%%.*}"
+                    echo "Pre-release detected, using npm dist-tag: $PRERELEASE_ID"
+                    echo "prerelease=true" >> "$GITHUB_OUTPUT"
+                    echo "npm_tag=$PRERELEASE_ID" >> "$GITHUB_OUTPUT"
+                  else
+                    echo "prerelease=false" >> "$GITHUB_OUTPUT"
+                    echo "npm_tag=latest" >> "$GITHUB_OUTPUT"
+                  fi
                   break
                 fi
               fi
@@ -100,10 +115,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          EXTRA_FLAGS=""
+          if [ "${{ steps.check.outputs.prerelease }}" = "true" ]; then
+            EXTRA_FLAGS="--prerelease"
+          fi
           gh release create "v${{ steps.check.outputs.version }}" \
             --title "Release v${{ steps.check.outputs.version }}" \
-            --generate-notes
+            --generate-notes \
+            $EXTRA_FLAGS
 
       - name: Publish release to npm
         if: steps.check.outputs.create_release == 'true'
-        run: pnpm -r --filter='./packages/libs/**' publish --access public --no-git-checks --provenance
+        run: pnpm -r --filter='./packages/libs/**' publish --tag "${{ steps.check.outputs.npm_tag }}" --access public --no-git-checks --provenance
