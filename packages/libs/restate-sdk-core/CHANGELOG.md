@@ -1,5 +1,11 @@
 # @restatedev/restate-sdk-core
 
+## 1.15.0-rc.0
+
+### Minor Changes
+
+- RC1 pre-release
+
 ## 1.14.3
 
 ### Patch Changes

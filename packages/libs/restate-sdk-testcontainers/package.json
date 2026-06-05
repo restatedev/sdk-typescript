@@ -1,6 +1,6 @@
 {
   "name": "@restatedev/restate-sdk-testcontainers",
-  "version": "1.14.3",
+  "version": "1.15.0-rc.0",
   "description": "Typescript SDK for Restate",
   "author": "Restate Developers",
   "email": "code@restate.dev",
