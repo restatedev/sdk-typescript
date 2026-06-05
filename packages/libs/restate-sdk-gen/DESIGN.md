@@ -344,6 +344,17 @@ the earliest possible moment, slightly before user catch handlers
 run. The order is microseconds different from any user-observable
 behavior, but it minimizes wasted work.
 
+Cancellation is not the only trigger. Production `execute()` links the
+SDK's `ctx.request().attemptCompletedSignal` to the scheduler (via
+`Scheduler.linkAbortSignal`), so the signal also fires when the
+current *attempt* ends — suspension, stream close, or completion.
+Without the link, a `run` closure still in flight when the attempt
+dies would keep running detached, doing work nobody can journal. One
+asymmetry: cancellation is recoverable, so each cancel event replaces
+the controller with a fresh unaborted one; an ended attempt is not —
+once a linked signal has fired, replacement controllers are born
+aborted.
+
 ### Cancellation hygiene in `ops.run`
 
 `ops.run` wraps user closures with cancellation-aware error handling.

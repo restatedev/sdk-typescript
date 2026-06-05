@@ -38,7 +38,7 @@
 import { describe, expect, test } from "vitest";
 import { gen, type Operation } from "../src/index.js";
 import { Scheduler } from "../src/internal.js";
-import { cancellingLib, deferred } from "./test-promise.js";
+import { cancellingLib, deferred, testLib } from "./test-promise.js";
 
 class CancelError extends Error {
   readonly code = "CANCELLED";
@@ -518,5 +518,93 @@ describe("abortSignal — only cancellation errors trigger the abort controller"
     expect(listenerCalls).toBe(1);
     d1.resolve("late1");
     d2.resolve("late2");
+  });
+});
+
+describe("abortSignal — linked external signals (attemptCompletedSignal)", () => {
+  // Production `execute()` links `ctx.request().attemptCompletedSignal`
+  // via `sched.linkAbortSignal(...)`: when the current attempt ends
+  // (suspension, stream close, completion), in-flight run closures
+  // listening on the scheduler signal must stop promptly — not just on
+  // invocation cancellation.
+
+  test("an unfired linked signal leaves the scheduler signal unaborted", () => {
+    const sched = new Scheduler(testLib);
+    const attempt = new AbortController();
+    sched.linkAbortSignal(attempt.signal);
+    expect(sched.abortSignal.aborted).toBe(false);
+  });
+
+  test("linked signal firing aborts the current scheduler signal with the same reason", async () => {
+    const sched = new Scheduler(testLib);
+    const attempt = new AbortController();
+    sched.linkAbortSignal(attempt.signal);
+    const d = deferred<string>();
+    const reason = new Error("attempt completed");
+    let capturedSignal: AbortSignal | null = null;
+
+    const op = gen(function* () {
+      // Capture the signal an ops.run closure would receive.
+      capturedSignal = sched.abortSignal;
+      return yield* sched.makeJournalFuture(d.promise);
+    });
+    const result = sched.run(op);
+    queueMicrotask(() => {
+      attempt.abort(reason);
+      d.resolve("done");
+    });
+    expect(await result).toBe("done");
+    const captured = capturedSignal as AbortSignal | null;
+    expect(captured).not.toBeNull();
+    expect(captured!.aborted).toBe(true);
+    expect(captured!.reason).toBe(reason);
+  });
+
+  test("linking an already-aborted signal aborts the scheduler signal immediately", () => {
+    const sched = new Scheduler(testLib);
+    const attempt = new AbortController();
+    const reason = new Error("attempt already over");
+    attempt.abort(reason);
+    sched.linkAbortSignal(attempt.signal);
+    expect(sched.abortSignal.aborted).toBe(true);
+    expect(sched.abortSignal.reason).toBe(reason);
+  });
+
+  test("linked abort is sticky: the recovery controller after a cancellation is born aborted", async () => {
+    // Cancellation is non-sticky (fresh controller per cancel event),
+    // but an ended attempt never resumes — so when a linked signal has
+    // fired, the replacement controller must be born aborted, and
+    // cleanup closures must not see an unaborted signal.
+    const { lib, cancel } = cancellingLib();
+    const sched = new Scheduler(lib);
+    const attempt = new AbortController();
+    sched.linkAbortSignal(attempt.signal);
+    const d1 = deferred<string>();
+    const d2 = deferred<string>();
+    let signalAfterRecovery: AbortSignal | null = null;
+
+    const op = gen(function* () {
+      try {
+        yield* sched.makeJournalFuture(d1.promise);
+      } catch {
+        // Expected: the cancellation fan-out lands here.
+      }
+      signalAfterRecovery = sched.abortSignal;
+      return yield* sched.makeJournalFuture(d2.promise);
+    });
+
+    const result = sched.run(op);
+    queueMicrotask(() => {
+      // The attempt ends first, then cancellation is observed — the
+      // recovery path replaces the controller *after* the attempt died.
+      attempt.abort(new Error("attempt completed"));
+      cancel(new CancelError());
+    });
+    queueMicrotask(() => queueMicrotask(() => d2.resolve("v")));
+    expect(await result).toBe("v");
+    const after = signalAfterRecovery as AbortSignal | null;
+    expect(after).not.toBeNull();
+    expect(after!.aborted).toBe(true);
+    d1.resolve("late");
   });
 });

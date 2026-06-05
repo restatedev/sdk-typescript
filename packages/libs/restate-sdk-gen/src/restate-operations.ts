@@ -724,5 +724,10 @@ export async function execute<T>(
   // `Fiber.advance` can install it on the module-level current-fiber
   // slot read by the free-standing API.
   sched.contextSlot = new RestateOperations(context, sched);
+  // Link the attempt lifecycle to the scheduler's AbortSignal: when
+  // the current attempt completes (suspension, stream close, success
+  // or failure), in-flight `run` closures listening on the signal stop
+  // promptly instead of running on detached.
+  sched.linkAbortSignal(context.request().attemptCompletedSignal);
   return sched.run(op);
 }
