@@ -27,3 +27,10 @@ ignoredBuiltDependencies:
 
 onlyBuiltDependencies:
   - heapdump
+
+# Disable pnpm's pre-run dependency check. CI runs with it enabled by default, and the
+# Release workflow's snapshot step (rewrites lib versions, installs, then `git checkout .`)
+# leaves node_modules' dep-state stale, so the next `pnpm run` auto-installs concurrently
+# across turbo's parallel tasks and corrupts node_modules/.bin (-> "eslint: Permission
+# denied" during release). Pinning it here keeps CI consistent with local dev.
+verifyDepsBeforeRun: false
