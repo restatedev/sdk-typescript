@@ -32,7 +32,7 @@ import {
   select as selectOp,
   type SelectResult,
 } from "./operation.js";
-import type { Scheduler } from "./scheduler.js";
+import type { Scheduler, SchedulerOptions } from "./scheduler.js";
 import { Scheduler as SchedulerClass } from "./scheduler.js";
 import {
   makeState,
@@ -534,6 +534,10 @@ export class RestateOperations {
    * already queued and will advance on the next scheduler tick — same
    * model as `run`/`sleep`/`awakeable`. The returned Future can be
    * yielded on, handed to combinators, or stored.
+   *
+   * A spawned routine still running when the main operation settles is
+   * abandoned by default (its handler returns without it); pass
+   * `{ onMainExit: "join" }` to `execute` to wait for it instead.
    */
   spawn<T>(op: Operation<T>): Future<T> {
     return this.sched.spawn(op);
@@ -624,9 +628,10 @@ export class RestateOperations {
   }
 
   /**
-   * Return the first future to settle; losers continue running but
-   * their results are discarded. Heterogeneous-tuple typing —
-   * `race([fA, fB])` yields `Future<A | B>`. Mirrors `Promise.race`.
+   * Return the first future to settle; losers continue running (until
+   * the main operation settles — see `OnMainExit`) but their results
+   * are discarded. Heterogeneous-tuple typing — `race([fA, fB])`
+   * yields `Future<A | B>`. Mirrors `Promise.race`.
    */
   race<const T extends readonly Future<unknown>[] | []>(
     futures: T
@@ -681,6 +686,11 @@ export class RestateOperations {
 // =============================================================================
 
 /**
+ * Options for {@link execute}.
+ */
+export type ExecuteOptions = SchedulerOptions;
+
+/**
  * Run a generator-based workflow against a Restate context.
  *
  * `op` is an `Operation<T>` — typically the result of
@@ -693,6 +703,11 @@ export class RestateOperations {
  * iterable across multiple `execute()` calls — no need for a builder
  * lambda at this boundary.
  *
+ * By default `execute` resolves as soon as the main operation settles;
+ * spawned fibers (and race losers) still running at that point are
+ * abandoned. Pass `{ onMainExit: "join" }` to instead keep driving
+ * until every spawned fiber has finished.
+ *
  * @example
  *   execute(ctx, gen(function* () {
  *     const greeting = yield* run(async () => "hi", { name: "compose" });
@@ -701,9 +716,10 @@ export class RestateOperations {
  */
 export async function execute<T>(
   context: restate.Context,
-  op: Operation<T>
+  op: Operation<T>,
+  options?: ExecuteOptions
 ): Promise<T> {
-  const sched = new SchedulerClass(defaultLib);
+  const sched = new SchedulerClass(defaultLib, options);
   // Publish a private `RestateOperations` on the scheduler so
   // `Fiber.advance` can install it on the module-level current-fiber
   // slot read by the free-standing API.

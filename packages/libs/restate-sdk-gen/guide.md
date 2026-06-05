@@ -44,8 +44,11 @@ Three things to notice:
 - `execute` takes an `Operation<T>` directly — typically the result of
   `gen(function*() { ... })`. The free functions inside the generator
   body resolve the active scheduler implicitly; no `ops` parameter, no
-  builder wrapper.
-- The generator returns the value the handler should return.
+  builder wrapper. An optional third argument carries options such as
+  `onMainExit` (see "Race losers and spawn lifetime").
+- The generator returns the value the handler should return. By default,
+  `execute` resolves as soon as the generator returns; spawned routines
+  still running at that point are abandoned.
 
 The rest of this guide assumes you're inside `gen(function*() { ... })`
 with the free functions in scope.
@@ -115,8 +118,10 @@ const winner = yield* race([
 return winner;
 ```
 
-The losing call keeps running in the background; its result is
-discarded. If you need the result of the loser too, use `all` instead.
+The losing call keeps running while the handler is still live; its
+result is discarded. Once the main operation settles, a loser still in
+flight is abandoned (see "Race losers and spawn lifetime" below). If you
+need the result of the loser too, use `all` instead.
 
 ### "First one that succeeds, retry-style"
 
@@ -192,6 +197,15 @@ Spawn vs. `all`/`race` of journal entries:
 - **Use `spawn`** when each unit is itself a multi-step workflow with
   internal logic, branches, retries, etc.
 
+A spawned routine's lifetime is bounded by the main operation. By
+default (`onMainExit: "abandon"`), `execute` returns as soon as the main
+operation settles, and any spawned routine still running at that point
+is abandoned — never resumed, no `catch`/`finally` blocks run. So
+fire-and-forget spawns are **not** guaranteed to complete: if you need a
+spawned routine to finish, `yield*` its future before returning, or run
+with `{ onMainExit: "join" }` (see "Race losers and spawn lifetime"
+below).
+
 To stop a spawned routine before it finishes, pass it a `Channel<void>`
 and have it `select` over its work and `stop.receive` — see the
 cooperative-cancellation section below. There is no `Future.cancel()`
@@ -214,9 +228,11 @@ const fastEnough = (): Operation<string> =>
   });
 ```
 
-The slow call keeps running in the background after timeout. Its result
-is discarded; if it eventually completes, the entry is recorded but no
-one reads it.
+The slow call keeps running while the handler is still live after
+timeout. Its result is discarded; if it completes before the main
+operation settles, the entry is recorded but no one reads it. Once the
+main operation settles, the abandoned-fiber rules apply (see "Race
+losers and spawn lifetime").
 
 If you need to actually cancel the slow call (not just stop waiting),
 pass an AbortSignal-aware closure to `run` — the closure receives
@@ -408,8 +424,10 @@ cancelled out from under it.
 There is no per-routine "kill this Future" primitive — by design. If you
 control both sides, use cooperative stop. If you don't (you're running
 someone else's Operation), the choice is to wrap it in a supervising
-routine that `select`s against a stop channel, or accept that it'll run
-to completion and discard the result.
+routine that `select`s against a stop channel, or let it run only while
+the main operation is live — once main settles it is abandoned, not run
+to completion (under the default `onMainExit: "abandon"`; see "Race
+losers and spawn lifetime").
 
 ---
 
@@ -555,24 +573,52 @@ const [a, b] = yield* all([f, f]);
 // Same again: a === b.
 ```
 
-### Race losers continue running
+### Race losers and spawn lifetime
 
 ```ts
 const winner = yield* race([
   run(() => slowA(), { name: "a" }),
   run(() => slowB(), { name: "b" }),
 ]);
-// If a wins, b's closure is still running. Its result is journaled but
-// nobody reads it. If you spawned b as a routine and want to cancel
-// it, that's separate.
+// If a wins, b's closure is still running while the handler is live.
+// Its result is journaled but nobody reads it. If you spawned b as a
+// routine and want to cancel it, that's separate.
 ```
 
-The scheduler waits for *every* spawned routine to finish before
-returning. This means race losers must terminate on their own; the
-scheduler doesn't kill them. In practice this is rarely an issue
-because journal-backed work always terminates (the underlying RPC or
-sleep settles eventually). But if you spawn a routine with an infinite
-loop and race it against something, your handler will hang forever.
+What happens to losers (and to any other still-running spawned routine)
+when the main operation settles is governed by the `onMainExit` option
+on `execute`:
+
+- **`"abandon"` (the default).** `execute` returns as soon as the main
+  operation settles. Any spawned routine still running at that point is
+  abandoned at its current suspension point: it is never resumed again,
+  so its `catch`/`finally` blocks do not run, and the source it was
+  parked on is dropped. The stop is *prompt* — nothing observable
+  (journal writes, channel sends, side effects) happens after the main
+  operation's outcome is decided. Durable work the routine already
+  performed is journaled as usual; only the in-memory continuation is
+  discarded.
+- **`"join"`.** `execute` keeps driving until *every* routine has
+  finished. This is the older "wait for all" behavior.
+
+Under the default this means a race loser — or any fire-and-forget
+spawn — is simply dropped once the main operation returns; it does not
+have to terminate on its own. A routine parked on a source that never
+settles no longer hangs the handler.
+
+```ts
+import { execute } from "@restatedev/restate-sdk-gen";
+
+// Keep driving spawned routines to completion instead of abandoning them.
+execute(ctx, op, { onMainExit: "join" });
+```
+
+The caveat lives entirely under `"join"`: there, a spawned routine
+parked on a source that never settles (an infinite loop, an awakeable
+that is never resolved) keeps the scheduler alive and the handler will
+hang forever. Reach for `"join"` only when the workflow genuinely
+relies on fire-and-forget routines completing, and make sure every such
+routine terminates on its own.
 
 ---
 

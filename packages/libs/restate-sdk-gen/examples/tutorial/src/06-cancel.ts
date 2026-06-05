@@ -87,8 +87,10 @@ export const cancel = service({
       });
 
       if (r.tag === "budget") {
-        // Budget elapsed — tell the worker to stop and wait for it
-        // to wind down so we don't leak a running routine.
+        // Budget elapsed — tell the worker to stop and wait for it to
+        // wind down so we can read its clean result. (An un-awaited
+        // worker would simply be abandoned at return under the default
+        // `onMainExit: "abandon"`; here we await it for the result.)
         yield* stop.send();
       }
       return yield* t;

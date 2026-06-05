@@ -233,9 +233,10 @@ export const all = <const T extends readonly Future<unknown>[] | []>(
 ): Future<FutureValues<T>> => currentOps().all(futures);
 
 /**
- * Return the first future to settle; losers continue running but their
- * results are discarded. Heterogeneous-tuple typing — `race([fA, fB])`
- * yields `Future<A | B>`. Mirrors `Promise.race`.
+ * Return the first future to settle; losers continue running (until
+ * the main operation settles — see `OnMainExit`) but their results are
+ * discarded. Heterogeneous-tuple typing — `race([fA, fB])` yields
+ * `Future<A | B>`. Mirrors `Promise.race`.
  */
 export const race = <const T extends readonly Future<unknown>[] | []>(
   futures: T
@@ -267,7 +268,9 @@ export const allSettled = <const T extends readonly Future<unknown>[] | []>(
 /**
  * Register `op` as a fresh routine and return a `Future<T>` for its
  * eventual outcome. Eager — the child is already in flight by the time
- * `spawn` returns. See `RestateOperations.spawn` for full semantics.
+ * `spawn` returns. A spawned routine still running when the main
+ * operation settles is abandoned by default (see `OnMainExit`). See
+ * `RestateOperations.spawn` for full semantics.
  */
 export const spawn = <T>(op: Operation<T>): Future<T> => currentOps().spawn(op);
 

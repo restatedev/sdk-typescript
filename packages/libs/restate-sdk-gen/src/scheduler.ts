@@ -43,10 +43,42 @@ import type { Settled, PromiseSource } from "./scheduler-types.js";
 import { Fiber, type SchedulerOps } from "./fiber.js";
 import { type Channel, makeChannel } from "./channel.js";
 
+/**
+ * Policy for what happens to still-running spawned routines when the
+ * main operation settles.
+ *
+ * - `"abandon"` (default): `run()` returns as soon as the main
+ *   operation settles. Still-running spawned routines (including
+ *   fibers synthesized internally by combinator fallbacks) are
+ *   abandoned at their current suspension point — they are never
+ *   resumed again, so no `catch`/`finally` blocks run and the sources
+ *   they were parked on are dropped. Durable work they already
+ *   started is journaled as usual; only the in-memory continuation is
+ *   discarded.
+ * - `"join"`: `run()` keeps driving until *every* routine has
+ *   finished. A spawned routine parked on a source that never settles
+ *   keeps the handler from returning forever — prefer `"abandon"`
+ *   unless the workflow relies on fire-and-forget routines completing.
+ */
+export type OnMainExit = "abandon" | "join";
+
+export interface SchedulerOptions {
+  /** See {@link OnMainExit}. Defaults to `"abandon"`. */
+  onMainExit?: OnMainExit;
+}
+
 export class Scheduler implements SchedulerOps {
   private readonly fibers: Set<Fiber<unknown>> = new Set();
   private readonly ready: Fiber<unknown>[] = [];
   private readonly lib: AwaitableLib;
+  private readonly onMainExit: OnMainExit;
+  /**
+   * The root fiber of the current `run()`. Assigned at the top of each
+   * `run` call. Note the scheduler does not support concurrent `run`
+   * calls (`fibers`/`ready`/`abortController` are equally shared);
+   * production `execute()` always constructs a fresh scheduler.
+   */
+  private main: Fiber<unknown> | null = null;
   // Replaced (not just re-aborted) each time the scheduler observes
   // invocation cancellation. AbortControllers are one-way — once
   // aborted, signal.aborted stays true forever — so the scheduler-
@@ -69,8 +101,9 @@ export class Scheduler implements SchedulerOps {
    */
   contextSlot: unknown;
 
-  constructor(lib: AwaitableLib) {
+  constructor(lib: AwaitableLib, options?: SchedulerOptions) {
     this.lib = lib;
+    this.onMainExit = options?.onMainExit ?? "abandon";
     this.contextSlot = this;
   }
 
@@ -124,6 +157,11 @@ export class Scheduler implements SchedulerOps {
    * Register an Operation as a fresh fiber and return a Future that
    * resolves with its eventual value. Eager: by the time this returns,
    * the fiber is queued ready and will be advanced on the next drain.
+   *
+   * Lifetime is bounded by the main fiber under the default
+   * `"abandon"` policy: a spawned fiber still running when the main
+   * fiber settles is abandoned (see {@link OnMainExit}). Under
+   * `"join"` it keeps the scheduler alive until it finishes.
    *
    * Used by combinator fallbacks (race, allSettled, …), by
    * `RestateOperations.spawn`, and via the slot interface by the free
@@ -283,21 +321,45 @@ export class Scheduler implements SchedulerOps {
 
   // ---- driving ----
 
+  /**
+   * True once the main fiber has settled under the `"abandon"` policy —
+   * the signal to stop driving everything else. Checked by the main
+   * loop *and* by `drainReady`, so the drain stops promptly mid-queue:
+   * nothing observable (journal writes, channel sends, side effects)
+   * happens after the main fiber's outcome is decided. Always false
+   * under `"join"`.
+   */
+  private mainExited(): boolean {
+    return (
+      this.onMainExit === "abandon" && this.main !== null && this.main.isDone()
+    );
+  }
+
   private drainReady(): void {
-    while (this.ready.length > 0) this.ready.shift()!.advance();
+    while (this.ready.length > 0 && !this.mainExited()) {
+      this.ready.shift()!.advance();
+    }
   }
 
   /**
    * Run an operation to completion. Drain the ready queue, then loop:
    * collect every PromiseSource from every parked fiber, race them,
-   * dispatch the winner via its fire callback, drain. Stop when no
-   * fiber is alive.
+   * dispatch the winner via its fire callback, drain.
+   *
+   * When to stop is governed by `onMainExit`: under `"abandon"` (the
+   * default) the loop ends as soon as the main fiber settles and any
+   * still-running spawned fibers are abandoned; under `"join"` it ends
+   * only when no fiber is alive.
    */
   async run<T>(op: Operation<T>): Promise<T> {
     const main = this.createFiber(op);
+    this.main = main as Fiber<unknown>;
     this.drainReady();
 
-    while (this.fibers.size > 0) {
+    // Under "join", mainExited() is always false and the loop runs
+    // until every fiber is done. Under "abandon", main ∈ fibers while
+    // it is alive, so the conjunction reduces to !main.isDone().
+    while (!this.mainExited() && this.fibers.size > 0) {
       const items: PromiseSource[] = [];
       for (const f of this.fibers) {
         for (const src of f.parkedSources()) items.push(src);
