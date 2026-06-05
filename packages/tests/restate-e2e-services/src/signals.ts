@@ -15,7 +15,7 @@ import { REGISTRY } from "./services.js";
 // ---------------------------------------------------------------------------
 class SignalStreamReader<T> implements AsyncIterableIterator<T> {
   constructor(
-    private readonly ctx: restate.internal.ContextInternal,
+    private readonly ctx: restate.Context,
     private readonly name: string
   ) {}
 
@@ -30,7 +30,7 @@ class SignalStreamReader<T> implements AsyncIterableIterator<T> {
 
 class SignalStreamWriter<T> {
   constructor(
-    private readonly target: restate.internal.InvocationReference,
+    private readonly target: restate.InvocationReference,
     private readonly name: string
   ) {}
 
@@ -56,8 +56,7 @@ const signalTest = restate.service({
       ctx: restate.Context,
       name: string
     ): Promise<unknown> => {
-      const ctxInternal = ctx as restate.internal.ContextInternal;
-      return ctxInternal.signal(name);
+      return ctx.signal(name);
     },
 
     /** Resolve a named signal on a target invocation with an arbitrary value. */
@@ -65,8 +64,7 @@ const signalTest = restate.service({
       ctx: restate.Context,
       req: { invocationId: string; name: string; value: unknown }
     ): Promise<void> => {
-      const ctxInternal = ctx as restate.internal.ContextInternal;
-      ctxInternal
+      ctx
         .invocation(restate.InvocationIdParser.fromString(req.invocationId))
         .signal(req.name)
         .resolve(req.value);
@@ -77,8 +75,7 @@ const signalTest = restate.service({
       ctx: restate.Context,
       req: { invocationId: string; name: string; reason: string }
     ): Promise<void> => {
-      const ctxInternal = ctx as restate.internal.ContextInternal;
-      ctxInternal
+      ctx
         .invocation(restate.InvocationIdParser.fromString(req.invocationId))
         .signal(req.name)
         .reject(req.reason);
@@ -90,10 +87,9 @@ const signalTest = restate.service({
     waitForTwoSignals: async (
       ctx: restate.Context
     ): Promise<{ a: string; b: string }> => {
-      const ctxInternal = ctx as restate.internal.ContextInternal;
       const [a, b] = await restate.RestatePromise.all([
-        ctxInternal.signal<string>("signalA"),
-        ctxInternal.signal<string>("signalB"),
+        ctx.signal<string>("signalA"),
+        ctx.signal<string>("signalB"),
       ]);
       return { a, b };
     },
@@ -105,8 +101,7 @@ const signalTest = restate.service({
       ctx: restate.Context,
       timeoutMs: number
     ): Promise<string> => {
-      const ctxInternal = ctx as restate.internal.ContextInternal;
-      return ctxInternal
+      return ctx
         .signal<string>("mySignal")
         .orTimeout(timeoutMs)
         .map((v, err) => {
@@ -124,8 +119,7 @@ const signalTest = restate.service({
 
     /** Read from a signal stream until end-of-stream, return collected values. */
     readStream: async (ctx: restate.Context): Promise<string[]> => {
-      const ctxInternal = ctx as restate.internal.ContextInternal;
-      const reader = new SignalStreamReader<string>(ctxInternal, "stream");
+      const reader = new SignalStreamReader<string>(ctx, "stream");
       const values: string[] = [];
       for await (const value of reader) {
         values.push(value);
@@ -138,8 +132,7 @@ const signalTest = restate.service({
       ctx: restate.Context,
       req: { invocationId: string; values: string[] }
     ): Promise<void> => {
-      const ctxInternal = ctx as restate.internal.ContextInternal;
-      const target = ctxInternal.invocation(
+      const target = ctx.invocation(
         restate.InvocationIdParser.fromString(req.invocationId)
       );
       const writer = new SignalStreamWriter<string>(target, "stream");
@@ -153,8 +146,7 @@ const signalTest = restate.service({
       ctx: restate.Context,
       req: { invocationId: string }
     ): Promise<void> => {
-      const ctxInternal = ctx as restate.internal.ContextInternal;
-      const target = ctxInternal.invocation(
+      const target = ctx.invocation(
         restate.InvocationIdParser.fromString(req.invocationId)
       );
       new SignalStreamWriter<string>(target, "stream").end();
