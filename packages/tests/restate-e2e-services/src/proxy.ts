@@ -20,6 +20,8 @@ type ProxyRequest = {
   message: Array<number>;
   delayMillis?: number;
   idempotencyKey?: string;
+  scope?: string;
+  limitKey?: string;
 };
 
 type ManyCallRequest = {
@@ -40,6 +42,8 @@ function rawCall(
     outputSerde: restate.serde.binary,
     parameter: new Uint8Array(request.message),
     idempotencyKey: request.idempotencyKey,
+    scope: request.scope,
+    limitKey: request.limitKey,
   });
 }
 
@@ -52,6 +56,8 @@ function rawSend(ctx: restate.Context, request: ProxyRequest): Promise<string> {
     parameter: new Uint8Array(request.message),
     delay: { milliseconds: request.delayMillis },
     idempotencyKey: request.idempotencyKey,
+    scope: request.scope,
+    limitKey: request.limitKey,
   });
   return handle.invocationId;
 }

@@ -95,10 +95,13 @@ export class WasmInput {
     free(): void;
     [Symbol.dispose](): void;
     readonly headers: WasmHeader[];
+    readonly idempotency_key: string | undefined;
     readonly input: Uint8Array;
     readonly invocation_id: string;
     readonly key: string;
+    readonly limit_key: string | undefined;
     readonly random_seed: bigint;
+    readonly scope: string | undefined;
 }
 
 export class WasmResponseHead {
@@ -131,7 +134,7 @@ export class WasmVM {
     propose_run_completion_success(handle: number, buffer: Uint8Array): void;
     sys_attach_invocation(invocation_id: string): number;
     sys_awakeable(): WasmAwakeable;
-    sys_call(service: string, handler: string, buffer: Uint8Array, key: string | null | undefined, headers: WasmHeader[], idempotency_key?: string | null, name?: string | null): WasmCallHandle;
+    sys_call(service: string, handler: string, buffer: Uint8Array, key: string | null | undefined, headers: WasmHeader[], idempotency_key?: string | null, scope?: string | null, limit_key?: string | null, name?: string | null): WasmCallHandle;
     sys_cancel_invocation(target_invocation_id: string): void;
     sys_clear_all_state(): void;
     sys_clear_state(key: string): void;
@@ -149,7 +152,7 @@ export class WasmVM {
     sys_input(): WasmInput;
     sys_peek_promise(key: string): number;
     sys_run(name: string): WasmRun;
-    sys_send(service: string, handler: string, buffer: Uint8Array, key: string | null | undefined, headers: WasmHeader[], delay?: bigint | null, idempotency_key?: string | null, name?: string | null): WasmSendHandle;
+    sys_send(service: string, handler: string, buffer: Uint8Array, key: string | null | undefined, headers: WasmHeader[], delay?: bigint | null, idempotency_key?: string | null, scope?: string | null, limit_key?: string | null, name?: string | null): WasmSendHandle;
     sys_set_state(key: string, buffer: Uint8Array): void;
     sys_signal(signal_name: string): number;
     sys_sleep(millis: bigint, name?: string | null): number;
