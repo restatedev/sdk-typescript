@@ -402,6 +402,130 @@ during finally blocks. If you need cleanup that's resilient to
 re-cancellation, write it explicitly with try/catch around each yield
 in the cleanup path.
 
+## Interrupting a task
+
+`spawn(op)` returns a `Task<T>` — a `Future<T>` (yieldable, composable
+into `all`/`race`/… exactly like any Future) plus one control method,
+`interrupt(err?)`. Combinator results (`race`, `all`, …) stay plain
+`Future<T>`: their journal fast path has no fiber to target, and their
+fallback runs SDK-authored loop code with no user try/catch.
+
+`task.interrupt(err)` does two things:
+
+- **Throws `err` into the routine at its next yield point.** This is the
+  cancellation fan-out's mechanism, scoped to one fiber: `wake` the
+  fiber with a failure resume, delivered as `it.throw(err)` when it next
+  advances. `err` is thrown verbatim; the routine's own try/catch may
+  catch and recover (interrupt is swallowable / non-sticky, like
+  invocation cancellation). With no argument, a plain `InterruptedError`
+  is thrown — a default sentinel, deliberately *not* a `TerminalError`
+  subclass, so interrupt imposes no blast radius of its own. Pass a
+  `TerminalError` if you want an uncaught interrupt to fail the
+  invocation terminally; pass an error your routine recognizes if you
+  want it to distinguish "I was interrupted" from "my work threw".
+- **Aborts the routine's in-flight `run` I/O.** Each fiber lazily owns
+  an `AbortController` whose signal is handed to its `run` closures.
+  Interrupt aborts it, so an in-flight `run(({ signal }) => fetch(url, {
+  signal }))` stops promptly instead of running on detached. The signal
+  is a *child* of the scheduler signal, so invocation cancellation /
+  attempt-end still cascade in; but interrupt aborts only the targeted
+  fiber's signal, leaving siblings' in-flight I/O untouched. After a
+  swallowed interrupt the controller is recreated, so a cleanup `run`
+  sees a fresh, unaborted signal.
+
+Semantics worth pinning down:
+
+- **Done / consumed target** — no-op. A finished routine has no yield
+  point left.
+- **Double interrupt** before the next advance — last-write-wins, not
+  queued.
+- **Same-tick precedence** — if the routine had already been woken with
+  a value (its awaited source just settled) but hasn't advanced yet, the
+  interrupt wins: the value the generator never observed is discarded.
+- **`onMainExit` interaction** — under the default `"abandon"`,
+  interrupting a child and then returning from the main operation
+  delivers *nothing*: the scheduler stops the moment main settles, so
+  the child is abandoned before it advances and no `catch`/`finally`
+  runs. To run the child's cleanup, **interrupt then join** — `yield*`
+  the task after interrupting, so it is driven to completion before main
+  returns. (Under `"join"` the scheduler keeps driving regardless.)
+- **Determinism** — interrupt is an in-memory control op issued from
+  inside a fiber advance, so its delivery point is fixed by the same
+  deterministic drive order as everything else; replay reproduces it.
+  The signal-abort touches only live I/O (on replay, `run` closures
+  don't re-execute), so it is replay-neutral.
+
+### The epoch guard
+
+**The invariant interrupt breaks.** Before interrupt, a parked fiber had
+exactly one way to leave the `parked` state: one of the sources it was
+parked on fires. A fiber parked on sibling `G` only ever woke when `G`
+finished — so the thing that woke it *was* the thing it was waiting on,
+and stale waiters were a non-problem. Interrupt violates this: it wakes
+a fiber from the outside while the sources it registered are still live.
+The fiber catches, re-parks elsewhere, and the callbacks it left on its
+old targets are still armed.
+
+**Why only local waiters are at risk.** The two kinds of source register
+differently. *Journal* sources are re-collected fresh from each fiber's
+`parkedSources()` on every main-loop tick, and a journal source's `fire`
+is only ever invoked for the winner of the race it is part of — a race
+built *after* the drain settles, so the owning fiber cannot have moved
+on within that race. Stale journal fires can't happen; the journal-leaf
+`fire` is therefore left unguarded. *Local* waiters are different:
+`awaitCompletion` only ever pushes the callback onto the target's waiter
+list, which is cleared (firing **all** of them) when the target itself
+finishes. Nothing prunes a waiter when the *waiting* fiber moves on — so
+a callback from a pre-interrupt park survives and fires whenever the
+sibling/channel eventually settles, possibly many drains later.
+
+The concrete failure, without a guard:
+
+```
+W parks on sibling G  →  W's callback is now in G's waiter list
+interrupt(W)          →  W.wake(err): W goes ready, the callback untouched
+W advances            →  catches err, re-parks on sibling H
+G finishes later      →  fires all its waiters, incl. W's stale callback
+                      →  W, currently parked on H, is woken with G's value
+                         and its H-park is clobbered. Corruption.
+```
+
+**The mechanism.** Each fiber carries a monotonic park-`epoch`, bumped on
+every `wake` — and `wake` is the single choke point through which a fiber
+leaves `parked` (a source firing or an interrupt both route through it),
+so bumping there retires the current park's waiters by construction
+rather than by enumerating cases. Every waiter captures the epoch at
+registration and no-ops on mismatch:
+
+```
+const epochAtPark = this.epoch;
+target.awaitCompletion((s) => {
+  if (this.epoch !== epochAtPark) return;   // stale → drop
+  this.wake(s);
+});
+```
+
+Replaying the failure with the guard: `W`'s callback captured epoch `E`;
+the interrupt's `wake` moved `W` to `E+1`; when `G` later fires the
+callback it sees `epoch (E+1) !== E` and drops. Epoch is monotonic and
+compared for equality, so once a fiber moves past `epochAtPark` that
+waiter is permanently dead — no resurrection.
+
+**It subsumes the `won` flag.** The old per-`AwaitRace` `won` boolean did
+*within-episode* dedup — when several race sources settle in the same
+tick, only the first wakes the fiber. The epoch covers that for free: the
+first source fires, `wake` bumps the epoch, and later same-tick fires see
+a mismatch and drop. So one mechanism now handles both within-episode
+dedup (what `won` did) and cross-episode staleness (what `won`, a fresh
+closure per park, could not — and what interrupt needs). `won` was
+removed entirely; `won-flag.test.ts` passing unchanged on the epoch guard
+is the evidence the within-episode behavior is preserved.
+
+This is what makes interrupt safe for a routine parked on *any* source —
+including a purely local one (waiting on a sibling or a channel) that the
+cancellation fan-out can't even reach, since such a fiber contributes no
+journal source to the main-loop race.
+
 ---
 
 ## What's deliberately not in the design
@@ -409,15 +533,18 @@ in the cleanup path.
 A few features that come up in cancellation discussions and aren't
 here, with the reasoning:
 
-**No `Future.cancel()` per-routine.** Cancellation in this system is
-an invocation-level event delivered by the SDK. We don't expose a way
-to cancel an individual spawned routine. If you need to stop a single
-sub-task, that's a different operation — currently best modeled as
-"don't await its Future"; under the default `"abandon"` policy it is
-discarded when the main operation settles (see *Concurrency* above),
-so you don't pay for work whose result you never read. If genuine
-per-routine cancellation becomes necessary, it will be a separate
-primitive with its own design.
+**Per-routine interrupt — `task.interrupt(err?)`.** Invocation-level
+cancellation is a broadcast delivered by the SDK. To stop *one* spawned
+routine, `spawn` returns a `Task<T>` (a `Future<T>` plus `interrupt`),
+and `task.interrupt(err)` throws `err` into that routine at its next
+yield point — a targeted, single-fiber instance of the same mechanism
+the cancellation fan-out uses (`wake` with a failure resume, delivered
+as `it.throw` at the yield). See *Interrupting a task* below.
+
+If you only want to *forget* a sub-task rather than stop it, you still
+can: don't await its Future, and under the default `"abandon"` policy
+it is discarded when the main operation settles (see *Concurrency*
+above), so you don't pay for work whose result you never read.
 
 **No automatic propagation of cancellation across structured
 concurrency.** Cancellation arrives at every parked routine

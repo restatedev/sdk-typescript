@@ -39,6 +39,7 @@ import type { Future, Backing, WaitTarget } from "./future.js";
 import { getBacking } from "./future.js";
 import type { Settled, PromiseSource, Waiter } from "./scheduler-types.js";
 import { setCurrent, clearCurrent } from "./current.js";
+import { linkAbortController } from "./abort.js";
 
 /**
  * Narrow interface a Fiber needs from its scheduler. Avoids a wide
@@ -54,6 +55,12 @@ export interface SchedulerOps {
    * Typed `unknown` to avoid cycles with `restate-operations.ts`.
    */
   readonly contextSlot: unknown;
+  /**
+   * The scheduler's current AbortSignal. A fiber's per-fiber run signal
+   * is a child of this, so invocation cancellation / attempt-end cascade
+   * into in-flight `run` closures (see `Fiber.runSignal`).
+   */
+  readonly abortSignal: AbortSignal;
 }
 
 type FiberState =
@@ -66,6 +73,26 @@ export class Fiber<T = unknown> implements WaitTarget<T> {
   private readonly sched: SchedulerOps;
   private state: FiberState = { kind: "ready", resume: null };
   private waiters: Waiter[] = [];
+  /**
+   * Monotonic park-episode counter, bumped on every `wake`. Each source
+   * waiter captures the epoch at registration and no-ops if the fiber
+   * has since woken (epoch advanced). This is what makes `interrupt`
+   * safe: an interrupted fiber leaves its park and re-parks elsewhere,
+   * but the local waiters it left on its old targets (channels, sibling
+   * fibers — never pruned, fired whenever the target settles) would
+   * otherwise wake it again with a stale value and clobber the new park.
+   * The guard generalizes the old per-AwaitRace `won` flag (within-tick
+   * dedup) to a persistent, per-fiber, cross-episode guard.
+   */
+  private epoch = 0;
+  /**
+   * Lazily-created AbortController for this fiber's `run` closures. Born
+   * a child of the scheduler's current signal (so invocation cancellation
+   * / attempt-end abort it) and aborted directly by `interrupt`. Recreated
+   * when aborted, so cleanup `run`s after a swallowed interrupt see a
+   * fresh, unaborted signal. Null until the fiber first needs a run signal.
+   */
+  private runController: AbortController | null = null;
 
   constructor(op: Operation<T>, sched: SchedulerOps) {
     this.it = op[Symbol.iterator]() as Iterator<unknown, unknown, unknown>;
@@ -120,11 +147,49 @@ export class Fiber<T = unknown> implements WaitTarget<T> {
    * notifies the scheduler. May be called from any state except done
    * (waking a done fiber is a programming error and is ignored
    * defensively).
+   *
+   * Bumps the park epoch so any waiters left registered on the targets
+   * of the park we're leaving become stale no-ops (see `epoch`).
    */
   wake(resume: Settled | null): void {
     if (this.state.kind === "done") return;
+    this.epoch++;
     this.state = { kind: "ready", resume };
     this.sched.markReady(this);
+  }
+
+  /**
+   * The AbortSignal handed to this fiber's `run` closures. Lazily
+   * created as a child of the scheduler's current signal, so invocation
+   * cancellation and attempt-end abort it like before; additionally,
+   * `interrupt` aborts it directly to stop just this fiber's in-flight
+   * I/O. Recreated once aborted, so a `run` issued after a swallowed
+   * interrupt (or after cancellation recovery) gets a fresh signal.
+   */
+  runSignal(): AbortSignal {
+    if (this.runController === null || this.runController.signal.aborted) {
+      this.runController = linkAbortController(this.sched.abortSignal);
+    }
+    return this.runController.signal;
+  }
+
+  /**
+   * Throw `err` into this fiber at its next yield point, and abort its
+   * in-flight `run` I/O.
+   *
+   * Two effects: (1) abort the per-fiber run signal so an in-flight
+   * `run(fetch(url, { signal }))` stops promptly — harmless if the fiber
+   * has no live controller; the next `runSignal()` makes a fresh one for
+   * post-interrupt cleanup. (2) wake the fiber with a failure resume so
+   * `stepIterator` delivers `it.throw(err)` at the next advance — the
+   * fiber's own try/catch may catch and recover (interrupt is
+   * swallowable / non-sticky). A done fiber is left untouched (`wake`
+   * no-ops). Same machinery as the cancellation fan-out, scoped to one
+   * fiber.
+   */
+  interrupt(err: unknown): void {
+    this.runController?.abort(err);
+    this.wake({ ok: false, e: err });
   }
 
   /**
@@ -202,8 +267,14 @@ export class Fiber<T = unknown> implements WaitTarget<T> {
     }
     // Local-backed: ask the target (fiber, channel, etc.) to either
     // give us its settled outcome (sync short-circuit) or register us
-    // as a waiter.
-    const settled = backing.target.awaitCompletion((s) => this.wake(s));
+    // as a waiter. The waiter is epoch-guarded: if we're interrupted and
+    // re-park before the target settles, this stale waiter (which the
+    // target never prunes) must not wake the moved-on fiber.
+    const epochAtPark = this.epoch;
+    const settled = backing.target.awaitCompletion((s) => {
+      if (this.epoch !== epochAtPark) return;
+      this.wake(s);
+    });
     if (settled !== null) return settled;
     this.state = { kind: "parked", promises: [] };
     return null;
@@ -215,11 +286,13 @@ export class Fiber<T = unknown> implements WaitTarget<T> {
    * (wrapped as Settled) on short-circuit, or null if parked.
    *
    * On the parked path, every source registers a one-shot fire
-   * callback that wakes the fiber with `{index, settled}`. The `won`
-   * flag guards against duplicate wakes when multiple sources settle
-   * in the same tick. Local sources (fibers, channels) park on the
-   * target's waiter list; journal sources race in the main loop's
-   * race promise.
+   * callback that wakes the fiber with `{index, settled}`. The epoch
+   * guard ensures only the first source to settle wakes the fiber
+   * (`wake` bumps the epoch, so any later same-tick fire sees a stale
+   * epoch and no-ops) and that a waiter surviving an interrupt-and-
+   * re-park can't fire onto the moved-on fiber. Local sources (fibers,
+   * channels) park on the target's waiter list; journal sources race in
+   * the main loop's race promise.
    */
   private parkOnAwaitRace(
     futures: ReadonlyArray<Future<unknown>>
@@ -234,14 +307,15 @@ export class Fiber<T = unknown> implements WaitTarget<T> {
       }
     }
 
-    let won = false;
+    const epochAtPark = this.epoch;
     const promises: PromiseSource[] = [];
     for (let i = 0; i < futures.length; i++) {
       const idx = i;
       const b = getBacking(futures[i]!);
       const fireOnce = (settled: Settled) => {
-        if (won) return;
-        won = true;
+        // Stale if the fiber has woken since this park (another source
+        // already won this race, or an interrupt moved us on).
+        if (this.epoch !== epochAtPark) return;
         this.wake({ ok: true, v: { index: idx, settled } });
       };
       if (b.kind === "local") {

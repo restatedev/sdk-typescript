@@ -42,6 +42,8 @@ import { type Operation, awaitRace, gen } from "./operation.js";
 import type { Settled, PromiseSource } from "./scheduler-types.js";
 import { Fiber, type SchedulerOps } from "./fiber.js";
 import { type Channel, makeChannel } from "./channel.js";
+import { type Task, makeTask } from "./task.js";
+import { linkAbortController } from "./abort.js";
 
 /**
  * Policy for what happens to still-running spawned routines when the
@@ -79,6 +81,13 @@ export class Scheduler implements SchedulerOps {
    * production `execute()` always constructs a fresh scheduler.
    */
   private main: Fiber<unknown> | null = null;
+  /**
+   * The fiber currently being advanced by `drainReady`, or null between
+   * advances. `run` reads this (via `currentRunSignal`) to hand a `run`
+   * closure the *current fiber's* signal rather than a single global one,
+   * so a targeted `interrupt` aborts only that fiber's in-flight I/O.
+   */
+  private advancingFiber: Fiber<unknown> | null = null;
   // Replaced (not just re-aborted) each time the scheduler observes
   // invocation cancellation. AbortControllers are one-way — once
   // aborted, signal.aborted stays true forever — so the scheduler-
@@ -152,23 +161,21 @@ export class Scheduler implements SchedulerOps {
    * attempt itself is over — a parent abort is sticky.
    */
   private newAbortController(): AbortController {
-    const c = new AbortController();
-    if (this.parentSignal.aborted) {
-      c.abort(this.parentSignal.reason);
-    } else {
-      this.parentSignal.addEventListener(
-        "abort",
-        () => c.abort(this.parentSignal.reason),
-        // `once`: the registration drops after the parent fires.
-        // `signal: c.signal`: it also drops the moment this controller
-        // is aborted by any other path (cancellation retiring it) — so
-        // replaced controllers self-detach and at most one listener
-        // lives on the parent at any time, no accumulation across
-        // cancel/recover cycles.
-        { once: true, signal: c.signal }
-      );
-    }
-    return c;
+    return linkAbortController(this.parentSignal);
+  }
+
+  /**
+   * The AbortSignal for the currently-advancing fiber's `run` closures —
+   * scoped per fiber so a targeted `interrupt(task)` aborts only that
+   * task's in-flight I/O, while invocation cancellation / attempt-end
+   * still cascade in (the fiber signal is a child of `abortSignal`).
+   * Falls back to the scheduler signal when no fiber is advancing (a
+   * defensive case — `run` is always called from inside a fiber).
+   */
+  currentRunSignal(): AbortSignal {
+    return this.advancingFiber !== null
+      ? this.advancingFiber.runSignal()
+      : this.abortSignal;
   }
 
   // ---- SchedulerOps: narrow interface for Fiber ----
@@ -200,22 +207,43 @@ export class Scheduler implements SchedulerOps {
   }
 
   /**
-   * Register an Operation as a fresh fiber and return a Future that
-   * resolves with its eventual value. Eager: by the time this returns,
-   * the fiber is queued ready and will be advanced on the next drain.
+   * Register an Operation as a fresh fiber, returning both its
+   * local-backed Future and the underlying Fiber. Eager: by the time
+   * this returns, the fiber is queued ready and will be advanced on the
+   * next drain.
    *
    * Lifetime is bounded by the main fiber under the default
    * `"abandon"` policy: a spawned fiber still running when the main
    * fiber settles is abandoned (see {@link OnMainExit}). Under
    * `"join"` it keeps the scheduler alive until it finishes.
    *
-   * Used by combinator fallbacks (race, allSettled, …), by
-   * `RestateOperations.spawn`, and via the slot interface by the free
-   * `spawn` function.
+   * Internal: combinator fallbacks (race, allSettled, …) use this to get
+   * a plain Future. The public `spawn` wraps the same pair into a `Task`.
    */
-  spawn<U>(op: Operation<U>): Future<U> {
-    const f = this.createFiber(op);
-    return makeFuture<U>({ kind: "local", target: f });
+  private spawnRoutine<U>(op: Operation<U>): {
+    future: Future<U>;
+    fiber: Fiber<U>;
+  } {
+    const fiber = this.createFiber(op);
+    return { future: makeFuture<U>({ kind: "local", target: fiber }), fiber };
+  }
+
+  /** Spawn returning just the Future — for combinator fallbacks, which
+   *  never expose `interrupt` on their synthesized fibers. */
+  private spawnFuture<U>(op: Operation<U>): Future<U> {
+    return this.spawnRoutine(op).future;
+  }
+
+  /**
+   * Register an Operation as a fresh fiber and return a `Task<U>` — a
+   * `Future<U>` for its eventual value, plus `interrupt(err?)` to throw
+   * into it at its next yield point. Eager: by the time this returns the
+   * fiber is queued ready. Reached by `RestateOperations.spawn` and the
+   * free `spawn` function.
+   */
+  spawn<U>(op: Operation<U>): Task<U> {
+    const { future, fiber } = this.spawnRoutine(op);
+    return makeTask(future, (err) => fiber.interrupt(err));
   }
 
   /**
@@ -253,7 +281,7 @@ export class Scheduler implements SchedulerOps {
         FutureValues<T>
       >;
     }
-    return this.spawn(
+    return this.spawnFuture(
       gen<FutureValues<T>>(function* () {
         const out: unknown[] = new Array(fs.length);
         for (let i = 0; i < fs.length; i++) {
@@ -271,7 +299,7 @@ export class Scheduler implements SchedulerOps {
     type R = FutureValues<T>[number];
     const fs = futures as ReadonlyArray<Future<unknown>>;
     // No need here to try downcasting to RestateFuture's, awaitRace will anyway produce the same UnresolvedFuture tree!
-    return this.spawn(
+    return this.spawnFuture(
       gen<R>(function* () {
         const result = yield* awaitRace(fs);
         if (result.settled.ok) return result.settled.v as R;
@@ -304,7 +332,7 @@ export class Scheduler implements SchedulerOps {
       const promises = fs.map((f) => f[futureBacking].promise);
       return this.makeJournalFuture(this.lib.any(promises)) as Future<R>;
     }
-    return this.spawn(
+    return this.spawnFuture(
       gen<R>(function* () {
         const errors: unknown[] = new Array(fs.length);
         const remaining = new Set<number>();
@@ -349,7 +377,7 @@ export class Scheduler implements SchedulerOps {
       const promises = fs.map((f) => f[futureBacking].promise);
       return this.makeJournalFuture(this.lib.allSettled(promises)) as Future<R>;
     }
-    return this.spawn(
+    return this.spawnFuture(
       gen<R>(function* () {
         const out = new Array<FutureSettledResult<unknown>>(fs.length);
         for (let i = 0; i < fs.length; i++) {
@@ -383,7 +411,17 @@ export class Scheduler implements SchedulerOps {
 
   private drainReady(): void {
     while (this.ready.length > 0 && !this.mainExited()) {
-      this.ready.shift()!.advance();
+      const f = this.ready.shift()!;
+      // Track the advancing fiber so `run` (called synchronously from
+      // inside `f.advance()`) can read this fiber's run signal. Saved/
+      // restored to tolerate any nesting, though advances don't nest.
+      const prev = this.advancingFiber;
+      this.advancingFiber = f;
+      try {
+        f.advance();
+      } finally {
+        this.advancingFiber = prev;
+      }
     }
   }
 
