@@ -105,7 +105,8 @@ describe("dial resilience", () => {
     const fake = await startFakeCloud({ decideTrailers: () => okTrailers() });
     const conn = connectTunnel({
       ...baseOptions(fake.port),
-      // Rotation: attempt 0 hits the silent peer, attempt 1 the good fake.
+      // Both get a slot; the silent peer's slot keeps timing out and
+      // retrying while the good server's slot establishes.
       tunnelServers: [
         `http://127.0.0.1:${silentPort}`,
         `http://127.0.0.1:${fake.port}`,
@@ -114,7 +115,7 @@ describe("dial resilience", () => {
     });
     try {
       await conn.ready; // would hang forever without the connect deadline
-      expect(silentAccepts).toBe(1);
+      expect(silentAccepts).toBeGreaterThanOrEqual(1);
       expect(conn.connectionCount).toBe(1);
     } finally {
       await conn.close();

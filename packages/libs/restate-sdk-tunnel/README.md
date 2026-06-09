@@ -40,9 +40,12 @@ restate dep register https://tunnel.us.restate.cloud:9080/<unprefixed-env-id>/my
 `connectTunnel` is the in-process analog of Restate Cloud's standalone
 [tunnel client](https://github.com/restatedev/restate-cloud-tunnel-client):
 
-1. **Dial out** to a tunnel server (region-based DNS discovery, or explicit
-   `tunnelServers`). TLS, deliberately with **no ALPN** — the tunnel speaks
-   HTTP/2 with prior knowledge.
+1. **Dial out** to the tunnel servers (region-based DNS discovery, or
+   explicit `tunnelServers`) — **one connection per resolved server**, like
+   the standalone client: SRV discovery expands every target to all of its
+   addresses, the set is re-resolved periodically, and connections are
+   started/torn down as servers appear/vanish. TLS, deliberately with
+   **no ALPN** — the tunnel speaks HTTP/2 with prior knowledge.
 2. **Role-flip:** Restate Cloud drives HTTP/2 as the _client_ over the
    connection we dialed; the deployment becomes the HTTP/2 _server_ on it.
 3. **Handshake:** the cloud opens `GET /_/start-tunnel`; we answer with the
@@ -84,20 +87,21 @@ interface TunnelConnection {
 
 Key options (see `ConnectTunnelOptions` for the full surface and defaults):
 
-| Option                               | Meaning                                                                     |
-| ------------------------------------ | --------------------------------------------------------------------------- |
-| `region` _or_ `tunnelServers`        | Tunnel server discovery — exactly one of the two                            |
-| `environmentId`                      | `env_...` — the environment to tunnel to                                    |
-| `authToken`                          | Cloud API key (`key_...`, Full role) presented in the handshake             |
-| `signingPublicKey`                   | `publickeyv1_...` — request-identity verification (required)                |
-| `tunnelName`                         | Stable rendezvous name (appears in the registration URL)                    |
-| `services`                           | Same shape `restate.serve` accepts                                          |
-| `tls`                                | Default on (system trust, **no ALPN**); object form for CA/mTLS             |
-| `connectTimeoutMs`                   | TCP+TLS dial deadline (5s, mirrors the standalone client)                   |
-| `reconnectInitialMs/MaxMs/Factor`    | Jittered exponential backoff (10ms → 120s, reset after a stable connection) |
-| `supportsDrain` / `drainGraceMs`     | Graceful-drain handover on cloud rollovers (on, 120s grace)                 |
-| `pingIntervalMs/TimeoutMs/MaxMissed` | Liveness watchdog (75s cadence)                                             |
-| `maxConcurrentStreams` etc.          | HTTP/2 tuning for high-concurrency serving                                  |
+| Option                                          | Meaning                                                                     |
+| ----------------------------------------------- | --------------------------------------------------------------------------- |
+| `region` / `tunnelServersSrv` / `tunnelServers` | Tunnel server discovery — exactly one; one connection per resolved server   |
+| `resolveIntervalMs`                             | SRV re-resolution cadence (30s; Node hides DNS TTLs)                        |
+| `environmentId`                                 | `env_...` — the environment to tunnel to                                    |
+| `authToken`                                     | Cloud API key (`key_...`, Full role) presented in the handshake             |
+| `signingPublicKey`                              | `publickeyv1_...` — request-identity verification (required)                |
+| `tunnelName`                                    | Stable rendezvous name (appears in the registration URL)                    |
+| `services`                                      | Same shape `restate.serve` accepts                                          |
+| `tls`                                           | Default on (system trust, **no ALPN**); object form for CA/mTLS             |
+| `connectTimeoutMs`                              | TCP+TLS dial deadline (5s, mirrors the standalone client)                   |
+| `reconnectInitialMs/MaxMs/Factor`               | Jittered exponential backoff (10ms → 120s, reset after a stable connection) |
+| `supportsDrain` / `drainGraceMs`                | Graceful-drain handover on cloud rollovers (on, 120s grace)                 |
+| `pingIntervalMs/TimeoutMs/MaxMissed`            | Liveness watchdog (75s cadence)                                             |
+| `maxConcurrentStreams` etc.                     | HTTP/2 tuning for high-concurrency serving                                  |
 
 ## Install
 
@@ -112,8 +116,9 @@ npm install @restatedev/restate-sdk-tunnel @restatedev/restate-sdk
 - Serves the deployment **in-process** — this package does not proxy to a
   separate local service, and does not expose the standalone tunnel client's
   "remote proxy" (local ingress/admin forwarding) feature.
-- Holds a single **active** tunnel connection; redials rotate across the
-  resolved tunnel servers, and a draining connection may transiently
-  overlap its replacement. Multi-homed (concurrent) connections are
-  intentionally not yet implemented.
+- Multi-homed like the standalone client: one connection per resolved
+  tunnel server (per IP for SRV discovery), each with its own reconnect
+  loop; the server set is reconciled as DNS changes. A fatal handshake on
+  any connection (`unauthorized`, `bad-tunnel-name`) stops the whole
+  tunnel — the credentials are shared.
 - Node-only (uses `node:tls`, `node:http2`, `node:dns`). Node ≥ 22.

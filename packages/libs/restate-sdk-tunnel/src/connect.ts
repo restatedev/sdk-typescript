@@ -36,9 +36,11 @@
 // up to drainGraceMs — and dials a replacement immediately (no backoff
 // sleep), so rollovers drop no requests.
 //
-// v1 scope: a single ACTIVE connection (no SRV multi-homing fan-out —
-// redials rotate across resolved targets; a draining connection may overlap
-// the replacement transiently).
+// Multi-homing: like the Rust client, the engine connects to EVERY resolved
+// tunnel server (one connection per resolved address for SRV discovery; one
+// per entry for explicit tunnelServers) and reconciles the set as DNS
+// changes — see the slot supervisor below. K is not configurable; it is the
+// resolved server set.
 
 import * as net from "node:net";
 import * as tls from "node:tls";
@@ -47,7 +49,7 @@ import { createEndpointHandler } from "@restatedev/restate-sdk";
 
 import type { ConnectTunnelOptions, TunnelConnection } from "./types.js";
 import { resolveOptions, buildTlsConnectOptions } from "./options.js";
-import { resolveTargets, type Target } from "./targets.js";
+import { resolveTargets, targetKey, type Target } from "./targets.js";
 import { makePlainBridge } from "./bridge.js";
 import {
   performHandshake,
@@ -103,7 +105,7 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
   let fatalError: Error | undefined;
   let connectionCount = 0;
   let lastInfo: HandshakeInfo | undefined;
-  let currentSocket: net.Socket | undefined;
+  const activeSockets = new Set<net.Socket>();
   const draining = new Set<DrainingConnection>();
 
   // Tear down every draining connection. Runs on close() AND on every loop
@@ -136,7 +138,10 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
   // keep Node alive.
   const keepAlive = setInterval(() => {}, 0x7fffffff);
 
-  const dialAndServe = (target: Target): Promise<ConnectionOutcome> =>
+  const dialAndServe = (
+    target: Target,
+    slotSignal: AbortSignal
+  ): Promise<ConnectionOutcome> =>
     new Promise((resolve) => {
       let settled = false;
       let openedAt: number | undefined; // set when the handshake confirms ok
@@ -163,7 +168,7 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
         if (watchdog !== undefined) clearInterval(watchdog);
         if (firstRequestTimer !== undefined) clearTimeout(firstRequestTimer);
         clearTimeout(connectTimer);
-        stopController.signal.removeEventListener("abort", onStop);
+        slotSignal.removeEventListener("abort", onStop);
         if (detachForDrain && session !== undefined && !session.destroyed) {
           // Drain handover: keep the old session serving its in-flight
           // streams for up to drainGraceMs (the cloud stops routing new work
@@ -189,16 +194,16 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
           session?.destroy();
           socket.destroy();
         }
-        if (currentSocket === socket) currentSocket = undefined;
+        activeSockets.delete(socket);
         resolve(outcome);
       };
 
-      // close() may race any phase of this attempt (dial, TLS, handshake,
-      // serving) — the abort listener tears the attempt down deterministically
-      // wherever it is.
+      // close() (or this slot's removal) may race any phase of this attempt
+      // (dial, TLS, handshake, serving) — the abort listener tears the
+      // attempt down deterministically wherever it is.
       const onStop = () =>
         settle({ kind: "retryable", reason: "tunnel closed" });
-      stopController.signal.addEventListener("abort", onStop, { once: true });
+      slotSignal.addEventListener("abort", onStop, { once: true });
 
       const plaintext = target.plaintext ?? opts.tls === false;
       const tlsOptions = plaintext
@@ -208,7 +213,7 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
       const socket: net.Socket = plaintext
         ? net.connect({ host: target.host, port: target.port })
         : tls.connect({ host: target.host, port: target.port, ...tlsOptions });
-      currentSocket = socket;
+      activeSockets.add(socket);
 
       // Bound the TCP connect AND the TLS handshake: a peer that accepts the
       // SYN but never completes TLS would otherwise stall this attempt
@@ -484,41 +489,63 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
       });
     });
 
-  // Exponential backoff with ±50% jitter; reset only after an ok handshake.
-  let backoffMs = opts.reconnectInitialMs;
-  const nextDelay = (): number => {
-    const d = backoffMs;
-    backoffMs = Math.min(backoffMs * opts.reconnectFactor, opts.reconnectMaxMs);
-    return d * (0.5 + Math.random());
+  // ---- slots: one tunnel connection per resolved server ----
+  //
+  // Like the Rust client, the engine connects to EVERY resolved tunnel
+  // server (one connection per resolved address for SRV discovery; one per
+  // entry for explicit tunnelServers) and keeps the set reconciled: servers
+  // that appear get a slot, servers that vanish have their slot torn down.
+  // Each slot runs its own dial→serve→backoff loop. A fatal handshake on
+  // ANY slot stops the whole tunnel — the credentials are shared, so every
+  // other slot would hit the same wall.
+
+  interface Slot {
+    ctl: AbortController;
+    done: Promise<void>;
+  }
+  const slots = new Map<string, Slot>();
+
+  // Wakes the supervisor out of its re-resolve sleep promptly on close()
+  // AND on a fatal (so teardown doesn't wait out resolveIntervalMs).
+  const supervisorWake = new AbortController();
+  stopController.signal.addEventListener(
+    "abort",
+    () => supervisorWake.abort(),
+    { once: true }
+  );
+
+  const stopAllSlots = () => {
+    for (const slot of slots.values()) slot.ctl.abort();
+    supervisorWake.abort();
   };
 
-  const loopDone = (async () => {
-    let attempt = 0;
-    while (!stopped) {
-      let outcome: ConnectionOutcome;
-      try {
-        const targets = await resolveTargets(opts);
-        if (stopped) break; // close() may have raced the resolution await
-        const target = targets[attempt % targets.length]!;
-        attempt++;
-        outcome = await dialAndServe(target);
-      } catch (err) {
-        outcome = {
-          kind: "retryable",
-          reason: `target resolution failed: ${err instanceof Error ? err.message : String(err)}`,
-        };
-      }
-      if (stopped) break;
+  const runSlot = async (target: Target, ctl: AbortController) => {
+    // Per-slot exponential backoff with ±50% jitter; reset only after a
+    // connection that stayed up (see MIN_UPTIME_FOR_BACKOFF_RESET_MS).
+    let backoffMs = opts.reconnectInitialMs;
+    const nextDelay = (): number => {
+      const d = backoffMs;
+      backoffMs = Math.min(
+        backoffMs * opts.reconnectFactor,
+        opts.reconnectMaxMs
+      );
+      return d * (0.5 + Math.random());
+    };
+
+    while (!stopped && !ctl.signal.aborted && fatalError === undefined) {
+      const outcome = await dialAndServe(target, ctl.signal);
+      if (stopped || ctl.signal.aborted) break;
       if (outcome.kind === "fatal") {
         fatalError = new Error(`tunnel: ${outcome.reason}`);
-        log(`tunnel: FATAL — ${outcome.reason}; not reconnecting`);
+        log(`tunnel: FATAL — ${outcome.reason}; stopping all connections`);
         readyReject(fatalError);
+        stopAllSlots();
         break;
       }
       if (outcome.kind === "served" || outcome.kind === "drained") {
         // Reset the backoff only when the connection actually held —
         // a handshake-ok-then-die cycle must keep compounding toward
-        // reconnectMaxMs (see MIN_UPTIME_FOR_BACKOFF_RESET_MS).
+        // reconnectMaxMs.
         if (outcome.uptimeMs >= MIN_UPTIME_FOR_BACKOFF_RESET_MS) {
           backoffMs = opts.reconnectInitialMs;
         }
@@ -529,8 +556,7 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
           // A stable connection was asked to rotate and the server is
           // holding the old one open for us — replace it NOW, not after a
           // backoff sleep. A connection drained moments after registering
-          // does NOT take this fast path: drain-spam (a flapping or buggy
-          // node draining every fresh connection) must compound the
+          // does NOT take this fast path: drain-spam must compound the
           // backoff like any handshake-ok-then-die cycle, or it becomes a
           // zero-delay dial loop that also accumulates draining sessions.
           log("tunnel: draining — reconnecting immediately");
@@ -544,8 +570,75 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
       } else {
         log(`tunnel: ${outcome.reason} — reconnecting`);
       }
-      await delay(nextDelay(), stopController.signal);
+      await delay(nextDelay(), ctl.signal);
     }
+  };
+
+  const startSlot = (key: string, target: Target) => {
+    const ctl = new AbortController();
+    // Chain to the global stop so close() cascades; self-detaching.
+    stopController.signal.addEventListener("abort", () => ctl.abort(), {
+      once: true,
+      signal: ctl.signal,
+    });
+    const slot: Slot = { ctl, done: Promise.resolve() };
+    slot.done = runSlot(target, ctl).finally(() => {
+      // Guarded: this key may have vanished and re-appeared, in which case
+      // a NEWER slot owns it — don't delete someone else's registration.
+      if (slots.get(key) === slot) slots.delete(key);
+    });
+    slots.set(key, slot);
+  };
+
+  // The supervisor: resolve the server set, reconcile slots, repeat (for
+  // region discovery; an explicit tunnelServers set is fixed and resolved
+  // once, like the Rust client's fixed_uri_stream).
+  const loopDone = (async () => {
+    while (!stopped && fatalError === undefined) {
+      let targets: Target[];
+      try {
+        // Race the (un-abortable) DNS work against the wake signal so
+        // close()/fatal don't block on a slow resolver — a late result is
+        // discarded by the stopped/fatal check below.
+        const resolution = resolveTargets(opts);
+        resolution.catch(() => {}); // a late rejection must not be unhandled
+        const raced = await raceAbortable(resolution, supervisorWake.signal);
+        if (raced === null) break; // woken: stopped or fatal
+        targets = raced;
+      } catch (err) {
+        // Keep whatever slots exist serving; retry the resolution later
+        // (the Rust client does the same on SRV failures).
+        log(
+          `tunnel: target resolution failed: ${err instanceof Error ? err.message : String(err)} — retrying`
+        );
+        await delay(
+          Math.min(5_000, opts.resolveIntervalMs),
+          supervisorWake.signal
+        );
+        continue;
+      }
+      if (stopped || fatalError !== undefined) break;
+
+      const desired = new Map(targets.map((t) => [targetKey(t), t] as const));
+      for (const [key, target] of desired) {
+        if (!slots.has(key)) {
+          log(`tunnel: starting connection to ${key}`);
+          startSlot(key, target);
+        }
+      }
+      for (const [key, slot] of slots) {
+        if (!desired.has(key)) {
+          log(`tunnel: ${key} no longer resolves — tearing down`);
+          slot.ctl.abort();
+        }
+      }
+
+      if (opts.srvName === undefined) break; // explicit servers: fixed set
+      await delay(opts.resolveIntervalMs, supervisorWake.signal);
+    }
+    // Slots still in the map are live; evicted ones have already settled.
+    // No slot can start after the supervisor loop exits.
+    await Promise.all([...slots.values()].map((s) => s.done));
     destroyDraining();
     clearInterval(keepAlive);
     // If the tunnel never established (closed or stopped before the first
@@ -560,7 +653,9 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
     if (!stopped) {
       stopped = true;
       stopController.abort();
-      currentSocket?.destroy();
+      stopAllSlots();
+      for (const socket of activeSockets) socket.destroy();
+      activeSockets.clear();
       destroyDraining();
       clearInterval(keepAlive);
     }
@@ -595,6 +690,29 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
     },
     ready,
   };
+}
+
+/**
+ * Race a promise against a signal: resolves `null` the moment the signal
+ * aborts, otherwise passes the promise's result through (rejections
+ * propagate). The abort listener is removed when the race settles, so
+ * repeated calls against a long-lived signal don't accumulate listeners.
+ */
+async function raceAbortable<T>(
+  promise: Promise<T>,
+  signal: AbortSignal
+): Promise<T | null> {
+  if (signal.aborted) return null;
+  let onAbort!: () => void;
+  const aborted = new Promise<null>((resolve) => {
+    onAbort = () => resolve(null);
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+  try {
+    return await Promise.race([promise, aborted]);
+  } finally {
+    signal.removeEventListener("abort", onAbort);
+  }
 }
 
 /** Sleep that wakes early (resolving) when the signal aborts. */

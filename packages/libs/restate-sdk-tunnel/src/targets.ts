@@ -12,7 +12,6 @@
 // Tunnel-server discovery: explicit addresses or region-based DNS SRV.
 
 import * as dns from "node:dns";
-import { srvNameForRegion } from "./options.js";
 
 /** A dialable tunnel server. */
 export interface Target {
@@ -89,15 +88,19 @@ export function parseServerAddress(address: string): Target {
  *
  * - Explicit `tunnelServers`: parsed as-is (no DNS here — the dial resolves
  *   the hostname).
- * - `region`: a DNS SRV lookup of `tunnel.<region>.restate.cloud`. Records
- *   are ordered by SRV priority (lowest first), then weight (highest
- *   first); each record's target hostname and port become a dialable
- *   target, with TLS verified against the SRV target name.
+ * - `srvName` (region-derived or given directly): a DNS SRV lookup, each
+ *   record expanded to ALL of its addresses (priority asc, weight desc).
  *
- * Throws if nothing resolves.
+ * Error taxonomy (mirrors the Rust resolver): a NEGATIVE answer for an SRV
+ * target (the name genuinely has no address — ENOTFOUND/ENODATA) removes
+ * that target, and an all-negative answer yields an EMPTY list (the
+ * supervisor then reconciles everything away, like Rust's empty set). A
+ * TRANSPORT error (EAI_AGAIN, timeouts, SERVFAIL) THROWS instead — the
+ * supervisor must keep the existing connections serving and retry, not
+ * tear down healthy slots over a resolver blip.
  */
 export async function resolveTargets(spec: {
-  region?: string;
+  srvName?: string;
   tunnelServers?: string[];
 }): Promise<Target[]> {
   if (spec.tunnelServers !== undefined) {
@@ -107,19 +110,44 @@ export async function resolveTargets(spec: {
     }
     return targets;
   }
-  const srvName = srvNameForRegion(spec.region!);
+  const srvName = spec.srvName!;
   const records = await dns.promises.resolveSrv(srvName);
-  if (records.length === 0) {
-    throw new Error(`tunnel: SRV lookup of ${srvName} returned no records`);
-  }
   records.sort((a, b) => a.priority - b.priority || b.weight - a.weight);
-  // SNI / certificate verification uses the SRV QUERY name (the cloud's
-  // cert covers `tunnel.<region>.restate.cloud`), not the per-record target
-  // hostname — mirroring the Rust client's FixedServerNameResolver, which
-  // pins ServerName to the SRV name for every resolved target.
-  return records.map((r) => ({
-    host: r.name,
-    port: r.port,
-    servername: srvName,
-  }));
+  // Expand each SRV target to its addresses: the tunnel connects to EVERY
+  // resolved address (one connection per IP), exactly like the Rust client,
+  // which flat-maps SRV targets through A/AAAA lookups into per-IP URIs.
+  // Lookups run concurrently (Rust uses FuturesUnordered) so one slow
+  // resolver doesn't serialize the rest. SNI / certificate verification
+  // uses the SRV QUERY name (the cloud's cert covers the SRV name, not
+  // per-node hostnames) — mirroring the Rust FixedServerNameResolver.
+  const lookups = await Promise.allSettled(
+    records.map((r) => dns.promises.lookup(r.name, { all: true }))
+  );
+  const targets: Target[] = [];
+  const seen = new Set<string>();
+  for (let i = 0; i < records.length; i++) {
+    const r = records[i]!;
+    const result = lookups[i]!;
+    if (result.status === "rejected") {
+      const code = (result.reason as NodeJS.ErrnoException | undefined)?.code;
+      if (code === "ENOTFOUND" || code === "ENODATA") {
+        continue; // negative answer: this SRV target genuinely has no address
+      }
+      // Transport error — fail the whole resolution so the supervisor
+      // keeps existing slots and retries.
+      throw result.reason;
+    }
+    for (const a of result.value) {
+      const key = `${a.address}:${r.port}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      targets.push({ host: a.address, port: r.port, servername: srvName });
+    }
+  }
+  return targets;
+}
+
+/** Stable identity of a target — the unit of one tunnel connection. */
+export function targetKey(t: Target): string {
+  return `${t.host}:${t.port}`;
 }

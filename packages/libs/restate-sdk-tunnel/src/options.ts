@@ -13,15 +13,18 @@
 
 import type * as tls from "node:tls";
 import type { ConnectTunnelOptions, TunnelTlsOptions } from "./types.js";
+import { parseServerAddress } from "./targets.js";
 
 export interface ResolvedOptions {
-  region?: string;
+  /** The SRV name to discover tunnel servers from (region-derived or given). */
+  srvName?: string;
   tunnelServers?: string[];
   environmentId: string;
   authToken: string;
   signingPublicKey: string;
   tunnelName: string;
   bidirectional: boolean;
+  resolveIntervalMs: number;
   supportsDrain: boolean;
   drainGraceMs: number;
   connectTimeoutMs: number;
@@ -61,15 +64,29 @@ function positive(
 /** Validate user options and apply defaults. Throws on misconfiguration. */
 export function resolveOptions(options: ConnectTunnelOptions): ResolvedOptions {
   const hasRegion = options.region !== undefined && options.region !== "";
+  const hasSrv =
+    options.tunnelServersSrv !== undefined && options.tunnelServersSrv !== "";
   const hasServers =
     options.tunnelServers !== undefined && options.tunnelServers.length > 0;
-  if (hasRegion === hasServers) {
+  if (Number(hasRegion) + Number(hasSrv) + Number(hasServers) !== 1) {
     throw new Error(
-      "tunnel: specify exactly one of `region` or `tunnelServers`"
+      "tunnel: specify exactly one of `region`, `tunnelServersSrv` or `tunnelServers`"
     );
   }
   if (hasRegion && !/^[a-z0-9-]+$/.test(options.region!)) {
     throw new Error(`tunnel: invalid region ${JSON.stringify(options.region)}`);
+  }
+  if (hasSrv && !/^[A-Za-z0-9._-]+$/.test(options.tunnelServersSrv!)) {
+    throw new Error(
+      `tunnel: invalid tunnelServersSrv ${JSON.stringify(options.tunnelServersSrv)}`
+    );
+  }
+  // Parse explicit servers eagerly: a config typo must throw here, like
+  // every other misconfiguration (the Rust client parses URIs at startup).
+  // Left to the supervisor it would look like a transient resolution
+  // failure and retry forever without ever connecting.
+  if (hasServers) {
+    for (const address of options.tunnelServers!) parseServerAddress(address);
   }
 
   const environmentId = requireNonEmpty(options.environmentId, "environmentId");
@@ -115,13 +132,22 @@ export function resolveOptions(options: ConnectTunnelOptions): ResolvedOptions {
   );
 
   return {
-    region: hasRegion ? options.region : undefined,
+    srvName: hasRegion
+      ? srvNameForRegion(options.region!)
+      : hasSrv
+        ? options.tunnelServersSrv
+        : undefined,
     tunnelServers: hasServers ? options.tunnelServers : undefined,
     environmentId,
     authToken,
     signingPublicKey,
     tunnelName,
     bidirectional: options.bidirectional ?? true,
+    resolveIntervalMs: positive(
+      options.resolveIntervalMs,
+      30_000,
+      "resolveIntervalMs"
+    ),
     supportsDrain: options.supportsDrain ?? true,
     drainGraceMs: positive(options.drainGraceMs, 120_000, "drainGraceMs"),
     connectTimeoutMs: positive(

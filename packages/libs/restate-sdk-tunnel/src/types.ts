@@ -53,20 +53,45 @@ export interface TunnelTlsOptions {
 export interface ConnectTunnelOptions {
   /**
    * Restate Cloud region (e.g. `"us"`, `"eu"`). Tunnel servers are
-   * discovered via a DNS SRV lookup of `tunnel.<region>.restate.cloud`.
+   * discovered via a DNS SRV lookup of `tunnel.<region>.restate.cloud`,
+   * expanded to every resolved address — the engine holds **one tunnel
+   * connection per resolved tunnel server** (like the standalone client),
+   * and re-resolves every {@link resolveIntervalMs}, starting connections
+   * to servers that appear and tearing down connections to servers that
+   * vanish.
    *
-   * Exactly one of `region` or `tunnelServers` must be set.
+   * Exactly one of `region`, `tunnelServersSrv` or `tunnelServers` must be
+   * set.
    */
   region?: string;
+  /**
+   * A DNS SRV name to discover tunnel servers from, for environments whose
+   * SRV name doesn't follow the `tunnel.<region>.restate.cloud` template
+   * (the standalone client's `RESTATE_TUNNEL_SERVERS_SRV`). Same expansion
+   * and reconciliation semantics as `region`.
+   *
+   * Exactly one of `region`, `tunnelServersSrv` or `tunnelServers` must be
+   * set.
+   */
+  tunnelServersSrv?: string;
   /**
    * Explicit tunnel server addresses, instead of region-based discovery.
    * Each entry is either `"host:port"` (TLS governed by the `tls` option)
    * or a URL `"https://host:port"` / `"http://host:port"` (scheme selects
-   * TLS/plaintext for that server).
+   * TLS/plaintext for that server). The engine holds one tunnel connection
+   * per entry; the set is fixed (no re-resolution).
    *
-   * Exactly one of `region` or `tunnelServers` must be set.
+   * Exactly one of `region`, `tunnelServersSrv` or `tunnelServers` must be
+   * set.
    */
   tunnelServers?: string[];
+  /**
+   * How often region-based discovery re-resolves the tunnel-server set.
+   * Default 30_000. (The Rust client re-resolves on DNS TTL expiry; Node
+   * does not expose record TTLs, so a fixed interval approximates it.)
+   * Ignored with explicit `tunnelServers`.
+   */
+  resolveIntervalMs?: number;
   /**
    * The Restate Cloud environment ID to tunnel to, including the `env_`
    * prefix (e.g. `"env_201k0yd4rz8yftmd4awh1bajg4v"`).

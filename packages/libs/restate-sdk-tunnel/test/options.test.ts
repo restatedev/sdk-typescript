@@ -30,7 +30,7 @@ const valid: ConnectTunnelOptions = {
 describe("resolveOptions — validation", () => {
   test("accepts a valid config and applies defaults", () => {
     const r = resolveOptions(valid);
-    expect(r.region).toBe("us");
+    expect(r.srvName).toBe("tunnel.us.restate.cloud");
     expect(r.bidirectional).toBe(true);
     expect(r.handshakeTimeoutMs).toBe(5_000);
     expect(r.reconnectInitialMs).toBe(10);
@@ -53,6 +53,30 @@ describe("resolveOptions — validation", () => {
     expect(() => resolveOptions({ ...valid, tunnelServers: ["h:1"] })).toThrow(
       /exactly one of/
     );
+  });
+
+  test("tunnelServersSrv is a third, exclusive discovery mode", () => {
+    const r = resolveOptions({
+      ...valid,
+      region: undefined,
+      tunnelServersSrv: "tunnel.dev.example.cloud",
+    });
+    expect(r.srvName).toBe("tunnel.dev.example.cloud");
+    expect(() =>
+      resolveOptions({ ...valid, tunnelServersSrv: "x.example" })
+    ).toThrow(/exactly one of/);
+  });
+
+  test("a malformed tunnelServers entry throws synchronously (not a retry loop)", () => {
+    // Left to the supervisor, a parse error would look like a transient
+    // resolution failure and retry forever without ever connecting.
+    expect(() =>
+      resolveOptions({
+        ...valid,
+        region: undefined,
+        tunnelServers: ["good.example:9080", "no-port"],
+      })
+    ).toThrow(/invalid tunnel server address/);
   });
 
   test("rejects environmentId without env_ prefix", () => {

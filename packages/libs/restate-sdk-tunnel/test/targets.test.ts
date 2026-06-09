@@ -9,35 +9,51 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi, beforeEach } from "vitest";
 
 vi.mock("node:dns", () => ({
   promises: {
     resolveSrv: vi.fn(),
+    lookup: vi.fn(),
   },
 }));
 
 import * as dns from "node:dns";
-import { resolveTargets } from "../src/targets.js";
+import { resolveTargets, targetKey } from "../src/targets.js";
 
 const resolveSrv = vi.mocked(dns.promises.resolveSrv);
+const lookup = vi.mocked(dns.promises.lookup);
+
+beforeEach(() => {
+  resolveSrv.mockReset();
+  lookup.mockReset();
+});
 
 describe("resolveTargets — region / SRV", () => {
-  test("orders by priority then weight, and pins servername to the SRV query name", async () => {
+  test("expands every SRV target to all of its addresses (one connection per IP)", async () => {
     resolveSrv.mockResolvedValueOnce([
       { name: "node-b.tunnel.internal", port: 19081, priority: 10, weight: 1 },
       { name: "node-a.tunnel.internal", port: 19080, priority: 0, weight: 5 },
-      { name: "node-c.tunnel.internal", port: 19082, priority: 0, weight: 9 },
     ]);
-    const targets = await resolveTargets({ region: "us" });
+    lookup.mockImplementation(((name: string) =>
+      Promise.resolve(
+        name === "node-a.tunnel.internal"
+          ? [
+              { address: "10.0.0.1", family: 4 },
+              { address: "10.0.0.2", family: 4 },
+            ]
+          : [{ address: "10.0.1.1", family: 4 }]
+      )) as never);
+    const targets = await resolveTargets({
+      srvName: "tunnel.us.restate.cloud",
+    });
     expect(resolveSrv).toHaveBeenCalledWith("tunnel.us.restate.cloud");
-    // priority asc, then weight desc.
-    expect(targets.map((t) => t.host)).toEqual([
-      "node-c.tunnel.internal",
-      "node-a.tunnel.internal",
-      "node-b.tunnel.internal",
+    // priority asc — node-a's addresses first — then node-b's.
+    expect(targets.map(targetKey)).toEqual([
+      "10.0.0.1:19080",
+      "10.0.0.2:19080",
+      "10.0.1.1:19081",
     ]);
-    expect(targets.map((t) => t.port)).toEqual([19082, 19080, 19081]);
     // TLS verification name is the SRV QUERY name for EVERY target (the
     // cloud's cert covers tunnel.<region>.restate.cloud, not per-node
     // hostnames) — mirrors the Rust client's FixedServerNameResolver.
@@ -46,19 +62,64 @@ describe("resolveTargets — region / SRV", () => {
     }
   });
 
-  test("empty SRV answer throws", async () => {
-    resolveSrv.mockResolvedValueOnce([]);
-    await expect(resolveTargets({ region: "eu" })).rejects.toThrow(
-      /no records/
-    );
+  test("a NEGATIVE answer (ENOTFOUND) removes that target; the others still serve", async () => {
+    resolveSrv.mockResolvedValueOnce([
+      { name: "alive.internal", port: 1000, priority: 0, weight: 1 },
+      { name: "dead.internal", port: 1001, priority: 0, weight: 1 },
+    ]);
+    lookup.mockImplementation(((name: string) =>
+      name === "dead.internal"
+        ? Promise.reject(
+            Object.assign(new Error("not found"), { code: "ENOTFOUND" })
+          )
+        : Promise.resolve([{ address: "10.0.0.9", family: 4 }])) as never);
+    const targets = await resolveTargets({ srvName: "tunnel.eu.example" });
+    expect(targets.map(targetKey)).toEqual(["10.0.0.9:1000"]);
   });
 
-  test("explicit tunnelServers bypass DNS entirely", async () => {
-    resolveSrv.mockClear();
+  test("a TRANSPORT error (EAI_AGAIN) fails the whole resolution — healthy slots must not be torn down over a resolver blip", async () => {
+    resolveSrv.mockResolvedValueOnce([
+      { name: "alive.internal", port: 1000, priority: 0, weight: 1 },
+      { name: "flaky.internal", port: 1001, priority: 0, weight: 1 },
+    ]);
+    lookup.mockImplementation(((name: string) =>
+      name === "flaky.internal"
+        ? Promise.reject(
+            Object.assign(new Error("temporary failure"), {
+              code: "EAI_AGAIN",
+            })
+          )
+        : Promise.resolve([{ address: "10.0.0.9", family: 4 }])) as never);
+    await expect(
+      resolveTargets({ srvName: "tunnel.eu.example" })
+    ).rejects.toThrow(/temporary failure/);
+  });
+
+  test("all-negative answers yield an EMPTY set (everything reconciled away, like Rust)", async () => {
+    resolveSrv.mockResolvedValueOnce([
+      { name: "dead.internal", port: 1001, priority: 0, weight: 1 },
+    ]);
+    lookup.mockRejectedValue(
+      Object.assign(new Error("not found"), { code: "ENOTFOUND" })
+    );
+    await expect(
+      resolveTargets({ srvName: "tunnel.eu.example" })
+    ).resolves.toEqual([]);
+  });
+
+  test("empty SRV answer yields an empty set", async () => {
+    resolveSrv.mockResolvedValueOnce([]);
+    await expect(
+      resolveTargets({ srvName: "tunnel.eu.example" })
+    ).resolves.toEqual([]);
+  });
+
+  test("explicit tunnelServers bypass DNS entirely (one target per entry)", async () => {
     const targets = await resolveTargets({
       tunnelServers: ["a.example:1000", "https://b.example"],
     });
     expect(resolveSrv).not.toHaveBeenCalled();
+    expect(lookup).not.toHaveBeenCalled();
     expect(targets.map((t) => t.host)).toEqual(["a.example", "b.example"]);
   });
 });
