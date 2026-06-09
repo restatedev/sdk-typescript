@@ -14,26 +14,40 @@ const greeter = restate.service({
   handlers: { greet: async (_ctx, name: string) => `Hello ${name}!` },
 });
 
-connectTunnel({
+const connection = connectTunnel({
   region: "us", // Restate Cloud region (tunnel servers discovered via DNS)
   environmentId: "env_...", // your environment ID (env_ prefix included)
   authToken: process.env.RESTATE_AUTH_TOKEN!, // Cloud API key with the Full role
   signingPublicKey: "publickeyv1_...", // your environment's request-identity key
-  tunnelName: "my-cluster", // stable rendezvous name for this deployment
+  tunnelName: "greeter", // routing key: unique per deployment, shared by its replicas
+  deploymentId: "greeterv1", // identity label shown in the registered deployment URI
   services: [greeter],
 });
+
+await connection.ready;
+console.log(`register me: ${connection.deploymentUrl}`);
 ```
 
-Once connected, register the deployment against Restate Cloud. The
-registration URL is the tunnel's proxy **base** URL (`connection.proxyUrl`,
-learned during the handshake — `<proxy-host>/<env-id>/<tunnel-name>`) plus a
-`/<scheme>/<host>/<port>` destination segment; for an in-process deployment
-the destination is vestigial:
+Once connected, register the deployment against Restate Cloud at
+`connection.deploymentUrl` —
+`<proxyUrl>/http/<deploymentId>/9080/`, e.g.:
 
 ```
-restate dep register https://tunnel.us.restate.cloud:9080/<unprefixed-env-id>/my-cluster/http/in-process/9080
-                      └──────────────── connection.proxyUrl ───────────────┘└── destination ──┘
+restate dep register https://tunnel.us.restate.cloud:9080/<unprefixed-env-id>/greeter/http/greeterv1/9080/
+                      └─────────────── connection.proxyUrl ──────────────┘└─ identity label ─┘
 ```
+
+Two things to know about the URL's anatomy:
+
+- **Routing is by `tunnelName`** — the proxy load-balances across every
+  connection registered under it. Give each distinct deployment its own
+  `tunnelName`; let replicas of the _same_ deployment share one (that's the
+  HA/load-balancing path).
+- **The `/http/<deploymentId>/9080/` destination is identity, not
+  routing** — an in-process tunnel terminates in this very process, so the
+  destination is never dialed. It is what operators see in the deployment
+  URI, so give it a meaningful, versioned name (`greeterv1`); in k8s,
+  populate it from an env var injected by your deployment machinery.
 
 ## How it works
 
@@ -79,7 +93,8 @@ interface TunnelConnection {
   readonly ready: Promise<void>; // first successful handshake (rejects on fatal)
   readonly connectionCount: number;
   readonly tunnelName: string | undefined; // learned from the handshake
-  readonly proxyUrl: string | undefined; // where to register the deployment
+  readonly proxyUrl: string | undefined; // proxy base for this tunnel
+  readonly deploymentUrl: string | undefined; // ready-made registration URL
   readonly tunnelUrl: string | undefined;
   readonly error: Error | undefined; // set on fatal (no more reconnects)
 }
@@ -94,7 +109,8 @@ Key options (see `ConnectTunnelOptions` for the full surface and defaults):
 | `environmentId`                                 | `env_...` — the environment to tunnel to                                    |
 | `authToken`                                     | Cloud API key (`key_...`, Full role) presented in the handshake             |
 | `signingPublicKey`                              | `publickeyv1_...` — request-identity verification (required)                |
-| `tunnelName`                                    | Stable rendezvous name (appears in the registration URL)                    |
+| `tunnelName`                                    | Routing key — unique per deployment, shared across its replicas             |
+| `deploymentId`                                  | Identity label in the registration URL (`greeterv1`); not dialed            |
 | `services`                                      | Same shape `restate.serve` accepts                                          |
 | `tls`                                           | Default on (system trust, **no ALPN**); object form for CA/mTLS             |
 | `connectTimeoutMs`                              | TCP+TLS dial deadline (5s, mirrors the standalone client)                   |

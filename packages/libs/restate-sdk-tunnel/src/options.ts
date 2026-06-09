@@ -23,6 +23,7 @@ export interface ResolvedOptions {
   authToken: string;
   signingPublicKey: string;
   tunnelName: string;
+  deploymentId: string;
   bidirectional: boolean;
   resolveIntervalMs: number;
   supportsDrain: boolean;
@@ -119,6 +120,12 @@ export function resolveOptions(options: ConnectTunnelOptions): ResolvedOptions {
       `tunnel: invalid tunnelName ${JSON.stringify(tunnelName)} — use letters, digits, '.', '_' or '-'`
     );
   }
+  const deploymentId = options.deploymentId ?? "in-process";
+  if (!/^[A-Za-z0-9._-]+$/.test(deploymentId)) {
+    throw new Error(
+      `tunnel: invalid deploymentId ${JSON.stringify(deploymentId)} — use letters, digits, '.', '_' or '-'`
+    );
+  }
 
   const pingIntervalMs = positive(
     options.pingIntervalMs,
@@ -142,6 +149,7 @@ export function resolveOptions(options: ConnectTunnelOptions): ResolvedOptions {
     authToken,
     signingPublicKey,
     tunnelName,
+    deploymentId,
     bidirectional: options.bidirectional ?? true,
     resolveIntervalMs: positive(
       options.resolveIntervalMs,

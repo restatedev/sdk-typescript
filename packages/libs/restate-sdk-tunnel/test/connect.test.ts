@@ -97,6 +97,34 @@ describe("connectTunnel — handshake", () => {
           expect(creds["tunnel-name"]).toBe(TUNNEL_NAME);
           // Drain is implemented and advertised by default.
           expect(creds["supports-drain"]).toBe("true");
+          // The ready-made registration URL: advertised proxy base + the
+          // deploymentId destination label (default "in-process").
+          expect(conn.deploymentUrl).toBe(
+            `${okTrailers()["proxy-url"]}/http/in-process/9080/`
+          );
+        } finally {
+          await conn.close();
+        }
+      }
+    );
+  });
+
+  test("deploymentUrl uses the configured deploymentId and normalizes a missing proxy port", async () => {
+    await withFake(
+      {
+        decideTrailers: () => ({
+          ...okTrailers(),
+          // Public clusters can advertise the proxy without a port.
+          "proxy-url": `https://tunnel.example/abc123/${TUNNEL_NAME}`,
+        }),
+      },
+      async (_fake, options) => {
+        const conn = connectTunnel({ ...options, deploymentId: "greeterv1" });
+        try {
+          await conn.ready;
+          expect(conn.deploymentUrl).toBe(
+            `https://tunnel.example:9080/abc123/${TUNNEL_NAME}/http/greeterv1/9080/`
+          );
         } finally {
           await conn.close();
         }
