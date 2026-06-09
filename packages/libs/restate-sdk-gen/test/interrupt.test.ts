@@ -32,7 +32,7 @@ import {
   type Future,
 } from "../src/index.js";
 import { Scheduler } from "../src/internal.js";
-import { deferred, resolved, testLib } from "./test-promise.js";
+import { cancellingLib, deferred, resolved, testLib } from "./test-promise.js";
 
 // "Let pending ready fibers run and park" — yield a pre-resolved journal
 // future so the current fiber suspends for one drain.
@@ -1259,6 +1259,87 @@ describe("interrupt — interaction with onMainExit", () => {
     });
     expect(await sched.run(op)).toBe("main-done");
     expect(finallyRan).toBe(true);
+  });
+});
+
+describe("interrupt — with invocation cancellation", () => {
+  // A targeted user interrupt and the SDK's invocation-cancellation
+  // fan-out (the broadcast) deliver through the same wake/resume slot.
+  // They must coexist in one run without interference: the interrupt
+  // resolves its target, the fan-out still reaches a spawned fiber.
+
+  test("interrupt resolves its target while the cancellation fan-out cancels a spawned fiber", async () => {
+    const { lib, cancel } = cancellingLib();
+    const sched = new Scheduler(lib);
+    const dInt = deferred<void>();
+    const dCancel = deferred<void>();
+    const op = gen(function* () {
+      const wInt = spawn(
+        gen(function* () {
+          try {
+            yield* sched.makeJournalFuture(dInt.promise);
+            return "wi-done";
+          } catch (e) {
+            return `wi:${(e as Error).message}`;
+          }
+        })
+      );
+      const wCancel = spawn(
+        gen(function* () {
+          try {
+            yield* sched.makeJournalFuture(dCancel.promise);
+            return "wc-done";
+          } catch (e) {
+            return `wc:${(e as Error).message}`;
+          }
+        })
+      );
+      // Interrupt wInt before its first advance: it resolves synchronously
+      // in this drain (caught), before any main-loop race — so the
+      // cancellation that follows lands only on what is still parked.
+      wInt.interrupt(new Error("int"));
+      const i = yield* wInt;
+      const c = yield* wCancel; // fan-out reaches wCancel on its journal source
+      return `${i}|${c}`;
+    });
+    const result = sched.run(op);
+    queueMicrotask(() => cancel(new Error("cancelled")));
+    expect(await result).toBe("wi:int|wc:cancelled");
+    dInt.resolve();
+    dCancel.resolve();
+  });
+
+  test("a fiber interrupted then recovered still participates in a later cancellation fan-out", async () => {
+    // wInt is interrupted (pre-advance), recovers by re-parking on a
+    // journal source, and is then reached by the invocation-cancellation
+    // fan-out — confirming the epoch/abort-controller state is sane for a
+    // fiber that took an interrupt before the cancel.
+    const { lib, cancel } = cancellingLib();
+    const sched = new Scheduler(lib);
+    const events: string[] = [];
+    const op = gen(function* () {
+      const w = spawn(
+        gen(function* () {
+          try {
+            yield* sched.makeJournalFuture(deferred<void>().promise);
+          } catch (e) {
+            events.push(`int:${(e as Error).message}`);
+          }
+          try {
+            yield* sched.makeJournalFuture(deferred<void>().promise);
+            return "completed";
+          } catch (e) {
+            return `cancel:${(e as Error).message}`;
+          }
+        })
+      );
+      w.interrupt(new Error("int")); // pre-advance interrupt; w recovers, re-parks
+      return yield* w; // main joins w; the cancel race fans out to w's 2nd park
+    });
+    const result = sched.run(op);
+    queueMicrotask(() => cancel(new Error("cancelled")));
+    expect(await result).toBe("cancel:cancelled");
+    expect(events).toEqual(["int:int"]);
   });
 });
 
