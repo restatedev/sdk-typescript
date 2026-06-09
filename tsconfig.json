@@ -33,6 +33,9 @@
       "@restatedev/restate-sdk-testcontainers": [
         "packages/libs/restate-sdk-testcontainers/src/index.ts"
       ],
+      "@restatedev/restate-sdk-tunnel": [
+        "packages/libs/restate-sdk-tunnel/src/index.ts"
+      ],
       "@restatedev/restate-sdk-zod": [
         "packages/libs/restate-sdk-zod/src/index.ts"
       ]
@@ -62,7 +65,13 @@
       "path": "packages/libs/restate-sdk-testcontainers"
     },
     {
+      "path": "packages/libs/restate-sdk-tunnel"
+    },
+    {
       "path": "packages/libs/restate-sdk-zod"
+    },
+    {
+      "path": "packages/tests/e2e"
     },
     {
       "path": "packages/tests/restate-e2e-services"

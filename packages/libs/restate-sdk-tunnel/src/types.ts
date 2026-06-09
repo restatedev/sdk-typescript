@@ -1,0 +1,202 @@
+/*
+ * Copyright (c) 2023-2026 - Restate Software, Inc., Restate GmbH
+ *
+ * This file is part of the Restate SDK for Node.js/TypeScript,
+ * which is released under the MIT license.
+ *
+ * You can find a copy of the license in file LICENSE in the root
+ * directory of this repository or package, or at
+ * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
+ */
+
+// Public types for @restatedev/restate-sdk-tunnel.
+
+import type { EndpointOptions } from "@restatedev/restate-sdk";
+
+/**
+ * The services to expose over the tunnel — the same shape `restate.serve`
+ * and `createEndpointHandler` accept (services, virtual objects, workflows).
+ */
+export type Services = EndpointOptions["services"];
+
+/**
+ * TLS options for the outbound tunnel connection.
+ *
+ * Note: unlike a regular HTTP/2 client, the tunnel deliberately negotiates
+ * NO ALPN protocol ("tunnel is not normal h2" — the server clears its ALPN
+ * list); both sides speak HTTP/2 with prior knowledge after the TLS
+ * handshake. There is therefore no ALPN field here, and the package never
+ * sets one.
+ */
+export interface TunnelTlsOptions {
+  /**
+   * CA certificate(s) (PEM) to trust. Omit to use the system trust store —
+   * the right choice for Restate Cloud's public endpoints.
+   */
+  ca?: string | Buffer | Array<string | Buffer>;
+  /** Client certificate (PEM) for mutual TLS. */
+  cert?: string | Buffer;
+  /** Client key (PEM) for mutual TLS. */
+  key?: string | Buffer;
+  /**
+   * SNI / certificate-verification name. Defaults to the hostname being
+   * dialed (for region/SRV discovery, the SRV target hostname).
+   */
+  servername?: string;
+  /** Verify the server certificate. Default true. */
+  rejectUnauthorized?: boolean;
+}
+
+/**
+ * Options for {@link connectTunnel}.
+ */
+export interface ConnectTunnelOptions {
+  /**
+   * Restate Cloud region (e.g. `"us"`, `"eu"`). Tunnel servers are
+   * discovered via a DNS SRV lookup of `tunnel.<region>.restate.cloud`.
+   *
+   * Exactly one of `region` or `tunnelServers` must be set.
+   */
+  region?: string;
+  /**
+   * Explicit tunnel server addresses, instead of region-based discovery.
+   * Each entry is either `"host:port"` (TLS governed by the `tls` option)
+   * or a URL `"https://host:port"` / `"http://host:port"` (scheme selects
+   * TLS/plaintext for that server).
+   *
+   * Exactly one of `region` or `tunnelServers` must be set.
+   */
+  tunnelServers?: string[];
+  /**
+   * The Restate Cloud environment ID to tunnel to, including the `env_`
+   * prefix (e.g. `"env_201k0yd4rz8yftmd4awh1bajg4v"`).
+   */
+  environmentId: string;
+  /**
+   * A Restate Cloud API key with the `Full` role (`key_...`), or a user
+   * JWT. Presented as `authorization: Bearer <token>` during the tunnel
+   * handshake; validated server-side.
+   */
+  authToken: string;
+  /**
+   * The environment's request-identity public key
+   * (`publickeyv1_<base58>`). Passed to the SDK's request-identity
+   * verification so every forwarded request is checked to genuinely come
+   * from your environment. Shown by Restate Cloud for your environment.
+   */
+  signingPublicKey: string;
+  /**
+   * Logical name for this tunnel — the rendezvous key senders address
+   * (it appears in the deployment registration URL, so it should be
+   * stable across restarts). E.g. the name of the cluster the deployment
+   * runs in.
+   */
+  tunnelName: string;
+  /** The services to serve over the tunnel. */
+  services: Services;
+  /**
+   * Protocol mode for the SDK handler. Default `true` (`BIDI_STREAM`) —
+   * the tunnel is always HTTP/2, so full-duplex streaming is available.
+   */
+  bidirectional?: boolean;
+  /**
+   * Reconnect backoff: initial delay in milliseconds. Default 10.
+   * The delay grows by `reconnectFactor` per failed attempt (with jitter)
+   * up to `reconnectMaxMs`, and resets after a successful handshake.
+   */
+  reconnectInitialMs?: number;
+  /** Reconnect backoff: maximum delay in milliseconds. Default 120_000. */
+  reconnectMaxMs?: number;
+  /** Reconnect backoff: growth factor. Default 2. */
+  reconnectFactor?: number;
+  /**
+   * Deadline for establishing the TCP connection and completing the TLS
+   * handshake. Default 5_000 (mirrors the standalone tunnel client's
+   * connect timeout). Without it, a peer that accepts the connection but
+   * never completes TLS would stall reconnection indefinitely.
+   */
+  connectTimeoutMs?: number;
+  /**
+   * Deadline for the tunnel handshake (the server opening
+   * `/_/start-tunnel` and completing it with trailers). Default 5_000,
+   * mirroring the tunnel server's own handshake timeout.
+   */
+  handshakeTimeoutMs?: number;
+  /**
+   * Liveness watchdog: send an HTTP/2 PING every this many milliseconds.
+   * Default 75_000 (the tunnel protocol's keepalive cadence).
+   */
+  pingIntervalMs?: number;
+  /** Watchdog: how long to wait for a PING ack. Default 10_000. */
+  pingTimeoutMs?: number;
+  /**
+   * Watchdog: consecutive missed PINGs before the connection is declared
+   * dead and redialed. Default 2.
+   */
+  pingMaxMissed?: number;
+  /**
+   * Maximum concurrent HTTP/2 streams (in-flight invocations) per
+   * connection. Default 4096 (Node's default of 100 is far too low for a
+   * deployment serving many concurrent invocations).
+   */
+  maxConcurrentStreams?: number;
+  /**
+   * Per-connection HTTP/2 flow-control window in bytes. Default 16 MiB
+   * (Node's 64 KiB default throttles aggregate throughput).
+   */
+  connectionWindowSize?: number;
+  /**
+   * Node http2 per-session memory cap in MiB. Default 256 (Node's 10 MiB
+   * default makes the session reject work under load).
+   */
+  maxSessionMemory?: number;
+  /**
+   * TLS for the outbound connection. Default `true` (system trust, SNI =
+   * dialed host, and — deliberately — NO ALPN). Pass `false` only for
+   * plaintext dev/test setups, or an object for a private CA / mTLS.
+   */
+  tls?: boolean | TunnelTlsOptions;
+  /** Abort to stop reconnecting and close the tunnel (same as `close()`). */
+  signal?: AbortSignal;
+  /** Diagnostic logger. Default: silent. */
+  logger?: (message: string) => void;
+}
+
+/**
+ * Handle returned by {@link connectTunnel}.
+ */
+export interface TunnelConnection {
+  /** Stop reconnecting, close the current connection, and wait for teardown. */
+  close(): Promise<void>;
+  /** Number of successful tunnel handshakes since `connectTunnel` was called. */
+  readonly connectionCount: number;
+  /**
+   * The tunnel name confirmed by the server in the most recent successful
+   * handshake. `undefined` until the first handshake completes.
+   */
+  readonly tunnelName: string | undefined;
+  /**
+   * The public proxy **base** URL for this tunnel
+   * (`<proxy-host>/<env-id>/<tunnel-name>`), learned from the most recent
+   * successful handshake. The deployment registration URL is this base plus
+   * a `/<scheme>/<host>/<port>` destination segment — for an in-process
+   * deployment the destination is vestigial, e.g.
+   * `${proxyUrl}/http/in-process/9080`. Registering the bare base URL will
+   * not route.
+   */
+  readonly proxyUrl: string | undefined;
+  /** The tunnel server URL, learned from the most recent successful handshake. */
+  readonly tunnelUrl: string | undefined;
+  /**
+   * Set when the tunnel stopped on a non-retryable failure (e.g. the server
+   * answered `unauthorized` or `bad-tunnel-name`). Once set, the tunnel no
+   * longer reconnects.
+   */
+  readonly error: Error | undefined;
+  /**
+   * Resolves when the first tunnel handshake succeeds; rejects if the
+   * tunnel stops on a non-retryable failure before ever connecting.
+   * Useful for readiness checks; safe to ignore.
+   */
+  readonly ready: Promise<void>;
+}

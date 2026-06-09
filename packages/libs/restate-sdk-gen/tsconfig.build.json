@@ -11,6 +11,9 @@
       "path": "../restate-sdk-clients/tsconfig.build.json"
     },
     {
+      "path": "../restate-sdk-core/tsconfig.build.json"
+    },
+    {
       "path": "../restate-sdk-testcontainers/tsconfig.build.json"
     }
   ]

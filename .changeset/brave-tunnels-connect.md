@@ -1,0 +1,7 @@
+---
+"@restatedev/restate-sdk-tunnel": minor
+---
+
+New package: `@restatedev/restate-sdk-tunnel` — serve a Restate SDK deployment over an **outbound** connection to Restate Cloud's tunnel, with no inbound HTTP listener. `connectTunnel({ region | tunnelServers, environmentId, authToken, signingPublicKey, tunnelName, services })` dials the tunnel server (TLS, deliberately without ALPN — prior-knowledge HTTP/2), role-flips so Restate Cloud drives HTTP/2 as the client while the deployment serves, completes the `/_/start-tunnel` credentials/trailers handshake, and dispatches each forwarded invocation into the SDK's own endpoint handler (full-duplex `BIDI_STREAM`) after stripping the tunnel's destination path prefix.
+
+Request identity is enforced by delegation to the SDK: `signingPublicKey` (required) is passed to the endpoint handler, so every forwarded request's `x-restate-jwt-v1` is verified against the service-relative path your environment signed. Reconnects use jittered exponential backoff that resets only after a confirmed handshake; authorization failures (`unauthorized`, `bad-tunnel-name`, tunnel-name mismatch) are fatal and surface on `connection.error` / `connection.ready` rather than retry-looping. The returned `TunnelConnection` exposes `ready`, `close()`, `connectionCount`, and the handshake-learned `tunnelName` / `proxyUrl` / `tunnelUrl` (the registration URL base). Single-homed in this release; graceful drain (`supports-drain`) intentionally not yet advertised.
