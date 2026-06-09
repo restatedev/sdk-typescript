@@ -1,7 +1,7 @@
 ## Build Docker image from the project root
 
 ```shell
-docker build . -f packages/restate-e2e-services/Dockerfile -t restatedev/node-test-services
+docker build . -f packages/tests/restate-e2e-services/Dockerfile -t restatedev/test-services-node
 ```
 
 ## Running the services locally
