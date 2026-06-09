@@ -188,6 +188,28 @@ const interruptSvc = service({
       return yield* w;
     },
 
+    // Interrupt before the worker's first advance: spawn then interrupt
+    // with no intervening yield. The throw must still land inside the
+    // worker's body (caught) and replay consistently — the body is primed
+    // to its first yield before the throw is delivered.
+    *interruptBeforeFirstAdvance(): Operation<string> {
+      const w = spawn(
+        (function* (): Operation<string> {
+          try {
+            yield* sleep(600000);
+            return "completed";
+          } catch (e) {
+            const audited = yield* run(async () => "audited", {
+              name: "pre-start-cleanup",
+            });
+            return `interrupted:${(e as Error).message}:${audited}`;
+          }
+        })()
+      );
+      w.interrupt(new Error("pre-start")); // no yield between spawn and interrupt
+      return yield* w;
+    },
+
     // Self-interrupt: a worker interrupts its own task, then yields. The
     // throw must land at that yield (delivered via the advance-loop's
     // re-entrant-wake detection) and replay consistently.
@@ -283,6 +305,13 @@ describe.each(modes)("interrupt — $name mode", ({ alwaysReplay }) => {
   test("self-interrupt: the throw lands at the worker's next yield and replays consistently", async () => {
     const c = clients.client(ingress, interruptSvc);
     expect(await c.selfInterrupt()).toBe("interrupted:self:audited");
+  });
+
+  test("interrupt before first advance is caught inside the worker and replays consistently", async () => {
+    const c = clients.client(ingress, interruptSvc);
+    expect(await c.interruptBeforeFirstAdvance()).toBe(
+      "interrupted:pre-start:audited"
+    );
   });
 
   test("interrupt mid-run: the caught error is the verbatim interrupt error, identical record vs replay", async () => {

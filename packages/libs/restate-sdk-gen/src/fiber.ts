@@ -86,6 +86,14 @@ export class Fiber<T = unknown> implements WaitTarget<T> {
    */
   private epoch = 0;
   /**
+   * Whether the generator has been started (`it.next()` called at least
+   * once). `it.throw()` on a not-yet-started generator propagates the
+   * error out *without* running any body code, bypassing the routine's
+   * own try/catch/finally — so an interrupt delivered before the first
+   * advance must prime the generator first (see `stepIterator`).
+   */
+  private started = false;
+  /**
    * Lazily-created AbortController for this fiber's `run` closures. Born
    * a child of the scheduler's current signal (so invocation cancellation
    * / attempt-end abort it) and aborted directly by `interrupt`. Recreated
@@ -228,11 +236,12 @@ export class Fiber<T = unknown> implements WaitTarget<T> {
         const epochBefore = this.epoch;
         let next: IteratorResult<unknown, unknown>;
         try {
-          next = stepIterator(this.it, resume);
+          next = stepIterator(this.it, resume, this.started);
         } catch (e) {
           this.finish({ ok: false, e });
           return;
         }
+        this.started = true;
         if (next.done) {
           // The body returned before reaching another yield, so a
           // self-interrupt has no yield point to land on and is moot.
@@ -377,13 +386,27 @@ export class Fiber<T = unknown> implements WaitTarget<T> {
  * very first step; `{ok: true, v}` resumes with a value; `{ok: false,
  * e}` throws into the iterator (or, if the iterator has no `throw`
  * method, rethrows so the fiber fails).
+ *
+ * `started` is whether the generator has run at least once. Throwing
+ * into a *not-yet-started* generator propagates the error straight out
+ * without executing any body code (its try/catch/finally never engage).
+ * That happens when a spawned routine is interrupted before its first
+ * advance. To honor the "delivered at the next yield point" /
+ * swallowable contract, we prime the generator with one `next()` first,
+ * so the throw lands at the body's first yield. If the body returns
+ * before reaching a yield, there is no yield point and the throw is moot.
  */
 function stepIterator(
   it: Iterator<unknown, unknown, unknown>,
-  resume: Settled | null
+  resume: Settled | null,
+  started: boolean
 ): IteratorResult<unknown, unknown> {
   if (resume === null) return it.next(undefined);
   if (resume.ok) return it.next(resume.v);
+  if (!started) {
+    const first = it.next(undefined);
+    if (first.done) return first;
+  }
   if (it.throw) return it.throw(resume.e);
   throw resume.e;
 }

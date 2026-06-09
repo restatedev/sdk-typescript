@@ -108,6 +108,94 @@ describe("interrupt — basic delivery", () => {
   });
 });
 
+describe("interrupt — before the routine's first advance", () => {
+  // `spawn` queues a fiber ready but does not advance it until the next
+  // drain. Interrupting it before that first advance (no yield between
+  // spawn and interrupt) must still deliver the throw INSIDE the body —
+  // its try/catch/finally apply — not propagate uncaught from a
+  // suspended-at-start generator.
+
+  test("interrupt before first advance is caught (delivered at the first yield)", async () => {
+    const sched = new Scheduler(testLib);
+    const events: string[] = [];
+    const op = gen(function* () {
+      const w = spawn(
+        gen(function* () {
+          events.push("body");
+          try {
+            yield* sched.makeJournalFuture(deferred<void>().promise);
+            return "completed";
+          } catch (e) {
+            return `caught:${(e as Error).message}`;
+          }
+        })
+      );
+      w.interrupt(new Error("pre-start")); // NO yield between spawn and interrupt
+      return yield* w;
+    });
+    const result = await sched.run(op);
+    expect(result).toBe("caught:pre-start");
+    expect(events).toEqual(["body"]); // body actually ran (up to the first yield)
+  });
+
+  test("interrupt before first advance under join still runs the routine's finally", async () => {
+    const sched = new Scheduler(testLib, undefined, { onMainExit: "join" });
+    let finallyRan = false;
+    const op = gen(function* () {
+      const w = spawn(
+        gen(function* () {
+          try {
+            yield* sched.makeJournalFuture(deferred<void>().promise);
+          } catch {
+            // swallow
+          } finally {
+            finallyRan = true;
+          }
+        })
+      );
+      w.interrupt(new Error("pre-start"));
+      return "main-done";
+    });
+    expect(await sched.run(op)).toBe("main-done");
+    expect(finallyRan).toBe(true);
+  });
+
+  test("interrupt before first advance on a body that returns before yielding is moot", async () => {
+    const sched = new Scheduler(testLib);
+    const op = gen(function* () {
+      const w = spawn(
+        gen(function* () {
+          return "no-yield"; // returns before any yield — no point to throw at
+        })
+      );
+      w.interrupt(new Error("pre-start"));
+      return yield* w;
+    });
+    expect(await sched.run(op)).toBe("no-yield");
+  });
+
+  test("uncaught interrupt before first advance fails the routine with the verbatim error", async () => {
+    const sched = new Scheduler(testLib);
+    const op = gen(function* () {
+      const w = spawn(
+        gen(function* () {
+          // No try/catch — runs to the first yield, then the interrupt.
+          yield* sched.makeJournalFuture(deferred<void>().promise);
+          return "completed";
+        })
+      );
+      w.interrupt(new Error("pre-start"));
+      try {
+        yield* w;
+        return "no-throw";
+      } catch (e) {
+        return `joined-threw:${(e as Error).message}`;
+      }
+    });
+    expect(await sched.run(op)).toBe("joined-threw:pre-start");
+  });
+});
+
 describe("interrupt — control flow", () => {
   test("the thrown error propagates through a nested yield* (delegation)", async () => {
     const sched = new Scheduler(testLib);
