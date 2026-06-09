@@ -1,5 +1,16 @@
 # @restatedev/restate-sdk
 
+## 1.15.0-rc.2
+
+### Minor Changes
+
+- Added RunRetryPolicy.onMaxAttempts = pause and PauseError
+
+### Patch Changes
+
+- Updated dependencies
+  - @restatedev/restate-sdk-core@1.15.0-rc.2
+
 ## 1.15.0-rc.1
 
 ### Minor Changes
