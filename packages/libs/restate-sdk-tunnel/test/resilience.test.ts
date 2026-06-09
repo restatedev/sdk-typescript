@@ -194,6 +194,234 @@ describe("lifecycle", () => {
   });
 });
 
+describe("graceful drain", () => {
+  test("drain triggers an immediate replacement while the old connection keeps serving", async () => {
+    const fake = await startFakeCloud({ decideTrailers: () => okTrailers() });
+    const conn = connectTunnel(baseOptions(fake.port));
+    try {
+      await conn.ready;
+      const c0 = await fake.waitForConnection(0);
+      expect((await c0.creds)["supports-drain"]).toBe("true");
+
+      // The cloud asks this connection to drain.
+      const ack = await roundtrip(c0.session, {
+        ":method": "GET",
+        ":path": "/_/drain-tunnel",
+      });
+      expect(ack.status).toBe(200);
+
+      // A replacement connection is dialed immediately (no backoff sleep).
+      await fake.waitForConnection(1);
+      await new Promise((r) => setTimeout(r, 100));
+      expect(conn.connectionCount).toBe(2);
+
+      // THE zero-drop property: the OLD session still serves during the
+      // grace window (the cloud keeps routing already-parked work to it).
+      const onOld = await roundtrip(c0.session, {
+        ":method": "GET",
+        ":path": "/http/h/9080/discover",
+        accept: DISCOVER_ACCEPT,
+        "x-restate-signature-scheme": "v1",
+        "x-restate-jwt-v1": identity.sign("/discover"),
+      });
+      expect(onOld.status).toBe(200);
+      expect(onOld.body).toContain("greeter");
+    } finally {
+      await conn.close();
+      await fake.close();
+    }
+  });
+
+  test("a drained connection is torn down after drainGraceMs", async () => {
+    const fake = await startFakeCloud({ decideTrailers: () => okTrailers() });
+    const conn = connectTunnel({
+      ...baseOptions(fake.port),
+      drainGraceMs: 80,
+    });
+    try {
+      await conn.ready;
+      const c0 = await fake.waitForConnection(0);
+      await roundtrip(c0.session, {
+        ":method": "GET",
+        ":path": "/_/drain-tunnel",
+      });
+      await fake.waitForConnection(1); // replacement up
+      // After the grace window the old session must be gone.
+      await new Promise((r) => setTimeout(r, 250));
+      expect(c0.session.destroyed).toBe(true);
+      expect(conn.connectionCount).toBe(2); // replacement still serving
+    } finally {
+      await conn.close();
+      await fake.close();
+    }
+  });
+
+  test("supportsDrain: false — header absent, drain acknowledged but ignored", async () => {
+    const fake = await startFakeCloud({ decideTrailers: () => okTrailers() });
+    const conn = connectTunnel({
+      ...baseOptions(fake.port),
+      supportsDrain: false,
+    });
+    try {
+      await conn.ready;
+      const c0 = await fake.waitForConnection(0);
+      expect((await c0.creds)["supports-drain"]).toBeUndefined();
+      const ack = await roundtrip(c0.session, {
+        ":method": "GET",
+        ":path": "/_/drain-tunnel",
+      });
+      expect(ack.status).toBe(200);
+      await new Promise((r) => setTimeout(r, 150));
+      // No handover: still the one connection, still serving.
+      expect(fake.connections.length).toBe(1);
+      expect(conn.connectionCount).toBe(1);
+    } finally {
+      await conn.close();
+      await fake.close();
+    }
+  });
+
+  test("a drain coalesced with the ok-trailers still triggers the handover", async () => {
+    // The server drains tunnels the moment it shuts down — including ones
+    // it just registered — so /_/drain-tunnel can land in the same TCP
+    // flush as the ok-trailers, before the handshake microtask flips
+    // `serving`. The drain must park on the handshake gate like forwarded
+    // streams, not be acked-and-dropped.
+    let drainAck: Promise<{ status: number; body: string }> | undefined;
+    const fake = await startFakeCloud({
+      decideTrailers: () => okTrailers(),
+      onTrailersSent: (conn) => {
+        if (conn.index === 0) {
+          drainAck = roundtrip(conn.session, {
+            ":method": "GET",
+            ":path": "/_/drain-tunnel",
+          });
+        }
+      },
+    });
+    const conn = connectTunnel(baseOptions(fake.port));
+    try {
+      await conn.ready;
+      expect((await drainAck!).status).toBe(200);
+      // The handover must still happen: a replacement connection is dialed.
+      await fake.waitForConnection(1);
+      await new Promise((r) => setTimeout(r, 100));
+      expect(conn.connectionCount).toBe(2);
+    } finally {
+      await conn.close();
+      await fake.close();
+    }
+  });
+
+  test("a fatal handshake during drain tears the draining connection down", async () => {
+    // Drain c0, then reject the replacement's handshake (token rotated
+    // mid-rollover). Fatal must stop the WHOLE tunnel — including the
+    // detached draining session, which must not keep serving (and pinning
+    // the process) for drainGraceMs after the credentials were rejected.
+    const fake = await startFakeCloud({
+      decideTrailers: (_creds, index) =>
+        index === 0 ? okTrailers() : { "tunnel-status": "unauthorized" },
+    });
+    const conn = connectTunnel({
+      ...baseOptions(fake.port),
+      drainGraceMs: 60_000, // long: only the fatal teardown can pass this test
+    });
+    try {
+      await conn.ready;
+      const c0 = await fake.waitForConnection(0);
+      await roundtrip(c0.session, {
+        ":method": "GET",
+        ":path": "/_/drain-tunnel",
+      });
+      await fake.waitForConnection(1); // replacement → unauthorized → fatal
+      await new Promise((r) => setTimeout(r, 200));
+      expect(conn.error?.message).toMatch(/unauthorized/);
+      expect(c0.session.destroyed).toBe(true);
+    } finally {
+      await conn.close();
+      await fake.close();
+    }
+  });
+
+  test("drain-spam compounds the backoff (no zero-delay dial loop)", async () => {
+    // A buggy/looping node that drains every fresh connection right after
+    // registering it: early drains (< 5s uptime) must pay the compounding
+    // backoff like any handshake-ok-then-die cycle — not redial instantly
+    // while accumulating draining sessions.
+    const fake = await startFakeCloud({
+      decideTrailers: () => okTrailers(),
+      onTrailersSent: (conn) => {
+        void roundtrip(conn.session, {
+          ":method": "GET",
+          ":path": "/_/drain-tunnel",
+        }).catch(() => {});
+      },
+    });
+    const conn = connectTunnel(baseOptions(fake.port));
+    try {
+      await conn.ready;
+      await new Promise((r) => setTimeout(r, 400));
+      expect(fake.connections.length).toBeGreaterThanOrEqual(2); // it does retry
+      expect(fake.connections.length).toBeLessThanOrEqual(15); // but backs off
+    } finally {
+      await conn.close();
+      await fake.close();
+    }
+  });
+
+  test("consecutive drains: two draining connections coexist and close() sweeps both", async () => {
+    const fake = await startFakeCloud({ decideTrailers: () => okTrailers() });
+    const conn = connectTunnel(baseOptions(fake.port));
+    try {
+      await conn.ready;
+      const c0 = await fake.waitForConnection(0);
+      await roundtrip(c0.session, {
+        ":method": "GET",
+        ":path": "/_/drain-tunnel",
+      });
+      const c1 = await fake.waitForConnection(1);
+      await new Promise((r) => setTimeout(r, 100)); // c1 handshake completes
+      await roundtrip(c1.session, {
+        ":method": "GET",
+        ":path": "/_/drain-tunnel",
+      });
+      await fake.waitForConnection(2);
+      // Both drained sessions are still alive within their grace windows…
+      expect(c0.session.destroyed).toBe(false);
+      expect(c1.session.destroyed).toBe(false);
+      // …and close() sweeps the active connection plus both draining ones.
+      await conn.close();
+      await new Promise((r) => setTimeout(r, 50));
+      expect(c0.session.destroyed).toBe(true);
+      expect(c1.session.destroyed).toBe(true);
+    } finally {
+      await fake.close();
+    }
+  });
+
+  test("close() during drain tears down both connections and resolves", async () => {
+    const fake = await startFakeCloud({ decideTrailers: () => okTrailers() });
+    const conn = connectTunnel(baseOptions(fake.port));
+    try {
+      await conn.ready;
+      const c0 = await fake.waitForConnection(0);
+      await roundtrip(c0.session, {
+        ":method": "GET",
+        ":path": "/_/drain-tunnel",
+      });
+      await fake.waitForConnection(1);
+      await conn.close(); // old is draining, new is serving — kill both
+      await new Promise((r) => setTimeout(r, 50));
+      expect(c0.session.destroyed).toBe(true);
+      const seen = fake.connections.length;
+      await new Promise((r) => setTimeout(r, 100));
+      expect(fake.connections.length).toBe(seen); // no redial after close
+    } finally {
+      await fake.close();
+    }
+  });
+});
+
 describe("liveness watchdog", () => {
   test("missed pings trigger a reconnect (half-open peer)", async () => {
     // TLS variant on purpose: over TLS the fake's h2 session reads via the

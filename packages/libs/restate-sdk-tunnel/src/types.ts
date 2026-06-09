@@ -100,6 +100,23 @@ export interface ConnectTunnelOptions {
    */
   bidirectional?: boolean;
   /**
+   * Advertise graceful-drain support (`supports-drain: true`) in the
+   * handshake. Default `true`. When Restate Cloud rolls a tunnel node it
+   * sends `/_/drain-tunnel` to drain-capable connections: the engine then
+   * immediately opens a replacement connection while the old one keeps
+   * serving its in-flight invocations (bounded by {@link drainGraceMs}) —
+   * zero dropped requests across cloud rollovers. With `false`, the cloud
+   * simply closes the connection and in-flight invocations are retried by
+   * the Restate runtime after the redial.
+   */
+  supportsDrain?: boolean;
+  /**
+   * How long a draining connection may keep serving its in-flight
+   * invocations before being torn down. Default 120_000 (mirrors the
+   * standalone tunnel client).
+   */
+  drainGraceMs?: number;
+  /**
    * Reconnect backoff: initial delay in milliseconds. Default 10.
    * The delay grows by `reconnectFactor` per failed attempt (with jitter)
    * up to `reconnectMaxMs`, and resets after a successful handshake.

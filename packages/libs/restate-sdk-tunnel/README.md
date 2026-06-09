@@ -60,6 +60,11 @@ restate dep register https://tunnel.us.restate.cloud:9080/<unprefixed-env-id>/my
    Authorization failures (`unauthorized`, `bad-tunnel-name`) are **fatal**
    — they surface on `connection.error` / `connection.ready` instead of
    hammering the auth path.
+7. **Drain gracefully:** the engine advertises `supports-drain`. When
+   Restate Cloud rolls a tunnel node it sends `/_/drain-tunnel`; the engine
+   immediately dials a replacement while the old connection keeps serving
+   its in-flight invocations (up to `drainGraceMs`, default 120s) — zero
+   dropped requests across cloud rollovers.
 
 ## API
 
@@ -90,6 +95,7 @@ Key options (see `ConnectTunnelOptions` for the full surface and defaults):
 | `tls`                                | Default on (system trust, **no ALPN**); object form for CA/mTLS             |
 | `connectTimeoutMs`                   | TCP+TLS dial deadline (5s, mirrors the standalone client)                   |
 | `reconnectInitialMs/MaxMs/Factor`    | Jittered exponential backoff (10ms → 120s, reset after a stable connection) |
+| `supportsDrain` / `drainGraceMs`     | Graceful-drain handover on cloud rollovers (on, 120s grace)                 |
 | `pingIntervalMs/TimeoutMs/MaxMissed` | Liveness watchdog (75s cadence)                                             |
 | `maxConcurrentStreams` etc.          | HTTP/2 tuning for high-concurrency serving                                  |
 
@@ -106,7 +112,8 @@ npm install @restatedev/restate-sdk-tunnel @restatedev/restate-sdk
 - Serves the deployment **in-process** — this package does not proxy to a
   separate local service, and does not expose the standalone tunnel client's
   "remote proxy" (local ingress/admin forwarding) feature.
-- Holds a single tunnel connection; redials rotate across the resolved
-  tunnel servers. Multi-homed connections and graceful drain
-  (`supports-drain`) are intentionally not yet implemented.
+- Holds a single **active** tunnel connection; redials rotate across the
+  resolved tunnel servers, and a draining connection may transiently
+  overlap its replacement. Multi-homed (concurrent) connections are
+  intentionally not yet implemented.
 - Node-only (uses `node:tls`, `node:http2`, `node:dns`). Node ≥ 22.

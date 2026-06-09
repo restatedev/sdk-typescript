@@ -22,6 +22,8 @@ export interface ResolvedOptions {
   signingPublicKey: string;
   tunnelName: string;
   bidirectional: boolean;
+  supportsDrain: boolean;
+  drainGraceMs: number;
   connectTimeoutMs: number;
   handshakeTimeoutMs: number;
   reconnectInitialMs: number;
@@ -120,6 +122,8 @@ export function resolveOptions(options: ConnectTunnelOptions): ResolvedOptions {
     signingPublicKey,
     tunnelName,
     bidirectional: options.bidirectional ?? true,
+    supportsDrain: options.supportsDrain ?? true,
+    drainGraceMs: positive(options.drainGraceMs, 120_000, "drainGraceMs"),
     connectTimeoutMs: positive(
       options.connectTimeoutMs,
       5_000,

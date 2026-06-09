@@ -95,8 +95,8 @@ describe("connectTunnel — handshake", () => {
           expect(creds["authorization"]).toBe("Bearer key_test.secret");
           expect(creds["environment-id"]).toBe("env_abc123");
           expect(creds["tunnel-name"]).toBe(TUNNEL_NAME);
-          // v1 does not implement graceful drain, so it must not advertise it.
-          expect(creds["supports-drain"]).toBeUndefined();
+          // Drain is implemented and advertised by default.
+          expect(creds["supports-drain"]).toBe("true");
         } finally {
           await conn.close();
         }

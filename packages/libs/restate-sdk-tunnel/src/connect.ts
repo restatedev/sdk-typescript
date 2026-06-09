@@ -30,10 +30,15 @@
 // bad-tunnel-name, name mismatch) — fatal stops the tunnel and surfaces an
 // error instead of hammering the auth path forever.
 //
-// v1 scope: a single connection (no SRV multi-homing fan-out — redials
-// rotate across resolved targets), and no `supports-drain` advertisement
-// (graceful drain needs confirmed cloud-side semantics; without advertising
-// it the cloud simply drops the connection on rollover and we redial).
+// Graceful drain: the engine advertises `supports-drain: true` (default).
+// When the cloud rolls a tunnel node it sends `/_/drain-tunnel`; the engine
+// detaches the connection — it keeps serving its in-flight invocations for
+// up to drainGraceMs — and dials a replacement immediately (no backoff
+// sleep), so rollovers drop no requests.
+//
+// v1 scope: a single ACTIVE connection (no SRV multi-homing fan-out —
+// redials rotate across resolved targets; a draining connection may overlap
+// the replacement transiently).
 
 import * as net from "node:net";
 import * as tls from "node:tls";
@@ -54,8 +59,17 @@ import { forwardedTail } from "./forwarded.js";
 /** Why a connection ended — drives the reconnect policy. */
 type ConnectionOutcome =
   | { kind: "served"; uptimeMs: number } // handshake ok'd, served, then closed → redial
+  | { kind: "drained"; uptimeMs: number } // server asked us to rotate → redial IMMEDIATELY
   | { kind: "retryable"; reason: string } // redial with backoff
   | { kind: "fatal"; reason: string }; // stop the tunnel, surface an error
+
+/** A connection handed off for graceful drain: still serving its in-flight
+ *  streams, bounded by drainGraceMs, torn down on close(). */
+interface DrainingConnection {
+  session: http2.Http2Session;
+  socket: net.Socket;
+  timer: NodeJS.Timeout;
+}
 
 /**
  * Backoff resets only when a served connection stayed up at least this long
@@ -90,6 +104,19 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
   let connectionCount = 0;
   let lastInfo: HandshakeInfo | undefined;
   let currentSocket: net.Socket | undefined;
+  const draining = new Set<DrainingConnection>();
+
+  // Tear down every draining connection. Runs on close() AND on every loop
+  // exit (a fatal handshake must not leave a detached session serving — and
+  // holding the process alive — for up to drainGraceMs).
+  const destroyDraining = () => {
+    for (const entry of draining) {
+      clearTimeout(entry.timer);
+      entry.session.destroy();
+      entry.socket.destroy();
+    }
+    draining.clear();
+  };
 
   // Stops in-progress backoff sleeps promptly on close().
   const stopController = new AbortController();
@@ -116,11 +143,18 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
       let session: http2.Http2Session | undefined;
       let watchdog: NodeJS.Timeout | undefined;
       let firstRequestTimer: NodeJS.Timeout | undefined;
+      // Set by the /_/drain-tunnel handover: settle WITHOUT destroying the
+      // session, handing it to the draining registry instead so in-flight
+      // invocations finish while the loop dials a replacement.
+      let detachForDrain = false;
+
+      const uptimeMs = () =>
+        openedAt === undefined ? 0 : Date.now() - openedAt;
 
       // "The connection served, then ended" — uptime gates the backoff reset.
       const servedOutcome = (): ConnectionOutcome => ({
         kind: "served",
-        uptimeMs: openedAt === undefined ? 0 : Date.now() - openedAt,
+        uptimeMs: uptimeMs(),
       });
 
       const settle = (outcome: ConnectionOutcome) => {
@@ -130,8 +164,31 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
         if (firstRequestTimer !== undefined) clearTimeout(firstRequestTimer);
         clearTimeout(connectTimer);
         stopController.signal.removeEventListener("abort", onStop);
-        session?.destroy();
-        socket.destroy();
+        if (detachForDrain && session !== undefined && !session.destroyed) {
+          // Drain handover: keep the old session serving its in-flight
+          // streams for up to drainGraceMs (the cloud stops routing new work
+          // to it), then tear it down. close() also tears it down.
+          const s = session;
+          const entry: DrainingConnection = {
+            session: s,
+            socket,
+            timer: setTimeout(() => {
+              draining.delete(entry);
+              s.destroy();
+              socket.destroy();
+            }, opts.drainGraceMs),
+          };
+          entry.timer.unref();
+          draining.add(entry);
+          s.on("close", () => {
+            clearTimeout(entry.timer);
+            draining.delete(entry);
+            socket.destroy();
+          });
+        } else {
+          session?.destroy();
+          socket.destroy();
+        }
         if (currentSocket === socket) currentSocket = undefined;
         resolve(outcome);
       };
@@ -240,6 +297,7 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
                   authToken: opts.authToken,
                   environmentId: opts.environmentId,
                   tunnelName: opts.tunnelName,
+                  supportsDrain: opts.supportsDrain,
                 },
                 opts.handshakeTimeoutMs
               ).then((outcome) => {
@@ -272,14 +330,41 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
               return;
             }
             if (rawPath === "/_/drain-tunnel") {
-              // We do not advertise supports-drain, so this is unexpected —
-              // acknowledge it and let the server close on us; the redial
-              // loop re-establishes.
-              log(
-                "tunnel: received /_/drain-tunnel (drain not advertised) — acknowledging"
-              );
               res.writeHead(200);
               res.end();
+              if (!opts.supportsDrain) {
+                // Not advertised, so unexpected — acknowledge and let the
+                // server close on us; the redial loop re-establishes.
+                log(
+                  "tunnel: received /_/drain-tunnel (drain not advertised) — acknowledging"
+                );
+                return;
+              }
+              const beginDrain = () => {
+                if (settled || detachForDrain) return;
+                // Handover: detach this connection (it keeps serving its
+                // in-flight invocations for up to drainGraceMs) and settle
+                // so the loop dials a replacement.
+                log(
+                  "tunnel: drain requested — opening a replacement connection"
+                );
+                detachForDrain = true;
+                settle({ kind: "drained", uptimeMs: uptimeMs() });
+              };
+              if (serving) {
+                beginDrain();
+              } else if (handshakePromise !== undefined) {
+                // Drain coalesced with the ok-trailers (the server drains
+                // tunnels the moment it shuts down, including ones it just
+                // registered): the same gate race as forwarded streams —
+                // park the drain on the handshake outcome instead of
+                // silently dropping it.
+                void handshakePromise.then(({ ok }) => {
+                  if (ok) beginDrain();
+                });
+              }
+              // Before /_/start-tunnel was even opened: not a tunnel server
+              // speaking the protocol — ack-and-ignore.
               return;
             }
             if (serving) {
@@ -430,19 +515,38 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
         readyReject(fatalError);
         break;
       }
-      if (outcome.kind === "served") {
+      if (outcome.kind === "served" || outcome.kind === "drained") {
         // Reset the backoff only when the connection actually held —
         // a handshake-ok-then-die cycle must keep compounding toward
         // reconnectMaxMs (see MIN_UPTIME_FOR_BACKOFF_RESET_MS).
         if (outcome.uptimeMs >= MIN_UPTIME_FOR_BACKOFF_RESET_MS) {
           backoffMs = opts.reconnectInitialMs;
         }
-        log("tunnel: connection ended — reconnecting");
+        if (
+          outcome.kind === "drained" &&
+          outcome.uptimeMs >= MIN_UPTIME_FOR_BACKOFF_RESET_MS
+        ) {
+          // A stable connection was asked to rotate and the server is
+          // holding the old one open for us — replace it NOW, not after a
+          // backoff sleep. A connection drained moments after registering
+          // does NOT take this fast path: drain-spam (a flapping or buggy
+          // node draining every fresh connection) must compound the
+          // backoff like any handshake-ok-then-die cycle, or it becomes a
+          // zero-delay dial loop that also accumulates draining sessions.
+          log("tunnel: draining — reconnecting immediately");
+          continue;
+        }
+        log(
+          outcome.kind === "drained"
+            ? "tunnel: drained shortly after connecting — reconnecting with backoff"
+            : "tunnel: connection ended — reconnecting"
+        );
       } else {
         log(`tunnel: ${outcome.reason} — reconnecting`);
       }
       await delay(nextDelay(), stopController.signal);
     }
+    destroyDraining();
     clearInterval(keepAlive);
     // If the tunnel never established (closed or stopped before the first
     // ok handshake), settle `ready` so awaiting callers don't hang. No-op
@@ -457,6 +561,7 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
       stopped = true;
       stopController.abort();
       currentSocket?.destroy();
+      destroyDraining();
       clearInterval(keepAlive);
     }
     await loopDone;

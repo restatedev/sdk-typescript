@@ -18,9 +18,9 @@
 //
 //   1. We answer immediately: `200` whose RESPONSE HEADERS carry our
 //      credentials — `authorization: Bearer <token>`,
-//      `environment-id: env_<id>`, `tunnel-name: <name>`. Empty body.
-//      (We do NOT send `supports-drain` — see connect.ts; advertising it
-//      obliges us to implement graceful drain, which v1 does not.)
+//      `environment-id: env_<id>`, `tunnel-name: <name>`, and
+//      `supports-drain: true` when the drain handover is enabled (the
+//      default — see the /_/drain-tunnel handling in connect.ts).
 //   2. The server validates the credentials, then completes the handshake
 //      by sending TRAILERS on its still-open request body:
 //      `tunnel-status: ok | unauthorized | bad-tunnel-name | too-many-tunnels`
@@ -57,6 +57,12 @@ export interface HandshakeCredentials {
   authToken: string;
   environmentId: string;
   tunnelName: string;
+  /**
+   * Advertise `supports-drain: true`. Only set this when the engine
+   * actually implements the `/_/drain-tunnel` handover — advertising it
+   * obliges us to open a replacement connection on drain.
+   */
+  supportsDrain: boolean;
 }
 
 export const START_TUNNEL_PATH = "/_/start-tunnel";
@@ -159,6 +165,7 @@ export function performHandshake(
       authorization: `Bearer ${creds.authToken}`,
       "environment-id": creds.environmentId,
       "tunnel-name": creds.tunnelName,
+      ...(creds.supportsDrain && { "supports-drain": "true" }),
     });
     res.end();
   });
