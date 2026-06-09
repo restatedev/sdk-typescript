@@ -119,6 +119,7 @@ export {
   TerminalError,
   TimeoutError,
   RetryableError,
+  PauseError,
   CancelledError,
   type RetryableErrorOptions,
 } from "./types/errors.js";

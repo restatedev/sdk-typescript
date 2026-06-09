@@ -12,6 +12,7 @@
 import {
   ensureError,
   logError,
+  PauseError,
   RestateError,
   RetryableError,
   TerminalError,
@@ -659,6 +660,13 @@ function notifyError(
           : undefined
       );
     } else {
+      if (error instanceof PauseError) {
+        ctx.vmLogger.warn(
+          "Throwing PauseError from the handler context will be ignored, " +
+            "as it leads to pause loops. You should use PauseError only inside `ctx.run`"
+        );
+      }
+
       // Transient error — VM decides retry policy
       ctx.coreVm.notify_error(error.message, error.stack);
     }

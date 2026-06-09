@@ -184,6 +184,41 @@ export class RetryableError extends RestateError {
 }
 
 /**
+ * When thrown, Restate will pause the execution of the current invocation.
+ * This error type MUST be used only within a `ctx.run` closure. If thrown outside a `ctx.run` closure, pause will be ignored.
+ *
+ * You can wrap another error using {@link from}.
+ */
+export class PauseError extends RestateError {
+  public override name = "PauseError";
+
+  constructor(
+    message: string,
+    options?: {
+      errorCode?: number;
+      cause?: any;
+    }
+  ) {
+    super(message, {
+      errorCode: options?.errorCode,
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      cause: options?.cause,
+    });
+  }
+
+  /**
+   * Create a `PauseError` from the given cause.
+   */
+  static from(cause: any): RetryableError {
+    const error = ensureError(cause);
+    return new RetryableError(error.message, {
+      errorCode: error["errorCode" as keyof typeof error] as number,
+      cause: cause,
+    });
+  }
+}
+
+/**
  * Returns true if the error indicates the current attempt is ending without
  * a failure — e.g. the runtime suspended the invocation (waiting for
  * `ctx.sleep()` or `ctx.call()`), or the connection was dropped (kill).
