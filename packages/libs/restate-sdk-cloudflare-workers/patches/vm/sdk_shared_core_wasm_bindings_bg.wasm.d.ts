@@ -35,6 +35,7 @@ export const wasmvm_notify_input_closed: (a: number) => void;
 export const wasmvm_propose_run_completion_failure: (a: number, b: number, c: any) => [number, number];
 export const wasmvm_propose_run_completion_failure_transient: (a: number, b: number, c: number, d: number, e: number, f: number, g: bigint, h: number) => [number, number];
 export const wasmvm_propose_run_completion_failure_transient_with_delay_override: (a: number, b: number, c: number, d: number, e: number, f: number, g: bigint, h: number, i: bigint, j: number, k: number, l: bigint) => [number, number];
+export const wasmvm_propose_run_completion_failure_transient_with_pause: (a: number, b: number, c: number, d: number, e: number, f: number, g: bigint) => [number, number];
 export const wasmvm_propose_run_completion_success: (a: number, b: number, c: number, d: number) => [number, number];
 export const wasmvm_sys_attach_invocation: (a: number, b: number, c: number) => [number, number, number];
 export const wasmvm_sys_awakeable: (a: number) => [number, number, number];

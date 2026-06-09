@@ -177,6 +177,12 @@ export class WasmVM {
     max_retry_attempts_override?: number | null,
     max_retry_duration_override?: bigint | null
   ): void;
+  propose_run_completion_failure_transient_with_pause(
+    handle: number,
+    error_message: string,
+    error_stacktrace: string | null | undefined,
+    attempt_duration: bigint
+  ): void;
   propose_run_completion_success(handle: number, buffer: Uint8Array): void;
   sys_attach_invocation(invocation_id: string): number;
   sys_awakeable(): WasmAwakeable;

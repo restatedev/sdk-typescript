@@ -39,6 +39,7 @@ import {
 import {
   ensureError,
   INTERNAL_ERROR_CODE,
+  PauseError,
   RetryableError,
   TerminalError,
   UNKNOWN_ERROR_CODE,
@@ -513,6 +514,13 @@ export class ContextImpl
                 options?.maxRetryDuration !== undefined
                   ? BigInt(millisOrDurationToMillis(options?.maxRetryDuration))
                   : undefined
+              );
+            } else if (err instanceof PauseError) {
+              this.coreVm.propose_run_completion_failure_transient_with_pause(
+                handle,
+                err.message,
+                err.stack,
+                BigInt(attemptDuration)
               );
             } else {
               this.vmLogger.warn(

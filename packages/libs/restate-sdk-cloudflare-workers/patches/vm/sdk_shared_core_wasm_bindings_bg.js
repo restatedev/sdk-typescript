@@ -447,6 +447,22 @@ export class WasmVM {
     }
     /**
      * @param {number} handle
+     * @param {string} error_message
+     * @param {string | null | undefined} error_stacktrace
+     * @param {bigint} attempt_duration
+     */
+    propose_run_completion_failure_transient_with_pause(handle, error_message, error_stacktrace, attempt_duration) {
+        const ptr0 = passStringToWasm0(error_message, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        var ptr1 = isLikeNone(error_stacktrace) ? 0 : passStringToWasm0(error_stacktrace, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        var len1 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmvm_propose_run_completion_failure_transient_with_pause(this.__wbg_ptr, handle, ptr0, len0, ptr1, len1, attempt_duration);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
+    /**
+     * @param {number} handle
      * @param {Uint8Array} buffer
      */
     propose_run_completion_success(handle, buffer) {

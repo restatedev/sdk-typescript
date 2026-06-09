@@ -1031,6 +1031,27 @@ impl WasmVM {
         .map_err(Into::into)
     }
 
+    pub fn propose_run_completion_failure_transient_with_pause(
+        &mut self,
+        handle: WasmNotificationHandle,
+        error_message: String,
+        error_stacktrace: Option<String>,
+        attempt_duration: u64,
+    ) -> Result<(), WasmFailure> {
+        use_log_dispatcher!(self, |vm| CoreVM::propose_run_completion(
+            vm,
+            handle.into(),
+            RunExitResult::RetryableFailure {
+                attempt_duration: Duration::from_millis(attempt_duration),
+                error: Error::internal(error_message)
+                    .with_stacktrace(error_stacktrace.unwrap_or_default())
+                    .with_should_pause(true),
+            },
+            RetryPolicy::Infinite
+        ))
+        .map_err(Into::into)
+    }
+
     pub fn sys_cancel_invocation(
         &mut self,
         target_invocation_id: String,
