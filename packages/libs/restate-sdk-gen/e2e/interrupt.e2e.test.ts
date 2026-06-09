@@ -96,6 +96,91 @@ const interruptSvc = service({
 
       return `${workerResult}|mainAbortedAtStart=${mainAbortedAtStart}`;
     },
+
+    // Interrupt a worker parked on a real `sleep` (not a run). The sleep
+    // command is created then thrown past; the handler completes promptly
+    // (it does NOT wait out the sleep), and the abandoned sleep command
+    // replays consistently under alwaysReplay.
+    *interruptPastSleep(): Operation<string> {
+      const w = spawn(
+        (function* (): Operation<string> {
+          try {
+            yield* sleep(600000);
+            return "completed";
+          } catch (e) {
+            return `interrupted:${(e as Error).message}`;
+          }
+        })()
+      );
+      yield* sleep(50);
+      w.interrupt(new Error("stop"));
+      const [r] = yield* allSettled([w]);
+      return r.status === "fulfilled" ? r.value : "rejected";
+    },
+
+    // Interrupt-then-join with journaled cleanup: the worker is interrupted
+    // mid-sleep, its catch runs a `run` (audit/cleanup), and returns. The
+    // cleanup journal entry must be created and replay deterministically.
+    *interruptThenJoinCleanup(): Operation<string> {
+      const w = spawn(
+        (function* (): Operation<string> {
+          try {
+            yield* sleep(600000);
+            return "completed";
+          } catch (e) {
+            const audited = yield* run(async () => "audited", {
+              name: "cleanup",
+            });
+            return `interrupted:${(e as Error).message}:${audited}`;
+          }
+        })()
+      );
+      yield* sleep(50);
+      w.interrupt(new Error("stop"));
+      return yield* w; // join: drives the worker through its catch + cleanup
+    },
+
+    // An uncaught interrupt fails the routine; the joiner observes the
+    // verbatim error via allSettled. Replay-stable.
+    *uncaughtInterruptFails(): Operation<string> {
+      const w = spawn(
+        (function* (): Operation<string> {
+          yield* sleep(600000); // no try/catch
+          return "completed";
+        })()
+      );
+      yield* sleep(50);
+      w.interrupt(new Error("boom"));
+      const [r] = yield* allSettled([w]);
+      return r.status === "rejected"
+        ? `rejected:${(r.reason as Error).message}`
+        : `fulfilled:${r.value}`;
+    },
+
+    // Combinator + interrupt at the journal level: interrupt one input of
+    // an allSettled; it is recorded rejected, the other fulfilled.
+    *interruptCombinatorInput(): Operation<string> {
+      const t1 = spawn(
+        (function* (): Operation<string> {
+          yield* sleep(600000); // interrupted, uncaught → rejects
+          return "t1";
+        })()
+      );
+      const t2 = spawn(
+        (function* (): Operation<string> {
+          return yield* run(async () => "two", { name: "t2" });
+        })()
+      );
+      yield* sleep(50);
+      t1.interrupt(new Error("boom"));
+      const [r1, r2] = yield* allSettled([t1, t2]);
+      const s1 =
+        r1.status === "rejected"
+          ? `rej:${(r1.reason as Error).message}`
+          : `ok:${r1.value}`;
+      const s2 = r2.status === "fulfilled" ? `ok:${r2.value}` : "rej";
+      return `${s1}|${s2}`;
+    },
   },
 });
 
@@ -118,6 +203,26 @@ describe.each(modes)("interrupt — $name mode", ({ alwaysReplay }) => {
 
   afterAll(async () => {
     await env?.stop();
+  });
+
+  test("interrupt past a sleep: handler completes promptly, sleep command abandoned", async () => {
+    const c = clients.client(ingress, interruptSvc);
+    expect(await c.interruptPastSleep()).toBe("interrupted:stop");
+  });
+
+  test("interrupt-then-join runs journaled cleanup in the catch", async () => {
+    const c = clients.client(ingress, interruptSvc);
+    expect(await c.interruptThenJoinCleanup()).toBe("interrupted:stop:audited");
+  });
+
+  test("uncaught interrupt fails the routine; joiner sees the verbatim error", async () => {
+    const c = clients.client(ingress, interruptSvc);
+    expect(await c.uncaughtInterruptFails()).toBe("rejected:boom");
+  });
+
+  test("interrupting one input of allSettled: rejected for it, fulfilled for the other", async () => {
+    const c = clients.client(ingress, interruptSvc);
+    expect(await c.interruptCombinatorInput()).toBe("rej:boom|ok:two");
   });
 
   test("interrupt aborts the worker's run signal and delivers the error; main's signal is unaffected", async () => {

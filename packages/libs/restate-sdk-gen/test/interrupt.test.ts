@@ -17,15 +17,27 @@
 // the routine's per-fiber run signal) needs a real `run` closure and is
 // covered by the e2e suite.
 //
-// The critical correctness case here is the epoch guard: an interrupted
-// routine leaves its park and re-parks elsewhere, but the local waiters
-// it left on its old targets (sibling fibers, channels) are never
-// pruned — they must not wake the moved-on routine with a stale value.
+// Coverage is organized by concern: basic delivery, control flow
+// (throw/catch/finally/rethrow/repeat), same-tick precedence, the epoch
+// guard against stale waiters, termination / no-deadlock, onMainExit
+// interaction, Task composition, and determinism.
 
 import { describe, expect, test } from "vitest";
-import { gen, spawn, InterruptedError } from "../src/index.js";
+import {
+  gen,
+  spawn,
+  select,
+  InterruptedError,
+  type Operation,
+  type Future,
+} from "../src/index.js";
 import { Scheduler } from "../src/internal.js";
 import { deferred, resolved, testLib } from "./test-promise.js";
+
+// "Let pending ready fibers run and park" — yield a pre-resolved journal
+// future so the current fiber suspends for one drain.
+const tick = (sched: Scheduler): Future<string> =>
+  sched.makeJournalFuture(resolved("tick"));
 
 describe("interrupt — basic delivery", () => {
   test("throws the exact error into the routine at its next yield; routine catches", async () => {
@@ -43,7 +55,7 @@ describe("interrupt — basic delivery", () => {
           }
         })
       );
-      yield* sched.makeJournalFuture(resolved("tick")); // let w park
+      yield* tick(sched); // let w park
       w.interrupt(boom);
       return yield* w;
     });
@@ -64,7 +76,7 @@ describe("interrupt — basic delivery", () => {
           }
         })
       );
-      yield* sched.makeJournalFuture(resolved("tick"));
+      yield* tick(sched);
       w.interrupt();
       return yield* w;
     });
@@ -83,7 +95,7 @@ describe("interrupt — basic delivery", () => {
           return "completed";
         })
       );
-      yield* sched.makeJournalFuture(resolved("tick"));
+      yield* tick(sched);
       w.interrupt(boom);
       try {
         yield* w;
@@ -93,6 +105,155 @@ describe("interrupt — basic delivery", () => {
       }
     });
     expect(await sched.run(op)).toBe("joined-threw:true");
+  });
+});
+
+describe("interrupt — control flow", () => {
+  test("the thrown error propagates through a nested yield* (delegation)", async () => {
+    const sched = new Scheduler(testLib);
+    const d = deferred<string>();
+    const helper = (): Operation<string> =>
+      gen(function* () {
+        // Parks here; the interrupt is thrown in at this delegated yield.
+        return yield* sched.makeJournalFuture(d.promise);
+      });
+    const op = gen(function* () {
+      const w = spawn(
+        gen(function* () {
+          try {
+            return yield* helper();
+          } catch (e) {
+            return `outer-caught:${(e as Error).message}`;
+          }
+        })
+      );
+      yield* tick(sched);
+      w.interrupt(new Error("boom"));
+      return yield* w;
+    });
+    expect(await sched.run(op)).toBe("outer-caught:boom");
+  });
+
+  test("try/finally with no catch: finally runs, then the error propagates", async () => {
+    const sched = new Scheduler(testLib);
+    const d = deferred<void>();
+    let finallyRan = false;
+    const op = gen(function* () {
+      const w = spawn(
+        gen(function* () {
+          try {
+            yield* sched.makeJournalFuture(d.promise);
+            return "completed";
+          } finally {
+            finallyRan = true;
+          }
+        })
+      );
+      yield* tick(sched);
+      w.interrupt(new Error("boom"));
+      try {
+        yield* w;
+        return "no-throw";
+      } catch (e) {
+        return `threw:${(e as Error).message}:finally=${finallyRan}`;
+      }
+    });
+    expect(await sched.run(op)).toBe("threw:boom:finally=true");
+  });
+
+  test("a finally that yields journaled cleanup completes before the error propagates", async () => {
+    const sched = new Scheduler(testLib);
+    const dWork = deferred<void>();
+    const dCleanup = deferred<string>();
+    let cleanupValue = "";
+    const op = gen(function* () {
+      const w = spawn(
+        gen(function* () {
+          try {
+            yield* sched.makeJournalFuture(dWork.promise);
+            return "completed";
+          } finally {
+            // The interrupt is pending; this cleanup yield must be driven
+            // to completion before the throw resumes propagating.
+            cleanupValue = yield* sched.makeJournalFuture(dCleanup.promise);
+          }
+        })
+      );
+      yield* tick(sched);
+      w.interrupt(new Error("boom"));
+      queueMicrotask(() => dCleanup.resolve("cleaned"));
+      try {
+        yield* w;
+        return "no-throw";
+      } catch (e) {
+        return `threw:${(e as Error).message}:cleanup=${cleanupValue}`;
+      }
+    });
+    expect(await sched.run(op)).toBe("threw:boom:cleanup=cleaned");
+    dWork.resolve();
+  });
+
+  test("catch and rethrow a different error", async () => {
+    const sched = new Scheduler(testLib);
+    const d = deferred<void>();
+    const op = gen(function* () {
+      const w = spawn(
+        gen(function* () {
+          try {
+            yield* sched.makeJournalFuture(d.promise);
+            return "completed";
+          } catch (e) {
+            throw new Error(`wrapped:${(e as Error).message}`);
+          }
+        })
+      );
+      yield* tick(sched);
+      w.interrupt(new Error("boom"));
+      try {
+        yield* w;
+        return "no-throw";
+      } catch (e) {
+        return (e as Error).message;
+      }
+    });
+    expect(await sched.run(op)).toBe("wrapped:boom");
+  });
+
+  test("sequential interrupts: caught, recovered, interrupted again, recovered again", async () => {
+    const sched = new Scheduler(testLib);
+    const d1 = deferred<void>();
+    const d2 = deferred<void>();
+    const d3 = deferred<string>();
+    const events: string[] = [];
+    const op = gen(function* () {
+      const w = spawn(
+        gen(function* () {
+          try {
+            yield* sched.makeJournalFuture(d1.promise);
+          } catch (e) {
+            events.push(`int1:${(e as Error).message}`);
+          }
+          try {
+            yield* sched.makeJournalFuture(d2.promise);
+          } catch (e) {
+            events.push(`int2:${(e as Error).message}`);
+          }
+          return yield* sched.makeJournalFuture(d3.promise);
+        })
+      );
+      yield* tick(sched);
+      w.interrupt(new Error("one")); // caught by first try
+      yield* tick(sched); // let w re-park on d2
+      w.interrupt(new Error("two")); // caught by second try
+      queueMicrotask(() => d3.resolve("done"));
+      const result = yield* w;
+      return { result, events };
+    });
+    const out = await sched.run(op);
+    expect(out.result).toBe("done");
+    expect(out.events).toEqual(["int1:one", "int2:two"]);
+    d1.resolve();
+    d2.resolve();
   });
 });
 
@@ -113,7 +274,7 @@ describe("interrupt — swallow / recover / repeat", () => {
           return `recovered:${v}`;
         })
       );
-      yield* sched.makeJournalFuture(resolved("tick"));
+      yield* tick(sched);
       w.interrupt(new Error("stop"));
       queueMicrotask(() => d2.resolve("after"));
       return yield* w;
@@ -136,7 +297,7 @@ describe("interrupt — swallow / recover / repeat", () => {
           }
         })
       );
-      yield* sched.makeJournalFuture(resolved("tick"));
+      yield* tick(sched);
       w.interrupt(new Error("first"));
       w.interrupt(new Error("second"));
       return yield* w;
@@ -154,9 +315,42 @@ describe("interrupt — swallow / recover / repeat", () => {
       );
       const v = yield* w; // drive w to completion
       w.interrupt(new Error("too late")); // no-op
+      w.interrupt(); // still a no-op
       return `${v}:${yield* w}`; // re-yielding a done task gives the value
     });
     expect(await sched.run(op)).toBe("done-early:done-early");
+  });
+});
+
+describe("interrupt — same-tick precedence", () => {
+  test("a routine handed a value then interrupted in the same advance: interrupt wins", async () => {
+    // The sender wakes the receiver with the channel value, then interrupts
+    // it — both inside the sender's synchronous advance, before the receiver
+    // runs. The receiver must observe the interrupt error, not the value.
+    const sched = new Scheduler(testLib);
+    const ch = sched.makeChannel<string>();
+    const events: string[] = [];
+    const op = gen(function* () {
+      const w = spawn(
+        gen(function* () {
+          try {
+            const v = yield* ch.receive;
+            events.push(`received:${v}`); // must NOT happen
+            return `value:${v}`;
+          } catch (e) {
+            return `interrupted:${(e as Error).message}`;
+          }
+        })
+      );
+      yield* tick(sched); // let w park on ch.receive
+      yield* ch.send("hello"); // wakes w with the value (synchronous)
+      w.interrupt(new Error("boom")); // overwrites the pending value
+      const result = yield* w;
+      return { result, events };
+    });
+    const out = await sched.run(op);
+    expect(out.result).toBe("interrupted:boom");
+    expect(out.events).toEqual([]);
   });
 });
 
@@ -198,11 +392,11 @@ describe("interrupt — epoch guard against stale waiters", () => {
         })
       );
 
-      yield* sched.makeJournalFuture(resolved("t1")); // let w park on g
+      yield* tick(sched); // let w park on g
       w.interrupt(new Error("stop")); // w catches, re-parks on h
-      yield* sched.makeJournalFuture(resolved("t2")); // let w re-park
+      yield* tick(sched); // let w re-park
       dG.resolve("G-late"); // stale: must not wake w
-      yield* sched.makeJournalFuture(resolved("t3")); // let g finish + fire stale waiter
+      yield* tick(sched); // let g finish + fire stale waiter
       dH.resolve("H-val");
       const result = yield* w;
       return { result, events };
@@ -248,12 +442,12 @@ describe("interrupt — epoch guard against stale waiters", () => {
           }
         })
       );
-      yield* sched.makeJournalFuture(resolved("t1"));
+      yield* tick(sched);
       w.interrupt(new Error("stop"));
-      yield* sched.makeJournalFuture(resolved("t2"));
+      yield* tick(sched);
       dA.resolve("A-late"); // stale loser of the first race
       dB.resolve("B-late");
-      yield* sched.makeJournalFuture(resolved("t3"));
+      yield* tick(sched);
       dC.resolve("C-val");
       const result = yield* w;
       return { result, events };
@@ -263,6 +457,439 @@ describe("interrupt — epoch guard against stale waiters", () => {
     expect(out.result).toBe("C-val");
     // race1 must never fire — the first race's losers are stale after interrupt.
     expect(out.events).toEqual(["interrupted:stop"]);
+  });
+
+  test("interrupting a routine parked on a channel, then re-parking, ignores a later send on the old channel", async () => {
+    const sched = new Scheduler(testLib);
+    const chOld = sched.makeChannel<string>();
+    const chNew = sched.makeChannel<string>();
+    const events: string[] = [];
+    const op = gen(function* () {
+      const w = spawn(
+        gen(function* () {
+          try {
+            const v = yield* chOld.receive; // park on old channel (local)
+            events.push(`old:${v}`); // must NOT happen
+            return `old:${v}`;
+          } catch (e) {
+            events.push(`interrupted:${(e as Error).message}`);
+            const v = yield* chNew.receive; // re-park on new channel
+            return `new:${v}`;
+          }
+        })
+      );
+      yield* tick(sched); // let w park on chOld
+      w.interrupt(new Error("stop")); // w catches, re-parks on chNew
+      yield* tick(sched); // let w re-park
+      yield* chOld.send("stale"); // stale send: must not wake w
+      yield* tick(sched);
+      yield* chNew.send("fresh");
+      const result = yield* w;
+      return { result, events };
+    });
+    const out = await sched.run(op);
+    expect(out.result).toBe("new:fresh");
+    expect(out.events).toEqual(["interrupted:stop"]);
+  });
+});
+
+describe("interrupt — termination / no deadlock", () => {
+  test("interrupt unblocks a routine parked on a never-resolving journal source", async () => {
+    // Without interrupt, `yield* w` would hang forever (w parked on a
+    // never-resolving source, main joined). Interrupt must let it
+    // terminate. If the impl is wrong, this test hangs → timeout.
+    const sched = new Scheduler(testLib);
+    const never = deferred<void>();
+    const op = gen(function* () {
+      const w = spawn(
+        gen(function* () {
+          try {
+            yield* sched.makeJournalFuture(never.promise);
+            return "completed";
+          } catch (e) {
+            return `interrupted:${(e as Error).message}`;
+          }
+        })
+      );
+      yield* tick(sched);
+      w.interrupt(new Error("stop"));
+      return yield* w; // must terminate, not hang
+    });
+    expect(await sched.run(op)).toBe("interrupted:stop");
+  });
+
+  test("interrupt unblocks a routine parked purely on a local source (fan-out can't reach it)", async () => {
+    const sched = new Scheduler(testLib);
+    const never = deferred<void>();
+    const op = gen(function* () {
+      const sibling = spawn(
+        gen(function* () {
+          yield* sched.makeJournalFuture(never.promise);
+          return "sib";
+        })
+      );
+      const w = spawn(
+        gen(function* () {
+          try {
+            return yield* sibling; // park on sibling (local, no journal source)
+          } catch (e) {
+            return `interrupted:${(e as Error).message}`;
+          }
+        })
+      );
+      yield* tick(sched);
+      w.interrupt(new Error("stop"));
+      return yield* w; // must terminate; sibling is abandoned at main exit
+    });
+    expect(await sched.run(op)).toBe("interrupted:stop");
+  });
+
+  test("interrupting all of many spawned routines terminates cleanly (no stuck, no hang)", async () => {
+    const sched = new Scheduler(testLib);
+    const N = 50;
+    const ds = Array.from({ length: N }, () => deferred<void>());
+    const op = gen(function* () {
+      const tasks = ds.map((d, i) =>
+        spawn(
+          gen(function* () {
+            try {
+              yield* sched.makeJournalFuture(d.promise);
+              return `done:${i}`;
+            } catch {
+              return `int:${i}`;
+            }
+          })
+        )
+      );
+      yield* tick(sched); // let all park
+      for (const t of tasks) t.interrupt(new Error("stop"));
+      const results = yield* sched.allSettled(tasks);
+      return results.map((r) => (r.status === "fulfilled" ? r.value : "rej"));
+    });
+    const out = await sched.run(op);
+    expect(out).toEqual(Array.from({ length: N }, (_, i) => `int:${i}`));
+  });
+
+  test("cross-fiber interrupt: a routine interrupts a sibling from its own catch; both terminate", async () => {
+    const sched = new Scheduler(testLib);
+    const dA = deferred<void>();
+    const dB = deferred<void>();
+    const holder: { b?: { interrupt(err?: unknown): void } } = {};
+    const op = gen(function* () {
+      const a = spawn(
+        gen(function* () {
+          try {
+            yield* sched.makeJournalFuture(dA.promise);
+            return "A-normal";
+          } catch (e) {
+            holder.b?.interrupt(new Error("A->B"));
+            return `A:${(e as Error).message}`;
+          }
+        })
+      );
+      const b = spawn(
+        gen(function* () {
+          try {
+            yield* sched.makeJournalFuture(dB.promise);
+            return "B-normal";
+          } catch (e) {
+            return `B:${(e as Error).message}`;
+          }
+        })
+      );
+      holder.b = b;
+      yield* tick(sched); // both park
+      a.interrupt(new Error("main->A")); // A catches → interrupts B → B catches
+      const [ra, rb] = yield* sched.allSettled([a, b]);
+      return {
+        a: ra.status === "fulfilled" ? ra.value : "rej",
+        b: rb.status === "fulfilled" ? rb.value : "rej",
+      };
+    });
+    const out = await sched.run(op);
+    expect(out).toEqual({ a: "A:main->A", b: "B:A->B" });
+    dA.resolve();
+    dB.resolve();
+  });
+
+  test("interrupt-then-recover (re-park on a resolvable source) does not trip the stuck detector", async () => {
+    const sched = new Scheduler(testLib);
+    const d = deferred<void>();
+    const recover = deferred<string>();
+    const op = gen(function* () {
+      const w = spawn(
+        gen(function* () {
+          try {
+            yield* sched.makeJournalFuture(d.promise);
+            return "completed";
+          } catch {
+            return yield* sched.makeJournalFuture(recover.promise);
+          }
+        })
+      );
+      yield* tick(sched);
+      w.interrupt(new Error("stop"));
+      queueMicrotask(() => recover.resolve("recovered"));
+      return yield* w;
+    });
+    expect(await sched.run(op)).toBe("recovered");
+    d.resolve();
+  });
+});
+
+describe("interrupt — Task composition", () => {
+  test("a spawned Task composes into all alongside another future", async () => {
+    const sched = new Scheduler(testLib);
+    const d1 = deferred<string>();
+    const d2 = deferred<string>();
+    const op = gen(function* () {
+      const t1 = spawn(
+        gen(function* () {
+          return yield* sched.makeJournalFuture(d1.promise);
+        })
+      );
+      const t2 = spawn(
+        gen(function* () {
+          return yield* sched.makeJournalFuture(d2.promise);
+        })
+      );
+      queueMicrotask(() => {
+        d1.resolve("one");
+        d2.resolve("two");
+      });
+      return yield* sched.all([t1, t2]);
+    });
+    expect(await sched.run(op)).toEqual(["one", "two"]);
+  });
+
+  test("interrupting a Task that is an input to all rejects the all", async () => {
+    const sched = new Scheduler(testLib);
+    const d1 = deferred<string>();
+    const d2 = deferred<string>();
+    const op = gen(function* () {
+      const t1 = spawn(
+        gen(function* () {
+          // uncaught — the interrupt fails this task
+          return yield* sched.makeJournalFuture(d1.promise);
+        })
+      );
+      const t2 = spawn(
+        gen(function* () {
+          return yield* sched.makeJournalFuture(d2.promise);
+        })
+      );
+      yield* tick(sched);
+      t1.interrupt(new Error("boom"));
+      queueMicrotask(() => d2.resolve("two"));
+      try {
+        yield* sched.all([t1, t2]);
+        return "no-throw";
+      } catch (e) {
+        return `all-threw:${(e as Error).message}`;
+      }
+    });
+    expect(await sched.run(op)).toBe("all-threw:boom");
+    d1.resolve("never");
+  });
+});
+
+describe("interrupt — mixed with combinators", () => {
+  // (a) Interrupting a routine while it is blocked *inside* a combinator —
+  // the throw lands at the combinator yield, the routine's try/catch sees it.
+
+  test("interrupt a routine blocked inside all()", async () => {
+    const sched = new Scheduler(testLib);
+    const d1 = deferred<string>();
+    const d2 = deferred<string>();
+    const op = gen(function* () {
+      const w = spawn(
+        gen(function* () {
+          const a = sched.makeJournalFuture(d1.promise);
+          const b = sched.makeJournalFuture(d2.promise);
+          try {
+            const [x, y] = yield* sched.all([a, b]);
+            return `all:${x},${y}`;
+          } catch (e) {
+            return `interrupted:${(e as Error).message}`;
+          }
+        })
+      );
+      yield* tick(sched); // let w park inside all()
+      w.interrupt(new Error("boom"));
+      return yield* w;
+    });
+    expect(await sched.run(op)).toBe("interrupted:boom");
+    d1.resolve("a");
+    d2.resolve("b");
+  });
+
+  test("interrupt a routine blocked inside race()", async () => {
+    const sched = new Scheduler(testLib);
+    const d1 = deferred<string>();
+    const d2 = deferred<string>();
+    const op = gen(function* () {
+      const w = spawn(
+        gen(function* () {
+          try {
+            return yield* sched.race([
+              sched.makeJournalFuture(d1.promise),
+              sched.makeJournalFuture(d2.promise),
+            ]);
+          } catch (e) {
+            return `interrupted:${(e as Error).message}`;
+          }
+        })
+      );
+      yield* tick(sched);
+      w.interrupt(new Error("boom"));
+      return yield* w;
+    });
+    expect(await sched.run(op)).toBe("interrupted:boom");
+    d1.resolve("a");
+    d2.resolve("b");
+  });
+
+  test("interrupt a routine blocked inside select()", async () => {
+    const sched = new Scheduler(testLib);
+    const d1 = deferred<string>();
+    const d2 = deferred<string>();
+    const op = gen(function* () {
+      const w = spawn(
+        gen(function* () {
+          try {
+            const r = yield* select({
+              x: sched.makeJournalFuture(d1.promise),
+              y: sched.makeJournalFuture(d2.promise),
+            });
+            return `select:${r.tag}`;
+          } catch (e) {
+            return `interrupted:${(e as Error).message}`;
+          }
+        })
+      );
+      yield* tick(sched);
+      w.interrupt(new Error("boom"));
+      return yield* w;
+    });
+    expect(await sched.run(op)).toBe("interrupted:boom");
+    d1.resolve("a");
+    d2.resolve("b");
+  });
+
+  // (b) Interrupting one *input* (a spawned Task) of a combinator — the
+  // combinator observes that input settling with the interrupt error.
+
+  test("interrupting one input of race(): race settles with the interrupt error", async () => {
+    // The interrupted input is the first to settle (with its error); the
+    // other input never resolves in this test, so race must pick the
+    // interrupted one. race surfaces a rejection if the winner rejected.
+    const sched = new Scheduler(testLib);
+    const slow = deferred<string>();
+    const op = gen(function* () {
+      const t1 = spawn(
+        gen(function* () {
+          return yield* sched.makeJournalFuture(slow.promise); // uncaught
+        })
+      );
+      const t2 = spawn(
+        gen(function* () {
+          return yield* sched.makeJournalFuture(deferred<string>().promise); // never
+        })
+      );
+      yield* tick(sched);
+      t1.interrupt(new Error("boom")); // t1 becomes first-to-settle (rejected)
+      try {
+        return yield* sched.race([t1, t2]);
+      } catch (e) {
+        return `race-threw:${(e as Error).message}`;
+      }
+    });
+    expect(await sched.run(op)).toBe("race-threw:boom");
+    slow.resolve("never");
+  });
+
+  test("interrupting one input of any(): any skips the failed input and resolves via another", async () => {
+    const sched = new Scheduler(testLib);
+    const d1 = deferred<string>();
+    const d2 = deferred<string>();
+    const op = gen(function* () {
+      const t1 = spawn(
+        gen(function* () {
+          return yield* sched.makeJournalFuture(d1.promise); // interrupted → rejects
+        })
+      );
+      const t2 = spawn(
+        gen(function* () {
+          return yield* sched.makeJournalFuture(d2.promise); // succeeds
+        })
+      );
+      yield* tick(sched);
+      t1.interrupt(new Error("boom"));
+      queueMicrotask(() => d2.resolve("two"));
+      return yield* sched.any([t1, t2]); // any ignores the rejection
+    });
+    expect(await sched.run(op)).toBe("two");
+    d1.resolve("never");
+  });
+
+  test("interrupting one input of allSettled(): that input is recorded rejected, others fulfilled", async () => {
+    const sched = new Scheduler(testLib);
+    const d1 = deferred<string>();
+    const d2 = deferred<string>();
+    const op = gen(function* () {
+      const t1 = spawn(
+        gen(function* () {
+          return yield* sched.makeJournalFuture(d1.promise); // interrupted
+        })
+      );
+      const t2 = spawn(
+        gen(function* () {
+          return yield* sched.makeJournalFuture(d2.promise);
+        })
+      );
+      yield* tick(sched);
+      t1.interrupt(new Error("boom"));
+      queueMicrotask(() => d2.resolve("two"));
+      const [r1, r2] = yield* sched.allSettled([t1, t2]);
+      return {
+        r1:
+          r1.status === "rejected"
+            ? `rej:${(r1.reason as Error).message}`
+            : `ok:${r1.value}`,
+        r2: r2.status === "fulfilled" ? `ok:${r2.value}` : "rej",
+      };
+    });
+    expect(await sched.run(op)).toEqual({ r1: "rej:boom", r2: "ok:two" });
+    d1.resolve("never");
+  });
+
+  test("interrupting one input of all(): all short-circuits with the interrupt error", async () => {
+    const sched = new Scheduler(testLib);
+    const d1 = deferred<string>();
+    const d2 = deferred<string>();
+    const op = gen(function* () {
+      const t1 = spawn(
+        gen(function* () {
+          return yield* sched.makeJournalFuture(d1.promise); // interrupted
+        })
+      );
+      const t2 = spawn(
+        gen(function* () {
+          return yield* sched.makeJournalFuture(d2.promise);
+        })
+      );
+      yield* tick(sched);
+      t1.interrupt(new Error("boom"));
+      queueMicrotask(() => d2.resolve("two"));
+      try {
+        yield* sched.all([t1, t2]);
+        return "no-throw";
+      } catch (e) {
+        return `all-threw:${(e as Error).message}`;
+      }
+    });
+    expect(await sched.run(op)).toBe("all-threw:boom");
+    d1.resolve("never");
   });
 });
 
@@ -284,7 +911,7 @@ describe("interrupt — interaction with onMainExit", () => {
           }
         })
       );
-      yield* sched.makeJournalFuture(resolved("tick"));
+      yield* tick(sched);
       w.interrupt(new Error("stop"));
       const r = yield* w; // join: drive w to completion
       return `${r}:finally=${finallyRan}`;
@@ -306,7 +933,7 @@ describe("interrupt — interaction with onMainExit", () => {
           }
         })
       );
-      yield* sched.makeJournalFuture(resolved("tick")); // let w park
+      yield* tick(sched); // let w park
       w.interrupt(new Error("stop")); // marks w ready...
       return "main-done"; // ...but main settles first, w abandoned
     });
@@ -331,11 +958,66 @@ describe("interrupt — interaction with onMainExit", () => {
           }
         })
       );
-      yield* sched.makeJournalFuture(resolved("tick"));
+      yield* tick(sched);
       w.interrupt(new Error("stop"));
       return "main-done";
     });
     expect(await sched.run(op)).toBe("main-done");
     expect(finallyRan).toBe(true);
+  });
+});
+
+describe("interrupt — determinism", () => {
+  test("an interrupt+recover+multi-fiber scenario produces identical ordered events every run", async () => {
+    // The outcome is fully determined by the interrupts (not by which
+    // race the lib happens to win), so it must be byte-identical across
+    // repeated runs. Guards against scheduler ordering nondeterminism
+    // introduced by interrupt/epoch handling.
+    const runScenario = async (): Promise<unknown> => {
+      const sched = new Scheduler(testLib);
+      const events: string[] = [];
+      const op = gen(function* () {
+        const mkWorker = (id: number, recover: boolean): Operation<string> =>
+          gen(function* () {
+            const d = deferred<void>();
+            try {
+              yield* sched.makeJournalFuture(d.promise);
+              return `w${id}:completed`;
+            } catch (e) {
+              events.push(`w${id}:caught:${(e as Error).message}`);
+              if (recover) {
+                return `w${id}:recovered`;
+              }
+              throw e;
+            }
+          });
+        const w0 = spawn(mkWorker(0, true));
+        const w1 = spawn(mkWorker(1, false));
+        const w2 = spawn(mkWorker(2, true));
+        yield* tick(sched);
+        w0.interrupt(new Error("i0"));
+        w1.interrupt(new Error("i1"));
+        w2.interrupt(new Error("i2"));
+        const results = yield* sched.allSettled([w0, w1, w2]);
+        return {
+          events,
+          results: results.map((r) =>
+            r.status === "fulfilled"
+              ? r.value
+              : `rej:${(r.reason as Error).message}`
+          ),
+        };
+      });
+      return sched.run(op);
+    };
+
+    const first = await runScenario();
+    expect(first).toEqual({
+      events: ["w0:caught:i0", "w1:caught:i1", "w2:caught:i2"],
+      results: ["w0:recovered", "rej:i1", "w2:recovered"],
+    });
+    for (let i = 0; i < 30; i++) {
+      expect(await runScenario()).toEqual(first);
+    }
   });
 });
