@@ -16,6 +16,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "app": "tsx src/app.ts",
+    "app:fetch": "RESTATE_E2E_ENDPOINT_ADAPTER=fetch tsx src/app.ts",
     "build": "turbo run _build --filter={.}...",
     "_build": "tsc -b tsconfig.test.json",
     "testrunner": "vitest run --exclude \"**/memory_leak.test.ts\" && vitest run test/memory_leak.test.ts",
