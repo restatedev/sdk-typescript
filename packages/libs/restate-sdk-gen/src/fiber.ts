@@ -123,10 +123,12 @@ export class Fiber<T = unknown> implements WaitTarget<T> {
    * Spawn-tree links. `parent` is the fiber that was advancing when this
    * one was created; `children` are the fibers it spawned (including the
    * synth fibers behind combinator fallbacks). `interrupt` cascades down
-   * `children`; `finish` prunes from `parent` so the set tracks only live
-   * descendants.
+   * `children`. On `finish`, a fiber's still-live children are re-homed
+   * onto its `parent` (not dropped) so the subtree stays connected to a
+   * live ancestor and a later cascade still reaches them — `parent` is
+   * therefore reassignable as ancestors complete.
    */
-  private readonly parent: Fiber<unknown> | null;
+  private parent: Fiber<unknown> | null;
   private readonly children = new Set<Fiber<unknown>>();
 
   constructor(
@@ -270,6 +272,9 @@ export class Fiber<T = unknown> implements WaitTarget<T> {
     // issued from a fiber advance — same determinism as a single
     // interrupt. The walk doesn't mutate `children` (interrupt only
     // wakes; finish/prune happens later in a drain), so iterating is safe.
+    // The cascade is a single snapshot: routines a descendant spawns
+    // *after* this fires (e.g. in its own interrupt-catch) are not
+    // retroactively interrupted — interrupt is one-shot and non-sticky.
     for (const child of this.children) child.interrupt(err);
   }
 
@@ -437,7 +442,17 @@ export class Fiber<T = unknown> implements WaitTarget<T> {
    */
   private finish(settled: Settled): void {
     this.state = { kind: "done", settled };
-    this.parent?.children.delete(this as Fiber<unknown>);
+    // Re-home still-live children onto the grandparent before detaching,
+    // so an ancestor's interrupt cascade still reaches them. A done fiber
+    // is never interrupted again, so leaving children pointing at it would
+    // sever the whole subtree from any live ancestor.
+    const gp = this.parent;
+    for (const child of this.children) {
+      child.parent = gp;
+      gp?.children.add(child);
+    }
+    this.children.clear();
+    gp?.children.delete(this as Fiber<unknown>);
     const waiters = this.waiters;
     this.waiters = [];
     for (const w of waiters) w(settled);

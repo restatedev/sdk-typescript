@@ -1491,6 +1491,89 @@ describe("interrupt — cascade to the spawn subtree", () => {
     expect(seen.sort()).toEqual(["A:up", "INNER:up"]);
   });
 
+  test("cascade reaches a grandchild whose intermediate parent already finished (re-homed)", async () => {
+    // The "supervisor spawns a worker then returns" pattern: c finishes
+    // while its grandchild g is still live. On c's finish, g is re-homed
+    // onto p, so interrupting p still cascades to g. Without re-homing, g
+    // would be orphaned and this hangs under join.
+    const sched = new Scheduler(testLib, undefined, { onMainExit: "join" });
+    const seen: string[] = [];
+    const op = gen(function* () {
+      const p = spawn(
+        gen(function* () {
+          const c = spawn(
+            gen(function* () {
+              spawn(
+                gen(function* () {
+                  try {
+                    yield* sched.makeJournalFuture(deferred<void>().promise);
+                  } catch (e) {
+                    seen.push(`G:${(e as Error).message}`);
+                  }
+                })
+              );
+              return "c-done"; // c finishes, leaving g live → re-homed to p
+            })
+          );
+          yield* c;
+          try {
+            yield* sched.makeJournalFuture(deferred<void>().promise);
+          } catch (e) {
+            seen.push(`P:${(e as Error).message}`);
+          }
+        })
+      );
+      yield* tick(sched);
+      yield* tick(sched); // let c run + finish, g park (and re-home)
+      p.interrupt(new Error("boom"));
+      return "main-done";
+    });
+    expect(await sched.run(op)).toBe("main-done");
+    expect(seen.sort()).toEqual(["G:boom", "P:boom"]);
+  });
+
+  test("re-homing stays in-lineage: a re-homed grandchild is not reached by a sibling's interrupt", async () => {
+    // a finishes, re-homing its grandchild g up to main. b is then a
+    // main-level sibling of g; interrupting b must NOT reach g — re-homing
+    // lifts only along the ancestor chain, never across subtrees. (Default
+    // abandon, so the untouched g is simply abandoned when main returns.)
+    const sched = new Scheduler(testLib);
+    const seen: string[] = [];
+    const op = gen(function* () {
+      const a = spawn(
+        gen(function* () {
+          spawn(
+            gen(function* () {
+              try {
+                yield* sched.makeJournalFuture(deferred<void>().promise);
+              } catch (e) {
+                seen.push(`G:${(e as Error).message}`);
+              }
+            })
+          );
+          return "a-done";
+        })
+      );
+      yield* a; // a finishes → g re-homed to main
+      const b = spawn(
+        gen(function* () {
+          try {
+            yield* sched.makeJournalFuture(deferred<void>().promise);
+            return "b-done";
+          } catch (e) {
+            seen.push(`B:${(e as Error).message}`);
+            return "b-int";
+          }
+        })
+      );
+      yield* tick(sched);
+      b.interrupt(new Error("b-only")); // reaches b's subtree only, not g
+      return yield* b;
+    });
+    expect(await sched.run(op)).toBe("b-int");
+    expect(seen).toEqual(["B:b-only"]); // g untouched by b's interrupt
+  });
+
   test("a child that finished before the interrupt is a no-op (pruned)", async () => {
     const sched = new Scheduler(testLib);
     const op = gen(function* () {

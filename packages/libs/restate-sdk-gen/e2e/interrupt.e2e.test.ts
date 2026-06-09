@@ -32,6 +32,7 @@ import {
   sleep,
   allSettled,
   type Operation,
+  type Task,
   clients,
 } from "@restatedev/restate-sdk-gen";
 
@@ -271,6 +272,49 @@ const interruptSvc = service({
       return yield* parent;
     },
 
+    // Re-homing: a worker spawns a grandchild then finishes (returning the
+    // grandchild's handle); the grandchild is re-homed onto the supervisor.
+    // Interrupting the supervisor must still cascade to that grandchild,
+    // and its journaled cleanup must replay consistently.
+    *cascadeReHome(): Operation<string> {
+      const sup = spawn(
+        (function* (): Operation<string> {
+          const worker = spawn(
+            (function* (): Operation<Task<string>> {
+              const g = spawn(
+                (function* (): Operation<string> {
+                  try {
+                    yield* sleep(600000);
+                    return "g-completed";
+                  } catch (e) {
+                    const a = yield* run(async () => "g-cleaned", {
+                      name: "g-cleanup",
+                    });
+                    return `g:${(e as Error).message}:${a}`;
+                  }
+                })()
+              );
+              return g; // worker finishes → g re-homed onto sup
+            })()
+          );
+          const g = yield* worker;
+          try {
+            yield* sleep(600000);
+            return "sup-completed";
+          } catch (e) {
+            const a = yield* run(async () => "sup-cleaned", {
+              name: "sup-cleanup",
+            });
+            const gr = yield* g; // g was interrupted via the cascade
+            return `sup:${(e as Error).message}:${a}|${gr}`;
+          }
+        })()
+      );
+      yield* sleep(50);
+      sup.interrupt(new Error("boom")); // cascades to the re-homed grandchild
+      return yield* sup;
+    },
+
     // Combinator + interrupt at the journal level: interrupt one input of
     // an allSettled; it is recorded rejected, the other fulfilled.
     *interruptCombinatorInput(): Operation<string> {
@@ -343,6 +387,13 @@ describe.each(modes)("interrupt — $name mode", ({ alwaysReplay }) => {
     const c = clients.client(ingress, interruptSvc);
     expect(await c.cascadeInterrupt()).toBe(
       "parent:boom:parent-cleaned|child:boom:child-cleaned"
+    );
+  });
+
+  test("cascade reaches a grandchild re-homed when its intermediate parent finished", async () => {
+    const c = clients.client(ingress, interruptSvc);
+    expect(await c.cascadeReHome()).toBe(
+      "sup:boom:sup-cleaned|g:boom:g-cleaned"
     );
   });
 
