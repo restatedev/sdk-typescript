@@ -157,6 +157,37 @@ const interruptSvc = service({
         : `fulfilled:${r.value}`;
     },
 
+    // Interrupt mid-run, error identity under replay: the worker's run
+    // closure rejects on signal-abort; the interrupt also wakes the
+    // worker with the verbatim error. The caught error must be identical
+    // record vs replay (the per-tick lib.race is a journaled combinator,
+    // so the interrupt-vs-run-resolution ordering is stable).
+    *interruptMidRunErrorIdentity(): Operation<string> {
+      const w = spawn(
+        (function* (): Operation<string> {
+          try {
+            yield* run(
+              ({ signal }) =>
+                new Promise<string>((resolve, reject) => {
+                  signal.addEventListener("abort", () =>
+                    reject(signal.reason as Error)
+                  );
+                  setTimeout(() => resolve("never"), 5000);
+                }),
+              { name: "io" }
+            );
+            return "completed";
+          } catch (e) {
+            const err = e as Error;
+            return `caught:${err.name}:${err.message}`;
+          }
+        })()
+      );
+      yield* sleep(50);
+      w.interrupt(); // no-arg → default InterruptedError
+      return yield* w;
+    },
+
     // Self-interrupt: a worker interrupts its own task, then yields. The
     // throw must land at that yield (delivered via the advance-loop's
     // re-entrant-wake detection) and replay consistently.
@@ -252,6 +283,16 @@ describe.each(modes)("interrupt — $name mode", ({ alwaysReplay }) => {
   test("self-interrupt: the throw lands at the worker's next yield and replays consistently", async () => {
     const c = clients.client(ingress, interruptSvc);
     expect(await c.selfInterrupt()).toBe("interrupted:self:audited");
+  });
+
+  test("interrupt mid-run: the caught error is the verbatim interrupt error, identical record vs replay", async () => {
+    const c = clients.client(ingress, interruptSvc);
+    // The in-memory interrupt wake (verbatim InterruptedError) wins over
+    // the run's journaled (coerced) outcome; the per-tick journaled race
+    // combinator keeps this ordering stable across replay.
+    expect(await c.interruptMidRunErrorIdentity()).toBe(
+      "caught:InterruptedError:Task interrupted"
+    );
   });
 
   test("interrupt aborts the worker's run signal and delivers the error; main's signal is unaffected", async () => {

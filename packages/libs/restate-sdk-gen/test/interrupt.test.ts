@@ -763,6 +763,32 @@ describe("interrupt — termination / no deadlock", () => {
     dB.resolve();
   });
 
+  test("interrupt-recovery re-parking on a dead channel surfaces as 'scheduler stuck', not a silent hang", async () => {
+    // If a caught interrupt legitimately re-parks on a source that can
+    // never make progress (a channel nobody sends to), and that becomes
+    // the whole live wait-graph, the scheduler reports a genuine deadlock
+    // loudly rather than hanging. Reachable via interrupt-recovery; pin it.
+    const sched = new Scheduler(testLib);
+    const dead = sched.makeChannel<string>(); // nobody ever sends
+    const never = deferred<void>();
+    const op = gen(function* () {
+      const w = spawn(
+        gen(function* () {
+          try {
+            yield* sched.makeJournalFuture(never.promise);
+            return "completed";
+          } catch {
+            return yield* dead.receive; // re-park on a channel nobody sends to
+          }
+        })
+      );
+      yield* tick(sched);
+      w.interrupt(new Error("stop")); // W catches → re-parks on dead.receive
+      return yield* w; // main + W now both local-parked, no journal pending
+    });
+    await expect(sched.run(op)).rejects.toThrow(/scheduler stuck/);
+  });
+
   test("interrupt-then-recover (re-park on a resolvable source) does not trip the stuck detector", async () => {
     const sched = new Scheduler(testLib);
     const d = deferred<void>();
@@ -1012,6 +1038,36 @@ describe("interrupt — mixed with combinators", () => {
     });
     expect(await sched.run(op)).toEqual({ r1: "rej:boom", r2: "ok:two" });
     d1.resolve("never");
+  });
+
+  test("under join, interrupting a routine inside a combinator: the orphaned synth fiber finishes once its inputs settle", async () => {
+    // Interrupting a routine blocked inside race() throws into the OUTER
+    // routine (it recovers), but race's synthesized inner fiber is not
+    // interrupted. Under "join" the scheduler waits for that inner fiber
+    // too — it finishes as soon as the combinator's inputs settle (the
+    // production case; a never-settling input would hang under join, same
+    // as any race loser).
+    const sched = new Scheduler(testLib, undefined, { onMainExit: "join" });
+    const other = deferred<string>();
+    const op = gen(function* () {
+      const w = spawn(
+        gen(function* () {
+          try {
+            return yield* sched.race([
+              sched.makeJournalFuture(deferred<string>().promise), // loser
+              sched.makeJournalFuture(other.promise),
+            ]);
+          } catch (e) {
+            return `recovered:${(e as Error).message}`;
+          }
+        })
+      );
+      yield* tick(sched);
+      w.interrupt(new Error("stop")); // W recovers; race synth orphaned
+      queueMicrotask(() => other.resolve("x")); // lets the synth's race win + finish
+      return yield* w;
+    });
+    expect(await sched.run(op)).toBe("recovered:stop");
   });
 
   test("interrupting one input of all(): all short-circuits with the interrupt error", async () => {
