@@ -25,6 +25,7 @@
 import * as restate from "@restatedev/restate-sdk";
 import type { Awaitable } from "./awaitable.js";
 import type { Future, FutureSettledResult, FutureValues } from "./future.js";
+import type { Task } from "./task.js";
 import type { Channel } from "./channel.js";
 import {
   gen,
@@ -346,7 +347,13 @@ export class RestateOperations {
    */
   run<T>(action: RunAction<T>, opts?: RunOpts<T>): Future<T> {
     const name = resolveRunName(action, opts);
-    const wrapped = wrapActionForCancellation(this.sched.abortSignal, action);
+    // Per-fiber signal: a targeted `interrupt(task)` aborts only this
+    // fiber's in-flight run; invocation cancellation / attempt-end still
+    // cascade in (the fiber signal is a child of the scheduler signal).
+    const wrapped = wrapActionForCancellation(
+      this.sched.currentRunSignal(),
+      action
+    );
     return this.sched.makeJournalFuture(
       adapt(this.ctx.run(name, wrapped, toSdkRunOptions(opts)))
     );
@@ -538,8 +545,11 @@ export class RestateOperations {
    * A spawned routine still running when the main operation settles is
    * abandoned by default (its handler returns without it); pass
    * `{ onMainExit: "join" }` to `execute` to wait for it instead.
+   *
+   * Returns a `Task<T>` — a `Future<T>` plus `interrupt(err?)` to throw
+   * into the routine at its next yield point.
    */
-  spawn<T>(op: Operation<T>): Future<T> {
+  spawn<T>(op: Operation<T>): Task<T> {
     return this.sched.spawn(op);
   }
 

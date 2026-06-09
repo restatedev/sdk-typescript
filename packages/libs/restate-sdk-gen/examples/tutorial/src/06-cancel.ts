@@ -9,18 +9,27 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-// Tier 6: cancellation — both flavors.
+// Tier 6: stopping work — three flavors.
 //
-// Maps to guide.md §"Cooperative cancellation with channels", §"Cancellation
-// from outside the workflow", and §"Two kinds of cancellation".
+// Maps to guide.md §"Cooperative cancellation with channels",
+// §"Interrupting a task", §"Cancellation from outside the workflow", and
+// §"Two kinds of cancellation".
 //
-// Two demos:
+// Demos:
 //
-//   pollWithStop      — workflow-internal stop. Spawn a polling worker;
-//                       the parent caps total time via `sleep`, then
-//                       calls `stop.send()` to wind it down. The worker
-//                       observes the stop signal at its next select and
-//                       returns null.
+//   pollWithStop      — workflow-internal COOPERATIVE stop. Spawn a
+//                       polling worker; the parent caps total time via
+//                       `sleep`, then calls `stop.send()` to wind it
+//                       down. The worker observes the stop signal at its
+//                       next select and returns null. Stop is in-band —
+//                       only observed at a select point.
+//
+//   interruptWorker   — per-task FORCEFUL interrupt. `spawn` returns a
+//                       Task; `task.interrupt(err)` throws `err` into the
+//                       worker at its next yield, wherever it is parked
+//                       (not only at a select). The worker catches it,
+//                       runs cleanup, and we interrupt-then-join so the
+//                       cleanup completes before returning.
 //
 //   cancellable       — invocation-level cancel. The handler waits on a
 //                       long-running fake job and catches CancelledError
@@ -94,6 +103,49 @@ export const cancel = service({
         yield* stop.send();
       }
       return yield* t;
+    },
+
+    // Per-task interrupt — the forceful counterpart to pollWithStop.
+    // The worker is parked deep inside a long `sleep`, where a stop
+    // channel could not reach it (no select to observe). `interrupt`
+    // throws into it there directly. The worker catches, runs cleanup,
+    // and returns; we interrupt-then-join so the cleanup runs before we
+    // return (under the default `onMainExit: "abandon"`, returning
+    // without joining would abandon the worker before its catch).
+    *interruptWorker(req: {
+      jobId: string;
+      budgetSeconds: number;
+    }): Operation<string> {
+      const worker = spawn(
+        (function* (): Operation<string> {
+          try {
+            yield* sleep({ seconds: 60 }); // parked here when interrupted
+            const status: JobStatus = yield* run(() => getJob(req.jobId), {
+              name: "get",
+            });
+            return status.state === "done" ? status.result : "(no-result)";
+          } catch (e) {
+            // Interrupt is swallowable: clean up, then report instead of
+            // propagating. (Re-throw `e` if you'd rather fail the task.)
+            yield* run(
+              async () => {
+                console.log(`audit: worker for ${req.jobId} interrupted`);
+              },
+              { name: "audit-interrupt" }
+            );
+            return `interrupted: ${(e as Error).message}`;
+          }
+        })()
+      );
+
+      const r = yield* select({
+        done: worker,
+        budget: sleep({ seconds: req.budgetSeconds }),
+      });
+      if (r.tag === "done") return yield* r.future;
+
+      worker.interrupt(new restate.TerminalError("over budget"));
+      return yield* worker; // join: drive the worker's catch + cleanup
     },
 
     // Invocation cancel, version A — long `sleep`.

@@ -180,7 +180,8 @@ fired; you unwrap with `yield* r.future` to get the value.
 ## Spawning concurrent routines
 
 `spawn` registers an Operation as a separate concurrent routine.
-Yields a `Future<T>` that settles when the routine returns or throws.
+Returns a `Task<T>` — a `Future<T>` that settles when the routine
+returns or throws, plus `interrupt(err?)` (see "Interrupting a task").
 
 ```ts
 const t1 = spawn(workflowA);
@@ -206,11 +207,68 @@ spawned routine to finish, `yield*` its future before returning, or run
 with `{ onMainExit: "join" }` (see "Race losers and spawn lifetime"
 below).
 
-To stop a spawned routine before it finishes, pass it a `Channel<void>`
-and have it `select` over its work and `stop.receive` — see the
-cooperative-cancellation section below. There is no `Future.cancel()`
-primitive on spawned routines by design; cooperative stop is the
-supported pattern.
+To stop a spawned routine before it finishes you have two options: a
+forceful `task.interrupt(err?)` (throws into the routine at its next
+yield — see below), or a cooperative `Channel<void>` it `select`s over
+alongside its work (see the cooperative-cancellation section). Reach for
+interrupt when you want to stop a routine that is parked anywhere; reach
+for a stop channel when the routine should decide *how* to wind down at
+a known point.
+
+---
+
+## Interrupting a task
+
+`task.interrupt(err?)` throws `err` into the spawned routine at its next
+yield point, and aborts its in-flight `run` I/O. `err` is delivered
+verbatim; omit it for a default `InterruptedError`. The routine's own
+try/catch may catch and recover — interrupt is swallowable, like
+invocation cancellation.
+
+```ts
+const worker = spawn(longJob());
+const r = yield* select({
+  done: worker,
+  budget: sleep({ seconds: 30 }),
+});
+if (r.tag === "budget") {
+  worker.interrupt(new Error("over budget"));
+  yield* worker; // interrupt-then-join: drive the worker's finally
+}
+```
+
+The interrupt-then-join in that example matters. Under the default
+`onMainExit: "abandon"`, interrupting a routine and then *returning*
+from the handler delivers nothing — the scheduler stops the moment the
+main operation settles, so the routine is abandoned before it advances
+and its `catch`/`finally` never run. To run a routine's cleanup, `yield*`
+the task after interrupting it, so it is driven to completion first.
+(Under `{ onMainExit: "join" }` the scheduler keeps driving regardless.)
+
+This is the per-task counterpart to invocation cancellation: same
+delivery (a throw at the next yield), but targeted at one routine with
+an error you choose. The injected error propagates like any other —
+pass a `TerminalError` if an uncaught interrupt should fail the
+invocation; the default `InterruptedError` is a plain error, so an
+uncaught one fails only that routine and surfaces wherever its Future is
+awaited.
+
+Interrupting a routine that has already finished is a no-op.
+
+**Interrupt cascades down the spawn subtree.** Interrupting a task also
+interrupts every routine that task spawned, transitively, with the same
+error — so interrupting a parent tears down the whole subtree it rooted,
+each routine getting the throw at its own next yield (and its own
+in-flight `run` I/O aborted). Scope is by spawn lineage: a child counts
+even if it was handed back to someone else. A routine unrelated to the
+interrupted one (a sibling spawned elsewhere) is untouched. This is the
+nursery/scope behavior — interrupt the root and the whole tree winds
+down.
+
+Because interrupt also aborts each interrupted routine's per-`run`
+`AbortSignal`, an in-flight `run(({ signal }) => fetch(url, { signal }))`
+anywhere in the subtree stops promptly — while routines outside the
+subtree keep their I/O.
 
 ---
 

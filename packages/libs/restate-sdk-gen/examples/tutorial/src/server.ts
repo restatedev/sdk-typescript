@@ -18,8 +18,9 @@
 //   /timeout           — select(work, sleep) for soft deadlines
 //   /retry             — run with maxRetryAttempts + TerminalError fallback
 //   /saga              — try / catch with journaled compensation
-//   /cancel            — cooperative stop via Channel<void>; invocation-cancel
-//                        catch with cleanup
+//   /cancel            — cooperative stop via Channel<void>; per-task
+//                        task.interrupt (forceful, then join); invocation-
+//                        cancel catch with cleanup
 //   /counter           — virtual-object state (typed, get/add/reset)
 //   /clients           — typed service/object clients + awakeable cross-handler
 //                        (also: /greeter, /awakeableHolder)

@@ -55,6 +55,7 @@ import type {
 import type { Descriptor, HandlerDescriptor } from "./define.js";
 import type { ClientFuture, GenClient, GenSendClient } from "./clients.js";
 import type { Operation } from "./operation.js";
+import type { Task } from "./task.js";
 import {
   InvocationReferenceImpl,
   type InvocationReference,
@@ -266,13 +267,14 @@ export const allSettled = <const T extends readonly Future<unknown>[] | []>(
 }> => currentOps().allSettled(futures);
 
 /**
- * Register `op` as a fresh routine and return a `Future<T>` for its
- * eventual outcome. Eager — the child is already in flight by the time
- * `spawn` returns. A spawned routine still running when the main
- * operation settles is abandoned by default (see `OnMainExit`). See
- * `RestateOperations.spawn` for full semantics.
+ * Register `op` as a fresh routine and return a `Task<T>` for its
+ * eventual outcome — a `Future<T>` plus `interrupt(err?)` to throw into
+ * the routine at its next yield point. Eager — the child is already in
+ * flight by the time `spawn` returns. A spawned routine still running
+ * when the main operation settles is abandoned by default (see
+ * `OnMainExit`). See `RestateOperations.spawn` for full semantics.
  */
-export const spawn = <T>(op: Operation<T>): Future<T> => currentOps().spawn(op);
+export const spawn = <T>(op: Operation<T>): Task<T> => currentOps().spawn(op);
 
 // `select` is already a free function in `operation.ts` (it yields a
 // marker the scheduler dispatches). It is re-exported from `index.ts`
