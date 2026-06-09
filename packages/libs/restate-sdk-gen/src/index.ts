@@ -56,6 +56,7 @@ export type {
   FutureValues,
 } from "./future.js";
 export { gen, type Operation, select, type SelectResult } from "./operation.js";
+export { contextLocal, type ContextLocal } from "./context.js";
 export { type Task, InterruptedError } from "./task.js";
 export {
   execute,

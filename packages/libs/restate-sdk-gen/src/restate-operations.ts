@@ -304,6 +304,19 @@ export class RestateOperations {
     return this.ctx.isProcessing();
   }
 
+  // ---- context-local storage ----
+  // Delegate to the scheduler, which owns the single per-invocation bag.
+  // Present here because `RestateOperations` is the current-fiber slot in
+  // production; `contextLocal()` handles cast the slot to this shape.
+
+  getLocal(key: symbol, fallback: unknown): unknown {
+    return this.sched.getLocal(key, fallback);
+  }
+
+  setLocal(key: symbol, value: unknown): void {
+    this.sched.setLocal(key, value);
+  }
+
   // ---- journal-backed Futures ----
 
   /**

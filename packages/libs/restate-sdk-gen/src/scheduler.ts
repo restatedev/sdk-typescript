@@ -136,6 +136,17 @@ export class Scheduler implements SchedulerOps {
    */
   contextSlot: unknown;
 
+  /**
+   * Context-local storage: an ambient key/value bag scoped to this
+   * scheduler — i.e. to this one `execute()` call, since production
+   * builds a fresh scheduler per invocation (like `fibers` / `ready` /
+   * `abortController`, this is per-run state, not shared across runs).
+   * Every fiber under this scheduler reaches the same bag (global-per-
+   * invocation; see `context.ts`). Keyed by the opaque symbol a
+   * `contextLocal()` handle owns. In-memory only — never journaled.
+   */
+  private readonly localStore = new Map<symbol, unknown>();
+
   constructor(
     lib: AwaitableLib,
     parentSignal?: AbortSignal,
@@ -271,6 +282,23 @@ export class Scheduler implements SchedulerOps {
    */
   makeChannel<U>(): Channel<U> {
     return makeChannel<U>();
+  }
+
+  // ---- context-local storage (see context.ts) ----
+
+  /**
+   * Read a context-local value, or `fallback` if `key` was never set in
+   * this invocation. `has`-checked so an explicit `setLocal(key,
+   * undefined)` reads back as `undefined` rather than falling through to
+   * the handle's default.
+   */
+  getLocal(key: symbol, fallback: unknown): unknown {
+    return this.localStore.has(key) ? this.localStore.get(key) : fallback;
+  }
+
+  /** Write a context-local value for the rest of this invocation. */
+  setLocal(key: symbol, value: unknown): void {
+    this.localStore.set(key, value);
   }
 
   // ---- combinator helpers (used by RestateOperations) ----
