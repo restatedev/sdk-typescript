@@ -37,8 +37,15 @@ import { Duplex } from "node:stream";
  * Wrap an established (TLS) socket in a plain Duplex so Node's http2 server
  * treats the connection as cleartext prior-knowledge HTTP/2. See the module
  * header for why this exists.
+ *
+ * `inboundTransform`, when given, filters every chunk received from the
+ * peer before the HTTP/2 session sees it (used for the `:authority` shim —
+ * see h2shim.ts). It may buffer internally and return an empty Buffer.
  */
-export function makePlainBridge(socket: Duplex): Duplex {
+export function makePlainBridge(
+  socket: Duplex,
+  inboundTransform?: (chunk: Buffer) => Buffer
+): Duplex {
   const bridge = new Duplex({
     read() {
       socket.resume();
@@ -57,7 +64,9 @@ export function makePlainBridge(socket: Duplex): Duplex {
   });
 
   socket.on("data", (chunk: Buffer) => {
-    if (!bridge.push(chunk)) socket.pause();
+    const data = inboundTransform ? inboundTransform(chunk) : chunk;
+    if (data.length === 0) return;
+    if (!bridge.push(data)) socket.pause();
   });
   socket.on("end", () => {
     bridge.push(null);

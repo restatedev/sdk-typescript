@@ -46,6 +46,7 @@ import type { ResolvedOptions } from "./options.js";
 import { buildTlsConnectOptions } from "./options.js";
 import type { Target } from "./targets.js";
 import { makePlainBridge } from "./bridge.js";
+import { createAuthorityShim } from "./h2shim.js";
 import {
   performHandshake,
   START_TUNNEL_PATH,
@@ -220,10 +221,12 @@ class ConnectionAttempt {
       `tunnel: connected to ${this.target.host}:${this.target.port}, starting handshake`
     );
 
-    // TLS sockets must be wrapped so Node's http2 runs a cleartext
-    // prior-knowledge session (no ALPN was negotiated — see bridge.ts).
-    // A plaintext socket already has that shape.
-    const stream = this.plaintext ? this.socket : makePlainBridge(this.socket);
+    // Every connection goes through the bridge: TLS sockets must be wrapped
+    // so Node's http2 runs a cleartext prior-knowledge session (no ALPN was
+    // negotiated — see bridge.ts), and ALL inbound bytes pass the
+    // :authority shim (the server's control requests omit authority, which
+    // nghttp2 would reject below the JS layer — see h2shim.ts).
+    const stream = makePlainBridge(this.socket, createAuthorityShim());
 
     const h2 = http2.createServer(
       {
