@@ -255,10 +255,20 @@ awaited.
 
 Interrupting a routine that has already finished is a no-op.
 
-Because interrupt also aborts the routine's per-`run` `AbortSignal`, an
-in-flight `run(({ signal }) => fetch(url, { signal }))` inside the
-interrupted routine stops promptly — and only *that* routine's I/O is
-aborted, not its siblings'.
+**Interrupt cascades down the spawn subtree.** Interrupting a task also
+interrupts every routine that task spawned, transitively, with the same
+error — so interrupting a parent tears down the whole subtree it rooted,
+each routine getting the throw at its own next yield (and its own
+in-flight `run` I/O aborted). Scope is by spawn lineage: a child counts
+even if it was handed back to someone else. A routine unrelated to the
+interrupted one (a sibling spawned elsewhere) is untouched. This is the
+nursery/scope behavior — interrupt the root and the whole tree winds
+down.
+
+Because interrupt also aborts each interrupted routine's per-`run`
+`AbortSignal`, an in-flight `run(({ signal }) => fetch(url, { signal }))`
+anywhere in the subtree stops promptly — while routines outside the
+subtree keep their I/O.
 
 ---
 

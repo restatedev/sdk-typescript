@@ -209,7 +209,10 @@ export class Scheduler implements SchedulerOps {
   }
 
   private createFiber<U>(op: Operation<U>): Fiber<U> {
-    const f = new Fiber<U>(op, this);
+    // The fiber advancing right now (if any) is the spawning parent — so
+    // `interrupt` can cascade down the spawn subtree. The root `main`
+    // fiber is created outside any advance, so it has no parent.
+    const f = new Fiber<U>(op, this, this.advancingFiber);
     this.fibers.add(f as Fiber<unknown>);
     this.ready.push(f as Fiber<unknown>);
     return f;

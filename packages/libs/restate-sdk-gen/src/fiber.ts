@@ -119,10 +119,25 @@ export class Fiber<T = unknown> implements WaitTarget<T> {
    * fresh, unaborted signal. Null until the fiber first needs a run signal.
    */
   private runController: AbortController | null = null;
+  /**
+   * Spawn-tree links. `parent` is the fiber that was advancing when this
+   * one was created; `children` are the fibers it spawned (including the
+   * synth fibers behind combinator fallbacks). `interrupt` cascades down
+   * `children`; `finish` prunes from `parent` so the set tracks only live
+   * descendants.
+   */
+  private readonly parent: Fiber<unknown> | null;
+  private readonly children = new Set<Fiber<unknown>>();
 
-  constructor(op: Operation<T>, sched: SchedulerOps) {
+  constructor(
+    op: Operation<T>,
+    sched: SchedulerOps,
+    parent: Fiber<unknown> | null = null
+  ) {
     this.it = op[Symbol.iterator]() as Iterator<unknown, unknown, unknown>;
     this.sched = sched;
+    this.parent = parent;
+    parent?.children.add(this as Fiber<unknown>);
   }
 
   // ---- lifecycle queries ----
@@ -250,6 +265,12 @@ export class Fiber<T = unknown> implements WaitTarget<T> {
   interrupt(err: unknown): void {
     this.runController?.abort(err);
     this.wake({ ok: false, e: err });
+    // Cascade down the spawn subtree: a task's interrupt also interrupts
+    // every routine it spawned (transitively). Synchronous and in-memory,
+    // issued from a fiber advance — same determinism as a single
+    // interrupt. The walk doesn't mutate `children` (interrupt only
+    // wakes; finish/prune happens later in a drain), so iterating is safe.
+    for (const child of this.children) child.interrupt(err);
   }
 
   /**
@@ -416,6 +437,7 @@ export class Fiber<T = unknown> implements WaitTarget<T> {
    */
   private finish(settled: Settled): void {
     this.state = { kind: "done", settled };
+    this.parent?.children.delete(this as Fiber<unknown>);
     const waiters = this.waiters;
     this.waiters = [];
     for (const w of waiters) w(settled);

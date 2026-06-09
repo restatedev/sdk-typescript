@@ -234,6 +234,43 @@ const interruptSvc = service({
       return yield* w;
     },
 
+    // Cascade: interrupting a parent task also interrupts the child it
+    // spawned. Both catch and run journaled cleanup; the parent joins the
+    // child to read its result. The cleanup command sequence must replay
+    // consistently under alwaysReplay.
+    *cascadeInterrupt(): Operation<string> {
+      const parent = spawn(
+        (function* (): Operation<string> {
+          const child = spawn(
+            (function* (): Operation<string> {
+              try {
+                yield* sleep(600000);
+                return "child-completed";
+              } catch (e) {
+                const a = yield* run(async () => "child-cleaned", {
+                  name: "child-cleanup",
+                });
+                return `child:${(e as Error).message}:${a}`;
+              }
+            })()
+          );
+          try {
+            yield* sleep(600000);
+            return "parent-completed";
+          } catch (e) {
+            const a = yield* run(async () => "parent-cleaned", {
+              name: "parent-cleanup",
+            });
+            const cr = yield* child; // child was interrupted via the cascade
+            return `parent:${(e as Error).message}:${a}|${cr}`;
+          }
+        })()
+      );
+      yield* sleep(50);
+      parent.interrupt(new Error("boom")); // cascades to child
+      return yield* parent;
+    },
+
     // Combinator + interrupt at the journal level: interrupt one input of
     // an allSettled; it is recorded rejected, the other fulfilled.
     *interruptCombinatorInput(): Operation<string> {
@@ -300,6 +337,13 @@ describe.each(modes)("interrupt — $name mode", ({ alwaysReplay }) => {
   test("interrupting one input of allSettled: rejected for it, fulfilled for the other", async () => {
     const c = clients.client(ingress, interruptSvc);
     expect(await c.interruptCombinatorInput()).toBe("rej:boom|ok:two");
+  });
+
+  test("interrupt cascades to a spawned child; both run journaled cleanup", async () => {
+    const c = clients.client(ingress, interruptSvc);
+    expect(await c.cascadeInterrupt()).toBe(
+      "parent:boom:parent-cleaned|child:boom:child-cleaned"
+    );
   });
 
   test("self-interrupt: the throw lands at the worker's next yield and replays consistently", async () => {

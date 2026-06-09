@@ -410,7 +410,7 @@ into `all`/`race`/… exactly like any Future) plus one control method,
 `Future<T>`: their journal fast path has no fiber to target, and their
 fallback runs SDK-authored loop code with no user try/catch.
 
-`task.interrupt(err)` does two things:
+`task.interrupt(err)` does three things:
 
 - **Throws `err` into the routine at its next yield point.** This is the
   cancellation fan-out's mechanism, scoped to one fiber: `wake` the
@@ -423,15 +423,31 @@ fallback runs SDK-authored loop code with no user try/catch.
   `TerminalError` if you want an uncaught interrupt to fail the
   invocation terminally; pass an error your routine recognizes if you
   want it to distinguish "I was interrupted" from "my work threw".
-- **Aborts the routine's in-flight `run` I/O.** Each fiber lazily owns
-  an `AbortController` whose signal is handed to its `run` closures.
-  Interrupt aborts it, so an in-flight `run(({ signal }) => fetch(url, {
-  signal }))` stops promptly instead of running on detached. The signal
-  is a *child* of the scheduler signal, so invocation cancellation /
-  attempt-end still cascade in; but interrupt aborts only the targeted
-  fiber's signal, leaving siblings' in-flight I/O untouched. After a
-  swallowed interrupt the controller is recreated, so a cleanup `run`
-  sees a fresh, unaborted signal.
+- **Cascades down the spawn subtree.** Interrupting a task also
+  interrupts every routine it spawned, transitively, with the same
+  `err`. Each fiber records its `parent` (the fiber advancing when it
+  was created) and its `children`; `interrupt` walks `children` depth-
+  first. The walk is synchronous and in-memory, issued from a fiber
+  advance, so it inherits single-interrupt determinism. Scope is by
+  *spawn lineage*: a child counts even if it was handed back to or is
+  awaited by someone else — so an interrupt tears down the whole subtree
+  it rooted, like a structured-concurrency scope. (Invocation
+  cancellation is unaffected — it already broadcasts to every fiber.)
+  Combinator synth fibers (`race`/`all`/… fallbacks) are children of the
+  routine that ran the combinator, so the cascade tears them down too —
+  which is why interrupting a routine blocked inside a combinator no
+  longer orphans the combinator's driver under `"join"`.
+- **Aborts in-flight `run` I/O — for the whole subtree.** Each fiber
+  lazily owns an `AbortController` whose signal is handed to its `run`
+  closures. Interrupt aborts it, so an in-flight `run(({ signal }) =>
+  fetch(url, { signal }))` stops promptly instead of running on
+  detached. Because each cascaded `interrupt` aborts that fiber's own
+  signal, the I/O abort follows the subtree. The signal is a *child* of
+  the scheduler signal, so invocation cancellation / attempt-end still
+  cascade in; but a targeted interrupt aborts only the subtree's signals,
+  leaving unrelated siblings' I/O untouched. After a swallowed interrupt
+  the controller is recreated, so a cleanup `run` sees a fresh, unaborted
+  signal.
 
 Semantics worth pinning down:
 

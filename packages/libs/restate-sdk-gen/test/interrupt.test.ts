@@ -1128,35 +1128,9 @@ describe("interrupt — mixed with combinators", () => {
     d1.resolve("never");
   });
 
-  test("under join, interrupting a routine inside a combinator: the orphaned synth fiber finishes once its inputs settle", async () => {
-    // Interrupting a routine blocked inside race() throws into the OUTER
-    // routine (it recovers), but race's synthesized inner fiber is not
-    // interrupted. Under "join" the scheduler waits for that inner fiber
-    // too — it finishes as soon as the combinator's inputs settle (the
-    // production case; a never-settling input would hang under join, same
-    // as any race loser).
-    const sched = new Scheduler(testLib, undefined, { onMainExit: "join" });
-    const other = deferred<string>();
-    const op = gen(function* () {
-      const w = spawn(
-        gen(function* () {
-          try {
-            return yield* sched.race([
-              sched.makeJournalFuture(deferred<string>().promise), // loser
-              sched.makeJournalFuture(other.promise),
-            ]);
-          } catch (e) {
-            return `recovered:${(e as Error).message}`;
-          }
-        })
-      );
-      yield* tick(sched);
-      w.interrupt(new Error("stop")); // W recovers; race synth orphaned
-      queueMicrotask(() => other.resolve("x")); // lets the synth's race win + finish
-      return yield* w;
-    });
-    expect(await sched.run(op)).toBe("recovered:stop");
-  });
+  // (interrupting a routine blocked inside a combinator under "join" is
+  //  covered in the cascade block: the synth driver is a child of the
+  //  routine, so the cascade tears it down — no orphan, no hang.)
 
   test("interrupting one input of all(): all short-circuits with the interrupt error", async () => {
     const sched = new Scheduler(testLib);
@@ -1259,6 +1233,288 @@ describe("interrupt — interaction with onMainExit", () => {
     });
     expect(await sched.run(op)).toBe("main-done");
     expect(finallyRan).toBe(true);
+  });
+});
+
+describe("interrupt — cascade to the spawn subtree", () => {
+  // interrupt(task) also interrupts every routine the task spawned,
+  // transitively, with the same error. The cascade follows spawn lineage
+  // and stays inside the subtree.
+
+  test("cascades to a spawned child (the parent's join of the child terminates)", async () => {
+    // Without the cascade this hangs: the parent joins a child parked on
+    // a never-settling source. The cascade interrupts the child too.
+    const sched = new Scheduler(testLib);
+    const events: string[] = [];
+    const op = gen(function* () {
+      const p = spawn(
+        gen(function* () {
+          const c = spawn(
+            gen(function* () {
+              try {
+                yield* sched.makeJournalFuture(deferred<void>().promise);
+              } catch (e) {
+                events.push(`C:${(e as Error).message}`);
+              }
+            })
+          );
+          try {
+            yield* sched.makeJournalFuture(deferred<void>().promise);
+          } catch (e) {
+            events.push(`P:${(e as Error).message}`);
+          }
+          yield* c; // only completes because the cascade interrupted c
+          return "p-done";
+        })
+      );
+      yield* tick(sched);
+      p.interrupt(new Error("boom"));
+      return yield* p;
+    });
+    expect(await sched.run(op)).toBe("p-done");
+    expect(events.sort()).toEqual(["C:boom", "P:boom"]);
+  });
+
+  test("cascade is transitive (grandchild) and the same error reaches the whole subtree", async () => {
+    const sched = new Scheduler(testLib);
+    const seen: string[] = [];
+    const never = () => deferred<void>().promise;
+    const op = gen(function* () {
+      const p = spawn(
+        gen(function* () {
+          const child = spawn(
+            gen(function* () {
+              const grand = spawn(
+                gen(function* () {
+                  try {
+                    yield* sched.makeJournalFuture(never());
+                  } catch (e) {
+                    seen.push(`G:${(e as Error).message}`);
+                  }
+                })
+              );
+              try {
+                yield* sched.makeJournalFuture(never());
+              } catch (e) {
+                seen.push(`C:${(e as Error).message}`);
+              }
+              yield* grand;
+            })
+          );
+          try {
+            yield* sched.makeJournalFuture(never());
+          } catch (e) {
+            seen.push(`P:${(e as Error).message}`);
+          }
+          yield* child;
+          return "ok";
+        })
+      );
+      yield* tick(sched);
+      p.interrupt(new Error("x"));
+      return yield* p;
+    });
+    expect(await sched.run(op)).toBe("ok");
+    expect(seen.sort()).toEqual(["C:x", "G:x", "P:x"]);
+  });
+
+  test("cascade is scoped: a routine spawned outside the subtree is untouched", async () => {
+    const sched = new Scheduler(testLib);
+    const seen: string[] = [];
+    const never = () => deferred<void>().promise;
+    const op = gen(function* () {
+      // Sibling spawned by main, NOT by p — must survive p's interrupt.
+      const sibling = spawn(
+        gen(function* () {
+          try {
+            yield* sched.makeJournalFuture(never());
+            return "sib-done";
+          } catch (e) {
+            seen.push(`SIB:${(e as Error).message}`);
+            return "sib-int";
+          }
+        })
+      );
+      const p = spawn(
+        gen(function* () {
+          const c = spawn(
+            gen(function* () {
+              try {
+                yield* sched.makeJournalFuture(never());
+              } catch (e) {
+                seen.push(`C:${(e as Error).message}`);
+              }
+            })
+          );
+          try {
+            yield* sched.makeJournalFuture(never());
+          } catch (e) {
+            seen.push(`P:${(e as Error).message}`);
+          }
+          yield* c;
+        })
+      );
+      yield* tick(sched);
+      p.interrupt(new Error("x"));
+      yield* p;
+      // sibling untouched by p's cascade; interrupt it separately to finish.
+      sibling.interrupt(new Error("y"));
+      return yield* sibling;
+    });
+    expect(await sched.run(op)).toBe("sib-int");
+    expect(seen.sort()).toEqual(["C:x", "P:x", "SIB:y"]);
+  });
+
+  test("each descendant catches independently; one may recover while another propagates", async () => {
+    const sched = new Scheduler(testLib);
+    const recover = deferred<string>();
+    const op = gen(function* () {
+      const p = spawn(
+        gen(function* () {
+          const c = spawn(
+            gen(function* () {
+              try {
+                yield* sched.makeJournalFuture(deferred<void>().promise);
+                return "c-done";
+              } catch {
+                // recover with more journaled-style work
+                return yield* sched.makeJournalFuture(recover.promise);
+              }
+            })
+          );
+          try {
+            yield* sched.makeJournalFuture(deferred<void>().promise);
+          } catch {
+            // swallow
+          }
+          return `p:${yield* c}`;
+        })
+      );
+      yield* tick(sched);
+      p.interrupt(new Error("boom"));
+      queueMicrotask(() => recover.resolve("recovered"));
+      return yield* p;
+    });
+    expect(await sched.run(op)).toBe("p:recovered");
+  });
+
+  test("interrupting a child does not reach the parent (cascade is downward only)", async () => {
+    const sched = new Scheduler(testLib);
+    const seen: string[] = [];
+    const dP = deferred<string>();
+    const holder: { c?: { interrupt(err?: unknown): void } } = {};
+    const op = gen(function* () {
+      const p = spawn(
+        gen(function* () {
+          const c = spawn(
+            gen(function* () {
+              try {
+                yield* sched.makeJournalFuture(deferred<void>().promise);
+              } catch (e) {
+                seen.push(`C:${(e as Error).message}`);
+              }
+            })
+          );
+          holder.c = c;
+          // p keeps running on its own source, unaffected by c's interrupt.
+          const v = yield* sched.makeJournalFuture(dP.promise);
+          yield* c;
+          return `p:${v}`;
+        })
+      );
+      yield* tick(sched);
+      holder.c?.interrupt(new Error("child-only"));
+      queueMicrotask(() => dP.resolve("alive"));
+      return yield* p;
+    });
+    expect(await sched.run(op)).toBe("p:alive");
+    expect(seen).toEqual(["C:child-only"]);
+  });
+
+  test("under join, interrupting a routine blocked inside a combinator terminates via cascade (no input need settle)", async () => {
+    // The combinator's synthesized driver fiber is a child of the routine
+    // running the combinator, so the cascade interrupts it too — it no
+    // longer orphans and hangs under join even though no input settles.
+    const sched = new Scheduler(testLib, undefined, { onMainExit: "join" });
+    const op = gen(function* () {
+      const w = spawn(
+        gen(function* () {
+          try {
+            return yield* sched.race([
+              sched.makeJournalFuture(deferred<string>().promise), // never
+              sched.makeJournalFuture(deferred<string>().promise), // never
+            ]);
+          } catch (e) {
+            return `recovered:${(e as Error).message}`;
+          }
+        })
+      );
+      yield* tick(sched);
+      w.interrupt(new Error("boom"));
+      return yield* w;
+    });
+    expect(await sched.run(op)).toBe("recovered:boom");
+  });
+
+  test("interrupting an ancestor cascades back into the interrupting fiber (self via cascade)", async () => {
+    const sched = new Scheduler(testLib);
+    const seen: string[] = [];
+    const holder: { ancestor?: { interrupt(err?: unknown): void } } = {};
+    const op = gen(function* () {
+      const a = spawn(
+        gen(function* () {
+          const inner = spawn(
+            gen(function* () {
+              try {
+                // Interrupt our own ancestor — the cascade comes back to us.
+                holder.ancestor?.interrupt(new Error("up"));
+                yield* sched.makeJournalFuture(deferred<void>().promise);
+                return "inner-done";
+              } catch (e) {
+                seen.push(`INNER:${(e as Error).message}`);
+                return "inner-int";
+              }
+            })
+          );
+          try {
+            yield* sched.makeJournalFuture(deferred<void>().promise);
+          } catch (e) {
+            seen.push(`A:${(e as Error).message}`);
+          }
+          return yield* inner;
+        })
+      );
+      holder.ancestor = a;
+      return yield* a;
+    });
+    expect(await sched.run(op)).toBe("inner-int");
+    expect(seen.sort()).toEqual(["A:up", "INNER:up"]);
+  });
+
+  test("a child that finished before the interrupt is a no-op (pruned)", async () => {
+    const sched = new Scheduler(testLib);
+    const op = gen(function* () {
+      const p = spawn(
+        gen(function* () {
+          const c = spawn(
+            gen(function* () {
+              return "c-done";
+            })
+          );
+          const cv = yield* c; // drive c to completion (now pruned)
+          try {
+            yield* sched.makeJournalFuture(deferred<void>().promise);
+            return "p-done";
+          } catch (e) {
+            return `p:${(e as Error).message}:${cv}`;
+          }
+        })
+      );
+      yield* tick(sched);
+      p.interrupt(new Error("boom")); // cascade finds no live children
+      return yield* p;
+    });
+    expect(await sched.run(op)).toBe("p:boom:c-done");
   });
 });
 
