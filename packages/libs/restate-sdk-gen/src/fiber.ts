@@ -32,6 +32,29 @@
 //                         fiber.awaitCompletion(waiter), fiber.isDone(),
 //                         fiber.settledValue().
 //   Fiber → Scheduler:    sched.markReady(this), sched.markDone(this).
+//
+// Invariants (the rules that make the rest reason-about-able):
+//
+//   I1. A generator step runs ONLY inside `advance`, which the scheduler
+//       calls ONLY from `drainReady`. `wake`, source `fire` callbacks,
+//       and `finish`'s waiter notifications never run a step — they only
+//       set state to `ready` and enqueue. So at most one fiber's body
+//       runs at any instant (cooperative, single-threaded).
+//   I2. `wake` is the sole transition into `ready`, and it bumps `epoch`
+//       — the park-episode id. A waiter registered while parked is valid
+//       only for that episode; once the fiber wakes (epoch advances) the
+//       waiter is void. `epochGuarded` enforces this.
+//   I3. A parked fiber normally leaves `parked` only when one of its own
+//       sources fires. `interrupt`/cancellation are the exceptions: they
+//       wake it OUT OF BAND, reusing the same resume path. The epoch
+//       guard (stale waiters) and the `wokenDuringStep` check in
+//       `advance` (self-interrupt) exist solely to keep those out-of-band
+//       wakes safe.
+//   I4. Journal-source fires need no epoch guard: the scheduler
+//       re-collects parked sources fresh every tick, so a journal source
+//       fires only in the tick it was collected, before the owner can
+//       move on. Local waiters (channels, sibling fibers) are pruned by
+//       nothing, so they MUST be epoch-guarded.
 
 import type { Operation, PrimitiveOp, LeafNode } from "./operation.js";
 import { opTag } from "./operation.js";
@@ -74,15 +97,10 @@ export class Fiber<T = unknown> implements WaitTarget<T> {
   private state: FiberState = { kind: "ready", resume: null };
   private waiters: Waiter[] = [];
   /**
-   * Monotonic park-episode counter, bumped on every `wake`. Each source
-   * waiter captures the epoch at registration and no-ops if the fiber
-   * has since woken (epoch advanced). This is what makes `interrupt`
-   * safe: an interrupted fiber leaves its park and re-parks elsewhere,
-   * but the local waiters it left on its old targets (channels, sibling
-   * fibers — never pruned, fired whenever the target settles) would
-   * otherwise wake it again with a stale value and clobber the new park.
-   * The guard generalizes the old per-AwaitRace `won` flag (within-tick
-   * dedup) to a persistent, per-fiber, cross-episode guard.
+   * Monotonic park-episode id, bumped on every `wake` (invariant I2).
+   * Consumed by `epochGuarded` (waiter validity) and `wokenDuringStep`
+   * (self-interrupt detection). Generalizes the old per-AwaitRace `won`
+   * flag into a persistent, per-fiber guard.
    */
   private epoch = 0;
   /**
@@ -164,6 +182,33 @@ export class Fiber<T = unknown> implements WaitTarget<T> {
     this.epoch++;
     this.state = { kind: "ready", resume };
     this.sched.markReady(this);
+  }
+
+  /**
+   * Wrap a handler as a waiter that fires only while the fiber is still
+   * in the park episode that registered it (see `epoch`, invariant I2).
+   * A waiter left on a target after the fiber moved on — a re-park after
+   * interrupt, or a losing race source — becomes a no-op. This is the
+   * single mechanism behind both the AwaitRace "first source wins" dedup
+   * and the cross-episode stale-waiter guard.
+   */
+  private epochGuarded(handler: (s: Settled) => void): Waiter {
+    const at = this.epoch;
+    return (s) => {
+      if (this.epoch !== at) return;
+      handler(s);
+    };
+  }
+
+  /**
+   * Whether a re-entrant `wake` fired during the step that began at
+   * `epochBefore` — i.e. the fiber interrupted *itself* while advancing
+   * (the only wake that can target the currently-advancing fiber). It
+   * leaves a fresh resume in `this.state` to deliver at this yield rather
+   * than parking on the op the body just produced.
+   */
+  private wokenDuringStep(epochBefore: number): boolean {
+    return this.epoch !== epochBefore && this.state.kind === "ready";
   }
 
   /**
@@ -250,9 +295,8 @@ export class Fiber<T = unknown> implements WaitTarget<T> {
         }
 
         // Self-interrupt during the step: deliver its resume at this
-        // yield point (the next step throws it in) instead of parking on
-        // the op the body just yielded.
-        if (this.epoch !== epochBefore && this.state.kind === "ready") {
+        // yield point instead of parking on the op the body just yielded.
+        if (this.wokenDuringStep(epochBefore)) {
           resume = this.state.resume;
           continue;
         }
@@ -293,22 +337,22 @@ export class Fiber<T = unknown> implements WaitTarget<T> {
   private parkOnLeaf(leaf: LeafNode<unknown>): Settled | null {
     const backing: Backing<unknown> = getBacking(leaf.future);
     if (backing.kind === "journal") {
+      // Journal fires need no epoch guard (invariant I4): the scheduler
+      // re-collects parked sources fresh each tick, so this source only
+      // fires in the tick it was collected, before the fiber can move on.
       this.state = {
         kind: "parked",
         promises: [{ promise: backing.promise, fire: (s) => this.wake(s) }],
       };
       return null;
     }
-    // Local-backed: ask the target (fiber, channel, etc.) to either
-    // give us its settled outcome (sync short-circuit) or register us
-    // as a waiter. The waiter is epoch-guarded: if we're interrupted and
-    // re-park before the target settles, this stale waiter (which the
-    // target never prunes) must not wake the moved-on fiber.
-    const epochAtPark = this.epoch;
-    const settled = backing.target.awaitCompletion((s) => {
-      if (this.epoch !== epochAtPark) return;
-      this.wake(s);
-    });
+    // Local-backed: ask the target (fiber, channel, …) for its settled
+    // outcome (sync short-circuit) or register an epoch-guarded waiter —
+    // the target never prunes it, so if we're interrupted and re-park it
+    // must not wake the moved-on fiber.
+    const settled = backing.target.awaitCompletion(
+      this.epochGuarded((s) => this.wake(s))
+    );
     if (settled !== null) return settled;
     this.state = { kind: "parked", promises: [] };
     return null;
@@ -341,17 +385,16 @@ export class Fiber<T = unknown> implements WaitTarget<T> {
       }
     }
 
-    const epochAtPark = this.epoch;
     const promises: PromiseSource[] = [];
     for (let i = 0; i < futures.length; i++) {
       const idx = i;
       const b = getBacking(futures[i]!);
-      const fireOnce = (settled: Settled) => {
-        // Stale if the fiber has woken since this park (another source
-        // already won this race, or an interrupt moved us on).
-        if (this.epoch !== epochAtPark) return;
-        this.wake({ ok: true, v: { index: idx, settled } });
-      };
+      // Epoch-guarded so only the first source to settle wakes the fiber
+      // (later same-tick fires see the bumped epoch and no-op), and a
+      // loser surviving an interrupt-and-re-park can't fire onto it.
+      const fireOnce = this.epochGuarded((settled) =>
+        this.wake({ ok: true, v: { index: idx, settled } })
+      );
       if (b.kind === "local") {
         // The target may already be done — but we sync-checked above
         // and short-circuited if so. So awaitCompletion here will queue

@@ -27,6 +27,21 @@
 //
 // The fiber's job is execution. The boundary between Scheduler and
 // Fiber is narrow (see `fiber.ts` and `SchedulerOps` interface).
+//
+// Invariants:
+//
+//   S1. The ONLY async suspension point is the single `await lib.race`
+//       per main-loop iteration. In production `lib.race` is a journaled
+//       combinator, so its winner replays identically — this is the
+//       determinism boundary. Drains, dispatch, and wakes are all
+//       synchronous between two such awaits.
+//   S2. Fibers advance ONLY inside `drainReady`. `advancingFiber` names
+//       the one currently advancing (so `run` can hand it a per-fiber
+//       signal); it is null between advances.
+//   S3. Invocation cancellation is observed as the race promise
+//       rejecting. It is fanned out to every parked source's `fire`,
+//       reusing the normal wake path; the AbortController is aborted
+//       then replaced so post-cancel recovery sees a fresh signal.
 
 import type { Awaitable, AwaitableLib } from "./awaitable.js";
 import {
