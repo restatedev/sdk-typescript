@@ -72,7 +72,8 @@ Imported directly from `@restatedev/restate-sdk-gen`:
 - **`sleep(duration)`** — journaled timer.
 - **`awakeable<T>()`** — journaled awakeable; returns `{ id, promise: Future<T> }`.
 - **`channel<T>()`** — single-shot in-memory `Channel<T>`.
-- **`state<T>()` / `sharedState<T>()`** — typed key-value store.
+- **`state<T>()` / `sharedState<T>()`** — typed key-value store (durable, survives across invocations).
+- **`contextLocal<T>(default?)`** — ambient, in-memory storage scoped to the current invocation and shared by every fiber under it. Set once near the top, read anywhere downstream without threading a parameter. Not durable — for state that must outlive the invocation, use `state()`.
 - **`serviceClient` / `objectClient` / `workflowClient`** (+ `*SendClient`) — typed RPC into other Restate services.
 - **`genericCall` / `genericSend`** — untyped RPC.
 - **`cancel(invocationId)`** — cancel another invocation.

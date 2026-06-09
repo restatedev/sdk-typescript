@@ -550,6 +550,56 @@ journal source to the main-loop race.
 
 ---
 
+## Context-local storage
+
+`contextLocal()` mints an ambient key/value slot — set once, read
+anywhere downstream without threading a parameter. It's the in-memory
+counterpart to `state()`: where `state()` is durable and survives across
+invocations, a context-local lives only for the current invocation.
+
+**Scope: global per invocation, not per fiber.** The bag lives on the
+`Scheduler` (one per `execute()` call, like `fibers`/`ready`), so every
+fiber under that scheduler — main, spawns, and the synthetic fibers
+behind combinator fallbacks — reaches the same bag. There is no
+inheritance and no per-strand isolation.
+
+This was a deliberate choice over a per-fiber, spawn-tree-inherited model
+(the Kotlin-`CoroutineContext` / Go-`context.Context` flavor):
+
+- Within a single fiber you don't need ambient storage at all — a closure
+  variable already threads a value through any depth of nested `gen`
+  bodies, since the body runs synchronously between yields. The feature
+  only earns its keep across the spawn boundary, and the dominant
+  cross-fiber use ("set a correlation id / tenant at the top, read it in
+  helpers and workers") wants *sharing*, which global gives directly.
+- Global stays out of the delicate fiber/scheduler core: a `Map` on the
+  scheduler plus two accessors, touching none of the I1–I4 / S1–S3
+  invariants, the interrupt cascade, or the re-homing on `finish`. A
+  per-fiber model would re-open all of that (snapshot-vs-live, write
+  isolation, sibling isolation, interaction with re-homing) for semantics
+  the common case doesn't ask for.
+- It's forward-compatible: the `get`/`set` surface is identical whether
+  resolution reads one bag or walks the fiber tree, so a per-strand
+  variant could be added later (as a separate handle kind) without
+  changing existing call sites. Only one narrow behavior would differ —
+  a write made *after* a child is spawned, read back in that child, is
+  visible under global and would not be under a snapshot-inherited model.
+
+**Determinism.** The bag is in-memory and never journaled, which is safe
+because a value re-derived by deterministic workflow code is itself
+deterministic: on replay the body re-runs from the top and re-`set`s the
+same values, and fibers advance in a replay-stable order, so reads are
+stable. The same discipline as a plain local applies — don't store a
+non-deterministically-obtained value (a bare `Date.now()`, a raw network
+result) without routing it through `run`/the journal first.
+
+The one sharp edge, documented for users: because the bag is shared,
+concurrently-interleaving routines that write the *same* slot clobber
+each other (last writer as of the reader's advance wins). Fine for
+set-once-read-everywhere; not a substitute for per-routine scratch.
+
+---
+
 ## What's deliberately not in the design
 
 A few features that come up in cancellation discussions and aren't

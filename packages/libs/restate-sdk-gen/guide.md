@@ -612,6 +612,70 @@ receive Future is reused everywhere.
 
 ---
 
+## Context-local storage
+
+Sometimes a value is needed deep inside the call tree — a correlation
+id, a tenant, a logging prefix — but threading it through every helper
+as a parameter is noise. `contextLocal()` gives you an ambient slot:
+set it once near the top, read it anywhere downstream.
+
+```ts
+import { contextLocal, gen, run, spawn } from "@restatedev/restate-sdk-gen";
+
+// Define the slot once, at module scope — minting touches no fiber.
+const requestId = contextLocal<string>();           // string | undefined
+const tenant = contextLocal<string>("public");      // with a default
+
+const auditedStep = (label: string) =>
+  gen(function* () {
+    // Reads the ambient slots — nothing passed them down.
+    const line = `[req ${requestId.get()} | ${tenant.get()}] ${label}`;
+    return yield* run(async () => line, { name: label });
+  });
+
+const handler = gen(function* () {
+  requestId.set(yield* run(() => newRequestId(), { name: "reqid" }));
+  const a = yield* auditedStep("validate");        // sees requestId
+  const b = yield* spawn(auditedStep("notify"));    // so does a spawned routine
+  return [a, b];
+});
+```
+
+The slot is scoped to **one invocation** (`execute` call) and shared by
+**every fiber under it** — the main routine, everything it `spawn`s, and
+the combinator fallbacks. There is no per-routine isolation and no
+inheritance: it is one bag for the whole invocation. Concurrent
+invocations in the same process never see each other's bags.
+
+`get()` returns the value last `set()` this invocation, or the default
+passed to `contextLocal` (or `undefined` if none).
+
+A few things to keep in mind:
+
+- **It is in-memory, not durable.** The bag lives only for the
+  invocation; it is never journaled. For values that must outlive the
+  invocation (and be visible to later invocations of the same virtual
+  object) use `state()` / `sharedState()` instead.
+- **Set deterministically.** A value re-derived by deterministic
+  workflow code survives replay/suspension unchanged (the body re-runs
+  and re-`set`s it the same way). Don't stuff a raw `Date.now()` or an
+  un-journaled network result into a slot any more than you would into a
+  plain local — route it through `run` first.
+- **Shared means shared.** Because the bag is global to the invocation,
+  two concurrently-interleaving routines that write the *same* slot
+  clobber each other (a reader sees whichever advanced last). That's
+  fine for the common "set once, read everywhere" use; it just isn't
+  per-strand scratch space.
+- **Call from the body, not from a `run` closure.** `get`/`set` work on
+  the fiber's synchronous span — directly in the generator body or a
+  spawned routine's body. Calling them from inside an `ops.run` action
+  closure (or any async callback) runs off-advance and throws "outside
+  an active fiber", just like any other free function. To capture a
+  journaled value, set it in the body from the result:
+  `slot.set(yield* run(() => fetchTenant(), { name: "tenant" }))`.
+
+---
+
 ## Working with futures defensively
 
 ### Future yielded twice gives the same value
@@ -837,6 +901,8 @@ no `run` is invoked until the iterator runs inside `execute()`.
 | Cancel an in-flight HTTP call | pass `signal` to `fetch` in `run` |
 | React to invocation cancel | catch `CancelledError` at yield site |
 | Pass an event from outside | channel — `send` from outside, `receive` inside |
+| Ambient value for this invocation | `contextLocal()` — set once, read anywhere |
+| A value that must outlive the invocation | `state()` / `sharedState()` (durable) |
 
 ---
 

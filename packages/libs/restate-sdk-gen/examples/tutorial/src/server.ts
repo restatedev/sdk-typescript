@@ -25,6 +25,8 @@
 //   /clients           — typed service/object clients + awakeable cross-handler
 //                        (also: /greeter, /awakeableHolder)
 //   /blockAndWait      — workflow with a durable promise
+//   /ambient           — context-local storage: request-scoped ambient
+//                        values shared across helpers and spawned routines
 //
 // See ../README.md for curl invocations grouped by tier.
 
@@ -40,6 +42,7 @@ import { clientsSvc, greeter, awakeableHolder } from "./08-clients.js";
 import { blockAndWaitWorkflow } from "./09-workflows.js";
 import { ifaceServices } from "./10-ifaces.js";
 import { userService, echoService } from "./11-serdes.js";
+import { ambient } from "./12-context.js";
 
 restate.serve({
   services: [
@@ -57,5 +60,6 @@ restate.serve({
     ...ifaceServices,
     userService,
     echoService,
+    ambient,
   ],
 });
