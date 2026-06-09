@@ -186,6 +186,13 @@ export class Fiber<T = unknown> implements WaitTarget<T> {
    * swallowable / non-sticky). A done fiber is left untouched (`wake`
    * no-ops). Same machinery as the cancellation fan-out, scoped to one
    * fiber.
+   *
+   * Self-interrupt (a fiber interrupting its own task while advancing)
+   * is uniform: the re-entrant `wake` fires during the fiber's own
+   * step, and `advance` detects the epoch bump and delivers the throw at
+   * the fiber's next yield rather than parking (see `advance`). If the
+   * body returns before reaching another yield, the self-interrupt is
+   * moot — there is no yield point to throw at.
    */
   interrupt(err: unknown): void {
     this.runController?.abort(err);
@@ -211,6 +218,14 @@ export class Fiber<T = unknown> implements WaitTarget<T> {
     try {
       let resume: Settled | null = this.state.resume;
       while (true) {
+        // Snapshot the epoch around the step. A re-entrant `wake` during
+        // user code (the fiber interrupting *itself* — the only way a
+        // wake can target the fiber that is currently advancing) bumps
+        // the epoch and installs a fresh resume in `this.state`. Stale
+        // epoch-guarded waiters from a prior park return early without
+        // waking, so they never bump it here — an epoch change across
+        // the step means, unambiguously, a self-interrupt.
+        const epochBefore = this.epoch;
         let next: IteratorResult<unknown, unknown>;
         try {
           next = stepIterator(this.it, resume);
@@ -219,8 +234,18 @@ export class Fiber<T = unknown> implements WaitTarget<T> {
           return;
         }
         if (next.done) {
+          // The body returned before reaching another yield, so a
+          // self-interrupt has no yield point to land on and is moot.
           this.finish({ ok: true, v: next.value });
           return;
+        }
+
+        // Self-interrupt during the step: deliver its resume at this
+        // yield point (the next step throws it in) instead of parking on
+        // the op the body just yielded.
+        if (this.epoch !== epochBefore && this.state.kind === "ready") {
+          resume = this.state.resume;
+          continue;
         }
 
         const op = next.value as PrimitiveOp<unknown>;

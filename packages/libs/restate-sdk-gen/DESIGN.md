@@ -439,6 +439,12 @@ Semantics worth pinning down:
   point left.
 - **Double interrupt** before the next advance — last-write-wins, not
   queued.
+- **Self-interrupt** — a routine interrupting its own task is uniform
+  with interrupting any other: the throw lands at its next yield. The
+  re-entrant `wake` fires during the routine's own step; `advance`
+  detects the epoch bump and delivers the resume instead of parking on
+  the op the body just yielded. If the body returns before reaching
+  another yield, the self-interrupt is moot (no yield point to land on).
 - **Same-tick precedence** — if the routine had already been woken with
   a value (its awaited source just settled) but hasn't advanced yet, the
   interrupt wins: the value the generator never observed is discarded.

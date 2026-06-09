@@ -322,6 +322,157 @@ describe("interrupt — swallow / recover / repeat", () => {
   });
 });
 
+describe("interrupt — self-interrupt", () => {
+  // A fiber interrupting its OWN task while it is the currently-advancing
+  // fiber. The throw must be delivered at the fiber's next yield, uniform
+  // with interrupting any other task — even though the wake fires
+  // re-entrantly during the fiber's own advance.
+
+  test("self-interrupt then yield a resolvable source: the interrupt wins at that yield", async () => {
+    const sched = new Scheduler(testLib);
+    const d = deferred<string>();
+    const holder: { self?: { interrupt(err?: unknown): void } } = {};
+    const op = gen(function* () {
+      const w = spawn(
+        gen(function* () {
+          try {
+            holder.self?.interrupt(new Error("self"));
+            const v = yield* sched.makeJournalFuture(d.promise);
+            return `completed:${v}`; // must NOT happen
+          } catch (e) {
+            return `caught:${(e as Error).message}`;
+          }
+        })
+      );
+      holder.self = w;
+      yield* tick(sched);
+      queueMicrotask(() => d.resolve("val"));
+      return yield* w;
+    });
+    expect(await sched.run(op)).toBe("caught:self");
+  });
+
+  test("self-interrupt then yield a never-resolving source: terminates via catch (no hang)", async () => {
+    const sched = new Scheduler(testLib);
+    const never = deferred<string>();
+    const holder: { self?: { interrupt(err?: unknown): void } } = {};
+    const op = gen(function* () {
+      const w = spawn(
+        gen(function* () {
+          try {
+            holder.self?.interrupt(new Error("self"));
+            const v = yield* sched.makeJournalFuture(never.promise);
+            return `completed:${v}`;
+          } catch (e) {
+            return `caught:${(e as Error).message}`;
+          }
+        })
+      );
+      holder.self = w;
+      yield* tick(sched);
+      return yield* w; // must terminate
+    });
+    expect(await sched.run(op)).toBe("caught:self");
+  });
+
+  test("self-interrupt with no further yield is moot (the fiber returns normally)", async () => {
+    const sched = new Scheduler(testLib);
+    const holder: { self?: { interrupt(err?: unknown): void } } = {};
+    const op = gen(function* () {
+      const w = spawn(
+        gen(function* () {
+          holder.self?.interrupt(new Error("self"));
+          return "completed"; // no yield after the interrupt → nothing to throw at
+        })
+      );
+      holder.self = w;
+      yield* tick(sched);
+      return yield* w;
+    });
+    expect(await sched.run(op)).toBe("completed");
+  });
+
+  test("no-arg self-interrupt throws the default InterruptedError at the next yield", async () => {
+    const sched = new Scheduler(testLib);
+    const d = deferred<void>();
+    const holder: { self?: { interrupt(err?: unknown): void } } = {};
+    const op = gen(function* () {
+      const w = spawn(
+        gen(function* () {
+          try {
+            holder.self?.interrupt();
+            yield* sched.makeJournalFuture(d.promise);
+            return "completed";
+          } catch (e) {
+            return e instanceof InterruptedError ? "interrupted" : "other";
+          }
+        })
+      );
+      holder.self = w;
+      yield* tick(sched);
+      return yield* w;
+    });
+    expect(await sched.run(op)).toBe("interrupted");
+    d.resolve();
+  });
+
+  test("self-interrupt can be caught and recovered from", async () => {
+    const sched = new Scheduler(testLib);
+    const d = deferred<void>();
+    const recover = deferred<string>();
+    const holder: { self?: { interrupt(err?: unknown): void } } = {};
+    const op = gen(function* () {
+      const w = spawn(
+        gen(function* () {
+          try {
+            holder.self?.interrupt(new Error("self"));
+            yield* sched.makeJournalFuture(d.promise);
+          } catch {
+            // swallowed
+          }
+          return yield* sched.makeJournalFuture(recover.promise);
+        })
+      );
+      holder.self = w;
+      yield* tick(sched);
+      queueMicrotask(() => recover.resolve("recovered"));
+      return yield* w;
+    });
+    expect(await sched.run(op)).toBe("recovered");
+    d.resolve();
+  });
+
+  test("sync work after a self-interrupt runs; the throw lands at the following yield", async () => {
+    const sched = new Scheduler(testLib);
+    const d = deferred<void>();
+    const events: string[] = [];
+    const holder: { self?: { interrupt(err?: unknown): void } } = {};
+    const op = gen(function* () {
+      const w = spawn(
+        gen(function* () {
+          try {
+            holder.self?.interrupt(new Error("self"));
+            events.push("after-interrupt-sync"); // sync work still runs
+            yield* sched.makeJournalFuture(d.promise);
+            events.push("after-yield"); // must NOT happen
+            return "completed";
+          } catch (e) {
+            return `caught:${(e as Error).message}`;
+          }
+        })
+      );
+      holder.self = w;
+      yield* tick(sched);
+      const result = yield* w;
+      return { result, events };
+    });
+    const out = await sched.run(op);
+    expect(out.result).toBe("caught:self");
+    expect(out.events).toEqual(["after-interrupt-sync"]);
+    d.resolve();
+  });
+});
+
 describe("interrupt — same-tick precedence", () => {
   test("a routine handed a value then interrupted in the same advance: interrupt wins", async () => {
     // The sender wakes the receiver with the channel value, then interrupts

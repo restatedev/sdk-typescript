@@ -157,6 +157,30 @@ const interruptSvc = service({
         : `fulfilled:${r.value}`;
     },
 
+    // Self-interrupt: a worker interrupts its own task, then yields. The
+    // throw must land at that yield (delivered via the advance-loop's
+    // re-entrant-wake detection) and replay consistently.
+    *selfInterrupt(): Operation<string> {
+      const holder: { self?: { interrupt(err?: unknown): void } } = {};
+      const w = spawn(
+        (function* (): Operation<string> {
+          try {
+            holder.self?.interrupt(new Error("self"));
+            yield* sleep(600000);
+            return "completed";
+          } catch (e) {
+            const audited = yield* run(async () => "audited", {
+              name: "self-cleanup",
+            });
+            return `interrupted:${(e as Error).message}:${audited}`;
+          }
+        })()
+      );
+      holder.self = w;
+      yield* sleep(50);
+      return yield* w;
+    },
+
     // Combinator + interrupt at the journal level: interrupt one input of
     // an allSettled; it is recorded rejected, the other fulfilled.
     *interruptCombinatorInput(): Operation<string> {
@@ -223,6 +247,11 @@ describe.each(modes)("interrupt — $name mode", ({ alwaysReplay }) => {
   test("interrupting one input of allSettled: rejected for it, fulfilled for the other", async () => {
     const c = clients.client(ingress, interruptSvc);
     expect(await c.interruptCombinatorInput()).toBe("rej:boom|ok:two");
+  });
+
+  test("self-interrupt: the throw lands at the worker's next yield and replays consistently", async () => {
+    const c = clients.client(ingress, interruptSvc);
+    expect(await c.selfInterrupt()).toBe("interrupted:self:audited");
   });
 
   test("interrupt aborts the worker's run signal and delivers the error; main's signal is unaffected", async () => {
