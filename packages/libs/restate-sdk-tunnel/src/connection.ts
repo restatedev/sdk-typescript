@@ -14,8 +14,8 @@
 //
 // One dial → serve → end cycle against one tunnel server:
 //
-//   dial TCP → TLS (NO ALPN) → wrap in the plain bridge (bridge.ts) →
-//   role-flip: we become the HTTP/2 *server* on the socket we dialed →
+//   dial TCP → TLS (ALPN must negotiate h2; the tunnel server advertises
+//   it) → role-flip: we become the HTTP/2 *server* on the socket we dialed →
 //   the cloud (h2 client) opens `GET /_/start-tunnel` → handshake.ts →
 //   on `tunnel-status: ok`, serve: each forwarded invocation is one h2
 //   stream; strip `/<scheme>/<host>/<port>` and hand it to the SDK's
@@ -45,8 +45,6 @@ import * as http2 from "node:http2";
 import type { ResolvedOptions } from "./options.js";
 import { buildTlsConnectOptions } from "./options.js";
 import type { Target } from "./targets.js";
-import { makePlainBridge } from "./bridge.js";
-import { createAuthorityShim } from "./h2shim.js";
 import {
   performHandshake,
   START_TUNNEL_PATH,
@@ -221,12 +219,22 @@ class ConnectionAttempt {
       `tunnel: connected to ${this.target.host}:${this.target.port}, starting handshake`
     );
 
-    // Every connection goes through the bridge: TLS sockets must be wrapped
-    // so Node's http2 runs a cleartext prior-knowledge session (no ALPN was
-    // negotiated — see bridge.ts), and ALL inbound bytes pass the
-    // :authority shim (the server's control requests omit authority, which
-    // nghttp2 would reject below the JS layer — see h2shim.ts).
-    const stream = makePlainBridge(this.socket, createAuthorityShim());
+    // The tunnel server advertises ALPN h2 and the dial offers it; Node's
+    // http2 requires the negotiation to have succeeded before it will run a
+    // server session over a TLS socket. A server that doesn't negotiate is
+    // too old for this client (see the README's server-version note).
+    if (!this.plaintext) {
+      const alpn = (this.socket as tls.TLSSocket).alpnProtocol;
+      if (alpn !== "h2") {
+        this.settle({
+          kind: "retryable",
+          reason:
+            "tunnel server did not negotiate h2 ALPN — it predates standard-h2 control traffic and cannot serve this client",
+        });
+        return;
+      }
+    }
+    const stream = this.socket;
 
     const h2 = http2.createServer(
       {

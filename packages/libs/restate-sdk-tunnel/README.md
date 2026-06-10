@@ -58,8 +58,9 @@ Two things to know about the URL's anatomy:
    explicit `tunnelServers`) — **one connection per resolved server**, like
    the standalone client: SRV discovery expands every target to all of its
    addresses, the set is re-resolved periodically, and connections are
-   started/torn down as servers appear/vanish. TLS, deliberately with
-   **no ALPN** — the tunnel speaks HTTP/2 with prior knowledge.
+   started/torn down as servers appear/vanish. TLS with **ALPN `h2`** —
+   the same offer the standalone Rust client makes; the negotiation must
+   succeed (see the server-version note below).
 2. **Role-flip:** Restate Cloud drives HTTP/2 as the _client_ over the
    connection we dialed; the deployment becomes the HTTP/2 _server_ on it.
 3. **Handshake:** the cloud opens `GET /_/start-tunnel`; we answer with the
@@ -112,7 +113,7 @@ Key options (see `ConnectTunnelOptions` for the full surface and defaults):
 | `tunnelName`                                    | Routing key — unique per deployment, shared across its replicas             |
 | `deploymentId`                                  | Identity label in the registration URL (`greeterv1`); not dialed            |
 | `services`                                      | Same shape `restate.serve` accepts                                          |
-| `tls`                                           | Default on (system trust, **no ALPN**); object form for CA/mTLS             |
+| `tls`                                           | Default on (system trust, ALPN `h2`); object form for CA/mTLS               |
 | `connectTimeoutMs`                              | TCP+TLS dial deadline (5s, mirrors the standalone client)                   |
 | `reconnectInitialMs/MaxMs/Factor`               | Jittered exponential backoff (10ms → 120s, reset after a stable connection) |
 | `supportsDrain` / `drainGraceMs`                | Graceful-drain handover on cloud rollovers (on, 120s grace)                 |
@@ -137,4 +138,8 @@ npm install @restatedev/restate-sdk-tunnel @restatedev/restate-sdk
   loop; the server set is reconciled as DNS changes. A fatal handshake on
   any connection (`unauthorized`, `bad-tunnel-name`) stops the whole
   tunnel — the credentials are shared.
+- **Requires a tunnel server with standard-h2 control traffic** (ALPN `h2`
+  advertised on the tunnel listener, `:authority` on control requests).
+  Older tunnel servers complete the TLS handshake without a negotiated
+  protocol and are rejected by this client with a clear log message.
 - Node-only (uses `node:tls`, `node:http2`, `node:dns`). Node ≥ 22.

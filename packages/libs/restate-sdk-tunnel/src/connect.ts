@@ -17,7 +17,6 @@
 //
 //   connection.ts — one dial → role-flip → handshake → serve cycle
 //   handshake.ts  — the /_/start-tunnel credentials/trailers exchange
-//   bridge.ts     — the TLS → cleartext-h2 wrapper (no-ALPN role flip)
 //   forwarded.ts  — the /<scheme>/<host>/<port> destination-prefix strip
 //   targets.ts    — server discovery (SRV per-IP expansion / explicit list)
 //   draining.ts   — graceful-drain handover ownership

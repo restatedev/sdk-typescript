@@ -364,11 +364,39 @@ describe("connectTunnel — dispatch", () => {
   });
 });
 
-describe("connectTunnel — TLS (no-ALPN bridge path)", () => {
+describe("connectTunnel — TLS (negotiated h2)", () => {
   const cert = fs.readFileSync(path.join(__dirname, "fixtures", "cert.pem"));
   const key = fs.readFileSync(path.join(__dirname, "fixtures", "key.pem"));
 
-  test("handshake and signed dispatch work over TLS without ALPN", async () => {
+  test("a server that does not negotiate h2 is rejected with a clear reason", async () => {
+    // An old tunnel server (pre standard-h2 control traffic) clears its
+    // ALPN list — the handshake completes without a negotiated protocol and
+    // this client must refuse it loudly rather than limp along.
+    const tlsImport = await import("node:tls");
+    const server = tlsImport.createServer({ cert, key }, (s) => {
+      s.on("error", () => {});
+    });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    const port = (server.address() as { port: number }).port;
+
+    const reasons: string[] = [];
+    const conn = connectTunnel({
+      ...baseOptions(0),
+      tunnelServers: [`127.0.0.1:${port}`],
+      tls: { ca: cert },
+      logger: (m) => reasons.push(m),
+    });
+    try {
+      await new Promise((r) => setTimeout(r, 300));
+      expect(reasons.join("\n")).toMatch(/did not negotiate h2 ALPN/);
+      expect(conn.connectionCount).toBe(0);
+    } finally {
+      await conn.close();
+      server.close();
+    }
+  });
+
+  test("handshake and signed dispatch work over TLS with negotiated h2", async () => {
     await withFake(
       { tls: { cert, key }, decideTrailers: () => okTrailers() },
       async (fake, options) => {

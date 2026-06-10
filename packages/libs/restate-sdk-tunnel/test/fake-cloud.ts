@@ -21,8 +21,44 @@
 import * as net from "node:net";
 import * as tls from "node:tls";
 import * as http2 from "node:http2";
-import type { Duplex } from "node:stream";
-import { makePlainBridge } from "../src/bridge.js";
+import { Duplex } from "node:stream";
+
+/**
+ * Wrap a socket in a plain Duplex. Two reasons the fake needs this for its
+ * TLS-accepted sockets: (1) Node's h2 CLIENT enforces ALPN on TLSSockets
+ * just like the server side, and the fake's session must run regardless of
+ * what was negotiated; (2) a wrapped socket reads via 'data' events, so
+ * `rawSocket.pause()` genuinely starves the session — which the watchdog
+ * test uses to simulate a half-open peer (pausing a socket natively adopted
+ * by h2 has no effect).
+ */
+function wrapPlain(socket: Duplex): Duplex {
+  const wrapped = new Duplex({
+    read() {
+      socket.resume();
+    },
+    write(chunk: Buffer, _encoding, callback) {
+      socket.write(chunk, callback);
+    },
+    final(callback) {
+      socket.end();
+      callback();
+    },
+    destroy(err, callback) {
+      socket.destroy(err ?? undefined);
+      callback(err);
+    },
+  });
+  socket.on("data", (chunk: Buffer) => {
+    if (!wrapped.push(chunk)) socket.pause();
+  });
+  socket.on("end", () => wrapped.push(null));
+  socket.on("error", (err: Error) => wrapped.destroy(err));
+  socket.on("close", () => {
+    if (!wrapped.destroyed) wrapped.destroy();
+  });
+  return wrapped;
+}
 
 export interface FakeTunnelConnection {
   /** 0-based order of arrival. */
@@ -75,12 +111,8 @@ export function startFakeCloud(options: FakeCloudOptions): Promise<FakeCloud> {
 
   const onSocket = (rawSocket: Duplex) => {
     const index = connections.length;
-    // Run the h2 CLIENT over the accepted socket (the role flip). Node's h2
-    // client enforces ALPN===h2 on TLSSockets just like the server side, so
-    // a no-ALPN TLS socket needs the same plain-Duplex treatment (the real
-    // cloud server is hyper/Rust and has no such check).
-    const socket =
-      options.tls !== undefined ? makePlainBridge(rawSocket) : rawSocket;
+    // Run the h2 CLIENT over the accepted socket (the role flip).
+    const socket = options.tls !== undefined ? wrapPlain(rawSocket) : rawSocket;
     const session = http2.connect("http://fake-tunnel-peer", {
       createConnection: () => socket,
     });
@@ -144,7 +176,14 @@ export function startFakeCloud(options: FakeCloudOptions): Promise<FakeCloud> {
   const server =
     options.tls !== undefined
       ? tls.createServer(
-          { cert: options.tls.cert, key: options.tls.key },
+          {
+            cert: options.tls.cert,
+            key: options.tls.key,
+            // Like the real tunnel server (post standard-h2 control
+            // traffic): advertise h2 so the client's required ALPN
+            // negotiation succeeds.
+            ALPNProtocols: ["h2"],
+          },
           onSocket
         )
       : net.createServer(onSocket);

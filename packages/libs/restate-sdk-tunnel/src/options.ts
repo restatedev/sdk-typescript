@@ -202,18 +202,19 @@ export function resolveOptions(options: ConnectTunnelOptions): ResolvedOptions {
  * Build the `tls.connect` options for a tunnel target, or `undefined` for a
  * plaintext connection.
  *
- * Deliberately sets NO `ALPNProtocols`: the tunnel endpoint clears its ALPN
- * list ("tunnel is not normal h2") and both sides speak HTTP/2 with prior
- * knowledge after the TLS handshake. Offering `h2` here would at best be
- * ignored — and the rest of the package depends on the no-ALPN shape (see
- * `bridge.ts`). This is the opposite of a normal h2 client; do not "fix" it.
+ * Always offers ALPN `["h2"]` — the same offer every Rust tunnel client
+ * makes — and the connection layer requires the negotiation to succeed:
+ * Node's http2 will only run a server session over a TLS socket whose ALPN
+ * negotiated `h2`. Tunnel servers advertise it since the standard-h2
+ * control-traffic change; older servers (which cleared their ALPN list)
+ * cannot serve this client.
  */
 export function buildTlsConnectOptions(
   tlsOption: boolean | TunnelTlsOptions,
   servername: string
 ): tls.ConnectionOptions | undefined {
   if (tlsOption === false) return undefined;
-  const base: tls.ConnectionOptions = { servername };
+  const base: tls.ConnectionOptions = { servername, ALPNProtocols: ["h2"] };
   if (tlsOption === true) return base;
   return {
     ...base,

@@ -142,11 +142,10 @@ describe("resolveOptions — validation", () => {
   });
 });
 
-describe("buildTlsConnectOptions — the no-ALPN invariant", () => {
-  test("never sets ALPNProtocols (tunnel is not normal h2)", () => {
-    // The tunnel endpoint clears its ALPN list; offering h2 would diverge
-    // from the protocol, and the bridge depends on the no-ALPN shape. This
-    // is the single most likely place for a relay-copy regression.
+describe("buildTlsConnectOptions — the ALPN invariant", () => {
+  test("always offers exactly ['h2'] (same offer as the Rust client)", () => {
+    // The connection layer REQUIRES the negotiation to succeed; dropping or
+    // widening the offer would silently change which servers we can talk to.
     for (const tlsOption of [
       true,
       { ca: "ca-pem" },
@@ -154,7 +153,7 @@ describe("buildTlsConnectOptions — the no-ALPN invariant", () => {
     ] as const) {
       const built = buildTlsConnectOptions(tlsOption, "host.example");
       expect(built).toBeDefined();
-      expect(Object.keys(built!)).not.toContain("ALPNProtocols");
+      expect(built!.ALPNProtocols).toEqual(["h2"]);
     }
   });
 
