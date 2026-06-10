@@ -106,16 +106,6 @@ describe("resolveOptions — validation", () => {
     );
   });
 
-  test("deploymentId defaults to in-process and rejects path-hostile values", () => {
-    expect(resolveOptions(valid).deploymentId).toBe("in-process");
-    expect(
-      resolveOptions({ ...valid, deploymentId: "greeterv1" }).deploymentId
-    ).toBe("greeterv1");
-    expect(() => resolveOptions({ ...valid, deploymentId: "a/b" })).toThrow(
-      /invalid deploymentId/
-    );
-  });
-
   test("connectTimeoutMs defaults to 5s", () => {
     expect(resolveOptions(valid).connectTimeoutMs).toBe(5_000);
   });

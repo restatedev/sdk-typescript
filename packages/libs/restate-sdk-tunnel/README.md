@@ -19,8 +19,7 @@ const connection = connectTunnel({
   environmentId: "env_...", // your environment ID (env_ prefix included)
   authToken: process.env.RESTATE_AUTH_TOKEN!, // Cloud API key with the Full role
   signingPublicKey: "publickeyv1_...", // your environment's request-identity key
-  tunnelName: "greeter", // routing key: unique per deployment, shared by its replicas
-  deploymentId: "greeterv1", // identity label shown in the registered deployment URI
+  tunnelName: "greeter-v1", // the deployment's identity: unique per deployment, shared by its replicas
   services: [greeter],
 });
 
@@ -30,24 +29,25 @@ console.log(`register me: ${connection.deploymentUrl}`);
 
 Once connected, register the deployment against Restate Cloud at
 `connection.deploymentUrl` —
-`<proxyUrl>/http/<deploymentId>/9080/`, e.g.:
+`<proxyUrl>/http/in-process/9080/`, e.g.:
 
 ```
-restate dep register https://tunnel.us.restate.cloud:9080/<unprefixed-env-id>/greeter/http/greeterv1/9080/
-                      └─────────────── connection.proxyUrl ──────────────┘└─ identity label ─┘
+restate dep register https://tunnel.us.restate.cloud:9080/<unprefixed-env-id>/greeter-v1/http/in-process/9080/
+                      └──────────────── connection.proxyUrl ─────────────────┘└── constant ──┘
 ```
 
 Two things to know about the URL's anatomy:
 
-- **Routing is by `tunnelName`** — the proxy load-balances across every
-  connection registered under it. Give each distinct deployment its own
-  `tunnelName`; let replicas of the _same_ deployment share one (that's the
-  HA/load-balancing path).
-- **The `/http/<deploymentId>/9080/` destination is identity, not
-  routing** — an in-process tunnel terminates in this very process, so the
-  destination is never dialed. It is what operators see in the deployment
-  URI, so give it a meaningful, versioned name (`greeterv1`); in k8s,
-  populate it from an env var injected by your deployment machinery.
+- **`tunnelName` is the deployment's identity** — the tunnel server keys
+  connections by `<environment>/<tunnelName>` and load-balances every
+  proxied invocation across the connections registered under that key.
+  Give each distinct deployment its own `tunnelName`; let replicas of the
+  _same_ deployment share one (that's the HA/load-balancing path).
+- **The `/http/in-process/9080/` destination is a constant** — the
+  standalone tunnel client is a forwarder that dials this segment on the
+  far side; an in-process tunnel terminates in this very process, so the
+  destination is never dialed and plays no role. It only needs to be
+  stable, because Restate identifies deployments by their full URI.
 
 ## How it works
 
@@ -110,8 +110,7 @@ Key options (see `ConnectTunnelOptions` for the full surface and defaults):
 | `environmentId`                                 | `env_...` — the environment to tunnel to                                    |
 | `authToken`                                     | Cloud API key (`key_...`, Full role) presented in the handshake             |
 | `signingPublicKey`                              | `publickeyv1_...` — request-identity verification (required)                |
-| `tunnelName`                                    | Routing key — unique per deployment, shared across its replicas             |
-| `deploymentId`                                  | Identity label in the registration URL (`greeterv1`); not dialed            |
+| `tunnelName`                                    | The deployment's identity — unique per deployment, shared by its replicas   |
 | `services`                                      | Same shape `restate.serve` accepts                                          |
 | `tls`                                           | Default on (system trust, ALPN `h2`); object form for CA/mTLS               |
 | `connectTimeoutMs`                              | TCP+TLS dial deadline (5s, mirrors the standalone client)                   |

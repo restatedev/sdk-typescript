@@ -111,28 +111,17 @@ export interface ConnectTunnelOptions {
    */
   signingPublicKey: string;
   /**
-   * Logical name for this tunnel — the rendezvous key senders address
-   * (it appears in the deployment registration URL, so it should be
-   * stable across restarts). E.g. the name of the cluster the deployment
-   * runs in.
+   * The deployment's identity: the rendezvous key both ends use to route.
+   * The tunnel server keys connections by `<environment>/<tunnelName>` and
+   * load-balances each proxied invocation across every connection
+   * registered under that key — so replicas of the *same* deployment must
+   * share one `tunnelName`, and distinct deployments must each have their
+   * own. It appears in the deployment registration URL, so it should be
+   * stable across restarts (e.g. `"greeter-v1"`).
    */
   tunnelName: string;
   /** The services to serve over the tunnel. */
   services: Services;
-  /**
-   * Human-meaningful identity for this deployment (e.g. `"greeterv1"`),
-   * used as the destination label in the registration URL:
-   * `<proxyUrl>/http/<deploymentId>/9080/` (see
-   * {@link TunnelConnection.deploymentUrl}). Default `"in-process"`.
-   *
-   * The label is identity, not routing: an in-process tunnel terminates at
-   * this very process, so the destination is never dialed — routing is by
-   * `tunnelName`. It is what operators see in the registered deployment's
-   * URI, and it keeps URIs distinct and recognizable across deployments.
-   * In k8s, set it from an env var injected by your deployment machinery
-   * (a pod cannot discover its own Service name).
-   */
-  deploymentId?: string;
   /**
    * Protocol mode for the SDK handler. Default `true` (`BIDI_STREAM`) —
    * the tunnel is always HTTP/2, so full-duplex streaming is available.
@@ -245,9 +234,14 @@ export interface TunnelConnection {
   readonly tunnelUrl: string | undefined;
   /**
    * The full deployment registration URL:
-   * `<proxyUrl>/http/<deploymentId>/9080/` — register this with
+   * `<proxyUrl>/http/in-process/9080/` — register this with
    * `restate dep register <url>` (or the UI) once the tunnel is
    * {@link ready}. `undefined` until the first successful handshake.
+   *
+   * The `/http/in-process/9080/` destination segment is a constant: an
+   * in-process tunnel terminates at this very process, so the destination
+   * is never dialed and plays no routing role — the deployment's identity
+   * is the `tunnelName` earlier in the path.
    *
    * Built from the handshake-advertised proxy URL; on BYOC clusters where
    * Restate reaches the proxy via a cluster-internal address instead,

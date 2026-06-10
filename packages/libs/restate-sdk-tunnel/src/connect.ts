@@ -296,15 +296,16 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
     get deploymentUrl() {
       if (lastInfo === undefined) return undefined;
       // Public clusters may advertise the proxy without a port; the proxy
-      // listens on 9080. The destination (`/http/<deploymentId>/9080/`) is
-      // identity, not routing — an in-process tunnel is never dialed.
+      // listens on 9080. The destination (`/http/in-process/9080/`) is a
+      // constant — an in-process tunnel is never dialed, so the server
+      // routes purely by the tunnelName earlier in the path.
       try {
         const proxy = new URL(lastInfo.proxyUrl);
         if (proxy.port === "") proxy.port = "9080";
         const base = proxy.toString().replace(/\/$/, "");
-        return `${base}/http/${opts.deploymentId}/9080/`;
+        return `${base}/http/in-process/9080/`;
       } catch {
-        return `${lastInfo.proxyUrl}/http/${opts.deploymentId}/9080/`;
+        return `${lastInfo.proxyUrl}/http/in-process/9080/`;
       }
     },
     get error() {

@@ -98,7 +98,7 @@ describe("connectTunnel — handshake", () => {
           // Drain is implemented and advertised by default.
           expect(creds["supports-drain"]).toBe("true");
           // The ready-made registration URL: advertised proxy base + the
-          // deploymentId destination label (default "in-process").
+          // constant in-process destination (routing is by tunnelName).
           expect(conn.deploymentUrl).toBe(
             `${okTrailers()["proxy-url"]}/http/in-process/9080/`
           );
@@ -109,7 +109,7 @@ describe("connectTunnel — handshake", () => {
     );
   });
 
-  test("deploymentUrl uses the configured deploymentId and normalizes a missing proxy port", async () => {
+  test("deploymentUrl normalizes a missing proxy port", async () => {
     await withFake(
       {
         decideTrailers: () => ({
@@ -119,11 +119,11 @@ describe("connectTunnel — handshake", () => {
         }),
       },
       async (_fake, options) => {
-        const conn = connectTunnel({ ...options, deploymentId: "greeterv1" });
+        const conn = connectTunnel(options);
         try {
           await conn.ready;
           expect(conn.deploymentUrl).toBe(
-            `https://tunnel.example:9080/abc123/${TUNNEL_NAME}/http/greeterv1/9080/`
+            `https://tunnel.example:9080/abc123/${TUNNEL_NAME}/http/in-process/9080/`
           );
         } finally {
           await conn.close();
