@@ -9,18 +9,37 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-// Option validation and TLS construction. Pure — no I/O.
+// Option validation and TLS construction.
 
+import * as fs from "node:fs";
 import type * as tls from "node:tls";
 import type { ConnectTunnelOptions, TunnelTlsOptions } from "./types.js";
 import { parseServerAddress } from "./targets.js";
+
+// The environment variables options fall back to when not given explicitly
+// (option > environment > throw). They form the contract with the
+// restate-operator, which injects the first four into the pods of a
+// `tunnelMode: in-process` RestateDeployment; AUTH_TOKEN_FILE is reserved
+// for the user's own Secret mount — credentials are never injected.
+export const TUNNEL_NAME_ENV = "RESTATE_INPROC_TUNNEL_NAME";
+export const ENVIRONMENT_ID_ENV = "RESTATE_INPROC_ENVIRONMENT_ID";
+export const CLOUD_REGION_ENV = "RESTATE_INPROC_CLOUD_REGION";
+export const SIGNING_PUBLIC_KEY_ENV = "RESTATE_INPROC_SIGNING_PUBLIC_KEY";
+export const AUTH_TOKEN_FILE_ENV = "RESTATE_INPROC_AUTH_TOKEN_FILE";
 
 export interface ResolvedOptions {
   /** The SRV name to discover tunnel servers from (region-derived or given). */
   srvName?: string;
   tunnelServers?: string[];
   environmentId: string;
-  authToken: string;
+  /**
+   * Returns the bearer token for the handshake. Called once per connection
+   * attempt: a file-sourced token (AUTH_TOKEN_FILE_ENV) is re-read on every
+   * redial so rotations are picked up without a restart. May throw (e.g.
+   * the file is briefly unreadable mid-rotation) — callers treat that as a
+   * retryable connection failure.
+   */
+  authToken: () => string;
   signingPublicKey: string;
   tunnelName: string;
   bidirectional: boolean;
@@ -42,11 +61,79 @@ export interface ResolvedOptions {
   logger: (message: string) => void;
 }
 
-function requireNonEmpty(value: string | undefined, name: string): string {
-  if (typeof value !== "string" || value.length === 0) {
-    throw new Error(`tunnel: ${name} is required`);
+/** An env var set to the empty string is treated as unset. */
+function fromEnv(name: string): string | undefined {
+  const value = process.env[name];
+  return value === undefined || value === "" ? undefined : value;
+}
+
+/** Resolve option > environment > throw. */
+function requireConfigured(
+  value: string | undefined,
+  name: string,
+  envName: string
+): string {
+  const resolved =
+    value !== undefined && value !== "" ? value : fromEnv(envName);
+  if (resolved === undefined) {
+    throw new Error(
+      `tunnel: ${name} is required (pass the option or set ${envName})`
+    );
+  }
+  return resolved;
+}
+
+/**
+ * Both credentials travel as HTTP header values in the handshake. Node
+ * silently strips header-illegal characters, which would surface as a
+ * baffling `unauthorized` from the server — reject them loudly instead.
+ */
+function requireHeaderSafe(value: string, what: string): string {
+  if (!/^[\x21-\x7e]+$/.test(value)) {
+    throw new Error(
+      `tunnel: ${what} contains characters that cannot travel in an HTTP header (whitespace or non-printable)`
+    );
   }
   return value;
+}
+
+function resolveAuthToken(option: string | undefined): () => string {
+  if (option !== undefined && option !== "") {
+    requireHeaderSafe(option, "authToken");
+    return () => option;
+  }
+  const tokenFile = fromEnv(AUTH_TOKEN_FILE_ENV);
+  if (tokenFile === undefined) {
+    throw new Error(
+      `tunnel: authToken is required (pass the option or set ${AUTH_TOKEN_FILE_ENV})`
+    );
+  }
+  const readToken = () => {
+    // Guard before reading: this runs synchronously on the redial path, so a
+    // FIFO (blocks forever) or an unbounded device file (reads forever) would
+    // freeze the event loop — and with it every other live connection.
+    const stat = fs.statSync(tokenFile);
+    if (!stat.isFile()) {
+      throw new Error(
+        `tunnel: auth token file ${tokenFile} is not a regular file`
+      );
+    }
+    if (stat.size > 64 * 1024) {
+      throw new Error(
+        `tunnel: auth token file ${tokenFile} is implausibly large for a token (${stat.size} bytes)`
+      );
+    }
+    // Trimmed because mounted secrets routinely carry a trailing newline.
+    const token = fs.readFileSync(tokenFile, "utf8").trim();
+    if (token === "") {
+      throw new Error(`tunnel: auth token file ${tokenFile} is empty`);
+    }
+    return requireHeaderSafe(token, `auth token file ${tokenFile}`);
+  };
+  // A bad path or token must throw at configuration time like every other
+  // misconfiguration, not look like a transient failure mid-redial.
+  readToken();
+  return readToken;
 }
 
 function positive(
@@ -61,20 +148,45 @@ function positive(
   return value;
 }
 
-/** Validate user options and apply defaults. Throws on misconfiguration. */
+/**
+ * Validate user options and apply defaults. Throws on misconfiguration.
+ * Each identity/discovery option falls back to its RESTATE_INPROC_* env var
+ * (option > environment > throw), so a pod the restate-operator configured
+ * for `tunnelMode: in-process` needs no explicit configuration beyond the
+ * auth token.
+ */
 export function resolveOptions(options: ConnectTunnelOptions): ResolvedOptions {
-  const hasRegion = options.region !== undefined && options.region !== "";
   const hasSrv =
     options.tunnelServersSrv !== undefined && options.tunnelServersSrv !== "";
   const hasServers =
     options.tunnelServers !== undefined && options.tunnelServers.length > 0;
-  if (Number(hasRegion) + Number(hasSrv) + Number(hasServers) !== 1) {
+  // The env var only fills the gap when NO discovery option was given — an
+  // explicit tunnelServersSrv/tunnelServers wins over an injected region, and
+  // an explicitly-given-but-empty tunnelServers stays a loud config error
+  // rather than silently yielding to the environment.
+  let region = options.region;
+  if (
+    (region === undefined || region === "") &&
+    !hasSrv &&
+    options.tunnelServers === undefined
+  ) {
+    region = fromEnv(CLOUD_REGION_ENV);
+  }
+  const hasRegion = region !== undefined && region !== "";
+  const discoveryCount =
+    Number(hasRegion) + Number(hasSrv) + Number(hasServers);
+  if (discoveryCount === 0) {
+    throw new Error(
+      `tunnel: specify one of \`region\`, \`tunnelServersSrv\` or \`tunnelServers\` (or set ${CLOUD_REGION_ENV})`
+    );
+  }
+  if (discoveryCount > 1) {
     throw new Error(
       "tunnel: specify exactly one of `region`, `tunnelServersSrv` or `tunnelServers`"
     );
   }
-  if (hasRegion && !/^[a-z0-9-]+$/.test(options.region!)) {
-    throw new Error(`tunnel: invalid region ${JSON.stringify(options.region)}`);
+  if (hasRegion && !/^[a-z0-9-]+$/.test(region!)) {
+    throw new Error(`tunnel: invalid region ${JSON.stringify(region)}`);
   }
   if (hasSrv && !/^[A-Za-z0-9._-]+$/.test(options.tunnelServersSrv!)) {
     throw new Error(
@@ -89,31 +201,32 @@ export function resolveOptions(options: ConnectTunnelOptions): ResolvedOptions {
     for (const address of options.tunnelServers!) parseServerAddress(address);
   }
 
-  const environmentId = requireNonEmpty(options.environmentId, "environmentId");
+  const environmentId = requireConfigured(
+    options.environmentId,
+    "environmentId",
+    ENVIRONMENT_ID_ENV
+  );
   if (!/^env_[A-Za-z0-9_-]+$/.test(environmentId)) {
     throw new Error(
       "tunnel: environmentId must be `env_` followed by alphanumerics (e.g. env_201k0yd4...)"
     );
   }
-  const authToken = requireNonEmpty(options.authToken, "authToken");
-  // Both values travel as HTTP header values in the handshake. Node silently
-  // strips header-illegal characters, which would surface as a baffling
-  // `unauthorized` from the server — reject them loudly here instead.
-  if (!/^[\x21-\x7e]+$/.test(authToken)) {
-    throw new Error(
-      "tunnel: authToken contains characters that cannot travel in an HTTP header (whitespace or non-printable)"
-    );
-  }
-  const signingPublicKey = requireNonEmpty(
+  const authToken = resolveAuthToken(options.authToken);
+  const signingPublicKey = requireConfigured(
     options.signingPublicKey,
-    "signingPublicKey"
+    "signingPublicKey",
+    SIGNING_PUBLIC_KEY_ENV
   );
   if (!signingPublicKey.startsWith("publickeyv1_")) {
     throw new Error(
       "tunnel: signingPublicKey must be a request-identity public key (publickeyv1_...)"
     );
   }
-  const tunnelName = requireNonEmpty(options.tunnelName, "tunnelName");
+  const tunnelName = requireConfigured(
+    options.tunnelName,
+    "tunnelName",
+    TUNNEL_NAME_ENV
+  );
   if (!/^[A-Za-z0-9._-]+$/.test(tunnelName)) {
     throw new Error(
       `tunnel: invalid tunnelName ${JSON.stringify(tunnelName)} — use letters, digits, '.', '_' or '-'`
@@ -132,7 +245,7 @@ export function resolveOptions(options: ConnectTunnelOptions): ResolvedOptions {
 
   return {
     srvName: hasRegion
-      ? srvNameForRegion(options.region!)
+      ? srvNameForRegion(region!)
       : hasSrv
         ? options.tunnelServersSrv
         : undefined,

@@ -49,6 +49,19 @@ export interface TunnelTlsOptions {
 
 /**
  * Options for {@link connectTunnel}.
+ *
+ * The identity and discovery options fall back to `RESTATE_INPROC_*`
+ * environment variables when not given (option > environment > throw):
+ * `tunnelName` ← `RESTATE_INPROC_TUNNEL_NAME`, `environmentId` ←
+ * `RESTATE_INPROC_ENVIRONMENT_ID`, `region` ← `RESTATE_INPROC_CLOUD_REGION`,
+ * `signingPublicKey` ← `RESTATE_INPROC_SIGNING_PUBLIC_KEY`, and `authToken`
+ * ← the file named by `RESTATE_INPROC_AUTH_TOKEN_FILE` (re-read on every
+ * reconnect, so rotations are picked up). The
+ * [restate-operator](https://github.com/restatedev/restate-operator)
+ * injects the first four into the pods of a `tunnelMode: in-process`
+ * RestateDeployment and registers the matching URL — there,
+ * `connectTunnel({ services })` plus a token-file Secret mount (named by
+ * `RESTATE_INPROC_AUTH_TOKEN_FILE`) is a complete configuration.
  */
 export interface ConnectTunnelOptions {
   /**
@@ -61,7 +74,8 @@ export interface ConnectTunnelOptions {
    * vanish.
    *
    * Exactly one of `region`, `tunnelServersSrv` or `tunnelServers` must be
-   * set.
+   * set. When none is, `region` falls back to the
+   * `RESTATE_INPROC_CLOUD_REGION` environment variable.
    */
   region?: string;
   /**
@@ -95,21 +109,31 @@ export interface ConnectTunnelOptions {
   /**
    * The Restate Cloud environment ID to tunnel to, including the `env_`
    * prefix (e.g. `"env_201k0yd4rz8yftmd4awh1bajg4v"`).
+   *
+   * Falls back to the `RESTATE_INPROC_ENVIRONMENT_ID` environment variable.
    */
-  environmentId: string;
+  environmentId?: string;
   /**
    * A Restate Cloud API key with the `Full` role (`key_...`), or a user
    * JWT. Presented as `authorization: Bearer <token>` during the tunnel
    * handshake; validated server-side.
+   *
+   * Falls back to the contents of the file named by the
+   * `RESTATE_INPROC_AUTH_TOKEN_FILE` environment variable — the right shape
+   * for a mounted Kubernetes Secret: the file is re-read on every reconnect,
+   * so a rotated token is picked up without a restart.
    */
-  authToken: string;
+  authToken?: string;
   /**
    * The environment's request-identity public key
    * (`publickeyv1_<base58>`). Passed to the SDK's request-identity
    * verification so every forwarded request is checked to genuinely come
    * from your environment. Shown by Restate Cloud for your environment.
+   *
+   * Falls back to the `RESTATE_INPROC_SIGNING_PUBLIC_KEY` environment
+   * variable.
    */
-  signingPublicKey: string;
+  signingPublicKey?: string;
   /**
    * The deployment's identity: the rendezvous key both ends use to route.
    * The tunnel server keys connections by `<environment>/<tunnelName>` and
@@ -118,8 +142,11 @@ export interface ConnectTunnelOptions {
    * share one `tunnelName`, and distinct deployments must each have their
    * own. It appears in the deployment registration URL, so it should be
    * stable across restarts (e.g. `"greeter-v1"`).
+   *
+   * Falls back to the `RESTATE_INPROC_TUNNEL_NAME` environment variable
+   * (the restate-operator injects a per-revision name there).
    */
-  tunnelName: string;
+  tunnelName?: string;
   /** The services to serve over the tunnel. */
   services: Services;
   /**

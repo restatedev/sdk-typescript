@@ -87,7 +87,19 @@ export function runConnection(
   slotSignal: AbortSignal,
   deps: ConnectionDeps
 ): Promise<ConnectionOutcome> {
-  return new ConnectionAttempt(target, slotSignal, deps).run();
+  // Resolved once per attempt, before dialing: a file-sourced token is
+  // re-read on every redial so rotations are picked up, and a read failure
+  // (e.g. mid-rotation) is a retryable outcome rather than a crash.
+  let authToken: string;
+  try {
+    authToken = deps.opts.authToken();
+  } catch (err) {
+    return Promise.resolve({
+      kind: "retryable",
+      reason: `auth token unavailable: ${err instanceof Error ? err.message : String(err)}`,
+    });
+  }
+  return new ConnectionAttempt(target, slotSignal, deps, authToken).run();
 }
 
 class ConnectionAttempt {
@@ -113,7 +125,8 @@ class ConnectionAttempt {
   constructor(
     private readonly target: Target,
     private readonly slotSignal: AbortSignal,
-    private readonly deps: ConnectionDeps
+    private readonly deps: ConnectionDeps,
+    private readonly authToken: string
   ) {
     this.log = deps.opts.logger;
     this.plaintext = target.plaintext ?? deps.opts.tls === false;
@@ -343,7 +356,7 @@ class ConnectionAttempt {
       req,
       res,
       {
-        authToken: this.deps.opts.authToken,
+        authToken: this.authToken,
         environmentId: this.deps.opts.environmentId,
         tunnelName: this.deps.opts.tunnelName,
         supportsDrain: this.deps.opts.supportsDrain,

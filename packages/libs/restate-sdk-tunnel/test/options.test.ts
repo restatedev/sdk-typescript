@@ -9,11 +9,19 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import { describe, expect, test } from "vitest";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import {
   resolveOptions,
   buildTlsConnectOptions,
   srvNameForRegion,
+  TUNNEL_NAME_ENV,
+  ENVIRONMENT_ID_ENV,
+  CLOUD_REGION_ENV,
+  SIGNING_PUBLIC_KEY_ENV,
+  AUTH_TOKEN_FILE_ENV,
 } from "../src/options.js";
 import { parseServerAddress } from "../src/targets.js";
 import type { ConnectTunnelOptions } from "../src/types.js";
@@ -26,6 +34,34 @@ const valid: ConnectTunnelOptions = {
   tunnelName: "my-tunnel",
   services: [],
 };
+
+const INPROC_ENVS = [
+  TUNNEL_NAME_ENV,
+  ENVIRONMENT_ID_ENV,
+  CLOUD_REGION_ENV,
+  SIGNING_PUBLIC_KEY_ENV,
+  AUTH_TOKEN_FILE_ENV,
+];
+
+// Options resolution reads RESTATE_INPROC_* fallbacks from process.env;
+// isolate every test from the host environment and from each other.
+const savedEnv: Record<string, string | undefined> = {};
+const tmpDirs: string[] = [];
+beforeEach(() => {
+  for (const name of INPROC_ENVS) {
+    savedEnv[name] = process.env[name];
+    delete process.env[name];
+  }
+});
+afterEach(() => {
+  for (const name of INPROC_ENVS) {
+    if (savedEnv[name] === undefined) delete process.env[name];
+    else process.env[name] = savedEnv[name];
+  }
+  for (const dir of tmpDirs.splice(0)) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 describe("resolveOptions — validation", () => {
   test("accepts a valid config and applies defaults", () => {
@@ -45,7 +81,7 @@ describe("resolveOptions — validation", () => {
 
   test("rejects neither region nor tunnelServers", () => {
     expect(() => resolveOptions({ ...valid, region: undefined })).toThrow(
-      /exactly one of/
+      new RegExp(`specify one of .*${CLOUD_REGION_ENV}`)
     );
   });
 
@@ -129,6 +165,137 @@ describe("resolveOptions — validation", () => {
     expect(() => resolveOptions({ ...valid, pingIntervalMs: -5 })).toThrow(
       /positive/
     );
+  });
+});
+
+describe("resolveOptions — RESTATE_INPROC_* environment fallbacks", () => {
+  const tokenFile = (contents: string): string => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tunnel-token-"));
+    tmpDirs.push(dir);
+    const file = path.join(dir, "token");
+    fs.writeFileSync(file, contents);
+    return file;
+  };
+
+  test("a fully operator-configured pod needs only the token file", () => {
+    process.env[TUNNEL_NAME_ENV] = "greeter-5b8c7d9f4";
+    process.env[ENVIRONMENT_ID_ENV] = "env_abc123";
+    process.env[CLOUD_REGION_ENV] = "eu";
+    process.env[SIGNING_PUBLIC_KEY_ENV] = valid.signingPublicKey!;
+    process.env[AUTH_TOKEN_FILE_ENV] = tokenFile("key_fromfile.secret\n");
+
+    const r = resolveOptions({ services: [] });
+    expect(r.tunnelName).toBe("greeter-5b8c7d9f4");
+    expect(r.environmentId).toBe("env_abc123");
+    expect(r.srvName).toBe("tunnel.eu.restate.cloud");
+    expect(r.signingPublicKey).toBe(valid.signingPublicKey);
+    // mounted secrets routinely carry a trailing newline — trimmed
+    expect(r.authToken()).toBe("key_fromfile.secret");
+  });
+
+  test("explicit options win over the environment", () => {
+    process.env[TUNNEL_NAME_ENV] = "from-env";
+    process.env[ENVIRONMENT_ID_ENV] = "env_fromenv";
+    process.env[CLOUD_REGION_ENV] = "eu";
+    process.env[SIGNING_PUBLIC_KEY_ENV] = "publickeyv1_fromenv";
+    process.env[AUTH_TOKEN_FILE_ENV] = tokenFile("key_fromfile");
+
+    const r = resolveOptions(valid);
+    expect(r.tunnelName).toBe("my-tunnel");
+    expect(r.environmentId).toBe("env_abc123");
+    expect(r.srvName).toBe("tunnel.us.restate.cloud");
+    expect(r.signingPublicKey).toBe(valid.signingPublicKey);
+    expect(r.authToken()).toBe("key_xyz.secret");
+  });
+
+  test("an explicit discovery option beats an injected region", () => {
+    process.env[CLOUD_REGION_ENV] = "eu";
+    // would be a "specify exactly one" conflict if the env region counted
+    const r = resolveOptions({
+      ...valid,
+      region: undefined,
+      tunnelServersSrv: "tunnel.dev.example.cloud",
+    });
+    expect(r.srvName).toBe("tunnel.dev.example.cloud");
+  });
+
+  test("an explicitly empty tunnelServers stays a config error despite an env region", () => {
+    process.env[CLOUD_REGION_ENV] = "eu";
+    expect(() =>
+      resolveOptions({ ...valid, region: undefined, tunnelServers: [] })
+    ).toThrow(/specify one of/);
+  });
+
+  test("environment-sourced values get the same validation as options", () => {
+    process.env[ENVIRONMENT_ID_ENV] = "not-an-env-id";
+    expect(() =>
+      resolveOptions({ ...valid, environmentId: undefined })
+    ).toThrow(/env_/);
+  });
+
+  test("an empty env var counts as unset", () => {
+    process.env[TUNNEL_NAME_ENV] = "";
+    expect(() => resolveOptions({ ...valid, tunnelName: undefined })).toThrow(
+      new RegExp(`tunnelName is required .*${TUNNEL_NAME_ENV}`)
+    );
+  });
+
+  test("missing-value errors name the env var that would fill the gap", () => {
+    expect(() =>
+      resolveOptions({ ...valid, environmentId: undefined })
+    ).toThrow(new RegExp(ENVIRONMENT_ID_ENV));
+    expect(() => resolveOptions({ ...valid, authToken: undefined })).toThrow(
+      new RegExp(AUTH_TOKEN_FILE_ENV)
+    );
+    expect(() =>
+      resolveOptions({ ...valid, signingPublicKey: undefined })
+    ).toThrow(new RegExp(SIGNING_PUBLIC_KEY_ENV));
+  });
+
+  test("a token file is re-read on every call — rotation without restart", () => {
+    const file = tokenFile("key_first");
+    process.env[AUTH_TOKEN_FILE_ENV] = file;
+
+    const r = resolveOptions({ ...valid, authToken: undefined });
+    expect(r.authToken()).toBe("key_first");
+    fs.writeFileSync(file, "key_second\n");
+    expect(r.authToken()).toBe("key_second");
+  });
+
+  test("token-file misconfiguration throws at resolve time, not mid-redial", () => {
+    process.env[AUTH_TOKEN_FILE_ENV] = "/does/not/exist/token";
+    expect(() => resolveOptions({ ...valid, authToken: undefined })).toThrow();
+
+    process.env[AUTH_TOKEN_FILE_ENV] = tokenFile("\n");
+    expect(() => resolveOptions({ ...valid, authToken: undefined })).toThrow(
+      /empty/
+    );
+
+    process.env[AUTH_TOKEN_FILE_ENV] = tokenFile("key with spaces");
+    expect(() => resolveOptions({ ...valid, authToken: undefined })).toThrow(
+      /HTTP header/
+    );
+
+    // a non-regular file (here: a directory) is rejected by the stat guard
+    // BEFORE the read — a FIFO would block the event loop forever
+    process.env[AUTH_TOKEN_FILE_ENV] = path.dirname(tokenFile("x"));
+    expect(() => resolveOptions({ ...valid, authToken: undefined })).toThrow(
+      /not a regular file/
+    );
+  });
+
+  test("a token read failure after resolve surfaces from the provider", () => {
+    const file = tokenFile("key_first");
+    process.env[AUTH_TOKEN_FILE_ENV] = file;
+    const r = resolveOptions({ ...valid, authToken: undefined });
+    fs.rmSync(file);
+    expect(() => r.authToken()).toThrow();
+  });
+
+  test("an explicit authToken never touches the file system", () => {
+    process.env[AUTH_TOKEN_FILE_ENV] = "/does/not/exist/token";
+    const r = resolveOptions(valid);
+    expect(r.authToken()).toBe("key_xyz.secret");
   });
 });
 

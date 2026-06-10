@@ -22,9 +22,10 @@
  * vestigial (the receiver *is* the service), so we drop exactly those three
  * segments and keep the tail (`/discover`, `/invoke/<svc>/<handler>`, …).
  *
- * The tail must be byte-exact: the SDK verifies each request's identity JWT
- * against `aud = <tail pathname>` (the signer uses the service-relative
- * path), so no normalization, re-encoding, or case folding happens here.
+ * The tail is passed through without re-encoding: the SDK verifies each
+ * request's identity JWT against the signed service-relative path (its
+ * routing and verification tolerate extra path *prefixes*, but re-encoding,
+ * normalization or case folding of the tail itself would break the match).
  * The query string is preserved (it is not part of `aud`).
  *
  * Returns `null` if the path isn't a forwarded `/<scheme>/<host>/<port>/...`

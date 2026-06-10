@@ -49,6 +49,37 @@ Two things to know about the URL's anatomy:
   destination is never dialed and plays no role. It only needs to be
   stable, because Restate identifies deployments by their full URI.
 
+## Zero config on Kubernetes (restate-operator)
+
+The identity options and `region` fall back to `RESTATE_INPROC_*`
+environment variables when not given (option > environment > throw):
+
+| Option             | Environment variable                                          |
+| ------------------ | ------------------------------------------------------------- |
+| `tunnelName`       | `RESTATE_INPROC_TUNNEL_NAME`                                   |
+| `environmentId`    | `RESTATE_INPROC_ENVIRONMENT_ID`                                |
+| `region`           | `RESTATE_INPROC_CLOUD_REGION`                                  |
+| `signingPublicKey` | `RESTATE_INPROC_SIGNING_PUBLIC_KEY`                            |
+| `authToken`        | the file named by `RESTATE_INPROC_AUTH_TOKEN_FILE` (see below) |
+
+The [restate-operator](https://github.com/restatedev/restate-operator)
+injects the first four into the pods of a `tunnelMode: in-process`
+RestateDeployment — with a per-revision `tunnelName` — and registers the
+matching tunnel URL for every revision automatically. There, a complete
+configuration is:
+
+```ts
+connectTunnel({ services: [greeter] });
+```
+
+plus a mounted API-key Secret: credentials are never injected, so mount one
+yourself and set `RESTATE_INPROC_AUTH_TOKEN_FILE` to its path. The file is
+**re-read on every reconnect**, so a rotated Secret is picked up without a
+restart (a transient read failure during rotation is treated as a retryable
+connection failure, not a crash). Mount the Secret as a whole volume rather
+than via `subPath` — Kubernetes does not update `subPath` mounts in place, so
+a rotated token would never reach the file.
+
 ## How it works
 
 `connectTunnel` is the in-process analog of Restate Cloud's standalone
