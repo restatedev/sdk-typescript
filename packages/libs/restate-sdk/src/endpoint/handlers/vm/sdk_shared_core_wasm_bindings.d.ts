@@ -236,7 +236,7 @@ export class WasmVM {
   sys_write_output_failure(value: WasmFailure): void;
   sys_write_output_success(buffer: Uint8Array): void;
   take_notification(handle: number): WasmAsyncResultValue;
-  take_output(): any;
+  take_output(): Uint8Array;
 }
 
 export function cancel_handle(): number;

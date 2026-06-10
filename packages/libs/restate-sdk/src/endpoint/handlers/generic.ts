@@ -686,11 +686,10 @@ async function flushAndClose(
 ): Promise<void> {
   let inputClosed = false;
   try {
-    // Consume output till the end, write it out, then close the stream
-    let nextOutput = coreVm.take_output() as Uint8Array | null | undefined;
-    while (nextOutput !== null && nextOutput !== undefined) {
+    // Consume vm output buffer, write it out, then close the stream
+    const nextOutput = coreVm.take_output();
+    if (nextOutput?.length > 0) {
       await outputWriter.write(nextOutput);
-      nextOutput = coreVm.take_output() as Uint8Array | null | undefined;
     }
 
     // --- After this point, we should have flushed the shared core internal buffer

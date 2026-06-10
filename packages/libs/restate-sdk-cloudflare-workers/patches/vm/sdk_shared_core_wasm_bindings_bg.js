@@ -839,7 +839,7 @@ export class WasmVM {
         return takeFromExternrefTable0(ret[0]);
     }
     /**
-     * @returns {any}
+     * @returns {Uint8Array}
      */
     take_output() {
         const ret = wasm.wasmvm_take_output(this.__wbg_ptr);
