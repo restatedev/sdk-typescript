@@ -4,8 +4,8 @@ use restate_sdk_shared_core::{
     AwaitResponse, AwakeableHandle, CallHandle, CommandRelationship, CommandType, CoreVM, Error,
     Header, HeaderMap, IdentityVerifier, ImplicitCancellationOption, Input,
     NonDeterministicChecksOption, NonEmptyValue, OnMaxAttempts, ResponseHead, RetryPolicy,
-    RunExitResult, RunHandle, SendHandle, TakeOutputResult, Target, TerminalFailure,
-    UnresolvedFuture, VMOptions, Value, CANCEL_NOTIFICATION_HANDLE, VM,
+    RunExitResult, RunHandle, SendHandle, Target, TerminalFailure, UnresolvedFuture, VMOptions,
+    Value, CANCEL_NOTIFICATION_HANDLE, VM,
 };
 use serde::{Deserialize, Serialize};
 use std::cmp;
@@ -634,11 +634,8 @@ impl WasmVM {
         ))
     }
 
-    pub fn take_output(&mut self) -> JsValue {
-        match use_log_dispatcher!(self, CoreVM::take_output) {
-            TakeOutputResult::Buffer(v) => Uint8Array::from(&*v).into(),
-            TakeOutputResult::EOF => JsValue::null(),
-        }
+    pub fn take_output(&mut self) -> Uint8Array {
+        (&*use_log_dispatcher!(self, CoreVM::take_output)).into()
     }
 
     pub fn is_ready_to_execute(&self) -> Result<bool, WasmFailure> {

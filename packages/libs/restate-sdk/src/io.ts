@@ -79,11 +79,8 @@ export class OutputPump {
   ) {}
 
   async awaitNextProgress() {
-    const nextOutput = this.coreVm.take_output() as
-      | Uint8Array
-      | null
-      | undefined;
-    if (nextOutput instanceof Uint8Array) {
+    const nextOutput = this.coreVm.take_output();
+    if (nextOutput?.length > 0) {
       await this.outputWriter.write(nextOutput);
     }
   }
