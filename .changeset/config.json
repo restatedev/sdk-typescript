@@ -2,7 +2,7 @@
   "$schema": "https://unpkg.com/@changesets/config@3.0.0/schema.json",
   "changelog": "@changesets/cli/changelog",
   "commit": false,
-  "fixed": [],
+  "fixed": [["@restatedev/*"]],
   "linked": [],
   "access": "public",
   "baseBranch": "main",
@@ -11,5 +11,8 @@
   "privatePackages": {
     "version": false,
     "tag": false
-  }
+  },
+  "___experimentalUnsafeOptions_WILL_CHANGE_IN_PATCH": {
+     "onlyUpdatePeerDependentsWhenOutOfRange": true
+   }
 }
