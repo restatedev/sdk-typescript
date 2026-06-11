@@ -1,5 +1,16 @@
 # @restatedev/restate-sdk-clients
 
+## 1.15.0-rc.3
+
+### Minor Changes
+
+- dcd51ba: Added RunRetryPolicy.onMaxAttempts = pause and PauseError
+
+### Patch Changes
+
+- Updated dependencies [dcd51ba]
+  - @restatedev/restate-sdk-core@1.15.0-rc.3
+
 ## 1.15.0-rc.2
 
 ### Minor Changes

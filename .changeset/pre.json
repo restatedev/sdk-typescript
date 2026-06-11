@@ -20,5 +20,11 @@
     "@restatedev/restate-sdk-zod": "1.15.0-rc.2",
     "@restatedev/restate-e2e-services": "0.0.0"
   },
-  "changesets": []
+  "changesets": [
+    "brave-tunnels-connect",
+    "clever-fibers-rest",
+    "every-jobs-love",
+    "spicy-context-local",
+    "tame-tasks-interrupt"
+  ]
 }
