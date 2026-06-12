@@ -79,6 +79,24 @@ describe("resolveOptions — validation", () => {
     expect(r.tls).toBe(true);
   });
 
+  test("accepts a multi-label (BYOC) region", () => {
+    const r = resolveOptions({
+      ...valid,
+      region: "inl4edhpbxasp9yuz1n0yvvkme.byoc",
+    });
+    expect(r.srvName).toBe(
+      "tunnel.inl4edhpbxasp9yuz1n0yvvkme.byoc.restate.cloud"
+    );
+  });
+
+  test("rejects a malformed region", () => {
+    for (const region of ["US", "us/extra", ".us", "us.", "us..eu"]) {
+      expect(() => resolveOptions({ ...valid, region })).toThrow(
+        /invalid region/
+      );
+    }
+  });
+
   test("rejects neither region nor tunnelServers", () => {
     expect(() => resolveOptions({ ...valid, region: undefined })).toThrow(
       new RegExp(`specify one of .*${CLOUD_REGION_ENV}`)

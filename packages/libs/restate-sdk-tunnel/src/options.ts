@@ -185,7 +185,10 @@ export function resolveOptions(options: ConnectTunnelOptions): ResolvedOptions {
       "tunnel: specify exactly one of `region`, `tunnelServersSrv` or `tunnelServers`"
     );
   }
-  if (hasRegion && !/^[a-z0-9-]+$/.test(region!)) {
+  // A region becomes DNS labels in `tunnel.{region}.restate.cloud`, so it may be
+  // multi-label (e.g. a BYOC region like "inl4edhpbxasp9yuz1n0yvvkme.byoc") —
+  // each label lowercase [a-z0-9-], dot-separated, no empty labels.
+  if (hasRegion && !/^[a-z0-9-]+(\.[a-z0-9-]+)*$/.test(region!)) {
     throw new Error(`tunnel: invalid region ${JSON.stringify(region)}`);
   }
   if (hasSrv && !/^[A-Za-z0-9._-]+$/.test(options.tunnelServersSrv!)) {
