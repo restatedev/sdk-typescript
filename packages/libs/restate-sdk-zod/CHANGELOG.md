@@ -1,5 +1,11 @@
 # @restatedev/restate-sdk-zod
 
+## 1.15.0-rc.4
+
+### Patch Changes
+
+-
+
 ## 1.15.0-rc.3
 
 ### Minor Changes

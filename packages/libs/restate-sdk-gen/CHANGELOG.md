@@ -1,5 +1,14 @@
 # @restatedev/restate-sdk-gen
 
+## 1.15.0-rc.4
+
+### Patch Changes
+
+-
+- Updated dependencies
+  - @restatedev/restate-sdk-clients@1.15.0-rc.4
+  - @restatedev/restate-sdk-core@1.15.0-rc.4
+
 ## 1.15.0-rc.3
 
 ### Minor Changes
