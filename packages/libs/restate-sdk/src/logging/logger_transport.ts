@@ -56,6 +56,10 @@ export type LoggerTransport = (
 
 /**
  * Logger context.
+ *
+ * The SDK fills invocation fields automatically. `additionalContext` contains
+ * fields added with `ctx.console.child(...)`, for example order ids or payment
+ * ids that should be attached to each log line.
  */
 export class LoggerContext {
   readonly invocationTarget: string;

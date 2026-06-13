@@ -11,17 +11,17 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import type {
-  LoggerContext,
-  LoggerTransport,
-  LogSource,
-} from "./logger_transport.js";
-import { RestateLogLevel } from "./logger_transport.js";
+import type { LoggerTransport, LogSource } from "./logger_transport.js";
+import { LoggerContext, RestateLogLevel } from "./logger_transport.js";
+import type { RestateConsole } from "../context.js";
 
 /**
  * Logging facade used internally by the Restate SDK.
  */
-export interface Logger extends Console {
+export interface Logger extends RestateConsole {
+  /**
+   * Emits a log event at the provided Restate log level
+   */
   logForLevel(
     level: RestateLogLevel,
     message?: any,
@@ -35,6 +35,30 @@ export function createLogger(
   context?: LoggerContext,
   isReplaying: () => boolean = () => false
 ): Logger {
+  /**
+   * Builds the immutable context for a child logger by merging parent and child
+   * fields without mutating the parent logger context.
+   */
+  function childLoggerContext(
+    context: LoggerContext | undefined,
+    additionalContext: Record<string, string>
+  ): LoggerContext | undefined {
+    if (context === undefined) {
+      return undefined;
+    }
+    return new LoggerContext(
+      context.invocationId,
+      context.serviceName,
+      context.handlerName,
+      context.key,
+      context.request,
+      {
+        ...context.additionalContext,
+        ...additionalContext,
+      }
+    );
+  }
+
   function loggerForLevel(
     loggerTransport: LoggerTransport,
     source: LogSource,
@@ -92,6 +116,18 @@ export function createLogger(
       isReplaying,
       context
     ),
+    child: {
+      get() {
+        return (additionalContext: Record<string, string>): Logger => {
+          return createLogger(
+            loggerTransport,
+            source,
+            childLoggerContext(context, additionalContext),
+            isReplaying
+          );
+        };
+      },
+    },
     logForLevel: {
       get() {
         return (

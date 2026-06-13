@@ -28,6 +28,7 @@ export type {
   ContextDate,
   RunAction,
   RunOptions,
+  RestateConsole,
   KeyValueStore,
   DurablePromise,
   Request,

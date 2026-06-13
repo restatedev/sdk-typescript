@@ -46,13 +46,27 @@ export interface EndpointOptions {
    * Using winston:
    * ```ts
    * const logger = createLogger({ ... })
-   * createEndpointHandler({ logger: (meta, message, ...o) => {logger.log(meta.level, {invocationId: meta.context?.invocationId}, [message, ...o].join(' '))} })
+   * createEndpointHandler({ logger: (meta, message, ...o) => {
+   *   logger.log(meta.level, {
+   *     invocationId: meta.context?.invocationId,
+   *     ...meta.context?.additionalContext,
+   *     message: [message, ...o].join(" "),
+   *   });
+   * } })
    * ```
    * @example
    * Using pino:
    * ```ts
    * const logger = pino()
-   * createEndpointHandler({ logger: (meta, message, ...o) => {logger[meta.level]({invocationId: meta.context?.invocationId}, [message, ...o].join(' '))}} )
+   * createEndpointHandler({ logger: (meta, message, ...o) => {
+   *   logger[meta.level](
+   *     {
+   *       invocationId: meta.context?.invocationId,
+   *       ...meta.context?.additionalContext,
+   *     },
+   *     [message, ...o].join(" ")
+   *   );
+   * } })
    * ```
    */
   logger?: LoggerTransport;

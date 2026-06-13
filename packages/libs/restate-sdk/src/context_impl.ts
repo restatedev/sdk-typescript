@@ -23,6 +23,7 @@ import type {
   ObjectContext,
   Rand,
   Request,
+  RestateConsole,
   RestatePromise,
   RunAction,
   RunOptions,
@@ -111,7 +112,7 @@ export class ContextImpl
   constructor(
     readonly coreVm: WasmVM,
     input: WasmInput,
-    public readonly console: Console,
+    public readonly console: RestateConsole,
     public readonly handlerKind: HandlerKind,
     readonly vmLogger: Console,
     private readonly invocationRequest: Request,
