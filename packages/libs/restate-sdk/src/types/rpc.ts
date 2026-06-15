@@ -501,6 +501,20 @@ export type ServiceHandlerOpts<I, O> = {
    * @experimental
    */
   explicitCancellation?: boolean;
+
+  /**
+   * Configures how the SDK reacts to journal mismatch errors, also known as non-determinism errors.
+   *
+   * - `"retry"` (default): the invocation follows the normal retry policy when a journal mismatch is detected.
+   * - `"pause"`: the invocation is paused instead of being retried, so it can be inspected and manually
+   *   resumed once the non-determinism in the code is fixed.
+   *
+   * *NOTE:* `"pause"` requires a restate-server that supports pausing invocations; on older servers the
+   * invocation will follow the retry policy regardless of this setting.
+   *
+   * @experimental
+   */
+  onJournalMismatchErrors?: "retry" | "pause";
 };
 
 export type ObjectHandlerOpts<I, O> = ServiceHandlerOpts<I, O> & {
@@ -1058,6 +1072,20 @@ export type ServiceOptions = {
    * @experimental
    */
   explicitCancellation?: boolean;
+
+  /**
+   * Configures how the SDK reacts to journal mismatch errors, also known as non-determinism errors.
+   *
+   * - `"retry"` (default): the invocation follows the normal retry policy when a journal mismatch is detected.
+   * - `"pause"`: the invocation is paused instead of being retried, so it can be inspected and manually
+   *   resumed once the non-determinism in the code is fixed.
+   *
+   * *NOTE:* `"pause"` requires a restate-server that supports pausing invocations; on older servers the
+   * invocation will follow the retry policy regardless of this setting.
+   *
+   * @experimental
+   */
+  onJournalMismatchErrors?: "retry" | "pause";
 };
 
 /**

@@ -325,11 +325,12 @@ export class WasmVM {
      * @param {number} logger_id
      * @param {boolean} disable_payload_checks
      * @param {boolean} explicit_cancellation
+     * @param {boolean} pause_on_journal_mismatch
      */
-    constructor(headers, log_level, logger_id, disable_payload_checks, explicit_cancellation) {
+    constructor(headers, log_level, logger_id, disable_payload_checks, explicit_cancellation, pause_on_journal_mismatch) {
         const ptr0 = passArrayJsValueToWasm0(headers, wasm.__wbindgen_malloc);
         const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.wasmvm_new(ptr0, len0, log_level, logger_id, disable_payload_checks, explicit_cancellation);
+        const ret = wasm.wasmvm_new(ptr0, len0, log_level, logger_id, disable_payload_checks, explicit_cancellation, pause_on_journal_mismatch);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }

@@ -138,7 +138,8 @@ export class WasmVM {
     log_level: LogLevel,
     logger_id: number,
     disable_payload_checks: boolean,
-    explicit_cancellation: boolean
+    explicit_cancellation: boolean,
+    pause_on_journal_mismatch: boolean
   );
   notify_error(error_message: string, stacktrace?: string | null): void;
   notify_error_for_next_command(

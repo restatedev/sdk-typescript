@@ -3,9 +3,9 @@ use restate_sdk_shared_core::tracing_pretty::{Pretty, PrettyFields};
 use restate_sdk_shared_core::{
     AwaitResponse, AwakeableHandle, CallHandle, CommandRelationship, CommandType, CoreVM, Error,
     Header, HeaderMap, IdentityVerifier, ImplicitCancellationOption, Input,
-    NonDeterministicChecksOption, NonEmptyValue, OnMaxAttempts, ResponseHead, RetryPolicy,
-    RunExitResult, RunHandle, SendHandle, Target, TerminalFailure, UnresolvedFuture, VMOptions,
-    Value, CANCEL_NOTIFICATION_HANDLE, VM,
+    NonDeterministicChecksOption, NonDeterministicChecksRetryPolicy, NonEmptyValue, OnMaxAttempts,
+    ResponseHead, RetryPolicy, RunExitResult, RunHandle, SendHandle, Target, TerminalFailure,
+    UnresolvedFuture, VMOptions, Value, CANCEL_NOTIFICATION_HANDLE, VM,
 };
 use serde::{Deserialize, Serialize};
 use std::cmp;
@@ -522,6 +522,7 @@ impl WasmVM {
         logger_id: u32,
         disable_payload_checks: bool,
         explicit_cancellation: bool,
+        pause_on_journal_mismatch: bool,
     ) -> Result<WasmVM, WasmFailure> {
         let log_dispatcher = Dispatch::new(log_subscriber(log_level, Some(logger_id)));
 
@@ -543,6 +544,11 @@ impl WasmVM {
                         }
                     },
                     awaiting_on_policy: Default::default(),
+                    non_determinism_checks_retry_policy: if pause_on_journal_mismatch {
+                        NonDeterministicChecksRetryPolicy::Pause
+                    } else {
+                        NonDeterministicChecksRetryPolicy::FollowRetryPolicy
+                    },
                 },
             )
         })?;

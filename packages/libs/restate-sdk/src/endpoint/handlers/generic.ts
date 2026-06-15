@@ -299,7 +299,8 @@ class RestateInvokeResponse implements RestateResponse {
       restateLogLevelToWasmLogLevel(DEFAULT_CONSOLE_LOGGER_LOG_LEVEL),
       this.loggerId,
       isJournalCodecDefined,
-      handler.executionOptions.explicitCancellation ?? false
+      handler.executionOptions.explicitCancellation ?? false,
+      (handler.executionOptions.onJournalMismatchErrors ?? "retry") === "pause"
     );
     const responseHead = this.coreVm.get_response_head();
     this.statusCode = responseHead.status_code;
