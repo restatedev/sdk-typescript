@@ -119,14 +119,21 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
   const draining = new DrainingRegistry();
   const inflight = new InflightTracker();
 
-  // The engine lifecycle as one disjoint state rather than a set of booleans
-  // whose combinations could express nonsense:
-  //   running  — normal operation.
-  //   draining — shutdown() in progress: every connection refuses new
-  //              invocations with the drain sentinel (so the cloud deselects
-  //              us) while in-flight ones finish.
-  //   closed   — torn down (abrupt close(), or a completed / grace-expired drain).
-  let phase: "running" | "draining" | "closed" = "running";
+  // The engine lifecycle as one disjoint state, each variant carrying the data
+  // that is meaningful only in that phase:
+  //   running  — normal operation. No phase-local data: the engine's
+  //              substantive state (the registries, the supervisor, the
+  //              handle's learned info) lives for the whole lifetime and is
+  //              used across every phase, so it sits in stable fields below.
+  //   draining — a graceful shutdown() is in progress; `completed` is its
+  //              promise, so a re-entrant shutdown()/close() coalesces onto the
+  //              same in-flight drain instead of starting another.
+  //   closed   — torn down (abrupt close(), or a completed/grace-expired drain).
+  type EngineState =
+    | { readonly kind: "running" }
+    | { readonly kind: "draining"; readonly completed: Promise<void> }
+    | { readonly kind: "closed" };
+  let state: EngineState = { kind: "running" };
   let connectionCount = 0;
   let lastInfo: HandshakeInfo | undefined;
 
@@ -152,7 +159,7 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
       lastInfo = info;
       ready.resolve();
     },
-    isShuttingDown: () => phase === "draining",
+    isShuttingDown: () => state.kind === "draining",
     inflightStarted: () => inflight.started(),
     inflightEnded: () => inflight.ended(),
   };
@@ -179,8 +186,8 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
 
   // Abrupt teardown, shared by close() and a grace-expired shutdown(). Idempotent.
   const teardown = (): void => {
-    if (phase === "closed") return;
-    phase = "closed";
+    if (state.kind === "closed") return;
+    state = { kind: "closed" };
     supervisor.abortAll();
     for (const socket of activeSockets) socket.destroy();
     activeSockets.clear();
@@ -193,32 +200,35 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
     await done;
   };
 
-  const shutdown = async ({
-    graceMs,
-  }: { graceMs?: number } = {}): Promise<void> => {
-    if (phase !== "running") {
-      // A shutdown or close is already in progress (or done): nothing left to
-      // drain gracefully — just await teardown.
-      await done;
-      return;
-    }
-    // Enter draining: every connection now refuses new invocations with the
-    // drain sentinel (isShuttingDown), so the cloud stops routing new work here.
-    phase = "draining";
-    // Stop dialing/resolving new connections (existing ones keep serving).
-    supervisor.stopResolving();
-    // Move every live connection into an explicit client-drain: serving ones
+  const drainGracefully = async (graceMs: number): Promise<void> => {
+    // Stop dialing/resolving new connections (existing ones keep serving) and
+    // move every live connection into an explicit client-drain: serving ones
     // refuse new invocations and finish in-flight in place; not-yet-serving
     // ones abort. Snapshot first — beginClientDrain may settle a connection,
     // which removes it from the set.
+    supervisor.stopResolving();
     for (const c of [...activeConnections]) c.beginClientDrain();
     log(
       `tunnel: graceful shutdown — refusing new invocations, draining ${inflight.inFlight} in-flight`
     );
-    await inflight.whenDrained(graceMs ?? opts.drainGraceMs);
+    await inflight.whenDrained(graceMs);
     // In-flight drained (or grace elapsed): tear the now-idle connections down.
     teardown();
     await done;
+  };
+
+  const shutdown = ({ graceMs }: { graceMs?: number } = {}): Promise<void> => {
+    // Coalesce: re-entrant calls join the in-progress drain; once closed there
+    // is nothing left to drain.
+    if (state.kind === "draining") return state.completed;
+    if (state.kind === "closed") return done;
+    // Start the drain and record its promise on the state BEFORE the first
+    // await, so every connection sees isShuttingDown() for the whole drain.
+    // (drainGracefully runs synchronously up to inflight.whenDrained, so no new
+    // invocation can interleave before `state` is set.)
+    const completed = drainGracefully(graceMs ?? opts.drainGraceMs);
+    state = { kind: "draining", completed };
+    return completed;
   };
 
   if (options.signal?.aborted) {
