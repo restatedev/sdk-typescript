@@ -76,6 +76,16 @@ export interface ConnectionDeps {
   activeSockets: Set<net.Socket>;
   /** Called once per successful handshake (count, learned info, ready). */
   onEstablished: (info: HandshakeInfo) => void;
+  /**
+   * True once the engine is gracefully shutting down: new forwarded
+   * invocations are refused with the drain sentinel instead of dispatched, so
+   * the cloud deselects this connection while in-flight invocations finish.
+   */
+  isShuttingDown: () => boolean;
+  /** A forwarded invocation began executing (counts toward the drain wait). */
+  inflightStarted: () => void;
+  /** A forwarded invocation finished (its stream closed). */
+  inflightEnded: () => void;
 }
 
 /**
@@ -360,6 +370,7 @@ class ConnectionAttempt {
         environmentId: this.deps.opts.environmentId,
         tunnelName: this.deps.opts.tunnelName,
         supportsDrain: this.deps.opts.supportsDrain,
+        supportsClientDrain: this.deps.opts.supportsClientDrain,
       },
       this.deps.opts.handshakeTimeoutMs
     ).then((outcome) => {
@@ -384,6 +395,15 @@ class ConnectionAttempt {
     req: http2.Http2ServerRequest,
     res: http2.Http2ServerResponse
   ): void {
+    // Graceful shutdown: refuse new invocations WITHOUT running the handler.
+    // The sentinel tells the server to stop routing here; failing the request
+    // (rather than running it) lets the runtime retry it on a healthy
+    // connection with no risk of double-execution.
+    if (this.deps.isShuttingDown()) {
+      res.writeHead(503, { "x-restate-tunnel-draining": "true" });
+      res.end();
+      return;
+    }
     const tail = forwardedTail(req.url ?? "");
     if (tail === null) {
       res.writeHead(400);
@@ -391,6 +411,9 @@ class ConnectionAttempt {
       return;
     }
     req.url = tail;
+    // Count this invocation as in-flight so shutdown() waits for it to finish.
+    this.deps.inflightStarted();
+    res.stream.once("close", () => this.deps.inflightEnded());
     this.deps.sdkHandler(req, res);
   }
 

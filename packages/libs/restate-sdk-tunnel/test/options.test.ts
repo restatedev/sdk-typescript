@@ -390,3 +390,57 @@ describe("parseServerAddress", () => {
     );
   });
 });
+
+describe("client-drain / graceful-shutdown options", () => {
+  test("supportsClientDrain defaults to true", () => {
+    expect(resolveOptions(valid).supportsClientDrain).toBe(true);
+  });
+
+  test("supportsClientDrain can be disabled", () => {
+    expect(
+      resolveOptions({ ...valid, supportsClientDrain: false })
+        .supportsClientDrain
+    ).toBe(false);
+  });
+
+  test("gracefulShutdown is undefined unless opted in", () => {
+    expect(resolveOptions(valid).gracefulShutdown).toBeUndefined();
+    expect(
+      resolveOptions({ ...valid, gracefulShutdown: false }).gracefulShutdown
+    ).toBeUndefined();
+  });
+
+  test("gracefulShutdown: true uses SIGTERM and the drain grace", () => {
+    expect(
+      resolveOptions({ ...valid, gracefulShutdown: true }).gracefulShutdown
+    ).toEqual({ signals: ["SIGTERM"], graceMs: 120_000 });
+  });
+
+  test("gracefulShutdown: true inherits a custom drainGraceMs", () => {
+    expect(
+      resolveOptions({ ...valid, gracefulShutdown: true, drainGraceMs: 30_000 })
+        .gracefulShutdown
+    ).toEqual({ signals: ["SIGTERM"], graceMs: 30_000 });
+  });
+
+  test("gracefulShutdown accepts custom signals and grace", () => {
+    expect(
+      resolveOptions({
+        ...valid,
+        gracefulShutdown: { signals: ["SIGTERM", "SIGINT"], graceMs: 5_000 },
+      }).gracefulShutdown
+    ).toEqual({ signals: ["SIGTERM", "SIGINT"], graceMs: 5_000 });
+  });
+
+  test("gracefulShutdown rejects an empty signal list", () => {
+    expect(() =>
+      resolveOptions({ ...valid, gracefulShutdown: { signals: [] } })
+    ).toThrow(/must not be empty/);
+  });
+
+  test("gracefulShutdown rejects a non-positive grace", () => {
+    expect(() =>
+      resolveOptions({ ...valid, gracefulShutdown: { graceMs: 0 } })
+    ).toThrow(/positive/);
+  });
+});

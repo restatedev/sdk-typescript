@@ -213,17 +213,27 @@ export function startFakeCloud(options: FakeCloudOptions): Promise<FakeCloud> {
 export function roundtrip(
   session: http2.ClientHttp2Session,
   headers: http2.OutgoingHttpHeaders
-): Promise<{ status: number; body: string }> {
+): Promise<{
+  status: number;
+  headers: http2.IncomingHttpHeaders;
+  body: string;
+}> {
   return new Promise((resolve, reject) => {
     const req = session.request(headers);
     let status = 0;
+    let responseHeaders: http2.IncomingHttpHeaders = {};
     const chunks: Buffer[] = [];
     req.on("response", (h) => {
       status = Number(h[":status"]);
+      responseHeaders = h;
     });
     req.on("data", (c: Buffer) => chunks.push(c));
     req.on("end", () =>
-      resolve({ status, body: Buffer.concat(chunks).toString() })
+      resolve({
+        status,
+        headers: responseHeaders,
+        body: Buffer.concat(chunks).toString(),
+      })
     );
     req.on("error", reject);
     req.end();

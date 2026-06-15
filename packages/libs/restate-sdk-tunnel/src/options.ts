@@ -46,6 +46,9 @@ export interface ResolvedOptions {
   resolveIntervalMs: number;
   supportsDrain: boolean;
   drainGraceMs: number;
+  supportsClientDrain: boolean;
+  /** Set when auto signal-handling is opted into; undefined leaves signals alone. */
+  gracefulShutdown?: { signals: NodeJS.Signals[]; graceMs: number };
   connectTimeoutMs: number;
   handshakeTimeoutMs: number;
   reconnectInitialMs: number;
@@ -245,6 +248,7 @@ export function resolveOptions(options: ConnectTunnelOptions): ResolvedOptions {
     10_000,
     "pingTimeoutMs"
   );
+  const drainGraceMs = positive(options.drainGraceMs, 120_000, "drainGraceMs");
 
   return {
     srvName: hasRegion
@@ -264,7 +268,12 @@ export function resolveOptions(options: ConnectTunnelOptions): ResolvedOptions {
       "resolveIntervalMs"
     ),
     supportsDrain: options.supportsDrain ?? true,
-    drainGraceMs: positive(options.drainGraceMs, 120_000, "drainGraceMs"),
+    drainGraceMs,
+    supportsClientDrain: options.supportsClientDrain ?? true,
+    gracefulShutdown: resolveGracefulShutdown(
+      options.gracefulShutdown,
+      drainGraceMs
+    ),
     connectTimeoutMs: positive(
       options.connectTimeoutMs,
       5_000,
@@ -302,6 +311,23 @@ export function resolveOptions(options: ConnectTunnelOptions): ResolvedOptions {
     ),
     tls: options.tls ?? true,
     logger: options.logger ?? (() => {}),
+  };
+}
+
+/** Resolve the opt-in auto signal-handling config (undefined = leave signals alone). */
+function resolveGracefulShutdown(
+  option: boolean | { signals?: NodeJS.Signals[]; graceMs?: number } | undefined,
+  drainGraceMs: number
+): { signals: NodeJS.Signals[]; graceMs: number } | undefined {
+  if (option === undefined || option === false) return undefined;
+  if (option === true) return { signals: ["SIGTERM"], graceMs: drainGraceMs };
+  const signals = option.signals ?? ["SIGTERM"];
+  if (signals.length === 0) {
+    throw new Error("tunnel: gracefulShutdown.signals must not be empty");
+  }
+  return {
+    signals,
+    graceMs: positive(option.graceMs, drainGraceMs, "gracefulShutdown.graceMs"),
   };
 }
 

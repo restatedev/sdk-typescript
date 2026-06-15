@@ -90,6 +90,14 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
   const draining = new DrainingRegistry();
   const slots = new Map<string, Slot>();
 
+  // Graceful client-initiated shutdown: `shuttingDown` makes every connection
+  // refuse new invocations with the drain sentinel (so the cloud deselects
+  // us), and `globalInflight` counts invocations still executing so shutdown()
+  // can wait for them to finish before tearing down.
+  let shuttingDown = false;
+  let globalInflight = 0;
+  let inflightDrained: (() => void) | undefined;
+
   // Aborted by close(); cascades into every slot.
   const stopController = new AbortController();
   // Wakes the supervisor out of its sleeps promptly on close() AND on a
@@ -125,6 +133,18 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
       connectionCount++;
       lastInfo = info;
       readyResolve();
+    },
+    isShuttingDown: () => shuttingDown,
+    inflightStarted: () => {
+      globalInflight++;
+    },
+    inflightEnded: () => {
+      globalInflight = Math.max(0, globalInflight - 1);
+      if (globalInflight === 0 && inflightDrained !== undefined) {
+        const resolve = inflightDrained;
+        inflightDrained = undefined;
+        resolve();
+      }
     },
   };
 
@@ -257,16 +277,67 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
 
   // ---- the public handle ----
 
+  // The abrupt teardown, factored out so both close() and a grace-expired
+  // shutdown() reach it. Idempotent.
+  let toreDown = false;
+  const teardown = (): void => {
+    if (toreDown) return;
+    toreDown = true;
+    stopController.abort();
+    stopAllSlots();
+    for (const socket of activeSockets) socket.destroy();
+    activeSockets.clear();
+    draining.destroyAll();
+    clearInterval(keepAlive);
+  };
+
   const close = async (): Promise<void> => {
-    if (!stopped) {
-      stopped = true;
-      stopController.abort();
-      stopAllSlots();
-      for (const socket of activeSockets) socket.destroy();
-      activeSockets.clear();
-      draining.destroyAll();
-      clearInterval(keepAlive);
+    stopped = true;
+    teardown();
+    await loopDone;
+  };
+
+  // Resolve once no invocation is in flight, or after `graceMs` — whichever is
+  // first. Only one shutdown runs at a time, so a single waiter suffices.
+  const waitForInflightDrain = (graceMs: number): Promise<void> =>
+    new Promise((resolve) => {
+      if (globalInflight === 0) {
+        resolve();
+        return;
+      }
+      const timer = setTimeout(() => {
+        inflightDrained = undefined;
+        resolve();
+      }, graceMs);
+      timer.unref();
+      inflightDrained = () => {
+        clearTimeout(timer);
+        resolve();
+      };
+    });
+
+  const shutdown = async ({
+    graceMs,
+  }: { graceMs?: number } = {}): Promise<void> => {
+    if (stopped || toreDown) {
+      // Already closing/closed (or a shutdown is already in progress): there is
+      // nothing left to drain gracefully — just await teardown.
+      await loopDone;
+      return;
     }
+    stopped = true;
+    // From here, every connection refuses new invocations with the drain
+    // sentinel, so the cloud stops routing new work to this process.
+    shuttingDown = true;
+    // Stop the supervisor resolving/starting connections (no new dials).
+    supervisorWake.abort();
+    log(
+      `tunnel: graceful shutdown — refusing new invocations, draining ${globalInflight} in-flight`
+    );
+    await waitForInflightDrain(graceMs ?? opts.drainGraceMs);
+    // In-flight is drained (or the grace elapsed): tear the now-idle
+    // connections down and wait for the engine to settle.
+    teardown();
     await loopDone;
   };
 
@@ -279,8 +350,20 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
     });
   }
 
+  // Opt-in: handle process signals ourselves — graceful drain, then exit.
+  if (opts.gracefulShutdown !== undefined) {
+    const { signals, graceMs } = opts.gracefulShutdown;
+    for (const signal of signals) {
+      process.once(signal, () => {
+        log(`tunnel: received ${signal} — shutting down gracefully`);
+        void shutdown({ graceMs }).finally(() => process.exit(0));
+      });
+    }
+  }
+
   return {
     close,
+    shutdown,
     get connectionCount() {
       return connectionCount;
     },
