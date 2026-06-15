@@ -119,12 +119,14 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
   const draining = new DrainingRegistry();
   const inflight = new InflightTracker();
 
-  // `shuttingDown` makes every connection refuse new invocations with the
-  // drain sentinel (so the cloud deselects us). `stopped`/`toreDown` guard the
-  // handle methods against re-entry.
-  let stopped = false;
-  let toreDown = false;
-  let shuttingDown = false;
+  // The engine lifecycle as one disjoint state rather than a set of booleans
+  // whose combinations could express nonsense:
+  //   running  — normal operation.
+  //   draining — shutdown() in progress: every connection refuses new
+  //              invocations with the drain sentinel (so the cloud deselects
+  //              us) while in-flight ones finish.
+  //   closed   — torn down (abrupt close(), or a completed / grace-expired drain).
+  let phase: "running" | "draining" | "closed" = "running";
   let connectionCount = 0;
   let lastInfo: HandshakeInfo | undefined;
 
@@ -150,7 +152,7 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
       lastInfo = info;
       ready.resolve();
     },
-    isShuttingDown: () => shuttingDown,
+    isShuttingDown: () => phase === "draining",
     inflightStarted: () => inflight.started(),
     inflightEnded: () => inflight.ended(),
   };
@@ -177,8 +179,8 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
 
   // Abrupt teardown, shared by close() and a grace-expired shutdown(). Idempotent.
   const teardown = (): void => {
-    if (toreDown) return;
-    toreDown = true;
+    if (phase === "closed") return;
+    phase = "closed";
     supervisor.abortAll();
     for (const socket of activeSockets) socket.destroy();
     activeSockets.clear();
@@ -187,7 +189,6 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
   };
 
   const close = async (): Promise<void> => {
-    stopped = true;
     teardown();
     await done;
   };
@@ -195,16 +196,15 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
   const shutdown = async ({
     graceMs,
   }: { graceMs?: number } = {}): Promise<void> => {
-    if (stopped || toreDown) {
-      // Already closing/closed (or a shutdown is already in progress): nothing
-      // left to drain gracefully — just await teardown.
+    if (phase !== "running") {
+      // A shutdown or close is already in progress (or done): nothing left to
+      // drain gracefully — just await teardown.
       await done;
       return;
     }
-    stopped = true;
-    // From here every connection refuses new invocations with the drain
-    // sentinel, so the cloud stops routing new work to this process.
-    shuttingDown = true;
+    // Enter draining: every connection now refuses new invocations with the
+    // drain sentinel (isShuttingDown), so the cloud stops routing new work here.
+    phase = "draining";
     // Stop dialing/resolving new connections (existing ones keep serving).
     supervisor.stopResolving();
     // Move every live connection into an explicit client-drain: serving ones
