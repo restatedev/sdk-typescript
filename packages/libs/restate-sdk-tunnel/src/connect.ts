@@ -16,59 +16,87 @@
 // to Restate Cloud's tunnel servers — no inbound listener. The pieces:
 //
 //   connection.ts — one dial → role-flip → handshake → serve cycle
+//   supervisor.ts — the slot supervisor (one connection per resolved server)
 //   handshake.ts  — the /_/start-tunnel credentials/trailers exchange
 //   forwarded.ts  — the /<scheme>/<host>/<port> destination-prefix strip
 //   targets.ts    — server discovery (SRV per-IP expansion / explicit list)
-//   draining.ts   — graceful-drain handover ownership
+//   draining.ts   — server-drain handover ownership
 //   backoff.ts    — jittered exponential reconnect policy
 //
-// This module owns the engine: the SLOT SUPERVISOR (multi-homing — like the
-// Rust client, one connection per resolved tunnel server, reconciled as DNS
-// changes; K is not configurable, it IS the resolved set), per-slot
-// reconnect loops with fatal-vs-retryable classification, and the public
-// TunnelConnection handle.
-//
-// Engine invariants:
-//
-//   E1. A FATAL outcome (unauthorized / bad-tunnel-name / name mismatch) on
-//       ANY slot stops the WHOLE tunnel — the credentials are shared, so
-//       every other slot would hit the same wall. Fatal wakes the
-//       supervisor, aborts every slot, tears down draining sessions, and
-//       surfaces on `error`/`ready` instead of retry-looping the auth path.
-//   E2. Backoff resets only after a connection held for
-//       MIN_UPTIME_FOR_BACKOFF_RESET_MS; a drain only skips the backoff
-//       sleep under the same guard (drain-spam must compound like any
-//       handshake-ok-then-die cycle).
-//   E3. Teardown is prompt everywhere: close()/fatal abort in-flight dials
-//       via per-slot signals, race the (un-abortable) DNS work instead of
-//       awaiting it, and never wait out a sleep or a drain grace window.
+// This module is the thin assembler: it builds the shared registries and the
+// per-connection dependencies, hands slot management to the {@link Supervisor},
+// and owns the public TunnelConnection handle and its lifecycle (`close` /
+// `shutdown` / signal wiring). The cross-cutting mechanisms live in their own
+// units — `Supervisor` (slots), `InflightTracker` (drain accounting),
+// `DrainingRegistry` (server-drain sessions), `Deferred` (readiness) — so the
+// engine holds only lifecycle flags + the public-handle state.
 
 import type * as net from "node:net";
 import { createEndpointHandler } from "@restatedev/restate-sdk";
 
 import type { ConnectTunnelOptions, TunnelConnection } from "./types.js";
 import { resolveOptions } from "./options.js";
-import { resolveTargets, targetKey, type Target } from "./targets.js";
 import type { HandshakeInfo } from "./handshake.js";
 import {
-  runConnection,
   type ConnectionDeps,
   type DrainableConnection,
 } from "./connection.js";
 import { DrainingRegistry } from "./draining.js";
-import { Backoff, MIN_UPTIME_FOR_BACKOFF_RESET_MS } from "./backoff.js";
-import { delay, raceAbortable } from "./util.js";
+import { Supervisor } from "./supervisor.js";
+import { Deferred } from "./util.js";
 
-/** A running per-server connection loop. */
-interface Slot {
-  ctl: AbortController;
-  done: Promise<void>;
+/**
+ * Counts forwarded invocations in flight and lets a graceful shutdown wait for
+ * them to finish. Spans both actively-served and server-drained (detached)
+ * sessions, since every dispatch increments and every stream close decrements
+ * regardless of which session it belongs to.
+ */
+class InflightTracker {
+  private count = 0;
+  private notifyDrained: (() => void) | undefined;
+
+  get inFlight(): number {
+    return this.count;
+  }
+
+  started(): void {
+    this.count++;
+  }
+
+  ended(): void {
+    this.count = Math.max(0, this.count - 1);
+    if (this.count === 0 && this.notifyDrained !== undefined) {
+      const notify = this.notifyDrained;
+      this.notifyDrained = undefined;
+      notify();
+    }
+  }
+
+  /** Resolve once nothing is in flight, or after `graceMs` — whichever first.
+   * Only one shutdown runs at a time, so a single waiter suffices. */
+  whenDrained(graceMs: number): Promise<void> {
+    return new Promise((resolve) => {
+      if (this.count === 0) {
+        resolve();
+        return;
+      }
+      const timer = setTimeout(() => {
+        this.notifyDrained = undefined;
+        resolve();
+      }, graceMs);
+      timer.unref();
+      this.notifyDrained = () => {
+        clearTimeout(timer);
+        resolve();
+      };
+    });
+  }
 }
 
 /**
  * Connect this deployment to a Restate Cloud tunnel and serve `services`
  * over it. Returns immediately; connection management runs in the
- * background until `close()` (or the `signal`) stops it. See
+ * background until `close()`/`shutdown()` (or the `signal`) stops it. See
  * {@link TunnelConnection.ready} to await the first successful handshake.
  */
 export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
@@ -84,50 +112,31 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
     identityKeys: [opts.signingPublicKey],
   });
 
-  // ---- engine state ----
+  // ---- shared registries + lifecycle state ----
 
-  let stopped = false;
-  let fatalError: Error | undefined;
-  let connectionCount = 0;
-  let lastInfo: HandshakeInfo | undefined;
   const activeSockets = new Set<net.Socket>();
-  // Live connections the engine can ask to drain in place on shutdown().
   const activeConnections = new Set<DrainableConnection>();
   const draining = new DrainingRegistry();
-  const slots = new Map<string, Slot>();
+  const inflight = new InflightTracker();
 
-  // Graceful client-initiated shutdown: `shuttingDown` makes every connection
-  // refuse new invocations with the drain sentinel (so the cloud deselects
-  // us), and `globalInflight` counts invocations still executing so shutdown()
-  // can wait for them to finish before tearing down.
+  // `shuttingDown` makes every connection refuse new invocations with the
+  // drain sentinel (so the cloud deselects us). `stopped`/`toreDown` guard the
+  // handle methods against re-entry.
+  let stopped = false;
+  let toreDown = false;
   let shuttingDown = false;
-  let globalInflight = 0;
-  let inflightDrained: (() => void) | undefined;
+  let connectionCount = 0;
+  let lastInfo: HandshakeInfo | undefined;
 
-  // Aborted by close(); cascades into every slot.
-  const stopController = new AbortController();
-  // Wakes the supervisor out of its sleeps promptly on close() AND on a
-  // fatal (so teardown doesn't wait out resolveIntervalMs) — E3.
-  const supervisorWake = new AbortController();
-  stopController.signal.addEventListener(
-    "abort",
-    () => supervisorWake.abort(),
-    { once: true }
-  );
+  // Resolves on the first successful handshake; rejects on a fatal stop or if
+  // the tunnel closes before ever connecting. The catch keeps a never-awaited
+  // rejection from surfacing as unhandled.
+  const ready = new Deferred<void>();
+  void ready.promise.catch(() => {});
 
-  let readyResolve!: () => void;
-  let readyReject!: (err: Error) => void;
-  const ready = new Promise<void>((resolve, reject) => {
-    readyResolve = resolve;
-    readyReject = reject;
-  });
-  // A caller may never await `ready`; don't turn a fatal handshake into an
-  // unhandled rejection.
-  ready.catch(() => {});
-
-  // Anchor the event loop: between a session closing and the next redial
-  // timer there may be no pending I/O, and a bare awaited promise does not
-  // keep Node alive.
+  // Anchor the event loop: between a session closing and the next redial timer
+  // there may be no pending I/O, and a bare awaited promise does not keep Node
+  // alive.
   const keepAlive = setInterval(() => {}, 0x7fffffff);
 
   const connectionDeps: ConnectionDeps = {
@@ -139,159 +148,38 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
     onEstablished: (info) => {
       connectionCount++;
       lastInfo = info;
-      readyResolve();
+      ready.resolve();
     },
     isShuttingDown: () => shuttingDown,
-    inflightStarted: () => {
-      globalInflight++;
-    },
-    inflightEnded: () => {
-      globalInflight = Math.max(0, globalInflight - 1);
-      if (globalInflight === 0 && inflightDrained !== undefined) {
-        const resolve = inflightDrained;
-        inflightDrained = undefined;
-        resolve();
-      }
-    },
+    inflightStarted: () => inflight.started(),
+    inflightEnded: () => inflight.ended(),
   };
 
-  // ---- slots: one tunnel connection per resolved server ----
+  const supervisor = new Supervisor(
+    opts,
+    connectionDeps,
+    { onFatal: (err) => ready.reject(err) }, // E1 surfaces on ready/error
+    log
+  );
 
-  const stopAllSlots = () => {
-    for (const slot of slots.values()) slot.ctl.abort();
-    supervisorWake.abort();
-  };
-
-  /** The per-server loop: dial → serve → classify outcome → backoff → redial. */
-  const runSlot = async (target: Target, ctl: AbortController) => {
-    const backoff = new Backoff(
-      opts.reconnectInitialMs,
-      opts.reconnectFactor,
-      opts.reconnectMaxMs
-    );
-
-    while (!stopped && !ctl.signal.aborted && fatalError === undefined) {
-      const outcome = await runConnection(target, ctl.signal, connectionDeps);
-      if (stopped || ctl.signal.aborted) break;
-      if (outcome.kind === "fatal") {
-        // E1: shared credentials — stop everything.
-        fatalError = new Error(`tunnel: ${outcome.reason}`);
-        log(`tunnel: FATAL — ${outcome.reason}; stopping all connections`);
-        readyReject(fatalError);
-        stopAllSlots();
-        break;
-      }
-      if (outcome.kind === "served" || outcome.kind === "drained") {
-        // E2: only a connection that actually held resets the backoff.
-        const heldLongEnough =
-          outcome.uptimeMs >= MIN_UPTIME_FOR_BACKOFF_RESET_MS;
-        if (heldLongEnough) backoff.reset();
-        if (outcome.kind === "drained" && heldLongEnough) {
-          // A stable connection was asked to rotate and the server is
-          // holding the old one open for us — replace it NOW.
-          log("tunnel: draining — reconnecting immediately");
-          continue;
-        }
-        log(
-          outcome.kind === "drained"
-            ? "tunnel: drained shortly after connecting — reconnecting with backoff"
-            : "tunnel: connection ended — reconnecting"
-        );
-      } else {
-        log(`tunnel: ${outcome.reason} — reconnecting`);
-      }
-      await delay(backoff.next(), ctl.signal);
-    }
-  };
-
-  const startSlot = (key: string, target: Target) => {
-    const ctl = new AbortController();
-    // Chain to the global stop so close() cascades; self-detaching.
-    stopController.signal.addEventListener("abort", () => ctl.abort(), {
-      once: true,
-      signal: ctl.signal,
-    });
-    const slot: Slot = { ctl, done: Promise.resolve() };
-    slot.done = runSlot(target, ctl).finally(() => {
-      // Guarded: this key may have vanished and re-appeared, in which case
-      // a NEWER slot owns it — don't delete someone else's registration.
-      if (slots.get(key) === slot) slots.delete(key);
-    });
-    slots.set(key, slot);
-  };
-
-  // ---- the supervisor: resolve the server set, reconcile slots, repeat ----
-  //
-  // For SRV discovery the set is re-resolved every resolveIntervalMs; an
-  // explicit tunnelServers set is fixed and resolved once (like the Rust
-  // client's fixed_uri_stream).
-
-  const loopDone = (async () => {
-    while (!stopped && fatalError === undefined) {
-      let targets: Target[];
-      try {
-        // E3: race the (un-abortable) DNS work against the wake signal so
-        // close()/fatal don't block on a slow resolver — a late result is
-        // discarded by the stopped/fatal check below.
-        const resolution = resolveTargets(opts);
-        resolution.catch(() => {}); // a late rejection must not be unhandled
-        const raced = await raceAbortable(resolution, supervisorWake.signal);
-        if (raced === null) break; // woken: stopped or fatal
-        targets = raced;
-      } catch (err) {
-        // Keep whatever slots exist serving; retry the resolution later
-        // (the Rust client does the same on SRV failures).
-        log(
-          `tunnel: target resolution failed: ${err instanceof Error ? err.message : String(err)} — retrying`
-        );
-        await delay(
-          Math.min(5_000, opts.resolveIntervalMs),
-          supervisorWake.signal
-        );
-        continue;
-      }
-      if (stopped || fatalError !== undefined) break;
-
-      const desired = new Map(targets.map((t) => [targetKey(t), t] as const));
-      for (const [key, target] of desired) {
-        if (!slots.has(key)) {
-          log(`tunnel: starting connection to ${key}`);
-          startSlot(key, target);
-        }
-      }
-      for (const [key, slot] of slots) {
-        if (!desired.has(key)) {
-          log(`tunnel: ${key} no longer resolves — tearing down`);
-          slot.ctl.abort();
-        }
-      }
-
-      if (opts.srvName === undefined) break; // explicit servers: fixed set
-      await delay(opts.resolveIntervalMs, supervisorWake.signal);
-    }
-    // Slots still in the map are live; evicted ones have already settled.
-    // No slot can start after the supervisor loop exits.
-    await Promise.all([...slots.values()].map((s) => s.done));
+  // Resolves when the supervisor has fully wound down; then do the one-shot
+  // cleanup and settle `ready` for anyone still awaiting it.
+  const done = supervisor.done.then(() => {
     draining.destroyAll();
     clearInterval(keepAlive);
-    // If the tunnel never established (closed or stopped before the first
-    // ok handshake), settle `ready` so awaiting callers don't hang. No-op
-    // if it already resolved/rejected.
-    readyReject(
-      fatalError ?? new Error("tunnel: closed before the first handshake")
+    ready.reject(
+      supervisor.fatalError ??
+        new Error("tunnel: closed before the first handshake")
     );
-  })();
+  });
 
-  // ---- the public handle ----
+  // ---- lifecycle ----
 
-  // The abrupt teardown, factored out so both close() and a grace-expired
-  // shutdown() reach it. Idempotent.
-  let toreDown = false;
+  // Abrupt teardown, shared by close() and a grace-expired shutdown(). Idempotent.
   const teardown = (): void => {
     if (toreDown) return;
     toreDown = true;
-    stopController.abort();
-    stopAllSlots();
+    supervisor.abortAll();
     for (const socket of activeSockets) socket.destroy();
     activeSockets.clear();
     draining.destroyAll();
@@ -301,56 +189,36 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
   const close = async (): Promise<void> => {
     stopped = true;
     teardown();
-    await loopDone;
+    await done;
   };
-
-  // Resolve once no invocation is in flight, or after `graceMs` — whichever is
-  // first. Only one shutdown runs at a time, so a single waiter suffices.
-  const waitForInflightDrain = (graceMs: number): Promise<void> =>
-    new Promise((resolve) => {
-      if (globalInflight === 0) {
-        resolve();
-        return;
-      }
-      const timer = setTimeout(() => {
-        inflightDrained = undefined;
-        resolve();
-      }, graceMs);
-      timer.unref();
-      inflightDrained = () => {
-        clearTimeout(timer);
-        resolve();
-      };
-    });
 
   const shutdown = async ({
     graceMs,
   }: { graceMs?: number } = {}): Promise<void> => {
     if (stopped || toreDown) {
-      // Already closing/closed (or a shutdown is already in progress): there is
-      // nothing left to drain gracefully — just await teardown.
-      await loopDone;
+      // Already closing/closed (or a shutdown is already in progress): nothing
+      // left to drain gracefully — just await teardown.
+      await done;
       return;
     }
     stopped = true;
-    // From here, every connection refuses new invocations with the drain
+    // From here every connection refuses new invocations with the drain
     // sentinel, so the cloud stops routing new work to this process.
     shuttingDown = true;
-    // Stop the supervisor resolving/starting connections (no new dials).
-    supervisorWake.abort();
+    // Stop dialing/resolving new connections (existing ones keep serving).
+    supervisor.stopResolving();
     // Move every live connection into an explicit client-drain: serving ones
     // refuse new invocations and finish in-flight in place; not-yet-serving
-    // ones abort (nothing in flight to protect). Snapshot first — beginClientDrain
-    // may settle a connection, which removes it from the set.
+    // ones abort. Snapshot first — beginClientDrain may settle a connection,
+    // which removes it from the set.
     for (const c of [...activeConnections]) c.beginClientDrain();
     log(
-      `tunnel: graceful shutdown — refusing new invocations, draining ${globalInflight} in-flight`
+      `tunnel: graceful shutdown — refusing new invocations, draining ${inflight.inFlight} in-flight`
     );
-    await waitForInflightDrain(graceMs ?? opts.drainGraceMs);
-    // In-flight is drained (or the grace elapsed): tear the now-idle
-    // connections down and wait for the engine to settle.
+    await inflight.whenDrained(graceMs ?? opts.drainGraceMs);
+    // In-flight drained (or grace elapsed): tear the now-idle connections down.
     teardown();
-    await loopDone;
+    await done;
   };
 
   if (options.signal?.aborted) {
@@ -372,6 +240,8 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
       });
     }
   }
+
+  // ---- the public handle ----
 
   return {
     close,
@@ -404,8 +274,8 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
       }
     },
     get error() {
-      return fatalError;
+      return supervisor.fatalError;
     },
-    ready,
+    ready: ready.promise,
   };
 }
