@@ -12,8 +12,8 @@
 // The tunnel engine.
 // =============================================================================
 //
-// connectTunnel() serves a Restate SDK deployment over OUTBOUND connections
-// to Restate Cloud's tunnel servers — no inbound listener. The pieces:
+// connectTunnel() serves a Restate SDK deployment over OUTBOUND connections to
+// Restate Cloud's tunnel servers — no inbound listener. The pieces:
 //
 //   connection.ts — one dial → role-flip → handshake → serve cycle
 //   supervisor.ts — the slot supervisor (one connection per resolved server)
@@ -23,13 +23,20 @@
 //   draining.ts   — server-drain handover ownership
 //   backoff.ts    — jittered exponential reconnect policy
 //
-// This module is the thin assembler: it builds the shared registries and the
-// per-connection dependencies, hands slot management to the {@link Supervisor},
-// and owns the public TunnelConnection handle and its lifecycle (`close` /
-// `shutdown` / signal wiring). The cross-cutting mechanisms live in their own
-// units — `Supervisor` (slots), `InflightTracker` (drain accounting),
-// `DrainingRegistry` (server-drain sessions), `Deferred` (readiness) — so the
-// engine holds only lifecycle flags + the public-handle state.
+// The engine has three kinds of state, kept deliberately separate:
+//
+//   * Injected infrastructure — the registries (activeSockets/activeConnections/
+//     draining/inflight) that ConnectionDeps hands to every connection. By
+//     definition the per-connection layer reads these, so they are created once
+//     and injected, not stored in a lifecycle phase.
+//   * Observable output — connectionCount / lastInfo / fatalError, which the
+//     handle exposes in every phase (including after close()), so they live in
+//     one lifetime record rather than a phase.
+//   * Lifecycle state — `EngineState`, a disjoint union whose live phases own
+//     the supervisor + the event-loop anchor (and, while draining, the in-flight
+//     drain promise). Each transition narrows the state and destructures what it
+//     needs, so no function reaches for the live machinery in the wrong phase
+//     (and `closed` provably has none).
 
 import type * as net from "node:net";
 import { createEndpointHandler } from "@restatedev/restate-sdk";
@@ -93,6 +100,31 @@ class InflightTracker {
   }
 }
 
+/** The engine's observable output — readable from the handle in every phase. */
+interface Output {
+  connectionCount: number;
+  lastInfo: HandshakeInfo | undefined;
+  fatalError: Error | undefined;
+}
+
+/** The live machinery, owned by the running/draining phases and gone in closed. */
+interface Active {
+  readonly supervisor: Supervisor;
+  /** Anchors the event loop while live (a bare awaited promise won't keep Node
+   * alive between a session closing and the next redial timer). */
+  readonly keepAlive: NodeJS.Timeout;
+}
+
+/** The engine lifecycle as one disjoint state; live phases carry `Active`. */
+type EngineState =
+  | { readonly kind: "running"; readonly active: Active }
+  | {
+      readonly kind: "draining";
+      readonly active: Active;
+      readonly completed: Promise<void>;
+    }
+  | { readonly kind: "closed" };
+
 /**
  * Connect this deployment to a Restate Cloud tunnel and serve `services`
  * over it. Returns immediately; connection management runs in the
@@ -112,41 +144,28 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
     identityKeys: [opts.signingPublicKey],
   });
 
-  // ---- shared registries + lifecycle state ----
-
+  // Injected infrastructure: the per-connection layer reads these via deps.
   const activeSockets = new Set<net.Socket>();
   const activeConnections = new Set<DrainableConnection>();
   const draining = new DrainingRegistry();
   const inflight = new InflightTracker();
 
-  // The engine lifecycle as one disjoint state, each variant carrying the data
-  // that is meaningful only in that phase:
-  //   running  — normal operation. No phase-local data: the engine's
-  //              substantive state (the registries, the supervisor, the
-  //              handle's learned info) lives for the whole lifetime and is
-  //              used across every phase, so it sits in stable fields below.
-  //   draining — a graceful shutdown() is in progress; `completed` is its
-  //              promise, so a re-entrant shutdown()/close() coalesces onto the
-  //              same in-flight drain instead of starting another.
-  //   closed   — torn down (abrupt close(), or a completed/grace-expired drain).
-  type EngineState =
-    | { readonly kind: "running" }
-    | { readonly kind: "draining"; readonly completed: Promise<void> }
-    | { readonly kind: "closed" };
-  let state: EngineState = { kind: "running" };
-  let connectionCount = 0;
-  let lastInfo: HandshakeInfo | undefined;
+  // Observable output (valid in every phase, including after close).
+  const output: Output = {
+    connectionCount: 0,
+    lastInfo: undefined,
+    fatalError: undefined,
+  };
 
   // Resolves on the first successful handshake; rejects on a fatal stop or if
-  // the tunnel closes before ever connecting. The catch keeps a never-awaited
+  // the tunnel closes before connecting. The catch keeps a never-awaited
   // rejection from surfacing as unhandled.
   const ready = new Deferred<void>();
   void ready.promise.catch(() => {});
 
-  // Anchor the event loop: between a session closing and the next redial timer
-  // there may be no pending I/O, and a bare awaited promise does not keep Node
-  // alive.
-  const keepAlive = setInterval(() => {}, 0x7fffffff);
+  // Assigned synchronously below once the live machinery exists; the deps
+  // closures only read it at runtime, long after.
+  let state: EngineState;
 
   const connectionDeps: ConnectionDeps = {
     opts,
@@ -155,8 +174,9 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
     activeSockets,
     activeConnections,
     onEstablished: (info) => {
-      connectionCount++;
-      lastInfo = info;
+      if (state.kind === "closed") return;
+      output.connectionCount++;
+      output.lastInfo = info;
       ready.resolve();
     },
     isShuttingDown: () => state.kind === "draining",
@@ -167,26 +187,26 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
   const supervisor = new Supervisor(
     opts,
     connectionDeps,
-    { onFatal: (err) => ready.reject(err) }, // E1 surfaces on ready/error
+    {
+      onFatal: (err) => {
+        output.fatalError = err; // E1 surfaces on ready/error
+        ready.reject(err);
+      },
+    },
     log
   );
 
-  // Resolves when the supervisor has fully wound down; then do the one-shot
-  // cleanup and settle `ready` for anyone still awaiting it.
-  const done = supervisor.done.then(() => {
-    draining.destroyAll();
-    clearInterval(keepAlive);
-    ready.reject(
-      supervisor.fatalError ??
-        new Error("tunnel: closed before the first handshake")
-    );
-  });
+  const keepAlive = setInterval(() => {}, 0x7fffffff);
 
-  // ---- lifecycle ----
+  state = { kind: "running", active: { supervisor, keepAlive } };
 
-  // Abrupt teardown, shared by close() and a grace-expired shutdown(). Idempotent.
+  // ---- transitions ----
+
+  /** Abrupt teardown; idempotent. Destructures the live machinery from the
+   * state, so it can only run while running/draining. */
   const teardown = (): void => {
     if (state.kind === "closed") return;
+    const { supervisor, keepAlive } = state.active;
     state = { kind: "closed" };
     supervisor.abortAll();
     for (const socket of activeSockets) socket.destroy();
@@ -195,17 +215,25 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
     clearInterval(keepAlive);
   };
 
-  const close = async (): Promise<void> => {
+  // Resolves when the supervisor has fully wound down; then tear down (covers a
+  // fatal that stopped us with no close()/shutdown() call) and settle `ready`.
+  const done = supervisor.done.then(() => {
     teardown();
-    await done;
-  };
+    ready.reject(
+      output.fatalError ??
+        new Error("tunnel: closed before the first handshake")
+    );
+  });
 
-  const drainGracefully = async (graceMs: number): Promise<void> => {
+  const drainGracefully = async (
+    active: Active,
+    graceMs: number
+  ): Promise<void> => {
+    const { supervisor } = active;
     // Stop dialing/resolving new connections (existing ones keep serving) and
-    // move every live connection into an explicit client-drain: serving ones
-    // refuse new invocations and finish in-flight in place; not-yet-serving
-    // ones abort. Snapshot first — beginClientDrain may settle a connection,
-    // which removes it from the set.
+    // move every live connection into a client-drain: serving ones refuse new
+    // invocations and finish in-flight in place; not-yet-serving ones abort.
+    // Snapshot — beginClientDrain may settle a connection, removing it.
     supervisor.stopResolving();
     for (const c of [...activeConnections]) c.beginClientDrain();
     log(
@@ -217,17 +245,22 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
     await done;
   };
 
+  const close = async (): Promise<void> => {
+    teardown();
+    await done;
+  };
+
   const shutdown = ({ graceMs }: { graceMs?: number } = {}): Promise<void> => {
-    // Coalesce: re-entrant calls join the in-progress drain; once closed there
-    // is nothing left to drain.
+    // Coalesce: a drain already in progress, or already closed.
     if (state.kind === "draining") return state.completed;
     if (state.kind === "closed") return done;
-    // Start the drain and record its promise on the state BEFORE the first
+    // Start the drain and record its promise on the state before the first
     // await, so every connection sees isShuttingDown() for the whole drain.
     // (drainGracefully runs synchronously up to inflight.whenDrained, so no new
     // invocation can interleave before `state` is set.)
-    const completed = drainGracefully(graceMs ?? opts.drainGraceMs);
-    state = { kind: "draining", completed };
+    const { active } = state;
+    const completed = drainGracefully(active, graceMs ?? opts.drainGraceMs);
+    state = { kind: "draining", active, completed };
     return completed;
   };
 
@@ -251,29 +284,30 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
     }
   }
 
-  // ---- the public handle ----
+  // ---- the public handle (reads the observable output) ----
 
   return {
     close,
     shutdown,
     get connectionCount() {
-      return connectionCount;
+      return output.connectionCount;
     },
     get tunnelName() {
-      return lastInfo?.tunnelName;
+      return output.lastInfo?.tunnelName;
     },
     get proxyUrl() {
-      return lastInfo?.proxyUrl;
+      return output.lastInfo?.proxyUrl;
     },
     get tunnelUrl() {
-      return lastInfo?.tunnelUrl;
+      return output.lastInfo?.tunnelUrl;
     },
     get deploymentUrl() {
+      const lastInfo = output.lastInfo;
       if (lastInfo === undefined) return undefined;
       // Public clusters may advertise the proxy without a port; the proxy
       // listens on 9080. The destination (`/http/in-process/9080/`) is a
-      // constant — an in-process tunnel is never dialed, so the server
-      // routes purely by the tunnelName earlier in the path.
+      // constant — an in-process tunnel is never dialed, so the server routes
+      // purely by the tunnelName earlier in the path.
       try {
         const proxy = new URL(lastInfo.proxyUrl);
         if (proxy.port === "") proxy.port = "9080";
@@ -284,7 +318,7 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
       }
     },
     get error() {
-      return supervisor.fatalError;
+      return output.fatalError;
     },
     ready: ready.promise,
   };
