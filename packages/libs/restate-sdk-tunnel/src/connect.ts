@@ -50,7 +50,11 @@ import type { ConnectTunnelOptions, TunnelConnection } from "./types.js";
 import { resolveOptions } from "./options.js";
 import { resolveTargets, targetKey, type Target } from "./targets.js";
 import type { HandshakeInfo } from "./handshake.js";
-import { runConnection, type ConnectionDeps } from "./connection.js";
+import {
+  runConnection,
+  type ConnectionDeps,
+  type DrainableConnection,
+} from "./connection.js";
 import { DrainingRegistry } from "./draining.js";
 import { Backoff, MIN_UPTIME_FOR_BACKOFF_RESET_MS } from "./backoff.js";
 import { delay, raceAbortable } from "./util.js";
@@ -87,6 +91,8 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
   let connectionCount = 0;
   let lastInfo: HandshakeInfo | undefined;
   const activeSockets = new Set<net.Socket>();
+  // Live connections the engine can ask to drain in place on shutdown().
+  const activeConnections = new Set<DrainableConnection>();
   const draining = new DrainingRegistry();
   const slots = new Map<string, Slot>();
 
@@ -129,6 +135,7 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
     sdkHandler,
     draining,
     activeSockets,
+    activeConnections,
     onEstablished: (info) => {
       connectionCount++;
       lastInfo = info;
@@ -331,6 +338,11 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
     shuttingDown = true;
     // Stop the supervisor resolving/starting connections (no new dials).
     supervisorWake.abort();
+    // Move every live connection into an explicit client-drain: serving ones
+    // refuse new invocations and finish in-flight in place; not-yet-serving
+    // ones abort (nothing in flight to protect). Snapshot first — beginClientDrain
+    // may settle a connection, which removes it from the set.
+    for (const c of [...activeConnections]) c.beginClientDrain();
     log(
       `tunnel: graceful shutdown — refusing new invocations, draining ${globalInflight} in-flight`
     );

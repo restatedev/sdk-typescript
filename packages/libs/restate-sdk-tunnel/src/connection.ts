@@ -23,20 +23,34 @@
 //   the stripped path (aud is signed service-relative), so this package
 //   does zero crypto.
 //
+// The lifecycle is one explicit `AttemptState` value rather than a handful of
+// booleans that can drift out of sync — see the type below. Two things that do
+// NOT fit a single linear phase are kept as separate concerns:
+//
+//   * `run()`-resolution is decoupled from session teardown. A *server* drain
+//     resolves `run()` immediately (so the slot redials) while the detached
+//     session keeps serving its in-flight invocations from the
+//     DrainingRegistry — the zero-drop property. So "the attempt's outcome is
+//     decided" and "the session is gone" are distinct events.
+//   * New-invocation refusal during shutdown is engine-wide (every connection
+//     refuses), so it is also gated on `deps.isShuttingDown()`, not only on
+//     this connection's own state.
+//
 // Lifecycle invariants:
 //
-//   C1. `settle(outcome)` runs EXACTLY ONCE per attempt: it clears every
-//       timer, detaches the slot-abort listener, releases the socket, and
-//       resolves `run()`. Every exit path funnels through it.
-//   C2. The connection is torn down on settle — with ONE exception: a
-//       drain handover (`detachForDrain`) hands the still-serving session
-//       to the DrainingRegistry instead, so in-flight invocations finish
-//       while the slot dials a replacement.
-//   C3. The handshake gate: forwarded streams (and drains) that arrive
-//       before the handshake outcome's microtask has run PARK on the
-//       handshake promise instead of being rejected — the cloud fires
-//       parked work the instant the tunnel registers, routinely
-//       coalescing it with the ok-trailers in one TCP flush.
+//   C1. `run()` resolves EXACTLY ONCE, via `resolve()`. Every terminal path
+//       funnels through `settle()` (resolve + destroy + → closed) except the
+//       server-drain handover, which resolves early and lets the registry do
+//       the eventual teardown.
+//   C2. A server drain DETACHES: the still-serving session is handed to the
+//       DrainingRegistry (it keeps serving in-flight while the slot dials a
+//       replacement). A client drain finishes IN PLACE (no redial) because the
+//       whole process is going away.
+//   C3. The handshake gate: forwarded streams (and drains) that arrive before
+//       the handshake outcome's microtask has run PARK on the handshake
+//       promise instead of being rejected — the cloud fires parked work the
+//       instant the tunnel registers, routinely coalescing it with the
+//       ok-trailers in one TCP flush.
 
 import * as net from "node:net";
 import * as tls from "node:tls";
@@ -60,26 +74,81 @@ export type ConnectionOutcome =
   | { kind: "retryable"; reason: string } // redial with backoff
   | { kind: "fatal"; reason: string }; // stop the tunnel, surface an error
 
+/**
+ * Why a connection is draining.
+ *  - `server`: the cloud sent `/_/drain-tunnel` (it is rotating this tunnel
+ *    node). We detach + redial; the old session keeps serving in-flight.
+ *  - `client`: this process is shutting down (SIGTERM / `shutdown()`). We
+ *    refuse new invocations and finish in-flight in place, with no redial.
+ */
+export type DrainTrigger = "server" | "client";
+
+/**
+ * The connection's lifecycle as one explicit value. Each phase carries exactly
+ * the data that phase needs, so an illegal combination (e.g. "serving with no
+ * session") cannot be represented:
+ *
+ *   connecting  — dialing the socket + TLS; no h2 session yet.
+ *   handshaking — session is up; `handshake` is set once /_/start-tunnel
+ *                 arrives (gate streams park on it until it resolves).
+ *   serving     — handshake ok'd; forwarding invocations to the SDK.
+ *   draining    — winding down; `trigger` records who asked. A `client` drain
+ *                 refuses new invocations; a `server` drain keeps serving its
+ *                 detached session until the registry closes it.
+ *   closed      — terminal; the session/socket are gone.
+ */
+type AttemptState =
+  | { readonly kind: "connecting" }
+  | {
+      readonly kind: "handshaking";
+      readonly session: http2.Http2Session;
+      handshake: Promise<{ ok: boolean }> | undefined;
+    }
+  | {
+      readonly kind: "serving";
+      readonly session: http2.Http2Session;
+      readonly openedAt: number;
+    }
+  | {
+      readonly kind: "draining";
+      readonly session: http2.Http2Session;
+      readonly openedAt: number;
+      readonly trigger: DrainTrigger;
+    }
+  | { readonly kind: "closed" };
+
 /** The Node request handler produced by the SDK's createEndpointHandler. */
 type SdkHandler = ReturnType<
   typeof import("@restatedev/restate-sdk").createEndpointHandler
 >;
+
+/**
+ * The engine's handle on a live connection: lets `shutdown()` ask each one to
+ * begin a client-initiated drain (refuse new, finish in-flight in place).
+ */
+export interface DrainableConnection {
+  beginClientDrain(): void;
+}
 
 /** What a connection attempt needs from the engine. */
 export interface ConnectionDeps {
   opts: ResolvedOptions;
   /** Built once by the engine; stateless per call, shared across streams. */
   sdkHandler: SdkHandler;
-  /** Takes ownership of a detached session on drain handover. */
+  /** Takes ownership of a detached session on a server-drain handover. */
   draining: DrainingRegistry;
   /** Engine-level socket registry, so close() can destroy in-flight dials. */
   activeSockets: Set<net.Socket>;
+  /** Live connections the engine can ask to drain on shutdown(). */
+  activeConnections: Set<DrainableConnection>;
   /** Called once per successful handshake (count, learned info, ready). */
   onEstablished: (info: HandshakeInfo) => void;
   /**
    * True once the engine is gracefully shutting down: new forwarded
    * invocations are refused with the drain sentinel instead of dispatched, so
    * the cloud deselects this connection while in-flight invocations finish.
+   * Engine-wide (every connection refuses), so it is checked in addition to
+   * this connection's own `draining{client}` state.
    */
   isShuttingDown: () => boolean;
   /** A forwarded invocation began executing (counts toward the drain wait). */
@@ -112,18 +181,12 @@ export function runConnection(
   return new ConnectionAttempt(target, slotSignal, deps, authToken).run();
 }
 
-class ConnectionAttempt {
-  private settled = false;
-  /** Set when the handshake confirms ok — the connection's serve epoch. */
-  private openedAt: number | undefined;
-  private serving = false;
-  /** Assigned when /_/start-tunnel arrives; the gate streams park on (C3). */
-  private handshakePromise: Promise<{ ok: boolean }> | undefined;
-  /** Drain handover requested — settle detaches instead of destroying (C2). */
-  private detachForDrain = false;
+class ConnectionAttempt implements DrainableConnection {
+  private state: AttemptState = { kind: "connecting" };
+  /** `run()` resolves exactly once (C1); a server-drain resolves it early. */
+  private resolved = false;
 
   private readonly socket: net.Socket;
-  private session: http2.Http2Session | undefined;
   private readonly connectTimer: NodeJS.Timeout;
   private firstRequestTimer: NodeJS.Timeout | undefined;
   private watchdog: NodeJS.Timeout | undefined;
@@ -145,6 +208,8 @@ class ConnectionAttempt {
     // (dial, TLS, handshake, serving) — the abort listener tears the
     // attempt down deterministically wherever it is.
     slotSignal.addEventListener("abort", this.onStop, { once: true });
+
+    deps.activeConnections.add(this);
 
     const tlsOptions = this.plaintext
       ? undefined
@@ -187,10 +252,25 @@ class ConnectionAttempt {
     });
   }
 
-  // ---- lifecycle ----
+  // ---- state helpers ----
 
-  private readonly onStop = () =>
-    this.settle({ kind: "retryable", reason: "tunnel closed" });
+  private get closed(): boolean {
+    return this.state.kind === "closed";
+  }
+
+  /** The h2 session, for any phase that has one. */
+  private session(): http2.Http2Session | undefined {
+    const s = this.state;
+    return s.kind === "handshaking" || s.kind === "serving" || s.kind === "draining"
+      ? s.session
+      : undefined;
+  }
+
+  /** When the handshake ok'd (the serve epoch), once we've reached it. */
+  private get openedAt(): number | undefined {
+    const s = this.state;
+    return s.kind === "serving" || s.kind === "draining" ? s.openedAt : undefined;
+  }
 
   private uptimeMs(): number {
     return this.openedAt === undefined ? 0 : Date.now() - this.openedAt;
@@ -203,34 +283,43 @@ class ConnectionAttempt {
       : { kind: "retryable", reason };
   }
 
-  /** C1: the single exit point. C2: drain handover detaches instead. */
-  private settle(outcome: ConnectionOutcome): void {
-    if (this.settled) return;
-    this.settled = true;
+  // ---- lifecycle ----
+
+  private readonly onStop = () =>
+    this.settle({ kind: "retryable", reason: "tunnel closed" });
+
+  /** Resolve `run()` once (C1). */
+  private resolve(outcome: ConnectionOutcome): void {
+    if (this.resolved) return;
+    this.resolved = true;
+    this.resolveRun(outcome);
+  }
+
+  /** Release this attempt's own resources (timers, listeners, registries). */
+  private release(): void {
     if (this.watchdog !== undefined) clearInterval(this.watchdog);
     if (this.firstRequestTimer !== undefined)
       clearTimeout(this.firstRequestTimer);
     clearTimeout(this.connectTimer);
     this.slotSignal.removeEventListener("abort", this.onStop);
-    if (
-      this.detachForDrain &&
-      this.session !== undefined &&
-      !this.session.destroyed
-    ) {
-      // Drain handover: the session keeps serving its in-flight streams
-      // under the registry's grace window (the cloud stops routing new
-      // work to it).
-      this.deps.draining.add(
-        this.session,
-        this.socket,
-        this.deps.opts.drainGraceMs
-      );
-    } else {
-      this.session?.destroy();
-      this.socket.destroy();
-    }
+    this.deps.activeConnections.delete(this);
     this.deps.activeSockets.delete(this.socket);
-    this.resolveRun(outcome);
+  }
+
+  /**
+   * C1: the single terminal path — resolve the outcome, destroy the
+   * session/socket, and move to `closed`. Idempotent. (A server drain does NOT
+   * funnel through here for teardown: it detaches via {@link beginServerDrain}
+   * and lets the DrainingRegistry destroy the session later.)
+   */
+  private settle(outcome: ConnectionOutcome): void {
+    if (this.closed) return;
+    const session = this.session();
+    this.release();
+    session?.destroy();
+    this.socket.destroy();
+    this.state = { kind: "closed" };
+    this.resolve(outcome);
   }
 
   // ---- connected: role-flip and serve ----
@@ -272,7 +361,10 @@ class ConnectionAttempt {
     );
 
     h2.on("session", (s) => {
-      this.session = s;
+      // Role-flip complete: the cloud is now our h2 client. connecting → handshaking.
+      if (this.state.kind === "connecting") {
+        this.state = { kind: "handshaking", session: s, handshake: undefined };
+      }
       try {
         // Raise the per-connection flow-control window (Node defaults to
         // 64 KiB, throttling aggregate throughput across streams).
@@ -298,7 +390,7 @@ class ConnectionAttempt {
     // The server must open /_/start-tunnel promptly; a peer that never
     // does is not a tunnel server.
     this.firstRequestTimer = setTimeout(() => {
-      if (this.handshakePromise === undefined) {
+      if (this.state.kind === "handshaking" && this.state.handshake === undefined) {
         this.settle({
           kind: "retryable",
           reason: "server never initiated /_/start-tunnel",
@@ -319,7 +411,8 @@ class ConnectionAttempt {
     const rawPath = (req.url ?? "").split("?")[0];
 
     if (
-      this.handshakePromise === undefined &&
+      this.state.kind === "handshaking" &&
+      this.state.handshake === undefined &&
       req.method === "GET" &&
       rawPath === START_TUNNEL_PATH
     ) {
@@ -341,18 +434,21 @@ class ConnectionAttempt {
       return;
     }
 
-    if (this.serving) {
+    // Serving, or draining (a server-drained session keeps serving its
+    // in-flight; dispatchForwarded refuses only a client drain / shutdown).
+    if (this.state.kind === "serving" || this.state.kind === "draining") {
       this.dispatchForwarded(req, res);
       return;
     }
-    if (this.handshakePromise === undefined) {
-      // A forwarded stream before /_/start-tunnel was even opened —
-      // not a tunnel server speaking the protocol.
-      res.writeHead(503);
-      res.end("tunnel: not ready");
+    // A stream that raced the handshake parks on its outcome (C3).
+    if (this.state.kind === "handshaking" && this.state.handshake !== undefined) {
+      this.parkOnGate(req, res);
       return;
     }
-    this.parkOnGate(req, res);
+    // Before /_/start-tunnel was even opened (or already gone) — not a tunnel
+    // server speaking the protocol.
+    res.writeHead(503);
+    res.end("tunnel: not ready");
   }
 
   /** First stream: run the handshake; its outcome opens the gate (C3). */
@@ -360,9 +456,10 @@ class ConnectionAttempt {
     req: http2.Http2ServerRequest,
     res: http2.Http2ServerResponse
   ): void {
+    if (this.state.kind !== "handshaking") return;
     if (this.firstRequestTimer !== undefined)
       clearTimeout(this.firstRequestTimer);
-    this.handshakePromise = performHandshake(
+    this.state.handshake = performHandshake(
       req,
       res,
       {
@@ -374,10 +471,16 @@ class ConnectionAttempt {
       },
       this.deps.opts.handshakeTimeoutMs
     ).then((outcome) => {
-      if (this.settled) return { ok: false };
+      // settle (session/socket error) may have raced us to `closed`.
+      if (this.state.kind !== "handshaking") return { ok: false };
       if (outcome.kind === "ok") {
-        this.openedAt = Date.now();
-        this.serving = true;
+        const { session } = this.state;
+        const openedAt = Date.now();
+        // If our own shutdown began while we were handshaking, open straight
+        // into a client drain so this connection refuses work from the start.
+        this.state = this.deps.isShuttingDown()
+          ? { kind: "draining", session, openedAt, trigger: "client" }
+          : { kind: "serving", session, openedAt };
         this.log(
           `tunnel: established (name=${outcome.info.tunnelName}, proxy=${outcome.info.proxyUrl})`
         );
@@ -395,11 +498,15 @@ class ConnectionAttempt {
     req: http2.Http2ServerRequest,
     res: http2.Http2ServerResponse
   ): void {
-    // Graceful shutdown: refuse new invocations WITHOUT running the handler.
-    // The sentinel tells the server to stop routing here; failing the request
-    // (rather than running it) lets the runtime retry it on a healthy
-    // connection with no risk of double-execution.
-    if (this.deps.isShuttingDown()) {
+    // Client-initiated drain (this connection, or an engine-wide shutdown):
+    // refuse new invocations WITHOUT running the handler. The sentinel tells
+    // the server to stop routing here; failing the request (rather than
+    // running it) lets the runtime retry it on a healthy connection with no
+    // risk of double-execution. A *server* drain does not refuse — its
+    // detached session keeps serving (the zero-drop property).
+    const clientDraining =
+      this.state.kind === "draining" && this.state.trigger === "client";
+    if (clientDraining || this.deps.isShuttingDown()) {
       res.writeHead(503, { "x-restate-tunnel-draining": "true" });
       res.end();
       return;
@@ -426,8 +533,13 @@ class ConnectionAttempt {
     req: http2.Http2ServerRequest,
     res: http2.Http2ServerResponse
   ): void {
-    void this.handshakePromise!.then(({ ok }) => {
-      if (this.settled || res.stream.destroyed) return;
+    if (this.state.kind !== "handshaking" || this.state.handshake === undefined) {
+      res.writeHead(503);
+      res.end("tunnel: not ready");
+      return;
+    }
+    void this.state.handshake.then(({ ok }) => {
+      if (this.closed || res.stream.destroyed) return;
       try {
         if (ok) {
           this.dispatchForwarded(req, res);
@@ -454,27 +566,69 @@ class ConnectionAttempt {
       );
       return;
     }
-    if (this.serving) {
-      this.beginDrain();
-    } else if (this.handshakePromise !== undefined) {
+    if (this.state.kind === "serving") {
+      this.beginServerDrain();
+    } else if (
+      this.state.kind === "handshaking" &&
+      this.state.handshake !== undefined
+    ) {
       // Drain coalesced with the ok-trailers (the server drains tunnels
       // the moment it shuts down, including ones it just registered): the
       // same gate race as forwarded streams — park the drain on the
       // handshake outcome instead of silently dropping it.
-      void this.handshakePromise.then(({ ok }) => {
-        if (ok) this.beginDrain();
+      void this.state.handshake.then(({ ok }) => {
+        if (ok) this.beginServerDrain();
       });
     }
     // Before /_/start-tunnel was even opened: not a tunnel server
     // speaking the protocol — ack-and-ignore.
   }
 
-  /** Handover: detach (C2) and settle so the slot dials a replacement. */
-  private beginDrain(): void {
-    if (this.settled || this.detachForDrain) return;
+  /**
+   * Server-initiated drain (C2): detach the still-serving session to the
+   * DrainingRegistry and resolve `run()` so the slot dials a replacement. The
+   * detached session keeps serving its in-flight invocations under the
+   * registry's grace window — `run()` resolves now, the session closes later.
+   */
+  private beginServerDrain(): void {
+    if (this.state.kind !== "serving") return;
+    const { session, openedAt } = this.state;
     this.log("tunnel: drain requested — opening a replacement connection");
-    this.detachForDrain = true;
-    this.settle({ kind: "drained", uptimeMs: this.uptimeMs() });
+    // Release our own timers/registrations and hand the socket to the
+    // registry, but do NOT destroy the session — it keeps serving.
+    this.release();
+    this.deps.draining.add(session, this.socket, this.deps.opts.drainGraceMs);
+    this.state = { kind: "draining", session, openedAt, trigger: "server" };
+    this.resolve({ kind: "drained", uptimeMs: this.uptimeMs() });
+    // The session's own close handler (registered in onConnected) will run
+    // settle() → closed when the registry destroys it (grace or natural close).
+  }
+
+  /**
+   * Client-initiated drain (C2): the engine is shutting this process down.
+   * Refuse new invocations and finish in-flight IN PLACE — no redial. The
+   * engine waits for in-flight to drain, then tears the connection down.
+   */
+  beginClientDrain(): void {
+    const s = this.state;
+    switch (s.kind) {
+      case "serving":
+        this.state = {
+          kind: "draining",
+          session: s.session,
+          openedAt: s.openedAt,
+          trigger: "client",
+        };
+        return;
+      case "connecting":
+      case "handshaking":
+        // No serving session yet — nothing in-flight to protect; abort.
+        this.settle({ kind: "retryable", reason: "shutting down" });
+        return;
+      case "draining":
+      case "closed":
+        return; // already winding down
+    }
   }
 
   // ---- liveness ----
@@ -486,7 +640,7 @@ class ConnectionAttempt {
   private startWatchdog(): void {
     let missed = 0;
     this.watchdog = setInterval(() => {
-      const s = this.session;
+      const s = this.session();
       if (s === undefined || s.destroyed) return;
       let acked = false;
       try {
