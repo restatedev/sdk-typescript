@@ -63,6 +63,13 @@ export interface HandshakeCredentials {
    * obliges us to open a replacement connection on drain.
    */
   supportsDrain: boolean;
+  /**
+   * Advertise `supports-client-drain: true`. Tells the server that on
+   * shutdown we refuse new invocations with the `x-restate-tunnel-draining`
+   * sentinel (rather than dropping them); only then does the server trust
+   * that sentinel to deselect this connection.
+   */
+  supportsClientDrain: boolean;
 }
 
 export const START_TUNNEL_PATH = "/_/start-tunnel";
@@ -166,6 +173,7 @@ export function performHandshake(
       "environment-id": creds.environmentId,
       "tunnel-name": creds.tunnelName,
       ...(creds.supportsDrain && { "supports-drain": "true" }),
+      ...(creds.supportsClientDrain && { "supports-client-drain": "true" }),
     });
     res.end();
   });

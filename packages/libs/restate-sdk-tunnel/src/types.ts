@@ -172,6 +172,29 @@ export interface ConnectTunnelOptions {
    */
   drainGraceMs?: number;
   /**
+   * Advertise client-initiated graceful drain (`supports-client-drain: true`)
+   * in the handshake. Default `true`. When enabled, {@link
+   * TunnelConnection.shutdown} (or the opt-in {@link gracefulShutdown} signal
+   * handler) refuses new invocations with a drain sentinel so Restate Cloud
+   * stops routing new work to this process while its in-flight invocations
+   * finish — the basis for zero-dropped-invocation rollouts. Specific to this
+   * in-process client; the standalone Rust client does not implement it.
+   */
+  supportsClientDrain?: boolean;
+  /**
+   * Automatic graceful shutdown on process signals. **On by default**: the
+   * engine installs a one-shot handler for each signal (default `SIGTERM`)
+   * that calls {@link TunnelConnection.shutdown} and then `process.exit(0)`
+   * once draining completes (or the grace elapses) — so an operator-managed
+   * deployment gets zero-dropped-invocation rollouts with no wiring. The
+   * handlers are removed when the connection closes.
+   *
+   * Pass `false` to opt out entirely — e.g. to manage signals and process
+   * exit yourself and call {@link TunnelConnection.shutdown} by hand. Pass an
+   * object to choose the signals and grace, or `true` for the defaults.
+   */
+  gracefulShutdown?: boolean | { signals?: NodeJS.Signals[]; graceMs?: number };
+  /**
    * Reconnect backoff: initial delay in milliseconds. Default 10.
    * The delay grows by `reconnectFactor` per failed attempt (with jitter)
    * up to `reconnectMaxMs`, and resets after a successful handshake.
@@ -240,6 +263,17 @@ export interface ConnectTunnelOptions {
 export interface TunnelConnection {
   /** Stop reconnecting, close the current connection, and wait for teardown. */
   close(): Promise<void>;
+  /**
+   * Gracefully drain, then stop. Stops accepting new invocations (Restate
+   * Cloud deselects this process via the drain sentinel), lets in-flight
+   * invocations finish — bounded by `graceMs` (default {@link
+   * ConnectTunnelOptions.drainGraceMs}) — and then tears down. Resolves once
+   * drained or the grace elapsed. Wire this to `SIGTERM` for
+   * zero-dropped-invocation rollouts; {@link close} is the abrupt alternative.
+   * Requires {@link ConnectTunnelOptions.supportsClientDrain} (the default) to
+   * have been advertised; otherwise it degrades to an abrupt {@link close}.
+   */
+  shutdown(opts?: { graceMs?: number }): Promise<void>;
   /** Number of successful tunnel handshakes since `connectTunnel` was called. */
   readonly connectionCount: number;
   /**

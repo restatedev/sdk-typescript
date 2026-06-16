@@ -52,3 +52,30 @@ export async function raceAbortable<T>(
     signal.removeEventListener("abort", onAbort);
   }
 }
+
+/** A promise whose resolve/reject are exposed and fire at most once. */
+export class Deferred<T> {
+  private settled = false;
+  readonly promise: Promise<T>;
+  private resolveFn!: (value: T) => void;
+  private rejectFn!: (err: Error) => void;
+
+  constructor() {
+    this.promise = new Promise<T>((resolve, reject) => {
+      this.resolveFn = resolve;
+      this.rejectFn = reject;
+    });
+  }
+
+  resolve(value: T): void {
+    if (this.settled) return;
+    this.settled = true;
+    this.resolveFn(value);
+  }
+
+  reject(err: Error): void {
+    if (this.settled) return;
+    this.settled = true;
+    this.rejectFn(err);
+  }
+}
