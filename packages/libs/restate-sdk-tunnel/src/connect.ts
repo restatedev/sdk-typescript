@@ -167,6 +167,10 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
   // closures only read it at runtime, long after.
   let state: EngineState;
 
+  // Opt-in process-signal handlers, removed on teardown so a closed connection
+  // can never later intercept a signal and exit the host process.
+  const signalHandlers: Array<[NodeJS.Signals, () => void]> = [];
+
   const connectionDeps: ConnectionDeps = {
     opts,
     sdkHandler,
@@ -208,6 +212,10 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
     if (state.kind === "closed") return;
     const { supervisor, keepAlive } = state.active;
     state = { kind: "closed" };
+    for (const [signal, handler] of signalHandlers) {
+      process.removeListener(signal, handler);
+    }
+    signalHandlers.length = 0;
     supervisor.abortAll();
     for (const socket of activeSockets) socket.destroy();
     activeSockets.clear();
@@ -251,6 +259,10 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
   };
 
   const shutdown = ({ graceMs }: { graceMs?: number } = {}): Promise<void> => {
+    // Without the advertised capability the server ignores our drain sentinel,
+    // so a graceful drain can't work (refused requests just keep getting
+    // routed back) — fall back to an abrupt close, as documented.
+    if (!opts.supportsClientDrain) return close();
     // Coalesce: a drain already in progress, or already closed.
     if (state.kind === "draining") return state.completed;
     if (state.kind === "closed") return done;
@@ -277,10 +289,12 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
   if (opts.gracefulShutdown !== undefined) {
     const { signals, graceMs } = opts.gracefulShutdown;
     for (const signal of signals) {
-      process.once(signal, () => {
+      const handler = () => {
         log(`tunnel: received ${signal} — shutting down gracefully`);
         void shutdown({ graceMs }).finally(() => process.exit(0));
-      });
+      };
+      signalHandlers.push([signal, handler]);
+      process.once(signal, handler);
     }
   }
 

@@ -121,6 +121,51 @@ describe("client-initiated graceful shutdown", () => {
     }
   });
 
+  test("supportsClientDrain: false makes shutdown() an abrupt close", async () => {
+    const fake = await startFakeCloud({ decideTrailers: () => okTrailers() });
+    const conn = connectTunnel({
+      ...baseOptions(fake.port),
+      supportsClientDrain: false,
+      drainGraceMs: 5_000,
+    });
+    try {
+      await conn.ready;
+      const c0 = await fake.waitForConnection(0);
+
+      // Hold an invocation in flight.
+      const disc = await roundtrip(c0.session, discoverReq());
+      const maxVersion = (
+        JSON.parse(disc.body) as { maxProtocolVersion: number }
+      ).maxProtocolVersion;
+      const invokePath = "/invoke/greeter/greet";
+      const held = c0.session.request(
+        {
+          ":method": "POST",
+          ":path": `/http/h/9080${invokePath}`,
+          "content-type": `application/vnd.restate.invocation.v${maxVersion}`,
+          "x-restate-signature-scheme": "v1",
+          "x-restate-jwt-v1": identity.sign(invokePath),
+        },
+        { endStream: false } // keep it open → it never completes on its own
+      );
+      held.on("error", () => {});
+      held.resume();
+      await new Promise((r) => setTimeout(r, 80));
+
+      // The capability was not advertised, so shutdown() degrades to an abrupt
+      // close(): it tears down immediately despite the in-flight invocation,
+      // rather than waiting out the (5s) drain grace.
+      const start = Date.now();
+      await conn.shutdown();
+      expect(Date.now() - start).toBeLessThan(2_000);
+      await waitForClose(c0.session);
+      expect(c0.session.destroyed).toBe(true);
+    } finally {
+      await conn.close();
+      await fake.close();
+    }
+  });
+
   test("an idle shutdown() tears the connection down and does not redial", async () => {
     const fake = await startFakeCloud({ decideTrailers: () => okTrailers() });
     const conn = connectTunnel(baseOptions(fake.port));
