@@ -47,7 +47,7 @@ export interface ExecutionOptions {
   defaultSerde: Serde<any>;
   hooks?: HooksProvider[];
   explicitCancellation?: boolean;
-  onJournalMismatchErrors?: "retry" | "pause";
+  onJournalMismatchErrors?: "retry" | "pause" | "fail";
 }
 
 export interface ComponentHandler {

@@ -508,13 +508,14 @@ export type ServiceHandlerOpts<I, O> = {
    * - `"retry"` (default): the invocation follows the normal retry policy when a journal mismatch is detected.
    * - `"pause"`: the invocation is paused instead of being retried, so it can be inspected and manually
    *   resumed once the non-determinism in the code is fixed.
+   * - `"fail"`: the invocation is failed terminally instead of being retried.
    *
-   * *NOTE:* `"pause"` requires a restate-server that supports pausing invocations; on older servers the
-   * invocation will follow the retry policy regardless of this setting.
+   * *NOTE:* `"pause"` and `"fail"` require a restate-server that supports these behaviors; on older
+   * servers the invocation will follow the retry policy regardless of this setting.
    *
    * @experimental
    */
-  onJournalMismatchErrors?: "retry" | "pause";
+  onJournalMismatchErrors?: "retry" | "pause" | "fail";
 };
 
 export type ObjectHandlerOpts<I, O> = ServiceHandlerOpts<I, O> & {
@@ -1079,13 +1080,14 @@ export type ServiceOptions = {
    * - `"retry"` (default): the invocation follows the normal retry policy when a journal mismatch is detected.
    * - `"pause"`: the invocation is paused instead of being retried, so it can be inspected and manually
    *   resumed once the non-determinism in the code is fixed.
+   * - `"fail"`: the invocation is failed terminally instead of being retried.
    *
-   * *NOTE:* `"pause"` requires a restate-server that supports pausing invocations; on older servers the
-   * invocation will follow the retry policy regardless of this setting.
+   * *NOTE:* `"pause"` and `"fail"` require a restate-server that supports these behaviors; on older
+   * servers the invocation will follow the retry policy regardless of this setting.
    *
    * @experimental
    */
-  onJournalMismatchErrors?: "retry" | "pause";
+  onJournalMismatchErrors?: "retry" | "pause" | "fail";
 };
 
 /**

@@ -300,7 +300,9 @@ class RestateInvokeResponse implements RestateResponse {
       this.loggerId,
       isJournalCodecDefined,
       handler.executionOptions.explicitCancellation ?? false,
-      (handler.executionOptions.onJournalMismatchErrors ?? "retry") === "pause"
+      onJournalMismatchErrorsToWasm(
+        handler.executionOptions.onJournalMismatchErrors
+      )
     );
     const responseHead = this.coreVm.get_response_head();
     this.statusCode = responseHead.status_code;
@@ -838,5 +840,19 @@ function restateLogLevelToWasmLogLevel(level: RestateLogLevel): vm.LogLevel {
       return vm.LogLevel.WARN;
     case RestateLogLevel.ERROR:
       return vm.LogLevel.ERROR;
+  }
+}
+
+function onJournalMismatchErrorsToWasm(
+  behavior: "retry" | "pause" | "fail" | undefined
+): vm.WasmJournalMismatchBehavior {
+  switch (behavior) {
+    case "pause":
+      return vm.WasmJournalMismatchBehavior.Pause;
+    case "fail":
+      return vm.WasmJournalMismatchBehavior.Fail;
+    case "retry":
+    case undefined:
+      return vm.WasmJournalMismatchBehavior.Retry;
   }
 }
