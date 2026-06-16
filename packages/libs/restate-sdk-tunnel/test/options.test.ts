@@ -403,8 +403,11 @@ describe("client-drain / graceful-shutdown options", () => {
     ).toBe(false);
   });
 
-  test("gracefulShutdown is undefined unless opted in", () => {
-    expect(resolveOptions(valid).gracefulShutdown).toBeUndefined();
+  test("gracefulShutdown is on by default; false opts out", () => {
+    expect(resolveOptions(valid).gracefulShutdown).toEqual({
+      signals: ["SIGTERM"],
+      graceMs: 120_000,
+    });
     expect(
       resolveOptions({ ...valid, gracefulShutdown: false }).gracefulShutdown
     ).toBeUndefined();

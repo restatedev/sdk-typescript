@@ -182,13 +182,16 @@ export interface ConnectTunnelOptions {
    */
   supportsClientDrain?: boolean;
   /**
-   * Opt in to automatic graceful shutdown on process signals. Off by default
-   * — a library should not commandeer signals unless asked. When set, the
+   * Automatic graceful shutdown on process signals. **On by default**: the
    * engine installs a one-shot handler for each signal (default `SIGTERM`)
    * that calls {@link TunnelConnection.shutdown} and then `process.exit(0)`
-   * once draining completes (or the grace elapses). Pass an object to choose
-   * the signals and grace, or `true` for the defaults. For finer control,
-   * leave this unset and call {@link TunnelConnection.shutdown} yourself.
+   * once draining completes (or the grace elapses) — so an operator-managed
+   * deployment gets zero-dropped-invocation rollouts with no wiring. The
+   * handlers are removed when the connection closes.
+   *
+   * Pass `false` to opt out entirely — e.g. to manage signals and process
+   * exit yourself and call {@link TunnelConnection.shutdown} by hand. Pass an
+   * object to choose the signals and grace, or `true` for the defaults.
    */
   gracefulShutdown?: boolean | { signals?: NodeJS.Signals[]; graceMs?: number };
   /**

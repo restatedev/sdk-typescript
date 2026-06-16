@@ -319,8 +319,11 @@ function resolveGracefulShutdown(
   option: boolean | { signals?: NodeJS.Signals[]; graceMs?: number } | undefined,
   drainGraceMs: number
 ): { signals: NodeJS.Signals[]; graceMs: number } | undefined {
-  if (option === undefined || option === false) return undefined;
-  if (option === true) return { signals: ["SIGTERM"], graceMs: drainGraceMs };
+  // On by default: only an explicit `false` opts out.
+  if (option === false) return undefined;
+  if (option === undefined || option === true) {
+    return { signals: ["SIGTERM"], graceMs: drainGraceMs };
+  }
   const signals = option.signals ?? ["SIGTERM"];
   if (signals.length === 0) {
     throw new Error("tunnel: gracefulShutdown.signals must not be empty");
