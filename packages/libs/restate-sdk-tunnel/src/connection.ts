@@ -24,13 +24,16 @@
 //   serve        — each forwarded invocation is one h2 stream; strip
 //                  `/<scheme>/<host>/<port>` and hand it to the SDK handler.
 //
-// The lifecycle is one explicit `AttemptState` value (below) rather than a
-// handful of booleans that can drift apart. Cross-cutting concerns are pulled
-// into single-responsibility units that own their own mutable state, so the
-// orchestrator holds almost none: `dial()` (connect), `Completion` (resolve
-// `run()` once), `Watchdog` (liveness ping), and `classifyRequest()` (pure
-// request routing). Two behaviours that do NOT fit one linear phase:
+// The lifecycle is one explicit `AttemptState` value, and every phase-owned
+// resource lives ON the phase that owns it — the handshake timer on
+// `handshaking`, the liveness `watchdog` on `serving`/`draining` — so each
+// method narrows the state and destructures what it needs (`const { session,
+// watchdog } = this.state`) rather than reaching for nullable instance fields.
+// Only the two genuinely lifetime-scoped things are fields: `socket` (used for
+// teardown in every phase, and handed to the registry on a server drain) and
+// `completion` (resolves `run()` exactly once).
 //
+// Two behaviours don't fit one linear phase:
 //   * `run()`-resolution is decoupled from session teardown. A *server* drain
 //     resolves `run()` immediately (so the slot redials) while the detached
 //     session keeps serving its in-flight invocations from the
@@ -111,13 +114,15 @@ export interface ConnectionDeps {
 
 /**
  * The connection's lifecycle as one explicit value. Each phase carries exactly
- * the data that phase needs, so an illegal combination (e.g. "serving with no
- * session") cannot be represented:
+ * the resources it owns, so a method cannot touch a resource that the current
+ * phase has no business with:
  *
  *   connecting  — dialing the socket + TLS; no h2 session yet.
- *   handshaking — session is up; `handshake` is set once /_/start-tunnel
- *                 arrives (gate streams park on it until it resolves).
- *   serving     — handshake ok'd; forwarding invocations to the SDK.
+ *   handshaking — session is up; `firstRequestTimer` bounds the wait for the
+ *                 cloud to open /_/start-tunnel; `handshake` is set once it
+ *                 does (gate streams park on it until it resolves).
+ *   serving     — handshake ok'd; forwarding invocations to the SDK, with the
+ *                 liveness `watchdog` running.
  *   draining    — winding down; `trigger` records who asked. A `client` drain
  *                 refuses new invocations; a `server` drain keeps serving its
  *                 detached session until the registry closes it.
@@ -128,18 +133,21 @@ type AttemptState =
   | {
       readonly kind: "handshaking";
       readonly session: http2.Http2Session;
+      readonly firstRequestTimer: NodeJS.Timeout;
       handshake: Promise<{ ok: boolean }> | undefined;
     }
   | {
       readonly kind: "serving";
       readonly session: http2.Http2Session;
       readonly openedAt: number;
+      readonly watchdog: Watchdog;
     }
   | {
       readonly kind: "draining";
       readonly session: http2.Http2Session;
       readonly openedAt: number;
       readonly trigger: DrainTrigger;
+      readonly watchdog: Watchdog;
     }
   | { readonly kind: "closed" };
 
@@ -324,9 +332,9 @@ export function runConnection(
 class ConnectionAttempt implements DrainableConnection {
   private state: AttemptState = { kind: "connecting" };
   private readonly completion = new Completion();
+  /** Lifetime-scoped: destroyed on teardown in any phase, handed to the
+   * registry on a server drain. */
   private socket: net.Socket | undefined;
-  private watchdog: Watchdog | undefined;
-  private firstRequestTimer: NodeJS.Timeout | undefined;
 
   private readonly plaintext: boolean;
   private readonly log: (message: string) => void;
@@ -412,11 +420,15 @@ class ConnectionAttempt implements DrainableConnection {
   private readonly onAbort = () =>
     this.settle({ kind: "retryable", reason: "tunnel closed" });
 
-  /** Release this attempt's own resources (timers, listeners, registries). */
-  private release(): void {
-    this.watchdog?.stop();
-    if (this.firstRequestTimer !== undefined)
-      clearTimeout(this.firstRequestTimer);
+  /** Stop the timers/monitors owned by the current phase. */
+  private stopPhaseResources(): void {
+    const s = this.state;
+    if (s.kind === "handshaking") clearTimeout(s.firstRequestTimer);
+    else if (s.kind === "serving" || s.kind === "draining") s.watchdog.stop();
+  }
+
+  /** Detach from the engine registries and the slot-abort listener. */
+  private deregister(): void {
     this.slotSignal.removeEventListener("abort", this.onAbort);
     this.deps.activeConnections.delete(this);
     if (this.socket !== undefined) this.deps.activeSockets.delete(this.socket);
@@ -431,10 +443,11 @@ class ConnectionAttempt implements DrainableConnection {
   private settle(outcome: ConnectionOutcome): void {
     if (this.closed) return;
     const session = this.session();
-    this.release();
+    this.stopPhaseResources();
+    this.deregister();
+    this.state = { kind: "closed" };
     session?.destroy();
     this.socket?.destroy();
-    this.state = { kind: "closed" };
     this.completion.resolve(outcome);
   }
 
@@ -458,9 +471,28 @@ class ConnectionAttempt implements DrainableConnection {
     );
 
     h2.on("session", (s) => {
-      // Role-flip complete: the cloud is now our h2 client. connecting → handshaking.
+      // Role-flip complete: the cloud is now our h2 client. connecting →
+      // handshaking, arming the timer that fires if the server never opens
+      // /_/start-tunnel.
       if (this.state.kind === "connecting") {
-        this.state = { kind: "handshaking", session: s, handshake: undefined };
+        const firstRequestTimer = setTimeout(() => {
+          if (
+            this.state.kind === "handshaking" &&
+            this.state.handshake === undefined
+          ) {
+            this.settle({
+              kind: "retryable",
+              reason: "server never initiated /_/start-tunnel",
+            });
+          }
+        }, this.deps.opts.handshakeTimeoutMs);
+        firstRequestTimer.unref();
+        this.state = {
+          kind: "handshaking",
+          session: s,
+          firstRequestTimer,
+          handshake: undefined,
+        };
       }
       try {
         // Raise the per-connection flow-control window (Node defaults to
@@ -481,18 +513,6 @@ class ConnectionAttempt implements DrainableConnection {
     h2.on("sessionError", (err: Error) =>
       this.settle(this.endOutcome(`session error: ${err.message}`))
     );
-
-    // The server must open /_/start-tunnel promptly; a peer that never
-    // does is not a tunnel server.
-    this.firstRequestTimer = setTimeout(() => {
-      if (this.state.kind === "handshaking" && this.state.handshake === undefined) {
-        this.settle({
-          kind: "retryable",
-          reason: "server never initiated /_/start-tunnel",
-        });
-      }
-    }, this.deps.opts.handshakeTimeoutMs);
-    this.firstRequestTimer.unref();
 
     h2.emit("connection", socket);
   }
@@ -518,8 +538,7 @@ class ConnectionAttempt implements DrainableConnection {
         ) {
           this.startHandshake(req, res);
         } else {
-          res.writeHead(503);
-          res.end("tunnel: not ready");
+          this.notReady(res);
         }
         return;
       case "forwarded":
@@ -570,8 +589,7 @@ class ConnectionAttempt implements DrainableConnection {
     res: http2.Http2ServerResponse
   ): void {
     if (this.state.kind !== "handshaking") return;
-    if (this.firstRequestTimer !== undefined)
-      clearTimeout(this.firstRequestTimer);
+    clearTimeout(this.state.firstRequestTimer);
     this.state.handshake = performHandshake(
       req,
       res,
@@ -589,16 +607,16 @@ class ConnectionAttempt implements DrainableConnection {
       if (outcome.kind === "ok") {
         const { session } = this.state;
         const openedAt = Date.now();
+        const watchdog = this.startWatchdog(session);
         // If our own shutdown began while we were handshaking, open straight
         // into a client drain so this connection refuses work from the start.
         this.state = this.deps.isShuttingDown()
-          ? { kind: "draining", session, openedAt, trigger: "client" }
-          : { kind: "serving", session, openedAt };
+          ? { kind: "draining", session, openedAt, trigger: "client", watchdog }
+          : { kind: "serving", session, openedAt, watchdog };
         this.log(
           `tunnel: established (name=${outcome.info.tunnelName}, proxy=${outcome.info.proxyUrl})`
         );
         this.deps.onEstablished(outcome.info);
-        this.startWatchdog(session);
         return { ok: true };
       }
       this.settle(outcome);
@@ -677,11 +695,12 @@ class ConnectionAttempt implements DrainableConnection {
    */
   private beginServerDrain(): void {
     if (this.state.kind !== "serving") return;
-    const { session, openedAt } = this.state;
+    const { session, openedAt, watchdog } = this.state;
     this.log("tunnel: drain requested — opening a replacement connection");
-    this.release();
+    watchdog.stop(); // the registry owns the session now; stop pinging it
+    this.deregister();
     this.deps.draining.add(session, this.socket!, this.deps.opts.drainGraceMs);
-    this.state = { kind: "draining", session, openedAt, trigger: "server" };
+    this.state = { kind: "draining", session, openedAt, trigger: "server", watchdog };
     this.completion.resolve({ kind: "drained", uptimeMs: this.uptimeMs() });
   }
 
@@ -699,6 +718,7 @@ class ConnectionAttempt implements DrainableConnection {
           session: s.session,
           openedAt: s.openedAt,
           trigger: "client",
+          watchdog: s.watchdog,
         };
         return;
       case "connecting":
@@ -714,11 +734,12 @@ class ConnectionAttempt implements DrainableConnection {
 
   // ---- liveness ----
 
-  private startWatchdog(session: http2.Http2Session): void {
-    this.watchdog = new Watchdog(session, this.deps.opts, () => {
+  private startWatchdog(session: http2.Http2Session): Watchdog {
+    const watchdog = new Watchdog(session, this.deps.opts, () => {
       this.log("tunnel: pings missed — reconnecting");
       this.settle({ kind: "served", uptimeMs: this.uptimeMs() });
     });
-    this.watchdog.start();
+    watchdog.start();
+    return watchdog;
   }
 }
