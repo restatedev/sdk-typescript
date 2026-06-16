@@ -240,4 +240,20 @@ describe("client-initiated graceful shutdown", () => {
       await fake.close();
     }
   });
+
+  test("an already-aborted signal leaves no gracefulShutdown handler installed", async () => {
+    // The aborted-signal path closes synchronously during connectTunnel; the
+    // gracefulShutdown handlers must be registered before it so teardown
+    // removes them, rather than leaking a SIGTERM handler on a closed tunnel.
+    const before = process.listenerCount("SIGTERM");
+    const ctl = new AbortController();
+    ctl.abort();
+    const conn = connectTunnel({
+      ...baseOptions(1), // never dialed — the aborted signal stops it first
+      gracefulShutdown: true,
+      signal: ctl.signal,
+    });
+    await conn.close(); // already closed; ensure teardown has run
+    expect(process.listenerCount("SIGTERM")).toBe(before);
+  });
 });

@@ -276,16 +276,11 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
     return completed;
   };
 
-  if (options.signal?.aborted) {
-    // An already-aborted signal means "don't run" — stop before dialing.
-    void close();
-  } else {
-    options.signal?.addEventListener("abort", () => void close(), {
-      once: true,
-    });
-  }
-
-  // Opt-in: handle process signals ourselves — graceful drain, then exit.
+  // Install process-signal handlers (graceful shutdown is on by default; see
+  // ConnectTunnelOptions.gracefulShutdown). Registered BEFORE the
+  // already-aborted-signal handling below, so that path's synchronous close()
+  // tears them down via teardown() rather than leaving a live handler on a
+  // connection that is already closed.
   if (opts.gracefulShutdown !== undefined) {
     const { signals, graceMs } = opts.gracefulShutdown;
     for (const signal of signals) {
@@ -296,6 +291,15 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
       signalHandlers.push([signal, handler]);
       process.once(signal, handler);
     }
+  }
+
+  if (options.signal?.aborted) {
+    // An already-aborted signal means "don't run" — stop before dialing.
+    void close();
+  } else {
+    options.signal?.addEventListener("abort", () => void close(), {
+      once: true,
+    });
   }
 
   // ---- the public handle (reads the observable output) ----
