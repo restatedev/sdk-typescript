@@ -222,6 +222,25 @@ export class WasmInput {
 }
 if (Symbol.dispose) WasmInput.prototype[Symbol.dispose] = WasmInput.prototype.free;
 
+/**
+ * How the state machine should behave when it hits a journal mismatch (non-determinism) error.
+ * @enum {0 | 1 | 2}
+ */
+export const WasmJournalMismatchBehavior = Object.freeze({
+    /**
+     * Follow the normal retry policy.
+     */
+    Retry: 0, "0": "Retry",
+    /**
+     * Pause the invocation instead of retrying.
+     */
+    Pause: 1, "1": "Pause",
+    /**
+     * Fail the invocation terminally instead of retrying.
+     */
+    Fail: 2, "2": "Fail",
+});
+
 export class WasmResponseHead {
     static __wrap(ptr) {
         const obj = Object.create(WasmResponseHead.prototype);
@@ -325,11 +344,12 @@ export class WasmVM {
      * @param {number} logger_id
      * @param {boolean} disable_payload_checks
      * @param {boolean} explicit_cancellation
+     * @param {WasmJournalMismatchBehavior} on_journal_mismatch
      */
-    constructor(headers, log_level, logger_id, disable_payload_checks, explicit_cancellation) {
+    constructor(headers, log_level, logger_id, disable_payload_checks, explicit_cancellation, on_journal_mismatch) {
         const ptr0 = passArrayJsValueToWasm0(headers, wasm.__wbindgen_malloc);
         const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.wasmvm_new(ptr0, len0, log_level, logger_id, disable_payload_checks, explicit_cancellation);
+        const ret = wasm.wasmvm_new(ptr0, len0, log_level, logger_id, disable_payload_checks, explicit_cancellation, on_journal_mismatch);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }

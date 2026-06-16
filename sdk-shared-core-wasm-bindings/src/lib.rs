@@ -3,9 +3,9 @@ use restate_sdk_shared_core::tracing_pretty::{Pretty, PrettyFields};
 use restate_sdk_shared_core::{
     AwaitResponse, AwakeableHandle, CallHandle, CommandRelationship, CommandType, CoreVM, Error,
     Header, HeaderMap, IdentityVerifier, ImplicitCancellationOption, Input,
-    NonDeterministicChecksOption, NonEmptyValue, OnMaxAttempts, ResponseHead, RetryPolicy,
-    RunExitResult, RunHandle, SendHandle, Target, TerminalFailure, UnresolvedFuture, VMOptions,
-    Value, CANCEL_NOTIFICATION_HANDLE, VM,
+    JournalMismatchRetryBehavior, NonDeterministicChecksOption, NonEmptyValue, OnMaxAttempts,
+    ResponseHead, RetryPolicy, RunExitResult, RunHandle, SendHandle, Target, TerminalFailure,
+    UnresolvedFuture, VMOptions, Value, CANCEL_NOTIFICATION_HANDLE, VM,
 };
 use serde::{Deserialize, Serialize};
 use std::cmp;
@@ -37,6 +37,27 @@ pub enum LogLevel {
     INFO = 2,
     WARN = 3,
     ERROR = 4,
+}
+
+/// How the state machine should behave when it hits a journal mismatch (non-determinism) error.
+#[wasm_bindgen]
+pub enum WasmJournalMismatchBehavior {
+    /// Follow the normal retry policy.
+    Retry = 0,
+    /// Pause the invocation instead of retrying.
+    Pause = 1,
+    /// Fail the invocation terminally instead of retrying.
+    Fail = 2,
+}
+
+impl From<WasmJournalMismatchBehavior> for JournalMismatchRetryBehavior {
+    fn from(value: WasmJournalMismatchBehavior) -> Self {
+        match value {
+            WasmJournalMismatchBehavior::Retry => Self::FollowRetryPolicy,
+            WasmJournalMismatchBehavior::Pause => Self::Pause,
+            WasmJournalMismatchBehavior::Fail => Self::FailTerminally,
+        }
+    }
 }
 
 #[wasm_bindgen(raw_module = "../core_logging.js")]
@@ -522,6 +543,7 @@ impl WasmVM {
         logger_id: u32,
         disable_payload_checks: bool,
         explicit_cancellation: bool,
+        on_journal_mismatch: WasmJournalMismatchBehavior,
     ) -> Result<WasmVM, WasmFailure> {
         let log_dispatcher = Dispatch::new(log_subscriber(log_level, Some(logger_id)));
 
@@ -543,6 +565,7 @@ impl WasmVM {
                         }
                     },
                     awaiting_on_policy: Default::default(),
+                    journal_mismatch_retry_behavior: on_journal_mismatch.into(),
                 },
             )
         })?;

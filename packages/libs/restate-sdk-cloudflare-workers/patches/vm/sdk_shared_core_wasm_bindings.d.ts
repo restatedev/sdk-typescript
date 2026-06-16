@@ -101,6 +101,24 @@ export class WasmInput {
     readonly random_seed: bigint;
 }
 
+/**
+ * How the state machine should behave when it hits a journal mismatch (non-determinism) error.
+ */
+export enum WasmJournalMismatchBehavior {
+    /**
+     * Follow the normal retry policy.
+     */
+    Retry = 0,
+    /**
+     * Pause the invocation instead of retrying.
+     */
+    Pause = 1,
+    /**
+     * Fail the invocation terminally instead of retrying.
+     */
+    Fail = 2,
+}
+
 export class WasmResponseHead {
     private constructor();
     free(): void;
@@ -118,7 +136,7 @@ export class WasmVM {
     is_processing(): boolean;
     is_ready_to_execute(): boolean;
     last_command_index(): number;
-    constructor(headers: WasmHeader[], log_level: LogLevel, logger_id: number, disable_payload_checks: boolean, explicit_cancellation: boolean);
+    constructor(headers: WasmHeader[], log_level: LogLevel, logger_id: number, disable_payload_checks: boolean, explicit_cancellation: boolean, on_journal_mismatch: WasmJournalMismatchBehavior);
     notify_error(error_message: string, stacktrace?: string | null): void;
     notify_error_for_next_command(error_message: string, stacktrace: string | null | undefined, wasm_command_type: WasmCommandType): void;
     notify_error_for_specific_command(error_message: string, stacktrace: string | null | undefined, wasm_command_type: WasmCommandType, command_index: number, command_name?: string | null): void;

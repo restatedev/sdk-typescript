@@ -47,6 +47,7 @@ export interface ExecutionOptions {
   defaultSerde: Serde<any>;
   hooks?: HooksProvider[];
   explicitCancellation?: boolean;
+  onJournalMismatchErrors?: "retry" | "pause" | "fail";
 }
 
 export interface ComponentHandler {
@@ -142,6 +143,9 @@ function createExecutionOptions(
     explicitCancellation:
       handlerOptions?.explicitCancellation ??
       serviceOptions?.explicitCancellation,
+    onJournalMismatchErrors:
+      handlerOptions?.onJournalMismatchErrors ??
+      serviceOptions?.onJournalMismatchErrors,
   };
 }
 
