@@ -9,15 +9,15 @@
     "@restatedev/node": "0.0.0",
     "@restatedev/otel": "0.0.0",
     "@restatedev/vercel": "0.0.0",
-    "@restatedev/restate-sdk": "1.15.0-rc.2",
-    "@restatedev/restate-sdk-clients": "1.15.0-rc.2",
-    "@restatedev/restate-sdk-cloudflare-workers": "1.15.0-rc.2",
-    "@restatedev/restate-sdk-core": "1.15.0-rc.2",
-    "@restatedev/restate-sdk-gen": "1.15.0-rc.2",
-    "@restatedev/restate-sdk-opentelemetry": "1.15.0-rc.2",
-    "@restatedev/restate-sdk-testcontainers": "1.15.0-rc.2",
-    "@restatedev/restate-sdk-tunnel": "1.15.0-rc.2",
-    "@restatedev/restate-sdk-zod": "1.15.0-rc.2",
+    "@restatedev/restate-sdk": "1.15.0-rc.4",
+    "@restatedev/restate-sdk-clients": "1.15.0-rc.4",
+    "@restatedev/restate-sdk-cloudflare-workers": "1.15.0-rc.4",
+    "@restatedev/restate-sdk-core": "1.15.0-rc.4",
+    "@restatedev/restate-sdk-gen": "1.15.0-rc.4",
+    "@restatedev/restate-sdk-opentelemetry": "1.15.0-rc.4",
+    "@restatedev/restate-sdk-testcontainers": "1.15.0-rc.4",
+    "@restatedev/restate-sdk-tunnel": "1.15.0-rc.4",
+    "@restatedev/restate-sdk-zod": "1.15.0-rc.4",
     "@restatedev/restate-e2e-services": "0.0.0"
   },
   "changesets": [
@@ -26,6 +26,7 @@
     "every-jobs-love",
     "shy-breads-prove",
     "spicy-context-local",
-    "tame-tasks-interrupt"
+    "tame-tasks-interrupt",
+    "upset-jokes-follow"
   ]
 }
