@@ -187,7 +187,10 @@ describe("client-initiated graceful shutdown", () => {
 
   test("drains in-flight invocations while refusing new ones with the sentinel", async () => {
     const fake = await startFakeCloud({ decideTrailers: () => okTrailers() });
-    const conn = connectTunnel({ ...baseOptions(fake.port), drainGraceMs: 5_000 });
+    const conn = connectTunnel({
+      ...baseOptions(fake.port),
+      drainGraceMs: 5_000,
+    });
     try {
       await conn.ready;
       const c0 = await fake.waitForConnection(0);
@@ -196,8 +199,9 @@ describe("client-initiated graceful shutdown", () => {
       // and hold it in flight (the SDK waits for input on the request stream).
       const disc = await roundtrip(c0.session, discoverReq());
       expect(disc.status).toBe(200);
-      const maxVersion = (JSON.parse(disc.body) as { maxProtocolVersion: number })
-        .maxProtocolVersion;
+      const maxVersion = (
+        JSON.parse(disc.body) as { maxProtocolVersion: number }
+      ).maxProtocolVersion;
       const invokePath = "/invoke/greeter/greet";
       const held = c0.session.request(
         {

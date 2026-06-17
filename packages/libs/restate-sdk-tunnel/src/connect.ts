@@ -44,10 +44,7 @@ import { createEndpointHandler } from "@restatedev/restate-sdk";
 import type { ConnectTunnelOptions, TunnelConnection } from "./types.js";
 import { resolveOptions } from "./options.js";
 import type { HandshakeInfo } from "./handshake.js";
-import {
-  type ConnectionDeps,
-  type DrainableConnection,
-} from "./connection.js";
+import { type ConnectionDeps, type DrainableConnection } from "./connection.js";
 import { DrainingRegistry } from "./draining.js";
 import { Supervisor } from "./supervisor.js";
 import { Deferred } from "./util.js";
@@ -132,17 +129,25 @@ type EngineState =
  * {@link TunnelConnection.ready} to await the first successful handshake.
  */
 export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
-  const opts = resolveOptions(options);
-  const log = opts.logger;
+  // Resolve options, eventually picking them up from env.
+  const resolvedOptions = resolveOptions(options);
 
   // Built once, shared across connections and streams (it is stateless per
   // call). identityKeys delegates per-request JWT verification to the SDK —
   // it checks `aud` against the post-strip `req.url` pathname.
   const sdkHandler = createEndpointHandler({
     services: options.services,
-    bidirectional: opts.bidirectional,
-    identityKeys: [opts.signingPublicKey],
+    bidirectional: resolvedOptions.bidirectional,
+    // TODO identityKeys and signingPublicKey are the very same field.
+    //  This can be aligned into the same field (and could be nice also for the regular SDK to read the key from env).
+    identityKeys: [resolvedOptions.signingPublicKey],
+    defaultServiceOptions: options.defaultServiceOptions,
+    logger: options.logger,
+    journalValueCodecProvider: options.journalValueCodecProvider,
   });
+
+  // Logger used for debugging the tunnel
+  const log = resolvedOptions.logger;
 
   // Injected infrastructure: the per-connection layer reads these via deps.
   const activeSockets = new Set<net.Socket>();
@@ -172,7 +177,7 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
   const signalHandlers: Array<[NodeJS.Signals, () => void]> = [];
 
   const connectionDeps: ConnectionDeps = {
-    opts,
+    opts: resolvedOptions,
     sdkHandler,
     draining,
     activeSockets,
@@ -189,7 +194,7 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
   };
 
   const supervisor = new Supervisor(
-    opts,
+    resolvedOptions,
     connectionDeps,
     {
       onFatal: (err) => {
@@ -262,7 +267,7 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
     // Without the advertised capability the server ignores our drain sentinel,
     // so a graceful drain can't work (refused requests just keep getting
     // routed back) — fall back to an abrupt close, as documented.
-    if (!opts.supportsClientDrain) return close();
+    if (!resolvedOptions.supportsClientDrain) return close();
     // Coalesce: a drain already in progress, or already closed.
     if (state.kind === "draining") return state.completed;
     if (state.kind === "closed") return done;
@@ -271,7 +276,10 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
     // (drainGracefully runs synchronously up to inflight.whenDrained, so no new
     // invocation can interleave before `state` is set.)
     const { active } = state;
-    const completed = drainGracefully(active, graceMs ?? opts.drainGraceMs);
+    const completed = drainGracefully(
+      active,
+      graceMs ?? resolvedOptions.drainGraceMs
+    );
     state = { kind: "draining", active, completed };
     return completed;
   };
@@ -281,8 +289,8 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
   // already-aborted-signal handling below, so that path's synchronous close()
   // tears them down via teardown() rather than leaving a live handler on a
   // connection that is already closed.
-  if (opts.gracefulShutdown !== undefined) {
-    const { signals, graceMs } = opts.gracefulShutdown;
+  if (resolvedOptions.gracefulShutdown !== undefined) {
+    const { signals, graceMs } = resolvedOptions.gracefulShutdown;
     for (const signal of signals) {
       const handler = () => {
         log(`tunnel: received ${signal} — shutting down gracefully`);

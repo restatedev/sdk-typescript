@@ -384,7 +384,7 @@ describe("connectTunnel — TLS (negotiated h2)", () => {
       ...baseOptions(0),
       tunnelServers: [`127.0.0.1:${port}`],
       tls: { ca: cert },
-      logger: (m) => reasons.push(m),
+      tunnelDiagnosticLogger: (m) => reasons.push(m),
     });
     try {
       await new Promise((r) => setTimeout(r, 300));
