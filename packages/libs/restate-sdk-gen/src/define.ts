@@ -14,6 +14,7 @@ import * as restate from "@restatedev/restate-sdk";
 import type { StandardSchemaV1 } from "@restatedev/restate-sdk-core";
 import { execute } from "./restate-operations.js";
 import { type Operation } from "./operation.js";
+import { ServiceHandlerOpts } from "@restatedev/restate-sdk";
 
 // =============================================================================
 // Shared types (consumed here and by interface.ts)
@@ -115,7 +116,7 @@ export type ImplementedDefinition<
     : ImplementedWorkflowDefinition<P, H>;
 
 // =============================================================================
-// HandlerDef — result of typed()
+// HandlerDef — result of serdes()
 // =============================================================================
 
 /** @internal
@@ -148,27 +149,37 @@ export type HandlerDescriptors<
 // Per-handler options
 // =============================================================================
 
-/** Options valid for all handler types (no serde — those live in typed()) */
-export type GenHandlerOpts = {
-  idempotencyRetention?: restate.Duration | number;
-  journalRetention?: restate.Duration | number;
-  inactivityTimeout?: restate.Duration | number;
-  abortTimeout?: restate.Duration | number;
-  retryPolicy?: restate.RetryPolicy;
-  description?: string;
-  metadata?: Record<string, string>;
-  ingressPrivate?: boolean;
-  explicitCancellation?: boolean;
-};
+/** Options valid for all handler types. To set input and output serde, check {@link serdes()} */
+export type GenHandlerOpts = Omit<
+  ServiceHandlerOpts<unknown, unknown>,
+  "input" | "output"
+>;
 
 /** Handler options for virtual object handlers */
 export type GenObjectHandlerOpts = GenHandlerOpts & {
+  /**
+   * When true, the handler will be marked as shared.
+   * Shared object handlers can only read state, not write it.
+   */
   shared?: boolean;
+
+  /**
+   * When set to `true`, lazy state will be enabled for all invocations to this handler.
+   *
+   * *NOTE:* You can set this field only if you register this endpoint against restate-server >= 1.4,
+   * otherwise the service discovery will fail.
+   */
   enableLazyState?: boolean;
 };
 
 /** Handler options for workflow handlers (shared is implicit from name) */
 export type GenWorkflowHandlerOpts = {
+  /**
+   * When set to `true`, lazy state will be enabled for all invocations to this handler.
+   *
+   * *NOTE:* You can set this field only if you register this endpoint against restate-server >= 1.4,
+   * otherwise the service discovery will fail.
+   */
   enableLazyState?: boolean;
 };
 
@@ -179,7 +190,7 @@ export type GenWorkflowHandlerOpts = {
 /** @internal */
 export type AnyGenFn = (input: any) => Operation<any>;
 
-/** A handler entry: either a bare generator fn or the result of typed() */
+/** A handler entry: either a bare generator fn or the result of {@link serdes()} */
 export type HandlerOrHandlerDescriptor = AnyGenFn | HandlerDef<any, any>;
 
 // =============================================================================
@@ -281,7 +292,8 @@ export function service<
 
   for (const [handlerName, entry] of Object.entries(handlers)) {
     const { genFn, inputSerde, outputSerde } = extractEntry(entry);
-    const handlerOpts = (perHandlerOpts as any)?.[handlerName] ?? {};
+    const handlerOpts =
+      ((perHandlerOpts as any)?.[handlerName] as GenHandlerOpts) ?? {};
 
     coreHandlers[handlerName] = restate.handlers.handler(
       { input: inputSerde, output: outputSerde, ...handlerOpts } as any,
@@ -330,7 +342,7 @@ export function object<
   for (const [handlerName, entry] of Object.entries(handlers)) {
     const { genFn, inputSerde, outputSerde } = extractEntry(entry);
     const handlerOpts: GenObjectHandlerOpts =
-      (perHandlerOpts as any)?.[handlerName] ?? {};
+      ((perHandlerOpts as any)?.[handlerName] as GenObjectHandlerOpts) ?? {};
     const { shared, ...restOpts } = handlerOpts;
 
     const sdkOpts = {
@@ -388,7 +400,8 @@ export function workflow<
 
   for (const [handlerName, entry] of Object.entries(handlers)) {
     const { genFn, inputSerde, outputSerde } = extractEntry(entry);
-    const handlerOpts = (perHandlerOpts as any)?.[handlerName] ?? {};
+    const handlerOpts =
+      ((perHandlerOpts as any)?.[handlerName] as GenWorkflowHandlerOpts) ?? {};
 
     const sdkOpts = {
       input: inputSerde,
