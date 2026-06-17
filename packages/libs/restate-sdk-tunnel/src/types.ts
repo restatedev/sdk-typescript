@@ -63,7 +63,10 @@ export interface TunnelTlsOptions {
  * `connectTunnel({ services })` plus a token-file Secret mount (named by
  * `RESTATE_INPROC_AUTH_TOKEN_FILE`) is a complete configuration.
  */
-export interface ConnectTunnelOptions {
+export interface ConnectTunnelOptions extends Omit<
+  EndpointOptions,
+  "identityKeys"
+> {
   /**
    * Restate Cloud region (e.g. `"us"`, `"eu"`). Tunnel servers are
    * discovered via a DNS SRV lookup of `tunnel.<region>.restate.cloud`,
@@ -147,8 +150,6 @@ export interface ConnectTunnelOptions {
    * (the restate-operator injects a per-revision name there).
    */
   tunnelName?: string;
-  /** The services to serve over the tunnel. */
-  services: Services;
   /**
    * Protocol mode for the SDK handler. Default `true` (`BIDI_STREAM`) —
    * the tunnel is always HTTP/2, so full-duplex streaming is available.
@@ -253,8 +254,10 @@ export interface ConnectTunnelOptions {
   tls?: boolean | TunnelTlsOptions;
   /** Abort to stop reconnecting and close the tunnel (same as `close()`). */
   signal?: AbortSignal;
+
+  // TODO this should probably be wired in the loggerTransport tooling of the core sdk.
   /** Diagnostic logger. Default: silent. */
-  logger?: (message: string) => void;
+  tunnelDiagnosticLogger?: (message: string) => void;
 }
 
 /**
