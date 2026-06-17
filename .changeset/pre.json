@@ -21,6 +21,7 @@
     "@restatedev/restate-e2e-services": "0.0.0"
   },
   "changesets": [
+    "big-buttons-build",
     "brave-tunnels-connect",
     "clever-fibers-rest",
     "every-jobs-love",

@@ -1,5 +1,16 @@
 # @restatedev/restate-sdk
 
+## 1.15.0-rc.6
+
+### Minor Changes
+
+- Bump to 1.15.0 rc.6
+
+### Patch Changes
+
+- Updated dependencies
+  - @restatedev/restate-sdk-core@1.15.0-rc.6
+
 ## 1.15.0-rc.5
 
 ### Minor Changes
