@@ -53,6 +53,7 @@ export async function raceAbortable<T>(
   }
 }
 
+// TODO replace with Promise.withResolvers
 /** A promise whose resolve/reject are exposed and fire at most once. */
 export class Deferred<T> {
   private settled = false;

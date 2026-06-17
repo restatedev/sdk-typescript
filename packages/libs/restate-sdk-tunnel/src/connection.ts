@@ -381,7 +381,9 @@ class ConnectionAttempt implements DrainableConnection {
       this.settle(this.endOutcome(`socket error: ${err.message}`))
     );
     dialed.socket.on("close", () =>
-      this.settle(this.endOutcome("connection closed before handshake completed"))
+      this.settle(
+        this.endOutcome("connection closed before handshake completed")
+      )
     );
     this.establish(dialed.socket);
   }
@@ -394,14 +396,18 @@ class ConnectionAttempt implements DrainableConnection {
 
   private session(): http2.Http2Session | undefined {
     const s = this.state;
-    return s.kind === "handshaking" || s.kind === "serving" || s.kind === "draining"
+    return s.kind === "handshaking" ||
+      s.kind === "serving" ||
+      s.kind === "draining"
       ? s.session
       : undefined;
   }
 
   private get openedAt(): number | undefined {
     const s = this.state;
-    return s.kind === "serving" || s.kind === "draining" ? s.openedAt : undefined;
+    return s.kind === "serving" || s.kind === "draining"
+      ? s.openedAt
+      : undefined;
   }
 
   private uptimeMs(): number {
@@ -462,6 +468,7 @@ class ConnectionAttempt implements DrainableConnection {
       {
         maxSessionMemory: this.deps.opts.maxSessionMemory,
         settings: {
+          // TODO why not allow to configure the other h2 options?
           maxConcurrentStreams: this.deps.opts.maxConcurrentStreams,
           initialWindowSize: 1024 * 1024,
           maxFrameSize: 65536,
@@ -504,7 +511,9 @@ class ConnectionAttempt implements DrainableConnection {
         // Older Node — per-stream windows still apply.
       }
       s.on("close", () =>
-        this.settle(this.endOutcome("session closed before handshake completed"))
+        this.settle(
+          this.endOutcome("session closed before handshake completed")
+        )
       );
       s.on("error", (err: Error) =>
         this.settle(this.endOutcome(`session error: ${err.message}`))
@@ -560,7 +569,10 @@ class ConnectionAttempt implements DrainableConnection {
     // A stream that raced the handshake parks on its outcome (the cloud fires
     // work the instant the tunnel registers, coalescing it with the
     // ok-trailers) rather than being rejected.
-    if (this.state.kind === "handshaking" && this.state.handshake !== undefined) {
+    if (
+      this.state.kind === "handshaking" &&
+      this.state.handshake !== undefined
+    ) {
       const handshake = this.state.handshake;
       void handshake.then(({ ok }) => {
         if (this.closed || res.stream.destroyed) return;
@@ -700,7 +712,13 @@ class ConnectionAttempt implements DrainableConnection {
     watchdog.stop(); // the registry owns the session now; stop pinging it
     this.deregister();
     this.deps.draining.add(session, this.socket!, this.deps.opts.drainGraceMs);
-    this.state = { kind: "draining", session, openedAt, trigger: "server", watchdog };
+    this.state = {
+      kind: "draining",
+      session,
+      openedAt,
+      trigger: "server",
+      watchdog,
+    };
     this.completion.resolve({ kind: "drained", uptimeMs: this.uptimeMs() });
   }
 

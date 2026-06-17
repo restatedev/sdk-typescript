@@ -310,13 +310,16 @@ export function resolveOptions(options: ConnectTunnelOptions): ResolvedOptions {
       "maxSessionMemory"
     ),
     tls: options.tls ?? true,
-    logger: options.logger ?? (() => {}),
+    logger: options.tunnelDiagnosticLogger ?? (() => {}),
   };
 }
 
 /** Resolve the opt-in auto signal-handling config (undefined = leave signals alone). */
 function resolveGracefulShutdown(
-  option: boolean | { signals?: NodeJS.Signals[]; graceMs?: number } | undefined,
+  option:
+    | boolean
+    | { signals?: NodeJS.Signals[]; graceMs?: number }
+    | undefined,
   drainGraceMs: number
 ): { signals: NodeJS.Signals[]; graceMs: number } | undefined {
   // On by default: only an explicit `false` opts out.
