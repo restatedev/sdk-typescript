@@ -34,5 +34,4 @@ export type {
   ConnectTunnelOptions,
   TunnelConnection,
   TunnelTlsOptions,
-  Services,
 } from "./types.js";

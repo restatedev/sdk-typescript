@@ -14,12 +14,6 @@
 import type { EndpointOptions } from "@restatedev/restate-sdk";
 
 /**
- * The services to expose over the tunnel — the same shape `restate.serve`
- * and `createEndpointHandler` accept (services, virtual objects, workflows).
- */
-export type Services = EndpointOptions["services"];
-
-/**
  * TLS options for the outbound tunnel connection.
  *
  * Note: unlike a regular HTTP/2 client, the tunnel deliberately negotiates
