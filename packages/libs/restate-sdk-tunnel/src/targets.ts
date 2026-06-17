@@ -31,6 +31,12 @@ export interface Target {
   plaintext?: boolean;
 }
 
+type DiagnosticLogger = (message: string) => void;
+
+function formatError(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
 /**
  * Parse one explicit tunnel-server address: `"host:port"`, or a URL whose
  * scheme picks TLS (`https`) / plaintext (`http`) for that server.
@@ -102,17 +108,28 @@ export function parseServerAddress(address: string): Target {
 export async function resolveTargets(spec: {
   srvName?: string;
   tunnelServers?: string[];
+  logger?: DiagnosticLogger;
 }): Promise<Target[]> {
+  const log: DiagnosticLogger = spec.logger ?? (() => {});
   if (spec.tunnelServers !== undefined) {
     const targets = spec.tunnelServers.map(parseServerAddress);
     if (targets.length === 0) {
       throw new Error("tunnel: tunnelServers is empty");
     }
+    log(
+      `tunnel: using configured tunnel target(s): ${targets.map(targetKey).join(", ")}`
+    );
     return targets;
   }
   const srvName = spec.srvName!;
+  log(`tunnel: resolving tunnel targets from SRV ${srvName}`);
   const records = await dns.promises.resolveSrv(srvName);
   records.sort((a, b) => a.priority - b.priority || b.weight - a.weight);
+  log(
+    `tunnel: SRV ${srvName} returned ${records.length} record(s): ${
+      records.map((r) => `${r.name}:${r.port}`).join(", ") || "<none>"
+    }`
+  );
   // Expand each SRV target to its addresses: the tunnel connects to EVERY
   // resolved address (one connection per IP), exactly like the Rust client,
   // which flat-maps SRV targets through A/AAAA lookups into per-IP URIs.
@@ -131,10 +148,16 @@ export async function resolveTargets(spec: {
     if (result.status === "rejected") {
       const code = (result.reason as NodeJS.ErrnoException | undefined)?.code;
       if (code === "ENOTFOUND" || code === "ENODATA") {
+        log(
+          `tunnel: SRV target ${r.name}:${r.port} has no address (${code})`
+        );
         continue; // negative answer: this SRV target genuinely has no address
       }
       // Transport error — fail the whole resolution so the supervisor
       // keeps existing slots and retries.
+      log(
+        `tunnel: address lookup for SRV target ${r.name}:${r.port} failed: ${formatError(result.reason)}`
+      );
       throw result.reason;
     }
     for (const a of result.value) {
@@ -144,6 +167,11 @@ export async function resolveTargets(spec: {
       targets.push({ host: a.address, port: r.port, servername: srvName });
     }
   }
+  log(
+    `tunnel: SRV ${srvName} expanded to ${targets.length} target(s): ${
+      targets.map(targetKey).join(", ") || "<none>"
+    }`
+  );
   return targets;
 }
 

@@ -67,8 +67,18 @@ export interface FakeTunnelConnection {
   creds: Promise<http2.IncomingHttpHeaders>;
   /** The role-flipped h2 client session — open streams to model forwarded requests. */
   session: http2.ClientHttp2Session;
+  /** GOAWAY frames received from the deployment side. */
+  goaways: FakeGoaway[];
+  /** Resolves when the next GOAWAY frame arrives on this session. */
+  waitForGoaway(): Promise<FakeGoaway>;
   /** The raw accepted socket (pause it to simulate a half-open peer). */
   rawSocket: Duplex;
+}
+
+export interface FakeGoaway {
+  errorCode: number;
+  lastStreamID: number;
+  opaqueData?: Buffer;
 }
 
 export interface FakeCloud {
@@ -118,6 +128,14 @@ export function startFakeCloud(options: FakeCloudOptions): Promise<FakeCloud> {
     });
     session.on("error", () => {}); // teardown resets are expected in tests
     sessions.push(session);
+    const goaways: FakeGoaway[] = [];
+    const goawayWaiters: Array<(goaway: FakeGoaway) => void> = [];
+    session.on("goaway", (errorCode, lastStreamID, opaqueData) => {
+      const goaway: FakeGoaway = { errorCode, lastStreamID, opaqueData };
+      goaways.push(goaway);
+      const waiters = goawayWaiters.splice(0);
+      for (const waiter of waiters) waiter(goaway);
+    });
 
     let credsResolve!: (h: http2.IncomingHttpHeaders) => void;
     const creds = new Promise<http2.IncomingHttpHeaders>((resolve) => {
@@ -162,6 +180,12 @@ export function startFakeCloud(options: FakeCloudOptions): Promise<FakeCloud> {
       index,
       creds,
       session,
+      goaways,
+      waitForGoaway() {
+        const last = goaways.at(-1);
+        if (last !== undefined) return Promise.resolve(last);
+        return new Promise((resolve) => goawayWaiters.push(resolve));
+      },
       rawSocket,
     };
     connections.push(conn);

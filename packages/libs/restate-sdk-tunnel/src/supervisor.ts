@@ -43,6 +43,10 @@ interface Slot {
   done: Promise<void>;
 }
 
+function formatTargetList(keys: string[]): string {
+  return keys.length === 0 ? "<none>" : keys.join(", ");
+}
+
 export interface SupervisorHooks {
   /** A slot hit a non-retryable failure; the whole tunnel must stop (E1). */
   onFatal: (err: Error) => void;
@@ -56,6 +60,7 @@ export class Supervisor {
   private readonly wake = new AbortController();
   private stopping = false;
   private fatal: Error | undefined;
+  private lastResolvedKeys: string[] | undefined;
 
   /** Resolves when the resolve loop has exited AND every slot has settled. */
   readonly done: Promise<void>;
@@ -82,12 +87,14 @@ export class Supervisor {
    */
   stopResolving(): void {
     this.stopping = true;
+    this.log("tunnel: supervisor stopping target resolution");
     this.wake.abort();
   }
 
   /** Abort every slot and the resolve loop (engine teardown). */
   abortAll(): void {
     this.stopping = true;
+    this.log("tunnel: supervisor aborting all connections");
     this.stopSignal.abort();
   }
 
@@ -158,7 +165,7 @@ export class Supervisor {
         // E3: race the (un-abortable) DNS work against the wake signal so
         // teardown/fatal don't block on a slow resolver — a late result is
         // discarded by the stopping/fatal check below.
-        const resolution = resolveTargets(this.opts);
+        const resolution = resolveTargets({ ...this.opts, logger: this.log });
         resolution.catch(() => {}); // a late rejection must not be unhandled
         const raced = await raceAbortable(resolution, this.wake.signal);
         if (raced === null) break; // woken: stopping or fatal
@@ -178,6 +185,39 @@ export class Supervisor {
       if (this.stopping || this.fatal !== undefined) break;
 
       const desired = new Map(targets.map((t) => [targetKey(t), t] as const));
+      const desiredKeys = [...desired.keys()].sort();
+      if (
+        this.lastResolvedKeys === undefined ||
+        desiredKeys.length !== this.lastResolvedKeys.length ||
+        desiredKeys.some((key, i) => key !== this.lastResolvedKeys![i])
+      ) {
+        const source =
+          this.opts.srvName === undefined
+            ? "configured tunnel targets"
+            : `SRV ${this.opts.srvName}`;
+        this.log(
+          `tunnel: target set from ${source}: ${formatTargetList(desiredKeys)}`
+        );
+        if (this.lastResolvedKeys !== undefined) {
+          const previous = new Set(this.lastResolvedKeys);
+          const current = new Set(desiredKeys);
+          const added = desiredKeys.filter((key) => !previous.has(key));
+          const removed = this.lastResolvedKeys.filter(
+            (key) => !current.has(key)
+          );
+          if (added.length > 0) {
+            this.log(
+              `tunnel: discovered new tunnel target(s): ${formatTargetList(added)}`
+            );
+          }
+          if (removed.length > 0) {
+            this.log(
+              `tunnel: tunnel target(s) disappeared: ${formatTargetList(removed)}`
+            );
+          }
+        }
+        this.lastResolvedKeys = desiredKeys;
+      }
       for (const [key, target] of desired) {
         if (!this.slots.has(key)) {
           this.log(`tunnel: starting connection to ${key}`);

@@ -65,9 +65,9 @@ export interface HandshakeCredentials {
   supportsDrain: boolean;
   /**
    * Advertise `supports-client-drain: true`. Tells the server that on
-   * shutdown we refuse new invocations with the `x-restate-tunnel-draining`
-   * sentinel (rather than dropping them); only then does the server trust
-   * that sentinel to deselect this connection.
+   * shutdown we proactively send GOAWAY and refuse any raced streams with the
+   * `x-restate-tunnel-draining` sentinel (rather than dropping them); only
+   * then does the server trust that sentinel to deselect this connection.
    */
   supportsClientDrain: boolean;
 }

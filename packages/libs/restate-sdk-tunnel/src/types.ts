@@ -169,11 +169,12 @@ export interface ConnectTunnelOptions extends Omit<
   /**
    * Advertise client-initiated graceful drain (`supports-client-drain: true`)
    * in the handshake. Default `true`. When enabled, {@link
-   * TunnelConnection.shutdown} (or the opt-in {@link gracefulShutdown} signal
-   * handler) refuses new invocations with a drain sentinel so Restate Cloud
-   * stops routing new work to this process while its in-flight invocations
-   * finish — the basis for zero-dropped-invocation rollouts. Specific to this
-   * in-process client; the standalone Rust client does not implement it.
+   * TunnelConnection.shutdown} (or the default {@link gracefulShutdown} signal
+   * handler) proactively sends HTTP/2 GOAWAY and refuses any raced streams
+   * with a drain sentinel, so Restate Cloud stops routing new work to this
+   * process while its in-flight invocations finish — the basis for
+   * zero-dropped-invocation rollouts. Specific to this in-process client; the
+   * standalone Rust client does not implement it.
    */
   supportsClientDrain?: boolean;
   /**
@@ -181,8 +182,10 @@ export interface ConnectTunnelOptions extends Omit<
    * engine installs a one-shot handler for each signal (default `SIGTERM`)
    * that calls {@link TunnelConnection.shutdown} and then `process.exit(0)`
    * once draining completes (or the grace elapses) — so an operator-managed
-   * deployment gets zero-dropped-invocation rollouts with no wiring. The
-   * handlers are removed when the connection closes.
+   * deployment gets zero-dropped-invocation rollouts with no wiring. In
+   * Kubernetes, set `terminationGracePeriodSeconds` to at least the drain
+   * grace plus the handler slack you want to preserve. The handlers are
+   * removed when the connection closes.
    *
    * Pass `false` to opt out entirely — e.g. to manage signals and process
    * exit yourself and call {@link TunnelConnection.shutdown} by hand. Pass an
@@ -261,12 +264,13 @@ export interface TunnelConnection {
   /** Stop reconnecting, close the current connection, and wait for teardown. */
   close(): Promise<void>;
   /**
-   * Gracefully drain, then stop. Stops accepting new invocations (Restate
-   * Cloud deselects this process via the drain sentinel), lets in-flight
-   * invocations finish — bounded by `graceMs` (default {@link
-   * ConnectTunnelOptions.drainGraceMs}) — and then tears down. Resolves once
-   * drained or the grace elapsed. Wire this to `SIGTERM` for
-   * zero-dropped-invocation rollouts; {@link close} is the abrupt alternative.
+   * Gracefully drain, then stop. Proactively sends HTTP/2 GOAWAY so Restate
+   * Cloud stops opening new streams, refuses any raced streams with a drain
+   * sentinel, lets in-flight invocations finish — bounded by `graceMs`
+   * (default {@link ConnectTunnelOptions.drainGraceMs}) — and then closes the
+   * session gracefully. If the grace elapses first, the session/socket are
+   * force-closed. The default {@link ConnectTunnelOptions.gracefulShutdown}
+   * handler wires this to `SIGTERM`; {@link close} is the abrupt alternative.
    * Requires {@link ConnectTunnelOptions.supportsClientDrain} (the default) to
    * have been advertised; otherwise it degrades to an abrupt {@link close}.
    */

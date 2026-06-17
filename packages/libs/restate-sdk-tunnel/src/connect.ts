@@ -76,22 +76,22 @@ class InflightTracker {
     }
   }
 
-  /** Resolve once nothing is in flight, or after `graceMs` — whichever first.
+  /** Resolve true once nothing is in flight, or false after `graceMs`.
    * Only one shutdown runs at a time, so a single waiter suffices. */
-  whenDrained(graceMs: number): Promise<void> {
+  whenDrained(graceMs: number): Promise<boolean> {
     return new Promise((resolve) => {
       if (this.count === 0) {
-        resolve();
+        resolve(true);
         return;
       }
       const timer = setTimeout(() => {
         this.notifyDrained = undefined;
-        resolve();
+        resolve(false);
       }, graceMs);
       timer.unref();
       this.notifyDrained = () => {
         clearTimeout(timer);
-        resolve();
+        resolve(true);
       };
     });
   }
@@ -184,8 +184,18 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
     activeConnections,
     onEstablished: (info) => {
       if (state.kind === "closed") return;
+      const firstConnection = output.connectionCount === 0;
       output.connectionCount++;
       output.lastInfo = info;
+      if (firstConnection) {
+        log(
+          `tunnel: service ready (name=${info.tunnelName}, proxy=${info.proxyUrl}, tunnel=${info.tunnelUrl})`
+        );
+      } else {
+        log(
+          `tunnel: additional connection ready (connections=${output.connectionCount}, name=${info.tunnelName})`
+        );
+      }
       ready.resolve();
     },
     isShuttingDown: () => state.kind === "draining",
@@ -252,8 +262,17 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
     log(
       `tunnel: graceful shutdown — refusing new invocations, draining ${inflight.inFlight} in-flight`
     );
-    await inflight.whenDrained(graceMs);
-    // In-flight drained (or grace elapsed): tear the now-idle connections down.
+    const drained = await inflight.whenDrained(graceMs);
+    // In-flight drained: ask h2 to close cleanly. Grace elapsed: force the
+    // still-open sessions down, which tears down any stuck streams.
+    await Promise.all(
+      [...activeConnections].map((c) =>
+        c.finishClientDrain({ force: !drained })
+      )
+    );
+    // Now tear down the supervisor and any idle retry loops. For the graceful
+    // case the live h2 sessions have already closed; for the forced case this
+    // is idempotent cleanup.
     teardown();
     await done;
   };

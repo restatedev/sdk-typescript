@@ -109,6 +109,37 @@ describe("connectTunnel — handshake", () => {
     );
   });
 
+  test("diagnostic logger reports connection lifecycle and service readiness", async () => {
+    await withFake(
+      { decideTrailers: () => okTrailers() },
+      async (_fake, options) => {
+        const logs: string[] = [];
+        const conn = connectTunnel({
+          ...options,
+          tunnelDiagnosticLogger: (m) => logs.push(m),
+        });
+        try {
+          await conn.ready;
+          const joined = logs.join("\n");
+          expect(joined).toMatch(/tunnel: using configured tunnel target\(s\):/);
+          expect(joined).toMatch(
+            /tunnel: target set from configured tunnel targets:/
+          );
+          expect(joined).toMatch(/tunnel: connected socket to .*plaintext/);
+          expect(joined).toMatch(
+            /tunnel: h2 session established to .*localSettings=.*remoteSettings=/
+          );
+          expect(joined).toMatch(
+            /tunnel: established \(name=test-tunnel, proxy=https:\/\/tunnel\.example:9080\/abc123\/test-tunnel\)/
+          );
+          expect(joined).toMatch(/tunnel: service ready \(name=test-tunnel,/);
+        } finally {
+          await conn.close();
+        }
+      }
+    );
+  });
+
   test("deploymentUrl normalizes a missing proxy port", async () => {
     await withFake(
       {
