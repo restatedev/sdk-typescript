@@ -258,6 +258,44 @@ export type GenericSend<REQ> = {
 };
 
 /**
+ * Console to use for replay-aware logging.
+ *
+ * `RestateConsole` behaves like the standard `Console`, but Restate attaches
+ * invocation metadata and suppresses user logs while replaying already-journaled
+ * work.
+ */
+export type RestateConsole = Console & {
+  /**
+   * Creates a child console that attaches the provided contextual fields to each
+   * log event.
+   * Context values must be serializable.
+   *
+   * Child consoles are immutable: this method returns a new console and does not
+   * mutate the parent console. Nested children merge their fields, and later
+   * fields override earlier fields with the same name.
+   *
+   * The child console object itself is not persisted between workers. Rebuild it
+   * from durable values such as handler input, object/workflow keys, state,
+   * request metadata, and `ctx.run` results. Avoid adding logger context only
+   * inside a `ctx.run` closure, because replay skips closures whose results are
+   * already journaled.
+   *
+   * @example Progressively enrich log context
+   * ```ts
+   * let log = ctx.console.child({ orderId: input.orderId });
+   *
+   * const payment = await ctx.run("charge payment", async () => {
+   *   return await chargePayment(input);
+   * });
+   *
+   * log = log.child({ paymentId: payment.paymentId });
+   * log.info("payment charged");
+   * ```
+   */
+  child(context: Record<string, string>): RestateConsole;
+};
+
+/**
  * The context that gives access to all Restate-backed operations, for example
  *   - sending reliable messages / RPC through Restate
  *   - execute non-deterministic closures and memoize their result
@@ -282,9 +320,10 @@ export interface Context extends RestateContext {
 
   /**
    * Console to use for logging. It attaches to each log message some contextual information,
-   * such as invoked service method and invocation id, and automatically excludes logs during replay.
+   * such as invoked service method and invocation id, and automatically excludes user logs during replay.
+   * Use {@link RestateConsole.child} to add custom contextual fields to all logs emitted by a child logger.
    */
-  console: Console;
+  console: RestateConsole;
 
   /**
    * Deterministic date.
