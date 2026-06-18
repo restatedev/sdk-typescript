@@ -145,6 +145,15 @@ export interface ConnectTunnelOptions extends Omit<
    */
   tunnelName?: string;
   /**
+   * Stable diagnostic identifier for this SDK worker/process. The tunnel
+   * server can include it in routing and failure logs so operators can grep
+   * server-side events against SDK-side logs. Defaults to
+   * `RESTATE_TUNNEL_WORKER_ID` when set, otherwise a hostname-based id with a
+   * short random suffix that is stable for this process. Advisory only: it is
+   * sent in the tunnel handshake for diagnostics, not used for authentication.
+   */
+  tunnelWorkerId?: string;
+  /**
    * Protocol mode for the SDK handler. Default `true` (`BIDI_STREAM`) —
    * the tunnel is always HTTP/2, so full-duplex streaming is available.
    */

@@ -53,6 +53,7 @@ const baseOptions = (port: number): ConnectTunnelOptions => ({
   authToken: "key_test.secret",
   signingPublicKey: identity.publicKey,
   tunnelName: TUNNEL_NAME,
+  tunnelWorkerId: "worker-test-1",
   services: [greeter],
   handshakeTimeoutMs: 300,
   reconnectInitialMs: 5,
@@ -95,8 +96,13 @@ describe("connectTunnel — handshake", () => {
           expect(creds["authorization"]).toBe("Bearer key_test.secret");
           expect(creds["environment-id"]).toBe("env_abc123");
           expect(creds["tunnel-name"]).toBe(TUNNEL_NAME);
+          expect(creds["tunnel-worker-id"]).toBe("worker-test-1");
+          expect(creds["tunnel-connection-id"]).toMatch(
+            /^[0-9A-HJKMNP-TV-Z]{26}$/
+          );
           // Drain is implemented and advertised by default.
           expect(creds["supports-drain"]).toBe("true");
+          expect(creds["supports-client-drain"]).toBe("true");
           // The ready-made registration URL: advertised proxy base + the
           // constant in-process destination (routing is by tunnelName).
           expect(conn.deploymentUrl).toBe(
@@ -127,12 +133,17 @@ describe("connectTunnel — handshake", () => {
           );
           expect(joined).toMatch(/tunnel: connected socket to .*plaintext/);
           expect(joined).toMatch(
+            /worker_id=worker-test-1 connection_id=[0-9A-HJKMNP-TV-Z]{26}/
+          );
+          expect(joined).toMatch(
             /tunnel: h2 session established to .*localSettings=.*remoteSettings=/
           );
           expect(joined).toMatch(
             /tunnel: established \(name=test-tunnel, proxy=https:\/\/tunnel\.example:9080\/abc123\/test-tunnel\)/
           );
-          expect(joined).toMatch(/tunnel: service ready \(name=test-tunnel,/);
+          expect(joined).toMatch(
+            /tunnel: service ready \(name=test-tunnel, .*worker_id=worker-test-1, connection_id=[0-9A-HJKMNP-TV-Z]{26}, target=/
+          );
         } finally {
           await conn.close();
         }

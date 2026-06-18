@@ -44,7 +44,11 @@ import { createEndpointHandler } from "@restatedev/restate-sdk";
 import type { ConnectTunnelOptions, TunnelConnection } from "./types.js";
 import { resolveOptions } from "./options.js";
 import type { HandshakeInfo } from "./handshake.js";
-import { type ConnectionDeps, type DrainableConnection } from "./connection.js";
+import {
+  type ConnectionDeps,
+  type ConnectionIdentity,
+  type DrainableConnection,
+} from "./connection.js";
 import { DrainingRegistry } from "./draining.js";
 import { Supervisor } from "./supervisor.js";
 import { Deferred } from "./util.js";
@@ -148,6 +152,8 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
 
   // Logger used for debugging the tunnel
   const log = resolvedOptions.logger;
+  const logWithWorker = (message: string) =>
+    log(`${message} (worker_id=${resolvedOptions.tunnelWorkerId})`);
 
   // Injected infrastructure: the per-connection layer reads these via deps.
   const activeSockets = new Set<net.Socket>();
@@ -182,18 +188,18 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
     draining,
     activeSockets,
     activeConnections,
-    onEstablished: (info) => {
+    onEstablished: (info, identity: ConnectionIdentity) => {
       if (state.kind === "closed") return;
       const firstConnection = output.connectionCount === 0;
       output.connectionCount++;
       output.lastInfo = info;
       if (firstConnection) {
         log(
-          `tunnel: service ready (name=${info.tunnelName}, proxy=${info.proxyUrl}, tunnel=${info.tunnelUrl})`
+          `tunnel: service ready (name=${info.tunnelName}, proxy=${info.proxyUrl}, tunnel=${info.tunnelUrl}, worker_id=${identity.workerId}, connection_id=${identity.connectionId}, target=${identity.target})`
         );
       } else {
         log(
-          `tunnel: additional connection ready (connections=${output.connectionCount}, name=${info.tunnelName})`
+          `tunnel: additional connection ready (connections=${output.connectionCount}, name=${info.tunnelName}, worker_id=${identity.workerId}, connection_id=${identity.connectionId}, target=${identity.target})`
         );
       }
       ready.resolve();
@@ -212,7 +218,7 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
         ready.reject(err);
       },
     },
-    log
+    logWithWorker
   );
 
   const keepAlive = setInterval(() => {}, 0x7fffffff);
@@ -259,7 +265,7 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
     // Snapshot — beginClientDrain may settle a connection, removing it.
     supervisor.stopResolving();
     for (const c of [...activeConnections]) c.beginClientDrain();
-    log(
+    logWithWorker(
       `tunnel: graceful shutdown — refusing new invocations, draining ${inflight.inFlight} in-flight`
     );
     const drained = await inflight.whenDrained(graceMs);
@@ -312,7 +318,7 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
     const { signals, graceMs } = resolvedOptions.gracefulShutdown;
     for (const signal of signals) {
       const handler = () => {
-        log(`tunnel: received ${signal} — shutting down gracefully`);
+        logWithWorker(`tunnel: received ${signal} — shutting down gracefully`);
         void shutdown({ graceMs }).finally(() => process.exit(0));
       };
       signalHandlers.push([signal, handler]);

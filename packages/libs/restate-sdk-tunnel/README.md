@@ -62,6 +62,12 @@ environment variables when not given (option > environment > throw):
 | `signingPublicKey` | `RESTATE_INPROC_SIGNING_PUBLIC_KEY`                            |
 | `authToken`        | the file named by `RESTATE_INPROC_AUTH_TOKEN_FILE` (see below) |
 
+For operator log attribution, set `tunnelWorkerId` or
+`RESTATE_TUNNEL_WORKER_ID` to a stable worker/pod identifier. When omitted,
+the SDK derives a process-stable, hostname-based id. Each h2 tunnel connection
+also gets a generated `tunnel-connection-id`; both ids are sent during the
+tunnel handshake for diagnostics only.
+
 The [restate-operator](https://github.com/restatedev/restate-operator)
 injects the first four into the pods of a `tunnelMode: in-process`
 RestateDeployment — with a per-revision `tunnelName` — and registers the
@@ -125,8 +131,9 @@ the `SIGTERM` handler, but wrappers still need to forward signals to Node.
 2. **Role-flip:** Restate Cloud drives HTTP/2 as the _client_ over the
    connection we dialed; the deployment becomes the HTTP/2 _server_ on it.
 3. **Handshake:** the cloud opens `GET /_/start-tunnel`; we answer with the
-   environment credentials and receive the tunnel confirmation (including
-   the public `proxy-url`) as HTTP/2 trailers.
+   environment credentials plus advisory diagnostic ids
+   (`tunnel-worker-id` and `tunnel-connection-id`) and receive the tunnel
+   confirmation (including the public `proxy-url`) as HTTP/2 trailers.
 4. **Serve:** each invocation arrives as one HTTP/2 stream. The tunnel's
    `/<scheme>/<host>/<port>` destination prefix is stripped and the request
    is handed to the SDK's own endpoint handler (full-duplex streaming —
@@ -179,6 +186,7 @@ Key options (see `ConnectTunnelOptions` for the full surface and defaults):
 | `authToken`                                     | Cloud API key (`key_...`, Full role) presented in the handshake             |
 | `signingPublicKey`                              | `publickeyv1_...` — request-identity verification (required)                |
 | `tunnelName`                                    | The deployment's identity — unique per deployment, shared by its replicas   |
+| `tunnelWorkerId`                                | Stable SDK worker/process diagnostic id; defaults to `RESTATE_TUNNEL_WORKER_ID` or hostname-based |
 | `services`                                      | Same shape `restate.serve` accepts                                          |
 | `tls`                                           | Default on (system trust, ALPN `h2`); object form for CA/mTLS               |
 | `connectTimeoutMs`                              | TCP+TLS dial deadline (5s, mirrors the standalone client)                   |
