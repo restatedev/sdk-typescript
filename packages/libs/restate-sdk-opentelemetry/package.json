@@ -1,6 +1,6 @@
 {
   "name": "@restatedev/restate-sdk-opentelemetry",
-  "version": "1.15.0-rc.6",
+  "version": "1.15.0-rc.7",
   "description": "OpenTelemetry integration for the Restate TypeScript SDK",
   "author": "Restate Developers",
   "email": "code@restate.dev",
