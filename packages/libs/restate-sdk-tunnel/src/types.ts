@@ -16,11 +16,10 @@ import type { EndpointOptions } from "@restatedev/restate-sdk";
 /**
  * TLS options for the outbound tunnel connection.
  *
- * Note: unlike a regular HTTP/2 client, the tunnel deliberately negotiates
- * NO ALPN protocol ("tunnel is not normal h2" — the server clears its ALPN
- * list); both sides speak HTTP/2 with prior knowledge after the TLS
- * handshake. There is therefore no ALPN field here, and the package never
- * sets one.
+ * The tunnel always offers ALPN `h2` and requires TLS peers to negotiate it;
+ * omit these options to use the system trust store and SNI for the dialed
+ * host. There is no user-facing ALPN option because the tunnel protocol
+ * requires HTTP/2.
  */
 export interface TunnelTlsOptions {
   /**
@@ -145,10 +144,39 @@ export interface ConnectTunnelOptions extends Omit<
    */
   tunnelName?: string;
   /**
+   * Stable diagnostic identifier for this SDK worker/process. The tunnel
+   * server can include it in routing and failure logs so operators can grep
+   * server-side events against SDK-side logs. Defaults to
+   * `RESTATE_TUNNEL_WORKER_ID` when set, otherwise a hostname-based id with a
+   * short random suffix that is stable for this process. Advisory only: it is
+   * sent in the tunnel handshake for diagnostics, not used for authentication.
+   */
+  tunnelWorkerId?: string;
+  /**
    * Protocol mode for the SDK handler. Default `true` (`BIDI_STREAM`) —
    * the tunnel is always HTTP/2, so full-duplex streaming is available.
    */
   bidirectional?: boolean;
+  /**
+   * Optional one-shot startup readiness gate. Without this option the tunnel
+   * dials immediately, preserving the previous behavior. When supplied, the
+   * tunnel supervisor waits for this promise or callback to complete before
+   * dialing any tunnel server, so the server cannot select this worker until
+   * the local in-process handler is ready. If the gate rejects, throws, or does
+   * not complete within {@link startupReadyTimeoutMs}, the tunnel stops and
+   * {@link TunnelConnection.ready} rejects.
+   *
+   * This is the startup counterpart to {@link supportsClientDrain}: startup
+   * gates traffic until the handler is ready; shutdown drain removes the
+   * connection from selection before the handler stops.
+   */
+  startupReady?: PromiseLike<void> | (() => void | PromiseLike<void>);
+  /**
+   * Deadline for {@link startupReady}. Default 120_000. Only used when
+   * `startupReady` is supplied; a stuck startup gate is treated as fatal so a
+   * broken worker is visible instead of silently absent from the tunnel fleet.
+   */
+  startupReadyTimeoutMs?: number;
   /**
    * Advertise graceful-drain support (`supports-drain: true`) in the
    * handshake. Default `true`. When Restate Cloud rolls a tunnel node it
@@ -169,20 +197,25 @@ export interface ConnectTunnelOptions extends Omit<
   /**
    * Advertise client-initiated graceful drain (`supports-client-drain: true`)
    * in the handshake. Default `true`. When enabled, {@link
-   * TunnelConnection.shutdown} (or the opt-in {@link gracefulShutdown} signal
-   * handler) refuses new invocations with a drain sentinel so Restate Cloud
-   * stops routing new work to this process while its in-flight invocations
-   * finish — the basis for zero-dropped-invocation rollouts. Specific to this
-   * in-process client; the standalone Rust client does not implement it.
+   * TunnelConnection.shutdown} (or the default {@link gracefulShutdown} signal
+   * handler) proactively sends HTTP/2 GOAWAY and refuses any raced streams
+   * with a drain sentinel, so Restate Cloud stops routing new work to this
+   * process while its in-flight invocations finish — the basis for
+   * zero-dropped-invocation rollouts. Specific to this in-process client; the
+   * standalone Rust client does not implement it.
    */
   supportsClientDrain?: boolean;
   /**
    * Automatic graceful shutdown on process signals. **On by default**: the
    * engine installs a one-shot handler for each signal (default `SIGTERM`)
-   * that calls {@link TunnelConnection.shutdown} and then `process.exit(0)`
-   * once draining completes (or the grace elapses) — so an operator-managed
-   * deployment gets zero-dropped-invocation rollouts with no wiring. The
-   * handlers are removed when the connection closes.
+   * that calls {@link TunnelConnection.shutdown}. If multiple tunnels in the
+   * same process register for a signal, the shared process-level handler waits
+   * for all of them before calling `process.exit(0)` once draining completes
+   * (or the grace elapses) — so an operator-managed deployment gets
+   * zero-dropped-invocation rollouts with no wiring. In Kubernetes, set
+   * `terminationGracePeriodSeconds` to at least the drain grace plus the
+   * handler slack you want to preserve. The handlers are removed when the
+   * connection closes.
    *
    * Pass `false` to opt out entirely — e.g. to manage signals and process
    * exit yourself and call {@link TunnelConnection.shutdown} by hand. Pass an
@@ -242,8 +275,8 @@ export interface ConnectTunnelOptions extends Omit<
   maxSessionMemory?: number;
   /**
    * TLS for the outbound connection. Default `true` (system trust, SNI =
-   * dialed host, and — deliberately — NO ALPN). Pass `false` only for
-   * plaintext dev/test setups, or an object for a private CA / mTLS.
+   * dialed host, ALPN `h2`). Pass `false` only for plaintext dev/test setups,
+   * or an object for a private CA / mTLS.
    */
   tls?: boolean | TunnelTlsOptions;
   /** Abort to stop reconnecting and close the tunnel (same as `close()`). */
@@ -261,12 +294,13 @@ export interface TunnelConnection {
   /** Stop reconnecting, close the current connection, and wait for teardown. */
   close(): Promise<void>;
   /**
-   * Gracefully drain, then stop. Stops accepting new invocations (Restate
-   * Cloud deselects this process via the drain sentinel), lets in-flight
-   * invocations finish — bounded by `graceMs` (default {@link
-   * ConnectTunnelOptions.drainGraceMs}) — and then tears down. Resolves once
-   * drained or the grace elapsed. Wire this to `SIGTERM` for
-   * zero-dropped-invocation rollouts; {@link close} is the abrupt alternative.
+   * Gracefully drain, then stop. Proactively sends HTTP/2 GOAWAY so Restate
+   * Cloud stops opening new streams, refuses any raced streams with a drain
+   * sentinel, lets in-flight invocations finish — bounded by `graceMs`
+   * (default {@link ConnectTunnelOptions.drainGraceMs}) — and then closes the
+   * session gracefully. If the grace elapses first, the session/socket are
+   * force-closed. The default {@link ConnectTunnelOptions.gracefulShutdown}
+   * handler wires this to `SIGTERM`; {@link close} is the abrupt alternative.
    * Requires {@link ConnectTunnelOptions.supportsClientDrain} (the default) to
    * have been advertised; otherwise it degrades to an abrupt {@link close}.
    */

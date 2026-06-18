@@ -16,6 +16,7 @@
 
 import { describe, expect, test } from "vitest";
 import * as net from "node:net";
+import * as http2 from "node:http2";
 import { once } from "node:events";
 import * as restate from "@restatedev/restate-sdk";
 
@@ -56,6 +57,28 @@ const baseOptions = (port: number): ConnectTunnelOptions => ({
 
 const DISCOVER_ACCEPT = "application/vnd.restate.endpointmanifest.v2+json";
 
+function deferred<T = void>(): {
+  promise: Promise<T>;
+  resolve: (value: T | PromiseLike<T>) => void;
+  reject: (err: Error) => void;
+} {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (err: Error) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+const discoverReq = () => ({
+  ":method": "GET",
+  ":path": "/http/h/9080/discover",
+  accept: DISCOVER_ACCEPT,
+  "x-restate-signature-scheme": "v1",
+  "x-restate-jwt-v1": identity.sign("/discover"),
+});
+
 describe("handshake gate", () => {
   test("a request coalesced with the ok-trailers is served, not 503'd", async () => {
     // The real proxy parks pending invocations and fires them the instant
@@ -85,6 +108,126 @@ describe("handshake gate", () => {
     } finally {
       await conn.close();
       await fake.close();
+    }
+  });
+});
+
+describe("startup readiness gate", () => {
+  test("does not connect to the tunnel server until startupReady resolves, then serves", async () => {
+    const gate = deferred<void>();
+    const fake = await startFakeCloud({ decideTrailers: () => okTrailers() });
+    const logs: string[] = [];
+    const conn = connectTunnel({
+      ...baseOptions(fake.port),
+      startupReady: gate.promise,
+      tunnelDiagnosticLogger: (m) => logs.push(m),
+    });
+    try {
+      await new Promise((r) => setTimeout(r, 120));
+      expect(fake.connections.length).toBe(0);
+      expect(conn.connectionCount).toBe(0);
+      expect(logs.join("\n")).toMatch(
+        /tunnel: waiting for startup readiness gate/
+      );
+
+      gate.resolve();
+      await conn.ready;
+      expect(fake.connections.length).toBe(1);
+      expect(logs.join("\n")).toMatch(
+        /tunnel: startup readiness gate passed/
+      );
+
+      const c0 = await fake.waitForConnection(0);
+      const result = await roundtrip(c0.session, discoverReq());
+      expect(result.status).toBe(200);
+      expect(result.body).toContain("greeter");
+    } finally {
+      await conn.close();
+      await fake.close();
+    }
+  });
+
+  test("a stuck startupReady gate fails fatally without dialing", async () => {
+    const fake = await startFakeCloud({ decideTrailers: () => okTrailers() });
+    const logs: string[] = [];
+    const conn = connectTunnel({
+      ...baseOptions(fake.port),
+      startupReady: new Promise<void>(() => {}),
+      startupReadyTimeoutMs: 20,
+      tunnelDiagnosticLogger: (m) => logs.push(m),
+    });
+    try {
+      await expect(conn.ready).rejects.toThrow(
+        /startup readiness gate failed: startup readiness gate timed out after 20ms/
+      );
+      expect(fake.connections.length).toBe(0);
+      expect(logs.join("\n")).toMatch(
+        /tunnel: waiting for startup readiness gate \(timeoutMs=20\)/
+      );
+      expect(logs.join("\n")).toMatch(
+        /tunnel: FATAL .* startup readiness gate timed out after 20ms/
+      );
+    } finally {
+      await conn.close();
+      await fake.close();
+    }
+  });
+
+  test("close() while startupReady is pending stops cleanly without dialing", async () => {
+    const gate = deferred<void>();
+    const fake = await startFakeCloud({ decideTrailers: () => okTrailers() });
+    const conn = connectTunnel({
+      ...baseOptions(fake.port),
+      startupReady: gate.promise,
+      startupReadyTimeoutMs: 5_000,
+    });
+    try {
+      const start = Date.now();
+      await conn.close();
+      expect(Date.now() - start).toBeLessThan(500);
+      await expect(conn.ready).rejects.toThrow(/closed before the first handshake/);
+      expect(conn.error).toBeUndefined();
+      expect(fake.connections.length).toBe(0);
+    } finally {
+      await fake.close();
+    }
+  });
+
+  test("a forwarded request before the tunnel handshake gets the not-ready sentinel, never 502", async () => {
+    let sessionResolve!: (session: http2.ClientHttp2Session) => void;
+    const sessionPromise = new Promise<http2.ClientHttp2Session>((resolve) => {
+      sessionResolve = resolve;
+    });
+    const server = net.createServer((rawSocket) => {
+      const session = http2.connect("http://fake-tunnel-peer", {
+        createConnection: () => rawSocket,
+      });
+      session.on("error", () => {});
+      sessionResolve(session);
+    });
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    const port = (server.address() as net.AddressInfo).port;
+
+    const logs: string[] = [];
+    const conn = connectTunnel({
+      ...baseOptions(port),
+      handshakeTimeoutMs: 500,
+      tunnelDiagnosticLogger: (m) => logs.push(m),
+    });
+    try {
+      const session = await sessionPromise;
+      const result = await roundtrip(session, discoverReq());
+      expect(result.status).toBe(503);
+      expect(result.status).not.toBe(502);
+      expect(result.headers["x-restate-tunnel-draining"]).toBe("true");
+      expect(result.body).toContain("tunnel: not ready");
+      expect(logs.join("\n")).toMatch(
+        /tunnel: refused forwarded stream \d+ before tunnel handshake completed/
+      );
+    } finally {
+      await conn.close();
+      server.close();
     }
   });
 });

@@ -18,9 +18,10 @@
 //
 //   1. We answer immediately: `200` whose RESPONSE HEADERS carry our
 //      credentials — `authorization: Bearer <token>`,
-//      `environment-id: env_<id>`, `tunnel-name: <name>`, and
-//      `supports-drain: true` when the drain handover is enabled (the
-//      default — see the /_/drain-tunnel handling in connect.ts).
+//      `environment-id: env_<id>`, `tunnel-name: <name>`, advisory diagnostic
+//      ids (`tunnel-worker-id`, `tunnel-connection-id`), and `supports-drain:
+//      true` when the drain handover is enabled (the default — see the
+//      /_/drain-tunnel handling in connect.ts).
 //   2. The server validates the credentials, then completes the handshake
 //      by sending TRAILERS on its still-open request body:
 //      `tunnel-status: ok | unauthorized | bad-tunnel-name | too-many-tunnels`
@@ -57,6 +58,10 @@ export interface HandshakeCredentials {
   authToken: string;
   environmentId: string;
   tunnelName: string;
+  /** Stable-ish per SDK worker/process, for cross-side diagnostics. */
+  tunnelWorkerId: string;
+  /** Unique per h2 tunnel connection attempt, for cross-side diagnostics. */
+  tunnelConnectionId: string;
   /**
    * Advertise `supports-drain: true`. Only set this when the engine
    * actually implements the `/_/drain-tunnel` handover — advertising it
@@ -65,9 +70,9 @@ export interface HandshakeCredentials {
   supportsDrain: boolean;
   /**
    * Advertise `supports-client-drain: true`. Tells the server that on
-   * shutdown we refuse new invocations with the `x-restate-tunnel-draining`
-   * sentinel (rather than dropping them); only then does the server trust
-   * that sentinel to deselect this connection.
+   * shutdown we proactively send GOAWAY and refuse any raced streams with the
+   * `x-restate-tunnel-draining` sentinel (rather than dropping them); only
+   * then does the server trust that sentinel to deselect this connection.
    */
   supportsClientDrain: boolean;
 }
@@ -172,6 +177,8 @@ export function performHandshake(
       authorization: `Bearer ${creds.authToken}`,
       "environment-id": creds.environmentId,
       "tunnel-name": creds.tunnelName,
+      "tunnel-worker-id": creds.tunnelWorkerId,
+      "tunnel-connection-id": creds.tunnelConnectionId,
       ...(creds.supportsDrain && { "supports-drain": "true" }),
       ...(creds.supportsClientDrain && { "supports-client-drain": "true" }),
     });

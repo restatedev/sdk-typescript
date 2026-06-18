@@ -22,6 +22,7 @@ import {
   CLOUD_REGION_ENV,
   SIGNING_PUBLIC_KEY_ENV,
   AUTH_TOKEN_FILE_ENV,
+  TUNNEL_WORKER_ID_ENV,
 } from "../src/options.js";
 import { parseServerAddress } from "../src/targets.js";
 import type { ConnectTunnelOptions } from "../src/types.js";
@@ -35,26 +36,27 @@ const valid: ConnectTunnelOptions = {
   services: [],
 };
 
-const INPROC_ENVS = [
+const OPTION_ENVS = [
   TUNNEL_NAME_ENV,
   ENVIRONMENT_ID_ENV,
   CLOUD_REGION_ENV,
   SIGNING_PUBLIC_KEY_ENV,
   AUTH_TOKEN_FILE_ENV,
+  TUNNEL_WORKER_ID_ENV,
 ];
 
-// Options resolution reads RESTATE_INPROC_* fallbacks from process.env;
-// isolate every test from the host environment and from each other.
+// Options resolution reads environment fallbacks from process.env; isolate
+// every test from the host environment and from each other.
 const savedEnv: Record<string, string | undefined> = {};
 const tmpDirs: string[] = [];
 beforeEach(() => {
-  for (const name of INPROC_ENVS) {
+  for (const name of OPTION_ENVS) {
     savedEnv[name] = process.env[name];
     delete process.env[name];
   }
 });
 afterEach(() => {
-  for (const name of INPROC_ENVS) {
+  for (const name of OPTION_ENVS) {
     if (savedEnv[name] === undefined) delete process.env[name];
     else process.env[name] = savedEnv[name];
   }
@@ -77,6 +79,7 @@ describe("resolveOptions — validation", () => {
     expect(r.connectionWindowSize).toBe(16 * 1024 * 1024);
     expect(r.maxSessionMemory).toBe(256);
     expect(r.tls).toBe(true);
+    expect(r.tunnelWorkerId).toMatch(/^[\x21-\x7e]+$/);
   });
 
   test("accepts a multi-label (BYOC) region", () => {
@@ -176,6 +179,15 @@ describe("resolveOptions — validation", () => {
     ).toThrow(/env_/);
   });
 
+  test("rejects a header-hostile tunnel worker id", () => {
+    expect(() =>
+      resolveOptions({ ...valid, tunnelWorkerId: "worker id" })
+    ).toThrow(/HTTP header/);
+    expect(() =>
+      resolveOptions({ ...valid, tunnelWorkerId: "worker\nid" })
+    ).toThrow(/HTTP header/);
+  });
+
   test("rejects non-positive numeric options", () => {
     expect(() => resolveOptions({ ...valid, reconnectInitialMs: 0 })).toThrow(
       /positive/
@@ -224,6 +236,16 @@ describe("resolveOptions — RESTATE_INPROC_* environment fallbacks", () => {
     expect(r.srvName).toBe("tunnel.us.restate.cloud");
     expect(r.signingPublicKey).toBe(valid.signingPublicKey);
     expect(r.authToken()).toBe("key_xyz.secret");
+  });
+
+  test("tunnelWorkerId falls back to RESTATE_TUNNEL_WORKER_ID and can be explicit", () => {
+    process.env[TUNNEL_WORKER_ID_ENV] = "worker-from-env";
+
+    expect(resolveOptions(valid).tunnelWorkerId).toBe("worker-from-env");
+    expect(
+      resolveOptions({ ...valid, tunnelWorkerId: "worker-explicit" })
+        .tunnelWorkerId
+    ).toBe("worker-explicit");
   });
 
   test("an explicit discovery option beats an injected region", () => {
@@ -392,6 +414,30 @@ describe("parseServerAddress", () => {
 });
 
 describe("client-drain / graceful-shutdown options", () => {
+  test("startupReady is optional and can be promise- or callback-backed", async () => {
+    expect(resolveOptions(valid).startupReady).toBeUndefined();
+    expect(resolveOptions(valid).startupReadyTimeoutMs).toBe(120_000);
+    await expect(
+      resolveOptions({
+        ...valid,
+        startupReady: Promise.resolve(),
+      }).startupReady?.()
+    ).resolves.toBeUndefined();
+    await expect(
+      resolveOptions({
+        ...valid,
+        startupReady: () => Promise.resolve(),
+      }).startupReady?.()
+    ).resolves.toBeUndefined();
+    expect(
+      resolveOptions({ ...valid, startupReadyTimeoutMs: 5_000 })
+        .startupReadyTimeoutMs
+    ).toBe(5_000);
+    expect(() =>
+      resolveOptions({ ...valid, startupReadyTimeoutMs: 0 })
+    ).toThrow(/startupReadyTimeoutMs must be a positive number/);
+  });
+
   test("supportsClientDrain defaults to true", () => {
     expect(resolveOptions(valid).supportsClientDrain).toBe(true);
   });

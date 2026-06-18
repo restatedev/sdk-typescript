@@ -78,6 +78,7 @@ describe("resolveTargets — region / SRV", () => {
   });
 
   test("a TRANSPORT error (EAI_AGAIN) fails the whole resolution — healthy slots must not be torn down over a resolver blip", async () => {
+    const logs: string[] = [];
     resolveSrv.mockResolvedValueOnce([
       { name: "alive.internal", port: 1000, priority: 0, weight: 1 },
       { name: "flaky.internal", port: 1001, priority: 0, weight: 1 },
@@ -91,8 +92,14 @@ describe("resolveTargets — region / SRV", () => {
           )
         : Promise.resolve([{ address: "10.0.0.9", family: 4 }])) as never);
     await expect(
-      resolveTargets({ srvName: "tunnel.eu.example" })
+      resolveTargets({
+        srvName: "tunnel.eu.example",
+        logger: (m) => logs.push(m),
+      })
     ).rejects.toThrow(/temporary failure/);
+    expect(logs.join("\n")).toContain(
+      "tunnel: address lookup for SRV target flaky.internal:1001 failed: temporary failure"
+    );
   });
 
   test("all-negative answers yield an EMPTY set (everything reconciled away, like Rust)", async () => {

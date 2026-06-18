@@ -12,6 +12,8 @@
 // Option validation and TLS construction.
 
 import * as fs from "node:fs";
+import * as os from "node:os";
+import { randomBytes } from "node:crypto";
 import type * as tls from "node:tls";
 import type { ConnectTunnelOptions, TunnelTlsOptions } from "./types.js";
 import { parseServerAddress } from "./targets.js";
@@ -26,6 +28,7 @@ export const ENVIRONMENT_ID_ENV = "RESTATE_INPROC_ENVIRONMENT_ID";
 export const CLOUD_REGION_ENV = "RESTATE_INPROC_CLOUD_REGION";
 export const SIGNING_PUBLIC_KEY_ENV = "RESTATE_INPROC_SIGNING_PUBLIC_KEY";
 export const AUTH_TOKEN_FILE_ENV = "RESTATE_INPROC_AUTH_TOKEN_FILE";
+export const TUNNEL_WORKER_ID_ENV = "RESTATE_TUNNEL_WORKER_ID";
 
 export interface ResolvedOptions {
   /** The SRV name to discover tunnel servers from (region-derived or given). */
@@ -42,7 +45,10 @@ export interface ResolvedOptions {
   authToken: () => string;
   signingPublicKey: string;
   tunnelName: string;
+  tunnelWorkerId: string;
   bidirectional: boolean;
+  startupReady?: () => Promise<void>;
+  startupReadyTimeoutMs: number;
   resolveIntervalMs: number;
   supportsDrain: boolean;
   drainGraceMs: number;
@@ -137,6 +143,50 @@ function resolveAuthToken(option: string | undefined): () => string {
   // misconfiguration, not look like a transient failure mid-redial.
   readToken();
   return readToken;
+}
+
+function sanitizeDefaultWorkerIdSegment(value: string): string {
+  const sanitized = value
+    .replace(/[^A-Za-z0-9._:-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return (sanitized === "" ? "worker" : sanitized).slice(0, 96);
+}
+
+function makeDefaultTunnelWorkerId(): string {
+  const host = fromEnv("HOSTNAME") ?? os.hostname() ?? "worker";
+  const suffix = randomBytes(4).toString("hex");
+  return `${sanitizeDefaultWorkerIdSegment(host)}-${suffix}`;
+}
+
+// Stable for the process lifetime. Multiple connectTunnel() calls in the same
+// process get the same default worker id unless explicitly overridden.
+const DEFAULT_TUNNEL_WORKER_ID = makeDefaultTunnelWorkerId();
+
+function resolveTunnelWorkerId(option: string | undefined): string {
+  const value =
+    option !== undefined && option !== ""
+      ? option
+      : fromEnv(TUNNEL_WORKER_ID_ENV);
+  return requireHeaderSafe(
+    value ?? DEFAULT_TUNNEL_WORKER_ID,
+    "tunnelWorkerId"
+  );
+}
+
+function resolveStartupReady(
+  option: ConnectTunnelOptions["startupReady"]
+): (() => Promise<void>) | undefined {
+  if (option === undefined) return undefined;
+  if (typeof option === "function") {
+    return async () => {
+      await option();
+    };
+  }
+  const ready = Promise.resolve(option);
+  ready.catch(() => {});
+  return async () => {
+    await ready;
+  };
 }
 
 function positive(
@@ -238,6 +288,7 @@ export function resolveOptions(options: ConnectTunnelOptions): ResolvedOptions {
       `tunnel: invalid tunnelName ${JSON.stringify(tunnelName)} — use letters, digits, '.', '_' or '-'`
     );
   }
+  const tunnelWorkerId = resolveTunnelWorkerId(options.tunnelWorkerId);
   const pingIntervalMs = positive(
     options.pingIntervalMs,
     75_000,
@@ -261,7 +312,14 @@ export function resolveOptions(options: ConnectTunnelOptions): ResolvedOptions {
     authToken,
     signingPublicKey,
     tunnelName,
+    tunnelWorkerId,
     bidirectional: options.bidirectional ?? true,
+    startupReady: resolveStartupReady(options.startupReady),
+    startupReadyTimeoutMs: positive(
+      options.startupReadyTimeoutMs,
+      120_000,
+      "startupReadyTimeoutMs"
+    ),
     resolveIntervalMs: positive(
       options.resolveIntervalMs,
       30_000,

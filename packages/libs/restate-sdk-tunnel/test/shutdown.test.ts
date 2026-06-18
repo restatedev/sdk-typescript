@@ -10,13 +10,14 @@
  */
 
 // Client-initiated graceful shutdown: on shutdown() the client advertises the
-// capability at handshake, refuses NEW invocations with the
-// `x-restate-tunnel-draining` sentinel (so the cloud deselects this
-// connection) without running them, drains its in-flight invocations, and then
-// tears down.
+// capability at handshake, sends GOAWAY proactively so the cloud stops opening
+// new streams, refuses any raced streams with the `x-restate-tunnel-draining`
+// sentinel, drains its in-flight invocations, and then tears down.
 
-import type * as http2 from "node:http2";
-import { describe, expect, test } from "vitest";
+import * as http2 from "node:http2";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { describe, expect, test, vi } from "vitest";
 import * as restate from "@restatedev/restate-sdk";
 
 import { connectTunnel } from "../src/index.js";
@@ -50,6 +51,39 @@ function waitForClose(
       resolve();
     });
   });
+}
+
+function withTimeout<T>(
+  promise: Promise<T>,
+  message: string,
+  timeoutMs = 2_000
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), timeoutMs);
+    timer.unref();
+    void promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      }
+    );
+  });
+}
+
+async function until(
+  cond: () => boolean,
+  timeoutMs = 2_000,
+  what = "condition"
+): Promise<void> {
+  const start = Date.now();
+  while (!cond()) {
+    if (Date.now() - start > timeoutMs) throw new Error(`timed out: ${what}`);
+    await new Promise((r) => setTimeout(r, 10));
+  }
 }
 
 const greeter = restate.service({
@@ -90,6 +124,48 @@ const discoverReq = () => ({
   "x-restate-signature-scheme": "v1",
   "x-restate-jwt-v1": identity.sign("/discover"),
 });
+
+async function openHeldInvocation(session: http2.ClientHttp2Session) {
+  const disc = await roundtrip(session, discoverReq());
+  expect(disc.status).toBe(200);
+  const maxVersion = (
+    JSON.parse(disc.body) as { maxProtocolVersion: number }
+  ).maxProtocolVersion;
+  const invokePath = "/invoke/greeter/greet";
+  const held = session.request(
+    {
+      ":method": "POST",
+      ":path": `/http/h/9080${invokePath}`,
+      "content-type": `application/vnd.restate.invocation.v${maxVersion}`,
+      "x-restate-signature-scheme": "v1",
+      "x-restate-jwt-v1": identity.sign(invokePath),
+    },
+    { endStream: false } // keep the request open → invocation stays in flight
+  );
+  held.on("error", () => {});
+  held.resume();
+  // Let the forwarded invocation register as in-flight before draining.
+  await new Promise((r) => setTimeout(r, 80));
+  return held;
+}
+
+async function expectDrainedOrGoawayRefusal(
+  session: http2.ClientHttp2Session
+): Promise<void> {
+  const result = await roundtrip(session, discoverReq()).then(
+    (res) => ({ kind: "response" as const, res }),
+    (err) => ({ kind: "error" as const, err })
+  );
+  if (result.kind === "response") {
+    expect(result.res.status).toBe(503);
+    expect(result.res.headers["x-restate-tunnel-draining"]).toBe("true");
+    expect(result.res.body).not.toContain("greeter");
+    return;
+  }
+  expect((result.err as { code?: string }).code).toBe(
+    "ERR_HTTP2_GOAWAY_SESSION"
+  );
+}
 
 describe("client-initiated graceful shutdown", () => {
   test("advertises supports-client-drain by default", async () => {
@@ -185,7 +261,7 @@ describe("client-initiated graceful shutdown", () => {
     }
   });
 
-  test("drains in-flight invocations while refusing new ones with the sentinel", async () => {
+  test("shutdown() proactively sends GOAWAY before in-flight work completes", async () => {
     const fake = await startFakeCloud({ decideTrailers: () => okTrailers() });
     const conn = connectTunnel({
       ...baseOptions(fake.port),
@@ -194,29 +270,194 @@ describe("client-initiated graceful shutdown", () => {
     try {
       await conn.ready;
       const c0 = await fake.waitForConnection(0);
+      const held = await openHeldInvocation(c0.session);
+      const heldStreamID = held.id;
+      if (heldStreamID === undefined) {
+        throw new Error("held invocation stream has no HTTP/2 stream ID");
+      }
 
-      // Learn the service-protocol version so we can open a real invocation
-      // and hold it in flight (the SDK waits for input on the request stream).
-      const disc = await roundtrip(c0.session, discoverReq());
-      expect(disc.status).toBe(200);
-      const maxVersion = (
-        JSON.parse(disc.body) as { maxProtocolVersion: number }
-      ).maxProtocolVersion;
-      const invokePath = "/invoke/greeter/greet";
-      const held = c0.session.request(
-        {
-          ":method": "POST",
-          ":path": `/http/h/9080${invokePath}`,
-          "content-type": `application/vnd.restate.invocation.v${maxVersion}`,
-          "x-restate-signature-scheme": "v1",
-          "x-restate-jwt-v1": identity.sign(invokePath),
-        },
-        { endStream: false } // keep the request open → invocation stays in flight
+      let shutdownDone = false;
+      const done = conn.shutdown().then(() => {
+        shutdownDone = true;
+      });
+
+      const goaway = await c0.waitForGoaway();
+      expect(goaway.errorCode).toBe(http2.constants.NGHTTP2_NO_ERROR);
+      // GOAWAY is connection-scoped, but its lastStreamID must still cover
+      // streams already accepted by the SDK so in-flight invocations can
+      // drain rather than being treated as unprocessed by the peer.
+      expect(goaway.lastStreamID).toBeGreaterThanOrEqual(heldStreamID);
+      expect(shutdownDone).toBe(false);
+      await expect(roundtrip(c0.session, discoverReq())).rejects.toMatchObject(
+        { code: "ERR_HTTP2_GOAWAY_SESSION" }
       );
-      held.on("error", () => {});
-      held.resume();
-      // Let the forwarded invocation register as in-flight before draining.
-      await new Promise((r) => setTimeout(r, 80));
+
+      held.close();
+      await done;
+      expect(shutdownDone).toBe(true);
+      await waitForClose(c0.session);
+    } finally {
+      await conn.close();
+      await fake.close();
+    }
+  });
+
+  test("shutdown() drains every active tunnel connection", async () => {
+    const fake1 = await startFakeCloud({ decideTrailers: () => okTrailers() });
+    const fake2 = await startFakeCloud({ decideTrailers: () => okTrailers() });
+    const conn = connectTunnel({
+      ...baseOptions(fake1.port),
+      tunnelServers: [
+        `http://127.0.0.1:${fake1.port}`,
+        `http://127.0.0.1:${fake2.port}`,
+      ],
+      drainGraceMs: 5_000,
+    });
+    try {
+      await conn.ready;
+      await until(() => conn.connectionCount === 2, 2_000, "both handshakes");
+      const c1 = await fake1.waitForConnection(0);
+      const c2 = await fake2.waitForConnection(0);
+      const held1 = await openHeldInvocation(c1.session);
+      const held2 = await openHeldInvocation(c2.session);
+
+      let shutdownDone = false;
+      const done = conn.shutdown().then(() => {
+        shutdownDone = true;
+      });
+
+      const [goaway1, goaway2] = await Promise.all([
+        c1.waitForGoaway(),
+        c2.waitForGoaway(),
+      ]);
+      expect(goaway1.errorCode).toBe(http2.constants.NGHTTP2_NO_ERROR);
+      expect(goaway2.errorCode).toBe(http2.constants.NGHTTP2_NO_ERROR);
+      expect(shutdownDone).toBe(false);
+
+      held1.close();
+      await new Promise((r) => setTimeout(r, 120));
+      expect(shutdownDone).toBe(false);
+
+      held2.close();
+      await done;
+      expect(shutdownDone).toBe(true);
+      await Promise.all([waitForClose(c1.session), waitForClose(c2.session)]);
+      expect(c1.session.destroyed).toBe(true);
+      expect(c2.session.destroyed).toBe(true);
+    } finally {
+      await conn.close();
+      await fake1.close();
+      await fake2.close();
+    }
+  });
+
+  test("SIGTERM handler starts drain and exits after in-flight work completes", async () => {
+    const fake = await startFakeCloud({ decideTrailers: () => okTrailers() });
+    const conn = connectTunnel({
+      ...baseOptions(fake.port),
+      drainGraceMs: 5_000,
+    });
+    let exitCode: string | number | null | undefined;
+    let resolveExit!: () => void;
+    const exitCalled = new Promise<void>((resolve) => {
+      resolveExit = resolve;
+    });
+    const exitSpy = vi
+      .spyOn(process, "exit")
+      .mockImplementation(((code?: string | number | null | undefined) => {
+        exitCode = code;
+        resolveExit();
+        return undefined as never;
+      }) as typeof process.exit);
+    try {
+      await conn.ready;
+      const c0 = await fake.waitForConnection(0);
+      const held = await openHeldInvocation(c0.session);
+
+      process.emit("SIGTERM", "SIGTERM");
+
+      const goaway = await c0.waitForGoaway();
+      expect(goaway.errorCode).toBe(http2.constants.NGHTTP2_NO_ERROR);
+      expect(exitSpy).not.toHaveBeenCalled();
+
+      held.close();
+      await withTimeout(exitCalled, "SIGTERM handler did not call process.exit");
+      expect(exitCode).toBe(0);
+      await waitForClose(c0.session);
+    } finally {
+      exitSpy.mockRestore();
+      await conn.close();
+      await fake.close();
+    }
+  });
+
+  test("SIGTERM handler waits for every tunnel in the process before exiting", async () => {
+    const fake1 = await startFakeCloud({ decideTrailers: () => okTrailers() });
+    const fake2 = await startFakeCloud({ decideTrailers: () => okTrailers() });
+    const conn1 = connectTunnel({
+      ...baseOptions(fake1.port),
+      drainGraceMs: 5_000,
+    });
+    const conn2 = connectTunnel({
+      ...baseOptions(fake2.port),
+      drainGraceMs: 5_000,
+    });
+    let exitCode: string | number | null | undefined;
+    let resolveExit!: () => void;
+    const exitCalled = new Promise<void>((resolve) => {
+      resolveExit = resolve;
+    });
+    const exitSpy = vi
+      .spyOn(process, "exit")
+      .mockImplementation(((code?: string | number | null | undefined) => {
+        exitCode = code;
+        resolveExit();
+        return undefined as never;
+      }) as typeof process.exit);
+    try {
+      await Promise.all([conn1.ready, conn2.ready]);
+      const c1 = await fake1.waitForConnection(0);
+      const c2 = await fake2.waitForConnection(0);
+      const held1 = await openHeldInvocation(c1.session);
+      const held2 = await openHeldInvocation(c2.session);
+
+      process.emit("SIGTERM", "SIGTERM");
+
+      const [goaway1, goaway2] = await Promise.all([
+        c1.waitForGoaway(),
+        c2.waitForGoaway(),
+      ]);
+      expect(goaway1.errorCode).toBe(http2.constants.NGHTTP2_NO_ERROR);
+      expect(goaway2.errorCode).toBe(http2.constants.NGHTTP2_NO_ERROR);
+      expect(exitSpy).not.toHaveBeenCalled();
+
+      held1.close();
+      await new Promise((r) => setTimeout(r, 120));
+      expect(exitSpy).not.toHaveBeenCalled();
+
+      held2.close();
+      await withTimeout(exitCalled, "SIGTERM handler did not call process.exit");
+      expect(exitCode).toBe(0);
+      await Promise.all([waitForClose(c1.session), waitForClose(c2.session)]);
+    } finally {
+      exitSpy.mockRestore();
+      await conn1.close();
+      await conn2.close();
+      await fake1.close();
+      await fake2.close();
+    }
+  });
+
+  test("drains in-flight invocations while refusing new ones", async () => {
+    const fake = await startFakeCloud({ decideTrailers: () => okTrailers() });
+    const conn = connectTunnel({
+      ...baseOptions(fake.port),
+      drainGraceMs: 5_000,
+    });
+    try {
+      await conn.ready;
+      const c0 = await fake.waitForConnection(0);
+      const held = await openHeldInvocation(c0.session);
 
       // Begin graceful shutdown; it must NOT resolve while the invocation runs.
       let shutdownDone = false;
@@ -226,12 +467,10 @@ describe("client-initiated graceful shutdown", () => {
       await new Promise((r) => setTimeout(r, 120));
       expect(shutdownDone).toBe(false); // still draining the in-flight invocation
 
-      // A NEW invocation is refused with the sentinel, WITHOUT running the
-      // handler (no manifest body) — the cloud will retry it elsewhere.
-      const refused = await roundtrip(c0.session, discoverReq());
-      expect(refused.status).toBe(503);
-      expect(refused.headers["x-restate-tunnel-draining"]).toBe("true");
-      expect(refused.body).not.toContain("greeter");
+      // A NEW invocation is refused immediately. If it races ahead of the
+      // proactive GOAWAY it gets the existing drain sentinel; once GOAWAY has
+      // arrived, Node refuses to open the stream at all.
+      await expectDrainedOrGoawayRefusal(c0.session);
 
       // The in-flight invocation finishes → shutdown completes and tears down.
       held.close();
@@ -239,6 +478,63 @@ describe("client-initiated graceful shutdown", () => {
       expect(shutdownDone).toBe(true);
       await waitForClose(c0.session);
       expect(c0.session.destroyed).toBe(true);
+    } finally {
+      await conn.close();
+      await fake.close();
+    }
+  });
+
+  test("grace expiry force-closes an in-flight invocation", async () => {
+    const fake = await startFakeCloud({ decideTrailers: () => okTrailers() });
+    const conn = connectTunnel({
+      ...baseOptions(fake.port),
+      drainGraceMs: 80,
+    });
+    try {
+      await conn.ready;
+      const c0 = await fake.waitForConnection(0);
+      await openHeldInvocation(c0.session);
+
+      const start = Date.now();
+      await conn.shutdown();
+      const elapsed = Date.now() - start;
+
+      expect(elapsed).toBeGreaterThanOrEqual(60);
+      expect(elapsed).toBeLessThan(2_000);
+      await waitForClose(c0.session);
+      expect(c0.session.destroyed).toBe(true);
+    } finally {
+      await conn.close();
+      await fake.close();
+    }
+  });
+
+  test("graceful h2 close is force-settled when the peer stops reading", async () => {
+    const cert = fs.readFileSync(path.join(__dirname, "fixtures", "cert.pem"));
+    const key = fs.readFileSync(path.join(__dirname, "fixtures", "key.pem"));
+    const fake = await startFakeCloud({
+      tls: { cert, key },
+      decideTrailers: () => okTrailers(),
+    });
+    const logs: string[] = [];
+    const conn = connectTunnel({
+      ...baseOptions(fake.port),
+      tunnelServers: [`127.0.0.1:${fake.port}`],
+      tls: { ca: cert },
+      tunnelDiagnosticLogger: (m) => logs.push(m),
+    });
+    try {
+      await conn.ready;
+      const c0 = await fake.waitForConnection(0);
+      c0.rawSocket.pause();
+
+      const start = Date.now();
+      await conn.shutdown();
+      const elapsed = Date.now() - start;
+
+      expect(elapsed).toBeGreaterThanOrEqual(900);
+      expect(elapsed).toBeLessThan(2_500);
+      expect(logs.join("\n")).toContain("detail=session.close() timed out");
     } finally {
       await conn.close();
       await fake.close();

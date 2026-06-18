@@ -13,7 +13,7 @@
 // (see fake-cloud.ts), over loopback. Covers the handshake, the
 // fatal-vs-retryable reconnect policy, control paths, forwarded dispatch
 // into the real SDK handler, the end-to-end identity delegation, and the
-// TLS no-ALPN bridge path.
+// TLS negotiated-h2 bridge path.
 
 import { describe, expect, test } from "vitest";
 import * as fs from "node:fs";
@@ -53,6 +53,7 @@ const baseOptions = (port: number): ConnectTunnelOptions => ({
   authToken: "key_test.secret",
   signingPublicKey: identity.publicKey,
   tunnelName: TUNNEL_NAME,
+  tunnelWorkerId: "worker-test-1",
   services: [greeter],
   handshakeTimeoutMs: 300,
   reconnectInitialMs: 5,
@@ -95,12 +96,53 @@ describe("connectTunnel — handshake", () => {
           expect(creds["authorization"]).toBe("Bearer key_test.secret");
           expect(creds["environment-id"]).toBe("env_abc123");
           expect(creds["tunnel-name"]).toBe(TUNNEL_NAME);
+          expect(creds["tunnel-worker-id"]).toBe("worker-test-1");
+          expect(creds["tunnel-connection-id"]).toMatch(
+            /^[0-9A-HJKMNP-TV-Z]{26}$/
+          );
           // Drain is implemented and advertised by default.
           expect(creds["supports-drain"]).toBe("true");
+          expect(creds["supports-client-drain"]).toBe("true");
           // The ready-made registration URL: advertised proxy base + the
           // constant in-process destination (routing is by tunnelName).
           expect(conn.deploymentUrl).toBe(
             `${okTrailers()["proxy-url"]}/http/in-process/9080/`
+          );
+        } finally {
+          await conn.close();
+        }
+      }
+    );
+  });
+
+  test("diagnostic logger reports connection lifecycle and service readiness", async () => {
+    await withFake(
+      { decideTrailers: () => okTrailers() },
+      async (_fake, options) => {
+        const logs: string[] = [];
+        const conn = connectTunnel({
+          ...options,
+          tunnelDiagnosticLogger: (m) => logs.push(m),
+        });
+        try {
+          await conn.ready;
+          const joined = logs.join("\n");
+          expect(joined).toMatch(/tunnel: using configured tunnel target\(s\):/);
+          expect(joined).toMatch(
+            /tunnel: target set from configured tunnel targets:/
+          );
+          expect(joined).toMatch(/tunnel: connected socket to .*plaintext/);
+          expect(joined).toMatch(
+            /worker_id=worker-test-1 connection_id=[0-9A-HJKMNP-TV-Z]{26}/
+          );
+          expect(joined).toMatch(
+            /tunnel: h2 session established to .*localSettings=.*remoteSettings=/
+          );
+          expect(joined).toMatch(
+            /tunnel: established \(name=test-tunnel, proxy=https:\/\/tunnel\.example:9080\/abc123\/test-tunnel\)/
+          );
+          expect(joined).toMatch(
+            /tunnel: service ready \(name=test-tunnel, .*worker_id=worker-test-1, connection_id=[0-9A-HJKMNP-TV-Z]{26}, target=/
           );
         } finally {
           await conn.close();

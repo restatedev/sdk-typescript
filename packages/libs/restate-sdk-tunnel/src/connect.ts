@@ -44,7 +44,11 @@ import { createEndpointHandler } from "@restatedev/restate-sdk";
 import type { ConnectTunnelOptions, TunnelConnection } from "./types.js";
 import { resolveOptions } from "./options.js";
 import type { HandshakeInfo } from "./handshake.js";
-import { type ConnectionDeps, type DrainableConnection } from "./connection.js";
+import {
+  type ConnectionDeps,
+  type ConnectionIdentity,
+  type DrainableConnection,
+} from "./connection.js";
 import { DrainingRegistry } from "./draining.js";
 import { Supervisor } from "./supervisor.js";
 import { Deferred } from "./util.js";
@@ -76,22 +80,22 @@ class InflightTracker {
     }
   }
 
-  /** Resolve once nothing is in flight, or after `graceMs` — whichever first.
+  /** Resolve true once nothing is in flight, or false after `graceMs`.
    * Only one shutdown runs at a time, so a single waiter suffices. */
-  whenDrained(graceMs: number): Promise<void> {
+  whenDrained(graceMs: number): Promise<boolean> {
     return new Promise((resolve) => {
       if (this.count === 0) {
-        resolve();
+        resolve(true);
         return;
       }
       const timer = setTimeout(() => {
         this.notifyDrained = undefined;
-        resolve();
+        resolve(false);
       }, graceMs);
       timer.unref();
       this.notifyDrained = () => {
         clearTimeout(timer);
-        resolve();
+        resolve(true);
       };
     });
   }
@@ -122,6 +126,66 @@ type EngineState =
     }
   | { readonly kind: "closed" };
 
+interface SignalShutdownParticipant {
+  shutdown(signal: NodeJS.Signals): Promise<void>;
+}
+
+const signalShutdownRegistrations = new Map<
+  NodeJS.Signals,
+  Set<SignalShutdownParticipant>
+>();
+const signalShutdownHandlers = new Map<NodeJS.Signals, () => void>();
+let signalShutdownInProgress = false;
+
+async function runGracefulShutdownSignal(
+  signal: NodeJS.Signals
+): Promise<void> {
+  if (signalShutdownInProgress) return;
+  signalShutdownInProgress = true;
+  const registrations = [
+    ...(signalShutdownRegistrations.get(signal) ?? []),
+  ];
+  await Promise.allSettled(registrations.map((entry) => entry.shutdown(signal)));
+  try {
+    process.exit(0);
+  } finally {
+    // Tests stub process.exit(); real process.exit() does not return.
+    signalShutdownInProgress = false;
+  }
+}
+
+function registerGracefulShutdownSignals(
+  signals: NodeJS.Signals[],
+  participant: SignalShutdownParticipant
+): () => void {
+  const unregisters = signals.map((signal) => {
+    let registrations = signalShutdownRegistrations.get(signal);
+    if (registrations === undefined) {
+      registrations = new Set();
+      signalShutdownRegistrations.set(signal, registrations);
+    }
+    registrations.add(participant);
+    if (!signalShutdownHandlers.has(signal)) {
+      const handler = () => void runGracefulShutdownSignal(signal);
+      signalShutdownHandlers.set(signal, handler);
+      process.once(signal, handler);
+    }
+    return () => {
+      const current = signalShutdownRegistrations.get(signal);
+      if (current === undefined) return;
+      current.delete(participant);
+      if (current.size > 0) return;
+      const handler = signalShutdownHandlers.get(signal);
+      if (handler !== undefined) process.removeListener(signal, handler);
+      signalShutdownHandlers.delete(signal);
+      signalShutdownRegistrations.delete(signal);
+    };
+  });
+  return () => {
+    for (const unregister of unregisters) unregister();
+  };
+}
+
 /**
  * Connect this deployment to a Restate Cloud tunnel and serve `services`
  * over it. Returns immediately; connection management runs in the
@@ -148,6 +212,19 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
 
   // Logger used for debugging the tunnel
   const log = resolvedOptions.logger;
+  const logWithWorker = (message: string) =>
+    log(`${message} (worker_id=${resolvedOptions.tunnelWorkerId})`);
+  let startupGatePassed = resolvedOptions.startupReady === undefined;
+  const opts = {
+    ...resolvedOptions,
+    startupReady:
+      resolvedOptions.startupReady === undefined
+        ? undefined
+        : async () => {
+            await resolvedOptions.startupReady!();
+            startupGatePassed = true;
+          },
+  };
 
   // Injected infrastructure: the per-connection layer reads these via deps.
   const activeSockets = new Set<net.Socket>();
@@ -172,29 +249,40 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
   // closures only read it at runtime, long after.
   let state: EngineState;
 
-  // Opt-in process-signal handlers, removed on teardown so a closed connection
-  // can never later intercept a signal and exit the host process.
-  const signalHandlers: Array<[NodeJS.Signals, () => void]> = [];
+  // Opt-in process-signal registrations, removed on teardown so a closed
+  // connection can never later intercept a signal and exit the host process.
+  const signalUnregisters: Array<() => void> = [];
 
   const connectionDeps: ConnectionDeps = {
-    opts: resolvedOptions,
+    opts,
     sdkHandler,
     draining,
     activeSockets,
     activeConnections,
-    onEstablished: (info) => {
+    onEstablished: (info, identity: ConnectionIdentity) => {
       if (state.kind === "closed") return;
+      const firstConnection = output.connectionCount === 0;
       output.connectionCount++;
       output.lastInfo = info;
+      if (firstConnection) {
+        log(
+          `tunnel: service ready (name=${info.tunnelName}, proxy=${info.proxyUrl}, tunnel=${info.tunnelUrl}, worker_id=${identity.workerId}, connection_id=${identity.connectionId}, target=${identity.target})`
+        );
+      } else {
+        log(
+          `tunnel: additional connection ready (connections=${output.connectionCount}, name=${info.tunnelName}, worker_id=${identity.workerId}, connection_id=${identity.connectionId}, target=${identity.target})`
+        );
+      }
       ready.resolve();
     },
     isShuttingDown: () => state.kind === "draining",
+    isStartupReady: () => startupGatePassed,
     inflightStarted: () => inflight.started(),
     inflightEnded: () => inflight.ended(),
   };
 
   const supervisor = new Supervisor(
-    resolvedOptions,
+    opts,
     connectionDeps,
     {
       onFatal: (err) => {
@@ -202,7 +290,7 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
         ready.reject(err);
       },
     },
-    log
+    logWithWorker
   );
 
   const keepAlive = setInterval(() => {}, 0x7fffffff);
@@ -217,10 +305,8 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
     if (state.kind === "closed") return;
     const { supervisor, keepAlive } = state.active;
     state = { kind: "closed" };
-    for (const [signal, handler] of signalHandlers) {
-      process.removeListener(signal, handler);
-    }
-    signalHandlers.length = 0;
+    for (const unregister of signalUnregisters) unregister();
+    signalUnregisters.length = 0;
     supervisor.abortAll();
     for (const socket of activeSockets) socket.destroy();
     activeSockets.clear();
@@ -249,11 +335,20 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
     // Snapshot — beginClientDrain may settle a connection, removing it.
     supervisor.stopResolving();
     for (const c of [...activeConnections]) c.beginClientDrain();
-    log(
+    logWithWorker(
       `tunnel: graceful shutdown — refusing new invocations, draining ${inflight.inFlight} in-flight`
     );
-    await inflight.whenDrained(graceMs);
-    // In-flight drained (or grace elapsed): tear the now-idle connections down.
+    const drained = await inflight.whenDrained(graceMs);
+    // In-flight drained: ask h2 to close cleanly. Grace elapsed: force the
+    // still-open sessions down, which tears down any stuck streams.
+    await Promise.all(
+      [...activeConnections].map((c) =>
+        c.finishClientDrain({ force: !drained })
+      )
+    );
+    // Now tear down the supervisor and any idle retry loops. For the graceful
+    // case the live h2 sessions have already closed; for the forced case this
+    // is idempotent cleanup.
     teardown();
     await done;
   };
@@ -291,14 +386,14 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
   // connection that is already closed.
   if (resolvedOptions.gracefulShutdown !== undefined) {
     const { signals, graceMs } = resolvedOptions.gracefulShutdown;
-    for (const signal of signals) {
-      const handler = () => {
-        log(`tunnel: received ${signal} — shutting down gracefully`);
-        void shutdown({ graceMs }).finally(() => process.exit(0));
-      };
-      signalHandlers.push([signal, handler]);
-      process.once(signal, handler);
-    }
+    signalUnregisters.push(
+      registerGracefulShutdownSignals(signals, {
+        async shutdown(signal) {
+          logWithWorker(`tunnel: received ${signal} — shutting down gracefully`);
+          await shutdown({ graceMs });
+        },
+      })
+    );
   }
 
   if (options.signal?.aborted) {

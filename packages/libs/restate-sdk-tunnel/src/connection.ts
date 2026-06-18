@@ -44,6 +44,7 @@
 import * as net from "node:net";
 import * as tls from "node:tls";
 import * as http2 from "node:http2";
+import { randomBytes } from "node:crypto";
 
 import type { ResolvedOptions } from "./options.js";
 import { buildTlsConnectOptions } from "./options.js";
@@ -68,9 +69,77 @@ export type ConnectionOutcome =
  *  - `server`: the cloud sent `/_/drain-tunnel` (it is rotating this tunnel
  *    node). We detach + redial; the old session keeps serving in-flight.
  *  - `client`: this process is shutting down (SIGTERM / `shutdown()`). We
- *    refuse new invocations and finish in-flight in place, with no redial.
+ *    send GOAWAY, refuse raced invocations, and finish in-flight in place,
+ *    with no redial.
  */
 export type DrainTrigger = "server" | "client";
+
+const CLIENT_DRAIN_SESSION_CLOSE_TIMEOUT_MS = 1_000;
+const TUNNEL_DRAINING_HEADER = "x-restate-tunnel-draining";
+const CROCKFORD_BASE32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+
+function encodeBase32(value: bigint, length: number): string {
+  let out = "";
+  for (let i = 0; i < length; i++) {
+    out = CROCKFORD_BASE32.charAt(Number(value & 31n)) + out;
+    value >>= 5n;
+  }
+  return out;
+}
+
+function newTunnelConnectionId(): string {
+  let random = 0n;
+  for (const byte of randomBytes(10)) {
+    random = (random << 8n) | BigInt(byte);
+  }
+  return `${encodeBase32(BigInt(Date.now()), 10)}${encodeBase32(random, 16)}`;
+}
+
+function formatIdentity(workerId: string, connectionId: string): string {
+  return `worker_id=${workerId} connection_id=${connectionId}`;
+}
+
+function targetLabel(target: Target): string {
+  return `${target.host}:${target.port}`;
+}
+
+function formatConnectionOutcome(outcome: ConnectionOutcome): string {
+  switch (outcome.kind) {
+    case "served":
+      return `served uptimeMs=${outcome.uptimeMs}`;
+    case "drained":
+      return `drained uptimeMs=${outcome.uptimeMs}`;
+    case "retryable":
+      return `retryable reason=${outcome.reason}`;
+    case "fatal":
+      return `fatal reason=${outcome.reason}`;
+  }
+}
+
+function formatSettings(settings: http2.Settings): string {
+  const entries = Object.entries(settings).filter(
+    ([, value]) => value !== undefined
+  );
+  if (entries.length === 0) return "{}";
+  return `{${entries
+    .map(([key, value]) => `${key}=${String(value)}`)
+    .join(", ")}}`;
+}
+
+function pathWithoutQuery(url: string | undefined): string {
+  if (url === undefined) return "?";
+  const queryStart = url.indexOf("?");
+  return queryStart === -1 ? url : url.slice(0, queryStart);
+}
+
+function endInternalError(res: http2.Http2ServerResponse): void {
+  try {
+    if (!res.headersSent) res.writeHead(500);
+    if (!res.writableEnded) res.end("tunnel: SDK handler error");
+  } catch {
+    // The stream may already be closing; keep the session lifecycle contained.
+  }
+}
 
 /** The Node request handler produced by the SDK's createEndpointHandler. */
 type SdkHandler = ReturnType<
@@ -79,10 +148,17 @@ type SdkHandler = ReturnType<
 
 /**
  * The engine's handle on a live connection: lets `shutdown()` ask each one to
- * begin a client-initiated drain (refuse new, finish in-flight in place).
+ * begin and finish a client-initiated drain.
  */
 export interface DrainableConnection {
   beginClientDrain(): void;
+  finishClientDrain(opts: { force: boolean }): Promise<void>;
+}
+
+export interface ConnectionIdentity {
+  workerId: string;
+  connectionId: string;
+  target: string;
 }
 
 /** What a connection attempt needs from the engine. */
@@ -97,7 +173,7 @@ export interface ConnectionDeps {
   /** Live connections the engine can ask to drain on shutdown(). */
   activeConnections: Set<DrainableConnection>;
   /** Called once per successful handshake (count, learned info, ready). */
-  onEstablished: (info: HandshakeInfo) => void;
+  onEstablished: (info: HandshakeInfo, identity: ConnectionIdentity) => void;
   /**
    * True once the engine is gracefully shutting down: new forwarded
    * invocations are refused with the drain sentinel instead of dispatched, so
@@ -106,6 +182,8 @@ export interface ConnectionDeps {
    * this connection's own `draining{client}` state.
    */
   isShuttingDown: () => boolean;
+  /** True once the startup readiness gate has passed. */
+  isStartupReady: () => boolean;
   /** A forwarded invocation began executing (counts toward the drain wait). */
   inflightStarted: () => void;
   /** A forwarded invocation finished (its stream closed). */
@@ -252,8 +330,11 @@ function dial(
   target: Target,
   deps: ConnectionDeps,
   plaintext: boolean,
-  signal: AbortSignal
+  signal: AbortSignal,
+  connectionId: string
 ): Promise<DialResult> {
+  const log = deps.opts.logger;
+  const identity = formatIdentity(deps.opts.tunnelWorkerId, connectionId);
   const tlsOptions = plaintext
     ? undefined
     : buildTlsConnectOptions(deps.opts.tls, target.servername);
@@ -263,6 +344,7 @@ function dial(
 
   return new Promise<DialResult>((resolve) => {
     let done = false;
+    const label = targetLabel(target);
     const onError = (err: Error) => fail(`socket error: ${err.message}`);
     const onAbort = () => fail("tunnel closed");
     const timer = setTimeout(
@@ -280,6 +362,7 @@ function dial(
       if (done) return;
       done = true;
       cleanup();
+      log(`tunnel: failed to connect to ${label}: ${reason} (${identity})`);
       socket.destroy();
       resolve({ ok: false, outcome: { kind: "retryable", reason } });
     }
@@ -289,6 +372,9 @@ function dial(
     socket.once(plaintext ? "connect" : "secureConnect", () => {
       if (done) return;
       socket.setNoDelay(true);
+      const alpn = plaintext
+        ? "plaintext"
+        : `tls alpn=${JSON.stringify((socket as tls.TLSSocket).alpnProtocol)}`;
       // Node's http2 requires ALPN to have negotiated h2 before it will run a
       // server session over a TLS socket. A server that doesn't negotiate is
       // too old for this client (see the README's server-version note).
@@ -300,6 +386,7 @@ function dial(
       }
       done = true;
       cleanup();
+      log(`tunnel: connected socket to ${label} (${alpn}, ${identity})`);
       resolve({ ok: true, socket });
     });
   });
@@ -338,6 +425,7 @@ class ConnectionAttempt implements DrainableConnection {
 
   private readonly plaintext: boolean;
   private readonly log: (message: string) => void;
+  private readonly connectionId = newTunnelConnectionId();
 
   constructor(
     private readonly target: Target,
@@ -347,6 +435,22 @@ class ConnectionAttempt implements DrainableConnection {
   ) {
     this.log = deps.opts.logger;
     this.plaintext = target.plaintext ?? deps.opts.tls === false;
+  }
+
+  private get identity(): ConnectionIdentity {
+    return {
+      workerId: this.deps.opts.tunnelWorkerId,
+      connectionId: this.connectionId,
+      target: targetLabel(this.target),
+    };
+  }
+
+  private identityLog(): string {
+    return formatIdentity(this.deps.opts.tunnelWorkerId, this.connectionId);
+  }
+
+  private logWithIdentity(message: string): void {
+    this.log(`${message} (${this.identityLog()})`);
   }
 
   run(): Promise<ConnectionOutcome> {
@@ -362,7 +466,8 @@ class ConnectionAttempt implements DrainableConnection {
       this.target,
       this.deps,
       this.plaintext,
-      this.slotSignal
+      this.slotSignal,
+      this.connectionId
     );
     // A client-drain (shutdown) or abort may have settled us mid-dial.
     if (this.completion.settled) {
@@ -378,11 +483,15 @@ class ConnectionAttempt implements DrainableConnection {
     this.deps.activeSockets.add(dialed.socket);
     this.slotSignal.addEventListener("abort", this.onAbort, { once: true });
     dialed.socket.on("error", (err: Error) =>
-      this.settle(this.endOutcome(`socket error: ${err.message}`))
+      this.settle(
+        this.endOutcome(`socket error: ${err.message}`),
+        `socket error: ${err.message}`
+      )
     );
     dialed.socket.on("close", () =>
       this.settle(
-        this.endOutcome("connection closed before handshake completed")
+        this.endOutcome("connection closed before handshake completed"),
+        "socket closed"
       )
     );
     this.establish(dialed.socket);
@@ -446,21 +555,79 @@ class ConnectionAttempt implements DrainableConnection {
    * funnel through here for teardown: it detaches via {@link beginServerDrain}
    * and lets the DrainingRegistry destroy the session later.
    */
-  private settle(outcome: ConnectionOutcome): void {
+  private settle(outcome: ConnectionOutcome, detail?: string): void {
     if (this.closed) return;
+    const phase = this.state.kind;
     const session = this.session();
     this.stopPhaseResources();
     this.deregister();
     this.state = { kind: "closed" };
     session?.destroy();
     this.socket?.destroy();
-    this.completion.resolve(outcome);
+    const firstOutcome = this.completion.resolve(outcome);
+    this.logWithIdentity(
+      `tunnel: connection to ${targetLabel(this.target)} closed (phase=${phase}, outcome=${formatConnectionOutcome(outcome)}${
+        detail === undefined ? "" : `, detail=${detail}`
+      }${firstOutcome ? "" : ", already reported"})`
+    );
+  }
+
+  private closeSessionGracefully(session: http2.Http2Session): Promise<void> {
+    return new Promise((resolve) => {
+      if (session.closed || session.destroyed) {
+        resolve();
+        return;
+      }
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        resolve();
+      };
+      const timer = setTimeout(() => {
+        this.settle(
+          { kind: "served", uptimeMs: this.uptimeMs() },
+          "session.close() timed out"
+        );
+        finish();
+      }, CLIENT_DRAIN_SESSION_CLOSE_TIMEOUT_MS);
+      timer.unref();
+      session.once("close", finish);
+      try {
+        session.close();
+      } catch {
+        this.settle(
+          this.endOutcome("session close failed"),
+          "session close failed"
+        );
+        finish();
+      }
+    });
+  }
+
+  private sendClientDrainGoaway(session: http2.Http2Session): void {
+    if (session.closed || session.destroyed) return;
+    try {
+      session.goaway(http2.constants.NGHTTP2_NO_ERROR);
+      this.logWithIdentity(
+        `tunnel: sent client-drain GOAWAY to ${targetLabel(this.target)}`
+      );
+    } catch (err) {
+      this.logWithIdentity(
+        `tunnel: failed to send client-drain GOAWAY to ${targetLabel(this.target)}: ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
+      // The session may be closing under us. dispatchForwarded still refuses
+      // any raced streams once the state flips to client-draining.
+    }
   }
 
   // ---- establish: role-flip ----
 
   private establish(socket: net.Socket): void {
-    this.log(
+    this.logWithIdentity(
       `tunnel: connected to ${this.target.host}:${this.target.port}, starting handshake`
     );
 
@@ -478,6 +645,21 @@ class ConnectionAttempt implements DrainableConnection {
     );
 
     h2.on("session", (s) => {
+      this.logWithIdentity(
+        `tunnel: h2 session established to ${targetLabel(this.target)} (localSettings=${formatSettings(
+          s.localSettings
+        )}, remoteSettings=${formatSettings(s.remoteSettings)})`
+      );
+      s.on("localSettings", (settings: http2.Settings) =>
+        this.logWithIdentity(
+          `tunnel: h2 local settings acknowledged by ${targetLabel(this.target)}: ${formatSettings(settings)}`
+        )
+      );
+      s.on("remoteSettings", (settings: http2.Settings) =>
+        this.logWithIdentity(
+          `tunnel: h2 remote settings from ${targetLabel(this.target)}: ${formatSettings(settings)}`
+        )
+      );
       // Role-flip complete: the cloud is now our h2 client. connecting →
       // handshaking, arming the timer that fires if the server never opens
       // /_/start-tunnel.
@@ -512,15 +694,22 @@ class ConnectionAttempt implements DrainableConnection {
       }
       s.on("close", () =>
         this.settle(
-          this.endOutcome("session closed before handshake completed")
+          this.endOutcome("session closed before handshake completed"),
+          "session closed"
         )
       );
       s.on("error", (err: Error) =>
-        this.settle(this.endOutcome(`session error: ${err.message}`))
+        this.settle(
+          this.endOutcome(`session error: ${err.message}`),
+          `session error: ${err.message}`
+        )
       );
     });
     h2.on("sessionError", (err: Error) =>
-      this.settle(this.endOutcome(`session error: ${err.message}`))
+      this.settle(
+        this.endOutcome(`session error: ${err.message}`),
+        `session error: ${err.message}`
+      )
     );
 
     h2.emit("connection", socket);
@@ -578,7 +767,12 @@ class ConnectionAttempt implements DrainableConnection {
         if (this.closed || res.stream.destroyed) return;
         try {
           if (ok) this.dispatchForwarded(req, res);
-          else this.notReady(res);
+          else {
+            this.logWithIdentity(
+              `tunnel: refused forwarded stream ${res.stream.id ?? "?"} before tunnel handshake completed`
+            );
+            this.notReady(res);
+          }
         } catch {
           // The session may be tearing down under us.
         }
@@ -587,11 +781,14 @@ class ConnectionAttempt implements DrainableConnection {
     }
     // Before /_/start-tunnel was even opened (or already gone) — not a tunnel
     // server speaking the protocol.
+    this.logWithIdentity(
+      `tunnel: refused forwarded stream ${res.stream.id ?? "?"} before tunnel handshake completed`
+    );
     this.notReady(res);
   }
 
   private notReady(res: http2.Http2ServerResponse): void {
-    res.writeHead(503);
+    res.writeHead(503, { [TUNNEL_DRAINING_HEADER]: "true" });
     res.end("tunnel: not ready");
   }
 
@@ -609,6 +806,8 @@ class ConnectionAttempt implements DrainableConnection {
         authToken: this.authToken,
         environmentId: this.deps.opts.environmentId,
         tunnelName: this.deps.opts.tunnelName,
+        tunnelWorkerId: this.deps.opts.tunnelWorkerId,
+        tunnelConnectionId: this.connectionId,
         supportsDrain: this.deps.opts.supportsDrain,
         supportsClientDrain: this.deps.opts.supportsClientDrain,
       },
@@ -625,10 +824,10 @@ class ConnectionAttempt implements DrainableConnection {
         this.state = this.deps.isShuttingDown()
           ? { kind: "draining", session, openedAt, trigger: "client", watchdog }
           : { kind: "serving", session, openedAt, watchdog };
-        this.log(
+        this.logWithIdentity(
           `tunnel: established (name=${outcome.info.tunnelName}, proxy=${outcome.info.proxyUrl})`
         );
-        this.deps.onEstablished(outcome.info);
+        this.deps.onEstablished(outcome.info, this.identity);
         return { ok: true };
       }
       this.settle(outcome);
@@ -649,8 +848,20 @@ class ConnectionAttempt implements DrainableConnection {
     // detached session keeps serving (the zero-drop property).
     const clientDraining =
       this.state.kind === "draining" && this.state.trigger === "client";
+    if (!this.deps.isStartupReady()) {
+      // Defensive fallback: the supervisor gates dialing until startupReady
+      // passes, so normal protocol traffic should not reach this state.
+      this.logWithIdentity(
+        `tunnel: refused forwarded stream ${res.stream.id ?? "?"} before startup readiness gate completed`
+      );
+      this.notReady(res);
+      return;
+    }
     if (clientDraining || this.deps.isShuttingDown()) {
-      res.writeHead(503, { "x-restate-tunnel-draining": "true" });
+      this.logWithIdentity(
+        `tunnel: refused forwarded stream ${res.stream.id ?? "?"} during client drain`
+      );
+      res.writeHead(503, { [TUNNEL_DRAINING_HEADER]: "true" });
       res.end();
       return;
     }
@@ -664,7 +875,27 @@ class ConnectionAttempt implements DrainableConnection {
     // Count this invocation as in-flight so shutdown() waits for it to finish.
     this.deps.inflightStarted();
     res.stream.once("close", () => this.deps.inflightEnded());
-    this.deps.sdkHandler(req, res);
+    res.stream.once("error", (err: Error) => {
+      const streamId = res.stream.id ?? "?";
+      const logPath = pathWithoutQuery(req.url);
+      this.logWithIdentity(
+        `tunnel: forwarded stream ${streamId} ${req.method ?? "?"} ${logPath} failed: ${
+          err.message
+        }`
+      );
+    });
+    try {
+      this.deps.sdkHandler(req, res);
+    } catch (err) {
+      const streamId = res.stream.id ?? "?";
+      const logPath = pathWithoutQuery(req.url);
+      this.logWithIdentity(
+        `tunnel: SDK handler threw for forwarded stream ${streamId} ${
+          req.method ?? "?"
+        } ${logPath}: ${err instanceof Error ? err.message : String(err)}`
+      );
+      endInternalError(res);
+    }
   }
 
   // ---- drain ----
@@ -672,10 +903,13 @@ class ConnectionAttempt implements DrainableConnection {
   private handleDrainRequest(res: http2.Http2ServerResponse): void {
     res.writeHead(200);
     res.end();
+    this.logWithIdentity(
+      `tunnel: received server drain notification from ${targetLabel(this.target)}`
+    );
     if (!this.deps.opts.supportsDrain) {
       // Not advertised, so unexpected — acknowledge and let the server
       // close on us; the slot's redial loop re-establishes.
-      this.log(
+      this.logWithIdentity(
         "tunnel: received /_/drain-tunnel (drain not advertised) — acknowledging"
       );
       return;
@@ -708,7 +942,9 @@ class ConnectionAttempt implements DrainableConnection {
   private beginServerDrain(): void {
     if (this.state.kind !== "serving") return;
     const { session, openedAt, watchdog } = this.state;
-    this.log("tunnel: drain requested — opening a replacement connection");
+    this.logWithIdentity(
+      "tunnel: server drain notification accepted — opening a replacement connection"
+    );
     watchdog.stop(); // the registry owns the session now; stop pinging it
     this.deregister();
     this.deps.draining.add(session, this.socket!, this.deps.opts.drainGraceMs);
@@ -738,6 +974,7 @@ class ConnectionAttempt implements DrainableConnection {
           trigger: "client",
           watchdog: s.watchdog,
         };
+        this.sendClientDrainGoaway(s.session);
         return;
       case "connecting":
       case "handshaking":
@@ -750,12 +987,28 @@ class ConnectionAttempt implements DrainableConnection {
     }
   }
 
+  async finishClientDrain(opts: { force: boolean }): Promise<void> {
+    const s = this.state;
+    if (s.kind !== "draining" || s.trigger !== "client") return;
+    if (opts.force) {
+      this.settle(
+        { kind: "served", uptimeMs: this.uptimeMs() },
+        "client drain grace expired"
+      );
+      return;
+    }
+    await this.closeSessionGracefully(s.session);
+  }
+
   // ---- liveness ----
 
   private startWatchdog(session: http2.Http2Session): Watchdog {
     const watchdog = new Watchdog(session, this.deps.opts, () => {
-      this.log("tunnel: pings missed — reconnecting");
-      this.settle({ kind: "served", uptimeMs: this.uptimeMs() });
+      this.logWithIdentity("tunnel: pings missed — reconnecting");
+      this.settle(
+        { kind: "served", uptimeMs: this.uptimeMs() },
+        "ping watchdog missed too many acknowledgements"
+      );
     });
     watchdog.start();
     return watchdog;

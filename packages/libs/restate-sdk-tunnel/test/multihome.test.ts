@@ -188,12 +188,14 @@ describe("multi-homing — DNS reconciliation (region mode)", () => {
       Promise.resolve([{ address: "127.0.0.1", family: 4 }] as never)
     );
 
+    const logs: string[] = [];
     const { tunnelServers: _drop, ...opts } = baseOptions([]);
     const conn = connectTunnel({
       ...opts,
       region: "us",
       tls: false, // plaintext fakes; region targets follow the global tls option
       resolveIntervalMs: 60,
+      tunnelDiagnosticLogger: (m) => logs.push(m),
     });
     try {
       await conn.ready;
@@ -206,6 +208,9 @@ describe("multi-homing — DNS reconciliation (region mode)", () => {
       ];
       await fake2.waitForConnection(0);
       await until(() => conn.connectionCount === 2, 2_000, "second handshake");
+      expect(logs.join("\n")).toContain(
+        `tunnel: discovered new tunnel target(s): 127.0.0.1:${fake2.port}`
+      );
 
       // The first server vanishes from DNS → its slot is torn down.
       current = [{ name: "node-2.tunnel.internal", port: fake2.port }];
@@ -215,6 +220,9 @@ describe("multi-homing — DNS reconciliation (region mode)", () => {
         "vanished server torn down"
       );
       expect(fake2.connections[0]!.session.destroyed).toBe(false);
+      expect(logs.join("\n")).toContain(
+        `tunnel: tunnel target(s) disappeared: 127.0.0.1:${fake1.port}`
+      );
     } finally {
       await conn.close();
       await fake1.close();

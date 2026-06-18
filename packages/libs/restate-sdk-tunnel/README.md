@@ -62,6 +62,21 @@ environment variables when not given (option > environment > throw):
 | `signingPublicKey` | `RESTATE_INPROC_SIGNING_PUBLIC_KEY`                            |
 | `authToken`        | the file named by `RESTATE_INPROC_AUTH_TOKEN_FILE` (see below) |
 
+For operator log attribution, set `tunnelWorkerId` or
+`RESTATE_TUNNEL_WORKER_ID` to a stable worker/pod identifier. When omitted,
+the SDK derives a process-stable, hostname-based id. Each h2 tunnel connection
+also gets a generated `tunnel-connection-id`; both ids are sent during the
+tunnel handshake for diagnostics only.
+
+If your process has asynchronous startup work before it can safely execute
+handlers, pass `startupReady` or call `connectTunnel` only after that work has
+completed. Without `startupReady`, the tunnel dials immediately. With it, the
+tunnel supervisor waits for the promise or callback before it dials any tunnel
+server, so the tunnel-server cannot select the pod before the in-process
+handler is ready. A stuck startup gate fails fatally after
+`startupReadyTimeoutMs` (default 120s), making a broken worker visible instead
+of silently absent from the fleet.
+
 The [restate-operator](https://github.com/restatedev/restate-operator)
 injects the first four into the pods of a `tunnelMode: in-process`
 RestateDeployment — with a per-revision `tunnelName` — and registers the
@@ -80,6 +95,44 @@ connection failure, not a crash). Mount the Secret as a whole volume rather
 than via `subPath` — Kubernetes does not update `subPath` mounts in place, so
 a rotated token would never reach the file.
 
+### Kubernetes shutdown and eviction
+
+Client-side graceful shutdown is on by default. On `SIGTERM`,
+`connectTunnel` calls `shutdown()`: each established tunnel session sends an
+HTTP/2 GOAWAY immediately so Restate Cloud stops opening new streams on that
+connection, any raced streams are refused with
+`x-restate-tunnel-draining: true`, in-flight invocations are allowed to finish
+for `drainGraceMs` (default 120s), then the session is closed gracefully. If
+the grace expires first, the session/socket is force-closed. Once the
+registered tunnels in the process finish draining, the default signal handler
+calls `process.exit(0)`.
+
+If a process creates multiple tunnels with default signal handling, one shared
+process-level signal handler drains all tunnels registered for that signal
+before exiting. Embedded applications that need to coordinate other shutdown
+work should pass `gracefulShutdown: false`, handle signals themselves, call
+`shutdown()` on every tunnel, and exit only after their own cleanup is complete.
+
+Set the pod's `terminationGracePeriodSeconds` to at least
+`ceil(drainGraceMs / 1000)` plus the longest handler drain slack you are
+prepared to allow. Kubernetes sends `SIGTERM` first and sends `SIGKILL` when
+the pod grace period expires; a too-short pod grace period will cut off the
+SDK's drain.
+
+On managed Kubernetes platforms, also account for the effective grace window
+the platform grants for the specific eviction event. The SDK can only drain for
+the smaller of `drainGraceMs`, the pod's `terminationGracePeriodSeconds`, and
+the grace the platform actually grants. Some providers document event-specific
+limits; for example,
+[GKE Autopilot documents bounded grace for GKE-initiated evictions](https://cloud.google.com/kubernetes-engine/docs/how-to/extended-duration-pods#about_gke-initiated_pod_eviction).
+Validate this path in your deployment environment by confirming `SIGTERM`
+reaches Node and the process remains alive long enough to complete the drain.
+
+Run the Node process as the container's main process with an exec-form
+`ENTRYPOINT`/`CMD`, or use a small init wrapper such as `tini`/`dumb-init` if
+your image starts through a shell or spawns child processes. The SDK installs
+the `SIGTERM` handler, but wrappers still need to forward signals to Node.
+
 ## How it works
 
 `connectTunnel` is the in-process analog of Restate Cloud's standalone
@@ -95,12 +148,15 @@ a rotated token would never reach the file.
 2. **Role-flip:** Restate Cloud drives HTTP/2 as the _client_ over the
    connection we dialed; the deployment becomes the HTTP/2 _server_ on it.
 3. **Handshake:** the cloud opens `GET /_/start-tunnel`; we answer with the
-   environment credentials and receive the tunnel confirmation (including
-   the public `proxy-url`) as HTTP/2 trailers.
+   environment credentials plus advisory diagnostic ids
+   (`tunnel-worker-id` and `tunnel-connection-id`) and receive the tunnel
+   confirmation (including the public `proxy-url`) as HTTP/2 trailers.
 4. **Serve:** each invocation arrives as one HTTP/2 stream. The tunnel's
    `/<scheme>/<host>/<port>` destination prefix is stripped and the request
    is handed to the SDK's own endpoint handler (full-duplex streaming —
-   `BIDI_STREAM`), exactly as if it had arrived on a local listener.
+   `BIDI_STREAM`), exactly as if it had arrived on a local listener. For
+   `connectTunnel`, the `/http/in-process/9080/` deployment URL segment is
+   vestigial: this package does not dial a local `:9080` socket.
 5. **Verify:** every forwarded request carries Restate's request-identity
    JWT (`x-restate-jwt-v1`). Verification is delegated to the SDK against
    `signingPublicKey`, so only requests signed by _your_ environment are
@@ -114,6 +170,12 @@ a rotated token would never reach the file.
    immediately dials a replacement while the old connection keeps serving
    its in-flight invocations (up to `drainGraceMs`, default 120s) — zero
    dropped requests across cloud rollovers.
+8. **Shut down gracefully:** the engine advertises `supports-client-drain`.
+   On `shutdown()` or the default `SIGTERM` handler, each live connection
+   sends HTTP/2 GOAWAY proactively, refuses any raced streams with the drain
+   sentinel, drains in-flight invocations up to `drainGraceMs`, and then
+   closes the h2 session gracefully. The final forced close is only used after
+   the grace window expires.
 
 ## API
 
@@ -122,6 +184,7 @@ function connectTunnel(options: ConnectTunnelOptions): TunnelConnection;
 
 interface TunnelConnection {
   close(): Promise<void>; // stop reconnecting + close
+  shutdown(opts?: { graceMs?: number }): Promise<void>; // graceful drain + close
   readonly ready: Promise<void>; // first successful handshake (rejects on fatal)
   readonly connectionCount: number;
   readonly tunnelName: string | undefined; // learned from the handshake
@@ -142,11 +205,15 @@ Key options (see `ConnectTunnelOptions` for the full surface and defaults):
 | `authToken`                                     | Cloud API key (`key_...`, Full role) presented in the handshake             |
 | `signingPublicKey`                              | `publickeyv1_...` — request-identity verification (required)                |
 | `tunnelName`                                    | The deployment's identity — unique per deployment, shared by its replicas   |
+| `tunnelWorkerId`                                | Stable SDK worker/process diagnostic id; defaults to `RESTATE_TUNNEL_WORKER_ID` or hostname-based |
+| `startupReady`                                  | One-shot startup readiness gate; no tunnel connections are dialed until it completes |
+| `startupReadyTimeoutMs`                         | Fatal deadline for `startupReady` (120s; only used when `startupReady` is set) |
 | `services`                                      | Same shape `restate.serve` accepts                                          |
 | `tls`                                           | Default on (system trust, ALPN `h2`); object form for CA/mTLS               |
 | `connectTimeoutMs`                              | TCP+TLS dial deadline (5s, mirrors the standalone client)                   |
 | `reconnectInitialMs/MaxMs/Factor`               | Jittered exponential backoff (10ms → 120s, reset after a stable connection) |
 | `supportsDrain` / `drainGraceMs`                | Graceful-drain handover on cloud rollovers (on, 120s grace)                 |
+| `supportsClientDrain` / `gracefulShutdown`      | Client shutdown drain with h2 GOAWAY and default `SIGTERM` handling         |
 | `pingIntervalMs/TimeoutMs/MaxMissed`            | Liveness watchdog (75s cadence)                                             |
 | `maxConcurrentStreams` etc.                     | HTTP/2 tuning for high-concurrency serving                                  |
 
