@@ -75,6 +75,7 @@ export type ConnectionOutcome =
 export type DrainTrigger = "server" | "client";
 
 const CLIENT_DRAIN_SESSION_CLOSE_TIMEOUT_MS = 1_000;
+const TUNNEL_DRAINING_HEADER = "x-restate-tunnel-draining";
 const CROCKFORD_BASE32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 
 function encodeBase32(value: bigint, length: number): string {
@@ -166,6 +167,8 @@ export interface ConnectionDeps {
    * this connection's own `draining{client}` state.
    */
   isShuttingDown: () => boolean;
+  /** True once the startup readiness gate has passed. */
+  isStartupReady: () => boolean;
   /** A forwarded invocation began executing (counts toward the drain wait). */
   inflightStarted: () => void;
   /** A forwarded invocation finished (its stream closed). */
@@ -749,7 +752,12 @@ class ConnectionAttempt implements DrainableConnection {
         if (this.closed || res.stream.destroyed) return;
         try {
           if (ok) this.dispatchForwarded(req, res);
-          else this.notReady(res);
+          else {
+            this.logWithIdentity(
+              `tunnel: refused forwarded stream ${res.stream.id ?? "?"} before tunnel handshake completed`
+            );
+            this.notReady(res);
+          }
         } catch {
           // The session may be tearing down under us.
         }
@@ -758,11 +766,14 @@ class ConnectionAttempt implements DrainableConnection {
     }
     // Before /_/start-tunnel was even opened (or already gone) — not a tunnel
     // server speaking the protocol.
+    this.logWithIdentity(
+      `tunnel: refused forwarded stream ${res.stream.id ?? "?"} before tunnel handshake completed`
+    );
     this.notReady(res);
   }
 
   private notReady(res: http2.Http2ServerResponse): void {
-    res.writeHead(503);
+    res.writeHead(503, { [TUNNEL_DRAINING_HEADER]: "true" });
     res.end("tunnel: not ready");
   }
 
@@ -822,11 +833,18 @@ class ConnectionAttempt implements DrainableConnection {
     // detached session keeps serving (the zero-drop property).
     const clientDraining =
       this.state.kind === "draining" && this.state.trigger === "client";
+    if (!this.deps.isStartupReady()) {
+      this.logWithIdentity(
+        `tunnel: refused forwarded stream ${res.stream.id ?? "?"} before startup readiness gate completed`
+      );
+      this.notReady(res);
+      return;
+    }
     if (clientDraining || this.deps.isShuttingDown()) {
       this.logWithIdentity(
         `tunnel: refused forwarded stream ${res.stream.id ?? "?"} during client drain`
       );
-      res.writeHead(503, { "x-restate-tunnel-draining": "true" });
+      res.writeHead(503, { [TUNNEL_DRAINING_HEADER]: "true" });
       res.end();
       return;
     }

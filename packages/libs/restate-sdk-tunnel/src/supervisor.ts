@@ -114,6 +114,28 @@ export class Supervisor {
     this.slots.set(key, slot);
   }
 
+  private async waitForStartupReady(): Promise<boolean> {
+    if (this.opts.startupReady === undefined) return true;
+    this.log("tunnel: waiting for startup readiness gate");
+    try {
+      const ready = this.opts.startupReady();
+      ready.catch(() => {}); // a late rejection after abort must not be unhandled
+      const raced = await raceAbortable(ready, this.wake.signal);
+      if (raced === null) return false;
+      this.log("tunnel: startup readiness gate passed");
+      return true;
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      this.fatal = new Error(`tunnel: startup readiness gate failed: ${reason}`);
+      this.log(
+        `tunnel: FATAL — startup readiness gate failed: ${reason}; stopping all connections`
+      );
+      this.hooks.onFatal(this.fatal);
+      this.stopSignal.abort();
+      return false;
+    }
+  }
+
   /** The per-server loop: dial → serve → classify outcome → backoff → redial. */
   private async runSlot(target: Target, ctl: AbortController): Promise<void> {
     const backoff = new Backoff(
@@ -159,6 +181,7 @@ export class Supervisor {
   /** Resolve the server set, reconcile slots, repeat. For SRV discovery the
    * set is re-resolved every resolveIntervalMs; an explicit set is fixed. */
   private async supervise(): Promise<void> {
+    if (!(await this.waitForStartupReady())) return;
     while (!this.stopping && this.fatal === undefined) {
       let targets: Target[];
       try {

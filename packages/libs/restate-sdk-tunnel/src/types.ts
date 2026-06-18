@@ -159,6 +159,18 @@ export interface ConnectTunnelOptions extends Omit<
    */
   bidirectional?: boolean;
   /**
+   * Optional one-shot startup readiness gate. When supplied, the tunnel
+   * supervisor waits for this promise or callback to complete before dialing
+   * any tunnel server, so the server cannot select this worker until the local
+   * in-process handler is ready. If the gate rejects or throws, the tunnel
+   * stops and {@link TunnelConnection.ready} rejects.
+   *
+   * This is the startup counterpart to {@link supportsClientDrain}: startup
+   * gates traffic until the handler is ready; shutdown drain removes the
+   * connection from selection before the handler stops.
+   */
+  startupReady?: PromiseLike<void> | (() => void | PromiseLike<void>);
+  /**
    * Advertise graceful-drain support (`supports-drain: true`) in the
    * handshake. Default `true`. When Restate Cloud rolls a tunnel node it
    * sends `/_/drain-tunnel` to drain-capable connections: the engine then

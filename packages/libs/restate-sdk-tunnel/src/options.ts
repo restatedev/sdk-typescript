@@ -47,6 +47,7 @@ export interface ResolvedOptions {
   tunnelName: string;
   tunnelWorkerId: string;
   bidirectional: boolean;
+  startupReady?: () => Promise<void>;
   resolveIntervalMs: number;
   supportsDrain: boolean;
   drainGraceMs: number;
@@ -169,6 +170,22 @@ function resolveTunnelWorkerId(option: string | undefined): string {
     value ?? DEFAULT_TUNNEL_WORKER_ID,
     "tunnelWorkerId"
   );
+}
+
+function resolveStartupReady(
+  option: ConnectTunnelOptions["startupReady"]
+): (() => Promise<void>) | undefined {
+  if (option === undefined) return undefined;
+  if (typeof option === "function") {
+    return async () => {
+      await option();
+    };
+  }
+  const ready = Promise.resolve(option);
+  ready.catch(() => {});
+  return async () => {
+    await ready;
+  };
 }
 
 function positive(
@@ -296,6 +313,7 @@ export function resolveOptions(options: ConnectTunnelOptions): ResolvedOptions {
     tunnelName,
     tunnelWorkerId,
     bidirectional: options.bidirectional ?? true,
+    startupReady: resolveStartupReady(options.startupReady),
     resolveIntervalMs: positive(
       options.resolveIntervalMs,
       30_000,

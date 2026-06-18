@@ -68,6 +68,11 @@ the SDK derives a process-stable, hostname-based id. Each h2 tunnel connection
 also gets a generated `tunnel-connection-id`; both ids are sent during the
 tunnel handshake for diagnostics only.
 
+If your process has asynchronous startup work before it can safely execute
+handlers, pass `startupReady`. The tunnel supervisor waits for that promise or
+callback before it dials any tunnel server, so the tunnel-server cannot select
+the pod before the in-process handler is ready.
+
 The [restate-operator](https://github.com/restatedev/restate-operator)
 injects the first four into the pods of a `tunnelMode: in-process`
 RestateDeployment — with a per-revision `tunnelName` — and registers the
@@ -137,7 +142,9 @@ the `SIGTERM` handler, but wrappers still need to forward signals to Node.
 4. **Serve:** each invocation arrives as one HTTP/2 stream. The tunnel's
    `/<scheme>/<host>/<port>` destination prefix is stripped and the request
    is handed to the SDK's own endpoint handler (full-duplex streaming —
-   `BIDI_STREAM`), exactly as if it had arrived on a local listener.
+   `BIDI_STREAM`), exactly as if it had arrived on a local listener. For
+   `connectTunnel`, the `/http/in-process/9080/` deployment URL segment is
+   vestigial: this package does not dial a local `:9080` socket.
 5. **Verify:** every forwarded request carries Restate's request-identity
    JWT (`x-restate-jwt-v1`). Verification is delegated to the SDK against
    `signingPublicKey`, so only requests signed by _your_ environment are
@@ -187,6 +194,7 @@ Key options (see `ConnectTunnelOptions` for the full surface and defaults):
 | `signingPublicKey`                              | `publickeyv1_...` — request-identity verification (required)                |
 | `tunnelName`                                    | The deployment's identity — unique per deployment, shared by its replicas   |
 | `tunnelWorkerId`                                | Stable SDK worker/process diagnostic id; defaults to `RESTATE_TUNNEL_WORKER_ID` or hostname-based |
+| `startupReady`                                  | One-shot startup readiness gate; no tunnel connections are dialed until it completes |
 | `services`                                      | Same shape `restate.serve` accepts                                          |
 | `tls`                                           | Default on (system trust, ALPN `h2`); object form for CA/mTLS               |
 | `connectTimeoutMs`                              | TCP+TLS dial deadline (5s, mirrors the standalone client)                   |

@@ -154,6 +154,17 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
   const log = resolvedOptions.logger;
   const logWithWorker = (message: string) =>
     log(`${message} (worker_id=${resolvedOptions.tunnelWorkerId})`);
+  let startupReady = resolvedOptions.startupReady === undefined;
+  const opts = {
+    ...resolvedOptions,
+    startupReady:
+      resolvedOptions.startupReady === undefined
+        ? undefined
+        : async () => {
+            await resolvedOptions.startupReady!();
+            startupReady = true;
+          },
+  };
 
   // Injected infrastructure: the per-connection layer reads these via deps.
   const activeSockets = new Set<net.Socket>();
@@ -183,7 +194,7 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
   const signalHandlers: Array<[NodeJS.Signals, () => void]> = [];
 
   const connectionDeps: ConnectionDeps = {
-    opts: resolvedOptions,
+    opts,
     sdkHandler,
     draining,
     activeSockets,
@@ -205,12 +216,13 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
       ready.resolve();
     },
     isShuttingDown: () => state.kind === "draining",
+    isStartupReady: () => startupReady,
     inflightStarted: () => inflight.started(),
     inflightEnded: () => inflight.ended(),
   };
 
   const supervisor = new Supervisor(
-    resolvedOptions,
+    opts,
     connectionDeps,
     {
       onFatal: (err) => {
