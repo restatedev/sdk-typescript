@@ -391,6 +391,63 @@ describe("client-initiated graceful shutdown", () => {
     }
   });
 
+  test("SIGTERM handler waits for every tunnel in the process before exiting", async () => {
+    const fake1 = await startFakeCloud({ decideTrailers: () => okTrailers() });
+    const fake2 = await startFakeCloud({ decideTrailers: () => okTrailers() });
+    const conn1 = connectTunnel({
+      ...baseOptions(fake1.port),
+      drainGraceMs: 5_000,
+    });
+    const conn2 = connectTunnel({
+      ...baseOptions(fake2.port),
+      drainGraceMs: 5_000,
+    });
+    let exitCode: string | number | null | undefined;
+    let resolveExit!: () => void;
+    const exitCalled = new Promise<void>((resolve) => {
+      resolveExit = resolve;
+    });
+    const exitSpy = vi
+      .spyOn(process, "exit")
+      .mockImplementation(((code?: string | number | null | undefined) => {
+        exitCode = code;
+        resolveExit();
+        return undefined as never;
+      }) as typeof process.exit);
+    try {
+      await Promise.all([conn1.ready, conn2.ready]);
+      const c1 = await fake1.waitForConnection(0);
+      const c2 = await fake2.waitForConnection(0);
+      const held1 = await openHeldInvocation(c1.session);
+      const held2 = await openHeldInvocation(c2.session);
+
+      process.emit("SIGTERM", "SIGTERM");
+
+      const [goaway1, goaway2] = await Promise.all([
+        c1.waitForGoaway(),
+        c2.waitForGoaway(),
+      ]);
+      expect(goaway1.errorCode).toBe(http2.constants.NGHTTP2_NO_ERROR);
+      expect(goaway2.errorCode).toBe(http2.constants.NGHTTP2_NO_ERROR);
+      expect(exitSpy).not.toHaveBeenCalled();
+
+      held1.close();
+      await new Promise((r) => setTimeout(r, 120));
+      expect(exitSpy).not.toHaveBeenCalled();
+
+      held2.close();
+      await withTimeout(exitCalled, "SIGTERM handler did not call process.exit");
+      expect(exitCode).toBe(0);
+      await Promise.all([waitForClose(c1.session), waitForClose(c2.session)]);
+    } finally {
+      exitSpy.mockRestore();
+      await conn1.close();
+      await conn2.close();
+      await fake1.close();
+      await fake2.close();
+    }
+  });
+
   test("drains in-flight invocations while refusing new ones", async () => {
     const fake = await startFakeCloud({ decideTrailers: () => okTrailers() });
     const conn = connectTunnel({

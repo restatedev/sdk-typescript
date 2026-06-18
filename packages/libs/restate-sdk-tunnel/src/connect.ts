@@ -126,6 +126,66 @@ type EngineState =
     }
   | { readonly kind: "closed" };
 
+interface SignalShutdownParticipant {
+  shutdown(signal: NodeJS.Signals): Promise<void>;
+}
+
+const signalShutdownRegistrations = new Map<
+  NodeJS.Signals,
+  Set<SignalShutdownParticipant>
+>();
+const signalShutdownHandlers = new Map<NodeJS.Signals, () => void>();
+let signalShutdownInProgress = false;
+
+async function runGracefulShutdownSignal(
+  signal: NodeJS.Signals
+): Promise<void> {
+  if (signalShutdownInProgress) return;
+  signalShutdownInProgress = true;
+  const registrations = [
+    ...(signalShutdownRegistrations.get(signal) ?? []),
+  ];
+  await Promise.allSettled(registrations.map((entry) => entry.shutdown(signal)));
+  try {
+    process.exit(0);
+  } finally {
+    // Tests stub process.exit(); real process.exit() does not return.
+    signalShutdownInProgress = false;
+  }
+}
+
+function registerGracefulShutdownSignals(
+  signals: NodeJS.Signals[],
+  participant: SignalShutdownParticipant
+): () => void {
+  const unregisters = signals.map((signal) => {
+    let registrations = signalShutdownRegistrations.get(signal);
+    if (registrations === undefined) {
+      registrations = new Set();
+      signalShutdownRegistrations.set(signal, registrations);
+    }
+    registrations.add(participant);
+    if (!signalShutdownHandlers.has(signal)) {
+      const handler = () => void runGracefulShutdownSignal(signal);
+      signalShutdownHandlers.set(signal, handler);
+      process.once(signal, handler);
+    }
+    return () => {
+      const current = signalShutdownRegistrations.get(signal);
+      if (current === undefined) return;
+      current.delete(participant);
+      if (current.size > 0) return;
+      const handler = signalShutdownHandlers.get(signal);
+      if (handler !== undefined) process.removeListener(signal, handler);
+      signalShutdownHandlers.delete(signal);
+      signalShutdownRegistrations.delete(signal);
+    };
+  });
+  return () => {
+    for (const unregister of unregisters) unregister();
+  };
+}
+
 /**
  * Connect this deployment to a Restate Cloud tunnel and serve `services`
  * over it. Returns immediately; connection management runs in the
@@ -154,7 +214,7 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
   const log = resolvedOptions.logger;
   const logWithWorker = (message: string) =>
     log(`${message} (worker_id=${resolvedOptions.tunnelWorkerId})`);
-  let startupReady = resolvedOptions.startupReady === undefined;
+  let startupGatePassed = resolvedOptions.startupReady === undefined;
   const opts = {
     ...resolvedOptions,
     startupReady:
@@ -162,7 +222,7 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
         ? undefined
         : async () => {
             await resolvedOptions.startupReady!();
-            startupReady = true;
+            startupGatePassed = true;
           },
   };
 
@@ -189,9 +249,9 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
   // closures only read it at runtime, long after.
   let state: EngineState;
 
-  // Opt-in process-signal handlers, removed on teardown so a closed connection
-  // can never later intercept a signal and exit the host process.
-  const signalHandlers: Array<[NodeJS.Signals, () => void]> = [];
+  // Opt-in process-signal registrations, removed on teardown so a closed
+  // connection can never later intercept a signal and exit the host process.
+  const signalUnregisters: Array<() => void> = [];
 
   const connectionDeps: ConnectionDeps = {
     opts,
@@ -216,7 +276,7 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
       ready.resolve();
     },
     isShuttingDown: () => state.kind === "draining",
-    isStartupReady: () => startupReady,
+    isStartupReady: () => startupGatePassed,
     inflightStarted: () => inflight.started(),
     inflightEnded: () => inflight.ended(),
   };
@@ -245,10 +305,8 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
     if (state.kind === "closed") return;
     const { supervisor, keepAlive } = state.active;
     state = { kind: "closed" };
-    for (const [signal, handler] of signalHandlers) {
-      process.removeListener(signal, handler);
-    }
-    signalHandlers.length = 0;
+    for (const unregister of signalUnregisters) unregister();
+    signalUnregisters.length = 0;
     supervisor.abortAll();
     for (const socket of activeSockets) socket.destroy();
     activeSockets.clear();
@@ -328,14 +386,14 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
   // connection that is already closed.
   if (resolvedOptions.gracefulShutdown !== undefined) {
     const { signals, graceMs } = resolvedOptions.gracefulShutdown;
-    for (const signal of signals) {
-      const handler = () => {
-        logWithWorker(`tunnel: received ${signal} — shutting down gracefully`);
-        void shutdown({ graceMs }).finally(() => process.exit(0));
-      };
-      signalHandlers.push([signal, handler]);
-      process.once(signal, handler);
-    }
+    signalUnregisters.push(
+      registerGracefulShutdownSignals(signals, {
+        async shutdown(signal) {
+          logWithWorker(`tunnel: received ${signal} — shutting down gracefully`);
+          await shutdown({ graceMs });
+        },
+      })
+    );
   }
 
   if (options.signal?.aborted) {

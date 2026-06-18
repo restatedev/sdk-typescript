@@ -208,12 +208,14 @@ export interface ConnectTunnelOptions extends Omit<
   /**
    * Automatic graceful shutdown on process signals. **On by default**: the
    * engine installs a one-shot handler for each signal (default `SIGTERM`)
-   * that calls {@link TunnelConnection.shutdown} and then `process.exit(0)`
-   * once draining completes (or the grace elapses) — so an operator-managed
-   * deployment gets zero-dropped-invocation rollouts with no wiring. In
-   * Kubernetes, set `terminationGracePeriodSeconds` to at least the drain
-   * grace plus the handler slack you want to preserve. The handlers are
-   * removed when the connection closes.
+   * that calls {@link TunnelConnection.shutdown}. If multiple tunnels in the
+   * same process register for a signal, the shared process-level handler waits
+   * for all of them before calling `process.exit(0)` once draining completes
+   * (or the grace elapses) — so an operator-managed deployment gets
+   * zero-dropped-invocation rollouts with no wiring. In Kubernetes, set
+   * `terminationGracePeriodSeconds` to at least the drain grace plus the
+   * handler slack you want to preserve. The handlers are removed when the
+   * connection closes.
    *
    * Pass `false` to opt out entirely — e.g. to manage signals and process
    * exit yourself and call {@link TunnelConnection.shutdown} by hand. Pass an

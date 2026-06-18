@@ -103,7 +103,15 @@ HTTP/2 GOAWAY immediately so Restate Cloud stops opening new streams on that
 connection, any raced streams are refused with
 `x-restate-tunnel-draining: true`, in-flight invocations are allowed to finish
 for `drainGraceMs` (default 120s), then the session is closed gracefully. If
-the grace expires first, the session/socket is force-closed.
+the grace expires first, the session/socket is force-closed. Once the
+registered tunnels in the process finish draining, the default signal handler
+calls `process.exit(0)`.
+
+If a process creates multiple tunnels with default signal handling, one shared
+process-level signal handler drains all tunnels registered for that signal
+before exiting. Embedded applications that need to coordinate other shutdown
+work should pass `gracefulShutdown: false`, handle signals themselves, call
+`shutdown()` on every tunnel, and exit only after their own cleanup is complete.
 
 Set the pod's `terminationGracePeriodSeconds` to at least
 `ceil(drainGraceMs / 1000)` plus the longest handler drain slack you are

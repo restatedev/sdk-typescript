@@ -132,6 +132,15 @@ function pathWithoutQuery(url: string | undefined): string {
   return queryStart === -1 ? url : url.slice(0, queryStart);
 }
 
+function endInternalError(res: http2.Http2ServerResponse): void {
+  try {
+    if (!res.headersSent) res.writeHead(500);
+    if (!res.writableEnded) res.end("tunnel: SDK handler error");
+  } catch {
+    // The stream may already be closing; keep the session lifecycle contained.
+  }
+}
+
 /** The Node request handler produced by the SDK's createEndpointHandler. */
 type SdkHandler = ReturnType<
   typeof import("@restatedev/restate-sdk").createEndpointHandler
@@ -866,24 +875,26 @@ class ConnectionAttempt implements DrainableConnection {
     // Count this invocation as in-flight so shutdown() waits for it to finish.
     this.deps.inflightStarted();
     res.stream.once("close", () => this.deps.inflightEnded());
-    const streamId = res.stream.id ?? "?";
-    const logPath = pathWithoutQuery(req.url);
-    res.stream.once("error", (err: Error) =>
+    res.stream.once("error", (err: Error) => {
+      const streamId = res.stream.id ?? "?";
+      const logPath = pathWithoutQuery(req.url);
       this.logWithIdentity(
         `tunnel: forwarded stream ${streamId} ${req.method ?? "?"} ${logPath} failed: ${
           err.message
         }`
-      )
-    );
+      );
+    });
     try {
       this.deps.sdkHandler(req, res);
     } catch (err) {
+      const streamId = res.stream.id ?? "?";
+      const logPath = pathWithoutQuery(req.url);
       this.logWithIdentity(
         `tunnel: SDK handler threw for forwarded stream ${streamId} ${
           req.method ?? "?"
         } ${logPath}: ${err instanceof Error ? err.message : String(err)}`
       );
-      throw err;
+      endInternalError(res);
     }
   }
 
