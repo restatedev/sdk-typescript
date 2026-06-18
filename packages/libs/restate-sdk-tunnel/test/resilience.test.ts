@@ -147,6 +147,32 @@ describe("startup readiness gate", () => {
     }
   });
 
+  test("a stuck startupReady gate fails fatally without dialing", async () => {
+    const fake = await startFakeCloud({ decideTrailers: () => okTrailers() });
+    const logs: string[] = [];
+    const conn = connectTunnel({
+      ...baseOptions(fake.port),
+      startupReady: new Promise<void>(() => {}),
+      startupReadyTimeoutMs: 20,
+      tunnelDiagnosticLogger: (m) => logs.push(m),
+    });
+    try {
+      await expect(conn.ready).rejects.toThrow(
+        /startup readiness gate failed: startup readiness gate timed out after 20ms/
+      );
+      expect(fake.connections.length).toBe(0);
+      expect(logs.join("\n")).toMatch(
+        /tunnel: waiting for startup readiness gate \(timeoutMs=20\)/
+      );
+      expect(logs.join("\n")).toMatch(
+        /tunnel: FATAL .* startup readiness gate timed out after 20ms/
+      );
+    } finally {
+      await conn.close();
+      await fake.close();
+    }
+  });
+
   test("a forwarded request before the tunnel handshake gets the not-ready sentinel, never 502", async () => {
     let sessionResolve!: (session: http2.ClientHttp2Session) => void;
     const sessionPromise = new Promise<http2.ClientHttp2Session>((resolve) => {

@@ -48,6 +48,7 @@ export interface ResolvedOptions {
   tunnelWorkerId: string;
   bidirectional: boolean;
   startupReady?: () => Promise<void>;
+  startupReadyTimeoutMs: number;
   resolveIntervalMs: number;
   supportsDrain: boolean;
   drainGraceMs: number;
@@ -314,6 +315,11 @@ export function resolveOptions(options: ConnectTunnelOptions): ResolvedOptions {
     tunnelWorkerId,
     bidirectional: options.bidirectional ?? true,
     startupReady: resolveStartupReady(options.startupReady),
+    startupReadyTimeoutMs: positive(
+      options.startupReadyTimeoutMs,
+      120_000,
+      "startupReadyTimeoutMs"
+    ),
     resolveIntervalMs: positive(
       options.resolveIntervalMs,
       30_000,

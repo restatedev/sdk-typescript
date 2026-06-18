@@ -116,11 +116,27 @@ export class Supervisor {
 
   private async waitForStartupReady(): Promise<boolean> {
     if (this.opts.startupReady === undefined) return true;
-    this.log("tunnel: waiting for startup readiness gate");
+    this.log(
+      `tunnel: waiting for startup readiness gate (timeoutMs=${this.opts.startupReadyTimeoutMs})`
+    );
+    let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
       const ready = this.opts.startupReady();
       ready.catch(() => {}); // a late rejection after abort must not be unhandled
-      const raced = await raceAbortable(ready, this.wake.signal);
+      const readyOrTimeout = Promise.race([
+        ready,
+        new Promise<never>((_, reject) => {
+          timeout = setTimeout(() => {
+            reject(
+              new Error(
+                `startup readiness gate timed out after ${this.opts.startupReadyTimeoutMs}ms`
+              )
+            );
+          }, this.opts.startupReadyTimeoutMs);
+        }),
+      ]);
+      readyOrTimeout.catch(() => {});
+      const raced = await raceAbortable(readyOrTimeout, this.wake.signal);
       if (raced === null) return false;
       this.log("tunnel: startup readiness gate passed");
       return true;
@@ -133,6 +149,8 @@ export class Supervisor {
       this.hooks.onFatal(this.fatal);
       this.stopSignal.abort();
       return false;
+    } finally {
+      if (timeout !== undefined) clearTimeout(timeout);
     }
   }
 

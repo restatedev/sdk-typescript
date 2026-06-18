@@ -416,6 +416,7 @@ describe("parseServerAddress", () => {
 describe("client-drain / graceful-shutdown options", () => {
   test("startupReady is optional and can be promise- or callback-backed", async () => {
     expect(resolveOptions(valid).startupReady).toBeUndefined();
+    expect(resolveOptions(valid).startupReadyTimeoutMs).toBe(120_000);
     await expect(
       resolveOptions({
         ...valid,
@@ -428,6 +429,13 @@ describe("client-drain / graceful-shutdown options", () => {
         startupReady: () => Promise.resolve(),
       }).startupReady?.()
     ).resolves.toBeUndefined();
+    expect(
+      resolveOptions({ ...valid, startupReadyTimeoutMs: 5_000 })
+        .startupReadyTimeoutMs
+    ).toBe(5_000);
+    expect(() =>
+      resolveOptions({ ...valid, startupReadyTimeoutMs: 0 })
+    ).toThrow(/startupReadyTimeoutMs must be a positive number/);
   });
 
   test("supportsClientDrain defaults to true", () => {
