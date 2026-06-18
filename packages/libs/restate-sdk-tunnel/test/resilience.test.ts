@@ -173,6 +173,26 @@ describe("startup readiness gate", () => {
     }
   });
 
+  test("close() while startupReady is pending stops cleanly without dialing", async () => {
+    const gate = deferred<void>();
+    const fake = await startFakeCloud({ decideTrailers: () => okTrailers() });
+    const conn = connectTunnel({
+      ...baseOptions(fake.port),
+      startupReady: gate.promise,
+      startupReadyTimeoutMs: 5_000,
+    });
+    try {
+      const start = Date.now();
+      await conn.close();
+      expect(Date.now() - start).toBeLessThan(500);
+      await expect(conn.ready).rejects.toThrow(/closed before the first handshake/);
+      expect(conn.error).toBeUndefined();
+      expect(fake.connections.length).toBe(0);
+    } finally {
+      await fake.close();
+    }
+  });
+
   test("a forwarded request before the tunnel handshake gets the not-ready sentinel, never 502", async () => {
     let sessionResolve!: (session: http2.ClientHttp2Session) => void;
     const sessionPromise = new Promise<http2.ClientHttp2Session>((resolve) => {

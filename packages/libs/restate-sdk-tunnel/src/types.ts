@@ -16,11 +16,10 @@ import type { EndpointOptions } from "@restatedev/restate-sdk";
 /**
  * TLS options for the outbound tunnel connection.
  *
- * Note: unlike a regular HTTP/2 client, the tunnel deliberately negotiates
- * NO ALPN protocol ("tunnel is not normal h2" — the server clears its ALPN
- * list); both sides speak HTTP/2 with prior knowledge after the TLS
- * handshake. There is therefore no ALPN field here, and the package never
- * sets one.
+ * The tunnel always offers ALPN `h2` and requires TLS peers to negotiate it;
+ * omit these options to use the system trust store and SNI for the dialed
+ * host. There is no user-facing ALPN option because the tunnel protocol
+ * requires HTTP/2.
  */
 export interface TunnelTlsOptions {
   /**
@@ -274,8 +273,8 @@ export interface ConnectTunnelOptions extends Omit<
   maxSessionMemory?: number;
   /**
    * TLS for the outbound connection. Default `true` (system trust, SNI =
-   * dialed host, and — deliberately — NO ALPN). Pass `false` only for
-   * plaintext dev/test setups, or an object for a private CA / mTLS.
+   * dialed host, ALPN `h2`). Pass `false` only for plaintext dev/test setups,
+   * or an object for a private CA / mTLS.
    */
   tls?: boolean | TunnelTlsOptions;
   /** Abort to stop reconnecting and close the tunnel (same as `close()`). */

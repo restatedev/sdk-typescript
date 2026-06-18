@@ -90,7 +90,7 @@ export interface FakeCloud {
 }
 
 export interface FakeCloudOptions {
-  /** Serve TLS (no ALPN — like the real tunnel listener). Plaintext if omitted. */
+  /** Serve TLS with h2 ALPN. Plaintext if omitted. */
   tls?: { cert: Buffer; key: Buffer };
   /**
    * Decide the handshake trailers for a connection, given the deployment's

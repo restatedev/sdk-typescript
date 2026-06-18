@@ -126,6 +126,12 @@ function formatSettings(settings: http2.Settings): string {
     .join(", ")}}`;
 }
 
+function pathWithoutQuery(url: string | undefined): string {
+  if (url === undefined) return "?";
+  const queryStart = url.indexOf("?");
+  return queryStart === -1 ? url : url.slice(0, queryStart);
+}
+
 /** The Node request handler produced by the SDK's createEndpointHandler. */
 type SdkHandler = ReturnType<
   typeof import("@restatedev/restate-sdk").createEndpointHandler
@@ -834,6 +840,8 @@ class ConnectionAttempt implements DrainableConnection {
     const clientDraining =
       this.state.kind === "draining" && this.state.trigger === "client";
     if (!this.deps.isStartupReady()) {
+      // Defensive fallback: the supervisor gates dialing until startupReady
+      // passes, so normal protocol traffic should not reach this state.
       this.logWithIdentity(
         `tunnel: refused forwarded stream ${res.stream.id ?? "?"} before startup readiness gate completed`
       );
@@ -859,11 +867,12 @@ class ConnectionAttempt implements DrainableConnection {
     this.deps.inflightStarted();
     res.stream.once("close", () => this.deps.inflightEnded());
     const streamId = res.stream.id ?? "?";
+    const logPath = pathWithoutQuery(req.url);
     res.stream.once("error", (err: Error) =>
       this.logWithIdentity(
-        `tunnel: forwarded stream ${streamId} ${req.method ?? "?"} ${
-          req.url ?? "?"
-        } failed: ${err.message}`
+        `tunnel: forwarded stream ${streamId} ${req.method ?? "?"} ${logPath} failed: ${
+          err.message
+        }`
       )
     );
     try {
@@ -872,7 +881,7 @@ class ConnectionAttempt implements DrainableConnection {
       this.logWithIdentity(
         `tunnel: SDK handler threw for forwarded stream ${streamId} ${
           req.method ?? "?"
-        } ${req.url ?? "?"}: ${err instanceof Error ? err.message : String(err)}`
+        } ${logPath}: ${err instanceof Error ? err.message : String(err)}`
       );
       throw err;
     }

@@ -15,6 +15,8 @@
 // sentinel, drains its in-flight invocations, and then tears down.
 
 import * as http2 from "node:http2";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { describe, expect, test, vi } from "vitest";
 import * as restate from "@restatedev/restate-sdk";
 
@@ -70,6 +72,18 @@ function withTimeout<T>(
       }
     );
   });
+}
+
+async function until(
+  cond: () => boolean,
+  timeoutMs = 2_000,
+  what = "condition"
+): Promise<void> {
+  const start = Date.now();
+  while (!cond()) {
+    if (Date.now() - start > timeoutMs) throw new Error(`timed out: ${what}`);
+    await new Promise((r) => setTimeout(r, 10));
+  }
 }
 
 const greeter = restate.service({
@@ -288,6 +302,55 @@ describe("client-initiated graceful shutdown", () => {
     }
   });
 
+  test("shutdown() drains every active tunnel connection", async () => {
+    const fake1 = await startFakeCloud({ decideTrailers: () => okTrailers() });
+    const fake2 = await startFakeCloud({ decideTrailers: () => okTrailers() });
+    const conn = connectTunnel({
+      ...baseOptions(fake1.port),
+      tunnelServers: [
+        `http://127.0.0.1:${fake1.port}`,
+        `http://127.0.0.1:${fake2.port}`,
+      ],
+      drainGraceMs: 5_000,
+    });
+    try {
+      await conn.ready;
+      await until(() => conn.connectionCount === 2, 2_000, "both handshakes");
+      const c1 = await fake1.waitForConnection(0);
+      const c2 = await fake2.waitForConnection(0);
+      const held1 = await openHeldInvocation(c1.session);
+      const held2 = await openHeldInvocation(c2.session);
+
+      let shutdownDone = false;
+      const done = conn.shutdown().then(() => {
+        shutdownDone = true;
+      });
+
+      const [goaway1, goaway2] = await Promise.all([
+        c1.waitForGoaway(),
+        c2.waitForGoaway(),
+      ]);
+      expect(goaway1.errorCode).toBe(http2.constants.NGHTTP2_NO_ERROR);
+      expect(goaway2.errorCode).toBe(http2.constants.NGHTTP2_NO_ERROR);
+      expect(shutdownDone).toBe(false);
+
+      held1.close();
+      await new Promise((r) => setTimeout(r, 120));
+      expect(shutdownDone).toBe(false);
+
+      held2.close();
+      await done;
+      expect(shutdownDone).toBe(true);
+      await Promise.all([waitForClose(c1.session), waitForClose(c2.session)]);
+      expect(c1.session.destroyed).toBe(true);
+      expect(c2.session.destroyed).toBe(true);
+    } finally {
+      await conn.close();
+      await fake1.close();
+      await fake2.close();
+    }
+  });
+
   test("SIGTERM handler starts drain and exits after in-flight work completes", async () => {
     const fake = await startFakeCloud({ decideTrailers: () => okTrailers() });
     const conn = connectTunnel({
@@ -383,6 +446,38 @@ describe("client-initiated graceful shutdown", () => {
       expect(elapsed).toBeLessThan(2_000);
       await waitForClose(c0.session);
       expect(c0.session.destroyed).toBe(true);
+    } finally {
+      await conn.close();
+      await fake.close();
+    }
+  });
+
+  test("graceful h2 close is force-settled when the peer stops reading", async () => {
+    const cert = fs.readFileSync(path.join(__dirname, "fixtures", "cert.pem"));
+    const key = fs.readFileSync(path.join(__dirname, "fixtures", "key.pem"));
+    const fake = await startFakeCloud({
+      tls: { cert, key },
+      decideTrailers: () => okTrailers(),
+    });
+    const logs: string[] = [];
+    const conn = connectTunnel({
+      ...baseOptions(fake.port),
+      tunnelServers: [`127.0.0.1:${fake.port}`],
+      tls: { ca: cert },
+      tunnelDiagnosticLogger: (m) => logs.push(m),
+    });
+    try {
+      await conn.ready;
+      const c0 = await fake.waitForConnection(0);
+      c0.rawSocket.pause();
+
+      const start = Date.now();
+      await conn.shutdown();
+      const elapsed = Date.now() - start;
+
+      expect(elapsed).toBeGreaterThanOrEqual(900);
+      expect(elapsed).toBeLessThan(2_500);
+      expect(logs.join("\n")).toContain("detail=session.close() timed out");
     } finally {
       await conn.close();
       await fake.close();

@@ -13,7 +13,7 @@
 // (see fake-cloud.ts), over loopback. Covers the handshake, the
 // fatal-vs-retryable reconnect policy, control paths, forwarded dispatch
 // into the real SDK handler, the end-to-end identity delegation, and the
-// TLS no-ALPN bridge path.
+// TLS negotiated-h2 bridge path.
 
 import { describe, expect, test } from "vitest";
 import * as fs from "node:fs";

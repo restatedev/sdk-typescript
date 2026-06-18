@@ -141,6 +141,7 @@ export class Supervisor {
       this.log("tunnel: startup readiness gate passed");
       return true;
     } catch (err) {
+      if (this.stopping || this.wake.signal.aborted) return false;
       const reason = err instanceof Error ? err.message : String(err);
       this.fatal = new Error(`tunnel: startup readiness gate failed: ${reason}`);
       this.log(
