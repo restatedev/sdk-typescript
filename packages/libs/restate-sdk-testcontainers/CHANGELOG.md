@@ -1,5 +1,27 @@
 # @restatedev/restate-sdk-testcontainers
 
+## 1.15.0
+
+### Minor Changes
+
+- ffadd88: Bump to 1.15.0 rc.6
+- dcd51ba: Added RunRetryPolicy.onMaxAttempts = pause and PauseError
+- Bump to 1.15.0
+- 59868ef: Bump to 1.15.0-rc.5
+
+### Patch Changes
+
+- 24b5263: 1.15.0-rc.7
+- 1f850e1:
+- Updated dependencies [ffadd88]
+- Updated dependencies [dcd51ba]
+- Updated dependencies
+- Updated dependencies [24b5263]
+- Updated dependencies [1f850e1]
+- Updated dependencies [59868ef]
+  - @restatedev/restate-sdk@1.15.0
+  - @restatedev/restate-sdk-clients@1.15.0
+
 ## 1.15.0-rc.7
 
 ### Patch Changes
