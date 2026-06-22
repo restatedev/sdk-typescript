@@ -137,7 +137,7 @@ export interface Ingress {
    * To use it in restate-server 1.7, enable the flow control and protocol v7 experimental features,
    * via `RESTATE_EXPERIMENTAL_ENABLE_PROTOCOL_V7=true` and `RESTATE_EXPERIMENTAL_ENABLE_VQUEUES=true`.
    * These can be enabled only on **new clusters**, for more info check out https://docs.restate.dev/services/flow-control#enabling-flow-control.
-   * When the experimental features are not enabled, this method fails the invocation with a retryable error, causing the invocation to be retried until fixed.
+   * When the experimental features are disabled, this method fails the invocation with a retryable error, causing the invocation to be retried until fixed.
    *
    * A scope is a sub-grouping of resources (invocations, virtual object instances, workflow
    * instances, concurrency limits) within the Restate cluster.
@@ -202,7 +202,7 @@ export interface IngressCallOptions<I = unknown, O = unknown> {
    * To use it in restate-server 1.7, enable the flow control and protocol v7 experimental features,
    * via `RESTATE_EXPERIMENTAL_ENABLE_PROTOCOL_V7=true` and `RESTATE_EXPERIMENTAL_ENABLE_VQUEUES=true`.
    * These can be enabled only on **new clusters**, for more info check out https://docs.restate.dev/services/flow-control#enabling-flow-control.
-   * When the experimental features are not enabled, this method fails the invocation with a retryable error, causing the invocation to be retried until fixed.
+   * When the experimental features are disabled, this method fails the invocation with a retryable error, causing the invocation to be retried until fixed.
    *
    * The limit key enforces hierarchical concurrency limits on invocations sharing the same scope.
    * It can have one or two levels separated by `/` (e.g. `"tenant1"` or `"tenant1/user42"`).
