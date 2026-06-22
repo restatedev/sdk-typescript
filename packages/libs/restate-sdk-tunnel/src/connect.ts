@@ -142,10 +142,10 @@ async function runGracefulShutdownSignal(
 ): Promise<void> {
   if (signalShutdownInProgress) return;
   signalShutdownInProgress = true;
-  const registrations = [
-    ...(signalShutdownRegistrations.get(signal) ?? []),
-  ];
-  await Promise.allSettled(registrations.map((entry) => entry.shutdown(signal)));
+  const registrations = [...(signalShutdownRegistrations.get(signal) ?? [])];
+  await Promise.allSettled(
+    registrations.map((entry) => entry.shutdown(signal))
+  );
   try {
     process.exit(0);
   } finally {
@@ -389,7 +389,9 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
     signalUnregisters.push(
       registerGracefulShutdownSignals(signals, {
         async shutdown(signal) {
-          logWithWorker(`tunnel: received ${signal} — shutting down gracefully`);
+          logWithWorker(
+            `tunnel: received ${signal} — shutting down gracefully`
+          );
           await shutdown({ graceMs });
         },
       })

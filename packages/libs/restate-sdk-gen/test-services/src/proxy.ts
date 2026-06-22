@@ -25,6 +25,8 @@ type ProxyRequest = {
   virtualObjectKey?: string;
   idempotencyKey?: string;
   delayMillis?: number;
+  scope?: string;
+  limitKey?: string;
 };
 
 type ManyCallsRequest = {
@@ -49,6 +51,8 @@ export const proxy = service({
         idempotencyKey: req.idempotencyKey,
         inputSerde: restate.serde.binary,
         outputSerde: restate.serde.binary,
+        scope: req.scope,
+        limitKey: req.limitKey,
       });
       return Array.from(result);
     },
@@ -62,6 +66,8 @@ export const proxy = service({
         idempotencyKey: req.idempotencyKey,
         inputSerde: restate.serde.binary,
         delay: req.delayMillis,
+        scope: req.scope,
+        limitKey: req.limitKey,
       });
       return ref.id;
     },
@@ -78,6 +84,8 @@ export const proxy = service({
             key: pr.virtualObjectKey,
             idempotencyKey: pr.idempotencyKey,
             inputSerde: restate.serde.binary,
+            scope: pr.scope,
+            limitKey: pr.limitKey,
           });
         } else {
           const future = call<Uint8Array, Uint8Array>({
@@ -88,6 +96,8 @@ export const proxy = service({
             idempotencyKey: pr.idempotencyKey,
             inputSerde: restate.serde.binary,
             outputSerde: restate.serde.binary,
+            scope: pr.scope,
+            limitKey: pr.limitKey,
           });
           if (req.awaitAtTheEnd) toAwait.push(future);
         }

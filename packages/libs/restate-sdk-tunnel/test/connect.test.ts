@@ -127,7 +127,9 @@ describe("connectTunnel — handshake", () => {
         try {
           await conn.ready;
           const joined = logs.join("\n");
-          expect(joined).toMatch(/tunnel: using configured tunnel target\(s\):/);
+          expect(joined).toMatch(
+            /tunnel: using configured tunnel target\(s\):/
+          );
           expect(joined).toMatch(
             /tunnel: target set from configured tunnel targets:/
           );

@@ -167,10 +167,7 @@ function resolveTunnelWorkerId(option: string | undefined): string {
     option !== undefined && option !== ""
       ? option
       : fromEnv(TUNNEL_WORKER_ID_ENV);
-  return requireHeaderSafe(
-    value ?? DEFAULT_TUNNEL_WORKER_ID,
-    "tunnelWorkerId"
-  );
+  return requireHeaderSafe(value ?? DEFAULT_TUNNEL_WORKER_ID, "tunnelWorkerId");
 }
 
 function resolveStartupReady(

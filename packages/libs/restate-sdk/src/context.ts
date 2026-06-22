@@ -9,7 +9,12 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import type { Client, SendClient } from "./types/rpc.js";
+import type {
+  Client,
+  SendClient,
+  //eslint-disable-next-line @typescript-eslint/no-unused-vars
+  ClientCallOptions,
+} from "./types/rpc.js";
 import type {
   RestateContext,
   RestateObjectContext,
@@ -82,6 +87,27 @@ export interface Request {
    * Care should be taken to use them deterministically.
    */
   readonly extraArgs: unknown[];
+
+  /**
+   * The idempotency key with which this invocation was submitted, if any.
+   */
+  readonly idempotencyKey?: string;
+
+  /**
+   * The scope key with which this invocation was submitted, if any.
+   *
+   * @see {@link Context.scope}
+   * @experimental
+   */
+  readonly scope?: string;
+
+  /**
+   * The limit key with which this invocation was submitted, if any.
+   *
+   * @see {@link ClientCallOptions.limitKey}
+   * @experimental
+   */
+  readonly limitKey?: string;
 
   /**
    * This is a signal that is aborted when the current attempt has been completed either successful or unsuccessfully.
@@ -232,6 +258,19 @@ export type GenericCall<REQ, RES> = {
   outputSerde?: Serde<RES>;
   idempotencyKey?: string;
   /**
+   * Scope of the request target.
+   *
+   * @see {@link Context.scope}.
+   */
+  scope?: string;
+  /**
+   * Limit key to use within the scope. Requires `scope` to be set.
+   *
+   * @see {@link ClientCallOptions.limitKey}.
+   * @experimental
+   */
+  limitKey?: string;
+  /**
    * Observability name, recorded in the Restate journal.
    */
   name?: string;
@@ -252,10 +291,38 @@ export type GenericSend<REQ> = {
   delay?: Duration | number;
   idempotencyKey?: string;
   /**
+   * Scope of the request target.
+   *
+   * @see {@link Context.scope}.
+   */
+  scope?: string;
+  /**
+   * Limit key to use within the scope. Requires `scope` to be set.
+   *
+   * @see {@link ClientCallOptions.limitKey}.
+   * @experimental
+   */
+  limitKey?: string;
+  /**
    * Observability name, recorded in the Restate journal.
    */
   name?: string;
 };
+
+/**
+ * A context for making RPC calls within a specific scope.
+ *
+ * @see {@link Context.scope}
+ * @experimental
+ * @interface
+ */
+export type ScopedContext = Pick<
+  Context,
+  | "serviceClient"
+  | "serviceSendClient"
+  | "workflowClient"
+  | "workflowSendClient"
+>;
 
 /**
  * The context that gives access to all Restate-backed operations, for example
@@ -562,6 +629,49 @@ export interface Context extends RestateContext {
     obj: VirtualObjectDefinitionFrom<D>,
     key: string
   ): SendClient<VirtualObject<D>>;
+
+  /**
+   * Returns a {@link ScopedContext} that routes all outgoing calls within the given scope.
+   *
+   * **NOTE:** This API is in preview and is not enabled by default.
+   * To use it in restate-server 1.7, enable the flow control and protocol v7 experimental features,
+   * via `RESTATE_EXPERIMENTAL_ENABLE_PROTOCOL_V7=true` and `RESTATE_EXPERIMENTAL_ENABLE_VQUEUES=true`.
+   * These can be enabled only on **new clusters**, for more info check out https://docs.restate.dev/services/flow-control#enabling-flow-control.
+   * If these experimental features aren't enabled, the call fails with a retryable error and keeps retrying until they are.
+   *
+   * A scope is a sub-grouping of resources (invocations, virtual object instances, workflow
+   * instances, concurrency limits) within the Restate cluster.
+   * It becomes part of the target identity tuple:
+   * - `scope, service, handler, idempotencyKey?`
+   * - `scope, virtualObject, objectKey, handler, idempotencyKey?`
+   * - `scope, workflow, workflowKey, handler`
+   *
+   * Under the hood, the scope contributes to the partition key, so all resources in a scope get co-located by the restate-server.
+   *
+   * Omitting the scope (i.e. using the regular `serviceClient` / `workflowClient` methods)
+   * is equivalent to calling with no scope, which is the existing behavior.
+   *
+   * The scope key must consist only of `[a-zA-Z0-9_.-]` characters, with 1 <= length <= 36 chars.
+   *
+   * @example
+   * ```ts
+   * // Route a call into a named scope
+   * await ctx.scope("tenant-123").serviceClient(MyService).process(payload);
+   *
+   * // Idempotency keys are scoped — "req-1" in "tenant-123" is distinct from "req-1" in "tenant-456"
+   * await ctx.scope("tenant-123").serviceClient(MyService)
+   *   .process(payload, rpc.opts({ idempotencyKey: "req-1" }));
+   *
+   * // Combine with a limit key to enforce per-scope concurrency limits
+   * await ctx.scope("tenant-123").workflowClient(MyWorkflow, "wf-key")
+   *   .run(input, rpc.opts({ limitKey: "api-key/user42" }));
+   * ```
+   *
+   * @param scopeKey the scope identifier
+   * @see https://docs.restate.dev/services/flow-control
+   * @experimental
+   */
+  scope(scopeKey: string): ScopedContext;
 
   genericCall<REQ = Uint8Array, RES = Uint8Array>(
     call: GenericCall<REQ, RES>

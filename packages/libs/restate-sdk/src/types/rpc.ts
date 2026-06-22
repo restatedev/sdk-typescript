@@ -45,10 +45,46 @@ import type { HooksProvider } from "../hooks.js";
 // ----------- rpc clients -------------------------------------------------------
 
 export type ClientCallOptions<I, O> = {
+  /**
+   * Override input serde.
+   */
   input?: Serde<I>;
+  /**
+   * Override output serde.
+   */
   output?: Serde<O>;
-  headers?: Record<string, string>;
+
+  /**
+   * Idempotency key to use for this request.
+   */
   idempotencyKey?: string;
+
+  /**
+   * An optional concurrency limit key within the scope.
+   * A limit key can only be used in conjunction with a scope (see {@link Context.scope}).
+   *
+   * **NOTE:** This API is in preview and is not enabled by default.
+   * To use it in restate-server 1.7, enable the flow control and protocol v7 experimental features,
+   * via `RESTATE_EXPERIMENTAL_ENABLE_PROTOCOL_V7=true` and `RESTATE_EXPERIMENTAL_ENABLE_VQUEUES=true`.
+   * These can be enabled only on **new clusters**, for more info check out https://docs.restate.dev/services/flow-control#enabling-flow-control.
+   * When the experimental features are disabled, this method fails the invocation with a retryable error, causing the invocation to be retried until fixed.
+   *
+   * The limit key enforces hierarchical concurrency limits on invocations sharing the same scope.
+   * It can have one or two levels separated by `/` (e.g. `"tenant1"` or `"tenant1/user42"`).
+   * Each level must consist only of `[a-zA-Z0-9_.-]` characters, and 1 <= length <= 36.
+   *
+   * The limit key is **not** part of the request identity: two calls to the same target with the
+   * same scope and object key but different limit keys refer to the **same** resource instance.
+   * The limit key only affects concurrency limits, not resource identity.
+   *
+   * @experimental
+   */
+  limitKey?: string;
+
+  /**
+   * Add headers to the request, which the callee will be able to access using {@link Request.headers}.
+   */
+  headers?: Record<string, string>;
 
   /**
    * Observability name, recorded in the Restate journal.
@@ -74,7 +110,6 @@ export class Opts<I, O> {
 }
 
 export type ClientSendOptions<I> = {
-  input?: Serde<I>;
   /**
    * Makes a type-safe one-way RPC to the specified target service, after a delay specified by the
    * milliseconds' argument.
@@ -97,12 +132,47 @@ export type ClientSendOptions<I> = {
    *
    * @example
    * ```ts
-   * ctx.serviceSendClient(Service).anotherAction(1337, { delay: { seconds: 60 } });
+   * ctx.serviceSendClient(Service).anotherAction(1337, rpc.opts.sendOpts({ delay: { seconds: 60 } }));
    * ```
    */
   delay?: Duration | number;
-  headers?: Record<string, string>;
+
+  /**
+   * Override input serde.
+   */
+  input?: Serde<I>;
+
+  /**
+   * Idempotency key to use for this request.
+   */
   idempotencyKey?: string;
+
+  /**
+   * An optional concurrency limit key within the scope.
+   * A limit key can only be used in conjunction with a scope (see {@link Context.scope}).
+   *
+   * **NOTE:** This API is in preview and is not enabled by default.
+   * To use it in restate-server 1.7, enable the flow control and protocol v7 experimental features,
+   * via `RESTATE_EXPERIMENTAL_ENABLE_PROTOCOL_V7=true` and `RESTATE_EXPERIMENTAL_ENABLE_VQUEUES=true`.
+   * These can be enabled only on **new clusters**, for more info check out https://docs.restate.dev/services/flow-control#enabling-flow-control.
+   * When the experimental features are disabled, this method fails the invocation with a retryable error, causing the invocation to be retried until fixed.
+   *
+   * The limit key enforces hierarchical concurrency limits on invocations sharing the same scope.
+   * It can have one or two levels separated by `/` (e.g. `"tenant1"` or `"tenant1/user42"`).
+   * Each level must consist only of `[a-zA-Z0-9_.-]` characters, and 1 <= length <= 36.
+   *
+   * The limit key is **not** part of the request identity: two calls to the same target with the
+   * same scope and object key but different limit keys refer to the **same** resource instance.
+   * The limit key only affects concurrency limits, not resource identity.
+   *
+   * @experimental
+   */
+  limitKey?: string;
+
+  /**
+   * Add headers to the request, which the callee will be able to access using {@link Request.headers}.
+   */
+  headers?: Record<string, string>;
 
   /**
    * Observability name, recorded in the Restate journal.
@@ -182,7 +252,8 @@ export const makeRpcCallProxy = <T>(
   genericCall: (call: GenericCall<unknown, unknown>) => Promise<unknown>,
   defaultSerde: Serde<any>,
   service: string,
-  key?: string
+  key?: string,
+  scope?: string
 ): T => {
   const clientProxy = new Proxy(
     {},
@@ -204,6 +275,8 @@ export const makeRpcCallProxy = <T>(
             inputSerde: requestSerde,
             outputSerde: responseSerde,
             idempotencyKey: opts?.idempotencyKey,
+            scope,
+            limitKey: opts?.limitKey,
             name: opts?.name,
           });
         };
@@ -218,7 +291,8 @@ export const makeRpcSendProxy = <T>(
   genericSend: (send: GenericSend<unknown>) => void,
   defaultSerde: Serde<any>,
   service: string,
-  key?: string
+  key?: string,
+  scope?: string
 ): T => {
   const clientProxy = new Proxy(
     {},
@@ -238,6 +312,8 @@ export const makeRpcSendProxy = <T>(
             delay,
             inputSerde: requestSerde,
             idempotencyKey: opts?.idempotencyKey,
+            scope,
+            limitKey: opts?.limitKey,
             name: opts?.name,
           });
         };
@@ -1211,7 +1287,7 @@ export type ObjectOptions = ServiceOptions & {
  * endpoint.bind(counter)
  * ```
  *
- *  @see to interact with the object, you can use the object client:
+ * @example to interact with the object, you can use the object client:
  * ```ts
  * ...
  * const client = ctx.objectClient<typeof counter>({ name: "counter"});

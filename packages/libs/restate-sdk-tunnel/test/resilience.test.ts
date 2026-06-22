@@ -133,9 +133,7 @@ describe("startup readiness gate", () => {
       gate.resolve();
       await conn.ready;
       expect(fake.connections.length).toBe(1);
-      expect(logs.join("\n")).toMatch(
-        /tunnel: startup readiness gate passed/
-      );
+      expect(logs.join("\n")).toMatch(/tunnel: startup readiness gate passed/);
 
       const c0 = await fake.waitForConnection(0);
       const result = await roundtrip(c0.session, discoverReq());
@@ -185,7 +183,9 @@ describe("startup readiness gate", () => {
       const start = Date.now();
       await conn.close();
       expect(Date.now() - start).toBeLessThan(500);
-      await expect(conn.ready).rejects.toThrow(/closed before the first handshake/);
+      await expect(conn.ready).rejects.toThrow(
+        /closed before the first handshake/
+      );
       expect(conn.error).toBeUndefined();
       expect(fake.connections.length).toBe(0);
     } finally {

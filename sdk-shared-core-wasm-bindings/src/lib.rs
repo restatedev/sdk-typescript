@@ -393,6 +393,12 @@ pub struct WasmInput {
     #[wasm_bindgen(readonly)]
     pub key: String,
     #[wasm_bindgen(readonly)]
+    pub idempotency_key: Option<String>,
+    #[wasm_bindgen(readonly)]
+    pub scope: Option<String>,
+    #[wasm_bindgen(readonly)]
+    pub limit_key: Option<String>,
+    #[wasm_bindgen(readonly)]
     pub headers: Vec<WasmHeader>,
     #[wasm_bindgen(readonly)]
     pub input: Uint8Array,
@@ -405,6 +411,9 @@ impl From<Input> for WasmInput {
         WasmInput {
             invocation_id: value.invocation_id,
             key: value.key,
+            idempotency_key: value.idempotency_key,
+            scope: value.scope,
+            limit_key: value.limit_key,
             headers: value.headers.into_iter().map(Into::into).collect(),
             input: (&*value.input).into(),
             random_seed: value.random_seed,
@@ -782,6 +791,8 @@ impl WasmVM {
         key: Option<String>,
         headers: Vec<WasmHeader>,
         idempotency_key: Option<String>,
+        scope: Option<String>,
+        limit_key: Option<String>,
         name: Option<String>,
     ) -> Result<WasmCallHandle, WasmFailure> {
         use_log_dispatcher!(self, |vm| CoreVM::sys_call(
@@ -791,8 +802,8 @@ impl WasmVM {
                 handler,
                 key,
                 idempotency_key,
-                scope: None,
-                limit_key: None,
+                scope,
+                limit_key,
                 headers: headers.into_iter().map(Header::from).collect(),
             },
             buffer.to_vec().into(),
@@ -813,6 +824,8 @@ impl WasmVM {
         headers: Vec<WasmHeader>,
         delay: Option<u64>,
         idempotency_key: Option<String>,
+        scope: Option<String>,
+        limit_key: Option<String>,
         name: Option<String>,
     ) -> Result<WasmSendHandle, WasmFailure> {
         use_log_dispatcher!(self, |vm| CoreVM::sys_send(
@@ -822,8 +835,8 @@ impl WasmVM {
                 handler,
                 key,
                 idempotency_key,
-                scope: None,
-                limit_key: None,
+                scope,
+                limit_key,
                 headers: headers.into_iter().map(Header::from).collect(),
             },
             buffer.to_vec().into(),

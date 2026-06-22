@@ -143,7 +143,9 @@ export class Supervisor {
     } catch (err) {
       if (this.stopping || this.wake.signal.aborted) return false;
       const reason = err instanceof Error ? err.message : String(err);
-      this.fatal = new Error(`tunnel: startup readiness gate failed: ${reason}`);
+      this.fatal = new Error(
+        `tunnel: startup readiness gate failed: ${reason}`
+      );
       this.log(
         `tunnel: FATAL — startup readiness gate failed: ${reason}; stopping all connections`
       );
