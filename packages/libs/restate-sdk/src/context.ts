@@ -90,11 +90,25 @@ export interface Request {
 
   /**
    * The scope key with which this invocation was submitted, if any.
+   *
+   * *NOTE:* This API is experimental. To use it you need a restate-server >= 1.7,
+   * configured to enable
+   * [service protocol v7](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#service-protocol-v7)
+   * and [flow control](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#flow-control).
+   *
+   * @experimental
    */
   readonly scope?: string;
 
   /**
    * The limit key with which this invocation was submitted, if any.
+   *
+   * *NOTE:* This API is experimental. To use it you need a restate-server >= 1.7,
+   * configured to enable
+   * [service protocol v7](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#service-protocol-v7)
+   * and [flow control](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#flow-control).
+   *
+   * @experimental
    */
   readonly limitKey?: string;
 
@@ -246,7 +260,27 @@ export type GenericCall<REQ, RES> = {
   inputSerde?: Serde<REQ>;
   outputSerde?: Serde<RES>;
   idempotencyKey?: string;
+  /**
+   * Route this request within the given scope. See {@link Context.scope}.
+   *
+   * *NOTE:* This API is experimental. To use it you need a restate-server >= 1.7,
+   * configured to enable
+   * [service protocol v7](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#service-protocol-v7)
+   * and [flow control](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#flow-control).
+   *
+   * @experimental
+   */
   scope?: string;
+  /**
+   * An optional concurrency limit key within the scope. Requires `scope` to be set.
+   *
+   * *NOTE:* This API is experimental. To use it you need a restate-server >= 1.7,
+   * configured to enable
+   * [service protocol v7](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#service-protocol-v7)
+   * and [flow control](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#flow-control).
+   *
+   * @experimental
+   */
   limitKey?: string;
   /**
    * Observability name, recorded in the Restate journal.
@@ -268,7 +302,27 @@ export type GenericSend<REQ> = {
   inputSerde?: Serde<REQ>;
   delay?: Duration | number;
   idempotencyKey?: string;
+  /**
+   * Route this request within the given scope. See {@link Context.scope}.
+   *
+   * *NOTE:* This API is experimental. To use it you need a restate-server >= 1.7,
+   * configured to enable
+   * [service protocol v7](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#service-protocol-v7)
+   * and [flow control](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#flow-control).
+   *
+   * @experimental
+   */
   scope?: string;
+  /**
+   * An optional concurrency limit key within the scope. Requires `scope` to be set.
+   *
+   * *NOTE:* This API is experimental. To use it you need a restate-server >= 1.7,
+   * configured to enable
+   * [service protocol v7](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#service-protocol-v7)
+   * and [flow control](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#flow-control).
+   *
+   * @experimental
+   */
   limitKey?: string;
   /**
    * Observability name, recorded in the Restate journal.
@@ -282,6 +336,13 @@ export type GenericSend<REQ> = {
  *
  * All invocations made through a `ScopedContext` carry the scope key as part of their identity.
  * See {@link Context.scope} for a full description of scopes.
+ *
+ * *NOTE:* This API is experimental. To use it you need a restate-server >= 1.7,
+ * configured to enable
+ * [service protocol v7](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#service-protocol-v7)
+ * and [flow control](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#flow-control).
+ *
+ * @experimental
  */
 export interface ScopedContext {
   serviceClient<D>(opts: ServiceDefinitionFrom<D>): Client<Service<D>>;
@@ -531,6 +592,11 @@ export interface Context extends RestateContext {
    *
    * The scope key must consist only of `[a-zA-Z0-9_.-]` characters and be non-empty.
    *
+   * *NOTE:* This API is experimental. To use it you need a restate-server >= 1.7,
+   * configured to enable
+   * [service protocol v7](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#service-protocol-v7)
+   * and [flow control](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#flow-control).
+   *
    * @example
    * ```ts
    * // Route a call into a named scope
@@ -546,6 +612,7 @@ export interface Context extends RestateContext {
    * ```
    *
    * @param scopeKey the scope identifier; must match `[a-zA-Z0-9_.-]+`
+   * @experimental
    */
   scope(scopeKey: string): ScopedContext;
 

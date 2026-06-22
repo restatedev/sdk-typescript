@@ -63,6 +63,13 @@ export type ClientCallOptions<I, O> = {
    * The limit key is **not** part of the request identity: two calls to the same target with the
    * same scope and object key but different limit keys refer to the **same** resource instance.
    * The limit key only affects concurrency limits, not resource addressing.
+   *
+   * *NOTE:* This API is experimental. To use it you need a restate-server >= 1.7,
+   * configured to enable
+   * [service protocol v7](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#service-protocol-v7)
+   * and [flow control](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#flow-control).
+   *
+   * @experimental
    */
   limitKey?: string;
 
@@ -133,6 +140,13 @@ export type ClientSendOptions<I> = {
    * The limit key is **not** part of the request identity: two calls to the same target with the
    * same scope and object key but different limit keys refer to the **same** resource instance.
    * The limit key only affects concurrency limits, not resource addressing.
+   *
+   * *NOTE:* This API is experimental. To use it you need a restate-server >= 1.7,
+   * configured to enable
+   * [service protocol v7](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#service-protocol-v7)
+   * and [flow control](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#flow-control).
+   *
+   * @experimental
    */
   limitKey?: string;
 

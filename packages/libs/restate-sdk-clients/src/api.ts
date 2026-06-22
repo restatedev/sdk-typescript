@@ -92,6 +92,16 @@ export interface Ingress {
     handler: string;
     parameter: I;
     key?: string;
+    /**
+     * Route this call within the given scope. See {@link Ingress.scope}.
+     *
+     * *NOTE:* This API is experimental. To use it you need a restate-server >= 1.7,
+     * configured to enable
+     * [service protocol v7](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#service-protocol-v7)
+     * and [flow control](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#flow-control).
+     *
+     * @experimental
+     */
     scope?: string;
     opts?: Opts<I, O>;
   }): Promise<O>;
@@ -102,6 +112,16 @@ export interface Ingress {
     handler: string;
     parameter: I;
     key?: string;
+    /**
+     * Route this send within the given scope. See {@link Ingress.scope}.
+     *
+     * *NOTE:* This API is experimental. To use it you need a restate-server >= 1.7,
+     * configured to enable
+     * [service protocol v7](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#service-protocol-v7)
+     * and [flow control](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#flow-control).
+     *
+     * @experimental
+     */
     scope?: string;
     opts?: SendOpts<I>;
   }): Promise<Send>;
@@ -115,7 +135,13 @@ export interface Ingress {
    *
    * The scope key must consist only of `[a-zA-Z0-9_.-]` characters and be non-empty.
    *
+   * *NOTE:* This API is experimental. To use it you need a restate-server >= 1.7,
+   * configured to enable
+   * [service protocol v7](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#service-protocol-v7)
+   * and [flow control](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#flow-control).
+   *
    * @param scopeKey the scope identifier; must match `[a-zA-Z0-9_.-]+`
+   * @experimental
    */
   scope(scopeKey: string): ScopedIngress;
 }
@@ -126,6 +152,13 @@ export interface Ingress {
  *
  * All invocations made through a `ScopedIngress` carry the scope key as part of their identity.
  * See {@link Ingress.scope} for a full description of scopes.
+ *
+ * *NOTE:* This API is experimental. To use it you need a restate-server >= 1.7,
+ * configured to enable
+ * [service protocol v7](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#service-protocol-v7)
+ * and [flow control](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#flow-control).
+ *
+ * @experimental
  */
 export interface ScopedIngress {
   serviceClient<D>(opts: ServiceDefinitionFrom<D>): IngressClient<Service<D>>;
@@ -161,6 +194,13 @@ export interface IngressCallOptions<I = unknown, O = unknown> {
    * The limit key only affects concurrency limits, not resource addressing.
    *
    * Sent as the `x-restate-limit-key` HTTP header.
+   *
+   * *NOTE:* This API is experimental. To use it you need a restate-server >= 1.7,
+   * configured to enable
+   * [service protocol v7](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#service-protocol-v7)
+   * and [flow control](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#flow-control).
+   *
+   * @experimental
    */
   limitKey?: string;
 
