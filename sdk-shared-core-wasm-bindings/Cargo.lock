@@ -298,8 +298,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ff2abc00be7fca6ebc474524697ae276ad847ad0a6b3faa4bcb027e9a4614ad0"
 dependencies = [
  "cfg-if",
+ "js-sys",
  "libc",
  "wasi",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -622,8 +624,9 @@ dependencies = [
 
 [[package]]
 name = "restate-sdk-shared-core"
-version = "0.10.0"
-source = "git+https://github.com/restatedev/sdk-shared-core.git?rev=abf2f20c0f02e3cf6a2f06b2d4ed7cfb8bd8f007#abf2f20c0f02e3cf6a2f06b2d4ed7cfb8bd8f007"
+version = "7.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9bf02583379fc28d6386bd864629ba6553ce942124956b862fa9e95a4d836558"
 dependencies = [
  "base64",
  "bs58",
@@ -689,8 +692,8 @@ name = "sdk-shared-core-wasm-bindings"
 version = "0.1.0"
 dependencies = [
  "console_error_panic_hook",
+ "getrandom",
  "js-sys",
- "jsonwebtoken",
  "restate-sdk-shared-core",
  "serde",
  "serde_bytes",

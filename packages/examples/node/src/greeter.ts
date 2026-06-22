@@ -15,6 +15,7 @@ const greeter = service({
   name: "greeter",
   handlers: {
     greet: async (ctx: Context, name: string) => {
+      ctx.scope("");
       return `Hello ${name}`;
     },
   },

@@ -128,9 +128,8 @@ const discoverReq = () => ({
 async function openHeldInvocation(session: http2.ClientHttp2Session) {
   const disc = await roundtrip(session, discoverReq());
   expect(disc.status).toBe(200);
-  const maxVersion = (
-    JSON.parse(disc.body) as { maxProtocolVersion: number }
-  ).maxProtocolVersion;
+  const maxVersion = (JSON.parse(disc.body) as { maxProtocolVersion: number })
+    .maxProtocolVersion;
   const invokePath = "/invoke/greeter/greet";
   const held = session.request(
     {
@@ -288,9 +287,9 @@ describe("client-initiated graceful shutdown", () => {
       // drain rather than being treated as unprocessed by the peer.
       expect(goaway.lastStreamID).toBeGreaterThanOrEqual(heldStreamID);
       expect(shutdownDone).toBe(false);
-      await expect(roundtrip(c0.session, discoverReq())).rejects.toMatchObject(
-        { code: "ERR_HTTP2_GOAWAY_SESSION" }
-      );
+      await expect(roundtrip(c0.session, discoverReq())).rejects.toMatchObject({
+        code: "ERR_HTTP2_GOAWAY_SESSION",
+      });
 
       held.close();
       await done;
@@ -362,13 +361,13 @@ describe("client-initiated graceful shutdown", () => {
     const exitCalled = new Promise<void>((resolve) => {
       resolveExit = resolve;
     });
-    const exitSpy = vi
-      .spyOn(process, "exit")
-      .mockImplementation(((code?: string | number | null | undefined) => {
-        exitCode = code;
-        resolveExit();
-        return undefined as never;
-      }) as typeof process.exit);
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(((
+      code?: string | number | null | undefined
+    ) => {
+      exitCode = code;
+      resolveExit();
+      return undefined as never;
+    }) as typeof process.exit);
     try {
       await conn.ready;
       const c0 = await fake.waitForConnection(0);
@@ -381,7 +380,10 @@ describe("client-initiated graceful shutdown", () => {
       expect(exitSpy).not.toHaveBeenCalled();
 
       held.close();
-      await withTimeout(exitCalled, "SIGTERM handler did not call process.exit");
+      await withTimeout(
+        exitCalled,
+        "SIGTERM handler did not call process.exit"
+      );
       expect(exitCode).toBe(0);
       await waitForClose(c0.session);
     } finally {
@@ -407,13 +409,13 @@ describe("client-initiated graceful shutdown", () => {
     const exitCalled = new Promise<void>((resolve) => {
       resolveExit = resolve;
     });
-    const exitSpy = vi
-      .spyOn(process, "exit")
-      .mockImplementation(((code?: string | number | null | undefined) => {
-        exitCode = code;
-        resolveExit();
-        return undefined as never;
-      }) as typeof process.exit);
+    const exitSpy = vi.spyOn(process, "exit").mockImplementation(((
+      code?: string | number | null | undefined
+    ) => {
+      exitCode = code;
+      resolveExit();
+      return undefined as never;
+    }) as typeof process.exit);
     try {
       await Promise.all([conn1.ready, conn2.ready]);
       const c1 = await fake1.waitForConnection(0);
@@ -436,7 +438,10 @@ describe("client-initiated graceful shutdown", () => {
       expect(exitSpy).not.toHaveBeenCalled();
 
       held2.close();
-      await withTimeout(exitCalled, "SIGTERM handler did not call process.exit");
+      await withTimeout(
+        exitCalled,
+        "SIGTERM handler did not call process.exit"
+      );
       expect(exitCode).toBe(0);
       await Promise.all([waitForClose(c1.session), waitForClose(c2.session)]);
     } finally {

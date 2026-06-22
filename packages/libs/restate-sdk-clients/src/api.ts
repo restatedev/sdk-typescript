@@ -99,6 +99,8 @@ export interface Ingress {
      * configured to enable
      * [service protocol v7](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#service-protocol-v7)
      * and [flow control](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#flow-control).
+     * For example, start the restate-server with the environment variables
+     * `RESTATE_EXPERIMENTAL_ENABLE_PROTOCOL_V7=true` and `RESTATE_EXPERIMENTAL_ENABLE_VQUEUES=true`.
      *
      * @experimental
      */
@@ -119,6 +121,8 @@ export interface Ingress {
      * configured to enable
      * [service protocol v7](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#service-protocol-v7)
      * and [flow control](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#flow-control).
+     * For example, start the restate-server with the environment variables
+     * `RESTATE_EXPERIMENTAL_ENABLE_PROTOCOL_V7=true` and `RESTATE_EXPERIMENTAL_ENABLE_VQUEUES=true`.
      *
      * @experimental
      */
@@ -129,47 +133,58 @@ export interface Ingress {
   /**
    * Returns a {@link ScopedIngress} that routes all calls within the given scope.
    *
+   * **NOTE:** This API is in preview and is not enabled by default.
+   * To use it in restate-server 1.7, enable the flow control and protocol v7 experimental features,
+   * via `RESTATE_EXPERIMENTAL_ENABLE_PROTOCOL_V7=true` and `RESTATE_EXPERIMENTAL_ENABLE_VQUEUES=true`.
+   * These can be enabled only on **new clusters**, for more info check out https://docs.restate.dev/services/flow-control#enabling-flow-control.
+   * When the experimental features are not enabled, this method fails the invocation with a retryable error, causing the invocation to be retried until fixed.
+   *
    * A scope is a sub-grouping of resources (invocations, virtual object instances, workflow
-   * instances, concurrency limits) within the Restate cluster. The scope key contributes to
-   * the partition key, so all resources in a scope are co-located.
+   * instances, concurrency limits) within the Restate cluster.
+   * It becomes part of the target identity tuple:
+   * - `scope, service, handler, idempotencyKey?`
+   * - `scope, virtualObject, objectKey, handler, idempotencyKey?`
+   * - `scope, workflow, workflowKey, handler`
    *
-   * The scope key must consist only of `[a-zA-Z0-9_.-]` characters and be non-empty.
+   * Under the hood, the scope contributes to the partition key, so all resources in a scope get co-located by the restate-server.
    *
-   * *NOTE:* This API is experimental. To use it you need a restate-server >= 1.7,
-   * configured to enable
-   * [service protocol v7](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#service-protocol-v7)
-   * and [flow control](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#flow-control).
+   * Omitting the scope (i.e. using the regular `serviceClient` / `workflowClient` methods)
+   * is equivalent to calling with no scope, which is the existing behavior.
    *
-   * @param scopeKey the scope identifier; must match `[a-zA-Z0-9_.-]+`
+   * The scope key must consist only of `[a-zA-Z0-9_.-]` characters, with 1 <= length <= 36 chars.
+   *
+   * @example
+   * ```ts
+   * // Route a call into a named scope
+   * await ingress.scope("tenant-123").serviceClient(MyService).process(payload);
+   *
+   * // Idempotency keys are scoped — "req-1" in "tenant-123" is distinct from "req-1" in "tenant-456"
+   * await ingress.scope("tenant-123").serviceClient(MyService)
+   *   .process(payload, rpc.opts({ idempotencyKey: "req-1" }));
+   *
+   * // Combine with a limit key to enforce per-scope concurrency limits
+   * await ingress.scope("tenant-123").workflowClient(MyWorkflow, "wf-key")
+   *   .run(input, rpc.opts({ limitKey: "api-key/user42" }));
+   * ```
+   *
+   * @param scopeKey the scope identifier
+   * @see https://docs.restate.dev/services/flow-control
    * @experimental
    */
   scope(scopeKey: string): ScopedIngress;
 }
 
 /**
- * An ingress client for making calls within a specific scope.
- * Obtain via {@link Ingress.scope}.
+ * An ingress client for making RPC calls within a specific scope.
  *
- * All invocations made through a `ScopedIngress` carry the scope key as part of their identity.
- * See {@link Ingress.scope} for a full description of scopes.
- *
- * *NOTE:* This API is experimental. To use it you need a restate-server >= 1.7,
- * configured to enable
- * [service protocol v7](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#service-protocol-v7)
- * and [flow control](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#flow-control).
- *
+ * @see {@link Ingress.scope}
  * @experimental
+ * @interface
  */
-export interface ScopedIngress {
-  serviceClient<D>(opts: ServiceDefinitionFrom<D>): IngressClient<Service<D>>;
-  serviceSendClient<D>(
-    opts: ServiceDefinitionFrom<D>
-  ): IngressSendClient<Service<D>>;
-  workflowClient<D>(
-    opts: WorkflowDefinitionFrom<D>,
-    key: string
-  ): IngressWorkflowClient<Workflow<D>>;
-}
+export type ScopedIngress = Pick<
+  Ingress,
+  "serviceClient" | "serviceSendClient" | "workflowClient"
+>;
 
 export interface IngressCallOptions<I = unknown, O = unknown> {
   /**
@@ -181,24 +196,21 @@ export interface IngressCallOptions<I = unknown, O = unknown> {
 
   /**
    * An optional concurrency limit key within the scope.
+   * A limit key can only be used in conjunction with a scope (see {@link Ingress.scope}).
+   *
+   * **NOTE:** This API is in preview and is not enabled by default.
+   * To use it in restate-server 1.7, enable the flow control and protocol v7 experimental features,
+   * via `RESTATE_EXPERIMENTAL_ENABLE_PROTOCOL_V7=true` and `RESTATE_EXPERIMENTAL_ENABLE_VQUEUES=true`.
+   * These can be enabled only on **new clusters**, for more info check out https://docs.restate.dev/services/flow-control#enabling-flow-control.
+   * When the experimental features are not enabled, this method fails the invocation with a retryable error, causing the invocation to be retried until fixed.
    *
    * The limit key enforces hierarchical concurrency limits on invocations sharing the same scope.
    * It can have one or two levels separated by `/` (e.g. `"tenant1"` or `"tenant1/user42"`).
-   * Each level must consist only of `[a-zA-Z0-9_.-]` characters and be non-empty.
-   *
-   * Requires a scope to be set (via {@link Ingress.scope} or the `scope` field on `call`/`send`).
-   * Requests that carry a limit key but no scope will be rejected by the runtime.
+   * Each level must consist only of `[a-zA-Z0-9_.-]` characters, and 1 <= length <= 36.
    *
    * The limit key is **not** part of the request identity: two calls to the same target with the
    * same scope and object key but different limit keys refer to the **same** resource instance.
-   * The limit key only affects concurrency limits, not resource addressing.
-   *
-   * Sent as the `x-restate-limit-key` HTTP header.
-   *
-   * *NOTE:* This API is experimental. To use it you need a restate-server >= 1.7,
-   * configured to enable
-   * [service protocol v7](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#service-protocol-v7)
-   * and [flow control](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#flow-control).
+   * The limit key only affects concurrency limits, not resource identity.
    *
    * @experimental
    */

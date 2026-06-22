@@ -7,7 +7,9 @@
     "packages/libs/restate-sdk-clients",
     "packages/libs/restate-sdk-opentelemetry",
     "packages/libs/restate-sdk-testcontainers",
-    "packages/libs/restate-sdk-zod"
+    "packages/libs/restate-sdk-zod",
+    "packages/libs/restate-sdk-gen",
+    "packages/libs/restate-sdk-tunnel"
   ],
   "entryPointStrategy": "packages",
   "packageOptions": {

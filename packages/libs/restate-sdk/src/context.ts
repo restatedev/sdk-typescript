@@ -9,7 +9,10 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import type { Client, SendClient } from "./types/rpc.js";
+import type { Client, SendClient,
+  //eslint-disable-next-line @typescript-eslint/no-unused-vars
+  ClientCallOptions
+} from "./types/rpc.js";
 import type {
   RestateContext,
   RestateObjectContext,
@@ -91,11 +94,7 @@ export interface Request {
   /**
    * The scope key with which this invocation was submitted, if any.
    *
-   * *NOTE:* This API is experimental. To use it you need a restate-server >= 1.7,
-   * configured to enable
-   * [service protocol v7](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#service-protocol-v7)
-   * and [flow control](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#flow-control).
-   *
+   * @see {@link Context.scope}
    * @experimental
    */
   readonly scope?: string;
@@ -103,11 +102,7 @@ export interface Request {
   /**
    * The limit key with which this invocation was submitted, if any.
    *
-   * *NOTE:* This API is experimental. To use it you need a restate-server >= 1.7,
-   * configured to enable
-   * [service protocol v7](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#service-protocol-v7)
-   * and [flow control](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#flow-control).
-   *
+   * @see {@link ClientCallOptions.limitKey}
    * @experimental
    */
   readonly limitKey?: string;
@@ -261,24 +256,15 @@ export type GenericCall<REQ, RES> = {
   outputSerde?: Serde<RES>;
   idempotencyKey?: string;
   /**
-   * Route this request within the given scope. See {@link Context.scope}.
+   * Scope of the request target.
    *
-   * *NOTE:* This API is experimental. To use it you need a restate-server >= 1.7,
-   * configured to enable
-   * [service protocol v7](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#service-protocol-v7)
-   * and [flow control](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#flow-control).
-   *
-   * @experimental
+   * @see {@link Context.scope}.
    */
   scope?: string;
   /**
-   * An optional concurrency limit key within the scope. Requires `scope` to be set.
+   * Limit key to use within the scope. Requires `scope` to be set.
    *
-   * *NOTE:* This API is experimental. To use it you need a restate-server >= 1.7,
-   * configured to enable
-   * [service protocol v7](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#service-protocol-v7)
-   * and [flow control](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#flow-control).
-   *
+   * @see {@link ClientCallOptions.limitKey}.
    * @experimental
    */
   limitKey?: string;
@@ -303,24 +289,15 @@ export type GenericSend<REQ> = {
   delay?: Duration | number;
   idempotencyKey?: string;
   /**
-   * Route this request within the given scope. See {@link Context.scope}.
+   * Scope of the request target.
    *
-   * *NOTE:* This API is experimental. To use it you need a restate-server >= 1.7,
-   * configured to enable
-   * [service protocol v7](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#service-protocol-v7)
-   * and [flow control](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#flow-control).
-   *
-   * @experimental
+   * @see {@link Context.scope}.
    */
   scope?: string;
   /**
-   * An optional concurrency limit key within the scope. Requires `scope` to be set.
+   * Limit key to use within the scope. Requires `scope` to be set.
    *
-   * *NOTE:* This API is experimental. To use it you need a restate-server >= 1.7,
-   * configured to enable
-   * [service protocol v7](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#service-protocol-v7)
-   * and [flow control](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#flow-control).
-   *
+   * @see {@link ClientCallOptions.limitKey}.
    * @experimental
    */
   limitKey?: string;
@@ -332,32 +309,18 @@ export type GenericSend<REQ> = {
 
 /**
  * A context for making RPC calls within a specific scope.
- * Obtain via {@link Context.scope}.
  *
- * All invocations made through a `ScopedContext` carry the scope key as part of their identity.
- * See {@link Context.scope} for a full description of scopes.
- *
- * *NOTE:* This API is experimental. To use it you need a restate-server >= 1.7,
- * configured to enable
- * [service protocol v7](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#service-protocol-v7)
- * and [flow control](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#flow-control).
- *
+ * @see {@link Context.scope}
  * @experimental
+ * @interface
  */
-export interface ScopedContext {
-  serviceClient<D>(opts: ServiceDefinitionFrom<D>): Client<Service<D>>;
-  serviceSendClient<D>(
-    service: ServiceDefinitionFrom<D>
-  ): SendClient<Service<D>>;
-  workflowClient<D>(
-    opts: WorkflowDefinitionFrom<D>,
-    key: string
-  ): Client<Workflow<D>>;
-  workflowSendClient<D>(
-    opts: WorkflowDefinitionFrom<D>,
-    key: string
-  ): SendClient<Workflow<D>>;
-}
+export type ScopedContext = Pick<
+  Context,
+  | "serviceClient"
+  | "serviceSendClient"
+  | "workflowClient"
+  | "workflowSendClient"
+>;
 
 /**
  * The context that gives access to all Restate-backed operations, for example
@@ -576,47 +539,6 @@ export interface Context extends RestateContext {
   serviceClient<D>(opts: ServiceDefinitionFrom<D>): Client<Service<D>>;
 
   /**
-   * Returns a {@link ScopedContext} that routes all outgoing calls within the given scope.
-   *
-   * A scope is a sub-grouping of resources (invocations, virtual object instances, workflow
-   * instances, concurrency limits) within the Restate cluster. The scope key contributes to
-   * the partition key, so all resources in a scope are co-located.
-   *
-   * The scope key becomes part of the target identity tuple:
-   * - `scope, service, handler, idempotencyKey?`
-   * - `scope, virtualObject, objectKey, handler, idempotencyKey?`
-   * - `scope, workflow, workflowKey, handler`
-   *
-   * Omitting the scope (i.e. using the regular `serviceClient` / `workflowClient` methods)
-   * is equivalent to calling with no scope, which is the existing behavior.
-   *
-   * The scope key must consist only of `[a-zA-Z0-9_.-]` characters and be non-empty.
-   *
-   * *NOTE:* This API is experimental. To use it you need a restate-server >= 1.7,
-   * configured to enable
-   * [service protocol v7](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#service-protocol-v7)
-   * and [flow control](https://github.com/restatedev/restate/blob/main/release-notes/v1.7.0.md#flow-control).
-   *
-   * @example
-   * ```ts
-   * // Route a call into a named scope
-   * await ctx.scope("tenant-123").serviceClient(MyService).process(payload);
-   *
-   * // Idempotency keys are scoped — "req-1" in "tenant-123" is distinct from "req-1" in "tenant-456"
-   * await ctx.scope("tenant-123").serviceClient(MyService)
-   *   .process(payload, rpc.opts({ idempotencyKey: "req-1" }));
-   *
-   * // Combine with a limit key to enforce per-scope concurrency limits
-   * await ctx.scope("tenant-123").workflowClient(MyWorkflow, "wf-key")
-   *   .run(input, rpc.opts({ limitKey: "api-key/user42" }));
-   * ```
-   *
-   * @param scopeKey the scope identifier; must match `[a-zA-Z0-9_.-]+`
-   * @experimental
-   */
-  scope(scopeKey: string): ScopedContext;
-
-  /**
    * Same as {@link serviceClient} but for virtual objects.
    *
    * @param opts
@@ -705,6 +627,49 @@ export interface Context extends RestateContext {
     obj: VirtualObjectDefinitionFrom<D>,
     key: string
   ): SendClient<VirtualObject<D>>;
+
+  /**
+   * Returns a {@link ScopedContext} that routes all outgoing calls within the given scope.
+   *
+   * **NOTE:** This API is in preview and is not enabled by default.
+   * To use it in restate-server 1.7, enable the flow control and protocol v7 experimental features,
+   * via `RESTATE_EXPERIMENTAL_ENABLE_PROTOCOL_V7=true` and `RESTATE_EXPERIMENTAL_ENABLE_VQUEUES=true`.
+   * These can be enabled only on **new clusters**, for more info check out https://docs.restate.dev/services/flow-control#enabling-flow-control.
+   * When the experimental features are not enabled, this method fails the invocation with a retryable error, causing the invocation to be retried until fixed.
+   *
+   * A scope is a sub-grouping of resources (invocations, virtual object instances, workflow
+   * instances, concurrency limits) within the Restate cluster.
+   * It becomes part of the target identity tuple:
+   * - `scope, service, handler, idempotencyKey?`
+   * - `scope, virtualObject, objectKey, handler, idempotencyKey?`
+   * - `scope, workflow, workflowKey, handler`
+   *
+   * Under the hood, the scope contributes to the partition key, so all resources in a scope get co-located by the restate-server.
+   *
+   * Omitting the scope (i.e. using the regular `serviceClient` / `workflowClient` methods)
+   * is equivalent to calling with no scope, which is the existing behavior.
+   *
+   * The scope key must consist only of `[a-zA-Z0-9_.-]` characters, with 1 <= length <= 36 chars.
+   *
+   * @example
+   * ```ts
+   * // Route a call into a named scope
+   * await ctx.scope("tenant-123").serviceClient(MyService).process(payload);
+   *
+   * // Idempotency keys are scoped — "req-1" in "tenant-123" is distinct from "req-1" in "tenant-456"
+   * await ctx.scope("tenant-123").serviceClient(MyService)
+   *   .process(payload, rpc.opts({ idempotencyKey: "req-1" }));
+   *
+   * // Combine with a limit key to enforce per-scope concurrency limits
+   * await ctx.scope("tenant-123").workflowClient(MyWorkflow, "wf-key")
+   *   .run(input, rpc.opts({ limitKey: "api-key/user42" }));
+   * ```
+   *
+   * @param scopeKey the scope identifier
+   * @see https://docs.restate.dev/services/flow-control
+   * @experimental
+   */
+  scope(scopeKey: string): ScopedContext;
 
   genericCall<REQ = Uint8Array, RES = Uint8Array>(
     call: GenericCall<REQ, RES>

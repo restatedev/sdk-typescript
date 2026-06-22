@@ -148,9 +148,7 @@ export async function resolveTargets(spec: {
     if (result.status === "rejected") {
       const code = (result.reason as NodeJS.ErrnoException | undefined)?.code;
       if (code === "ENOTFOUND" || code === "ENODATA") {
-        log(
-          `tunnel: SRV target ${r.name}:${r.port} has no address (${code})`
-        );
+        log(`tunnel: SRV target ${r.name}:${r.port} has no address (${code})`);
         continue; // negative answer: this SRV target genuinely has no address
       }
       // Transport error — fail the whole resolution so the supervisor
