@@ -11,6 +11,8 @@ import type * as clients from "@restatedev/restate-sdk-clients";
 import type {
   MemoryInvocationResult,
   MemoryLoadInput,
+  RunClosureRetentionInput,
+  RunClosureRetentionResult,
 } from "../src/memory_leak.js";
 
 export interface InvocationStatusCounts {
@@ -65,6 +67,9 @@ export interface MemoryLeakSendClient {
   hookAndRunHook(
     input: MemoryLoadInput
   ): Promise<clients.Send<MemoryInvocationResult>>;
+  runClosureRetention(
+    input: RunClosureRetentionInput
+  ): Promise<clients.Send<RunClosureRetentionResult>>;
   abortTimeoutZero(input: MemoryLoadInput): Promise<clients.Send<void>>;
 }
 
