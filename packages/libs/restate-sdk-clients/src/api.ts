@@ -458,8 +458,8 @@ export type RetryFailure =
       readonly status: number;
       readonly headers: Headers;
       /**
-       * The response body, decoded as text. Present (possibly empty) for
-       * response failures; absent only when the body could not be read.
+       * The response body, decoded as text, when the response carried a
+       * non-empty body; `undefined` otherwise.
        */
       readonly body?: string;
     };

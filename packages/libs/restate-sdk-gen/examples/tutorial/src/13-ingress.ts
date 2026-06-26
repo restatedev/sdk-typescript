@@ -73,13 +73,16 @@ export async function runIngressDemo(url: string = INGRESS_URL) {
 
   // 4) Custom retry decision. shouldRetry replaces the built-in rule; compose
   //    with defaultShouldRetry to narrow it — here we keep the defaults but
-  //    never retry a 501, and inspect the body when one is present.
+  //    bail when the response body marks the failure as terminal. The body is
+  //    available on response failures when one was present.
   const tuned = clients.connect({
     url,
     retry: {
       shouldRetry: (failure) =>
         clients.defaultShouldRetry(failure) &&
-        !(failure.kind === "response" && failure.status === 501),
+        !(
+          failure.kind === "response" && failure.body?.includes("do-not-retry")
+        ),
     },
   });
   await clients
