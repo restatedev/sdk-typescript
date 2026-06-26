@@ -13,6 +13,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   abortableSleep,
   backoffDelay,
+  defaultShouldRetry,
   isRetryableStatus,
   parseRetryAfter,
   resolveRetryPolicy,
@@ -21,17 +22,21 @@ import { connect, HttpCallError } from "./ingress.js";
 import { Opts, type RetryPolicy } from "./api.js";
 
 describe("resolveRetryPolicy", () => {
-  it("returns the default policy when unset", () => {
-    expect(resolveRetryPolicy(undefined)).toEqual({
+  it("is disabled (undefined) when unset — retries are opt-in", () => {
+    expect(resolveRetryPolicy(undefined)).toBeUndefined();
+  });
+
+  it("returns undefined when disabled with false", () => {
+    expect(resolveRetryPolicy(false)).toBeUndefined();
+  });
+
+  it("returns the default policy when enabled with true", () => {
+    expect(resolveRetryPolicy(true)).toEqual({
       maxRetries: 5,
       initialInterval: 100,
       maxInterval: 2000,
       multiplier: 2,
     });
-  });
-
-  it("returns undefined when disabled", () => {
-    expect(resolveRetryPolicy(false)).toBeUndefined();
   });
 
   it("fills in missing fields with defaults", () => {
@@ -40,7 +45,38 @@ describe("resolveRetryPolicy", () => {
       initialInterval: 100,
       maxInterval: 2000,
       multiplier: 2,
+      shouldRetry: undefined,
     });
+  });
+
+  it("carries a custom shouldRetry through", () => {
+    const shouldRetry = () => false;
+    expect(resolveRetryPolicy({ shouldRetry })).toMatchObject({ shouldRetry });
+  });
+});
+
+describe("defaultShouldRetry", () => {
+  it("retries network errors and 429/5xx responses", () => {
+    expect(defaultShouldRetry({ kind: "network", error: new Error("x") })).toBe(
+      true
+    );
+    expect(
+      defaultShouldRetry({
+        kind: "response",
+        status: 503,
+        headers: new Headers(),
+      })
+    ).toBe(true);
+  });
+
+  it("does not retry non-retryable responses", () => {
+    expect(
+      defaultShouldRetry({
+        kind: "response",
+        status: 409,
+        headers: new Headers(),
+      })
+    ).toBe(false);
   });
 });
 
@@ -161,7 +197,7 @@ describe("ingress auto-retry", () => {
 
   const fastRetry = { initialInterval: 1, maxInterval: 2, multiplier: 2 };
 
-  const call = (idempotencyKey?: string, retry?: RetryPolicy | false) =>
+  const call = (idempotencyKey?: string, retry?: RetryPolicy | boolean) =>
     connect({ url: URL, retry }).call({
       service: "svc",
       handler: "greet",
@@ -184,6 +220,18 @@ describe("ingress auto-retry", () => {
       HttpCallError
     );
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does NOT retry by default — retries are opt-in", async () => {
+    queue(fail(503), ok());
+    await expect(call("k1", undefined)).rejects.toBeInstanceOf(HttpCallError);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("retry:true enables the built-in policy", async () => {
+    queue(fail(503), ok());
+    await expect(call("k1", true)).resolves.toEqual({ ok: true });
+    expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(2);
   });
 
   it("retries 5xx then succeeds when an idempotency key is set", async () => {
@@ -214,6 +262,31 @@ describe("ingress auto-retry", () => {
     queue(fail(503), ok());
     await expect(call("k1", false)).rejects.toBeInstanceOf(HttpCallError);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("a custom shouldRetry can narrow the decision (no retry on 500)", async () => {
+    queue(fail(500), ok());
+    await expect(
+      call("k1", {
+        ...fastRetry,
+        shouldRetry: (f) =>
+          defaultShouldRetry(f) && !(f.kind === "response" && f.status === 500),
+      })
+    ).rejects.toMatchObject({ status: 500 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("a custom shouldRetry can inspect the response body", async () => {
+    queue(fail(503, undefined), ok());
+    const seen: Array<string | undefined> = [];
+    await call("k1", {
+      ...fastRetry,
+      shouldRetry: (f) => {
+        if (f.kind === "response") seen.push(f.body);
+        return defaultShouldRetry(f);
+      },
+    });
+    expect(seen).toEqual(["nope"]); // body text was available to the predicate
   });
 
   it("gives up after maxRetries and throws the last error", async () => {

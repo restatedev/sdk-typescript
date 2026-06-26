@@ -36,7 +36,7 @@ import { Opts, SendOpts } from "./api.js";
 import {
   abortableSleep,
   backoffDelay,
-  isRetryableStatus,
+  defaultShouldRetry,
   parseRetryAfter,
   resolveRetryPolicy,
 } from "./retry.js";
@@ -214,14 +214,16 @@ const doComponentInvocation = async <I, O>(
   //
   // retries
   //
-  // We only retry when the call carries an idempotency key: Restate then
-  // dedupes the request, so re-issuing it after an ambiguous failure (network
-  // error, 429, 5xx) safely attaches to the in-flight/completed invocation
-  // instead of starting a duplicate. Without a key, retrying is unsafe.
+  // Retries are opt-in (opts.retry) AND only ever attempted when the call
+  // carries an idempotency key: Restate then dedupes the request, so re-issuing
+  // it after an ambiguous failure (network error, 429, 5xx) safely attaches to
+  // the in-flight/completed invocation instead of starting a duplicate. Without
+  // a key, retrying is unsafe.
   //
   const retryPolicy = idempotencyKey
     ? resolveRetryPolicy(opts.retry)
     : undefined;
+  const shouldRetry = retryPolicy?.shouldRetry ?? defaultShouldRetry;
 
   //
   // make the call
@@ -236,11 +238,12 @@ const doComponentInvocation = async <I, O>(
         signal: attemptSignal(),
       });
     } catch (e) {
-      // network error (fetch rejected) — ambiguous, retry if allowed
+      // network error (fetch rejected) — ambiguous
       if (
         retryPolicy &&
         attempt < retryPolicy.maxRetries &&
-        !userSignal?.aborted
+        !userSignal?.aborted &&
+        shouldRetry({ kind: "network", error: e }, attempt)
       ) {
         await abortableSleep(backoffDelay(retryPolicy, attempt), userSignal);
         continue;
@@ -250,22 +253,30 @@ const doComponentInvocation = async <I, O>(
     if (httpResponse.ok) {
       break;
     }
+    // Read the error body once; it is reused for the retry decision and, if we
+    // give up, for the thrown HttpCallError.
+    const errorBody = await httpResponse.text();
     if (
       retryPolicy &&
-      isRetryableStatus(httpResponse.status) &&
       attempt < retryPolicy.maxRetries &&
-      !userSignal?.aborted
+      !userSignal?.aborted &&
+      shouldRetry(
+        {
+          kind: "response",
+          status: httpResponse.status,
+          headers: httpResponse.headers,
+          body: errorBody || undefined,
+        },
+        attempt
+      )
     ) {
       const retryAfter = parseRetryAfter(httpResponse.headers);
-      // free the connection before re-issuing
-      await httpResponse.body?.cancel();
       await abortableSleep(
         backoffDelay(retryPolicy, attempt, retryAfter),
         userSignal
       );
       continue;
     }
-    const errorBody = await httpResponse.text();
     throw new HttpCallError(
       httpResponse.status,
       errorBody,

@@ -9,7 +9,7 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import type { RetryPolicy } from "./api.js";
+import type { RetryFailure, RetryPolicy } from "./api.js";
 
 /** Fully resolved retry policy, with all defaults applied. */
 export interface ResolvedRetryPolicy {
@@ -17,6 +17,7 @@ export interface ResolvedRetryPolicy {
   initialInterval: number;
   maxInterval: number;
   multiplier: number;
+  shouldRetry?: (failure: RetryFailure, attempt: number) => boolean;
 }
 
 const DEFAULT_RETRY_POLICY: ResolvedRetryPolicy = {
@@ -29,15 +30,17 @@ const DEFAULT_RETRY_POLICY: ResolvedRetryPolicy = {
 /**
  * Resolve a user supplied retry policy into a fully populated one.
  *
- * Returns `undefined` when retries are disabled (`retry: false`).
+ * Retries are opt-in: returns `undefined` (disabled) when `retry` is omitted or
+ * `false`. `true` enables the built-in policy; an object enables it with the
+ * provided overrides.
  */
 export function resolveRetryPolicy(
-  retry: RetryPolicy | false | undefined
+  retry: RetryPolicy | boolean | undefined
 ): ResolvedRetryPolicy | undefined {
-  if (retry === false) {
+  if (retry === undefined || retry === false) {
     return undefined;
   }
-  if (retry === undefined) {
+  if (retry === true) {
     return DEFAULT_RETRY_POLICY;
   }
   return {
@@ -46,12 +49,22 @@ export function resolveRetryPolicy(
       retry.initialInterval ?? DEFAULT_RETRY_POLICY.initialInterval,
     maxInterval: retry.maxInterval ?? DEFAULT_RETRY_POLICY.maxInterval,
     multiplier: retry.multiplier ?? DEFAULT_RETRY_POLICY.multiplier,
+    shouldRetry: retry.shouldRetry,
   };
 }
 
 /** Whether an HTTP response status warrants a retry. */
 export function isRetryableStatus(status: number): boolean {
   return status === 429 || (status >= 500 && status <= 599);
+}
+
+/**
+ * The built-in retry decision: retry network errors, HTTP `429`, and HTTP
+ * `5xx`. Exported so a custom {@link RetryPolicy.shouldRetry} can compose with
+ * it rather than reimplement it.
+ */
+export function defaultShouldRetry(failure: RetryFailure): boolean {
+  return failure.kind === "network" || isRetryableStatus(failure.status);
 }
 
 /**

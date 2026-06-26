@@ -20,7 +20,9 @@ import {
   type IngressSendClient,
   type ConnectionOpts,
   type RetryPolicy,
+  type RetryFailure,
   connect as clientsConnect,
+  defaultShouldRetry,
 } from "@restatedev/restate-sdk-clients";
 import type { HandlerDescriptor, Descriptor } from "./define.js";
 
@@ -28,8 +30,10 @@ import type { HandlerDescriptor, Descriptor } from "./define.js";
 export {
   Opts,
   SendOpts,
+  defaultShouldRetry,
   type ConnectionOpts,
   type RetryPolicy,
+  type RetryFailure,
   type Ingress,
   type Send,
   type IngressClient,

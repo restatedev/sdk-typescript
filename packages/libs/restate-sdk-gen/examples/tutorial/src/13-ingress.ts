@@ -21,11 +21,12 @@
 //   clients.sendClient(ing, def)   — fire-and-forget client
 //   clients.Opts.from({ ... })     — per-call options (idempotencyKey, headers, …)
 //
-// Auto-retry: when a call carries an `idempotencyKey`, the client retries
-// automatically on ambiguous failures (network errors, HTTP 429, HTTP 5xx).
-// Restate dedupes on the key, so a retry safely attaches to the in-flight or
-// completed invocation instead of starting a duplicate. Without a key, a retry
-// could double-execute, so none is attempted.
+// Auto-retry (opt-in): enable it via the connection's `retry` option. The
+// client then retries ambiguous failures (network errors, HTTP 429, HTTP 5xx),
+// but only when a call carries an `idempotencyKey`. Restate dedupes on the key,
+// so a retry safely attaches to the in-flight or completed invocation instead
+// of starting a duplicate. Without a key, a retry could double-execute, so none
+// is attempted.
 //
 // Run the endpoint first (`pnpm start:tutorial`), register it with a
 // restate-server, then run this module against the ingress URL.
@@ -38,10 +39,10 @@ import { greeter } from "./08-clients.js";
 const INGRESS_URL = process.env.RESTATE_INGRESS_URL ?? "http://localhost:8080";
 
 export async function runIngressDemo(url: string = INGRESS_URL) {
-  // Connect once and reuse. `retry` is a connection-wide default:
-  //   - omit it       → built-in policy (maxRetries 5, exp. backoff + jitter)
-  //   - retry: {...}  → tune the policy
-  //   - retry: false  → disable auto-retry entirely
+  // Connect once and reuse. `retry` is a connection-wide, opt-in setting:
+  //   - omit it / false → no retries (the default)
+  //   - retry: true     → built-in policy (maxRetries 5, exp. backoff + jitter)
+  //   - retry: {...}     → tune the policy, or supply shouldRetry (see below)
   const ingress = clients.connect({
     url,
     retry: { maxRetries: 5, initialInterval: 100, maxInterval: 2000 },
@@ -70,10 +71,19 @@ export async function runIngressDemo(url: string = INGRESS_URL) {
   //    non-idempotent handler). Use a key whenever a retry must be safe.
   await greeterClient.greet("anon");
 
-  // 4) Opt out of retries for a connection even when keys are present.
-  const noRetry = clients.connect({ url, retry: false });
+  // 4) Custom retry decision. shouldRetry replaces the built-in rule; compose
+  //    with defaultShouldRetry to narrow it — here we keep the defaults but
+  //    never retry a 501, and inspect the body when one is present.
+  const tuned = clients.connect({
+    url,
+    retry: {
+      shouldRetry: (failure) =>
+        clients.defaultShouldRetry(failure) &&
+        !(failure.kind === "response" && failure.status === 501),
+    },
+  });
   await clients
-    .client(noRetry, greeter)
+    .client(tuned, greeter)
     .greet("bob", clients.Opts.from({ idempotencyKey: "greet-bob" }));
 
   // 5) Fire-and-forget. `record` returns void; the send resolves once the

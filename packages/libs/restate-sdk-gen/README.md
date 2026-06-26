@@ -121,19 +121,32 @@ const greeting = await greeterClient.greet("sam");
 
 ### Automatic retries
 
-When a call carries an `idempotencyKey`, the client retries automatically on ambiguous failures — network errors, HTTP `429`, and HTTP `5xx` — with exponential backoff and jitter:
+Retries are **opt-in** and configured connection-wide via `retry` (`clients.RetryPolicy`). Enable the built-in policy with `true`, or pass an object to tune it:
+
+```ts
+clients.connect({ url, retry: true });
+clients.connect({ url, retry: { maxRetries: 5, initialInterval: 100, maxInterval: 2000 } });
+```
+
+When enabled, the client retries ambiguous failures — network errors, HTTP `429`, and HTTP `5xx` — with exponential backoff and jitter, **but only when the call carries an `idempotencyKey`**:
 
 ```ts
 await greeterClient.greet("sam", clients.Opts.from({ idempotencyKey: "greet-sam-once" }));
 ```
 
-The idempotency key is the safety boundary: Restate dedupes on it, so a retry attaches to the in-flight or completed invocation instead of starting a duplicate. **Without a key, no retry is attempted** — retrying a non-idempotent invocation could double-execute it.
+The idempotency key is the safety boundary: Restate dedupes on it, so a retry attaches to the in-flight or completed invocation instead of starting a duplicate. Without a key, no retry is attempted — retrying a non-idempotent invocation could double-execute it.
 
-Retries are on by default. Configure or disable them connection-wide via `retry` (`clients.RetryPolicy`):
+To decide per-failure (e.g. to skip a terminal `5xx`), supply `shouldRetry`. It fully replaces the built-in rule; compose with `clients.defaultShouldRetry` to narrow it. The `RetryFailure` carries the status, headers, and — for response failures — the body text when present:
 
 ```ts
-clients.connect({ url, retry: { maxRetries: 5, initialInterval: 100, maxInterval: 2000 } });
-clients.connect({ url, retry: false }); // opt out
+clients.connect({
+  url,
+  retry: {
+    shouldRetry: (failure, attempt) =>
+      clients.defaultShouldRetry(failure) &&
+      !(failure.kind === "response" && failure.body?.includes("do-not-retry")),
+  },
+});
 ```
 
 See `examples/tutorial/src/13-ingress.ts` for a runnable walkthrough.

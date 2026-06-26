@@ -35,6 +35,7 @@ export type {
   IngressWorkflowClient,
   IngressCallOptions,
   RetryPolicy,
+  RetryFailure,
   Send,
   IngressSendOptions,
   WorkflowSubmission,
@@ -46,3 +47,4 @@ export { Opts, SendOpts } from "./api.js";
 export { rpc } from "./api.js";
 
 export { connect, HttpCallError } from "./ingress.js";
+export { defaultShouldRetry } from "./retry.js";
