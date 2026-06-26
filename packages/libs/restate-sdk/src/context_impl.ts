@@ -1039,6 +1039,7 @@ export class RunClosuresTracker {
     if (runClosure === undefined) {
       throw new Error(`Handle ${handle} doesn't exist`);
     }
+    this.runsToExecute.delete(handle);
     runClosure()
       .finally(() => this.channel.signal())
       .catch(() => {});
