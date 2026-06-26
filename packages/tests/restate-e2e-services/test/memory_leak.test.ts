@@ -38,6 +38,10 @@ type InvocationGroups = Record<
   string[]
 >;
 
+function formatBytes(bytes: number): string {
+  return `${(bytes / 1024 / 1024).toFixed(1)} MiB`;
+}
+
 describe("SDK memory pressure", { timeout: testTimeout }, () => {
   it("does not retain SDK heap after mixed invocation load", async () => {
     const ingress = clients.connect({ url: getIngressUrl() });
@@ -200,6 +204,114 @@ describe("SDK memory pressure", { timeout: testTimeout }, () => {
       invocationLoadRows,
       roundMemoryRows,
     });
+
+    console.log(`\n${report}`);
+
+    if (exceededThreshold) {
+      expect.fail(report);
+    }
+  });
+
+  it("does not retain completed ctx.run closures while an invocation stays active", async () => {
+    const ingress = clients.connect({ url: getIngressUrl() });
+    const config = {
+      runCount: envInt("RESTATE_E2E_MEMORY_RUN_CLOSURE_RUNS", 200),
+      payloadBytes: envInt(
+        "RESTATE_E2E_MEMORY_RUN_CLOSURE_PAYLOAD_BYTES",
+        160 * 1024
+      ),
+      holdMillis: envInt("RESTATE_E2E_MEMORY_RUN_CLOSURE_HOLD_MS", 60_000),
+      waitTimeout: envInt("RESTATE_E2E_MEMORY_WAIT_TIMEOUT_MS", 90_000),
+      cleanupDelay: envInt("RESTATE_E2E_MEMORY_CLEANUP_DELAY_MS", 1_000),
+      maxHeapDeltaBytes: envInt(
+        "RESTATE_E2E_MEMORY_RUN_CLOSURE_MAX_HEAP_DELTA_BYTES",
+        16 * 1024 * 1024
+      ),
+    };
+    const client = ingress.serviceClient(memoryLeakProbe);
+    const sendClient = ingress.serviceSendClient(
+      memoryLeakProbe
+    ) as unknown as MemoryLeakSendClient;
+    const baseline = await client.memoryStats({ forceGc: true });
+    let invocationId: string | undefined;
+    let heapWhileHolding: number | undefined;
+
+    expect(
+      baseline.gcAvailable,
+      "MemoryLeakProbe must run under node --expose-gc"
+    ).toBe(true);
+
+    try {
+      const send = await sendClient.runClosureRetention({
+        runCount: config.runCount,
+        payloadBytes: config.payloadBytes,
+        holdMillis: config.holdMillis,
+      });
+      invocationId = await send.invocationId;
+
+      await expect
+        .poll(
+          async () => {
+            const status = await client.runClosureRetentionStatus();
+            if (status.invocationId !== invocationId) {
+              return { phase: "idle", completedRuns: 0 };
+            }
+
+            return {
+              phase: status.phase,
+              completedRuns: status.completedRuns,
+            };
+          },
+          { timeout: config.waitTimeout, interval: 250 }
+        )
+        .toMatchObject({
+          phase: "holding",
+          completedRuns: config.runCount,
+        });
+
+      heapWhileHolding = (
+        await client.memoryStats({
+          forceGc: true,
+        })
+      ).heapUsed;
+    } finally {
+      if (invocationId !== undefined) {
+        await client
+          .releaseRunClosureRetention({ invocationId })
+          .catch(() => undefined);
+      }
+    }
+
+    await expect
+      .poll(
+        async () => {
+          const status = await client.runClosureRetentionStatus();
+          return status.invocationId === invocationId ? status.phase : "idle";
+        },
+        { timeout: config.waitTimeout, interval: 250 }
+      )
+      .toBe("completed");
+    await delay(config.cleanupDelay);
+
+    const afterCompletion = await client.memoryStats({ forceGc: true });
+    const heapDeltaWhileHolding =
+      (heapWhileHolding ?? baseline.heapUsed) - baseline.heapUsed;
+    const heapDeltaAfterCompletion =
+      afterCompletion.heapUsed - baseline.heapUsed;
+    const exceededThreshold =
+      Math.max(0, heapDeltaWhileHolding) > config.maxHeapDeltaBytes ||
+      Math.max(0, heapDeltaAfterCompletion) > config.maxHeapDeltaBytes;
+    const report = [
+      "ctx.run closure retention memory check",
+      `runs: ${config.runCount}`,
+      `payload per run: ${formatBytes(config.payloadBytes)}`,
+      `baseline heap: ${formatBytes(baseline.heapUsed)}`,
+      `heap while invocation is active: ${formatBytes(heapWhileHolding ?? 0)}`,
+      `delta while active: ${formatBytes(heapDeltaWhileHolding)}`,
+      `heap after completion: ${formatBytes(afterCompletion.heapUsed)}`,
+      `delta after completion: ${formatBytes(heapDeltaAfterCompletion)}`,
+      `retained heap threshold: ${formatBytes(config.maxHeapDeltaBytes)}`,
+    ].join("\n");
 
     console.log(`\n${report}`);
 

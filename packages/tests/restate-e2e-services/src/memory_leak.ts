@@ -16,6 +16,37 @@ export interface MemoryLoadInput {
   payloadBytes?: number;
 }
 
+export interface RunClosureRetentionInput {
+  runCount?: number;
+  payloadBytes?: number;
+  holdMillis?: number;
+}
+
+export interface RunClosureRetentionReleaseInput {
+  invocationId?: string;
+}
+
+export type RunClosureRetentionPhase =
+  | "idle"
+  | "capturing"
+  | "holding"
+  | "released"
+  | "completed";
+
+export interface RunClosureRetentionStatus {
+  invocationId?: string;
+  phase: RunClosureRetentionPhase;
+  completedRuns: number;
+  runCount: number;
+  payloadBytes: number;
+}
+
+export interface RunClosureRetentionResult {
+  invocationId: string;
+  completedRuns: number;
+  payloadBytes: number;
+}
+
 export interface MemoryStatsInput {
   forceGc?: boolean;
 }
@@ -41,8 +72,52 @@ function boundedPayloadBytes(input: MemoryLoadInput | undefined): number {
   return Math.max(0, Math.min(input?.payloadBytes ?? 512, 64 * 1024));
 }
 
+function boundedRunClosureRetentionPayloadBytes(
+  input: RunClosureRetentionInput | undefined
+): number {
+  return Math.max(0, Math.min(input?.payloadBytes ?? 128 * 1024, 512 * 1024));
+}
+
+function boundedRunClosureRetentionRunCount(
+  input: RunClosureRetentionInput | undefined
+): number {
+  return Math.max(1, Math.min(input?.runCount ?? 200, 2_000));
+}
+
+function boundedRunClosureRetentionHoldMillis(
+  input: RunClosureRetentionInput | undefined
+): number {
+  return Math.max(1, Math.min(input?.holdMillis ?? 30_000, 120_000));
+}
+
 function allocatePayload(input: MemoryLoadInput | undefined): number {
   return "x".repeat(boundedPayloadBytes(input)).length;
+}
+
+function allocateRunClosurePayload(
+  runIndex: number,
+  payloadBytes: number
+): number[] {
+  const elementCount = Math.max(1, Math.ceil(payloadBytes / 8));
+  const payload = new Array<number>(elementCount);
+
+  for (let elementIndex = 0; elementIndex < elementCount; elementIndex++) {
+    payload[elementIndex] = runIndex + elementIndex + 0.5;
+  }
+
+  return payload;
+}
+
+async function completeRunWithCapturedPayload(
+  ctx: restate.Context,
+  runIndex: number,
+  payloadBytes: number
+): Promise<number> {
+  const capturedPayload = allocateRunClosurePayload(runIndex, payloadBytes);
+  return ctx.run(
+    `run-closure-retention-captured-payload-${runIndex}`,
+    () => capturedPayload.length
+  );
 }
 
 function forceGcIfAvailable(): boolean {
@@ -82,6 +157,41 @@ const passThroughHooks: HooksProvider = () => ({
     },
   },
 });
+
+const runClosureRetentionStatus: RunClosureRetentionStatus = {
+  phase: "idle",
+  completedRuns: 0,
+  runCount: 0,
+  payloadBytes: 0,
+};
+let releaseRunClosureRetentionHold: (() => void) | undefined;
+
+function updateRunClosureRetentionStatus(
+  update: Partial<RunClosureRetentionStatus>
+): RunClosureRetentionStatus {
+  Object.assign(runClosureRetentionStatus, update);
+  return { ...runClosureRetentionStatus };
+}
+
+function waitForRunClosureRetentionRelease(holdMillis: number): Promise<void> {
+  return new Promise<void>((resolve) => {
+    let settled = false;
+    const timeout = setTimeout(release, holdMillis);
+
+    function release() {
+      if (settled) return;
+
+      settled = true;
+      clearTimeout(timeout);
+      if (releaseRunClosureRetentionHold === release) {
+        releaseRunClosureRetentionHold = undefined;
+      }
+      resolve();
+    }
+
+    releaseRunClosureRetentionHold = release;
+  });
+}
 
 function createMemoryLeakProbe(name: string) {
   return restate.service({
@@ -166,6 +276,90 @@ function createMemoryLeakProbe(name: string) {
           return { invocationId: ctx.request().id, payloadBytes };
         }
       ),
+
+      runClosureRetention: async (
+        ctx: restate.Context,
+        input: RunClosureRetentionInput
+      ): Promise<RunClosureRetentionResult> => {
+        const invocationId = ctx.request().id;
+        const runCount = boundedRunClosureRetentionRunCount(input);
+        const payloadBytes = boundedRunClosureRetentionPayloadBytes(input);
+        const holdMillis = boundedRunClosureRetentionHoldMillis(input);
+
+        await ctx.run("run-closure-retention-start", () => {
+          releaseRunClosureRetentionHold?.();
+          releaseRunClosureRetentionHold = undefined;
+          return updateRunClosureRetentionStatus({
+            invocationId,
+            phase: "capturing",
+            completedRuns: 0,
+            runCount,
+            payloadBytes,
+          });
+        });
+
+        for (let runIndex = 0; runIndex < runCount; runIndex++) {
+          await completeRunWithCapturedPayload(ctx, runIndex, payloadBytes);
+
+          const completedRuns = runIndex + 1;
+          if (completedRuns % 25 === 0 || completedRuns === runCount) {
+            await ctx.run(
+              `run-closure-retention-progress-${completedRuns}`,
+              () =>
+                updateRunClosureRetentionStatus({
+                  completedRuns,
+                })
+            );
+          }
+        }
+
+        await ctx.run("run-closure-retention-holding", () =>
+          updateRunClosureRetentionStatus({
+            phase: "holding",
+          })
+        );
+        await ctx.run("run-closure-retention-hold", () =>
+          waitForRunClosureRetentionRelease(holdMillis)
+        );
+        await ctx.run("run-closure-retention-completed", () =>
+          updateRunClosureRetentionStatus({
+            phase: "completed",
+            completedRuns: runCount,
+          })
+        );
+
+        return { invocationId, completedRuns: runCount, payloadBytes };
+      },
+
+      runClosureRetentionStatus: async (
+        ctx: restate.Context
+      ): Promise<RunClosureRetentionStatus> => {
+        return ctx.run("run-closure-retention-status", () => ({
+          ...runClosureRetentionStatus,
+        }));
+      },
+
+      releaseRunClosureRetention: async (
+        ctx: restate.Context,
+        input: RunClosureRetentionReleaseInput
+      ): Promise<boolean> => {
+        return ctx.run("release-run-closure-retention", () => {
+          if (
+            input?.invocationId !== undefined &&
+            input.invocationId !== runClosureRetentionStatus.invocationId
+          ) {
+            return false;
+          }
+
+          const release = releaseRunClosureRetentionHold;
+          if (release === undefined) return false;
+
+          releaseRunClosureRetentionHold = undefined;
+          updateRunClosureRetentionStatus({ phase: "released" });
+          release();
+          return true;
+        });
+      },
 
       abortTimeoutZero: restate.createServiceHandler(
         {
