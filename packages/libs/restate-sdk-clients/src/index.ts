@@ -34,6 +34,7 @@ export type {
   IngressSendClient,
   IngressWorkflowClient,
   IngressCallOptions,
+  RetryPolicy,
   Send,
   IngressSendOptions,
   WorkflowSubmission,

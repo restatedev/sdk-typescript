@@ -440,6 +440,43 @@ export type IngressSendClient<M> = {
     : never;
 };
 
+/**
+ * Policy controlling automatic retries of ambiguous ingress failures.
+ *
+ * Retries are only ever attempted when an `idempotencyKey` is set on the call
+ * (see {@link IngressCallOptions.idempotencyKey}). Retrying without one could
+ * double-execute a non-idempotent invocation, so the idempotency key is the
+ * safety boundary — this policy can tune or disable retries, but never bypass
+ * that gate.
+ *
+ * The following failures are considered retryable: network errors (the
+ * underlying `fetch` rejecting), HTTP `429`, and HTTP `5xx` responses.
+ */
+export interface RetryPolicy {
+  /**
+   * Maximum number of retries after the initial attempt.
+   *
+   * Defaults to `5` (up to 6 attempts in total).
+   */
+  maxRetries?: number;
+
+  /**
+   * Initial backoff interval, in milliseconds. Defaults to `100`.
+   */
+  initialInterval?: number;
+
+  /**
+   * Maximum backoff interval, in milliseconds. Defaults to `2000`.
+   */
+  maxInterval?: number;
+
+  /**
+   * Multiplier applied to the backoff interval after each attempt.
+   * Defaults to `2`.
+   */
+  multiplier?: number;
+}
+
 export type ConnectionOpts = {
   /**
    * Restate ingress URL.
@@ -451,6 +488,20 @@ export type ConnectionOpts = {
    * Use this to attach authentication headers.
    */
   headers?: Record<string, string>;
+
+  /**
+   * Automatic retry policy for ambiguous ingress failures (network errors,
+   * HTTP `429`, HTTP `5xx`).
+   *
+   * Retries fire **only** when an `idempotencyKey` is set on the call — without
+   * one a retry could double-execute a non-idempotent invocation. With a key,
+   * Restate dedupes the request, so a retry safely attaches to the in-flight or
+   * completed invocation instead of starting a new one.
+   *
+   * Defaults to a built-in policy ({@link RetryPolicy}). Set to `false` to
+   * disable automatic retries entirely.
+   */
+  retry?: RetryPolicy | false;
 
   /**
    * Default serde to use for ingress payloads when no operation-specific serde
