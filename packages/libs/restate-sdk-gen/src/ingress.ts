@@ -23,6 +23,7 @@ import {
   type RetryFailure,
   connect as clientsConnect,
   defaultShouldRetry,
+  HttpCallError,
 } from "@restatedev/restate-sdk-clients";
 import type { HandlerDescriptor, Descriptor } from "./define.js";
 
@@ -31,6 +32,7 @@ export {
   Opts,
   SendOpts,
   defaultShouldRetry,
+  HttpCallError,
   type ConnectionOpts,
   type RetryPolicy,
   type RetryFailure,
