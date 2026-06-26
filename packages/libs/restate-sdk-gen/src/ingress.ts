@@ -19,17 +19,25 @@ import {
   type IngressWorkflowClient,
   type IngressSendClient,
   type ConnectionOpts,
+  type RetryPolicy,
+  type RetryFailure,
   connect as clientsConnect,
+  defaultShouldRetry,
+  HttpCallError,
 } from "@restatedev/restate-sdk-clients";
 import type { HandlerDescriptor, Descriptor } from "./define.js";
 
 // Re-export connect, Ingress, SendOpts so consumers can use clients.connect / clients.Ingress
 export {
+  Opts,
   SendOpts,
+  defaultShouldRetry,
+  HttpCallError,
   type ConnectionOpts,
+  type RetryPolicy,
+  type RetryFailure,
   type Ingress,
   type Send,
-  type Opts,
   type IngressClient,
   type IngressWorkflowClient,
   type IngressSendClient,

@@ -440,6 +440,82 @@ export type IngressSendClient<M> = {
     : never;
 };
 
+/**
+ * An ambiguous ingress failure that may be retried.
+ *
+ * Passed to {@link RetryPolicy.shouldRetry} so a caller can inspect the failure
+ * and decide whether to retry.
+ */
+export type RetryFailure =
+  | {
+      /** The underlying `fetch` call rejected (connection refused/reset, DNS). */
+      readonly kind: "network";
+      readonly error: unknown;
+    }
+  | {
+      /** The server returned a non-2xx response. */
+      readonly kind: "response";
+      readonly status: number;
+      readonly headers: Headers;
+      /**
+       * The response body, decoded as text, when the response carried a
+       * non-empty body; `undefined` otherwise.
+       */
+      readonly body?: string;
+    };
+
+/**
+ * Policy controlling automatic retries of ambiguous ingress failures.
+ *
+ * Retries are **opt-in**: they happen only when a policy is configured (see
+ * {@link ConnectionOpts.retry}) **and** the call carries an `idempotencyKey`
+ * (see {@link IngressCallOptions.idempotencyKey}). Retrying without a key could
+ * double-execute a non-idempotent invocation, so the idempotency key is the
+ * safety boundary that a policy can never bypass.
+ *
+ * By default the following failures are retried: network errors (the underlying
+ * `fetch` rejecting), HTTP `429`, and HTTP `5xx` responses. Override this with
+ * {@link RetryPolicy.shouldRetry}.
+ */
+export interface RetryPolicy {
+  /**
+   * Maximum number of retries after the initial attempt.
+   *
+   * Defaults to `5` (up to 6 attempts in total).
+   */
+  maxRetries?: number;
+
+  /**
+   * Initial backoff interval, in milliseconds. Defaults to `100`.
+   */
+  initialInterval?: number;
+
+  /**
+   * Maximum backoff interval, in milliseconds. Defaults to `2000`.
+   */
+  maxInterval?: number;
+
+  /**
+   * Multiplier applied to the backoff interval after each attempt.
+   * Defaults to `2`.
+   */
+  multiplier?: number;
+
+  /**
+   * Decide whether a given failure should be retried. When provided, this
+   * fully replaces the built-in rule (network / `429` / `5xx`).
+   *
+   * The idempotency-key gate and the `maxRetries` cap still apply — this
+   * predicate only narrows or broadens *which failures* are retryable within
+   * those bounds. Compose with the built-in rule via the exported
+   * `defaultShouldRetry`.
+   *
+   * @param failure the failure being considered
+   * @param attempt the zero-based index of the attempt that just failed
+   */
+  shouldRetry?: (failure: RetryFailure, attempt: number) => boolean;
+}
+
 export type ConnectionOpts = {
   /**
    * Restate ingress URL.
@@ -451,6 +527,21 @@ export type ConnectionOpts = {
    * Use this to attach authentication headers.
    */
   headers?: Record<string, string>;
+
+  /**
+   * Opt in to automatic retries of ambiguous ingress failures (network errors,
+   * HTTP `429`, HTTP `5xx`).
+   *
+   * Retries are **disabled by default**. Set `true` to enable the built-in
+   * policy ({@link RetryPolicy}), or pass a {@link RetryPolicy} to tune it.
+   *
+   * Even when enabled, retries fire **only** when an `idempotencyKey` is set on
+   * the call — without one a retry could double-execute a non-idempotent
+   * invocation. With a key, Restate dedupes the request, so a retry safely
+   * attaches to the in-flight or completed invocation instead of starting a new
+   * one.
+   */
+  retry?: RetryPolicy | boolean;
 
   /**
    * Default serde to use for ingress payloads when no operation-specific serde

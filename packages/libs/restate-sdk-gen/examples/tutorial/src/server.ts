@@ -28,6 +28,10 @@
 //   /ambient           — context-local storage: request-scoped ambient
 //                        values shared across helpers and spawned routines
 //
+// Tier 13 (13-ingress.ts) is the client side: a plain Node process that calls
+// this endpoint over HTTP via the ingress client (with auto-retry). It is not a
+// service, so it is not registered here — run it separately against the ingress.
+//
 // See ../README.md for curl invocations grouped by tier.
 
 import * as restate from "@restatedev/restate-sdk";

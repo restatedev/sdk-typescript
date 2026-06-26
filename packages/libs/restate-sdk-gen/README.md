@@ -101,6 +101,56 @@ For routine-level "stop": use a `Channel<void>` plus `select({ work, stop: stop.
 
 Under the default `onMainExit: "abandon"` a spawned routine or race loser parked on a never-settling source does **not** hang the handler: the handler returns as soon as the main operation settles and the parked routine is abandoned. That hang only applies under `onMainExit: "join"`, where the scheduler keeps driving until every fiber finishes.
 
+## Ingress client
+
+To call a deployed endpoint from the outside — a plain process, not a handler — use the ingress client under the `clients` namespace. The same typed definition that hosts the handlers also types the client:
+
+```ts
+import { clients } from "@restatedev/restate-sdk-gen";
+import { greeter } from "./greeter.js";
+
+const ingress = clients.connect({ url: "http://localhost:8080" });
+const greeterClient = clients.client(ingress, greeter);
+
+const greeting = await greeterClient.greet("sam");
+```
+
+- `clients.client(ing, def)` / `clients.client(ing, def, key)` — typed request/response.
+- `clients.sendClient(ing, def)` / `(ing, def, key)` — fire-and-forget; resolves once the invocation is accepted.
+- `clients.Opts.from({ ... })` — per-call options (`idempotencyKey`, `headers`, `timeout`, `signal`).
+
+### Automatic retries
+
+Retries are **opt-in** and configured connection-wide via `retry` (`clients.RetryPolicy`). Enable the built-in policy with `true`, or pass an object to tune it:
+
+```ts
+clients.connect({ url, retry: true });
+clients.connect({ url, retry: { maxRetries: 5, initialInterval: 100, maxInterval: 2000 } });
+```
+
+When enabled, the client retries ambiguous failures — network errors, HTTP `429`, and HTTP `5xx` — with exponential backoff and jitter, **but only when the call carries an `idempotencyKey`**:
+
+```ts
+await greeterClient.greet("sam", clients.Opts.from({ idempotencyKey: "greet-sam-once" }));
+```
+
+The idempotency key is the safety boundary: Restate dedupes on it, so a retry attaches to the in-flight or completed invocation instead of starting a duplicate. Without a key, no retry is attempted — retrying a non-idempotent invocation could double-execute it.
+
+To decide per-failure (e.g. to skip a terminal `5xx`), supply `shouldRetry`. It fully replaces the built-in rule; compose with `clients.defaultShouldRetry` to narrow it. The `RetryFailure` carries the status, headers, and — for response failures — the body text when present:
+
+```ts
+clients.connect({
+  url,
+  retry: {
+    shouldRetry: (failure, attempt) =>
+      clients.defaultShouldRetry(failure) &&
+      !(failure.kind === "response" && failure.body?.includes("do-not-retry")),
+  },
+});
+```
+
+See `examples/tutorial/src/13-ingress.ts` for a runnable walkthrough.
+
 ## Repository layout
 
 This package lives in the [`sdk-typescript`](https://github.com/restatedev/sdk-typescript) workspace. The library proper is in `src/`; auxiliary subdirectories live alongside but are not published:

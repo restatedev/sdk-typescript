@@ -33,6 +33,13 @@ import {
 } from "./api.js";
 
 import { Opts, SendOpts } from "./api.js";
+import {
+  abortableSleep,
+  backoffDelay,
+  defaultShouldRetry,
+  parseRetryAfter,
+  resolveRetryPolicy,
+} from "./retry.js";
 
 /**
  * Connect to the restate Ingress
@@ -191,35 +198,89 @@ const doComponentInvocation = async <I, O>(
   }
 
   // Abort signal, if any
-  let signal: AbortSignal | undefined;
-  if (
-    params.opts?.opts.signal !== undefined &&
-    params.opts?.opts.timeout !== undefined
-  ) {
+  const userSignal = params.opts?.opts.signal;
+  const timeout = params.opts?.opts.timeout;
+  if (userSignal !== undefined && timeout !== undefined) {
     throw new Error(
       "You can't specify both signal and timeout options at the same time"
     );
-  } else if (params.opts?.opts.signal !== undefined) {
-    signal = params.opts?.opts.signal;
-  } else if (params.opts?.opts.timeout !== undefined) {
-    signal = AbortSignal.timeout(params.opts?.opts.timeout);
   }
+  // A fresh timeout signal is minted per attempt below — a single
+  // AbortSignal.timeout() would already be aborted on the second attempt.
+  const attemptSignal = (): AbortSignal | undefined =>
+    userSignal ??
+    (timeout !== undefined ? AbortSignal.timeout(timeout) : undefined);
+
+  //
+  // retries
+  //
+  // Retries are opt-in (opts.retry) AND only ever attempted when the call
+  // carries an idempotency key: Restate then dedupes the request, so re-issuing
+  // it after an ambiguous failure (network error, 429, 5xx) safely attaches to
+  // the in-flight/completed invocation instead of starting a duplicate. Without
+  // a key, retrying is unsafe.
+  //
+  const retryPolicy = idempotencyKey
+    ? resolveRetryPolicy(opts.retry)
+    : undefined;
+  const shouldRetry = retryPolicy?.shouldRetry ?? defaultShouldRetry;
 
   //
   // make the call
   //
-  const httpResponse = await fetch(url, {
-    method: params.method ?? "POST",
-    headers,
-    body,
-    signal,
-  });
-  if (!httpResponse.ok) {
-    const body = await httpResponse.text();
+  let httpResponse: Response;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      httpResponse = await fetch(url, {
+        method: params.method ?? "POST",
+        headers,
+        body,
+        signal: attemptSignal(),
+      });
+    } catch (e) {
+      // network error (fetch rejected) — ambiguous
+      if (
+        retryPolicy &&
+        attempt < retryPolicy.maxRetries &&
+        !userSignal?.aborted &&
+        shouldRetry({ kind: "network", error: e }, attempt)
+      ) {
+        await abortableSleep(backoffDelay(retryPolicy, attempt), userSignal);
+        continue;
+      }
+      throw e;
+    }
+    if (httpResponse.ok) {
+      break;
+    }
+    // Read the error body once; it is reused for the retry decision and, if we
+    // give up, for the thrown HttpCallError.
+    const errorBody = await httpResponse.text();
+    if (
+      retryPolicy &&
+      attempt < retryPolicy.maxRetries &&
+      !userSignal?.aborted &&
+      shouldRetry(
+        {
+          kind: "response",
+          status: httpResponse.status,
+          headers: httpResponse.headers,
+          body: errorBody || undefined,
+        },
+        attempt
+      )
+    ) {
+      const retryAfter = parseRetryAfter(httpResponse.headers);
+      await abortableSleep(
+        backoffDelay(retryPolicy, attempt, retryAfter),
+        userSignal
+      );
+      continue;
+    }
     throw new HttpCallError(
       httpResponse.status,
-      body,
-      `Request failed: ${httpResponse.status}\n${body}`
+      errorBody,
+      `Request failed: ${httpResponse.status}\n${errorBody}`
     );
   }
   const responseBuf = new Uint8Array(await httpResponse.arrayBuffer());
