@@ -27,4 +27,11 @@ RUN pnpm --filter @restatedev/restate-sdk-gen build
 
 EXPOSE 9080
 ENTRYPOINT ["tini", "--"]
-CMD ["pnpm", "--filter", "@restatedev/restate-sdk-gen", "exec", "tsx", "test-services/src/server.ts"]
+# Launch with plain `node` (loading the tsx ESM hook), NOT `pnpm exec`.
+# Going through pnpm makes the corepack shim reach out to registry.npmjs.org
+# to (re)fetch the pinned pnpm at container start; an unhandled fetch error
+# there crashes the whole node process before the endpoint binds, which
+# surfaces to sdk-test-suite as a discovery DNS/timeout failure. node + tsx
+# is fully offline at runtime (tsx is already installed in node_modules, and
+# the restate-sdk-gen dist built above is resolved via the workspace symlink).
+CMD ["node", "--import", "tsx", "/usr/src/app/packages/libs/restate-sdk-gen/test-services/src/server.ts"]
