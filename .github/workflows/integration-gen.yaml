@@ -110,7 +110,7 @@ jobs:
       # In the workflow dispatch case where the artifact was created in a previous run, we can download as normal
       - name: Download restate snapshot from completed workflow
         if: ${{ inputs.restateCommit != '' && github.event_name == 'workflow_dispatch' }}
-        uses: dawidd6/action-download-artifact@v3
+        uses: dawidd6/action-download-artifact@v6
         with:
           repo: restatedev/restate
           workflow: ci.yml

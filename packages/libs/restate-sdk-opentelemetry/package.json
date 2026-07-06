@@ -50,8 +50,13 @@
   "dependencies": {},
   "devDependencies": {
     "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/context-async-hooks": "^2.0.0",
     "@opentelemetry/core": "^2.6.0",
-    "@restatedev/restate-sdk": "workspace:*"
+    "@opentelemetry/sdk-trace-base": "^2.0.0",
+    "@restatedev/restate-sdk": "workspace:*",
+    "@restatedev/restate-sdk-clients": "workspace:*",
+    "@restatedev/restate-sdk-testcontainers": "workspace:*",
+    "testcontainers": "^11.12.0"
   },
   "peerDependencies": {
     "@opentelemetry/api": ">=1.9.0",

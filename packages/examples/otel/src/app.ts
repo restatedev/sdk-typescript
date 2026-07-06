@@ -11,7 +11,7 @@
 
 import { NodeSDK } from "@opentelemetry/sdk-node";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-grpc";
-import { Resource } from "@opentelemetry/resources";
+import { resourceFromAttributes } from "@opentelemetry/resources";
 import { ATTR_SERVICE_NAME } from "@opentelemetry/semantic-conventions";
 import { trace } from "@opentelemetry/api";
 import { service, serve, type Context } from "@restatedev/restate-sdk";
@@ -19,7 +19,7 @@ import { openTelemetryHook } from "@restatedev/restate-sdk-opentelemetry";
 
 // Setup NodeSDK, uses grpc otlp trace exporter (the same used by the Restate runtime by default).
 const sdk = new NodeSDK({
-  resource: new Resource({
+  resource: resourceFromAttributes({
     [ATTR_SERVICE_NAME]: "restate-greeter-service",
   }),
   traceExporter: new OTLPTraceExporter({
