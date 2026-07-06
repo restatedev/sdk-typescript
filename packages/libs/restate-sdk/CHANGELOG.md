@@ -1,5 +1,11 @@
 # @restatedev/restate-sdk
 
+## 1.16.0
+
+### Patch Changes
+
+- @restatedev/restate-sdk-core@1.16.0
+
 ## 1.15.1
 
 ### Patch Changes

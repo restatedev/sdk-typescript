@@ -1,5 +1,17 @@
 # @restatedev/restate-sdk-gen
 
+## 1.16.0
+
+### Minor Changes
+
+- Ingress calls now automatically retry on 5xx, 429, and network errors when an idempotency key is set.
+
+### Patch Changes
+
+- Updated dependencies
+  - @restatedev/restate-sdk-clients@1.16.0
+  - @restatedev/restate-sdk-core@1.16.0
+
 ## 1.15.1
 
 ### Patch Changes
