@@ -16,6 +16,22 @@ allowBuilds:
 catalog:
   zod: ^4.2.0
 
+# Security overrides: force patched versions of transitive/dev dependencies flagged by
+# Dependabot with high/critical severity. Each is pinned within its current major so the
+# resolver stays on a compatible line while picking up the fix. Revisit when the packages
+# that pull these in (grpc/proto-loader, testcontainers, miniflare, vitest, etc.) ship
+# releases whose own ranges already satisfy these minimums.
+overrides:
+  protobufjs: ^7.6.3
+  "@grpc/grpc-js": ^1.14.4
+  undici: ^7.28.0
+  ws: ^8.21.0
+  tmp: ^0.2.6
+  fast-uri: ^3.1.2
+  vite: ^7.3.5
+  vitest: ^3.2.6
+  next: ^16.2.6
+
 ignoredBuiltDependencies:
   - cpu-features
   - esbuild
