@@ -110,8 +110,7 @@ const baseOptions = (port: number): ConnectTunnelOptions => ({
   tunnelName: TUNNEL_NAME,
   services: [greeter],
   handshakeTimeoutMs: 300,
-  reconnectInitialMs: 5,
-  reconnectMaxMs: 200,
+  reconnectRetryPolicy: { initialInterval: 5, maxInterval: 200 },
 });
 
 const DISCOVER_ACCEPT = "application/vnd.restate.endpointmanifest.v2+json";

@@ -211,7 +211,7 @@ Key options (see `ConnectTunnelOptions` for the full surface and defaults):
 | `services`                                      | Same shape `restate.serve` accepts                                          |
 | `tls`                                           | Default on (system trust, ALPN `h2`); object form for CA/mTLS               |
 | `connectTimeoutMs`                              | TCP+TLS dial deadline (5s, mirrors the standalone client)                   |
-| `reconnectInitialMs/MaxMs/Factor`               | Jittered exponential backoff (10ms → 120s, reset after a stable connection) |
+| `reconnectRetryPolicy`                          | Jittered exponential backoff `{ initialInterval, maxInterval, exponentiationFactor }` (10ms → 120s, reset after a stable connection) |
 | `supportsDrain` / `drainGraceMs`                | Graceful-drain handover on cloud rollovers (on, 120s grace)                 |
 | `supportsClientDrain` / `gracefulShutdown`      | Client shutdown drain with h2 GOAWAY and default `SIGTERM` handling         |
 | `pingIntervalMs/TimeoutMs/MaxMissed`            | Liveness watchdog (75s cadence)                                             |

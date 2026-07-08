@@ -68,7 +68,7 @@ every spawned fiber has finished (`ExecuteOptions = { onMainExit?: "abandon" |
 
 Imported directly from `@restatedev/restate-sdk-gen`:
 
-- **`run(action, opts?)`** — journaled side effect. `action` is `(opts: { signal: AbortSignal }) => Promise<T>`. Pass `signal` into AbortSignal-aware APIs (`fetch(url, { signal })`) for cancellation hygiene. Journal-entry name comes from `opts.name` if given, otherwise from `action.name` (works for named functions and `const`-bound arrows). Retry policy via `opts.retry` (`{ maxAttempts, initialInterval, maxInterval, intervalFactor, maxDuration }`).
+- **`run(action, opts?)`** — journaled side effect. `action` is `(opts: { signal: AbortSignal }) => Promise<T>`. Pass `signal` into AbortSignal-aware APIs (`fetch(url, { signal })`) for cancellation hygiene. Journal-entry name comes from `opts.name` if given, otherwise from `action.name` (works for named functions and `const`-bound arrows). Retry policy via `opts.retry` (`{ maxAttempts, initialInterval, maxInterval, exponentiationFactor, maxDuration }`).
 - **`sleep(duration)`** — journaled timer.
 - **`awakeable<T>()`** — journaled awakeable; returns `{ id, promise: Future<T> }`.
 - **`channel<T>()`** — single-shot in-memory `Channel<T>`.
@@ -125,7 +125,14 @@ Retries are **opt-in** and configured connection-wide via `retry` (`clients.Retr
 
 ```ts
 clients.connect({ url, retry: true });
-clients.connect({ url, retry: { maxRetries: 5, initialInterval: 100, maxInterval: 2000 } });
+clients.connect({
+  url,
+  retry: {
+    maxAttempts: 6,
+    initialInterval: { milliseconds: 100 },
+    maxInterval: { seconds: 2 },
+  },
+});
 ```
 
 When enabled, the client retries ambiguous failures — network errors, HTTP `429`, and HTTP `5xx` — with exponential backoff and jitter, **but only when the call carries an `idempotencyKey`**:

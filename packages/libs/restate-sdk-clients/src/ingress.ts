@@ -241,7 +241,7 @@ const doComponentInvocation = async <I, O>(
       // network error (fetch rejected) — ambiguous
       if (
         retryPolicy &&
-        attempt < retryPolicy.maxRetries &&
+        attempt < retryPolicy.maxAttempts - 1 &&
         !userSignal?.aborted &&
         shouldRetry({ kind: "network", error: e }, attempt)
       ) {
@@ -258,7 +258,7 @@ const doComponentInvocation = async <I, O>(
     const errorBody = await httpResponse.text();
     if (
       retryPolicy &&
-      attempt < retryPolicy.maxRetries &&
+      attempt < retryPolicy.maxAttempts - 1 &&
       !userSignal?.aborted &&
       shouldRetry(
         {
@@ -522,6 +522,15 @@ class HttpIngress implements Ingress {
       serviceSendClient: <D>(opts: ServiceDefinitionFrom<D>) =>
         scopedProxy(opts.name, undefined, true) as IngressSendClient<
           Service<D>
+        >,
+      objectClient: <D>(opts: VirtualObjectDefinitionFrom<D>, key: string) =>
+        scopedProxy(opts.name, key) as IngressClient<VirtualObject<D>>,
+      objectSendClient: <D>(
+        opts: VirtualObjectDefinitionFrom<D>,
+        key: string
+      ) =>
+        scopedProxy(opts.name, key, true) as IngressSendClient<
+          VirtualObject<D>
         >,
       workflowClient: <D>(
         opts: WorkflowDefinitionFrom<D>,

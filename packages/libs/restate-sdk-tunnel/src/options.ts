@@ -15,6 +15,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import { randomBytes } from "node:crypto";
 import type * as tls from "node:tls";
+import type { Duration } from "@restatedev/restate-sdk";
 import type { ConnectTunnelOptions, TunnelTlsOptions } from "./types.js";
 import { parseServerAddress } from "./targets.js";
 
@@ -199,6 +200,23 @@ function positive(
 }
 
 /**
+ * Normalize a `Duration | number` into milliseconds (a number is already ms).
+ * Inlined rather than importing the SDK's `millisOrDurationToMillis`, which is
+ * not part of its public API — this keeps the tunnel package dependency-free.
+ */
+function toMillis(value: Duration | number | undefined): number | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value === "number") return Math.trunc(value);
+  return Math.trunc(
+    (value.milliseconds ?? 0) +
+      1000 * (value.seconds ?? 0) +
+      1000 * 60 * (value.minutes ?? 0) +
+      1000 * 60 * 60 * (value.hours ?? 0) +
+      1000 * 60 * 60 * 24 * (value.days ?? 0)
+  );
+}
+
+/**
  * Validate user options and apply defaults. Throws on misconfiguration.
  * Each identity/discovery option falls back to its RESTATE_INPROC_* env var
  * (option > environment > throw), so a pod the restate-operator configured
@@ -340,12 +358,20 @@ export function resolveOptions(options: ConnectTunnelOptions): ResolvedOptions {
       "handshakeTimeoutMs"
     ),
     reconnectInitialMs: positive(
-      options.reconnectInitialMs,
+      toMillis(options.reconnectRetryPolicy?.initialInterval),
       10,
-      "reconnectInitialMs"
+      "reconnectRetryPolicy.initialInterval"
     ),
-    reconnectMaxMs: positive(options.reconnectMaxMs, 120_000, "reconnectMaxMs"),
-    reconnectFactor: positive(options.reconnectFactor, 2, "reconnectFactor"),
+    reconnectMaxMs: positive(
+      toMillis(options.reconnectRetryPolicy?.maxInterval),
+      120_000,
+      "reconnectRetryPolicy.maxInterval"
+    ),
+    reconnectFactor: positive(
+      options.reconnectRetryPolicy?.exponentiationFactor,
+      2,
+      "reconnectRetryPolicy.exponentiationFactor"
+    ),
     pingIntervalMs,
     pingTimeoutMs,
     pingMaxMissed: positive(options.pingMaxMissed, 2, "pingMaxMissed"),

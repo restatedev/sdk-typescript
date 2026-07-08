@@ -32,6 +32,7 @@
 export { connectTunnel } from "./connect.js";
 export type {
   ConnectTunnelOptions,
+  ReconnectRetryPolicy,
   TunnelConnection,
   TunnelTlsOptions,
 } from "./types.js";

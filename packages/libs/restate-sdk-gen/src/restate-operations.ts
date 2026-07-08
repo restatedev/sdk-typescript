@@ -126,7 +126,7 @@ export type RetryOptions = {
    */
   maxDuration?: restate.Duration | number;
   /**
-   * First retry delay. Subsequent delays grow by `intervalFactor`.
+   * First retry delay. Subsequent delays grow by `exponentiationFactor`.
    * Number is ms. Defaults to 50 ms.
    */
   initialInterval?: restate.Duration | number;
@@ -135,7 +135,11 @@ export type RetryOptions = {
    */
   maxInterval?: restate.Duration | number;
   /**
-   * Multiplier applied to the previous delay. Defaults to 2.
+   * Exponentiation factor applied to the previous delay. Defaults to 2.
+   */
+  exponentiationFactor?: number;
+  /**
+   * @deprecated Renamed to {@link exponentiationFactor}.
    */
   intervalFactor?: number;
 };
@@ -238,8 +242,11 @@ function toSdkRunOptions<T>(opts?: RunOpts<T>): restate.RunOptions<T> {
     if (r.initialInterval !== undefined)
       out.initialRetryInterval = r.initialInterval;
     if (r.maxInterval !== undefined) out.maxRetryInterval = r.maxInterval;
-    if (r.intervalFactor !== undefined)
-      out.retryIntervalFactor = r.intervalFactor;
+    // `exponentiationFactor` is the aligned name; `intervalFactor` is the
+    // deprecated alias, honored only as a fallback.
+    const exponentiationFactor = r.exponentiationFactor ?? r.intervalFactor;
+    if (exponentiationFactor !== undefined)
+      out.retryIntervalFactor = exponentiationFactor;
   }
   return out;
 }

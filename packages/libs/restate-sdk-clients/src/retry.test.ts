@@ -32,19 +32,19 @@ describe("resolveRetryPolicy", () => {
 
   it("returns the default policy when enabled with true", () => {
     expect(resolveRetryPolicy(true)).toEqual({
-      maxRetries: 5,
+      maxAttempts: 6,
       initialInterval: 100,
       maxInterval: 2000,
-      multiplier: 2,
+      exponentiationFactor: 2,
     });
   });
 
   it("fills in missing fields with defaults", () => {
-    expect(resolveRetryPolicy({ maxRetries: 1 })).toEqual({
-      maxRetries: 1,
+    expect(resolveRetryPolicy({ maxAttempts: 3 })).toEqual({
+      maxAttempts: 3,
       initialInterval: 100,
       maxInterval: 2000,
-      multiplier: 2,
+      exponentiationFactor: 2,
       shouldRetry: undefined,
     });
   });
@@ -52,6 +52,18 @@ describe("resolveRetryPolicy", () => {
   it("carries a custom shouldRetry through", () => {
     const shouldRetry = () => false;
     expect(resolveRetryPolicy({ shouldRetry })).toMatchObject({ shouldRetry });
+  });
+
+  it("accepts Duration intervals, resolving them to milliseconds", () => {
+    expect(
+      resolveRetryPolicy({
+        initialInterval: { seconds: 1 },
+        maxInterval: { seconds: 30 },
+      })
+    ).toMatchObject({
+      initialInterval: 1000,
+      maxInterval: 30_000,
+    });
   });
 });
 
@@ -99,10 +111,10 @@ describe("isRetryableStatus", () => {
 
 describe("backoffDelay", () => {
   const policy = {
-    maxRetries: 5,
+    maxAttempts: 6,
     initialInterval: 100,
     maxInterval: 2000,
-    multiplier: 2,
+    exponentiationFactor: 2,
   };
 
   it("never exceeds the per-attempt ceiling (full jitter)", () => {
@@ -195,7 +207,11 @@ describe("ingress auto-retry", () => {
     );
   };
 
-  const fastRetry = { initialInterval: 1, maxInterval: 2, multiplier: 2 };
+  const fastRetry = {
+    initialInterval: 1,
+    maxInterval: 2,
+    exponentiationFactor: 2,
+  };
 
   const call = (idempotencyKey?: string, retry?: RetryPolicy | boolean) =>
     connect({ url: URL, retry }).call({
@@ -289,10 +305,10 @@ describe("ingress auto-retry", () => {
     expect(seen).toEqual(["nope"]); // body text was available to the predicate
   });
 
-  it("gives up after maxRetries and throws the last error", async () => {
+  it("gives up after maxAttempts and throws the last error", async () => {
     queue(fail(500));
     await expect(
-      call("k1", { ...fastRetry, maxRetries: 2 })
+      call("k1", { ...fastRetry, maxAttempts: 3 })
     ).rejects.toMatchObject({ status: 500 });
     expect(fetchMock).toHaveBeenCalledTimes(3); // initial + 2 retries
   });
