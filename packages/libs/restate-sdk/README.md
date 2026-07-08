@@ -54,21 +54,14 @@ This library follows [Semantic Versioning](https://semver.org/).
 
 The compatibility with Restate is described in the following table:
 
-| Restate Server\sdk-typescript | <= 1.4           | 1.5 - 1.6 | 1.7 - 1.8        | 1.9 - 1.10          | 1.11 - 1.14            | 1.15                   |
-|-------------------------------|------------------|-----------|------------------|---------------------|------------------------|------------------------|
-| <= 1.2                        | ✅                | ❌         | ❌                | ❌                   | ❌                      | ❌                      |
-| 1.3                           | ✅                | ✅         | ✅ <sup>(1)</sup> | ✅ <sup>(1, 2)</sup> | ✅ <sup>(1, 2, 3)</sup> | ✅ <sup>(1, 2, 3)</sup> |
-| 1.4                           | ✅                | ✅         | ✅                | ✅ <sup>(2)</sup>    | ✅ <sup>(2, 3)</sup>    | ✅ <sup>(2, 3)</sup>    |
-| 1.5                           | ⚠ <sup>(4)</sup> | ✅         | ✅                | ✅                   | ✅ <sup>(3)</sup>       | ✅ <sup>(3)</sup>       |
-| 1.6                           | ⚠ <sup>(4)</sup> | ✅         | ✅                | ✅                   | ✅                      | ✅                      |
-| 1.7                           | ⚠ <sup>(4)</sup> | ✅         | ✅                | ✅                   | ✅                      | ✅ <sup>(5)</sup>       |
+| Restate Server\sdk-typescript | 1.11 - 1.14 | 1.15 - 1.16 |
+|-------------------------------|-------------|-------------|
+| 1.5                           | ✅           | ✅           |
+| 1.6                           | ✅           | ✅           |
+| 1.7                           | ✅           | ✅           |
 
-<sup>(1)</sup> **Note** `options` in service/object/workflow constructors, together with some options in the `handler`s too, work only from Restate 1.4 onward. Check the in-code documentation for more details.
+Some features require a minimum version of both Restate and the SDK:
 
-<sup>(2)</sup> **Note** `options.retryPolicy` work only from Restate 1.5 onward. Check the in-code documentation for more details.
-
-<sup>(3)</sup> **Note** `TerminalError.metadata` work only from Restate 1.6 onward. Check the in-code documentation for more details.
-
-<sup>(4)</sup> **Warning** SDK versions <= 1.4 are deprecated, and cannot be registered anymore. Check the [Restate 1.5 release notes](https://github.com/restatedev/restate/releases/tag/v1.5.0) for more info.
-
-<sup>(5)</sup> **Note** `ctx.run`'s `retryPolicy` pause and `PauseError` work on Restate 1.7 setting `RESTATE_EXPERIMENTAL_ENABLE_PROTOCOL_V7=true` on the Restate Server. Check the in-code documentation for more details.
+- **`TerminalError.metadata`**: requires Restate >= 1.6 with sdk-typescript >= 1.11. Check the in-code documentation for more details.
+- **`ctx.run`'s `retryPolicy` pause and `PauseError`**: requires Restate >= 1.7 with sdk-typescript >= 1.15, setting `RESTATE_EXPERIMENTAL_ENABLE_PROTOCOL_V7=true` on the Restate Server. Check the in-code documentation for more details.
+- **Scope and limit key**: requires Restate >= 1.7 with sdk-typescript >= 1.15
