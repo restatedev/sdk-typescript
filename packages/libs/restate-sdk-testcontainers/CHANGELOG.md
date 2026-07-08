@@ -1,5 +1,13 @@
 # @restatedev/restate-sdk-testcontainers
 
+## 1.16.0
+
+### Patch Changes
+
+- Updated dependencies [1e3027a]
+  - @restatedev/restate-sdk@1.16.0
+  - @restatedev/restate-sdk-clients@1.16.0
+
 ## 1.15.1
 
 ### Patch Changes
