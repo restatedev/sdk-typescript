@@ -75,7 +75,7 @@ export const failing = object({
           retry: {
             maxAttempts: minimumAttempts + 1,
             initialInterval: 1,
-            intervalFactor: 1.0,
+            exponentiationFactor: 1.0,
           },
         }
       );
@@ -93,7 +93,7 @@ export const failing = object({
             retry: {
               maxAttempts: retryPolicyMaxRetryCount,
               initialInterval: 1,
-              intervalFactor: 1.0,
+              exponentiationFactor: 1.0,
             },
           }
         );

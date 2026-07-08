@@ -183,7 +183,11 @@ export interface Ingress {
  */
 export type ScopedIngress = Pick<
   Ingress,
-  "serviceClient" | "serviceSendClient" | "workflowClient"
+  | "serviceClient"
+  | "serviceSendClient"
+  | "objectClient"
+  | "objectSendClient"
+  | "workflowClient"
 >;
 
 export interface IngressCallOptions<I = unknown, O = unknown> {
@@ -479,33 +483,35 @@ export type RetryFailure =
  */
 export interface RetryPolicy {
   /**
-   * Maximum number of retries after the initial attempt.
+   * Max number of attempts (including the initial), before giving up.
    *
-   * Defaults to `5` (up to 6 attempts in total).
+   * Defaults to `6` (the initial attempt plus up to 5 retries).
    */
-  maxRetries?: number;
+  maxAttempts?: number;
 
   /**
-   * Initial backoff interval, in milliseconds. Defaults to `100`.
+   * Initial backoff interval. If a number is provided, it is interpreted as
+   * milliseconds. Defaults to `100` milliseconds.
    */
-  initialInterval?: number;
+  initialInterval?: Duration | number;
 
   /**
-   * Maximum backoff interval, in milliseconds. Defaults to `2000`.
+   * Maximum backoff interval. If a number is provided, it is interpreted as
+   * milliseconds. Defaults to `2000` milliseconds.
    */
-  maxInterval?: number;
+  maxInterval?: Duration | number;
 
   /**
-   * Multiplier applied to the backoff interval after each attempt.
+   * Exponentiation factor to use when computing the next retry delay.
    * Defaults to `2`.
    */
-  multiplier?: number;
+  exponentiationFactor?: number;
 
   /**
    * Decide whether a given failure should be retried. When provided, this
    * fully replaces the built-in rule (network / `429` / `5xx`).
    *
-   * The idempotency-key gate and the `maxRetries` cap still apply — this
+   * The idempotency-key gate and the `maxAttempts` cap still apply — this
    * predicate only narrows or broadens *which failures* are retryable within
    * those bounds. Compose with the built-in rule via the exported
    * `defaultShouldRetry`.

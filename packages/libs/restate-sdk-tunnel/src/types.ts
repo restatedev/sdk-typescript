@@ -11,7 +11,7 @@
 
 // Public types for @restatedev/restate-sdk-tunnel.
 
-import type { EndpointOptions } from "@restatedev/restate-sdk";
+import type { Duration, EndpointOptions } from "@restatedev/restate-sdk";
 
 /**
  * TLS options for the outbound tunnel connection.
@@ -38,6 +38,30 @@ export interface TunnelTlsOptions {
   servername?: string;
   /** Verify the server certificate. Default true. */
   rejectUnauthorized?: boolean;
+}
+
+/**
+ * Reconnect backoff policy. Between reconnect attempts the engine waits a
+ * jittered exponential delay: it starts at {@link initialInterval}, grows by
+ * {@link exponentiationFactor} per failed attempt, is capped at
+ * {@link maxInterval}, and resets after a connection stays up long enough to be
+ * considered stable. Intervals accept a {@link Duration} or a number of
+ * milliseconds.
+ *
+ * The field names mirror the invocation and ingress retry policies. Note the
+ * tunnel reconnect loop is unbounded — there is no `maxAttempts`; it redials
+ * forever until a connection succeeds or the tunnel is shut down.
+ */
+export interface ReconnectRetryPolicy {
+  /** Initial delay. A number is interpreted as milliseconds. Default 10 milliseconds. */
+  initialInterval?: Duration | number;
+  /** Maximum delay. A number is interpreted as milliseconds. Default 120_000 milliseconds. */
+  maxInterval?: Duration | number;
+  /**
+   * Exponentiation factor applied to the delay after each failed attempt.
+   * Default 2.
+   */
+  exponentiationFactor?: number;
 }
 
 /**
@@ -223,15 +247,11 @@ export interface ConnectTunnelOptions extends Omit<
    */
   gracefulShutdown?: boolean | { signals?: NodeJS.Signals[]; graceMs?: number };
   /**
-   * Reconnect backoff: initial delay in milliseconds. Default 10.
-   * The delay grows by `reconnectFactor` per failed attempt (with jitter)
-   * up to `reconnectMaxMs`, and resets after a successful handshake.
+   * Reconnect backoff policy: jittered exponential backoff applied between
+   * reconnect attempts (10ms → 120s by default), reset after a stable
+   * connection. See {@link ReconnectRetryPolicy}.
    */
-  reconnectInitialMs?: number;
-  /** Reconnect backoff: maximum delay in milliseconds. Default 120_000. */
-  reconnectMaxMs?: number;
-  /** Reconnect backoff: growth factor. Default 2. */
-  reconnectFactor?: number;
+  reconnectRetryPolicy?: ReconnectRetryPolicy;
   /**
    * Deadline for establishing the TCP connection and completing the TLS
    * handshake. Default 5_000 (mirrors the standalone tunnel client's

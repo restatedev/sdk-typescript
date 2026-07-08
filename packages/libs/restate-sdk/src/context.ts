@@ -320,6 +320,8 @@ export type ScopedContext = Pick<
   Context,
   | "serviceClient"
   | "serviceSendClient"
+  | "objectClient"
+  | "objectSendClient"
   | "workflowClient"
   | "workflowSendClient"
 >;
@@ -657,6 +659,9 @@ export interface Context extends RestateContext {
    * ```ts
    * // Route a call into a named scope
    * await ctx.scope("tenant-123").serviceClient(MyService).process(payload);
+   *
+   * // Virtual objects can be scoped too — the object key is part of the scoped identity
+   * await ctx.scope("tenant-123").objectClient(MyObject, "obj-key").update(payload);
    *
    * // Idempotency keys are scoped — "req-1" in "tenant-123" is distinct from "req-1" in "tenant-456"
    * await ctx.scope("tenant-123").serviceClient(MyService)

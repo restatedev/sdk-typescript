@@ -41,11 +41,15 @@ const INGRESS_URL = process.env.RESTATE_INGRESS_URL ?? "http://localhost:8080";
 export async function runIngressDemo(url: string = INGRESS_URL) {
   // Connect once and reuse. `retry` is a connection-wide, opt-in setting:
   //   - omit it / false → no retries (the default)
-  //   - retry: true     → built-in policy (maxRetries 5, exp. backoff + jitter)
+  //   - retry: true     → built-in policy (maxAttempts 6, exp. backoff + jitter)
   //   - retry: {...}     → tune the policy, or supply shouldRetry (see below)
   const ingress = clients.connect({
     url,
-    retry: { maxRetries: 5, initialInterval: 100, maxInterval: 2000 },
+    retry: {
+      maxAttempts: 6,
+      initialInterval: { milliseconds: 100 },
+      maxInterval: { seconds: 2 },
+    },
   });
 
   const greeterClient = clients.client(ingress, greeter);

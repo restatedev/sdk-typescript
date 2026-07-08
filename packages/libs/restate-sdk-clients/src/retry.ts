@@ -9,22 +9,23 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
+import { millisOrDurationToMillis } from "@restatedev/restate-sdk-core";
 import type { RetryFailure, RetryPolicy } from "./api.js";
 
 /** Fully resolved retry policy, with all defaults applied. */
 export interface ResolvedRetryPolicy {
-  maxRetries: number;
+  maxAttempts: number;
   initialInterval: number;
   maxInterval: number;
-  multiplier: number;
+  exponentiationFactor: number;
   shouldRetry?: (failure: RetryFailure, attempt: number) => boolean;
 }
 
 const DEFAULT_RETRY_POLICY: ResolvedRetryPolicy = {
-  maxRetries: 5,
+  maxAttempts: 6,
   initialInterval: 100,
   maxInterval: 2000,
-  multiplier: 2,
+  exponentiationFactor: 2,
 };
 
 /**
@@ -44,11 +45,17 @@ export function resolveRetryPolicy(
     return DEFAULT_RETRY_POLICY;
   }
   return {
-    maxRetries: retry.maxRetries ?? DEFAULT_RETRY_POLICY.maxRetries,
+    maxAttempts: retry.maxAttempts ?? DEFAULT_RETRY_POLICY.maxAttempts,
     initialInterval:
-      retry.initialInterval ?? DEFAULT_RETRY_POLICY.initialInterval,
-    maxInterval: retry.maxInterval ?? DEFAULT_RETRY_POLICY.maxInterval,
-    multiplier: retry.multiplier ?? DEFAULT_RETRY_POLICY.multiplier,
+      retry.initialInterval !== undefined
+        ? millisOrDurationToMillis(retry.initialInterval)
+        : DEFAULT_RETRY_POLICY.initialInterval,
+    maxInterval:
+      retry.maxInterval !== undefined
+        ? millisOrDurationToMillis(retry.maxInterval)
+        : DEFAULT_RETRY_POLICY.maxInterval,
+    exponentiationFactor:
+      retry.exponentiationFactor ?? DEFAULT_RETRY_POLICY.exponentiationFactor,
     shouldRetry: retry.shouldRetry,
   };
 }
@@ -82,7 +89,8 @@ export function backoffDelay(
   if (retryAfterMs !== undefined) {
     return Math.min(retryAfterMs, policy.maxInterval);
   }
-  const exp = policy.initialInterval * Math.pow(policy.multiplier, attempt);
+  const exp =
+    policy.initialInterval * Math.pow(policy.exponentiationFactor, attempt);
   const ceiling = Math.min(exp, policy.maxInterval);
   // full jitter: random in [0, ceiling]
   return Math.random() * ceiling;

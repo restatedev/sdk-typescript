@@ -82,6 +82,20 @@ describe("resolveOptions — validation", () => {
     expect(r.tunnelWorkerId).toMatch(/^[\x21-\x7e]+$/);
   });
 
+  test("accepts Duration reconnect intervals, resolving them to milliseconds", () => {
+    const r = resolveOptions({
+      ...valid,
+      reconnectRetryPolicy: {
+        initialInterval: { seconds: 1 },
+        maxInterval: { seconds: 30 },
+        exponentiationFactor: 3,
+      },
+    });
+    expect(r.reconnectInitialMs).toBe(1000);
+    expect(r.reconnectMaxMs).toBe(30_000);
+    expect(r.reconnectFactor).toBe(3);
+  });
+
   test("accepts a multi-label (BYOC) region", () => {
     const r = resolveOptions({
       ...valid,
@@ -189,9 +203,9 @@ describe("resolveOptions — validation", () => {
   });
 
   test("rejects non-positive numeric options", () => {
-    expect(() => resolveOptions({ ...valid, reconnectInitialMs: 0 })).toThrow(
-      /positive/
-    );
+    expect(() =>
+      resolveOptions({ ...valid, reconnectRetryPolicy: { initialInterval: 0 } })
+    ).toThrow(/positive/);
     expect(() => resolveOptions({ ...valid, pingIntervalMs: -5 })).toThrow(
       /positive/
     );

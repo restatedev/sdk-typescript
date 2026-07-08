@@ -470,6 +470,28 @@ export class ContextImpl
           undefined,
           scopeKey
         ),
+      objectClient: <D>(
+        { name }: VirtualObjectDefinitionFrom<D>,
+        key: string
+      ) =>
+        makeRpcCallProxy<Client<VirtualObject<D>>>(
+          (call) => this.genericCall(call),
+          this.defaultSerde,
+          name,
+          key,
+          scopeKey
+        ),
+      objectSendClient: <D>(
+        { name }: VirtualObjectDefinitionFrom<D>,
+        key: string
+      ) =>
+        makeRpcSendProxy<SendClient<VirtualObject<D>>>(
+          (send) => this.genericSend(send),
+          this.defaultSerde,
+          name,
+          key,
+          scopeKey
+        ),
       workflowClient: <D>({ name }: WorkflowDefinitionFrom<D>, key: string) =>
         makeRpcCallProxy<Client<Workflow<D>>>(
           (call) => this.genericCall(call),

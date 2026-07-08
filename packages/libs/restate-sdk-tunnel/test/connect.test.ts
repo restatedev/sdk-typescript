@@ -56,8 +56,7 @@ const baseOptions = (port: number): ConnectTunnelOptions => ({
   tunnelWorkerId: "worker-test-1",
   services: [greeter],
   handshakeTimeoutMs: 300,
-  reconnectInitialMs: 5,
-  reconnectMaxMs: 50,
+  reconnectRetryPolicy: { initialInterval: 5, maxInterval: 50 },
 });
 
 // The SDK's minimum supported endpoint-manifest version is v2.
