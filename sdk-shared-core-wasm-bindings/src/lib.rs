@@ -24,10 +24,10 @@ use wasm_bindgen::prelude::*;
 /// Setups the WASM module
 #[wasm_bindgen(start)]
 pub fn start() {
-    // print pretty errors in wasm https://github.com/rustwasm/console_error_panic_hook
-    // This is not needed for tracing_wasm to work, but it is a common tool for getting proper error line numbers for panics.
-    #[cfg(feature = "console_error_panic_hook")]
-    console_error_panic_hook::set_once();
+    // Setup our panic hook
+    std::panic::set_hook(Box::new(|info| {
+        fatal(&info.to_string());
+    }));
 }
 
 #[wasm_bindgen]
@@ -64,6 +64,10 @@ impl From<WasmJournalMismatchBehavior> for JournalMismatchRetryBehavior {
 extern "C" {
     #[wasm_bindgen]
     fn vm_log(level: LogLevel, s: &[u8], logger_id: Option<u32>);
+
+    /// Called on panics
+    #[wasm_bindgen]
+    fn fatal(s: &str);
 }
 
 pub struct MakeWebConsoleWriter {

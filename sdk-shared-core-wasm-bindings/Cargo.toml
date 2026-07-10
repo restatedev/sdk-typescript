@@ -7,13 +7,9 @@ edition = "2018"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
-[features]
-default = ["console_error_panic_hook"]
-
 [dependencies]
 wasm-bindgen = "0.2.121"
-restate-sdk-shared-core = { version = "7.0.0", features = ["request_identity", "rust_crypto", "tracing_pretty"] }
-console_error_panic_hook = { version = "0.1.7", optional = true }
+restate-sdk-shared-core = { version = "7.0.1", features = ["request_identity", "rust_crypto", "tracing_pretty"] }
 serde = { version = "1.0.210", features = ["derive"] }
 tsify = { version = "0.5.6", default-features = false, features = ["js"] }
 getrandom = { version = "0.2", features = ["js"] } # Needed for jsonwebtoken
@@ -25,3 +21,5 @@ tracing-subscriber = { version = "0.3.18", default-features = false, features = 
 [profile.release]
 opt-level = 3
 lto = true
+# This still runs the panic handler, just wont allow to catch panics.
+panic = "abort"
