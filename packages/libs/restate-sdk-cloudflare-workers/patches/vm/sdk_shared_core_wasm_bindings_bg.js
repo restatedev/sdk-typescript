@@ -1,4 +1,4 @@
-import { vm_log } from '../core_logging.js';
+import { fatal, vm_log } from '../core_logging.js';
 
 
 /**
@@ -1041,16 +1041,8 @@ export function __wbg_entries_564a7e8b1e54ede5(arg0) {
     const ret = Object.entries(arg0);
     return ret;
 }
-export function __wbg_error_a6fa202b58aa1cd3(arg0, arg1) {
-    let deferred0_0;
-    let deferred0_1;
-    try {
-        deferred0_0 = arg0;
-        deferred0_1 = arg1;
-        console.error(getStringFromWasm0(arg0, arg1));
-    } finally {
-        wasm.__wbindgen_free(deferred0_0, deferred0_1, 1);
-    }
+export function __wbg_fatal_dd3314b57e7713f4(arg0, arg1) {
+    fatal(getStringFromWasm0(arg0, arg1));
 }
 export function __wbg_from_fa561fa561dc8031(arg0) {
     const ret = Array.from(arg0);
@@ -1131,10 +1123,6 @@ export function __wbg_new_0_2722fcdb71a888a6() {
     const ret = new Date();
     return ret;
 }
-export function __wbg_new_227d7c05414eb861() {
-    const ret = new Error();
-    return ret;
-}
 export function __wbg_new_310879b66b6e95e1() {
     const ret = new Array();
     return ret;
@@ -1186,13 +1174,6 @@ export function __wbg_set_6be42768c690e380(arg0, arg1, arg2) {
 }
 export function __wbg_set_78ea6a19f4818587(arg0, arg1, arg2) {
     arg0[arg1 >>> 0] = arg2;
-}
-export function __wbg_stack_3b0d974bbf31e44f(arg0, arg1) {
-    const ret = arg1.stack;
-    const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
-    const len1 = WASM_VECTOR_LEN;
-    getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
-    getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
 }
 export function __wbg_static_accessor_GLOBAL_THIS_02344c9b09eb08a9() {
     const ret = typeof globalThis === 'undefined' ? null : globalThis;

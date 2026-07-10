@@ -48,6 +48,36 @@ export function vm_log(
   }
 }
 
+/**
+ * Invoked by the shared core's panic hook when it hits a rust panic.
+ */
+export function fatal(message: string) {
+  try {
+    const stack = new Error().stack;
+    defaultLoggerTransport(
+      {
+        level: RestateLogLevel.ERROR,
+        replaying: false,
+        source: LogSource.SYSTEM,
+      },
+      "FATAL: the SDK shared-core panicked, terminating the process. Reason: \n" +
+        message +
+        (stack ? "\n\nStack:\n" + stack : "")
+    );
+
+    const proc = (
+      globalThis as typeof globalThis & {
+        process?: { exit?: (code?: number) => never };
+      }
+    ).process;
+    if (typeof proc?.exit === "function") {
+      proc.exit(1);
+    }
+  } catch {
+    // Never throw back into the panic hook (would trigger a double-panic abort).
+  }
+}
+
 export function registerLogger(loggerId: number, logger: Logger) {
   invocationLoggers.set(loggerId, logger);
 }
