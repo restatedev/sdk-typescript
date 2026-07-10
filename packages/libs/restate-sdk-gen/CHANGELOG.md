@@ -1,5 +1,14 @@
 # @restatedev/restate-sdk-gen
 
+## 1.16.1
+
+### Patch Changes
+
+- Update shared core to 7.0.1, including fix for panics on out of bound durations
+- Updated dependencies
+  - @restatedev/restate-sdk-clients@1.16.1
+  - @restatedev/restate-sdk-core@1.16.1
+
 ## 1.16.0
 
 ### Minor Changes

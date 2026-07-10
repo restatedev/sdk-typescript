@@ -1,5 +1,11 @@
 # @restatedev/restate-sdk-zod
 
+## 1.16.1
+
+### Patch Changes
+
+- Update shared core to 7.0.1, including fix for panics on out of bound durations
+
 ## 1.16.0
 
 ## 1.15.1

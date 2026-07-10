@@ -1,6 +1,6 @@
 {
   "name": "@restatedev/restate-sdk-tunnel",
-  "version": "1.16.0",
+  "version": "1.16.1",
   "description": "Reverse-tunnel client for Restate Cloud — serve a Restate SDK deployment over an outbound tunnel connection, with no inbound HTTP listener",
   "author": "Restate Developers",
   "email": "code@restate.dev",
