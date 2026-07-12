@@ -118,7 +118,7 @@ function optsFromArgs(args: unknown[]): {
 const IDEMPOTENCY_KEY_HEADER = "idempotency-key";
 const LIMIT_KEY_HEADER = "x-restate-limit-key";
 
-const getFetch = (opts: ConnectionOpts): typeof globalThis.fetch =>
+const getFetch = (opts: ConnectionOpts): NonNullable<ConnectionOpts["fetch"]> =>
   opts.fetch ?? globalThis.fetch;
 
 const doComponentInvocation = async <I, O>(
