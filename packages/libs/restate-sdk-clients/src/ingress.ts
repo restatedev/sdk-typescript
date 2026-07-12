@@ -118,6 +118,9 @@ function optsFromArgs(args: unknown[]): {
 const IDEMPOTENCY_KEY_HEADER = "idempotency-key";
 const LIMIT_KEY_HEADER = "x-restate-limit-key";
 
+const getFetch = (opts: ConnectionOpts): typeof globalThis.fetch =>
+  opts.fetch ?? globalThis.fetch;
+
 const doComponentInvocation = async <I, O>(
   opts: ConnectionOpts,
   params: InvocationParameters<I>
@@ -231,7 +234,7 @@ const doComponentInvocation = async <I, O>(
   let httpResponse: Response;
   for (let attempt = 0; ; attempt++) {
     try {
-      httpResponse = await fetch(url, {
+      httpResponse = await getFetch(opts)(url, {
         method: params.method ?? "POST",
         headers,
         body,
@@ -331,7 +334,7 @@ const doWorkflowHandleCall = async <O>(
     signal = AbortSignal.timeout(callOpts?.opts?.timeout);
   }
 
-  const httpResponse = await fetch(url, {
+  const httpResponse = await getFetch(opts)(url, {
     method: "GET",
     headers,
     signal,
@@ -671,7 +674,7 @@ class HttpIngress implements Ingress {
     if (contentType) {
       headers["Content-Type"] = contentType;
     }
-    const httpResponse = await fetch(url, {
+    const httpResponse = await getFetch(this.opts)(url, {
       method: "POST",
       headers,
       body,
@@ -692,7 +695,7 @@ class HttpIngress implements Ingress {
       "Content-Type": "text/plain",
       ...(this.opts.headers ?? {}),
     };
-    const httpResponse = await fetch(url, {
+    const httpResponse = await getFetch(this.opts)(url, {
       method: "POST",
       headers,
       body: reason,
@@ -727,7 +730,7 @@ class HttpIngress implements Ingress {
     // make the call
     const url = `${this.opts.url}/restate/invocation/${send.invocationId}/attach`;
 
-    const httpResponse = await fetch(url, {
+    const httpResponse = await getFetch(this.opts)(url, {
       method: "GET",
       headers,
     });

@@ -564,4 +564,11 @@ export type ConnectionOpts = {
    * @experimental
    */
   journalValueCodec?: JournalValueCodec;
+
+  /**
+   * Custom fetch handler
+   *
+   * Defaults to globalThis.fetch
+   */
+  fetch?: typeof globalThis.fetch;
 };
