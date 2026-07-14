@@ -566,9 +566,11 @@ export type ConnectionOpts = {
   journalValueCodec?: JournalValueCodec;
 
   /**
-   * Custom fetch handler
+   * Custom fetch client
    *
-   * Defaults to globalThis.fetch
+   * Allows you to provide a different fetch implementation (e.g., undici fetch for HTTP/2 support).
+   *
+   * @defaultValue `globalThis.fetch`
    */
   fetch?: typeof globalThis.fetch;
 };
