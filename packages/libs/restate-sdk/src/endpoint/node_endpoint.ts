@@ -183,7 +183,9 @@ function nodeHandlerImpl(
     // Abort controller used to cleanup resources at the end of this stream lifecycle
     const abortController = new AbortController();
     httpRequest.on("close", () => {
-      abortController.abort();
+      if (!httpRequest.readableEnded) {
+        abortController.abort();
+      }
     });
 
     const writeHead = res.writeHead.bind(res);
