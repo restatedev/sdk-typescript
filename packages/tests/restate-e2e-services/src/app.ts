@@ -31,6 +31,8 @@ import "./preview_serdes.js";
 import "./ingress_default_serde.js";
 import "./hooks.js";
 import "./memory_leak.js";
+import "./node_endpoint.js";
+import * as http from "http";
 import * as http2 from "http2";
 import * as heapdump from "heapdump";
 import path from "path";
@@ -125,11 +127,40 @@ function startNodeHttp2Endpoint() {
   });
 }
 
+function startNodeHttp1Endpoint() {
+  let inflightRequests = 0;
+
+  const handler = restate.createEndpointHandler({
+    services: selectedServices,
+    identityKeys,
+    bidirectional: false,
+  });
+  const server = http.createServer((req, res) => {
+    inflightRequests++;
+    res.once("close", () => {
+      inflightRequests--;
+    });
+    handler(req, res);
+  });
+
+  setInterval(() => {
+    console.log(
+      `${new Date().toISOString()}: Inflight requests: ${inflightRequests}`
+    );
+  }, 30 * 1000);
+
+  server.listen(port, "0.0.0.0", () => {
+    console.log(`HTTP/1.1 server listening on 0.0.0.0:${port}`);
+  });
+}
+
 const endpointAdapter =
   process.env.RESTATE_E2E_ENDPOINT_ADAPTER ?? "node-http2";
 if (endpointAdapter === "fetch") {
   const { startFetchEndpoint } = await import("./fetch_endpoint.js");
   startFetchEndpoint({ port, services: selectedServices, identityKeys });
+} else if (endpointAdapter === "node-http1" || endpointAdapter === "http1") {
+  startNodeHttp1Endpoint();
 } else if (endpointAdapter === "node-http2" || endpointAdapter === "http2") {
   startNodeHttp2Endpoint();
 } else {
