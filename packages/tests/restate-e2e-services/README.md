@@ -19,16 +19,19 @@ pnpm --filter @restatedev/restate-e2e-services app
 By default all services are registered on port `9080`. The following environment
 variables are supported:
 
-| Variable                        | Default      | Purpose                                                       |
-| ------------------------------- | ------------ | ------------------------------------------------------------- |
-| `SERVICES`                      | all          | Comma-separated list of services to register, or `*` for all  |
-| `PORT`                          | `9080`       | HTTP/2 server port                                            |
-| `RESTATE_E2E_ENDPOINT_ADAPTER`  | `node-http2` | Endpoint implementation (`node-http2` or `fetch`)             |
+| Variable                       | Default      | Purpose                                                       |
+|--------------------------------|--------------|---------------------------------------------------------------|
+| `SERVICES`                     | all          | Comma-separated list of services to register, or `*` for all  |
+| `PORT`                         | `9080`       | HTTP/2 server port                                            |
+| `RESTATE_E2E_ENDPOINT_ADAPTER` | `node-http2` | Endpoint implementation (`node-http2`, `node-http1`, `fetch`) |
 
 Examples:
 
 ```shell
 SERVICES=Counter,EventHandler PORT=9080 pnpm app
+
+# run with the HTTP/1.1 endpoint adapter
+pnpm app:http1
 
 # run with the fetch-based endpoint adapter
 pnpm app:fetch
