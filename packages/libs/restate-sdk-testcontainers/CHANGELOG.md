@@ -1,5 +1,14 @@
 # @restatedev/restate-sdk-testcontainers
 
+## 1.16.2
+
+### Patch Changes
+
+- Added scope() client to the gen sdk
+- Updated dependencies
+  - @restatedev/restate-sdk@1.16.2
+  - @restatedev/restate-sdk-clients@1.16.2
+
 ## 1.16.1
 
 ### Patch Changes

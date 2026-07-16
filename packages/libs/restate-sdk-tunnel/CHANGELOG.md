@@ -1,5 +1,11 @@
 # @restatedev/restate-sdk-tunnel
 
+## 1.16.2
+
+### Patch Changes
+
+- Added scope() client to the gen sdk
+
 ## 1.16.1
 
 ### Patch Changes
