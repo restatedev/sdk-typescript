@@ -237,6 +237,31 @@ export interface GenContextDate {
   toJSON(): Future<string>;
 }
 
+/**
+ * Client bundle bound to a specific scope, returned by
+ * {@link RestateOperations.scope} (and the free-standing `scope`).
+ *
+ * Exposes the same `client`/`sendClient` overloads as the unscoped
+ * variants — for services, no key; for objects/workflows, the key —
+ * but every call/send routes within the bound scope.
+ */
+export interface ScopedOperations {
+  client<H extends Record<string, HandlerDescriptor>>(
+    def: Descriptor<string, H, "service">
+  ): GenClient<H>;
+  client<H extends Record<string, HandlerDescriptor>>(
+    def: Descriptor<string, H, "object" | "workflow">,
+    key: string
+  ): GenClient<H>;
+  sendClient<H extends Record<string, HandlerDescriptor>>(
+    def: Descriptor<string, H, "service">
+  ): GenSendClient<H>;
+  sendClient<H extends Record<string, HandlerDescriptor>>(
+    def: Descriptor<string, H, "object" | "workflow">,
+    key: string
+  ): GenSendClient<H>;
+}
+
 export class RestateOperations {
   private readonly ctx: restate.internal.ContextInternal;
   private readonly sched: Scheduler;
@@ -437,6 +462,37 @@ export class RestateOperations {
     return makeSendClient(def, key, (o, serde) =>
       this.send(o as any, serde)
     ) as any;
+  }
+
+  /**
+   * Route all outgoing calls/sends through a named scope.
+   *
+   * Returns a bundle with the same `client`/`sendClient` overloads as the
+   * unscoped variants; every call or send built from it carries the given
+   * `scopeKey`. A scope is a sub-grouping of resources within the cluster
+   * and becomes part of the target identity (it contributes to the
+   * partition key, co-locating resources in the same scope).
+   *
+   * `scopeKey` must match `[a-zA-Z0-9_.-]`, 1..36 chars. Per-call
+   * `limitKey` (via `Opts`/`SendOpts`) can only be used within a scope.
+   *
+   * @example
+   *   yield* scope("tenant-123").client(Greeter).greet(name);
+   *   yield* scope("tenant-123").client(Cart, "cart-42").add(item);
+   *   scope("tenant-123").sendClient(Greeter).greet(name);
+   */
+  scope(scopeKey: string): ScopedOperations {
+    return {
+      client: (def: Descriptor<string, any, any>, key?: string) =>
+        makeClient(def, key, (o) => this.call(o as any), scopeKey),
+      sendClient: (def: Descriptor<string, any, any>, key?: string) =>
+        makeSendClient(
+          def,
+          key,
+          (o, serde) => this.send(o as any, serde),
+          scopeKey
+        ),
+    } as ScopedOperations;
   }
 
   // ---- generic call/send (renamed from genericCall/genericSend) ----

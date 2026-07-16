@@ -27,6 +27,8 @@
 //   /blockAndWait      — workflow with a durable promise
 //   /ambient           — context-local storage: request-scoped ambient
 //                        values shared across helpers and spawned routines
+//   /OrderProcessor    — scoped calls: scope(apiKey).client(def) to rate-limit
+//                        third-party API usage per key (also: /AmazonMerchantService)
 //
 // Tier 13 (13-ingress.ts) is the client side: a plain Node process that calls
 // this endpoint over HTTP via the ingress client (with auto-retry). It is not a
@@ -47,6 +49,7 @@ import { blockAndWaitWorkflow } from "./09-workflows.js";
 import { ifaceServices } from "./10-ifaces.js";
 import { userService, echoService } from "./11-serdes.js";
 import { ambient } from "./12-context.js";
+import { amazonMerchantService, orderProcessor } from "./14-scopes.js";
 
 restate.serve({
   services: [
@@ -65,5 +68,7 @@ restate.serve({
     userService,
     echoService,
     ambient,
+    amazonMerchantService,
+    orderProcessor,
   ],
 });
