@@ -55,7 +55,8 @@ export type GenSendClient<H extends Record<string, HandlerDescriptor>> = {
 export function makeClient<H extends Record<string, HandlerDescriptor>>(
   def: Descriptor<string, H, any>,
   key: string | undefined,
-  call: (opts: restate.GenericCall<unknown, unknown>) => ClientFuture<unknown>
+  call: (opts: restate.GenericCall<unknown, unknown>) => ClientFuture<unknown>,
+  scope?: string
 ): GenClient<H> {
   return new Proxy({} as any, {
     get(_target, methodName: string) {
@@ -75,6 +76,8 @@ export function makeClient<H extends Record<string, HandlerDescriptor>>(
           outputSerde: (outputSerde ??
             restate.serde.json) as restate.Serde<unknown>,
           idempotencyKey: callOpts?.idempotencyKey,
+          limitKey: callOpts?.limitKey,
+          scope,
           headers: callOpts?.headers,
           name: callOpts?.name,
         });
@@ -89,7 +92,8 @@ export function makeSendClient<H extends Record<string, HandlerDescriptor>>(
   send: (
     opts: restate.GenericSend<unknown>,
     outputSerde?: restate.Serde<unknown>
-  ) => Future<InvocationReference<unknown>>
+  ) => Future<InvocationReference<unknown>>,
+  scope?: string
 ): GenSendClient<H> {
   return new Proxy({} as any, {
     get(_target, methodName: string) {
@@ -108,6 +112,8 @@ export function makeSendClient<H extends Record<string, HandlerDescriptor>>(
               restate.serde.json) as restate.Serde<unknown>,
             delay: sendOpts?.delay,
             idempotencyKey: sendOpts?.idempotencyKey,
+            limitKey: sendOpts?.limitKey,
+            scope,
             headers: sendOpts?.headers,
             name: sendOpts?.name,
           },

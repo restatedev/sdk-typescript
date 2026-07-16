@@ -51,6 +51,7 @@ import type {
   RestateOperations,
   RunAction,
   RunOpts,
+  ScopedOperations,
 } from "./restate-operations.js";
 import type { Descriptor, HandlerDescriptor } from "./define.js";
 import type { ClientFuture, GenClient, GenSendClient } from "./clients.js";
@@ -172,6 +173,19 @@ export function sendClient(
     key as any
   );
 }
+
+/**
+ * Route all outgoing calls/sends through a named scope. Returns a bundle
+ * exposing the same `client`/`sendClient` overloads, with every call/send
+ * carrying `scopeKey`. See {@link RestateOperations.scope} for full semantics.
+ *
+ * @example
+ *   yield* scope("tenant-123").client(Greeter).greet(name);
+ *   yield* scope("tenant-123").client(Cart, "cart-42").add(item);
+ *   scope("tenant-123").sendClient(Greeter).greet(name);
+ */
+export const scope = (scopeKey: string): ScopedOperations =>
+  currentOps().scope(scopeKey);
 
 // ---- generic call/send (renamed from genericCall/genericSend) ----
 

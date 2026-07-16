@@ -113,26 +113,7 @@ export function client(
   def: Descriptor<string, any, any>,
   key?: string
 ): IngressHandlerClient<any> {
-  return new Proxy({} as any, {
-    get(_target, methodName: string) {
-      return (...args: unknown[]) => {
-        const { parameter, opts } = optsFromArgs(args);
-        const desc = def._handlers[methodName] as HandlerDescriptor | undefined;
-        const mergedOpts = Opts.from({
-          ...opts?.opts,
-          input: opts?.opts?.input ?? desc?._inputSerde,
-          output: opts?.opts?.output ?? desc?._outputSerde,
-        });
-        return ingress.call<unknown, unknown>({
-          service: def.name,
-          handler: methodName,
-          parameter,
-          key,
-          opts: mergedOpts,
-        });
-      };
-    },
-  });
+  return makeIngressClient(ingress, def, key);
 }
 
 export function sendClient<H extends Record<string, HandlerDescriptor>>(
@@ -149,6 +130,85 @@ export function sendClient(
   def: Descriptor<string, any, any>,
   key?: string
 ): IngressSendHandlerClient<any> {
+  return makeIngressSendClient(ingress, def, key);
+}
+
+/**
+ * Ingress client bundle bound to a specific scope, returned by {@link scope}.
+ * Mirrors the in-handler `scope(...)` surface: same `client`/`sendClient`
+ * overloads, but every call/send routes within the bound scope.
+ */
+export interface ScopedGenIngress {
+  client<H extends Record<string, HandlerDescriptor>>(
+    def: Descriptor<string, H, "service">
+  ): IngressHandlerClient<H>;
+  client<H extends Record<string, HandlerDescriptor>>(
+    def: Descriptor<string, H, "object" | "workflow">,
+    key: string
+  ): IngressHandlerClient<H>;
+  sendClient<H extends Record<string, HandlerDescriptor>>(
+    def: Descriptor<string, H, "service">
+  ): IngressSendHandlerClient<H>;
+  sendClient<H extends Record<string, HandlerDescriptor>>(
+    def: Descriptor<string, H, "object" | "workflow">,
+    key: string
+  ): IngressSendHandlerClient<H>;
+}
+
+/**
+ * Route all ingress calls/sends through a named scope. The in-handler
+ * `scope(scopeKey)` and this `scope(ingress, scopeKey)` produce the same
+ * `.client(def)` / `.sendClient(def)` shape, so handler and ingress code
+ * read identically (modulo the explicit `ingress`).
+ *
+ * @example
+ *   await clients.scope(ingress, "tenant-123").client(Greeter).greet(name);
+ *   await clients.scope(ingress, "tenant-123").client(Cart, "cart-42").add(item);
+ */
+export function scope(ingress: GenIngress, scopeKey: string): ScopedGenIngress {
+  return {
+    client: (def: Descriptor<string, any, any>, key?: string) =>
+      makeIngressClient(ingress, def, key, scopeKey),
+    sendClient: (def: Descriptor<string, any, any>, key?: string) =>
+      makeIngressSendClient(ingress, def, key, scopeKey),
+  } as ScopedGenIngress;
+}
+
+function makeIngressClient(
+  ingress: GenIngress,
+  def: Descriptor<string, any, any>,
+  key?: string,
+  scope?: string
+): IngressHandlerClient<any> {
+  return new Proxy({} as any, {
+    get(_target, methodName: string) {
+      return (...args: unknown[]) => {
+        const { parameter, opts } = optsFromArgs(args);
+        const desc = def._handlers[methodName] as HandlerDescriptor | undefined;
+        const mergedOpts = Opts.from({
+          ...opts?.opts,
+          input: opts?.opts?.input ?? desc?._inputSerde,
+          output: opts?.opts?.output ?? desc?._outputSerde,
+        });
+        return ingress.call<unknown, unknown>({
+          service: def.name,
+          handler: methodName,
+          parameter,
+          key,
+          scope,
+          opts: mergedOpts,
+        });
+      };
+    },
+  });
+}
+
+function makeIngressSendClient(
+  ingress: GenIngress,
+  def: Descriptor<string, any, any>,
+  key?: string,
+  scope?: string
+): IngressSendHandlerClient<any> {
   return new Proxy({} as any, {
     get(_target, methodName: string) {
       return (...args: unknown[]) => {
@@ -163,6 +223,7 @@ export function sendClient(
           handler: methodName,
           parameter,
           key,
+          scope,
           opts: mergedOpts,
         });
       };

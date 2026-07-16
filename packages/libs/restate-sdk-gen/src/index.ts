@@ -37,6 +37,7 @@ export {
   rejectAwakeable,
   resolveAwakeable,
   run,
+  scope,
   send,
   sendClient,
   sharedState,
@@ -66,6 +67,7 @@ export {
   type RunAction,
   type RunActionOpts,
   type RunOpts,
+  type ScopedOperations,
   wrapActionForCancellation,
   type HandlerRequest,
 } from "./restate-operations.js";
