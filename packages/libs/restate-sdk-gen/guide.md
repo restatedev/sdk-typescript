@@ -1,13 +1,34 @@
-# restate-fluent — User Guide
+# Restate Gen SDK — User Guide
 
-A pattern-by-pattern guide to writing workflows. Read alongside `DESIGN.md`,
-which covers the model and semantics. This document focuses on shapes of
-code you'll actually write.
+A pattern-by-pattern guide to building durable Restate services, virtual
+objects, and workflows with `@restatedev/restate-sdk-gen`. It covers the code
+you write in an application; [`DESIGN.md`](./DESIGN.md) covers scheduler
+internals and design rationale.
+
+The Gen SDK builds on `@restatedev/restate-sdk`. Restate still journals every
+durable operation and replays completed results after a crash. The difference
+is how handler code composes those operations: generator handlers use `yield*`
+and work with `Operation<T>` and `Future<T>` instead of awaiting
+`RestatePromise<T>` directly.
 
 The examples use the **free-standing API** — `sleep`, `run`, `all`,
 `select`, etc. imported directly. Inside a `gen(function*() { ... })`
 body these read the active scheduler from a synchronous current-fiber
-slot set by `execute()`; you don't pass `ops` around.
+slot set by `execute()`; you don't pass an operations object around.
+
+## Install and run
+
+```bash
+npm install @restatedev/restate-sdk @restatedev/restate-sdk-gen
+```
+
+`@restatedev/restate-sdk` is a peer dependency. Start the endpoint shown below,
+then register and invoke it through a running Restate server:
+
+```bash
+restate deployments register http://localhost:9080
+curl localhost:8080/Greeter/greet --json '"World"'
+```
 
 ---
 
@@ -15,43 +36,211 @@ slot set by `execute()`; you don't pass `ops` around.
 
 ```ts
 import * as restate from "@restatedev/restate-sdk";
-import { gen, execute, run } from "@restatedev/restate-sdk-gen";
+import { service, run } from "@restatedev/restate-sdk-gen";
 
-const greeter = restate.service({
-  name: "greeter",
+const greeter = service({
+  name: "Greeter",
   handlers: {
-    greet: async (ctx, name: string) =>
-      execute(
-        ctx,
-        gen(function* () {
-          const greeting = yield* run(async () => {
-            return `Hello, ${name}!`;
-          }, { name: "compose" });
-          return greeting;
-        })
-      ),
+    *greet(name: string) {
+      return yield* run(async () => `Hello, ${name}!`, { name: "compose" });
+    },
   },
 });
 
 restate.serve({ services: [greeter] });
 ```
 
-Three things to notice:
+Four things to notice:
 
-- The handler is a normal `async (ctx, ...) => ...` function. We call
-  `execute(ctx, ...)` inside it; everything generator-y is inside that
-  call.
-- `execute` takes an `Operation<T>` directly — typically the result of
-  `gen(function*() { ... })`. The free functions inside the generator
-  body resolve the active scheduler implicitly; no `ops` parameter, no
-  builder wrapper. An optional third argument carries options such as
-  `onMainExit` (see "Race losers and spawn lifetime").
-- The generator returns the value the handler should return. By default,
-  `execute` resolves as soon as the generator returns; spawned routines
-  still running at that point are abandoned.
+- `service(...)` turns generator methods into ordinary Restate handlers and is
+  directly bindable by `restate.serve`.
+- The handler input and return type become the typed client contract.
+- `run` records an external side effect. On replay, Restate returns the recorded
+  result without executing the closure again.
+- The generator's return value is the handler response.
+
+For existing core-SDK definitions, use `execute` explicitly:
+
+```ts
+import { execute, gen, run } from "@restatedev/restate-sdk-gen";
+
+const handler = async (ctx: restate.Context, name: string) =>
+  execute(
+    ctx,
+    gen(function* () {
+      return yield* run(async () => `Hello, ${name}!`, { name: "compose" });
+    })
+  );
+```
+
+`execute(ctx, operation, options?)` creates the scheduler for one invocation.
+The optional `onMainExit` policy is covered under “Race losers and spawn
+lifetime.” Most applications should prefer the Gen SDK definition factories
+and only use explicit `execute` when integrating with an existing core-SDK
+handler.
 
 The rest of this guide assumes you're inside `gen(function*() { ... })`
 with the free functions in scope.
+
+---
+
+## The execution model
+
+An `Operation<T>` is lazy generator work. Use `gen(function* () { ... })` when
+you want a reusable helper or a child routine. Each call must create a fresh
+Operation:
+
+```ts
+const prepareOrder = (id: string): Operation<Order> =>
+  gen(function* () {
+    return yield* run(() => loadOrder(id), { name: "load-order" });
+  });
+```
+
+A `Future<T>` is eager and memoized. Durable primitives start when their Future
+is created, not when it is first yielded. Yielding the same Future twice does
+not repeat its work. Use the Gen SDK's `all`, `race`, `any`, `allSettled`, and
+`select` rather than native Promise combinators to coordinate durable work.
+
+Free-standing APIs read the active generator synchronously. Call them only in a
+generator body—not at module initialization, in `setTimeout`, or inside a
+`run` closure. A `run` closure may perform external I/O, but it must not call
+Restate operations.
+
+---
+
+## Service types
+
+The three definition factories produce normal Restate definitions, so they can
+be passed directly to `restate.serve`.
+
+### Service
+
+A service is stateless from Restate's perspective. Invocations are independent
+and can run concurrently:
+
+```ts
+import { service } from "@restatedev/restate-sdk-gen";
+
+export const emails = service({
+  name: "Emails",
+  handlers: {
+    *send(input: { to: string; body: string }) {
+      // durable work
+    },
+  },
+});
+```
+
+### Virtual object
+
+A virtual object has an application-defined key. Calls to exclusive handlers
+are serialized per key and may update durable state. Mark read-only handlers as
+`shared` when they may run concurrently:
+
+```ts
+import { object, sharedState, state } from "@restatedev/restate-sdk-gen";
+
+type AccountState = { balance: number };
+
+export const account = object({
+  name: "Account",
+  handlers: {
+    *deposit(amount: number) {
+      const store = state<AccountState>();
+      const balance = (yield* store.get("balance")) ?? 0;
+      store.set("balance", balance + amount);
+      return balance + amount;
+    },
+    *balance() {
+      return (yield* sharedState<AccountState>().get("balance")) ?? 0;
+    },
+  },
+  options: { handlers: { balance: { shared: true } } },
+});
+```
+
+### Workflow
+
+A workflow's `run` handler executes once for each workflow key. Other handlers
+are shared and can inspect state or resolve a workflow promise while `run` is
+waiting:
+
+```ts
+import { workflow, workflowPromise } from "@restatedev/restate-sdk-gen";
+
+export const approval = workflow({
+  name: "Approval",
+  handlers: {
+    *run(request: Request) {
+      return yield* workflowPromise<string>("decision").get();
+    },
+    *approve(reason: string) {
+      yield* workflowPromise<string>("decision").resolve(reason);
+    },
+  },
+});
+```
+
+Call objects and workflows with a key:
+
+```ts
+yield* client(account, "account-123").deposit(50);
+yield* client(approval, "request-456").run(request);
+```
+
+### Schemas, serdes, and handler options
+
+Plain generator handlers use JSON serialization. Use `schemas` to validate
+input and output with any Standard Schema implementation:
+
+```ts
+import { z } from "zod";
+import { schemas, service } from "@restatedev/restate-sdk-gen";
+
+const Input = z.object({ name: z.string() });
+const Output = z.object({ greeting: z.string() });
+
+const greeter = service({
+  name: "Greeter",
+  handlers: {
+    greet: schemas({ input: Input, output: Output }, function* ({ name }) {
+      return { greeting: `Hello, ${name}!` };
+    }),
+  },
+});
+```
+
+Use `serdes({ input, output }, generator)` for explicit Restate serdes such as
+`restate.serde.binary`. Service-wide options go in `options`; handler-specific
+options go in `options.handlers[handlerName]`. Object handlers additionally
+accept `shared`, and service/object/workflow handlers support the compatible
+core-SDK options such as lazy state and timeouts.
+
+### Separate interface and implementation
+
+Use the `iface` namespace when callers should depend on a contract without
+depending on its implementation:
+
+```ts
+import { iface, implement } from "@restatedev/restate-sdk-gen";
+
+export const counterApi = iface.object("Counter", {
+  add: iface.json<number, number>(),
+  get: iface.json<void, number>(),
+});
+
+export const counter = implement(counterApi, {
+  handlers: {
+    *add(delta) { /* ... */ return delta; },
+    *get() { /* ... */ return 0; },
+  },
+  options: { handlers: { get: { shared: true } } },
+});
+```
+
+`iface.schemas` and `iface.serdes` carry validation and serialization metadata
+through typed in-handler and ingress clients.
 
 ---
 
@@ -105,8 +294,8 @@ const futures = items.map(item =>
 const results = yield* all(futures);
 ```
 
-Each `run` is a separately journaled entry, so make sure the names are
-unique within the workflow.
+Each `run` is a separately journaled entry. Names should be stable and
+descriptive; journal position, not global name uniqueness, identifies the step.
 
 ### "Whichever finishes first"
 
@@ -127,9 +316,9 @@ need the result of the loser too, use `all` instead.
 
 ```ts
 const winner = yield* any([
-  run("region-a", () => callA()),
-  run("region-b", () => callB()),
-  run("region-c", () => callC()),
+  run(() => callA(), { name: "region-a" }),
+  run(() => callB(), { name: "region-b" }),
+  run(() => callC(), { name: "region-c" }),
 ]);
 ```
 
@@ -144,9 +333,9 @@ surface a rejection if the first to settle happens to fail).
 
 ```ts
 const results = yield* allSettled([
-  run("a", () => fetchA()),
-  run("b", () => fetchB()),
-  run("c", () => fetchC()),
+  run(() => fetchA(), { name: "a" }),
+  run(() => fetchB(), { name: "b" }),
+  run(() => fetchC(), { name: "c" }),
 ]);
 for (const r of results) {
   if (r.status === "fulfilled") emit(r.value);
@@ -292,18 +481,16 @@ operation settles, the entry is recorded but no one reads it. Once the
 main operation settles, the abandoned-fiber rules apply (see "Race
 losers and spawn lifetime").
 
-If you need to actually cancel the slow call (not just stop waiting),
-pass an AbortSignal-aware closure to `run` — the closure receives
-`{ signal }` and can wire it into `fetch` (or anything else that
-accepts an AbortSignal). The signal aborts when invocation cancellation
-arrives. For workflow-internal "stop on timeout," spawn the work as a
-routine and signal it via a `Channel<void>` (see below).
+This is a soft timeout: it stops waiting but does not cancel the losing `run`.
+To abort in-flight I/O on an internal deadline, put the work in a spawned
+routine, pass its `run` AbortSignal to the I/O API, and interrupt the task when
+the timer wins. Then join the interrupted task if its cleanup must execute.
 
 ---
 
 ## Retries
 
-The SDK's `ctx.run` already handles retry internally — by default, it
+The underlying Restate `ctx.run` already handles retry internally—by default, it
 retries forever on non-terminal errors (with backoff), and it stops on
 TerminalError. You usually don't need to write a retry loop yourself.
 
@@ -348,6 +535,242 @@ A user-written retry loop on top of `run` is rarely the right tool.
 Use it only when you need control flow that the policy can't express
 (e.g., switch to a different endpoint after N failures, or check
 external state between attempts).
+
+---
+
+## Durable state
+
+State belongs to a virtual-object or workflow key and survives across
+invocations. Reads return Futures; writes are synchronous journal operations:
+
+```ts
+type CartState = {
+  items: Item[];
+  owner: string;
+};
+
+const store = state<CartState>();
+const items = (yield* store.get("items")) ?? [];
+store.set("items", [...items, nextItem]);
+const keys = yield* store.keys();
+store.clear("owner");
+store.clearAll();
+```
+
+`state<T>()` exposes reads and writes and belongs in exclusive object handlers
+or the workflow `run` handler. `sharedState<T>()` exposes only `get` and `keys`
+for shared handlers. Omitting `T` gives an untyped store with string keys and
+per-call value inference.
+
+Do not use module globals as durable state. They are process-local, disappear
+on restart, and can be observed by unrelated invocations.
+
+---
+
+## Calling other handlers
+
+Pass a Gen definition or interface to `client` for a typed request/response
+call. Services need no key; virtual objects and workflows do:
+
+```ts
+const greeting = yield* client(greeter).greet("Ada");
+const count = yield* client(counter, "counter-1").add(1);
+const result = yield* client(signup, "user-42").run(input);
+```
+
+Calls return `ClientFuture<T>`, which behaves like any other Future and also
+exposes an `.invocation` Future:
+
+```ts
+const callFuture = client(worker).process(job);
+const ref = yield* callFuture.invocation;
+logger().info("started", ref.id);
+const result = yield* callFuture;
+```
+
+Use `sendClient` for a send that does not wait for the handler result. The
+returned Future resolves to an `InvocationReference` once the invocation is
+accepted:
+
+```ts
+sendClient(audit).record(event); // dispatch and continue
+
+const ref = yield* sendClient(worker).process(job);
+ref.cancel();
+```
+
+An `InvocationReference<T>` provides:
+
+- `id` — the invocation ID.
+- `attach(serde?)` — a Future for the invocation result.
+- `signal(name, serde?)` — a reference with synchronous `resolve` and `reject`.
+- `cancel()` — cancel the invocation.
+
+If you already have an ID, use `invocation<T>(id, { outputSerde })`,
+`attach(id, serde)`, or `cancel(id)`. Use `call({...})` and `send({...})` for
+string-based targets that have no imported descriptor; these accept the core
+SDK's `GenericCall` and `GenericSend` shapes.
+
+Call and send options use the core SDK's `Opts` and `SendOpts` wrappers:
+
+```ts
+yield* client(worker).process(
+  job,
+  restate.Opts.from({ idempotencyKey: `job-${job.id}` })
+);
+
+sendClient(worker).process(
+  job,
+  restate.SendOpts.from({ delay: { minutes: 5 } })
+);
+```
+
+---
+
+## External callbacks and invocation signals
+
+### Awakeables
+
+An awakeable creates a unique callback ID and a Future. Store or send the ID to
+an external system inside a journaled `run`, then yield the Future:
+
+```ts
+const { id, promise } = awakeable<Review>();
+yield* run(() => requestReview(id), { name: "request-review" });
+const review = yield* promise;
+```
+
+Another handler can complete it with `resolveAwakeable(id, value)` or
+`rejectAwakeable(id, reason)`. An external system can use Restate's awakeable
+HTTP endpoint:
+
+```bash
+curl localhost:8080/restate/awakeables/$ID/resolve --json '{"approved":true}'
+```
+
+Awakeables are durable and cross invocation/process boundaries. In-memory
+channels are not.
+
+### Named signals
+
+Use a named signal when the sender knows the target invocation ID and both
+sides agree on a name:
+
+```ts
+// Receiver
+const decision = yield* signal<Decision>("review");
+
+// Sender, in another generator handler
+invocation<DecisionResult>(invocationId)
+  .signal<Decision>("review")
+  .resolve({ approved: true });
+```
+
+Signals are durable inter-invocation messages. A `Channel<T>` is only for
+communication among routines inside one `execute` call.
+
+### Workflow promises
+
+Workflow promises have a stable name within a workflow key. The `run` handler
+can wait while another workflow handler resolves or rejects the promise:
+
+```ts
+const approval = workflowPromise<Decision>("approval");
+const current = yield* approval.peek();
+const decision = current ?? (yield* approval.get());
+
+yield* approval.resolve({ approved: true });
+// or: yield* approval.reject("request denied");
+```
+
+---
+
+## Deterministic context helpers
+
+Code outside `run` is replayed and must make the same durable decisions. Use
+Restate's deterministic helpers for random values and time:
+
+```ts
+const requestId = rand().uuidv4();
+const sample = rand().random();
+const timestamp = yield* date().now();
+const isoTimestamp = yield* date().toJSON();
+```
+
+Use `logger()` for replay-aware logging. `handlerRequest()` returns request
+metadata including invocation ID, headers, target, idempotency key, scope,
+limit key, and the object/workflow `key` when present:
+
+```ts
+const request = handlerRequest();
+logger().info("handling", request.id, request.key);
+```
+
+Do not use `Date.now()`, `new Date()`, `Math.random()`, or random UUID APIs in
+generator control flow. They are fine inside `run`, where the result is
+journaled, but any value returned by `run` must be serializable by its selected
+serde.
+
+---
+
+## Scoped calls
+
+`scope(scopeKey)` returns typed `client` and `sendClient` factories that route
+within a Restate scope. Scopes group target identities and allow server-side
+concurrency or rate-limit rules—for example, limiting a third-party API wrapper
+per tenant credential:
+
+```ts
+const checkout = yield* scope(tenantKey)
+  .client(merchantService)
+  .checkout(order);
+```
+
+The scope key must match `[a-zA-Z0-9_.-]` and be 1–36 characters. A per-call
+`limitKey` may be supplied through `Opts`/`SendOpts` only within a scope. Scopes
+depend on corresponding Restate Server flow-control support; check the server
+documentation before enabling scoped routing in production. A complete example
+is in `examples/tutorial/src/14-scopes.ts`.
+
+---
+
+## Calling from outside a handler
+
+The `clients` namespace adapts the same definitions to the external ingress
+client. These methods return native Promises because this code runs outside a
+durable handler:
+
+```ts
+import { clients } from "@restatedev/restate-sdk-gen";
+import { greeter } from "./greeter.js";
+
+const ingress = clients.connect({ url: "http://localhost:8080" });
+const greeting = await clients.client(ingress, greeter).greet("Ada");
+await clients.sendClient(ingress, greeter).record("called");
+```
+
+Use `clients.client(ingress, definition, key)` for an object or workflow.
+`clients.scope(ingress, scopeKey)` provides the same scoped client shape.
+Per-call configuration uses `clients.Opts.from(...)` or
+`clients.SendOpts.from(...)`.
+
+Ingress retries are disabled by default. Set `retry: true` on `connect` for the
+built-in policy or pass a `RetryPolicy`. Automatic retries occur only when the
+call carries an idempotency key, because that key lets Restate attach a retry to
+the same invocation safely:
+
+```ts
+const ingress = clients.connect({ url, retry: true });
+
+await clients.client(ingress, greeter).greet(
+  "Ada",
+  clients.Opts.from({ idempotencyKey: "greet-ada-once" })
+);
+```
+
+The built-in rule covers network failures, HTTP 429, and HTTP 5xx. A custom
+`shouldRetry` replaces it; compose with `clients.defaultShouldRetry` to narrow
+the defaults. See `examples/tutorial/src/13-ingress.ts`.
 
 ---
 
@@ -435,7 +858,7 @@ Channels are typed; the value comes back through `yield* r.future`.
 ## Cancellation from outside the workflow
 
 If the invocation itself is cancelled (someone clicks "cancel" in the
-Restate UI, or a parent invocation cancels you), the cancellation
+Restate UI, or another invocation cancels it), the cancellation
 arrives at the next yield point as a `CancelledError`:
 
 ```ts
@@ -462,30 +885,27 @@ work normally. Cleanup that yields journal ops just works.
 
 ---
 
-## Two kinds of cancellation
+## Three kinds of stopping
 
-Two distinct mechanisms, both valid:
+Three distinct mechanisms are available:
 
 | Mechanism | Initiator | How it surfaces | Scope |
 |-----------|-----------|-----------------|-------|
-| Invocation cancel | external (Restate UI, parent invocation) | `CancelledError` thrown at the next yield | every routine in the workflow |
-| Cooperative stop | inside the workflow | `select` branch wins on `stop.receive` | one routine — the one selecting on the stop channel |
+| Invocation cancel | external (Restate UI or another invocation) | `CancelledError` thrown at the next yield | every routine in the invocation |
+| Task interrupt | supervising routine | chosen error thrown at the next yield | task and its spawn subtree |
+| Cooperative stop | routine in the same invocation | `select` branch wins on `stop.receive` | routines selecting on that channel |
 
-Invocation cancel is forced — the workflow is being torn down. Cooperative
-stop is in-band: no exception, no forced unwind, the receiver decides
-what to do (return partial results, run cleanup yields, ignore).
+Invocation cancellation and task interruption inject errors. Cooperative stop
+is in-band: no exception or forced unwind, and the receiver decides what to do
+(return partial results, run cleanup yields, or ignore it).
 
 The two compose. A routine that selects on a stop channel can also catch
 `CancelledError` for end-of-life cleanup if the whole invocation gets
 cancelled out from under it.
 
-There is no per-routine "kill this Future" primitive — by design. If you
-control both sides, use cooperative stop. If you don't (you're running
-someone else's Operation), the choice is to wrap it in a supervising
-routine that `select`s against a stop channel, or let it run only while
-the main operation is live — once main settles it is abandoned, not run
-to completion (under the default `onMainExit: "abandon"`; see "Race
-losers and spawn lifetime").
+If you control both sides, a channel often gives the clearest graceful-stop
+protocol. Use `task.interrupt()` when a supervising routine must stop work that
+may be parked anywhere, including an in-flight `run`.
 
 ---
 
@@ -668,7 +1088,7 @@ A few things to keep in mind:
   per-strand scratch space.
 - **Call from the body, not from a `run` closure.** `get`/`set` work on
   the fiber's synchronous span — directly in the generator body or a
-  spawned routine's body. Calling them from inside an `ops.run` action
+  spawned routine's body. Calling them from inside a `run` action
   closure (or any async callback) runs off-advance and throws "outside
   an active fiber", just like any other free function. To capture a
   journaled value, set it in the body from the result:
@@ -788,9 +1208,10 @@ yield* run(() => fetch(url), { name: "fetch" });
 yield* run(() => fetch(url), { name: `fetch-attempt-${attempt}` });
 ```
 
-On replay, journal entry names must match the original execution. The
-closure's body can do anything — it's only re-run if the entry isn't
-in the journal — but the *name* must be reproducible.
+On replay, journal entry names must match the original execution. The closure
+may perform non-deterministic external work because Restate records its outcome,
+but it must not call Restate APIs and its result must be serializable. The
+*name* must be reproducible too.
 
 ### Don't catch and ignore TerminalErrors carelessly
 
@@ -817,9 +1238,10 @@ try {
 } catch (e) {
   if (e instanceof CancelledError) throw e; // never swallow
   if (e instanceof TerminalError) {
-    // log it, return a default, etc. — but be sure
+    // Deliberately log it, return a fallback, or compensate.
+  } else {
+    throw e;
   }
-  // retryable error: maybe retry
 }
 ```
 
@@ -867,7 +1289,7 @@ closure that resolved after the fiber returned, from a `setTimeout`
 callback — throws:
 
 ```
-Error: restate-fluent: free-standing API called outside an active fiber.
+Error: @restatedev/restate-sdk-gen: free-standing API called outside an active fiber.
 ```
 
 Practically, this means: free functions go inside the
@@ -900,7 +1322,8 @@ no `run` is invoked until the iterator runs inside `execute()`.
 | Stop a sub-workflow you control | channel + select |
 | Cancel an in-flight HTTP call | pass `signal` to `fetch` in `run` |
 | React to invocation cancel | catch `CancelledError` at yield site |
-| Pass an event from outside | channel — `send` from outside, `receive` inside |
+| Pass a callback ID to an external system | `awakeable()` |
+| Send to a known invocation by ID and name | `signal()` / `invocation(id).signal()` |
 | Ambient value for this invocation | `contextLocal()` — set once, read anywhere |
 | A value that must outlive the invocation | `state()` / `sharedState()` (durable) |
 
@@ -908,11 +1331,12 @@ no `run` is invoked until the iterator runs inside `execute()`.
 
 ## Where to look next
 
-- `DESIGN.md` — the model, semantics, and the why behind decisions.
-- `examples/` — runnable services (`tutorial/`).
-- `packages/restate-fluent/test/workflow-patterns.test.ts` — full
+- [`DESIGN.md`](./DESIGN.md) — the model, semantics, and design rationale.
+- [`examples/tutorial/`](./examples/tutorial/) — runnable services and clients.
+- [`test/workflow-patterns.test.ts`](./test/workflow-patterns.test.ts) — full
   implementations of retry, saga, polling, work-stealing, and more.
-- `packages/restate-fluent/test/cancellation.test.ts` and
-  `abort-signal.test.ts` — every cancellation behavior tested explicitly.
-- `packages/restate-fluent/test/channel.test.ts` — channel patterns
+- [`test/cancellation.test.ts`](./test/cancellation.test.ts) and
+  [`test/abort-signal.test.ts`](./test/abort-signal.test.ts) — cancellation
+  behavior tested explicitly.
+- [`test/channel.test.ts`](./test/channel.test.ts) — channel patterns
   including the cooperative-cancellation idiom.
