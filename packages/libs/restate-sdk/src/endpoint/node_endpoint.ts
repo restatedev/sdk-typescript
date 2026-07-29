@@ -165,6 +165,18 @@ function nodeHttp2Handler(
   return nodeHandlerImpl(endpoint, protocolMode);
 }
 
+export function abortSignalForRequest(request: {
+  on(event: "close", listener: () => void): unknown;
+  readonly readableEnded: boolean;
+}): AbortSignal {
+  const abortController = new AbortController();
+  request.on("close", () => {
+    // https://nodejs.org/api/stream.html#readablereadableended
+    if (!request.readableEnded) abortController.abort();
+  });
+  return abortController.signal;
+}
+
 function nodeHandlerImpl(
   endpoint: Endpoint,
   protocolMode: ProtocolMode
@@ -181,10 +193,7 @@ function nodeHandlerImpl(
     const res = httpResponse as NodeWritableResponse;
 
     // Abort controller used to cleanup resources at the end of this stream lifecycle
-    const abortController = new AbortController();
-    httpRequest.on("close", () => {
-      abortController.abort();
-    });
+    const abortSignal = abortSignalForRequest(httpRequest);
 
     const writeHead = res.writeHead.bind(res);
 
@@ -200,7 +209,7 @@ function nodeHandlerImpl(
         inputReader,
         outputWriter,
         writeHead,
-        abortSignal: abortController.signal,
+        abortSignal,
       })
       .catch((e) => {
         // Responses handle their own errors before rejecting; anything
