@@ -19,6 +19,7 @@ import type {
 import { IncomingMessage, ServerResponse } from "node:http";
 import { Http2ServerRequest, Http2ServerResponse } from "node:http2";
 import * as http2 from "node:http2";
+import type { Readable } from "node:stream";
 import type { Endpoint } from "./endpoint.js";
 import { EndpointBuilder } from "./endpoint.js";
 import { createRestateHandler } from "./handlers/generic.js";
@@ -165,10 +166,8 @@ function nodeHttp2Handler(
   return nodeHandlerImpl(endpoint, protocolMode);
 }
 
-export function abortSignalForRequest(request: {
-  on(event: "close", listener: () => void): unknown;
-  readonly readableEnded: boolean;
-}): AbortSignal {
+/** @internal For testing only. */
+export function abortSignalForRequest(request: Readable): AbortSignal {
   const abortController = new AbortController();
   request.on("close", () => {
     // https://nodejs.org/api/stream.html#readablereadableended
