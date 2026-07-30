@@ -187,8 +187,6 @@ function nodeHandlerImpl(
 
   return (httpRequest, httpResponse) => {
     const url = httpRequest.url!;
-    const inputReader = inputReaderAdapter(httpRequest);
-    const outputWriter = outputWriterAdapter(httpResponse);
     const res = httpResponse as NodeWritableResponse;
 
     // handle should never throw
@@ -200,8 +198,8 @@ function nodeHandlerImpl(
 
     restateResponse
       .process({
-        inputReader,
-        outputWriter,
+        inputReader: inputReaderAdapter(httpRequest),
+        outputWriter: outputWriterAdapter(httpResponse),
         writeHead: res.writeHead.bind(res),
         abortSignal: abortSignalForRequest(httpRequest),
       })
