@@ -191,11 +191,6 @@ function nodeHandlerImpl(
     const outputWriter = outputWriterAdapter(httpResponse);
     const res = httpResponse as NodeWritableResponse;
 
-    // Abort controller used to cleanup resources at the end of this stream lifecycle
-    const abortSignal = abortSignalForRequest(httpRequest);
-
-    const writeHead = res.writeHead.bind(res);
-
     // handle should never throw
     const restateResponse = handler.handle({
       url,
@@ -207,8 +202,8 @@ function nodeHandlerImpl(
       .process({
         inputReader,
         outputWriter,
-        writeHead,
-        abortSignal,
+        writeHead: res.writeHead.bind(res),
+        abortSignal: abortSignalForRequest(httpRequest),
       })
       .catch((e) => {
         // Responses handle their own errors before rejecting; anything
