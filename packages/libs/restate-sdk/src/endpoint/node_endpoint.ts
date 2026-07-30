@@ -190,13 +190,12 @@ function nodeHandlerImpl(
     const res = httpResponse as NodeWritableResponse;
 
     // handle should never throw
-    const restateResponse = handler.handle({
-      url,
-      headers: httpRequest.headers,
-      extraArgs: [],
-    });
-
-    restateResponse
+    handler
+      .handle({
+        url,
+        headers: httpRequest.headers,
+        extraArgs: [],
+      })
       .process({
         inputReader: inputReaderAdapter(httpRequest),
         outputWriter: outputWriterAdapter(httpResponse),
