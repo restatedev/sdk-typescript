@@ -1,5 +1,11 @@
 # @restatedev/restate-sdk-zod
 
+## 1.16.4
+
+### Patch Changes
+
+- Few minor improvements
+
 ## 1.16.3
 
 ### Patch Changes
