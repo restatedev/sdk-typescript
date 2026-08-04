@@ -1,5 +1,13 @@
 # @restatedev/restate-sdk-cloudflare-workers
 
+## 1.16.3
+
+### Patch Changes
+
+- Add retry support to workflows
+- Updated dependencies
+  - @restatedev/restate-sdk-core@1.16.3
+
 ## 1.16.2
 
 ### Patch Changes
