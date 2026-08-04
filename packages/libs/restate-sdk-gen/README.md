@@ -141,7 +141,7 @@ When enabled, the client retries ambiguous failures — network errors, HTTP `42
 await greeterClient.greet("sam", clients.Opts.from({ idempotencyKey: "greet-sam-once" }));
 ```
 
-The idempotency key is the safety boundary for regular calls: Restate dedupes on it, so a retry attaches to the in-flight or completed invocation instead of starting a duplicate. Without a key, no retry is attempted — retrying a non-idempotent invocation could double-execute it. Workflow submissions and attaches are also retried: submissions are idempotent by workflow ID, while attaches only retrieve the existing result. After an internal retry, a successful submission may report `PreviouslyAccepted` rather than `Accepted`.
+The idempotency key is the safety boundary for regular calls: Restate dedupes on it, so a retry attaches to the in-flight or completed invocation instead of starting a duplicate. Without a key, no retry is attempted — retrying a non-idempotent invocation could double-execute it. Workflow submissions, attaches, and output retrieval are also retried: submissions are idempotent by workflow ID, while attach and output operations only observe the existing workflow. After an internal retry, a successful submission may report `PreviouslyAccepted` rather than `Accepted`.
 
 To decide per-failure (e.g. to skip a terminal `5xx`), supply `shouldRetry`. It fully replaces the built-in rule; compose with `clients.defaultShouldRetry` to narrow it. The `RetryFailure` carries the status, headers, and — for response failures — the body text when present:
 

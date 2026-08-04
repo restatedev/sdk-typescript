@@ -357,6 +357,30 @@ describe("ingress auto-retry", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it("does NOT retry workflow output without a retry policy", async () => {
+    queue(fail(503), ok({ result: "done" }));
+    await expect(workflow().workflowOutput()).rejects.toBeInstanceOf(
+      HttpCallError
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries workflow output without an idempotency key", async () => {
+    queue(fail(503), ok({ result: "done" }));
+    await expect(workflow(fastRetry).workflowOutput()).resolves.toEqual({
+      ready: true,
+      result: { result: "done" },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("does NOT retry workflow output when it is not ready by default", async () => {
+    queue(fail(470), ok({ result: "done" }));
+    const output = await workflow(fastRetry).workflowOutput();
+    expect(output.ready).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("does NOT retry on a non-retryable 4xx", async () => {
     queue(fail(409), ok());
     await expect(call("k1", fastRetry)).rejects.toBeInstanceOf(HttpCallError);

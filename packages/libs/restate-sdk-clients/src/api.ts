@@ -412,6 +412,8 @@ export type IngressWorkflowClient<M> = Omit<
      * The returned Output object will have a 'ready' field set to true if the output is ready.
      * If the output is ready, the 'result' field will contain the output.
      * note: that this operation will not wait for the workflow to complete, to do so use 'workflowAttach'.
+     * When automatic retries are enabled on the connection, the client retries
+     * ambiguous output retrieval failures according to the configured retry policy.
      *
      * @returns a promise that resolves if the workflow's output is ready/available.
      */
@@ -486,8 +488,8 @@ export type RetryFailure =
  * {@link ConnectionOpts.retry}) and the request is safe to repeat. Regular
  * calls require an `idempotencyKey` (see
  * {@link IngressCallOptions.idempotencyKey}); workflow submissions are
- * idempotent by workflow ID, and workflow attaches only retrieve the existing
- * result.
+ * idempotent by workflow ID, while workflow attaches and output retrieval only
+ * observe the existing workflow.
  *
  * By default the following failures are retried: network errors (the underlying
  * `fetch` rejecting), HTTP `429`, and HTTP `5xx` responses. Override this with
@@ -524,10 +526,10 @@ export interface RetryPolicy {
    * fully replaces the built-in rule (network / `429` / `5xx`).
    *
    * The idempotency-key gate still applies to regular invocations; workflow
-   * submissions and attaches remain eligible without an idempotency key. The
-   * `maxAttempts` cap applies to both. This predicate only narrows or broadens
-   * *which failures* are retryable within those bounds. Compose with the
-   * built-in rule via the exported `defaultShouldRetry`.
+   * submissions, attaches, and output retrieval remain eligible without an
+   * idempotency key. The `maxAttempts` cap applies to all of them. This predicate
+   * only narrows or broadens *which failures* are retryable within those bounds.
+   * Compose with the built-in rule via the exported `defaultShouldRetry`.
    *
    * @param failure the failure being considered
    * @param attempt the zero-based index of the attempt that just failed
@@ -556,10 +558,11 @@ export type ConnectionOpts = {
    *
    * Even when enabled, regular calls are retried **only** when an
    * `idempotencyKey` is set — without one a retry could double-execute a
-   * non-idempotent invocation. Workflow submissions and attaches are also
-   * retried: submissions are idempotent by workflow ID, while attaches only
-   * retrieve the existing result. If a submission retry observes a workflow
-   * accepted by an earlier attempt, its status is `PreviouslyAccepted`.
+   * non-idempotent invocation. Workflow submissions, attaches, and output
+   * retrieval are also retried: submissions are idempotent by workflow ID,
+   * while attach and output operations only observe the existing workflow. If a
+   * submission retry observes a workflow accepted by an earlier attempt, its
+   * status is `PreviouslyAccepted`.
    */
   retry?: RetryPolicy | boolean;
 
