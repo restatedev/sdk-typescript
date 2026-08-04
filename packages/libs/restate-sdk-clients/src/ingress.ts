@@ -122,26 +122,71 @@ const LIMIT_KEY_HEADER = "x-restate-limit-key";
 const getFetch = (opts: ConnectionOpts): NonNullable<ConnectionOpts["fetch"]> =>
   opts.fetch ?? globalThis.fetch;
 
-const fetchWithRetries = async (
-  opts: ConnectionOpts,
-  url: string,
-  init: RequestInit,
-  callOpts: Opts<unknown, unknown> | SendOpts<unknown> | undefined,
-  retryPolicy: ResolvedRetryPolicy | undefined
-): Promise<Uint8Array> => {
-  const userSignal = callOpts?.opts.signal;
-  const timeout = callOpts?.opts.timeout;
-  if (userSignal !== undefined && timeout !== undefined) {
+type CancellationOptions = { signal?: AbortSignal; timeout?: number };
+
+type AttemptDeadline = {
+  /**
+   * Cancellation observed between attempts: once it aborts, no further attempt
+   * is made and any pending backoff is cut short.
+   */
+  cancellation?: AbortSignal;
+  /** The signal handed to `fetch` for the next attempt. */
+  attemptSignal: () => AbortSignal | undefined;
+};
+
+const assertSignalAndTimeoutExclusive = (opts?: CancellationOptions) => {
+  if (opts?.signal !== undefined && opts.timeout !== undefined) {
     // The caller configured two mutually exclusive ways to abort each attempt.
     throw new Error(
       "You can't specify both signal and timeout options at the same time"
     );
   }
-  // A fresh timeout signal is minted per attempt below — a single
-  // AbortSignal.timeout() would already be aborted on the second attempt.
-  const attemptSignal = (): AbortSignal | undefined =>
-    userSignal ??
-    (timeout !== undefined ? AbortSignal.timeout(timeout) : undefined);
+};
+
+/**
+ * A deadline per attempt. Each attempt at invoking a handler starts the wait
+ * over, so each is given the full timeout.
+ */
+const perAttemptDeadline = (opts?: CancellationOptions): AttemptDeadline => {
+  assertSignalAndTimeoutExclusive(opts);
+  const userSignal = opts?.signal;
+  const timeout = opts?.timeout;
+  return {
+    cancellation: userSignal,
+    // A fresh timeout signal is minted per attempt — a single
+    // AbortSignal.timeout() would already be aborted on the second attempt.
+    attemptSignal: () =>
+      userSignal ??
+      (timeout !== undefined ? AbortSignal.timeout(timeout) : undefined),
+  };
+};
+
+/**
+ * One deadline covering the whole operation, retries and backoff included.
+ *
+ * This is what a deadline means on a read: the caller is giving up on work that
+ * is already running elsewhere, so handing each attempt a fresh timeout would
+ * silently multiply the wait they asked for by `maxAttempts`.
+ */
+const wholeOperationDeadline = (
+  opts?: CancellationOptions
+): AttemptDeadline => {
+  assertSignalAndTimeoutExclusive(opts);
+  const signal =
+    opts?.signal ??
+    (opts?.timeout !== undefined
+      ? AbortSignal.timeout(opts.timeout)
+      : undefined);
+  return { cancellation: signal, attemptSignal: () => signal };
+};
+
+const fetchWithRetries = async (
+  opts: ConnectionOpts,
+  url: string,
+  init: RequestInit,
+  { cancellation, attemptSignal }: AttemptDeadline,
+  retryPolicy: ResolvedRetryPolicy | undefined
+): Promise<Uint8Array> => {
   const shouldRetry = retryPolicy?.shouldRetry ?? defaultShouldRetry;
 
   for (let attempt = 0; ; attempt++) {
@@ -166,12 +211,12 @@ const fetchWithRetries = async (
       if (
         retryPolicy &&
         attempt < retryPolicy.maxAttempts - 1 &&
-        !userSignal?.aborted &&
+        !cancellation?.aborted &&
         shouldRetry({ kind: "network", error: e }, attempt)
       ) {
         // Retries are enabled, attempts remain, the caller did not abort, and
         // the policy accepted this network failure.
-        await abortableSleep(backoffDelay(retryPolicy, attempt), userSignal);
+        await abortableSleep(backoffDelay(retryPolicy, attempt), cancellation);
         continue;
       }
       // Retries are disabled or exhausted, the caller aborted, or the policy
@@ -181,7 +226,7 @@ const fetchWithRetries = async (
     if (
       retryPolicy &&
       attempt < retryPolicy.maxAttempts - 1 &&
-      !userSignal?.aborted &&
+      !cancellation?.aborted &&
       shouldRetry(
         {
           kind: "response",
@@ -197,7 +242,7 @@ const fetchWithRetries = async (
       const retryAfter = parseRetryAfter(response.headers);
       await abortableSleep(
         backoffDelay(retryPolicy, attempt, retryAfter),
-        userSignal
+        cancellation
       );
       continue;
     }
@@ -309,7 +354,7 @@ const doComponentInvocation = async <I, O>(
       headers,
       body,
     },
-    params.opts,
+    perAttemptDeadline(params.opts?.opts),
     retryPolicy
   );
   if (!params.send) {
@@ -323,42 +368,53 @@ const doComponentInvocation = async <I, O>(
   return { ...json, attachable };
 };
 
-const doWorkflowHandleCall = async <O>(
+const deserializeResponse = async <T>(
+  bytes: Uint8Array,
+  outputSerde: Serde<T>,
+  journalValueCodec?: JournalValueCodec
+): Promise<T> =>
+  outputSerde.deserialize(
+    journalValueCodec ? await journalValueCodec.decode(bytes) : bytes
+  );
+
+/**
+ * Read the outcome of an invocation that already exists: attach, output, and an
+ * attached send result only observe work that has already been submitted.
+ *
+ * Retried whenever {@link ConnectionOpts.retry} is enabled, with no
+ * idempotency-key gate: a GET has no side effects, so reissuing it can at worst
+ * return the same answer twice. That is what lets these reads survive an ingress
+ * being drained mid-read during a rolling deploy.
+ */
+const safeRead = async <T>(
+  opts: ConnectionOpts,
+  url: string,
+  outputSerde: Serde<T>,
+  callOpts?: Opts<void, T>
+): Promise<T> => {
+  const bytes = await fetchWithRetries(
+    opts,
+    url,
+    { method: "GET", headers: { ...(opts.headers ?? {}) } },
+    wholeOperationDeadline(callOpts?.opts),
+    resolveRetryPolicy(opts.retry)
+  );
+  return deserializeResponse(bytes, outputSerde, opts.journalValueCodec);
+};
+
+const doWorkflowHandleCall = <O>(
   opts: ConnectionOpts,
   wfName: string,
   wfKey: string,
   op: "output" | "attach",
-  callOpts?: Opts<unknown, O> | SendOpts<unknown>
-): Promise<O> => {
-  const outputSerde = callOpts?.opts.output ?? opts.serde ?? serde.json;
-  //
-  // headers
-  //
-  const headers = {
-    ...(opts.headers ?? {}),
-  };
-  //
-  // make the call
-  //
-  const url = `${opts.url}/restate/workflow/${wfName}/${encodeURIComponent(
-    wfKey
-  )}/${op}`;
-  // Attach and output only observe the existing workflow, so both are eligible
-  // when the connection has a retry policy.
-  const retryPolicy = resolveRetryPolicy(opts.retry);
-
-  const responseBuf = await fetchWithRetries(
+  callOpts?: Opts<void, O>
+): Promise<O> =>
+  safeRead(
     opts,
-    url,
-    { method: "GET", headers },
-    callOpts,
-    retryPolicy
+    `${opts.url}/restate/workflow/${wfName}/${encodeURIComponent(wfKey)}/${op}`,
+    (callOpts?.opts.output ?? opts.serde ?? serde.json) as Serde<O>,
+    callOpts
   );
-  const decodedBuf = opts.journalValueCodec
-    ? await opts.journalValueCodec.decode(responseBuf)
-    : responseBuf;
-  return outputSerde.deserialize(decodedBuf) as O;
-};
 
 class HttpIngress implements Ingress {
   constructor(private readonly opts: ConnectionOpts) {}
@@ -734,34 +790,10 @@ class HttpIngress implements Ingress {
         A service's result is stored only with an idempotencyKey is supplied when invocating the service.`
       );
     }
-    //
-    // headers
-    //
-    const headers = {
-      ...(this.opts.headers ?? {}),
-    };
-    //
-    // make the call
-    const url = `${this.opts.url}/restate/invocation/${send.invocationId}/attach`;
-
-    const httpResponse = await getFetch(this.opts)(url, {
-      method: "GET",
-      headers,
-    });
-    if (httpResponse.ok) {
-      const responseBuf = new Uint8Array(await httpResponse.arrayBuffer());
-      const decodedBuf = this.opts.journalValueCodec
-        ? await this.opts.journalValueCodec.decode(responseBuf)
-        : responseBuf;
-      return (resultSerde ?? this.opts.serde ?? serde.json).deserialize(
-        decodedBuf
-      ) as T;
-    }
-    const body = await httpResponse.text();
-    throw new HttpCallError(
-      httpResponse.status,
-      body,
-      `Request failed: ${httpResponse.status}\n${body}`
+    return safeRead(
+      this.opts,
+      `${this.opts.url}/restate/invocation/${send.invocationId}/attach`,
+      (resultSerde ?? this.opts.serde ?? serde.json) as Serde<T>
     );
   }
 }

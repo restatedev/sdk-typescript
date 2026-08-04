@@ -66,6 +66,51 @@ describe("resolveRetryPolicy", () => {
       maxInterval: 30_000,
     });
   });
+
+  it("rejects a maxAttempts that is not a positive integer", () => {
+    expect(() => resolveRetryPolicy({ maxAttempts: Infinity })).toThrow(
+      TypeError
+    );
+    expect(() => resolveRetryPolicy({ maxAttempts: 0 })).toThrow(TypeError);
+    expect(() => resolveRetryPolicy({ maxAttempts: -1 })).toThrow(TypeError);
+    expect(() => resolveRetryPolicy({ maxAttempts: 2.5 })).toThrow(TypeError);
+    expect(() => resolveRetryPolicy({ maxAttempts: NaN })).toThrow(TypeError);
+  });
+
+  it("accepts maxAttempts of 1, which simply makes no retry", () => {
+    expect(resolveRetryPolicy({ maxAttempts: 1 })).toMatchObject({
+      maxAttempts: 1,
+    });
+  });
+
+  it("rejects intervals that are negative or not finite", () => {
+    expect(() => resolveRetryPolicy({ initialInterval: -1 })).toThrow(
+      TypeError
+    );
+    expect(() => resolveRetryPolicy({ initialInterval: Infinity })).toThrow(
+      TypeError
+    );
+    expect(() => resolveRetryPolicy({ maxInterval: -1 })).toThrow(TypeError);
+    expect(() => resolveRetryPolicy({ maxInterval: NaN })).toThrow(TypeError);
+  });
+
+  it("rejects an exponentiation factor below 1 or not finite", () => {
+    expect(() => resolveRetryPolicy({ exponentiationFactor: 0 })).toThrow(
+      TypeError
+    );
+    expect(() => resolveRetryPolicy({ exponentiationFactor: 0.5 })).toThrow(
+      TypeError
+    );
+    expect(() =>
+      resolveRetryPolicy({ exponentiationFactor: Infinity })
+    ).toThrow(TypeError);
+  });
+
+  it("names the offending field in the error", () => {
+    expect(() => resolveRetryPolicy({ maxInterval: -1 })).toThrow(
+      /retry\.maxInterval/
+    );
+  });
 });
 
 describe("defaultShouldRetry", () => {
@@ -88,6 +133,18 @@ describe("defaultShouldRetry", () => {
         kind: "response",
         status: 409,
         headers: new Headers(),
+      })
+    ).toBe(false);
+  });
+
+  it("does not retry a 5xx that reports an invocation's own outcome", () => {
+    // A handler's TerminalError surfaces with the failure's own status; the
+    // ingress marks such responses with the invocation id.
+    expect(
+      defaultShouldRetry({
+        kind: "response",
+        status: 500,
+        headers: new Headers({ "x-restate-id": "inv_1abc" }),
       })
     ).toBe(false);
   });
@@ -177,58 +234,80 @@ describe("abortableSleep", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Integration: retry behavior through connect()/call()
+// Integration: retry behavior through connect()
 // ---------------------------------------------------------------------------
 
+const URL = "http://localhost:8080";
+
+// Response/error factories — a fresh, unread Response per attempt (real
+// fetch hands back a new Response per call).
+type Attempt = () => Promise<Response>;
+const ok =
+  (body: unknown = { ok: true }): Attempt =>
+  () =>
+    Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
+const fail =
+  (status: number, headers?: Record<string, string>): Attempt =>
+  () =>
+    Promise.resolve(new Response("nope", { status, headers }));
+const neterr =
+  (msg: string): Attempt =>
+  () =>
+    Promise.reject(new TypeError(msg));
+// Headers arrived, then the connection died part-way through the body.
+const streamerr =
+  (msg: string, status = 200, headers?: Record<string, string>): Attempt =>
+  () => {
+    let sentChunk = false;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (!sentChunk) {
+          controller.enqueue(new TextEncoder().encode('{"partial":'));
+          sentChunk = true;
+          return;
+        }
+        controller.error(new TypeError(msg));
+      },
+    });
+    return Promise.resolve(new Response(body, { status, headers }));
+  };
+
+const fastRetry = {
+  initialInterval: 1,
+  maxInterval: 2,
+  exponentiationFactor: 2,
+};
+
+/**
+ * Stub out global fetch for the enclosing describe, returning a `queue` that
+ * plays back a sequence of attempts, repeating the last one.
+ */
+const stubFetch = () => {
+  let fetchMock!: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  return {
+    calls: () => fetchMock.mock.calls,
+    attempts: () => fetchMock.mock.calls.length,
+    queue: (...attempts: Attempt[]) => {
+      let i = 0;
+      fetchMock.mockImplementation(() =>
+        attempts[Math.min(i++, attempts.length - 1)]!()
+      );
+    },
+  };
+};
+
 describe("ingress auto-retry", () => {
-  const URL = "http://localhost:8080";
-  let fetchMock: ReturnType<typeof vi.fn>;
-
-  // Response/error factories — a fresh, unread Response per attempt (real
-  // fetch hands back a new Response per call).
-  type Attempt = () => Promise<Response>;
-  const ok =
-    (body: unknown = { ok: true }): Attempt =>
-    () =>
-      Promise.resolve(new Response(JSON.stringify(body), { status: 200 }));
-  const fail =
-    (status: number, headers?: Record<string, string>): Attempt =>
-    () =>
-      Promise.resolve(new Response("nope", { status, headers }));
-  const neterr =
-    (msg: string): Attempt =>
-    () =>
-      Promise.reject(new TypeError(msg));
-  const streamerr =
-    (msg: string): Attempt =>
-    () => {
-      let sentChunk = false;
-      const body = new ReadableStream<Uint8Array>({
-        pull(controller) {
-          if (!sentChunk) {
-            controller.enqueue(new TextEncoder().encode('{"partial":'));
-            sentChunk = true;
-            return;
-          }
-          controller.error(new TypeError(msg));
-        },
-      });
-      return Promise.resolve(new Response(body, { status: 200 }));
-    };
-
-  // A fetch mock that plays back a queued sequence, repeating the last item.
-  const queue = (...attempts: Attempt[]) => {
-    let i = 0;
-    fetchMock.mockImplementation(() =>
-      attempts[Math.min(i++, attempts.length - 1)]!()
-    );
-  };
-
-  const fastRetry = {
-    initialInterval: 1,
-    maxInterval: 2,
-    exponentiationFactor: 2,
-  };
+  const { queue, calls, attempts } = stubFetch();
 
   const call = (idempotencyKey?: string, retry?: RetryPolicy | boolean) =>
     connect({ url: URL, retry }).call({
@@ -255,57 +334,48 @@ describe("ingress auto-retry", () => {
       .scope("scope")
       .workflowClient(testWorkflow, "workflow-id");
 
-  beforeEach(() => {
-    fetchMock = vi.fn();
-    vi.stubGlobal("fetch", fetchMock);
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
   it("does NOT retry without an idempotency key", async () => {
     queue(fail(503), ok());
     await expect(call(undefined, fastRetry)).rejects.toBeInstanceOf(
       HttpCallError
     );
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(attempts()).toBe(1);
   });
 
   it("does NOT retry by default — retries are opt-in", async () => {
     queue(fail(503), ok());
     await expect(call("k1", undefined)).rejects.toBeInstanceOf(HttpCallError);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(attempts()).toBe(1);
   });
 
   it("retry:true enables the built-in policy", async () => {
     queue(fail(503), ok());
     await expect(call("k1", true)).resolves.toEqual({ ok: true });
-    expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(attempts()).toBeGreaterThanOrEqual(2);
   });
 
   it("retries 5xx then succeeds when an idempotency key is set", async () => {
     queue(fail(500), fail(503), ok({ greeting: "hi" }));
     await expect(call("k1", fastRetry)).resolves.toEqual({ greeting: "hi" });
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(attempts()).toBe(3);
   });
 
   it("retries on 429", async () => {
     queue(fail(429), ok());
     await expect(call("k1", fastRetry)).resolves.toEqual({ ok: true });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(attempts()).toBe(2);
   });
 
   it("retries on a network error", async () => {
     queue(neterr("connection refused"), ok());
     await expect(call("k1", fastRetry)).resolves.toEqual({ ok: true });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(attempts()).toBe(2);
   });
 
   it("retries when a successful response body stream fails", async () => {
     queue(streamerr("stream interrupted"), ok({ greeting: "hi" }));
     await expect(call("k1", fastRetry)).resolves.toEqual({ greeting: "hi" });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(attempts()).toBe(2);
   });
 
   it("does NOT retry workflow submission without a retry policy", async () => {
@@ -313,7 +383,7 @@ describe("ingress auto-retry", () => {
     await expect(workflow().workflowSubmit({})).rejects.toBeInstanceOf(
       HttpCallError
     );
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(attempts()).toBe(1);
   });
 
   it("retries workflow submission without an idempotency key", async () => {
@@ -327,7 +397,7 @@ describe("ingress auto-retry", () => {
         status: "PreviouslyAccepted",
       }
     );
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(attempts()).toBe(2);
   });
 
   it("retries scoped workflow submission without an idempotency key", async () => {
@@ -338,7 +408,7 @@ describe("ingress auto-retry", () => {
       invocationId: "invocation-id",
       status: "Accepted",
     });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(attempts()).toBe(2);
   });
 
   it("does NOT retry workflow attach without a retry policy", async () => {
@@ -346,7 +416,7 @@ describe("ingress auto-retry", () => {
     await expect(workflow().workflowAttach()).rejects.toBeInstanceOf(
       HttpCallError
     );
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(attempts()).toBe(1);
   });
 
   it("retries workflow attach without an idempotency key", async () => {
@@ -354,7 +424,7 @@ describe("ingress auto-retry", () => {
     await expect(workflow(fastRetry).workflowAttach()).resolves.toEqual({
       result: "done",
     });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(attempts()).toBe(2);
   });
 
   it("does NOT retry workflow output without a retry policy", async () => {
@@ -362,7 +432,7 @@ describe("ingress auto-retry", () => {
     await expect(workflow().workflowOutput()).rejects.toBeInstanceOf(
       HttpCallError
     );
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(attempts()).toBe(1);
   });
 
   it("retries workflow output without an idempotency key", async () => {
@@ -371,26 +441,26 @@ describe("ingress auto-retry", () => {
       ready: true,
       result: { result: "done" },
     });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(attempts()).toBe(2);
   });
 
   it("does NOT retry workflow output when it is not ready by default", async () => {
     queue(fail(470), ok({ result: "done" }));
     const output = await workflow(fastRetry).workflowOutput();
     expect(output.ready).toBe(false);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(attempts()).toBe(1);
   });
 
   it("does NOT retry on a non-retryable 4xx", async () => {
     queue(fail(409), ok());
     await expect(call("k1", fastRetry)).rejects.toBeInstanceOf(HttpCallError);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(attempts()).toBe(1);
   });
 
   it("retry:false disables retries even with an idempotency key", async () => {
     queue(fail(503), ok());
     await expect(call("k1", false)).rejects.toBeInstanceOf(HttpCallError);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(attempts()).toBe(1);
   });
 
   it("a custom shouldRetry can narrow the decision (no retry on 500)", async () => {
@@ -402,7 +472,7 @@ describe("ingress auto-retry", () => {
           defaultShouldRetry(f) && !(f.kind === "response" && f.status === 500),
       })
     ).rejects.toMatchObject({ status: 500 });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(attempts()).toBe(1);
   });
 
   it("a custom shouldRetry can inspect the response body", async () => {
@@ -423,7 +493,7 @@ describe("ingress auto-retry", () => {
     await expect(
       call("k1", { ...fastRetry, maxAttempts: 3 })
     ).rejects.toMatchObject({ status: 500 });
-    expect(fetchMock).toHaveBeenCalledTimes(3); // initial + 2 retries
+    expect(attempts()).toBe(3); // initial + 2 retries
   });
 
   it("mints a fresh timeout signal per attempt", async () => {
@@ -434,10 +504,208 @@ describe("ingress auto-retry", () => {
       parameter: {},
       opts: Opts.from({ idempotencyKey: "k1", timeout: 10_000 }),
     });
-    const signals = fetchMock.mock.calls.map(
-      (c) => (c[1] as RequestInit).signal
-    );
+    const signals = calls().map((c) => (c[1] as RequestInit).signal);
     expect(signals[0]).not.toBe(signals[1]);
     expect(signals[0]?.aborted).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Integration: reading the outcome of an existing invocation — result(),
+// workflowOutput, and workflowAttach beyond the cases above. These GETs must
+// survive an ingress draining mid-read during a rolling deploy, which is what
+// the drain 503, the reset connection and the truncated body stand in for.
+// ---------------------------------------------------------------------------
+
+describe("ingress read auto-retry", () => {
+  const { queue, calls, attempts } = stubFetch();
+
+  // What a draining ingress sends: 503 plus, on HTTP/1.1, a connection close.
+  const drain = fail(503, { "retry-after": "0", connection: "close" });
+  // A handler's TerminalError, which the ingress reports with the failure's own
+  // status and marks with the invocation id.
+  const terminalFailure = fail(500, { "x-restate-id": "inv_1abc" });
+
+  type TestWorkflow = WorkflowDefinition<
+    "workflow",
+    {
+      run: (
+        context: unknown,
+        input: Record<string, unknown>
+      ) => Promise<Record<string, unknown>>;
+    }
+  >;
+  const testWorkflow: TestWorkflow = { name: "workflow" };
+  const workflow = (retry?: RetryPolicy | boolean) =>
+    connect({ url: URL, retry }).workflowClient(testWorkflow, "workflow-id");
+  const scopedWorkflow = (retry?: RetryPolicy | boolean) =>
+    connect({ url: URL, retry })
+      .scope("scope")
+      .workflowClient(testWorkflow, "workflow-id");
+
+  const result = (retry?: RetryPolicy | boolean) =>
+    connect({ url: URL, retry }).result({
+      invocationId: "inv_1abc",
+      status: "Accepted",
+      attachable: true,
+    });
+
+  describe("result()", () => {
+    it("retries a drain 503, then succeeds", async () => {
+      queue(drain, ok({ greeting: "hi" }));
+      await expect(result(fastRetry)).resolves.toEqual({ greeting: "hi" });
+      expect(attempts()).toBe(2);
+    });
+
+    it("retries a transport failure, then succeeds", async () => {
+      queue(neterr("socket hang up"), ok({ greeting: "hi" }));
+      await expect(result(fastRetry)).resolves.toEqual({ greeting: "hi" });
+      expect(attempts()).toBe(2);
+    });
+
+    it("retries a body cut short after a 200, then succeeds", async () => {
+      queue(streamerr("stream interrupted"), ok({ greeting: "hi" }));
+      await expect(result(fastRetry)).resolves.toEqual({ greeting: "hi" });
+      expect(attempts()).toBe(2);
+    });
+
+    it("retries a body cut short after a drain 503, then succeeds", async () => {
+      queue(streamerr("stream interrupted", 503), ok({ greeting: "hi" }));
+      await expect(result(fastRetry)).resolves.toEqual({ greeting: "hi" });
+      expect(attempts()).toBe(2);
+    });
+
+    it("needs no idempotency key — the read itself is safe", async () => {
+      queue(drain, ok());
+      await expect(result(true)).resolves.toEqual({ ok: true });
+      expect(attempts()).toBeGreaterThanOrEqual(2);
+    });
+
+    it("does NOT retry by default — retries are opt-in", async () => {
+      queue(drain, ok());
+      await expect(result()).rejects.toBeInstanceOf(HttpCallError);
+      expect(attempts()).toBe(1);
+    });
+
+    it("does NOT retry an invocation's own terminal failure", async () => {
+      queue(terminalFailure, ok());
+      await expect(result(fastRetry)).rejects.toMatchObject({ status: 500 });
+      expect(attempts()).toBe(1);
+    });
+
+    it("gives up after maxAttempts and throws the last error", async () => {
+      queue(drain);
+      await expect(
+        result({ ...fastRetry, maxAttempts: 3 })
+      ).rejects.toMatchObject({ status: 503, responseText: "nope" });
+      expect(attempts()).toBe(3);
+    });
+
+    it("does not fetch at all when the send is not attachable", async () => {
+      queue(ok());
+      await expect(
+        connect({ url: URL, retry: fastRetry }).result({
+          invocationId: "inv_1abc",
+          status: "Accepted",
+          attachable: false,
+        })
+      ).rejects.toThrow(/Unable to fetch the result/);
+      expect(attempts()).toBe(0);
+    });
+  });
+
+  describe("workflowAttach", () => {
+    it("retries a body cut short, then succeeds", async () => {
+      queue(streamerr("stream interrupted"), ok({ done: true }));
+      await expect(workflow(fastRetry).workflowAttach()).resolves.toEqual({
+        done: true,
+      });
+      expect(attempts()).toBe(2);
+    });
+
+    it("does NOT retry once the caller has aborted", async () => {
+      queue(drain, ok());
+      const ac = new AbortController();
+      ac.abort(new Error("caller gave up"));
+      await expect(
+        workflow(fastRetry).workflowAttach(Opts.from({ signal: ac.signal }))
+      ).rejects.toThrow();
+      expect(attempts()).toBe(1);
+    });
+
+    it("stops retrying when the caller aborts between attempts", async () => {
+      const ac = new AbortController();
+      queue(() => {
+        ac.abort(new Error("caller gave up"));
+        return Promise.resolve(new Response("nope", { status: 503 }));
+      }, ok());
+      await expect(
+        workflow({ ...fastRetry, initialInterval: 10_000 }).workflowAttach(
+          Opts.from({ signal: ac.signal })
+        )
+      ).rejects.toBeInstanceOf(HttpCallError);
+      expect(attempts()).toBe(1);
+    });
+
+    it("bounds the whole read, retries included, with one timeout signal", async () => {
+      queue(drain, ok());
+      await workflow(fastRetry).workflowAttach(Opts.from({ timeout: 10_000 }));
+      const signals = calls().map((c) => (c[1] as RequestInit).signal);
+      expect(attempts()).toBe(2);
+      expect(signals[0]).toBe(signals[1]);
+    });
+
+    it("does NOT retry an invocation's own terminal failure", async () => {
+      queue(terminalFailure, ok());
+      await expect(workflow(fastRetry).workflowAttach()).rejects.toMatchObject({
+        status: 500,
+      });
+      expect(attempts()).toBe(1);
+    });
+  });
+
+  describe("workflowOutput", () => {
+    it("retries a drain 503, then reports the output as not ready", async () => {
+      queue(drain, fail(470));
+      await expect(workflow(fastRetry).workflowOutput()).resolves.toMatchObject(
+        { ready: false }
+      );
+      expect(attempts()).toBe(2);
+    });
+
+    it("does NOT retry the 470 that means 'not ready yet'", async () => {
+      queue(fail(470), ok());
+      await expect(workflow(fastRetry).workflowOutput()).resolves.toMatchObject(
+        { ready: false }
+      );
+      expect(attempts()).toBe(1);
+    });
+
+    it("retries a transport failure, then returns the output", async () => {
+      queue(neterr("ECONNRESET"), ok({ done: true }));
+      await expect(workflow(fastRetry).workflowOutput()).resolves.toEqual({
+        ready: true,
+        result: { done: true },
+      });
+      expect(attempts()).toBe(2);
+    });
+  });
+
+  describe("scoped workflow reads", () => {
+    it("retries a drain 503 on attach, then succeeds", async () => {
+      queue(drain, ok({ done: true }));
+      await expect(scopedWorkflow(fastRetry).workflowAttach()).resolves.toEqual(
+        { done: true }
+      );
+      expect(attempts()).toBe(2);
+    });
+
+    it("retries a drain 503 on output, then succeeds", async () => {
+      queue(drain, ok({ done: true }));
+      await expect(scopedWorkflow(fastRetry).workflowOutput()).resolves.toEqual(
+        { ready: true, result: { done: true } }
+      );
+      expect(attempts()).toBe(2);
+    });
   });
 });

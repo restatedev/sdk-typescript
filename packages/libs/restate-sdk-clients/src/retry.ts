@@ -29,11 +29,46 @@ const DEFAULT_RETRY_POLICY: ResolvedRetryPolicy = {
 };
 
 /**
+ * Bounds are checked rather than clamped: a policy that cannot be honored as
+ * written — an unbounded `maxAttempts`, a backoff that collapses to an immediate
+ * retry — is a mistake to surface, not to quietly reinterpret.
+ */
+const checkedAttempts = (value: number): number => {
+  if (!Number.isInteger(value) || value < 1) {
+    throw new TypeError(
+      `retry.maxAttempts must be an integer of at least 1, got ${value}`
+    );
+  }
+  return value;
+};
+
+const checkedInterval = (name: string, value: number): number => {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new TypeError(
+      `retry.${name} must be a finite, non-negative duration, got ${value}`
+    );
+  }
+  return value;
+};
+
+const checkedFactor = (value: number): number => {
+  if (!Number.isFinite(value) || value < 1) {
+    throw new TypeError(
+      `retry.exponentiationFactor must be a finite number of at least 1, got ${value}`
+    );
+  }
+  return value;
+};
+
+/**
  * Resolve a user supplied retry policy into a fully populated one.
  *
  * Retries are opt-in: returns `undefined` (disabled) when `retry` is omitted or
  * `false`. `true` enables the built-in policy; an object enables it with the
  * provided overrides.
+ *
+ * @throws TypeError if an override is outside the domain documented on
+ *   {@link RetryPolicy}.
  */
 export function resolveRetryPolicy(
   retry: RetryPolicy | boolean | undefined
@@ -45,17 +80,28 @@ export function resolveRetryPolicy(
     return DEFAULT_RETRY_POLICY;
   }
   return {
-    maxAttempts: retry.maxAttempts ?? DEFAULT_RETRY_POLICY.maxAttempts,
+    maxAttempts:
+      retry.maxAttempts !== undefined
+        ? checkedAttempts(retry.maxAttempts)
+        : DEFAULT_RETRY_POLICY.maxAttempts,
     initialInterval:
       retry.initialInterval !== undefined
-        ? millisOrDurationToMillis(retry.initialInterval)
+        ? checkedInterval(
+            "initialInterval",
+            millisOrDurationToMillis(retry.initialInterval)
+          )
         : DEFAULT_RETRY_POLICY.initialInterval,
     maxInterval:
       retry.maxInterval !== undefined
-        ? millisOrDurationToMillis(retry.maxInterval)
+        ? checkedInterval(
+            "maxInterval",
+            millisOrDurationToMillis(retry.maxInterval)
+          )
         : DEFAULT_RETRY_POLICY.maxInterval,
     exponentiationFactor:
-      retry.exponentiationFactor ?? DEFAULT_RETRY_POLICY.exponentiationFactor,
+      retry.exponentiationFactor !== undefined
+        ? checkedFactor(retry.exponentiationFactor)
+        : DEFAULT_RETRY_POLICY.exponentiationFactor,
     shouldRetry: retry.shouldRetry,
   };
 }
@@ -66,12 +112,30 @@ export function isRetryableStatus(status: number): boolean {
 }
 
 /**
+ * Set by the ingress on every response that carries an invocation's own outcome.
+ * Its presence separates "the invocation ended this way" from "the ingress could
+ * not answer": a handler's terminal failure surfaces with the failure's own HTTP
+ * status, which may well be a `5xx`.
+ */
+const INVOCATION_ID_HEADER = "x-restate-id";
+
+/**
  * The built-in retry decision: retry network errors, HTTP `429`, and HTTP
  * `5xx`. Exported so a custom {@link RetryPolicy.shouldRetry} can compose with
  * it rather than reimplement it.
+ *
+ * A response identifying an invocation is never retried, whatever its status —
+ * the ingress reached the invocation and reported its outcome, and asking again
+ * cannot make a terminal failure any less terminal.
  */
 export function defaultShouldRetry(failure: RetryFailure): boolean {
-  return failure.kind === "network" || isRetryableStatus(failure.status);
+  if (failure.kind === "network") {
+    return true;
+  }
+  if (failure.headers.has(INVOCATION_ID_HEADER)) {
+    return false;
+  }
+  return isRetryableStatus(failure.status);
 }
 
 /**

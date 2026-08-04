@@ -79,6 +79,9 @@ export interface Ingress {
   /**
    * Obtain the result of a service that was asynchronously submitted (via a sendClient).
    *
+   * This only retrieves a result that already exists, so it is retried whenever
+   * {@link ConnectionOpts.retry} is enabled — no idempotency key is needed.
+   *
    * @param send either the send response or the workflow submission as obtained by the respective clients.
    */
   result<T>(
@@ -234,12 +237,20 @@ export interface IngressCallOptions<I = unknown, O = unknown> {
    *
    * Same as {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal#aborting_a_fetch_with_timeout_or_explicit_abort | AbortSignal.timeout()}.
    *
+   * With {@link ConnectionOpts.retry} enabled, each attempt at invoking a handler
+   * gets the full timeout, since every attempt starts the wait over. On the reads
+   * (`result`, `workflowAttach`, `workflowOutput`) the timeout instead bounds the
+   * whole operation including its retries, because the work being waited on is
+   * already running elsewhere.
+   *
    * This field is exclusive with `signal`, and using both of them will result in a runtime failure.
    */
   timeout?: number;
 
   /**
    * Signal to abort the underlying `fetch` operation. See {@link https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal}.
+   *
+   * Aborting also stops any pending retry.
    *
    * This field is exclusive with `timeout`, and using both of them will result in a runtime failure.
    */
@@ -413,7 +424,9 @@ export type IngressWorkflowClient<M> = Omit<
      * If the output is ready, the 'result' field will contain the output.
      * note: that this operation will not wait for the workflow to complete, to do so use 'workflowAttach'.
      * When automatic retries are enabled on the connection, the client retries
-     * ambiguous output retrieval failures according to the configured retry policy.
+     * ambiguous output retrieval failures according to the configured retry policy;
+     * a workflow whose output is simply not ready yet is reported as such rather
+     * than retried.
      *
      * @returns a promise that resolves if the workflow's output is ready/available.
      */
@@ -488,12 +501,21 @@ export type RetryFailure =
  * {@link ConnectionOpts.retry}) and the request is safe to repeat. Regular
  * calls require an `idempotencyKey` (see
  * {@link IngressCallOptions.idempotencyKey}); workflow submissions are
- * idempotent by workflow ID, while workflow attaches and output retrieval only
- * observe the existing workflow.
+ * idempotent by workflow ID, while workflow attaches, output retrieval, and
+ * {@link Ingress.result} only observe an invocation that already exists.
  *
  * By default the following failures are retried: network errors (the underlying
- * `fetch` rejecting), HTTP `429`, and HTTP `5xx` responses. Override this with
- * {@link RetryPolicy.shouldRetry}.
+ * `fetch` rejecting), HTTP `429`, and HTTP `5xx` responses. A response that
+ * reports an invocation's own outcome is never retried, even a `5xx` one, since
+ * a terminal failure does not become less terminal on a second look. Override
+ * all of this with {@link RetryPolicy.shouldRetry}.
+ *
+ * A failure stays ambiguous until the response body has been received in full,
+ * so a connection lost mid-body is retried like any other transport failure.
+ *
+ * An override outside the documented domain — a non-integer or unbounded
+ * `maxAttempts`, a negative or non-finite interval — throws a `TypeError` rather
+ * than being clamped.
  */
 export interface RetryPolicy {
   /**
@@ -526,10 +548,15 @@ export interface RetryPolicy {
    * fully replaces the built-in rule (network / `429` / `5xx`).
    *
    * The idempotency-key gate still applies to regular invocations; workflow
-   * submissions, attaches, and output retrieval remain eligible without an
-   * idempotency key. The `maxAttempts` cap applies to all of them. This predicate
-   * only narrows or broadens *which failures* are retryable within those bounds.
-   * Compose with the built-in rule via the exported `defaultShouldRetry`.
+   * submissions, attaches, output retrieval, and {@link Ingress.result} remain
+   * eligible without an idempotency key. The `maxAttempts` cap applies to all of
+   * them. This predicate only narrows or broadens *which failures* are retryable
+   * within those bounds. Compose with the built-in rule via the exported
+   * `defaultShouldRetry`.
+   *
+   * Because it replaces the built-in rule everywhere, it also sees read-path
+   * failures — including the `470` that `workflowOutput` uses to report an
+   * output that is not ready yet.
    *
    * @param failure the failure being considered
    * @param attempt the zero-based index of the attempt that just failed
@@ -558,11 +585,14 @@ export type ConnectionOpts = {
    *
    * Even when enabled, regular calls are retried **only** when an
    * `idempotencyKey` is set — without one a retry could double-execute a
-   * non-idempotent invocation. Workflow submissions, attaches, and output
-   * retrieval are also retried: submissions are idempotent by workflow ID,
-   * while attach and output operations only observe the existing workflow. If a
-   * submission retry observes a workflow accepted by an earlier attempt, its
+   * non-idempotent invocation. Workflow submissions, attaches, output retrieval,
+   * and {@link Ingress.result} are also retried: submissions are idempotent by
+   * workflow ID, while the reads only observe an invocation that already exists.
+   * If a submission retry observes a workflow accepted by an earlier attempt, its
    * status is `PreviouslyAccepted`.
+   *
+   * Retrying the reads is what lets them survive an ingress being drained
+   * mid-read during a rolling deploy.
    */
   retry?: RetryPolicy | boolean;
 
