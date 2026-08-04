@@ -20,6 +20,7 @@ import {
 } from "./retry.js";
 import { connect, HttpCallError } from "./ingress.js";
 import { Opts, type RetryPolicy } from "./api.js";
+import type { WorkflowDefinition } from "@restatedev/restate-sdk-core";
 
 describe("resolveRetryPolicy", () => {
   it("is disabled (undefined) when unset — retries are opt-in", () => {
@@ -198,6 +199,22 @@ describe("ingress auto-retry", () => {
     (msg: string): Attempt =>
     () =>
       Promise.reject(new TypeError(msg));
+  const streamerr =
+    (msg: string): Attempt =>
+    () => {
+      let sentChunk = false;
+      const body = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (!sentChunk) {
+            controller.enqueue(new TextEncoder().encode('{"partial":'));
+            sentChunk = true;
+            return;
+          }
+          controller.error(new TypeError(msg));
+        },
+      });
+      return Promise.resolve(new Response(body, { status: 200 }));
+    };
 
   // A fetch mock that plays back a queued sequence, repeating the last item.
   const queue = (...attempts: Attempt[]) => {
@@ -220,6 +237,23 @@ describe("ingress auto-retry", () => {
       parameter: {},
       opts: idempotencyKey ? Opts.from({ idempotencyKey }) : undefined,
     });
+
+  type TestWorkflow = WorkflowDefinition<
+    "workflow",
+    {
+      run: (
+        context: unknown,
+        input: Record<string, unknown>
+      ) => Promise<Record<string, unknown>>;
+    }
+  >;
+  const testWorkflow: TestWorkflow = { name: "workflow" };
+  const workflow = (retry?: RetryPolicy | boolean) =>
+    connect({ url: URL, retry }).workflowClient(testWorkflow, "workflow-id");
+  const scopedWorkflow = (retry?: RetryPolicy | boolean) =>
+    connect({ url: URL, retry })
+      .scope("scope")
+      .workflowClient(testWorkflow, "workflow-id");
 
   beforeEach(() => {
     fetchMock = vi.fn();
@@ -265,6 +299,61 @@ describe("ingress auto-retry", () => {
   it("retries on a network error", async () => {
     queue(neterr("connection refused"), ok());
     await expect(call("k1", fastRetry)).resolves.toEqual({ ok: true });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries when a successful response body stream fails", async () => {
+    queue(streamerr("stream interrupted"), ok({ greeting: "hi" }));
+    await expect(call("k1", fastRetry)).resolves.toEqual({ greeting: "hi" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("does NOT retry workflow submission without a retry policy", async () => {
+    queue(fail(503), ok());
+    await expect(workflow().workflowSubmit({})).rejects.toBeInstanceOf(
+      HttpCallError
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries workflow submission without an idempotency key", async () => {
+    queue(
+      neterr("response lost"),
+      ok({ invocationId: "invocation-id", status: "PreviouslyAccepted" })
+    );
+    await expect(workflow(fastRetry).workflowSubmit({})).resolves.toMatchObject(
+      {
+        invocationId: "invocation-id",
+        status: "PreviouslyAccepted",
+      }
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries scoped workflow submission without an idempotency key", async () => {
+    queue(fail(503), ok({ invocationId: "invocation-id", status: "Accepted" }));
+    await expect(
+      scopedWorkflow(fastRetry).workflowSubmit({})
+    ).resolves.toMatchObject({
+      invocationId: "invocation-id",
+      status: "Accepted",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("does NOT retry workflow attach without a retry policy", async () => {
+    queue(fail(503), ok());
+    await expect(workflow().workflowAttach()).rejects.toBeInstanceOf(
+      HttpCallError
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries workflow attach without an idempotency key", async () => {
+    queue(fail(503), ok({ result: "done" }));
+    await expect(workflow(fastRetry).workflowAttach()).resolves.toEqual({
+      result: "done",
+    });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 

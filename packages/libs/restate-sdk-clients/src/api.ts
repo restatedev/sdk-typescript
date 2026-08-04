@@ -332,6 +332,14 @@ export type WorkflowSubmission<T> = {
    *
    */
   readonly invocationId: string;
+  /**
+   * Whether the workflow was accepted by this request or had already been
+   * accepted.
+   *
+   * When automatic retries are enabled, this may be `PreviouslyAccepted` if an
+   * earlier attempt from the same `workflowSubmit` call was accepted but its
+   * response was not observed by the client.
+   */
   readonly status: "Accepted" | "PreviouslyAccepted";
   readonly attachable: true;
 };
@@ -364,8 +372,9 @@ export type IngressWorkflowClient<M> = Omit<
      *
      * This instructs restate to execute the 'run' handler of the workflow, idempotently.
      * The workflow will be executed asynchronously, and the promise will resolve when the workflow has been accepted.
-     * Please note that submitting a workflow does not wait for it to completion, and it is safe to retry the submission,
-     * in case of failure.
+     * Please note that submitting a workflow does not wait for it to completion.
+     * When automatic retries are enabled on the connection, the client safely retries
+     * ambiguous submission failures using the workflow ID as the request identity.
      *
      * @param argument the same argument type as defined by the 'run' handler.
      */
@@ -385,6 +394,8 @@ export type IngressWorkflowClient<M> = Omit<
      * The promise will resolve when the workflow has completed either successfully with a result,
      * or be rejected with an error.
      * This operation is safe to retry many times, and it will always return the same result.
+     * When automatic retries are enabled on the connection, the client retries
+     * ambiguous attach failures according to the configured retry policy.
      *
      * @returns a promise that resolves when the workflow has completed.
      */
@@ -472,10 +483,11 @@ export type RetryFailure =
  * Policy controlling automatic retries of ambiguous ingress failures.
  *
  * Retries are **opt-in**: they happen only when a policy is configured (see
- * {@link ConnectionOpts.retry}) **and** the call carries an `idempotencyKey`
- * (see {@link IngressCallOptions.idempotencyKey}). Retrying without a key could
- * double-execute a non-idempotent invocation, so the idempotency key is the
- * safety boundary that a policy can never bypass.
+ * {@link ConnectionOpts.retry}) and the request is safe to repeat. Regular
+ * calls require an `idempotencyKey` (see
+ * {@link IngressCallOptions.idempotencyKey}); workflow submissions are
+ * idempotent by workflow ID, and workflow attaches only retrieve the existing
+ * result.
  *
  * By default the following failures are retried: network errors (the underlying
  * `fetch` rejecting), HTTP `429`, and HTTP `5xx` responses. Override this with
@@ -511,10 +523,11 @@ export interface RetryPolicy {
    * Decide whether a given failure should be retried. When provided, this
    * fully replaces the built-in rule (network / `429` / `5xx`).
    *
-   * The idempotency-key gate and the `maxAttempts` cap still apply — this
-   * predicate only narrows or broadens *which failures* are retryable within
-   * those bounds. Compose with the built-in rule via the exported
-   * `defaultShouldRetry`.
+   * The idempotency-key gate still applies to regular invocations; workflow
+   * submissions and attaches remain eligible without an idempotency key. The
+   * `maxAttempts` cap applies to both. This predicate only narrows or broadens
+   * *which failures* are retryable within those bounds. Compose with the
+   * built-in rule via the exported `defaultShouldRetry`.
    *
    * @param failure the failure being considered
    * @param attempt the zero-based index of the attempt that just failed
@@ -541,11 +554,12 @@ export type ConnectionOpts = {
    * Retries are **disabled by default**. Set `true` to enable the built-in
    * policy ({@link RetryPolicy}), or pass a {@link RetryPolicy} to tune it.
    *
-   * Even when enabled, retries fire **only** when an `idempotencyKey` is set on
-   * the call — without one a retry could double-execute a non-idempotent
-   * invocation. With a key, Restate dedupes the request, so a retry safely
-   * attaches to the in-flight or completed invocation instead of starting a new
-   * one.
+   * Even when enabled, regular calls are retried **only** when an
+   * `idempotencyKey` is set — without one a retry could double-execute a
+   * non-idempotent invocation. Workflow submissions and attaches are also
+   * retried: submissions are idempotent by workflow ID, while attaches only
+   * retrieve the existing result. If a submission retry observes a workflow
+   * accepted by an earlier attempt, its status is `PreviouslyAccepted`.
    */
   retry?: RetryPolicy | boolean;
 

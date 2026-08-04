@@ -23,10 +23,9 @@
 //
 // Auto-retry (opt-in): enable it via the connection's `retry` option. The
 // client then retries ambiguous failures (network errors, HTTP 429, HTTP 5xx),
-// but only when a call carries an `idempotencyKey`. Restate dedupes on the key,
-// so a retry safely attaches to the in-flight or completed invocation instead
-// of starting a duplicate. Without a key, a retry could double-execute, so none
-// is attempted.
+// but only when the request is safe to repeat. Regular calls require an
+// `idempotencyKey`; workflow submissions are idempotent by workflow ID, while
+// workflow attaches only retrieve the existing result.
 //
 // Run the endpoint first (`pnpm start:tutorial`), register it with a
 // restate-server, then run this module against the ingress URL.

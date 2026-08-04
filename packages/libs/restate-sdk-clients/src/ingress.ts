@@ -38,6 +38,7 @@ import {
   backoffDelay,
   defaultShouldRetry,
   parseRetryAfter,
+  type ResolvedRetryPolicy,
   resolveRetryPolicy,
 } from "./retry.js";
 
@@ -121,9 +122,99 @@ const LIMIT_KEY_HEADER = "x-restate-limit-key";
 const getFetch = (opts: ConnectionOpts): NonNullable<ConnectionOpts["fetch"]> =>
   opts.fetch ?? globalThis.fetch;
 
+const fetchWithRetries = async (
+  opts: ConnectionOpts,
+  url: string,
+  init: RequestInit,
+  callOpts: Opts<unknown, unknown> | SendOpts<unknown> | undefined,
+  retryPolicy: ResolvedRetryPolicy | undefined
+): Promise<Uint8Array> => {
+  const userSignal = callOpts?.opts.signal;
+  const timeout = callOpts?.opts.timeout;
+  if (userSignal !== undefined && timeout !== undefined) {
+    // The caller configured two mutually exclusive ways to abort each attempt.
+    throw new Error(
+      "You can't specify both signal and timeout options at the same time"
+    );
+  }
+  // A fresh timeout signal is minted per attempt below — a single
+  // AbortSignal.timeout() would already be aborted on the second attempt.
+  const attemptSignal = (): AbortSignal | undefined =>
+    userSignal ??
+    (timeout !== undefined ? AbortSignal.timeout(timeout) : undefined);
+  const shouldRetry = retryPolicy?.shouldRetry ?? defaultShouldRetry;
+
+  for (let attempt = 0; ; attempt++) {
+    let response: Response;
+    let errorBody: string;
+    try {
+      response = await getFetch(opts)(url, {
+        ...init,
+        signal: attemptSignal(),
+      });
+      if (response.ok) {
+        // A 2xx response was received. Keep the body read inside this try so a
+        // connection failure while streaming the body is retried as ambiguous.
+        return new Uint8Array(await response.arrayBuffer());
+      }
+      // fetch resolves normally for non-2xx statuses. Read the body here both
+      // for RetryFailure inspection and the final HttpCallError.
+      errorBody = await response.text();
+    } catch (e) {
+      // fetch rejected, or the response body failed while streaming. Both are
+      // ambiguous because the server may already have processed the request.
+      if (
+        retryPolicy &&
+        attempt < retryPolicy.maxAttempts - 1 &&
+        !userSignal?.aborted &&
+        shouldRetry({ kind: "network", error: e }, attempt)
+      ) {
+        // Retries are enabled, attempts remain, the caller did not abort, and
+        // the policy accepted this network failure.
+        await abortableSleep(backoffDelay(retryPolicy, attempt), userSignal);
+        continue;
+      }
+      // Retries are disabled or exhausted, the caller aborted, or the policy
+      // rejected this failure.
+      throw e;
+    }
+    if (
+      retryPolicy &&
+      attempt < retryPolicy.maxAttempts - 1 &&
+      !userSignal?.aborted &&
+      shouldRetry(
+        {
+          kind: "response",
+          status: response.status,
+          headers: response.headers,
+          body: errorBody || undefined,
+        },
+        attempt
+      )
+    ) {
+      // A non-2xx response was received, attempts remain, and the policy chose
+      // to retry it (by default, HTTP 429 and 5xx).
+      const retryAfter = parseRetryAfter(response.headers);
+      await abortableSleep(
+        backoffDelay(retryPolicy, attempt, retryAfter),
+        userSignal
+      );
+      continue;
+    }
+    // The response is not retryable, retries are disabled or exhausted, the
+    // caller aborted, or the policy rejected this response.
+    throw new HttpCallError(
+      response.status,
+      errorBody,
+      `Request failed: ${response.status}\n${errorBody}`
+    );
+  }
+};
+
 const doComponentInvocation = async <I, O>(
   opts: ConnectionOpts,
-  params: InvocationParameters<I>
+  params: InvocationParameters<I>,
+  canBeRetried = Boolean(params.opts?.opts.idempotencyKey)
 ): Promise<O> => {
   let attachable = false;
   //
@@ -200,93 +291,27 @@ const doComponentInvocation = async <I, O>(
     headers[LIMIT_KEY_HEADER] = limitKey;
   }
 
-  // Abort signal, if any
-  const userSignal = params.opts?.opts.signal;
-  const timeout = params.opts?.opts.timeout;
-  if (userSignal !== undefined && timeout !== undefined) {
-    throw new Error(
-      "You can't specify both signal and timeout options at the same time"
-    );
-  }
-  // A fresh timeout signal is minted per attempt below — a single
-  // AbortSignal.timeout() would already be aborted on the second attempt.
-  const attemptSignal = (): AbortSignal | undefined =>
-    userSignal ??
-    (timeout !== undefined ? AbortSignal.timeout(timeout) : undefined);
-
   //
   // retries
   //
-  // Retries are opt-in (opts.retry) AND only ever attempted when the call
-  // carries an idempotency key: Restate then dedupes the request, so re-issuing
-  // it after an ambiguous failure (network error, 429, 5xx) safely attaches to
-  // the in-flight/completed invocation instead of starting a duplicate. Without
-  // a key, retrying is unsafe.
-  //
-  const retryPolicy = idempotencyKey
-    ? resolveRetryPolicy(opts.retry)
-    : undefined;
-  const shouldRetry = retryPolicy?.shouldRetry ?? defaultShouldRetry;
+  // Regular invocations default eligibility from the idempotency key, while
+  // workflow submissions opt in because the workflow ID identifies the run.
+  const retryPolicy = canBeRetried ? resolveRetryPolicy(opts.retry) : undefined;
 
   //
   // make the call
   //
-  let httpResponse: Response;
-  for (let attempt = 0; ; attempt++) {
-    try {
-      httpResponse = await getFetch(opts)(url, {
-        method: params.method ?? "POST",
-        headers,
-        body,
-        signal: attemptSignal(),
-      });
-    } catch (e) {
-      // network error (fetch rejected) — ambiguous
-      if (
-        retryPolicy &&
-        attempt < retryPolicy.maxAttempts - 1 &&
-        !userSignal?.aborted &&
-        shouldRetry({ kind: "network", error: e }, attempt)
-      ) {
-        await abortableSleep(backoffDelay(retryPolicy, attempt), userSignal);
-        continue;
-      }
-      throw e;
-    }
-    if (httpResponse.ok) {
-      break;
-    }
-    // Read the error body once; it is reused for the retry decision and, if we
-    // give up, for the thrown HttpCallError.
-    const errorBody = await httpResponse.text();
-    if (
-      retryPolicy &&
-      attempt < retryPolicy.maxAttempts - 1 &&
-      !userSignal?.aborted &&
-      shouldRetry(
-        {
-          kind: "response",
-          status: httpResponse.status,
-          headers: httpResponse.headers,
-          body: errorBody || undefined,
-        },
-        attempt
-      )
-    ) {
-      const retryAfter = parseRetryAfter(httpResponse.headers);
-      await abortableSleep(
-        backoffDelay(retryPolicy, attempt, retryAfter),
-        userSignal
-      );
-      continue;
-    }
-    throw new HttpCallError(
-      httpResponse.status,
-      errorBody,
-      `Request failed: ${httpResponse.status}\n${errorBody}`
-    );
-  }
-  const responseBuf = new Uint8Array(await httpResponse.arrayBuffer());
+  const responseBuf = await fetchWithRetries(
+    opts,
+    url,
+    {
+      method: params.method ?? "POST",
+      headers,
+      body,
+    },
+    params.opts,
+    retryPolicy
+  );
   if (!params.send) {
     const decodedBuf = opts.journalValueCodec
       ? await opts.journalValueCodec.decode(responseBuf)
@@ -319,39 +344,17 @@ const doWorkflowHandleCall = async <O>(
     wfKey
   )}/${op}`;
 
-  // Abort signal, if any
-  let signal: AbortSignal | undefined;
-  if (
-    callOpts?.opts?.signal !== undefined &&
-    callOpts?.opts?.timeout !== undefined
-  ) {
-    throw new Error(
-      "You can't specify both signal and timeout options at the same time"
-    );
-  } else if (callOpts?.opts?.signal !== undefined) {
-    signal = callOpts?.opts?.signal;
-  } else if (callOpts?.opts?.timeout !== undefined) {
-    signal = AbortSignal.timeout(callOpts?.opts?.timeout);
-  }
-
-  const httpResponse = await getFetch(opts)(url, {
-    method: "GET",
-    headers,
-    signal,
-  });
-  if (httpResponse.ok) {
-    const responseBuf = new Uint8Array(await httpResponse.arrayBuffer());
-    const decodedBuf = opts.journalValueCodec
-      ? await opts.journalValueCodec.decode(responseBuf)
-      : responseBuf;
-    return outputSerde.deserialize(decodedBuf) as O;
-  }
-  const body = await httpResponse.text();
-  throw new HttpCallError(
-    httpResponse.status,
-    body,
-    `Request failed: ${httpResponse.status}\n${body}`
+  const responseBuf = await fetchWithRetries(
+    opts,
+    url,
+    { method: "GET", headers },
+    callOpts,
+    op === "attach" ? resolveRetryPolicy(opts.retry) : undefined
   );
+  const decodedBuf = opts.journalValueCodec
+    ? await opts.journalValueCodec.decode(responseBuf)
+    : responseBuf;
+  return outputSerde.deserialize(decodedBuf) as O;
 };
 
 class HttpIngress implements Ingress {
@@ -401,14 +404,18 @@ class HttpIngress implements Ingress {
       ...args: unknown[]
     ): Promise<WorkflowSubmission<unknown>> => {
       const { parameter, opts } = optsFromArgs(args);
-      const res: Send = await doComponentInvocation(conn, {
-        component,
-        handler: "run",
-        key,
-        send: true,
-        parameter,
-        opts,
-      });
+      const res: Send = await doComponentInvocation(
+        conn,
+        {
+          component,
+          handler: "run",
+          key,
+          send: true,
+          parameter,
+          opts,
+        },
+        true
+      );
 
       return {
         invocationId: res.invocationId,
@@ -545,15 +552,19 @@ class HttpIngress implements Ingress {
           ...args: unknown[]
         ): Promise<WorkflowSubmission<unknown>> => {
           const { parameter, opts } = optsFromArgs(args);
-          const res: Send = await doComponentInvocation(conn, {
-            component,
-            handler: "run",
-            key,
-            send: true,
-            parameter,
-            opts,
-            scope: scopeKey,
-          });
+          const res: Send = await doComponentInvocation(
+            conn,
+            {
+              component,
+              handler: "run",
+              key,
+              send: true,
+              parameter,
+              opts,
+              scope: scopeKey,
+            },
+            true
+          );
           return {
             invocationId: res.invocationId,
             status: res.status,
