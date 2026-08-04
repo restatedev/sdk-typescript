@@ -135,13 +135,13 @@ clients.connect({
 });
 ```
 
-When enabled, the client retries ambiguous failures — network errors, HTTP `429`, and HTTP `5xx` — with exponential backoff and jitter, **but only when the call carries an `idempotencyKey`**:
+When enabled, the client retries ambiguous failures — network errors, HTTP `429`, and HTTP `5xx` — with exponential backoff and jitter. Regular calls are retried **only when they carry an `idempotencyKey`**:
 
 ```ts
 await greeterClient.greet("sam", clients.Opts.from({ idempotencyKey: "greet-sam-once" }));
 ```
 
-The idempotency key is the safety boundary: Restate dedupes on it, so a retry attaches to the in-flight or completed invocation instead of starting a duplicate. Without a key, no retry is attempted — retrying a non-idempotent invocation could double-execute it.
+The idempotency key is the safety boundary for regular calls: Restate dedupes on it, so a retry attaches to the in-flight or completed invocation instead of starting a duplicate. Without a key, no retry is attempted — retrying a non-idempotent invocation could double-execute it. Workflow submissions and attaches are also retried: submissions are idempotent by workflow ID, while attaches only retrieve the existing result. After an internal retry, a successful submission may report `PreviouslyAccepted` rather than `Accepted`.
 
 To decide per-failure (e.g. to skip a terminal `5xx`), supply `shouldRetry`. It fully replaces the built-in rule; compose with `clients.defaultShouldRetry` to narrow it. The `RetryFailure` carries the status, headers, and — for response failures — the body text when present:
 
