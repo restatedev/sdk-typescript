@@ -343,13 +343,16 @@ const doWorkflowHandleCall = async <O>(
   const url = `${opts.url}/restate/workflow/${wfName}/${encodeURIComponent(
     wfKey
   )}/${op}`;
+  // Attach and output only observe the existing workflow, so both are eligible
+  // when the connection has a retry policy.
+  const retryPolicy = resolveRetryPolicy(opts.retry);
 
   const responseBuf = await fetchWithRetries(
     opts,
     url,
     { method: "GET", headers },
     callOpts,
-    op === "attach" ? resolveRetryPolicy(opts.retry) : undefined
+    retryPolicy
   );
   const decodedBuf = opts.journalValueCodec
     ? await opts.journalValueCodec.decode(responseBuf)
