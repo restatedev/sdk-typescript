@@ -1,5 +1,14 @@
 # @restatedev/restate-sdk-clients
 
+## 1.16.3
+
+### Patch Changes
+
+- 9bb2570: Allow providing custom fetch implementation in client
+- Retry workflow submit/attach from client
+- Updated dependencies
+  - @restatedev/restate-sdk-core@1.16.3
+
 ## 1.16.2
 
 ### Patch Changes

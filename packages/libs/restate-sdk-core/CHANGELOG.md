@@ -1,5 +1,11 @@
 # @restatedev/restate-sdk-core
 
+## 1.16.3
+
+### Patch Changes
+
+- Retry workflow submit/attach from client
+
 ## 1.16.2
 
 ### Patch Changes
