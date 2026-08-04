@@ -1,5 +1,11 @@
 # @restatedev/restate-sdk-zod
 
+## 1.16.3
+
+### Patch Changes
+
+- Add retry support to workflows
+
 ## 1.16.2
 
 ### Patch Changes
