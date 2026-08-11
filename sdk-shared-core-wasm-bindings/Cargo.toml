@@ -9,7 +9,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 wasm-bindgen = "0.2.121"
-restate-sdk-shared-core = { version = "7.0.1", features = ["request_identity", "rust_crypto", "tracing_pretty"] }
+restate-sdk-shared-core = { version = "7.0.2", features = ["request_identity", "rust_crypto", "tracing_pretty"] }
 serde = { version = "1.0.210", features = ["derive"] }
 tsify = { version = "0.5.6", default-features = false, features = ["js"] }
 getrandom = { version = "0.2", features = ["js"] } # Needed for jsonwebtoken
