@@ -1,5 +1,11 @@
 # @restatedev/restate-sdk-opentelemetry
 
+## 1.16.5
+
+### Patch Changes
+
+- Update shared core to 7.0.2
+
 ## 1.16.4
 
 ### Patch Changes

@@ -1,5 +1,14 @@
 # @restatedev/restate-sdk-testcontainers
 
+## 1.16.5
+
+### Patch Changes
+
+- Update shared core to 7.0.2
+- Updated dependencies
+  - @restatedev/restate-sdk@1.16.5
+  - @restatedev/restate-sdk-clients@1.16.5
+
 ## 1.16.4
 
 ### Patch Changes
