@@ -1,0 +1,48 @@
+{
+  "name": "@restatedev/restate-sdk-tunnel-native",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Embedded native relay-tunnel receiver (napi-rs) for the Restate TypeScript SDK",
+  "author": "Restate Developers",
+  "email": "code@restate.dev",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.cts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "index.cjs",
+    "index.d.cts",
+    "restate-sdk-tunnel-native.*.node",
+    "README.md"
+  ],
+  "napi": {
+    "name": "restate-sdk-tunnel-native"
+  },
+  "scripts": {
+    "build:native": "napi build --platform --release --js index.cjs --dts index.d.cts",
+    "build:native:debug": "napi build --platform --js index.cjs --dts index.d.cts",
+    "_build": "tsc --noEmit --project tsconfig.build.json && tsdown",
+    "build": "turbo run _build --filter={.}...",
+    "check:types": "turbo run _check:types --filter={.}...",
+    "_check:types": "tsc --noEmit --project tsconfig.build.json",
+    "clean": "rm -rf dist *.tsbuildinfo .turbo",
+    "lint": "eslint ."
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@napi-rs/cli": "^2.18.4",
+    "@restatedev/restate-sdk": "workspace:*"
+  },
+  "peerDependencies": {
+    "@restatedev/restate-sdk": "^1.15.0"
+  }
+}
