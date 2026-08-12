@@ -27,15 +27,12 @@
   "napi": {
     "name": "restate-sdk-tunnel-native"
   },
+  "//scripts": "This package needs a native `napi build` step that the shared CI pipeline does not run yet, so it deliberately does NOT define the turbo task scripts (_build / _check:types / _test / lint). That opts it out of the repo-wide `turbo run` (build/verify) until the prebuild matrix + native CI land — see development/relay-receiver-napi-plan.md. Build it manually with the scripts below (build:native first, then build:wrapper).",
   "scripts": {
     "build:native": "napi build --platform --release --js index.cjs --dts index.d.cts",
     "build:native:debug": "napi build --platform --js index.cjs --dts index.d.cts",
-    "_build": "tsc --noEmit --project tsconfig.build.json && tsdown",
-    "build": "turbo run _build --filter={.}...",
-    "check:types": "turbo run _check:types --filter={.}...",
-    "_check:types": "tsc --noEmit --project tsconfig.build.json",
-    "clean": "rm -rf dist *.tsbuildinfo .turbo",
-    "lint": "eslint ."
+    "build:wrapper": "tsc --noEmit --project tsconfig.build.json && tsdown",
+    "clean": "rm -rf dist *.tsbuildinfo .turbo"
   },
   "dependencies": {},
   "devDependencies": {

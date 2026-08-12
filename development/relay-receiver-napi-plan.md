@@ -118,6 +118,11 @@ there is **no** napi-rs yet. This package adds:
 ## Deferred (documented, not in v1)
 
 - Multi-platform prebuild matrix + CI + `optionalDependencies` publishing.
+  Until that lands, the package deliberately defines **no** turbo task scripts
+  (`_build`/`_check:types`/`_test`/`lint`), so it is skipped by the repo-wide
+  `turbo run` (build/verify) — CI can't run `napi build`, so it must not try to
+  `tsc`/`tsdown` a wrapper whose native binding isn't present. Build it manually
+  with `build:native` then `build:wrapper`.
 - Restate Cloud `/_/start-tunnel` mode (the engine is `/whoami`-only, same as Java).
 - Reconciling with the pure-JS `restate-sdk-tunnel` package.
 - Swapping the shared-core git dep for a crates.io release once `tunnel` ships.
