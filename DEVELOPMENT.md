@@ -367,4 +367,35 @@ brew install llvm
 CC=/opt/homebrew/opt/llvm/bin/clang AR=/opt/homebrew/opt/llvm/bin/llvm-ar pnpm build:core
 ```
 
+### Building the Shared Core (native / napi)
+
+On **Node.js**, the SDK can run the shared core as a native [napi-rs](https://napi.rs)
+addon (`packages/libs/restate-sdk-shared-core-native/`) instead of WASM, avoiding
+the wasm32 4&nbsp;GB memory ceiling and reducing buffer copies. It exposes the exact
+same JS surface as the WASM binding and is kept in lockstep with
+`sdk-shared-core-wasm-bindings/` for functional parity.
+
+Selection happens in `packages/libs/restate-sdk/src/endpoint/handlers/vm/index.ts`:
+
+- **Node** tries to load the native addon (published as per-platform prebuilt
+  binaries via optional dependencies) and transparently falls back to the bundled
+  WASM build when it is unavailable.
+- **Every other runtime** (Bun, Deno, Cloudflare Workers, edge, browser) keeps using
+  the WASM build. The Cloudflare Workers package swaps in its workerd WASM
+  entrypoint at build time.
+- Force a path with `RESTATE_SHARED_CORE=native|wasm` (useful in tests).
+
+The native addon is **not** compiled by `pnpm build` / `pnpm verify`, so contributors
+don't need a Rust toolchain — those flows use the WASM build. Build it explicitly
+only when working on the native path:
+
+```bash
+pnpm build:core-native   # runs `napi build --release` for your host platform
+```
+
+**Prerequisites:** [Rust](https://www.rust-lang.org/tools/install) (stable). Prebuilt
+binaries for all published targets (Linux x64/arm64 gnu+musl, macOS arm64) are
+cross-compiled in CI by `.github/workflows/native.yaml` and published as per-platform
+packages by `.tools/publish-native.sh`.
+
 For more detailed information about the monorepo structure and advanced features, see the [template documentation](https://github.com/restatedev/typescript-monorepo-template).
