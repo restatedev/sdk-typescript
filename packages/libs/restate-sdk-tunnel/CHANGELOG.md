@@ -1,5 +1,11 @@
 # @restatedev/restate-sdk-tunnel
 
+## 1.16.6
+
+### Patch Changes
+
+- Bump shared core to 7.0.3
+
 ## 1.16.5
 
 ### Patch Changes
