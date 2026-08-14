@@ -193,7 +193,8 @@ const fetchWithRetries = async (
       )
     ) {
       // A non-2xx response was received, attempts remain, and the policy chose
-      // to retry it (by default, HTTP 429 and 5xx).
+      // to retry it (by default, transient statuses 408/425/429/5xx, unless the
+      // error is attributed to the invocation via x-restate-error-source).
       const retryAfter = parseRetryAfter(response.headers);
       await abortableSleep(
         backoffDelay(retryPolicy, attempt, retryAfter),

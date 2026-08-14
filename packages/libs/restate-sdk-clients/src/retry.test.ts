@@ -69,7 +69,7 @@ describe("resolveRetryPolicy", () => {
 });
 
 describe("defaultShouldRetry", () => {
-  it("retries network errors and 429/5xx responses", () => {
+  it("retries network errors and transient responses", () => {
     expect(defaultShouldRetry({ kind: "network", error: new Error("x") })).toBe(
       true
     );
@@ -91,17 +91,39 @@ describe("defaultShouldRetry", () => {
       })
     ).toBe(false);
   });
+
+  it("retries a transient status flagged as an ingress error", () => {
+    expect(
+      defaultShouldRetry({
+        kind: "response",
+        status: 503,
+        headers: new Headers({ "x-restate-error-source": "ingress" }),
+      })
+    ).toBe(true);
+  });
+
+  it("does NOT retry an invocation-sourced error even on a 5xx", () => {
+    expect(
+      defaultShouldRetry({
+        kind: "response",
+        status: 500,
+        headers: new Headers({ "x-restate-error-source": "invocation" }),
+      })
+    ).toBe(false);
+  });
 });
 
 describe("isRetryableStatus", () => {
-  it("retries on 429 and 5xx", () => {
+  it("retries on 408, 425, 429 and 5xx", () => {
+    expect(isRetryableStatus(408)).toBe(true);
+    expect(isRetryableStatus(425)).toBe(true);
     expect(isRetryableStatus(429)).toBe(true);
     expect(isRetryableStatus(500)).toBe(true);
     expect(isRetryableStatus(503)).toBe(true);
     expect(isRetryableStatus(599)).toBe(true);
   });
 
-  it("does not retry on 4xx (except 429) or 2xx/3xx", () => {
+  it("does not retry on non-transient 4xx or 2xx/3xx", () => {
     expect(isRetryableStatus(200)).toBe(false);
     expect(isRetryableStatus(400)).toBe(false);
     expect(isRetryableStatus(404)).toBe(false);
@@ -385,6 +407,24 @@ describe("ingress auto-retry", () => {
     queue(fail(409), ok());
     await expect(call("k1", fastRetry)).rejects.toBeInstanceOf(HttpCallError);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries the new transient statuses 408 and 425", async () => {
+    queue(fail(408), fail(425), ok({ greeting: "hi" }));
+    await expect(call("k1", fastRetry)).resolves.toEqual({ greeting: "hi" });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("does NOT retry an invocation-sourced 5xx", async () => {
+    queue(fail(500, { "x-restate-error-source": "invocation" }), ok());
+    await expect(call("k1", fastRetry)).rejects.toBeInstanceOf(HttpCallError);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries an ingress-sourced 5xx", async () => {
+    queue(fail(503, { "x-restate-error-source": "ingress" }), ok());
+    await expect(call("k1", fastRetry)).resolves.toEqual({ ok: true });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("retry:false disables retries even with an idempotency key", async () => {
