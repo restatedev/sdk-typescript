@@ -396,6 +396,30 @@ describe("ingress auto-retry", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it("does NOT retry result() without a retry policy", async () => {
+    queue(fail(503), ok({ greeting: "hi" }));
+    await expect(
+      connect({ url: URL }).result({
+        invocationId: "inv-1",
+        status: "Accepted",
+        attachable: true,
+      })
+    ).rejects.toBeInstanceOf(HttpCallError);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries result() attach when a retry policy is set", async () => {
+    queue(fail(503), ok({ greeting: "hi" }));
+    await expect(
+      connect({ url: URL, retry: fastRetry }).result({
+        invocationId: "inv-1",
+        status: "Accepted",
+        attachable: true,
+      })
+    ).resolves.toEqual({ greeting: "hi" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("does NOT retry workflow output when it is not ready by default", async () => {
     queue(fail(470), ok({ result: "done" }));
     const output = await workflow(fastRetry).workflowOutput();
