@@ -24,6 +24,8 @@ import {
 } from "@restatedev/restate-sdk";
 import { describe, it, beforeAll, afterAll, expect } from "vitest";
 
+const TESTCONTAINERS_START_TIMEOUT = 120_000;
+
 // Non-deterministic handler: sets state to a random value then sleeps.
 // On replay, Math.random() produces a different value, causing a journal mismatch.
 // With alwaysReplay, this is caught. Without it, the handler completes in one shot.
@@ -66,7 +68,7 @@ describe("ExampleObject", () => {
       services: [counter],
     });
     rs = clients.connect({ url: restateTestEnvironment.baseUrl() });
-  }, 20_000);
+  }, TESTCONTAINERS_START_TIMEOUT);
 
   // Stop Restate and the Service endpoint
   afterAll(async () => {
@@ -168,7 +170,7 @@ describe("Always replay", () => {
       disableRetries: true,
     });
     rs = clients.connect({ url: restateTestEnvironment.baseUrl() });
-  }, 20_000);
+  }, TESTCONTAINERS_START_TIMEOUT);
 
   afterAll(async () => {
     if (restateTestEnvironment !== undefined) {
@@ -195,7 +197,7 @@ describe("Disable retries", () => {
       disableRetries: true,
     });
     rs = clients.connect({ url: restateTestEnvironment.baseUrl() });
-  }, 20_000);
+  }, TESTCONTAINERS_START_TIMEOUT);
 
   afterAll(async () => {
     if (restateTestEnvironment !== undefined) {
@@ -229,7 +231,7 @@ describe("Custom testcontainer config", () => {
             stream.on("err", (line) => console.error(line));
           })
     );
-  }, 20_000);
+  }, TESTCONTAINERS_START_TIMEOUT);
 
   // Stop Restate and the Service endpoint
   afterAll(async () => {
@@ -252,7 +254,7 @@ describe("Testcontainers host networking with disk storage", () => {
       storage: "disk",
     });
     rs = clients.connect({ url: restateTestEnvironment.baseUrl() });
-  }, 20_000);
+  }, TESTCONTAINERS_START_TIMEOUT);
 
   afterAll(async () => {
     if (restateTestEnvironment !== undefined) {

@@ -861,7 +861,9 @@ function createHookLevelSuite(level: HookLevel) {
       return { invocationId: ctx.request().id };
     },
     options: {
-      inactivityTimeout: 100,
+      // Leave enough time for the successful retry's run completion to reach
+      // Restate before the next inactivity timeout on loaded CI runners.
+      inactivityTimeout: 500,
       abortTimeout: 100,
       retryPolicy: {
         initialInterval: 10,

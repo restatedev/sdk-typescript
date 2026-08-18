@@ -58,7 +58,11 @@ jobs:
 
       - name: Install AWS CLI Local
         run: |
-          pip install awscli-local[ver1]
+          python3 -m venv "$RUNNER_TEMP/awscli-local"
+          "$RUNNER_TEMP/awscli-local/bin/pip" install \
+            "awscli-local[ver1]==0.22.2" \
+            "awscli==1.45.64"
+          echo "$RUNNER_TEMP/awscli-local/bin" >> "$GITHUB_PATH"
 
       - name: Wait for LocalStack
         run: |
