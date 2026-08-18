@@ -15,6 +15,7 @@ import {
   envInt,
   invocationStatusCounts,
   renderMemoryLeakReport,
+  waitForHeapCleanup,
   type InvocationLoadReportRow,
   type MemoryLeakSendClient,
   type MemoryProbeConfig,
@@ -50,6 +51,11 @@ describe("SDK memory pressure", { timeout: testTimeout }, () => {
       payloadBytes: envInt("RESTATE_E2E_MEMORY_PAYLOAD_BYTES", 512),
       waitTimeout: envInt("RESTATE_E2E_MEMORY_WAIT_TIMEOUT_MS", 90_000),
       cleanupDelay: envInt("RESTATE_E2E_MEMORY_CLEANUP_DELAY_MS", 1_000),
+      cleanupTimeout: envInt("RESTATE_E2E_MEMORY_CLEANUP_TIMEOUT_MS", 15_000),
+      cleanupPollInterval: envInt(
+        "RESTATE_E2E_MEMORY_CLEANUP_POLL_INTERVAL_MS",
+        500
+      ),
       invocationsPerHandlerPerRound: envInt(
         "RESTATE_E2E_MEMORY_INVOCATIONS_PER_HANDLER_PER_ROUND",
         25
@@ -191,6 +197,15 @@ describe("SDK memory pressure", { timeout: testTimeout }, () => {
       });
     }
 
+    latestAfterCleanup = await waitForHeapCleanup(
+      latestAfterCleanup,
+      () => client.memoryStats({ forceGc: true }),
+      baseline.heapUsed,
+      config.maxHeapDeltaBytes,
+      config.cleanupTimeout,
+      config.cleanupPollInterval
+    );
+
     const totalHeapDelta = latestAfterCleanup.heapUsed - baseline.heapUsed;
     const retainedHeapDelta = Math.max(0, totalHeapDelta);
     const exceededThreshold = retainedHeapDelta > config.maxHeapDeltaBytes;
@@ -223,6 +238,11 @@ describe("SDK memory pressure", { timeout: testTimeout }, () => {
       holdMillis: envInt("RESTATE_E2E_MEMORY_RUN_CLOSURE_HOLD_MS", 60_000),
       waitTimeout: envInt("RESTATE_E2E_MEMORY_WAIT_TIMEOUT_MS", 90_000),
       cleanupDelay: envInt("RESTATE_E2E_MEMORY_CLEANUP_DELAY_MS", 1_000),
+      cleanupTimeout: envInt("RESTATE_E2E_MEMORY_CLEANUP_TIMEOUT_MS", 15_000),
+      cleanupPollInterval: envInt(
+        "RESTATE_E2E_MEMORY_CLEANUP_POLL_INTERVAL_MS",
+        500
+      ),
       maxHeapDeltaBytes: envInt(
         "RESTATE_E2E_MEMORY_RUN_CLOSURE_MAX_HEAP_DELTA_BYTES",
         16 * 1024 * 1024
@@ -293,7 +313,15 @@ describe("SDK memory pressure", { timeout: testTimeout }, () => {
       .toBe("completed");
     await delay(config.cleanupDelay);
 
-    const afterCompletion = await client.memoryStats({ forceGc: true });
+    const initialAfterCompletion = await client.memoryStats({ forceGc: true });
+    const afterCompletion = await waitForHeapCleanup(
+      initialAfterCompletion,
+      () => client.memoryStats({ forceGc: true }),
+      baseline.heapUsed,
+      config.maxHeapDeltaBytes,
+      config.cleanupTimeout,
+      config.cleanupPollInterval
+    );
     const heapDeltaWhileHolding =
       (heapWhileHolding ?? baseline.heapUsed) - baseline.heapUsed;
     const heapDeltaAfterCompletion =
