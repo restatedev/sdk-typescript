@@ -7,10 +7,12 @@
 // directory of this repository or package, or at
 // https://github.com/restatedev/e2e/blob/main/LICENSE
 
+import { setTimeout as delay } from "node:timers/promises";
 import type * as clients from "@restatedev/restate-sdk-clients";
 import type {
   MemoryInvocationResult,
   MemoryLoadInput,
+  MemoryStats,
   RunClosureRetentionInput,
   RunClosureRetentionResult,
 } from "../src/memory_leak.js";
@@ -77,9 +79,34 @@ export interface MemoryProbeConfig {
   payloadBytes: number;
   waitTimeout: number;
   cleanupDelay: number;
+  cleanupTimeout: number;
+  cleanupPollInterval: number;
   invocationsPerHandlerPerRound: number;
   rounds: number;
   maxHeapDeltaBytes: number;
+}
+
+export async function waitForHeapCleanup(
+  initialStats: MemoryStats,
+  readStats: () => Promise<MemoryStats>,
+  baselineHeapUsed: number,
+  maxHeapDeltaBytes: number,
+  timeoutMs: number,
+  pollIntervalMs: number
+): Promise<MemoryStats> {
+  const startedAt = Date.now();
+  let stats = initialStats;
+
+  while (
+    Math.max(0, stats.heapUsed - baselineHeapUsed) > maxHeapDeltaBytes &&
+    Date.now() - startedAt < timeoutMs
+  ) {
+    const remainingMs = timeoutMs - (Date.now() - startedAt);
+    await delay(Math.min(Math.max(1, pollIntervalMs), remainingMs));
+    stats = await readStats();
+  }
+
+  return stats;
 }
 
 export function envInt(name: string, defaultValue: number): number {
