@@ -492,7 +492,10 @@ export type RetryFailure =
  * observe the existing workflow.
  *
  * By default the following failures are retried: network errors (the underlying
- * `fetch` rejecting), HTTP `429`, and HTTP `5xx` responses. Override this with
+ * `fetch` rejecting) and responses with a transient status (`408`, `425`, `429`,
+ * or `5xx`). An error that restate attributes to the invocation itself (the
+ * `x-restate-error-source: invocation` header) is a terminal outcome and is
+ * never retried, whatever its status code. Override all of this with
  * {@link RetryPolicy.shouldRetry}.
  */
 export interface RetryPolicy {
@@ -523,7 +526,8 @@ export interface RetryPolicy {
 
   /**
    * Decide whether a given failure should be retried. When provided, this
-   * fully replaces the built-in rule (network / `429` / `5xx`).
+   * fully replaces the built-in rule (network / transient `408`/`425`/`429`/`5xx`,
+   * excluding invocation-sourced errors).
    *
    * The idempotency-key gate still applies to regular invocations; workflow
    * submissions, attaches, and output retrieval remain eligible without an
@@ -550,8 +554,9 @@ export type ConnectionOpts = {
   headers?: Record<string, string>;
 
   /**
-   * Opt in to automatic retries of ambiguous ingress failures (network errors,
-   * HTTP `429`, HTTP `5xx`).
+   * Opt in to automatic retries of ambiguous ingress failures (network errors
+   * and transient HTTP statuses `408`/`425`/`429`/`5xx`, excluding errors
+   * restate attributes to the invocation itself).
    *
    * Retries are **disabled by default**. Set `true` to enable the built-in
    * policy ({@link RetryPolicy}), or pass a {@link RetryPolicy} to tune it.

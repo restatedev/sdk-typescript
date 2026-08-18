@@ -60,18 +60,43 @@ export function resolveRetryPolicy(
   };
 }
 
-/** Whether an HTTP response status warrants a retry. */
+/**
+ * Whether an HTTP response status is a transient ingress condition that
+ * warrants a retry: `408`, `425`, `429`, or any `5xx`.
+ */
 export function isRetryableStatus(status: number): boolean {
-  return status === 429 || (status >= 500 && status <= 599);
+  return (
+    status === 408 ||
+    status === 425 ||
+    status === 429 ||
+    (status >= 500 && status <= 599)
+  );
 }
 
 /**
- * The built-in retry decision: retry network errors, HTTP `429`, and HTTP
- * `5xx`. Exported so a custom {@link RetryPolicy.shouldRetry} can compose with
- * it rather than reimplement it.
+ * The built-in retry decision. Retries network errors and responses with a
+ * transient status (`408`, `425`, `429`, or `5xx`) — except errors restate
+ * attributes to the invocation itself, which are terminal outcomes of the
+ * durable execution and are never retried whatever their status code.
+ *
+ * restate-server discloses the origin via the `x-restate-error-source` header
+ * (`"invocation"` or `"ingress"`); when it is absent — a proxy stripped it, or
+ * an older server — the status alone drives the decision. See
+ * https://github.com/restatedev/restate/pull/5173.
+ *
+ * Exported so a custom {@link RetryPolicy.shouldRetry} can compose with it
+ * rather than reimplement it.
  */
 export function defaultShouldRetry(failure: RetryFailure): boolean {
-  return failure.kind === "network" || isRetryableStatus(failure.status);
+  if (failure.kind === "network") {
+    return true;
+  }
+  // An invocation-sourced error is the terminal result of the durable
+  // execution; retrying it re-runs nothing and never changes the outcome.
+  if (failure.headers.get("x-restate-error-source") === "invocation") {
+    return false;
+  }
+  return isRetryableStatus(failure.status);
 }
 
 /**

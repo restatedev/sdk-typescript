@@ -193,7 +193,8 @@ const fetchWithRetries = async (
       )
     ) {
       // A non-2xx response was received, attempts remain, and the policy chose
-      // to retry it (by default, HTTP 429 and 5xx).
+      // to retry it (by default, transient statuses 408/425/429/5xx, unless the
+      // error is attributed to the invocation via x-restate-error-source).
       const retryAfter = parseRetryAfter(response.headers);
       await abortableSleep(
         backoffDelay(retryPolicy, attempt, retryAfter),
@@ -742,27 +743,25 @@ class HttpIngress implements Ingress {
     };
     //
     // make the call
+    //
     const url = `${this.opts.url}/restate/invocation/${send.invocationId}/attach`;
+    // Attaching only observes the existing invocation, so it is safe to retry
+    // when the connection has a retry policy.
+    const retryPolicy = resolveRetryPolicy(this.opts.retry);
 
-    const httpResponse = await getFetch(this.opts)(url, {
-      method: "GET",
-      headers,
-    });
-    if (httpResponse.ok) {
-      const responseBuf = new Uint8Array(await httpResponse.arrayBuffer());
-      const decodedBuf = this.opts.journalValueCodec
-        ? await this.opts.journalValueCodec.decode(responseBuf)
-        : responseBuf;
-      return (resultSerde ?? this.opts.serde ?? serde.json).deserialize(
-        decodedBuf
-      ) as T;
-    }
-    const body = await httpResponse.text();
-    throw new HttpCallError(
-      httpResponse.status,
-      body,
-      `Request failed: ${httpResponse.status}\n${body}`
+    const responseBuf = await fetchWithRetries(
+      this.opts,
+      url,
+      { method: "GET", headers },
+      undefined,
+      retryPolicy
     );
+    const decodedBuf = this.opts.journalValueCodec
+      ? await this.opts.journalValueCodec.decode(responseBuf)
+      : responseBuf;
+    return (resultSerde ?? this.opts.serde ?? serde.json).deserialize(
+      decodedBuf
+    ) as T;
   }
 }
 
