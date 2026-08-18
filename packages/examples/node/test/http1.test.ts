@@ -25,6 +25,8 @@ import {
 } from "testcontainers";
 import { describe, it, beforeAll, afterAll, expect } from "vitest";
 
+const TESTCONTAINERS_START_TIMEOUT = 120_000;
+
 const greeter = service({
   name: "greeter",
   handlers: {
@@ -79,7 +81,7 @@ function defineHttp1Tests(
 
       const ingressUrl = `http://${restateContainer.getHost()}:${restateContainer.getMappedPort(8080)}`;
       rs = clients.connect({ url: ingressUrl });
-    }, 30_000);
+    }, TESTCONTAINERS_START_TIMEOUT);
 
     afterAll(async () => {
       if (restateContainer) {
