@@ -19,6 +19,7 @@ import type {
 import { IncomingMessage, ServerResponse } from "node:http";
 import { Http2ServerRequest, Http2ServerResponse } from "node:http2";
 import * as http2 from "node:http2";
+import type { Readable } from "node:stream";
 import type { Endpoint } from "./endpoint.js";
 import { EndpointBuilder } from "./endpoint.js";
 import { createRestateHandler } from "./handlers/generic.js";
@@ -165,6 +166,16 @@ function nodeHttp2Handler(
   return nodeHandlerImpl(endpoint, protocolMode);
 }
 
+/** @internal For testing only. */
+export function abortSignalForRequest(request: Readable): AbortSignal {
+  const abortController = new AbortController();
+  request.on("close", () => {
+    // https://nodejs.org/api/stream.html#readablereadableended
+    if (!request.readableEnded) abortController.abort();
+  });
+  return abortController.signal;
+}
+
 function nodeHandlerImpl(
   endpoint: Endpoint,
   protocolMode: ProtocolMode
@@ -176,31 +187,20 @@ function nodeHandlerImpl(
 
   return (httpRequest, httpResponse) => {
     const url = httpRequest.url!;
-    const inputReader = inputReaderAdapter(httpRequest);
-    const outputWriter = outputWriterAdapter(httpResponse);
     const res = httpResponse as NodeWritableResponse;
 
-    // Abort controller used to cleanup resources at the end of this stream lifecycle
-    const abortController = new AbortController();
-    httpRequest.on("close", () => {
-      abortController.abort();
-    });
-
-    const writeHead = res.writeHead.bind(res);
-
     // handle should never throw
-    const restateResponse = handler.handle({
-      url,
-      headers: httpRequest.headers,
-      extraArgs: [],
-    });
-
-    restateResponse
+    handler
+      .handle({
+        url,
+        headers: httpRequest.headers,
+        extraArgs: [],
+      })
       .process({
-        inputReader,
-        outputWriter,
-        writeHead,
-        abortSignal: abortController.signal,
+        inputReader: inputReaderAdapter(httpRequest),
+        outputWriter: outputWriterAdapter(httpResponse),
+        writeHead: res.writeHead.bind(res),
+        abortSignal: abortSignalForRequest(httpRequest),
       })
       .catch((e) => {
         // Responses handle their own errors before rejecting; anything
