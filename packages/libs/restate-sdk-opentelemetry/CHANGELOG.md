@@ -1,5 +1,11 @@
 # @restatedev/restate-sdk-opentelemetry
 
+## 1.16.7
+
+### Patch Changes
+
+- Improve retry logic using the new x-restate-error-source header in restate 1.7.4
+
 ## 1.16.6
 
 ### Patch Changes

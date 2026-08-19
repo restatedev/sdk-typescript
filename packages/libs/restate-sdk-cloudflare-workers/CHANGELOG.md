@@ -1,5 +1,13 @@
 # @restatedev/restate-sdk-cloudflare-workers
 
+## 1.16.7
+
+### Patch Changes
+
+- Improve retry logic using the new x-restate-error-source header in restate 1.7.4
+- Updated dependencies
+  - @restatedev/restate-sdk-core@1.16.7
+
 ## 1.16.6
 
 ### Patch Changes
