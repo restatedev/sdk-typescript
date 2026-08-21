@@ -14,11 +14,20 @@ import type { RetryFailure, RetryPolicy } from "./api.js";
 
 /** Fully resolved retry policy, with all defaults applied. */
 export interface ResolvedRetryPolicy {
+  /**
+   * `Infinity` means retries are not bounded by attempt count (the user passed
+   * `maxAttempts: false`).
+   */
   maxAttempts: number;
   initialInterval: number;
   maxInterval: number;
   exponentiationFactor: number;
   respectRetryAfter: boolean;
+  /**
+   * In milliseconds. `Infinity` means retries are not bounded by duration (the
+   * user passed `maxDuration: false`).
+   */
+  maxDuration: number;
   shouldRetry?: (failure: RetryFailure, attempt: number) => boolean;
 }
 
@@ -28,6 +37,7 @@ const DEFAULT_RETRY_POLICY: ResolvedRetryPolicy = {
   maxInterval: 3000,
   exponentiationFactor: 2,
   respectRetryAfter: true,
+  maxDuration: 60_000,
 };
 
 /**
@@ -47,7 +57,11 @@ export function resolveRetryPolicy(
     return DEFAULT_RETRY_POLICY;
   }
   return {
-    maxAttempts: retry.maxAttempts ?? DEFAULT_RETRY_POLICY.maxAttempts,
+    // `false` disables the bound (Infinity); otherwise the override or default.
+    maxAttempts:
+      retry.maxAttempts === false
+        ? Infinity
+        : (retry.maxAttempts ?? DEFAULT_RETRY_POLICY.maxAttempts),
     initialInterval:
       retry.initialInterval !== undefined
         ? millisOrDurationToMillis(retry.initialInterval)
@@ -60,6 +74,14 @@ export function resolveRetryPolicy(
       retry.exponentiationFactor ?? DEFAULT_RETRY_POLICY.exponentiationFactor,
     respectRetryAfter:
       retry.respectRetryAfter ?? DEFAULT_RETRY_POLICY.respectRetryAfter,
+    // Defaults to 60s; `false` disables the duration bound (Infinity), relying
+    // on maxAttempts alone.
+    maxDuration:
+      retry.maxDuration === false
+        ? Infinity
+        : retry.maxDuration !== undefined
+          ? millisOrDurationToMillis(retry.maxDuration)
+          : DEFAULT_RETRY_POLICY.maxDuration,
     shouldRetry: retry.shouldRetry,
   };
 }

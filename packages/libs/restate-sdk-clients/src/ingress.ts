@@ -120,7 +120,7 @@ const IDEMPOTENCY_KEY_HEADER = "idempotency-key";
 const LIMIT_KEY_HEADER = "x-restate-limit-key";
 // Carries the 1-based attempt number on every request so the server can observe
 // how many times the client has (re)issued it.
-const ATTEMPT_HEADER = "x-restateclient-attempt";
+const ATTEMPT_HEADER = "x-restateclient-retry-attempt";
 
 const getFetch = (opts: ConnectionOpts): NonNullable<ConnectionOpts["fetch"]> =>
   opts.fetch ?? globalThis.fetch;
@@ -146,6 +146,19 @@ const fetchWithRetries = async (
     userSignal ??
     (timeout !== undefined ? AbortSignal.timeout(timeout) : undefined);
   const shouldRetry = retryPolicy?.shouldRetry ?? defaultShouldRetry;
+
+  // Whether waiting `delay` and then starting the next attempt would still fall
+  // within the maxDuration budget (measured from the first attempt; a non-finite
+  // maxDuration disables the bound). Checked *after* the delay is known so we
+  // never sleep out a backoff — or a long Retry-After — only to give up on the
+  // attempt it precedes. This is a decision-time gate only: it never aborts an
+  // in-flight request. The maxAttempts count is gated separately, before the
+  // delay is computed.
+  const startTime = Date.now();
+  const nextAttemptFitsBudget = (
+    policy: ResolvedRetryPolicy,
+    delay: number
+  ): boolean => Date.now() - startTime + delay < policy.maxDuration;
 
   // Headers are always a plain record in this codebase; carry them forward and
   // stamp the attempt number afresh on each try.
@@ -178,12 +191,16 @@ const fetchWithRetries = async (
         shouldRetry({ kind: "network", error: e }, attempt)
       ) {
         // Retries are enabled, attempts remain, the caller did not abort, and
-        // the policy accepted this network failure.
-        await abortableSleep(backoffDelay(retryPolicy, attempt), userSignal);
-        continue;
+        // the policy accepted this failure. Retry only if the backoff still
+        // leaves us within the duration budget.
+        const delay = backoffDelay(retryPolicy, attempt);
+        if (nextAttemptFitsBudget(retryPolicy, delay)) {
+          await abortableSleep(delay, userSignal);
+          continue;
+        }
       }
-      // Retries are disabled or exhausted, the caller aborted, or the policy
-      // rejected this failure.
+      // Retries are disabled or exhausted, the caller aborted, the policy
+      // rejected this failure, or the duration budget is spent.
       throw e;
     }
     if (
@@ -202,18 +219,17 @@ const fetchWithRetries = async (
     ) {
       // A non-2xx response was received, attempts remain, and the policy chose
       // to retry it (by default, transient statuses 408/425/429/5xx, unless the
-      // error is attributed to the invocation via x-restate-error-source).
-      // Honoring Retry-After only affects the delay of this attempt — the
-      // maxAttempts cap above always applies, so it can never extend the retries.
+      // error is attributed to the invocation via x-restate-error-source). The
+      // delay is the server's Retry-After when present, else the computed
+      // backoff; either way we only retry if it still fits the duration budget.
       const retryAfter = retryPolicy.respectRetryAfter
         ? parseRetryAfter(response.headers)
         : undefined;
-
-      await abortableSleep(
-        retryAfter ?? backoffDelay(retryPolicy, attempt),
-        userSignal
-      );
-      continue;
+      const delay = retryAfter ?? backoffDelay(retryPolicy, attempt);
+      if (nextAttemptFitsBudget(retryPolicy, delay)) {
+        await abortableSleep(delay, userSignal);
+        continue;
+      }
     }
     // The response is not retryable, retries are disabled or exhausted, the
     // caller aborted, or the policy rejected this response.

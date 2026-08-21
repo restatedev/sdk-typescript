@@ -493,18 +493,32 @@ export type RetryFailure =
  *
  * By default the following failures are retried: network errors (the underlying
  * `fetch` rejecting) and responses with a transient status (`408`, `425`, `429`,
- * or `5xx`). An error that restate attributes to the invocation itself (the
- * `x-restate-error-source: invocation` header) is a terminal outcome and is
- * never retried, whatever its status code. Override all of this with
- * {@link RetryPolicy.shouldRetry}.
+ * or `5xx`). A terminal error of the invocation is never retried, whatever its status code.
+ * Override all of this with {@link RetryPolicy.shouldRetry}.
  */
 export interface RetryPolicy {
   /**
    * Max number of attempts (including the initial), before giving up.
    *
-   * Defaults to `6` (the initial attempt plus up to 5 retries).
+   * Retrying stops as soon as **either** `maxDuration` or {@link maxAttempts} is reached.
+   *
+   * Defaults to `6` (the initial attempt plus up to 5 retries). Pass `false` to
+   * remove the attempt bound.
    */
-  maxAttempts?: number;
+  maxAttempts?: number | false;
+
+  /**
+   * Max total duration of retries, measured from the first attempt, before
+   * giving up. If a number is provided, it is interpreted as milliseconds.
+   *
+   * This bound is checked only when deciding whether to start another
+   * attempt after a failure: it never aborts an in-flight request.
+   *
+   * Retrying stops as soon as **either** {@link maxDuration} or {@link maxAttempts} is reached.
+   *
+   * Defaults to 60 seconds. Pass `false` to remove the duration bound.
+   */
+  maxDuration?: Duration | number | false;
 
   /**
    * Initial backoff interval. If a number is provided, it is interpreted as
@@ -531,8 +545,8 @@ export interface RetryPolicy {
    *
    * Set to `false` to always use the exponential backoff and ignore the header.
    *
-   * Note that `Retry-After` never extends the number of retries: {@link maxAttempts}
-   * is always respected regardless of this setting.
+   * Note that `Retry-After` never extends the number of retries: {@link maxAttempts} and
+   * {@link maxDuration} is always respected regardless of this setting.
    *
    * Defaults to `true`.
    */

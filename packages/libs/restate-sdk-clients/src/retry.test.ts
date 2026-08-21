@@ -38,6 +38,7 @@ describe("resolveRetryPolicy", () => {
       maxInterval: 3000,
       exponentiationFactor: 2,
       respectRetryAfter: true,
+      maxDuration: 60_000,
     });
   });
 
@@ -48,7 +49,26 @@ describe("resolveRetryPolicy", () => {
       maxInterval: 3000,
       exponentiationFactor: 2,
       respectRetryAfter: true,
+      maxDuration: 60_000,
       shouldRetry: undefined,
+    });
+  });
+
+  it("resolves maxDuration to milliseconds", () => {
+    expect(resolveRetryPolicy({ maxDuration: 1234 })).toMatchObject({
+      maxDuration: 1234,
+    });
+    expect(resolveRetryPolicy({ maxDuration: { seconds: 5 } })).toMatchObject({
+      maxDuration: 5000,
+    });
+  });
+
+  it("treats maxDuration: false and maxAttempts: false as unbounded (Infinity)", () => {
+    expect(
+      resolveRetryPolicy({ maxDuration: false, maxAttempts: false })
+    ).toMatchObject({
+      maxDuration: Infinity,
+      maxAttempts: Infinity,
     });
   });
 
@@ -147,6 +167,7 @@ describe("backoffDelay", () => {
     maxInterval: 2000,
     exponentiationFactor: 2,
     respectRetryAfter: true,
+    maxDuration: 60_000,
   };
 
   it("stays within ±20% of the (capped) exponential base", () => {
@@ -499,20 +520,18 @@ describe("ingress auto-retry", () => {
       (c) => (c[1] as RequestInit).headers as Record<string, string>
     );
 
-  it("stamps x-restateclient-attempt: 1 on a non-retried request", async () => {
+  it("stamps x-restateclient-retry-attempt: 1 on a non-retried request", async () => {
     queue(ok({ greeting: "hi" }));
     await call("k1");
-    expect(attemptHeaders()[0]?.["x-restateclient-attempt"]).toBe("1");
+    expect(attemptHeaders()[0]?.["x-restateclient-retry-attempt"]).toBe("1");
   });
 
-  it("stamps an incrementing x-restateclient-attempt header on each attempt", async () => {
+  it("stamps an incrementing x-restateclient-retry-attempt header on each attempt", async () => {
     queue(fail(503), fail(503), ok({ greeting: "hi" }));
     await expect(call("k1", fastRetry)).resolves.toEqual({ greeting: "hi" });
-    expect(attemptHeaders().map((h) => h["x-restateclient-attempt"])).toEqual([
-      "1",
-      "2",
-      "3",
-    ]);
+    expect(
+      attemptHeaders().map((h) => h["x-restateclient-retry-attempt"])
+    ).toEqual(["1", "2", "3"]);
   });
 
   it("stops at maxAttempts even when the server keeps sending Retry-After", async () => {
@@ -522,6 +541,63 @@ describe("ingress auto-retry", () => {
       call("k1", { ...fastRetry, maxAttempts: 3 })
     ).rejects.toMatchObject({ status: 503 });
     expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("stops retrying once maxDuration elapses (maxAttempts disabled)", async () => {
+    vi.useFakeTimers();
+    // Fix the jitter (factor 0.8 + 0.5*0.4 = 1.0) so each backoff is exactly the
+    // 100ms base, making the elapsed-time math deterministic.
+    const rand = vi.spyOn(Math, "random").mockReturnValue(0.5);
+    try {
+      queue(fail(503)); // always fails
+      const p = call("k1", {
+        initialInterval: 100,
+        maxInterval: 100,
+        exponentiationFactor: 1, // constant 100ms base per attempt
+        maxAttempts: false, // duration is the only bound
+        maxDuration: 250,
+      });
+      // Attach the rejection expectation up front so the eventual rejection is
+      // never momentarily unhandled while we drive the fake clock.
+      const rejects = expect(p).rejects.toBeInstanceOf(HttpCallError);
+      // The budget check happens *after* the backoff is computed: we only sleep
+      // if the next attempt would still start within maxDuration.
+      await vi.advanceTimersByTimeAsync(0); // attempt 0 @0ms (0+100 < 250) → sleep
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(100); // attempt 1 @100ms (100+100 < 250) → sleep
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      await vi.advanceTimersByTimeAsync(100); // attempt 2 @200ms (200+100 >= 250) → give up
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+      await rejects;
+      await vi.advanceTimersByTimeAsync(1000); // no further attempts, no wasted wait
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    } finally {
+      rand.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  it("gives up immediately when the delay would overrun maxDuration (no wasteful wait)", async () => {
+    vi.useFakeTimers();
+    try {
+      queue(fail(503, { "retry-after": "5" })); // asks for a 5s wait
+      const p = call("k1", {
+        initialInterval: 1,
+        maxInterval: 2,
+        exponentiationFactor: 2,
+        maxAttempts: false, // duration is the only bound
+        maxDuration: 250, // 5s Retry-After can't fit → don't even wait
+      });
+      const rejects = expect(p).rejects.toBeInstanceOf(HttpCallError);
+      await vi.advanceTimersByTimeAsync(0); // attempt 0 fails; 0+5000 >= 250 → give up now
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      await rejects;
+      // We never slept the 5s: advancing well past it yields no further attempt.
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("honors Retry-After verbatim by default, beyond maxInterval", async () => {
