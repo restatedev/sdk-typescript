@@ -92,3 +92,35 @@ jobs:
       - name: Run e2e tests
         run: pnpm --filter @restatedev/restate-sdk-gen test:e2e
         timeout-minutes: 15
+
+  # Builds the napi shared-core addon for the runner (linux-x64-gnu) and runs
+  # the same testcontainers e2e suite with the native path forced, proving the
+  # napi binding is functionally equivalent to the WASM build. Contributors
+  # don't need Rust for the normal build/verify jobs — only this job compiles it.
+  native-parity:
+    if: github.repository_owner == 'restatedev'
+    runs-on: warp-ubuntu-latest-x64-4x
+    strategy:
+      matrix:
+        node-version: [22.x]
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.1.3
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+      - run: pnpm install --frozen-lockfile
+      - name: Build native shared-core (linux-x64-gnu)
+        run: pnpm --filter @restatedev/restate-sdk-shared-core-native run build:native
+      - run: pnpm build
+      - name: Run e2e tests with the native shared-core
+        env:
+          RESTATE_SHARED_CORE: native
+        run: pnpm --filter @restatedev/restate-sdk-gen test:e2e
+        timeout-minutes: 15
