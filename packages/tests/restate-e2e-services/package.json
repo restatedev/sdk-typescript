@@ -17,10 +17,12 @@
   "type": "module",
   "scripts": {
     "app": "tsx src/app.ts",
+    "app:http1": "RESTATE_E2E_ENDPOINT_ADAPTER=node-http1 tsx src/app.ts",
     "app:fetch": "RESTATE_E2E_ENDPOINT_ADAPTER=fetch tsx src/app.ts",
     "build": "turbo run _build --filter={.}...",
     "_build": "tsc -b tsconfig.test.json",
     "testrunner": "vitest run --exclude \"**/memory_leak.test.ts\" && vitest run test/memory_leak.test.ts",
+    "testrunner:http1": "vitest run test/node_endpoint.test.ts",
     "testrunner:fetch": "vitest run test/memory_leak.test.ts",
     "clean": "rm -rf dist *.tsbuildinfo .turbo",
     "check:types": "turbo run _check:types --filter={.}...",
