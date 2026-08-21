@@ -34,19 +34,27 @@ describe("resolveRetryPolicy", () => {
   it("returns the default policy when enabled with true", () => {
     expect(resolveRetryPolicy(true)).toEqual({
       maxAttempts: 6,
-      initialInterval: 100,
-      maxInterval: 2000,
+      initialInterval: 250,
+      maxInterval: 3000,
       exponentiationFactor: 2,
+      respectRetryAfter: true,
     });
   });
 
   it("fills in missing fields with defaults", () => {
     expect(resolveRetryPolicy({ maxAttempts: 3 })).toEqual({
       maxAttempts: 3,
-      initialInterval: 100,
-      maxInterval: 2000,
+      initialInterval: 250,
+      maxInterval: 3000,
       exponentiationFactor: 2,
+      respectRetryAfter: true,
       shouldRetry: undefined,
+    });
+  });
+
+  it("carries respectRetryAfter: false through", () => {
+    expect(resolveRetryPolicy({ respectRetryAfter: false })).toMatchObject({
+      respectRetryAfter: false,
     });
   });
 
@@ -138,22 +146,18 @@ describe("backoffDelay", () => {
     initialInterval: 100,
     maxInterval: 2000,
     exponentiationFactor: 2,
+    respectRetryAfter: true,
   };
 
-  it("never exceeds the per-attempt ceiling (full jitter)", () => {
+  it("stays within ±20% of the (capped) exponential base", () => {
     for (let attempt = 0; attempt < 6; attempt++) {
-      const ceiling = Math.min(100 * 2 ** attempt, 2000);
+      const base = Math.min(100 * 2 ** attempt, 2000);
       for (let i = 0; i < 50; i++) {
         const d = backoffDelay(policy, attempt);
-        expect(d).toBeGreaterThanOrEqual(0);
-        expect(d).toBeLessThanOrEqual(ceiling);
+        expect(d).toBeGreaterThanOrEqual(base * 0.8);
+        expect(d).toBeLessThanOrEqual(base * 1.2);
       }
     }
-  });
-
-  it("honors Retry-After, capped at maxInterval", () => {
-    expect(backoffDelay(policy, 0, 500)).toBe(500);
-    expect(backoffDelay(policy, 0, 10_000)).toBe(2000);
   });
 });
 
@@ -488,6 +492,83 @@ describe("ingress auto-retry", () => {
       call("k1", { ...fastRetry, maxAttempts: 3 })
     ).rejects.toMatchObject({ status: 500 });
     expect(fetchMock).toHaveBeenCalledTimes(3); // initial + 2 retries
+  });
+
+  const attemptHeaders = () =>
+    fetchMock.mock.calls.map(
+      (c) => (c[1] as RequestInit).headers as Record<string, string>
+    );
+
+  it("stamps x-restateclient-attempt: 1 on a non-retried request", async () => {
+    queue(ok({ greeting: "hi" }));
+    await call("k1");
+    expect(attemptHeaders()[0]?.["x-restateclient-attempt"]).toBe("1");
+  });
+
+  it("stamps an incrementing x-restateclient-attempt header on each attempt", async () => {
+    queue(fail(503), fail(503), ok({ greeting: "hi" }));
+    await expect(call("k1", fastRetry)).resolves.toEqual({ greeting: "hi" });
+    expect(attemptHeaders().map((h) => h["x-restateclient-attempt"])).toEqual([
+      "1",
+      "2",
+      "3",
+    ]);
+  });
+
+  it("stops at maxAttempts even when the server keeps sending Retry-After", async () => {
+    // Retry-After: 0 keeps the delays instantaneous; the cap must still hold.
+    queue(fail(503, { "retry-after": "0" }));
+    await expect(
+      call("k1", { ...fastRetry, maxAttempts: 3 })
+    ).rejects.toMatchObject({ status: 503 });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("honors Retry-After verbatim by default, beyond maxInterval", async () => {
+    vi.useFakeTimers();
+    try {
+      queue(fail(503, { "retry-after": "5" }), ok({ greeting: "hi" }));
+      // maxInterval is a mere 2ms, far below the 5s Retry-After: if it were
+      // capped, the retry would fire almost immediately.
+      const p = call("k1", {
+        initialInterval: 1,
+        maxInterval: 2,
+        exponentiationFactor: 2,
+        maxAttempts: 2,
+      });
+      await vi.advanceTimersByTimeAsync(0); // let the first attempt fail
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(3); // past maxInterval, but not the 5s wait
+      expect(fetchMock).toHaveBeenCalledTimes(1); // still waiting out the Retry-After
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      await expect(p).resolves.toEqual({ greeting: "hi" });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("ignores Retry-After when respectRetryAfter is false", async () => {
+    vi.useFakeTimers();
+    try {
+      queue(fail(503, { "retry-after": "5" }), ok({ greeting: "hi" }));
+      const p = call("k1", {
+        initialInterval: 100,
+        maxInterval: 100,
+        exponentiationFactor: 2,
+        maxAttempts: 2,
+        respectRetryAfter: false,
+      });
+      await vi.advanceTimersByTimeAsync(0); // let the first attempt fail
+      // The exponential backoff base is 100ms — far below the 5s Retry-After
+      // the server asked for. Advancing 200ms (past the jittered base) retries,
+      // proving the header was ignored.
+      await vi.advanceTimersByTimeAsync(200);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      await expect(p).resolves.toEqual({ greeting: "hi" });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("mints a fresh timeout signal per attempt", async () => {

@@ -118,6 +118,9 @@ function optsFromArgs(args: unknown[]): {
 
 const IDEMPOTENCY_KEY_HEADER = "idempotency-key";
 const LIMIT_KEY_HEADER = "x-restate-limit-key";
+// Carries the 1-based attempt number on every request so the server can observe
+// how many times the client has (re)issued it.
+const ATTEMPT_HEADER = "x-restateclient-attempt";
 
 const getFetch = (opts: ConnectionOpts): NonNullable<ConnectionOpts["fetch"]> =>
   opts.fetch ?? globalThis.fetch;
@@ -144,12 +147,17 @@ const fetchWithRetries = async (
     (timeout !== undefined ? AbortSignal.timeout(timeout) : undefined);
   const shouldRetry = retryPolicy?.shouldRetry ?? defaultShouldRetry;
 
+  // Headers are always a plain record in this codebase; carry them forward and
+  // stamp the attempt number afresh on each try.
+  const baseHeaders = (init.headers ?? {}) as Record<string, string>;
+
   for (let attempt = 0; ; attempt++) {
     let response: Response;
     let errorBody: string;
     try {
       response = await getFetch(opts)(url, {
         ...init,
+        headers: { ...baseHeaders, [ATTEMPT_HEADER]: String(attempt + 1) },
         signal: attemptSignal(),
       });
       if (response.ok) {
@@ -195,9 +203,14 @@ const fetchWithRetries = async (
       // A non-2xx response was received, attempts remain, and the policy chose
       // to retry it (by default, transient statuses 408/425/429/5xx, unless the
       // error is attributed to the invocation via x-restate-error-source).
-      const retryAfter = parseRetryAfter(response.headers);
+      // Honoring Retry-After only affects the delay of this attempt — the
+      // maxAttempts cap above always applies, so it can never extend the retries.
+      const retryAfter = retryPolicy.respectRetryAfter
+        ? parseRetryAfter(response.headers)
+        : undefined;
+
       await abortableSleep(
-        backoffDelay(retryPolicy, attempt, retryAfter),
+        retryAfter ?? backoffDelay(retryPolicy, attempt),
         userSignal
       );
       continue;

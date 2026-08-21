@@ -508,13 +508,13 @@ export interface RetryPolicy {
 
   /**
    * Initial backoff interval. If a number is provided, it is interpreted as
-   * milliseconds. Defaults to `100` milliseconds.
+   * milliseconds. Defaults to `250` milliseconds.
    */
   initialInterval?: Duration | number;
 
   /**
    * Maximum backoff interval. If a number is provided, it is interpreted as
-   * milliseconds. Defaults to `2000` milliseconds.
+   * milliseconds. Defaults to `3000` milliseconds.
    */
   maxInterval?: Duration | number;
 
@@ -523,6 +523,20 @@ export interface RetryPolicy {
    * Defaults to `2`.
    */
   exponentiationFactor?: number;
+
+  /**
+   * Whether to honor a `Retry-After` response header when the server provides
+   * one. When `true` (the default), a `Retry-After` value overrides the computed
+   * exponential backoff for that attempt.
+   *
+   * Set to `false` to always use the exponential backoff and ignore the header.
+   *
+   * Note that `Retry-After` never extends the number of retries: {@link maxAttempts}
+   * is always respected regardless of this setting.
+   *
+   * Defaults to `true`.
+   */
+  respectRetryAfter?: boolean;
 
   /**
    * Decide whether a given failure should be retried. When provided, this
