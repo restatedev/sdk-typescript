@@ -1,5 +1,14 @@
 # @restatedev/restate-sdk-testcontainers
 
+## 1.16.8
+
+### Patch Changes
+
+- Improved retry logic in ingress clients
+- Updated dependencies
+  - @restatedev/restate-sdk@1.16.8
+  - @restatedev/restate-sdk-clients@1.16.8
+
 ## 1.16.7
 
 ### Patch Changes
