@@ -14,18 +14,30 @@ import type { RetryFailure, RetryPolicy } from "./api.js";
 
 /** Fully resolved retry policy, with all defaults applied. */
 export interface ResolvedRetryPolicy {
+  /**
+   * `Infinity` means retries are not bounded by attempt count (the user passed
+   * `maxAttempts: false`).
+   */
   maxAttempts: number;
   initialInterval: number;
   maxInterval: number;
   exponentiationFactor: number;
+  respectRetryAfter: boolean;
+  /**
+   * In milliseconds. `Infinity` means retries are not bounded by duration (the
+   * user passed `maxDuration: false`).
+   */
+  maxDuration: number;
   shouldRetry?: (failure: RetryFailure, attempt: number) => boolean;
 }
 
 const DEFAULT_RETRY_POLICY: ResolvedRetryPolicy = {
   maxAttempts: 6,
-  initialInterval: 100,
-  maxInterval: 2000,
+  initialInterval: 250,
+  maxInterval: 3000,
   exponentiationFactor: 2,
+  respectRetryAfter: true,
+  maxDuration: 60_000,
 };
 
 /**
@@ -45,7 +57,11 @@ export function resolveRetryPolicy(
     return DEFAULT_RETRY_POLICY;
   }
   return {
-    maxAttempts: retry.maxAttempts ?? DEFAULT_RETRY_POLICY.maxAttempts,
+    // `false` disables the bound (Infinity); otherwise the override or default.
+    maxAttempts:
+      retry.maxAttempts === false
+        ? Infinity
+        : (retry.maxAttempts ?? DEFAULT_RETRY_POLICY.maxAttempts),
     initialInterval:
       retry.initialInterval !== undefined
         ? millisOrDurationToMillis(retry.initialInterval)
@@ -56,6 +72,16 @@ export function resolveRetryPolicy(
         : DEFAULT_RETRY_POLICY.maxInterval,
     exponentiationFactor:
       retry.exponentiationFactor ?? DEFAULT_RETRY_POLICY.exponentiationFactor,
+    respectRetryAfter:
+      retry.respectRetryAfter ?? DEFAULT_RETRY_POLICY.respectRetryAfter,
+    // Defaults to 60s; `false` disables the duration bound (Infinity), relying
+    // on maxAttempts alone.
+    maxDuration:
+      retry.maxDuration === false
+        ? Infinity
+        : retry.maxDuration !== undefined
+          ? millisOrDurationToMillis(retry.maxDuration)
+          : DEFAULT_RETRY_POLICY.maxDuration,
     shouldRetry: retry.shouldRetry,
   };
 }
@@ -101,24 +127,19 @@ export function defaultShouldRetry(failure: RetryFailure): boolean {
 
 /**
  * Compute the backoff for the given (zero based) attempt index using
- * exponential backoff with full jitter, capped at `maxInterval`.
- *
- * When the server provided an explicit `Retry-After` we honor it instead,
- * capped at `maxInterval` to avoid pathologically long waits.
+ * exponential backoff with ±20% jitter. The exponential base is capped at
+ * `maxInterval`; jitter is then applied on top, so the returned delay can sit
+ * up to 20% above `maxInterval`.
  */
 export function backoffDelay(
   policy: ResolvedRetryPolicy,
-  attempt: number,
-  retryAfterMs?: number
+  attempt: number
 ): number {
-  if (retryAfterMs !== undefined) {
-    return Math.min(retryAfterMs, policy.maxInterval);
-  }
   const exp =
     policy.initialInterval * Math.pow(policy.exponentiationFactor, attempt);
-  const ceiling = Math.min(exp, policy.maxInterval);
-  // full jitter: random in [0, ceiling]
-  return Math.random() * ceiling;
+  const base = Math.min(exp, policy.maxInterval);
+  // ±20% jitter keeps clients from retrying in lockstep after a shared blip.
+  return base * (0.8 + Math.random() * 0.4);
 }
 
 /**
