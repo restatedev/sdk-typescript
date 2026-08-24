@@ -180,11 +180,14 @@ function nodeHandlerImpl(
     const outputWriter = outputWriterAdapter(httpResponse);
     const res = httpResponse as NodeWritableResponse;
 
-    // Abort controller used to cleanup resources at the end of this stream lifecycle
+    // Abort controller used to clean up resources at the end of this attempt.
     const abortController = new AbortController();
-    httpRequest.on("close", () => {
-      abortController.abort();
-    });
+    const abort = () => abortController.abort();
+    if (httpRequest.httpVersionMajor >= 2) {
+      httpRequest.once("close", abort);
+    } else {
+      httpResponse.once("close", abort);
+    }
 
     const writeHead = res.writeHead.bind(res);
 
