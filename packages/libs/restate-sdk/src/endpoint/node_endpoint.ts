@@ -184,6 +184,8 @@ function nodeHandlerImpl(
     const abortController = new AbortController();
     const abort = () => abortController.abort();
 
+    // WARNING: DON'T TOUCH THIS UNLESS YOU REALLY KNOW WHAT YOU'RE DOING
+    //
     // HTTP/1 has separate request and response lifecycles:
     // request body ends -> request closes -> handler finishes -> response closes.
     // The request can therefore close while the attempt is still running. The
