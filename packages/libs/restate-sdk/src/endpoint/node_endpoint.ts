@@ -183,6 +183,15 @@ function nodeHandlerImpl(
     // Abort controller used to clean up resources at the end of this attempt.
     const abortController = new AbortController();
     const abort = () => abortController.abort();
+
+    // HTTP/1 has separate request and response lifecycles:
+    // request body ends -> request closes -> handler finishes -> response closes.
+    // The request can therefore close while the attempt is still running. The
+    // response closes when the response completes or the connection is lost.
+    //
+    // In HTTP/2, the request and response share one stream:
+    // request body ends -> handler finishes -> stream closes -> request closes.
+    // Request close therefore covers both stream completion and reset.
     if (httpRequest.httpVersionMajor >= 2) {
       httpRequest.once("close", abort);
     } else {
