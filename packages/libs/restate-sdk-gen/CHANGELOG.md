@@ -1,5 +1,14 @@
 # @restatedev/restate-sdk-gen
 
+## 1.16.9
+
+### Patch Changes
+
+- Fix HTTP/1 attempt abort timing
+- Updated dependencies
+  - @restatedev/restate-sdk-clients@1.16.9
+  - @restatedev/restate-sdk-core@1.16.9
+
 ## 1.16.8
 
 ### Patch Changes

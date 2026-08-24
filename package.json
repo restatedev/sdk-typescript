@@ -1,6 +1,6 @@
 {
   "name": "@restatedev/sdk-typescript",
-  "version": "1.14.1",
+  "version": "1.16.9",
   "description": "Typescript SDK for Restate",
   "author": "Restate Developers",
   "email": "code@restate.dev",

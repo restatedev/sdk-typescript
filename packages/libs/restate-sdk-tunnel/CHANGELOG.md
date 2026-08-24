@@ -1,5 +1,11 @@
 # @restatedev/restate-sdk-tunnel
 
+## 1.16.9
+
+### Patch Changes
+
+- Fix HTTP/1 attempt abort timing
+
 ## 1.16.8
 
 ### Patch Changes
