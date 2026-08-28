@@ -35,8 +35,8 @@ import {
   select,
   type Operation,
   type Channel,
-  clients,
 } from "@restatedev/restate-sdk-gen";
+import { connect, type Ingress } from "@restatedev/restate-sdk-clients";
 
 // Job state is read-only from the polling closure's perspective: a
 // background timer flips `done` exactly once. Calling takePoll multiple
@@ -123,14 +123,14 @@ const modes = [
 
 describe.each(modes)("polling — $name mode", ({ alwaysReplay }) => {
   let env: RestateTestEnvironment;
-  let ingress: clients.GenIngress;
+  let ingress: Ingress;
 
   beforeAll(async () => {
     env = await RestateTestEnvironment.start({
       services: [pollingSvc],
       alwaysReplay,
     });
-    ingress = clients.connect({ url: env.baseUrl() });
+    ingress = connect({ url: env.baseUrl() });
   });
 
   afterAll(async () => {
@@ -140,14 +140,14 @@ describe.each(modes)("polling — $name mode", ({ alwaysReplay }) => {
   test("pollUntilDone: completes after the job finishes", async () => {
     const jobId = `poll-${alwaysReplay ? "replay" : "default"}`;
     startJob(jobId, 200, "complete");
-    const client = clients.client(ingress, pollingSvc);
+    const client = ingress.client(pollingSvc);
     expect(await client.pollUntilDone(jobId)).toBe("complete");
   });
 
   test("pollWithStop: worker returns the result before budget elapses", async () => {
     const jobId = `stop-fast-${alwaysReplay ? "replay" : "default"}`;
     startJob(jobId, 100, "got-it");
-    const client = clients.client(ingress, pollingSvc);
+    const client = ingress.client(pollingSvc);
     expect(await client.pollWithStop({ jobId, budgetMs: 5_000 })).toBe(
       "got-it"
     );
@@ -158,14 +158,14 @@ describe.each(modes)(
   "polling — channel-based stop — $name mode",
   ({ alwaysReplay }) => {
     let env: RestateTestEnvironment;
-    let ingress: clients.GenIngress;
+    let ingress: Ingress;
 
     beforeAll(async () => {
       env = await RestateTestEnvironment.start({
         services: [pollingSvc],
         alwaysReplay,
       });
-      ingress = clients.connect({ url: env.baseUrl() });
+      ingress = connect({ url: env.baseUrl() });
     });
 
     afterAll(async () => {
@@ -185,7 +185,7 @@ describe.each(modes)(
       // freshly-constructed channel.
       const jobId = `stop-never-${alwaysReplay ? "replay" : "default"}`;
       startJob(jobId, -1, "never-seen");
-      const client = clients.client(ingress, pollingSvc);
+      const client = ingress.client(pollingSvc);
       expect(await client.pollWithStop({ jobId, budgetMs: 250 })).toBeNull();
     });
   }

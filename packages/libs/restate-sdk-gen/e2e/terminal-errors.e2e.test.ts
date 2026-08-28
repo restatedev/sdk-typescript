@@ -26,12 +26,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import * as restate from "@restatedev/restate-sdk";
 import { RestateTestEnvironment } from "@restatedev/restate-sdk-testcontainers";
-import {
-  service,
-  run,
-  type Operation,
-  clients,
-} from "@restatedev/restate-sdk-gen";
+import { service, run, type Operation } from "@restatedev/restate-sdk-gen";
+import { connect, type Ingress } from "@restatedev/restate-sdk-clients";
 
 // Module-scope counters: handlers record how many times their throwing
 // code path executed. Cleared per-test inside describe.each blocks.
@@ -71,7 +67,7 @@ const modes = [
 
 describe.each(modes)("terminal errors — $name mode", ({ alwaysReplay }) => {
   let env: RestateTestEnvironment;
-  let ingress: clients.GenIngress;
+  let ingress: Ingress;
 
   beforeAll(async () => {
     env = await RestateTestEnvironment.start({
@@ -81,7 +77,7 @@ describe.each(modes)("terminal errors — $name mode", ({ alwaysReplay }) => {
       disableRetries: true,
       alwaysReplay,
     });
-    ingress = clients.connect({ url: env.baseUrl() });
+    ingress = connect({ url: env.baseUrl() });
   });
 
   afterAll(async () => {
@@ -91,7 +87,7 @@ describe.each(modes)("terminal errors — $name mode", ({ alwaysReplay }) => {
   test("inside ops.run", async () => {
     attempts.clear();
     const key = `inside-${alwaysReplay ? "replay" : "default"}`;
-    const client = clients.client(ingress, terminalSvc);
+    const client = ingress.client(terminalSvc);
     await expect(client.insideRun(key)).rejects.toThrow(/inside-run-fatal/);
     // Closure ran exactly once — terminal errors don't retry, and the
     // journaled terminal outcome is replayed (not re-executed) under
@@ -102,7 +98,7 @@ describe.each(modes)("terminal errors — $name mode", ({ alwaysReplay }) => {
   test("outside ops.run (raw throw in the gen body)", async () => {
     attempts.clear();
     const key = `outside-${alwaysReplay ? "replay" : "default"}`;
-    const client = clients.client(ingress, terminalSvc);
+    const client = ingress.client(terminalSvc);
     await expect(client.outsideRun(key)).rejects.toThrow(/outside-run-fatal/);
     // No journal entries before the throw → no suspension → no replay
     // even in alwaysReplay mode. Body runs exactly once.

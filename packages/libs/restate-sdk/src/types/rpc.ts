@@ -38,6 +38,10 @@ import {
   type WorkflowSharedHandler,
   type Serde,
   type Duration,
+  type HandlerDescriptor,
+  type InferInput,
+  type InferOutput,
+  makeHandlerDescriptor,
 } from "@restatedev/restate-sdk-core";
 import { ensureError, TerminalError } from "./errors.js";
 import type { HooksProvider } from "../hooks.js";
@@ -253,7 +257,8 @@ export const makeRpcCallProxy = <T>(
   defaultSerde: Serde<any>,
   service: string,
   key?: string,
-  scope?: string
+  scope?: string,
+  handlers?: Record<string, HandlerDescriptor>
 ): T => {
   const clientProxy = new Proxy(
     {},
@@ -262,9 +267,12 @@ export const makeRpcCallProxy = <T>(
         const method = prop as string;
         return (...args: unknown[]) => {
           const { parameter, opts } = optsFromArgs(args);
-          const requestSerde = opts?.input ?? defaultSerde;
+          const descriptor = handlers?.[method];
+          const requestSerde =
+            opts?.input ?? descriptor?._inputSerde ?? defaultSerde;
           const responseSerde =
             (opts as ClientCallOptions<unknown, unknown> | undefined)?.output ??
+            descriptor?._outputSerde ??
             defaultSerde;
           return genericCall({
             service,
@@ -292,7 +300,8 @@ export const makeRpcSendProxy = <T>(
   defaultSerde: Serde<any>,
   service: string,
   key?: string,
-  scope?: string
+  scope?: string,
+  handlers?: Record<string, HandlerDescriptor>
 ): T => {
   const clientProxy = new Proxy(
     {},
@@ -301,7 +310,9 @@ export const makeRpcSendProxy = <T>(
         const method = prop as string;
         return (...args: unknown[]) => {
           const { parameter, opts } = optsFromArgs(args);
-          const requestSerde = opts?.input ?? defaultSerde;
+          const descriptor = handlers?.[method];
+          const requestSerde =
+            opts?.input ?? descriptor?._inputSerde ?? defaultSerde;
           const delay = (opts as ClientSendOptions<unknown> | undefined)?.delay;
           return genericSend({
             service,
@@ -344,6 +355,39 @@ export type SendClient<M> = {
   ) => void
     ? (...args: [...P, ...[opts?: SendOpts<InferArg<P>>]]) => InvocationHandle
     : never;
+};
+
+/**
+ * Typed request/response client derived from a service interface's handler
+ * descriptor map `H` (see `iface` in `@restatedev/restate-sdk-core`). Unlike
+ * {@link Client}, which recovers the phantom handler-map from a
+ * `ServiceDefinition`, this recovers the input/output types directly from the
+ * descriptors, so a code-free interface value produces a fully typed client.
+ */
+export type ClientFromDescriptors<H extends Record<string, HandlerDescriptor>> =
+  {
+    readonly [K in keyof H]: [InferInput<H[K]>] extends [void]
+      ? (
+          opts?: Opts<InferInput<H[K]>, InferOutput<H[K]>>
+        ) => InvocationPromise<InferOutput<H[K]>>
+      : (
+          input: InferInput<H[K]>,
+          opts?: Opts<InferInput<H[K]>, InferOutput<H[K]>>
+        ) => InvocationPromise<InferOutput<H[K]>>;
+  };
+
+/**
+ * One-way (send) counterpart of {@link ClientFromDescriptors}.
+ */
+export type SendClientFromDescriptors<
+  H extends Record<string, HandlerDescriptor>,
+> = {
+  readonly [K in keyof H]: [InferInput<H[K]>] extends [void]
+    ? (opts?: SendOpts<InferInput<H[K]>>) => InvocationHandle
+    : (
+        input: InferInput<H[K]>,
+        opts?: SendOpts<InferInput<H[K]>>
+      ) => InvocationHandle;
 };
 
 // ----------- handlers ----------------------------------------------
@@ -1213,6 +1257,31 @@ export type ServiceOptions = {
  * @type P the name of the service
  * @type M the handlers for the service
  */
+/**
+ * Build the per-handler serde descriptor map that lets a caller reuse a
+ * definition's declared serdes (see `HandlerDescriptor` /
+ * `ingress.client(def)`). The serde recorded per handler is its effective one —
+ * explicit `input`/`output`, else the handler-level `serde`, else the
+ * service-level `serde`; left `undefined` (→ caller default, i.e. JSON) when
+ * nothing was declared.
+ */
+const buildHandlerDescriptors = (
+  routes: object,
+  serviceSerde: Serde<any> | undefined
+): Record<string, HandlerDescriptor> => {
+  const descriptors: Record<string, HandlerDescriptor> = {};
+  for (const [name, handler] of Object.entries(routes)) {
+    const wrapper = HandlerWrapper.fromHandler(handler);
+    const opts = wrapper?.options;
+    descriptors[name] = makeHandlerDescriptor(
+      opts?.input ?? opts?.serde ?? serviceSerde,
+      opts?.output ?? opts?.serde ?? serviceSerde,
+      wrapper?.kind === HandlerKind.SHARED
+    );
+  }
+  return descriptors;
+};
+
 export const service = <P extends string, M>(service: {
   name: P;
   handlers: ServiceOpts<M> & ThisType<M>;
@@ -1236,13 +1305,20 @@ export const service = <P extends string, M>(service: {
     throw new TypeError(`Unexpected handler type ${name}`);
   });
 
-  return {
-    name: service.name,
-    service: Object.fromEntries(handlers) as object,
-    metadata: service.metadata,
-    description: service.description,
-    options: service.options,
-  } as ServiceDefinition<P, M>;
+  const routes = Object.fromEntries(handlers) as Record<string, unknown>;
+  return Object.assign(
+    {
+      name: service.name,
+      service: routes,
+      metadata: service.metadata,
+      description: service.description,
+      options: service.options,
+    },
+    {
+      _kind: "service" as const,
+      _handlers: buildHandlerDescriptors(routes, service.options?.serde),
+    }
+  ) as ServiceDefinition<P, M>;
 };
 
 // ----------- objects ----------------------------------------------
@@ -1346,13 +1422,20 @@ export const object = <P extends string, M>(object: {
     throw new TypeError(`Unexpected handler type ${name}`);
   });
 
-  return {
-    name: object.name,
-    object: Object.fromEntries(handlers) as object,
-    metadata: object.metadata,
-    description: object.description,
-    options: object.options,
-  } as VirtualObjectDefinition<P, M>;
+  const routes = Object.fromEntries(handlers) as Record<string, unknown>;
+  return Object.assign(
+    {
+      name: object.name,
+      object: routes,
+      metadata: object.metadata,
+      description: object.description,
+      options: object.options,
+    },
+    {
+      _kind: "object" as const,
+      _handlers: buildHandlerDescriptors(routes, object.options?.serde),
+    }
+  ) as VirtualObjectDefinition<P, M>;
 };
 
 // ----------- workflows ----------------------------------------------
@@ -1499,11 +1582,18 @@ export const workflow = <P extends string, M>(workflow: {
     handlers.push([name, wrapper.transpose()]);
   }
 
-  return {
-    name: workflow.name,
-    workflow: Object.fromEntries(handlers) as object,
-    metadata: workflow.metadata,
-    description: workflow.description,
-    options: workflow.options,
-  } as WorkflowDefinition<P, M>;
+  const routes = Object.fromEntries(handlers) as Record<string, unknown>;
+  return Object.assign(
+    {
+      name: workflow.name,
+      workflow: routes,
+      metadata: workflow.metadata,
+      description: workflow.description,
+      options: workflow.options,
+    },
+    {
+      _kind: "workflow" as const,
+      _handlers: buildHandlerDescriptors(routes, workflow.options?.serde),
+    }
+  ) as WorkflowDefinition<P, M>;
 };

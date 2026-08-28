@@ -12,108 +12,38 @@
 
 import * as restate from "@restatedev/restate-sdk";
 import type { StandardSchemaV1 } from "@restatedev/restate-sdk-core";
+import {
+  type HandlerDescriptor,
+  type Descriptor,
+  type ServiceDescriptor,
+  type ObjectDescriptor,
+  type WorkflowDescriptor,
+  type ImplementedServiceDefinition,
+  type ImplementedObjectDefinition,
+  type ImplementedWorkflowDefinition,
+  type ImplementedDefinition,
+  makeHandlerDescriptor,
+  serde,
+} from "@restatedev/restate-sdk-core";
 import { execute } from "./restate-operations.js";
 import { type Operation } from "./operation.js";
 import { ServiceHandlerOpts } from "@restatedev/restate-sdk";
 
 // =============================================================================
-// Shared types (consumed here and by interface.ts)
+// Shared interface/descriptor layer — moved to @restatedev/restate-sdk-core and
+// re-exported here so this package's public API is unchanged.
 // =============================================================================
-
-// --- HandlerDescriptor -------------------------------------------------------
-
-/**
- * Minimal descriptor stored in Descriptor._handlers per handler.
- */
-export type HandlerDescriptor<I = any, O = any> = {
-  readonly _inputSerde?: restate.Serde<I>;
-  readonly _outputSerde?: restate.Serde<O>;
+export type {
+  HandlerDescriptor,
+  Descriptor,
+  ServiceDescriptor,
+  ObjectDescriptor,
+  WorkflowDescriptor,
+  ImplementedServiceDefinition,
+  ImplementedObjectDefinition,
+  ImplementedWorkflowDefinition,
+  ImplementedDefinition,
 };
-
-export function makeDescriptor<I, O>(
-  inputSerde?: restate.Serde<I>,
-  outputSerde?: restate.Serde<O>
-): HandlerDescriptor<I, O> {
-  return {
-    _inputSerde: inputSerde,
-    _outputSerde: outputSerde,
-  };
-}
-
-// --- Descriptor -----------------------------------------------------
-
-/**
- * The single client-facing type for all definition styles.
- * - Returned by service() / object() / workflow() (also bindable to serve())
- * - Returned by restate.interface.service/object/workflow (pure, not bindable)
- * - Returned by implement() (also bindable)
- */
-export type Descriptor<
-  P extends string = string,
-  H extends Record<string, HandlerDescriptor> = Record<
-    string,
-    HandlerDescriptor
-  >,
-  Kind extends "service" | "object" | "workflow" =
-    | "service"
-    | "object"
-    | "workflow",
-> = {
-  readonly name: P;
-  readonly _kind: Kind;
-  readonly _handlers: H;
-};
-
-/** Kind-specific aliases for the common Descriptor type */
-export type ServiceDescriptor<
-  P extends string = string,
-  H extends Record<string, HandlerDescriptor> = Record<
-    string,
-    HandlerDescriptor
-  >,
-> = Descriptor<P, H, "service">;
-
-export type ObjectDescriptor<
-  P extends string = string,
-  H extends Record<string, HandlerDescriptor> = Record<
-    string,
-    HandlerDescriptor
-  >,
-> = Descriptor<P, H, "object">;
-
-export type WorkflowDescriptor<
-  P extends string = string,
-  H extends Record<string, HandlerDescriptor> = Record<
-    string,
-    HandlerDescriptor
-  >,
-> = Descriptor<P, H, "workflow">;
-
-/** Implemented definition — extends Descriptor and also bindable to serve() */
-export type ImplementedServiceDefinition<
-  P extends string,
-  H extends Record<string, HandlerDescriptor>,
-> = restate.ServiceDefinition<P, any> & ServiceDescriptor<P, H>;
-
-export type ImplementedObjectDefinition<
-  P extends string,
-  H extends Record<string, HandlerDescriptor>,
-> = restate.VirtualObjectDefinition<P, any> & ObjectDescriptor<P, H>;
-
-export type ImplementedWorkflowDefinition<
-  P extends string,
-  H extends Record<string, HandlerDescriptor>,
-> = restate.WorkflowDefinition<P, any> & WorkflowDescriptor<P, H>;
-
-export type ImplementedDefinition<
-  P extends string,
-  H extends Record<string, HandlerDescriptor>,
-  Kind extends "service" | "object" | "workflow",
-> = Kind extends "service"
-  ? ImplementedServiceDefinition<P, H>
-  : Kind extends "object"
-    ? ImplementedObjectDefinition<P, H>
-    : ImplementedWorkflowDefinition<P, H>;
 
 // =============================================================================
 // HandlerDef — result of serdes()
@@ -208,11 +138,6 @@ function isHandlerDef(
   );
 }
 
-/** Convert a Standard Schema to a Serde via restate.serde.schema() */
-export function toSerde<T>(schema: StandardSchemaV1<T>): restate.Serde<T> {
-  return restate.serde.schema(schema as any) as restate.Serde<T>;
-}
-
 function extractEntry(entry: HandlerOrHandlerDescriptor): {
   genFn: AnyGenFn;
   inputSerde: restate.Serde<any> | undefined;
@@ -263,8 +188,8 @@ export function schemas<
 > {
   return {
     _genFn: fn as AnyGenFn,
-    _inputSerde: toSerde(opts.input),
-    _outputSerde: toSerde(opts.output),
+    _inputSerde: serde.schema(opts.input),
+    _outputSerde: serde.schema(opts.output),
   };
 }
 
@@ -300,7 +225,7 @@ export function service<
       async (ctx: restate.Context, input: any) => execute(ctx, genFn(input))
     );
 
-    descriptors[handlerName] = makeDescriptor(inputSerde, outputSerde);
+    descriptors[handlerName] = makeHandlerDescriptor(inputSerde, outputSerde);
   }
 
   const coreDef = restate.service({
@@ -359,7 +284,7 @@ export function object<
       ? restate.handlers.object.shared(sdkOpts, fn as any)
       : restate.handlers.object.exclusive(sdkOpts, fn as any);
 
-    descriptors[handlerName] = makeDescriptor(inputSerde, outputSerde);
+    descriptors[handlerName] = makeHandlerDescriptor(inputSerde, outputSerde);
   }
 
   const coreDef = restate.object({
@@ -418,7 +343,7 @@ export function workflow<
         ? restate.handlers.workflow.workflow(sdkOpts, fn as any)
         : restate.handlers.workflow.shared(sdkOpts, fn as any);
 
-    descriptors[handlerName] = makeDescriptor(inputSerde, outputSerde);
+    descriptors[handlerName] = makeHandlerDescriptor(inputSerde, outputSerde);
   }
 
   const coreDef = restate.workflow({

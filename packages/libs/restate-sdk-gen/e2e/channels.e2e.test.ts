@@ -28,9 +28,9 @@ import {
   select,
   all,
   type Operation,
-  clients,
   gen,
 } from "@restatedev/restate-sdk-gen";
+import { connect, type Ingress } from "@restatedev/restate-sdk-clients";
 
 const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -120,14 +120,14 @@ const modes = [
 
 describe.each(modes)("channels — $name mode", ({ alwaysReplay }) => {
   let env: RestateTestEnvironment;
-  let ingress: clients.GenIngress;
+  let ingress: Ingress;
 
   beforeAll(async () => {
     env = await RestateTestEnvironment.start({
       services: [channelsSvc],
       alwaysReplay,
     });
-    ingress = clients.connect({ url: env.baseUrl() });
+    ingress = connect({ url: env.baseUrl() });
   });
 
   afterAll(async () => {
@@ -135,24 +135,24 @@ describe.each(modes)("channels — $name mode", ({ alwaysReplay }) => {
   });
 
   test("basic send/receive in the same fiber", async () => {
-    const client = clients.client(ingress, channelsSvc);
+    const client = ingress.client(channelsSvc);
     expect(await client.basicSend("hello")).toBe("hello");
   });
 
   test("spawn coordinate: spawned fiber sends, parent receives", async () => {
-    const client = clients.client(ingress, channelsSvc);
+    const client = ingress.client(channelsSvc);
     expect(await client.spawnCoordinate("from-spawn")).toBe("from-spawn");
   });
 
   test("multi-reader broadcast: all readers see the same value", async () => {
-    const client = clients.client(ingress, channelsSvc);
+    const client = ingress.client(channelsSvc);
     expect(await client.multiReaderBroadcast("payload")).toBe(
       "A:payload|B:payload|C:payload"
     );
   });
 
   test("stop with reason: typed channel carrying structured data", async () => {
-    const client = clients.client(ingress, channelsSvc);
+    const client = ingress.client(channelsSvc);
     expect(await client.stopWithReason({ reason: "user-cancelled" })).toBe(
       "stopped:user-cancelled"
     );

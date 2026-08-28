@@ -33,8 +33,8 @@ import {
   allSettled,
   type Operation,
   type Task,
-  clients,
 } from "@restatedev/restate-sdk-gen";
+import { connect, type Ingress } from "@restatedev/restate-sdk-clients";
 
 // Out-of-band observation channel (same process as the test).
 const obs: Record<string, string> = {};
@@ -349,14 +349,14 @@ const modes = [
 
 describe.each(modes)("interrupt — $name mode", ({ alwaysReplay }) => {
   let env: RestateTestEnvironment;
-  let ingress: clients.GenIngress;
+  let ingress: Ingress;
 
   beforeAll(async () => {
     env = await RestateTestEnvironment.start({
       services: [interruptSvc],
       alwaysReplay,
     });
-    ingress = clients.connect({ url: env.baseUrl() });
+    ingress = connect({ url: env.baseUrl() });
   });
 
   afterAll(async () => {
@@ -364,53 +364,53 @@ describe.each(modes)("interrupt — $name mode", ({ alwaysReplay }) => {
   });
 
   test("interrupt past a sleep: handler completes promptly, sleep command abandoned", async () => {
-    const c = clients.client(ingress, interruptSvc);
+    const c = ingress.client(interruptSvc);
     expect(await c.interruptPastSleep()).toBe("interrupted:stop");
   });
 
   test("interrupt-then-join runs journaled cleanup in the catch", async () => {
-    const c = clients.client(ingress, interruptSvc);
+    const c = ingress.client(interruptSvc);
     expect(await c.interruptThenJoinCleanup()).toBe("interrupted:stop:audited");
   });
 
   test("uncaught interrupt fails the routine; joiner sees the verbatim error", async () => {
-    const c = clients.client(ingress, interruptSvc);
+    const c = ingress.client(interruptSvc);
     expect(await c.uncaughtInterruptFails()).toBe("rejected:boom");
   });
 
   test("interrupting one input of allSettled: rejected for it, fulfilled for the other", async () => {
-    const c = clients.client(ingress, interruptSvc);
+    const c = ingress.client(interruptSvc);
     expect(await c.interruptCombinatorInput()).toBe("rej:boom|ok:two");
   });
 
   test("interrupt cascades to a spawned child; both run journaled cleanup", async () => {
-    const c = clients.client(ingress, interruptSvc);
+    const c = ingress.client(interruptSvc);
     expect(await c.cascadeInterrupt()).toBe(
       "parent:boom:parent-cleaned|child:boom:child-cleaned"
     );
   });
 
   test("cascade reaches a grandchild re-homed when its intermediate parent finished", async () => {
-    const c = clients.client(ingress, interruptSvc);
+    const c = ingress.client(interruptSvc);
     expect(await c.cascadeReHome()).toBe(
       "sup:boom:sup-cleaned|g:boom:g-cleaned"
     );
   });
 
   test("self-interrupt: the throw lands at the worker's next yield and replays consistently", async () => {
-    const c = clients.client(ingress, interruptSvc);
+    const c = ingress.client(interruptSvc);
     expect(await c.selfInterrupt()).toBe("interrupted:self:audited");
   });
 
   test("interrupt before first advance is caught inside the worker and replays consistently", async () => {
-    const c = clients.client(ingress, interruptSvc);
+    const c = ingress.client(interruptSvc);
     expect(await c.interruptBeforeFirstAdvance()).toBe(
       "interrupted:pre-start:audited"
     );
   });
 
   test("interrupt mid-run: the caught error is the verbatim interrupt error, identical record vs replay", async () => {
-    const c = clients.client(ingress, interruptSvc);
+    const c = ingress.client(interruptSvc);
     // The in-memory interrupt wake (verbatim InterruptedError) wins over
     // the run's journaled (coerced) outcome; the per-tick journaled race
     // combinator keeps this ordering stable across replay.
@@ -421,7 +421,7 @@ describe.each(modes)("interrupt — $name mode", ({ alwaysReplay }) => {
 
   test("interrupt aborts the worker's run signal and delivers the error; main's signal is unaffected", async () => {
     obs.worker = "init";
-    const client = clients.client(ingress, interruptSvc);
+    const client = ingress.client(interruptSvc);
     const result = await client.scopedInterrupt();
     expect(result).toBe("worker-interrupted:stop|mainAbortedAtStart=false");
     // The worker's in-flight run signal fired (scoped per fiber).

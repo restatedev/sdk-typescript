@@ -34,9 +34,9 @@ import {
   sleep,
   spawn,
   contextLocal,
-  clients,
   type Operation,
 } from "@restatedev/restate-sdk-gen";
+import { connect, type Ingress } from "@restatedev/restate-sdk-clients";
 
 // Defined once at module scope — each invocation gets its own bag.
 const requestId = contextLocal<string>();
@@ -109,14 +109,14 @@ const modes = [
 
 describe.each(modes)("contextLocal — $name mode", ({ alwaysReplay }) => {
   let env: RestateTestEnvironment;
-  let ingress: clients.GenIngress;
+  let ingress: Ingress;
 
   beforeAll(async () => {
     env = await RestateTestEnvironment.start({
       services: [ambient],
       alwaysReplay,
     });
-    ingress = clients.connect({ url: env.baseUrl() });
+    ingress = connect({ url: env.baseUrl() });
   });
 
   afterAll(async () => {
@@ -124,7 +124,7 @@ describe.each(modes)("contextLocal — $name mode", ({ alwaysReplay }) => {
   });
 
   test("value set before a suspension is readable after, by main / nested / spawned", async () => {
-    const client = clients.client(ingress, ambient);
+    const client = ingress.client(ambient);
     const out = await client.propagate({ id: "42", tenant: "acme" });
     expect(out.afterSleep).toBe("req-42");
     expect(out.nested).toBe("[req-42 | acme] nested");
@@ -132,20 +132,20 @@ describe.each(modes)("contextLocal — $name mode", ({ alwaysReplay }) => {
   });
 
   test("default applies when a slot is left unset within the invocation", async () => {
-    const client = clients.client(ingress, ambient);
+    const client = ingress.client(ambient);
     const out = await client.propagate({ id: "7" }); // no tenant → default
     expect(out.nested).toBe("[req-7 | public] nested");
   });
 
   test("scoped per invocation: a fresh invocation does not see a prior one's value", async () => {
-    const client = clients.client(ingress, ambient);
+    const client = ingress.client(ambient);
     await client.propagate({ id: "999", tenant: "acme" });
     // whoami is a brand-new invocation; it never set requestId.
     expect(await client.whoami()).toBe("unset");
   });
 
   test("get/set inside a run closure throws (off the advance span)", async () => {
-    const client = clients.client(ingress, ambient);
+    const client = ingress.client(ambient);
     expect(await client.runBoundary()).toBe("threw");
   });
 });

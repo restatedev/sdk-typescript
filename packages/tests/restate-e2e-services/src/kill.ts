@@ -9,7 +9,7 @@
 
 import * as restate from "@restatedev/restate-sdk";
 import { REGISTRY } from "./services.js";
-import type { AwakeableHolder } from "./awakeable_holder.js";
+import { AwakeableHolder } from "./awakeable_holder.js";
 
 const kill = restate.object({
   name: "KillTestRunner",
@@ -25,9 +25,7 @@ const killSingleton = restate.object({
   handlers: {
     async recursiveCall(ctx: restate.ObjectContext) {
       const { id, promise } = ctx.awakeable();
-      ctx
-        .objectSendClient<AwakeableHolder>({ name: "AwakeableHolder" }, ctx.key)
-        .hold(id);
+      ctx.sendClient(AwakeableHolder, ctx.key).hold(id);
       await promise;
 
       await ctx.objectClient(killSingleton, ctx.key).recursiveCall();

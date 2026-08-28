@@ -74,6 +74,8 @@ export { serde } from "@restatedev/restate-sdk-core";
 export type {
   Client,
   SendClient,
+  ClientFromDescriptors,
+  SendClientFromDescriptors,
   ClientCallOptions,
   ClientSendOptions,
   RemoveVoidArgument,
@@ -105,6 +107,39 @@ export type {
   VirtualObjectDefinition,
   WorkflowDefinition,
 } from "@restatedev/restate-sdk-core";
+
+export { iface } from "@restatedev/restate-sdk-core";
+export type {
+  ServiceInterface,
+  HandlerDescriptor,
+  Descriptor,
+  ServiceDescriptor,
+  ObjectDescriptor,
+  WorkflowDescriptor,
+  ImplementedServiceDefinition,
+  ImplementedObjectDefinition,
+  ImplementedWorkflowDefinition,
+  ImplementedDefinition,
+  InferInput,
+  InferOutput,
+} from "@restatedev/restate-sdk-core";
+export { implement } from "./types/interface.js";
+export type {
+  /** @internal */
+  FnOf,
+  /** @internal */
+  ServiceImplHandlers,
+  /** @internal */
+  ObjectImplHandlers,
+  /** @internal */
+  WorkflowImplHandlers,
+  /** @internal */
+  ServicePerHandlerOpts,
+  /** @internal */
+  ObjectPerHandlerOpts,
+  /** @internal */
+  WorkflowPerHandlerOpts,
+} from "./types/interface.js";
 
 export type {
   RestateEndpoint,
