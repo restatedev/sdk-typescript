@@ -8,24 +8,20 @@
  * directory of this repository or package, or at
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
+// The client methods implement the overloaded `Ingress` interface (classic
+// definition OR service interface), which requires an `any` return on the
+// implementation signatures.
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import {
-  type Service,
-  type ServiceDefinitionFrom,
-  type VirtualObject,
-  type WorkflowDefinitionFrom,
-  type Workflow,
-  type VirtualObjectDefinitionFrom,
   type Serde,
   serde,
   type JournalValueCodec,
+  type HandlerDescriptor,
 } from "@restatedev/restate-sdk-core";
 import {
   ConnectionOpts,
   Ingress,
-  IngressClient,
-  IngressSendClient,
-  IngressWorkflowClient,
   Output,
   Send,
   ScopedIngress,
@@ -52,6 +48,18 @@ export function connect(opts: ConnectionOpts): Ingress {
   return new HttpIngress(opts);
 }
 
+/**
+ * The runtime shape a client method needs off a definition value: the service
+ * name, plus (for interface / `implement()` values) the per-handler serde
+ * descriptors. Classic definitions carry no `_handlers`, so serde reuse is a
+ * no-op for them.
+ */
+type ClientTarget = {
+  name: string;
+  _handlers?: Record<string, HandlerDescriptor>;
+  _kind?: "service" | "object" | "workflow";
+};
+
 export class HttpCallError extends Error {
   constructor(
     public readonly status: number,
@@ -71,6 +79,8 @@ type InvocationParameters<I> = {
   parameter?: I;
   method?: string;
   scope?: string;
+  /** Serdes declared by the callee's service interface, if the client was built from one. */
+  handlerDesc?: HandlerDescriptor;
 };
 
 function optsFromArgs(args: unknown[]): {
@@ -288,7 +298,11 @@ const doComponentInvocation = async <I, O>(
   //
   // request body
   //
-  const inputSerde = params.opts?.opts.input ?? opts.serde ?? serde.json;
+  const inputSerde =
+    params.opts?.opts.input ??
+    params.handlerDesc?._inputSerde ??
+    opts.serde ??
+    serde.json;
 
   const { body, contentType } = serializeBodyWithContentType(
     params.parameter,
@@ -346,7 +360,11 @@ const doComponentInvocation = async <I, O>(
     const decodedBuf = opts.journalValueCodec
       ? await opts.journalValueCodec.decode(responseBuf)
       : responseBuf;
-    const outputSerde = params.opts?.opts.output ?? opts.serde ?? serde.json;
+    const outputSerde =
+      params.opts?.opts.output ??
+      params.handlerDesc?._outputSerde ??
+      opts.serde ??
+      serde.json;
     return outputSerde.deserialize(decodedBuf) as O;
   }
   const json = serde.json.deserialize(responseBuf) as O;
@@ -358,9 +376,11 @@ const doWorkflowHandleCall = async <O>(
   wfName: string,
   wfKey: string,
   op: "output" | "attach",
-  callOpts?: Opts<unknown, O> | SendOpts<unknown>
+  callOpts?: Opts<unknown, O> | SendOpts<unknown>,
+  runOutputSerde?: Serde<unknown>
 ): Promise<O> => {
-  const outputSerde = callOpts?.opts.output ?? opts.serde ?? serde.json;
+  const outputSerde =
+    callOpts?.opts.output ?? runOutputSerde ?? opts.serde ?? serde.json;
   //
   // headers
   //
@@ -393,7 +413,12 @@ const doWorkflowHandleCall = async <O>(
 class HttpIngress implements Ingress {
   constructor(private readonly opts: ConnectionOpts) {}
 
-  private proxy(component: string, key?: string, send?: boolean) {
+  private proxy(
+    component: string,
+    key?: string,
+    send?: boolean,
+    handlers?: Record<string, HandlerDescriptor>
+  ) {
     return new Proxy(
       {},
       {
@@ -408,6 +433,7 @@ class HttpIngress implements Ingress {
               parameter,
               opts,
               send,
+              handlerDesc: handlers?.[handler],
             });
           };
         },
@@ -415,22 +441,18 @@ class HttpIngress implements Ingress {
     );
   }
 
-  serviceClient<D>(opts: ServiceDefinitionFrom<D>): IngressClient<Service<D>> {
-    return this.proxy(opts.name) as IngressClient<Service<D>>;
+  serviceClient(opts: ClientTarget): any {
+    return this.proxy(opts.name, undefined, undefined, opts._handlers);
   }
 
-  objectClient<D>(
-    opts: VirtualObjectDefinitionFrom<D>,
-    key: string
-  ): IngressClient<VirtualObject<D>> {
-    return this.proxy(opts.name, key) as IngressClient<VirtualObject<D>>;
+  objectClient(opts: ClientTarget, key: string): any {
+    return this.proxy(opts.name, key, undefined, opts._handlers);
   }
 
-  workflowClient<D>(
-    opts: WorkflowDefinitionFrom<D>,
-    key: string
-  ): IngressWorkflowClient<Workflow<D>> {
+  workflowClient(opts: ClientTarget, key: string): any {
     const component = opts.name;
+    const handlers = opts._handlers;
+    const runOutputSerde = handlers?.run?._outputSerde;
     const conn = this.opts;
 
     const workflowSubmit = async (
@@ -446,6 +468,7 @@ class HttpIngress implements Ingress {
           send: true,
           parameter,
           opts,
+          handlerDesc: handlers?.run,
         },
         true
       );
@@ -458,7 +481,14 @@ class HttpIngress implements Ingress {
     };
 
     const workflowAttach = (opts?: Opts<void, unknown>) =>
-      doWorkflowHandleCall(conn, component, key, "attach", opts);
+      doWorkflowHandleCall(
+        conn,
+        component,
+        key,
+        "attach",
+        opts,
+        runOutputSerde
+      );
 
     const workflowOutput = async (
       opts?: Opts<void, unknown>
@@ -469,7 +499,8 @@ class HttpIngress implements Ingress {
           component,
           key,
           "output",
-          opts
+          opts,
+          runOutputSerde
         );
 
         return {
@@ -511,33 +542,44 @@ class HttpIngress implements Ingress {
               key,
               parameter,
               opts,
+              handlerDesc: handlers?.[handler],
             });
           };
         },
       }
-    ) as IngressWorkflowClient<Workflow<D>>;
+    );
   }
 
-  objectSendClient<D>(
-    opts: VirtualObjectDefinitionFrom<D>,
-    key: string
-  ): IngressSendClient<VirtualObject<D>> {
-    return this.proxy(opts.name, key, true) as IngressSendClient<
-      VirtualObject<D>
-    >;
+  objectSendClient(opts: ClientTarget, key: string): any {
+    return this.proxy(opts.name, key, true, opts._handlers);
   }
 
-  serviceSendClient<D>(
-    opts: ServiceDefinitionFrom<D>
-  ): IngressSendClient<Service<D>> {
-    return this.proxy(opts.name, undefined, true) as IngressSendClient<
-      Service<D>
-    >;
+  serviceSendClient(opts: ClientTarget): any {
+    return this.proxy(opts.name, undefined, true, opts._handlers);
+  }
+
+  // Factory that dispatches on the interface's kind — mirrors the generator
+  // SDK's `client(ingress, def)` / `sendClient(ingress, def)` ergonomics.
+  client(opts: ClientTarget, key?: string): any {
+    return opts._kind === "service"
+      ? this.serviceClient(opts)
+      : this.objectClient(opts, key as string);
+  }
+
+  sendClient(opts: ClientTarget, key?: string): any {
+    return opts._kind === "service"
+      ? this.serviceSendClient(opts)
+      : this.objectSendClient(opts, key as string);
   }
 
   scope(scopeKey: string): ScopedIngress {
     const conn = this.opts;
-    const scopedProxy = (component: string, key?: string, send?: boolean) =>
+    const scopedProxy = (
+      component: string,
+      key?: string,
+      send?: boolean,
+      handlers?: Record<string, HandlerDescriptor>
+    ) =>
       new Proxy(
         {},
         {
@@ -553,6 +595,7 @@ class HttpIngress implements Ingress {
                 opts,
                 send,
                 scope: scopeKey,
+                handlerDesc: handlers?.[handler],
               });
             };
           },
@@ -560,26 +603,26 @@ class HttpIngress implements Ingress {
       );
 
     return {
-      serviceClient: <D>(opts: ServiceDefinitionFrom<D>) =>
-        scopedProxy(opts.name) as IngressClient<Service<D>>,
-      serviceSendClient: <D>(opts: ServiceDefinitionFrom<D>) =>
-        scopedProxy(opts.name, undefined, true) as IngressSendClient<
-          Service<D>
-        >,
-      objectClient: <D>(opts: VirtualObjectDefinitionFrom<D>, key: string) =>
-        scopedProxy(opts.name, key) as IngressClient<VirtualObject<D>>,
-      objectSendClient: <D>(
-        opts: VirtualObjectDefinitionFrom<D>,
-        key: string
-      ) =>
-        scopedProxy(opts.name, key, true) as IngressSendClient<
-          VirtualObject<D>
-        >,
-      workflowClient: <D>(
-        opts: WorkflowDefinitionFrom<D>,
-        key: string
-      ): IngressWorkflowClient<Workflow<D>> => {
+      serviceClient: (opts: ClientTarget): any =>
+        scopedProxy(opts.name, undefined, undefined, opts._handlers),
+      serviceSendClient: (opts: ClientTarget): any =>
+        scopedProxy(opts.name, undefined, true, opts._handlers),
+      objectClient: (opts: ClientTarget, key: string): any =>
+        scopedProxy(opts.name, key, undefined, opts._handlers),
+      objectSendClient: (opts: ClientTarget, key: string): any =>
+        scopedProxy(opts.name, key, true, opts._handlers),
+      client: (opts: ClientTarget, key?: string): any =>
+        opts._kind === "service"
+          ? scopedProxy(opts.name, undefined, undefined, opts._handlers)
+          : scopedProxy(opts.name, key, undefined, opts._handlers),
+      sendClient: (opts: ClientTarget, key?: string): any =>
+        opts._kind === "service"
+          ? scopedProxy(opts.name, undefined, true, opts._handlers)
+          : scopedProxy(opts.name, key, true, opts._handlers),
+      workflowClient: (opts: ClientTarget, key: string): any => {
         const component = opts.name;
+        const handlers = opts._handlers;
+        const runOutputSerde = handlers?.run?._outputSerde;
 
         const workflowSubmit = async (
           ...args: unknown[]
@@ -595,6 +638,7 @@ class HttpIngress implements Ingress {
               parameter,
               opts,
               scope: scopeKey,
+              handlerDesc: handlers?.run,
             },
             true
           );
@@ -606,7 +650,14 @@ class HttpIngress implements Ingress {
         };
 
         const workflowAttach = (opts?: Opts<void, unknown>) =>
-          doWorkflowHandleCall(conn, component, key, "attach", opts);
+          doWorkflowHandleCall(
+            conn,
+            component,
+            key,
+            "attach",
+            opts,
+            runOutputSerde
+          );
 
         const workflowOutput = async (
           opts?: Opts<void, unknown>
@@ -617,7 +668,8 @@ class HttpIngress implements Ingress {
               component,
               key,
               "output",
-              opts
+              opts,
+              runOutputSerde
             );
             return { ready: true, result };
           } catch (e) {
@@ -654,11 +706,12 @@ class HttpIngress implements Ingress {
                   parameter,
                   opts,
                   scope: scopeKey,
+                  handlerDesc: handlers?.[handler],
                 });
               };
             },
           }
-        ) as IngressWorkflowClient<Workflow<D>>;
+        );
       },
     };
   }

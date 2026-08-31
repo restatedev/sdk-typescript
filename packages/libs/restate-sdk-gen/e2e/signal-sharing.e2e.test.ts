@@ -40,12 +40,16 @@ import {
   allSettled,
   race,
   invocation,
-  clients,
 } from "@restatedev/restate-sdk-gen";
+import {
+  connect,
+  type Ingress,
+  SendOpts,
+} from "@restatedev/restate-sdk-clients";
 
 let idempotencyKeySeq = 0;
 const idem = () =>
-  clients.SendOpts.from<void>({
+  SendOpts.from<void>({
     idempotencyKey: `test-${++idempotencyKeySeq}`,
   });
 
@@ -139,14 +143,14 @@ describe.each(modes)(
   "signal-sharing combinators — $name mode",
   ({ alwaysReplay }) => {
     let env: RestateTestEnvironment;
-    let ingress: clients.GenIngress;
+    let ingress: Ingress;
 
     beforeAll(async () => {
       env = await RestateTestEnvironment.start({
         services: [combinatorSvc, signalSenderSvc],
         alwaysReplay,
       });
-      ingress = clients.connect({ url: env.baseUrl() });
+      ingress = connect({ url: env.baseUrl() });
     });
 
     afterAll(async () => {
@@ -154,7 +158,7 @@ describe.each(modes)(
     });
 
     const sendSignal = (invocationId: string, name: string, value: string) =>
-      clients.client(ingress, signalSenderSvc).resolve({
+      ingress.client(signalSenderSvc).resolve({
         invocationId,
         name,
         value,
@@ -163,8 +167,8 @@ describe.each(modes)(
     // ---- scenario 1: allSettled(race(p1, p2), race(p1, p3)) ----------------
 
     test("allSettled — p1 fires first: both races settle with p1's value", async () => {
-      const handle = await clients
-        .sendClient(ingress, combinatorSvc)
+      const handle = await ingress
+        .sendClient(combinatorSvc)
         .allSettledSharedSignal(idem());
       const invocationId = handle.invocationId;
 
@@ -184,8 +188,8 @@ describe.each(modes)(
     }, 30_000);
 
     test("allSettled — p2 fires first on race1, p3 fires first on race2", async () => {
-      const handle = await clients
-        .sendClient(ingress, combinatorSvc)
+      const handle = await ingress
+        .sendClient(combinatorSvc)
         .allSettledSharedSignal(idem());
       const invocationId = handle.invocationId;
 
@@ -208,8 +212,8 @@ describe.each(modes)(
     // ---- scenario 2: all(race(p1→throws, p2), race(p1, p3)) ---------------
 
     test("all — p1 fires first: spawned transform throws, all rejects", async () => {
-      const handle = await clients
-        .sendClient(ingress, combinatorSvc)
+      const handle = await ingress
+        .sendClient(combinatorSvc)
         .allWithMappedSignal(idem());
       const invocationId = handle.invocationId;
 
@@ -222,8 +226,8 @@ describe.each(modes)(
     }, 30_000);
 
     test("all — p2 fires first on race1: all resolves with both values", async () => {
-      const handle = await clients
-        .sendClient(ingress, combinatorSvc)
+      const handle = await ingress
+        .sendClient(combinatorSvc)
         .allWithMappedSignal(idem());
       const invocationId = handle.invocationId;
 
@@ -233,7 +237,7 @@ describe.each(modes)(
       // p1 fires last — the races already settled without it.
       await sendSignal(invocationId, "p1", "from-p1");
 
-      const result = (await ingress.result(handle)) as string[];
+      const result = await ingress.result(handle);
       expect(result).toHaveLength(2);
       expect(result[0]).toBe("from-p2");
       expect(result[1]).toBe("from-p3");

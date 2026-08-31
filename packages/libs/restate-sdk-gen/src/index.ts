@@ -97,10 +97,14 @@ export {
   type GenWorkflowHandlerOpts,
 } from "./define.js";
 
-// Interface / implement pattern
+// Interface / implement pattern.
+// The declarators/factories (`service`/`object`/`workflow`/`json`/`serdes`/
+// `schemas`/`shared`) live in @restatedev/restate-sdk-core; `implement` is
+// generator-specific and lives here. Merge them under one `iface` namespace.
 export { implement } from "./interface.js";
-import * as _iface from "./interface.js";
-export { _iface as iface };
+import { iface as _coreIface } from "@restatedev/restate-sdk-core";
+import { implement as _implement } from "./interface.js";
+export const iface = { ..._coreIface, implement: _implement };
 
 // Ingress adapters, exported as `clients` namespace
 import * as _ingress from "./ingress.js";
@@ -125,6 +129,8 @@ export type {
   VirtualObjectDefinition,
   Duration,
   StandardTypedV1,
+  ServiceInterface,
+  SerdeType,
 } from "@restatedev/restate-sdk-core";
 
 export type { ContextDate, Rand } from "@restatedev/restate-sdk";

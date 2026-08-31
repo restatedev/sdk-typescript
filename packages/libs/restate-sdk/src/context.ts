@@ -12,6 +12,8 @@
 import type {
   Client,
   SendClient,
+  ClientFromDescriptors,
+  SendClientFromDescriptors,
   //eslint-disable-next-line @typescript-eslint/no-unused-vars
   ClientCallOptions,
 } from "./types/rpc.js";
@@ -29,6 +31,10 @@ import type {
   WorkflowDefinitionFrom,
   Serde,
   Duration,
+  HandlerDescriptor,
+  ServiceDescriptor,
+  ObjectDescriptor,
+  WorkflowDescriptor,
 } from "@restatedev/restate-sdk-core";
 import type { TerminalError } from "./types/errors.js";
 import {
@@ -324,6 +330,8 @@ export type ScopedContext = Pick<
   | "objectSendClient"
   | "workflowClient"
   | "workflowSendClient"
+  | "client"
+  | "sendClient"
 >;
 
 /**
@@ -631,6 +639,44 @@ export interface Context extends RestateContext {
     obj: VirtualObjectDefinitionFrom<D>,
     key: string
   ): SendClient<VirtualObject<D>>;
+
+  /**
+   * Create a request/response client from a service interface / `Descriptor`.
+   *
+   * @example
+   * ```ts
+   * ctx.client(greeter).greet(req);        // service
+   * ctx.client(counter, "k").add(1);       // virtual object / workflow
+   * ```
+   */
+  client<P extends string, H extends Record<string, HandlerDescriptor>>(
+    serviceInterface: ServiceDescriptor<P, H>
+  ): ClientFromDescriptors<H>;
+  client<P extends string, H extends Record<string, HandlerDescriptor>>(
+    objectOrWorkflowInterface:
+      | ObjectDescriptor<P, H>
+      | WorkflowDescriptor<P, H>,
+    key: string
+  ): ClientFromDescriptors<H>;
+
+  /**
+   * Send-client (one-way) counterpart of {@link Context.client}.
+   *
+   * @example
+   * ```ts
+   * ctx.sendClient(greeter).greet(req);
+   * ctx.sendClient(counter, "k").add(1);
+   * ```
+   */
+  sendClient<P extends string, H extends Record<string, HandlerDescriptor>>(
+    serviceInterface: ServiceDescriptor<P, H>
+  ): SendClientFromDescriptors<H>;
+  sendClient<P extends string, H extends Record<string, HandlerDescriptor>>(
+    objectOrWorkflowInterface:
+      | ObjectDescriptor<P, H>
+      | WorkflowDescriptor<P, H>,
+    key: string
+  ): SendClientFromDescriptors<H>;
 
   /**
    * Returns a {@link ScopedContext} that routes all outgoing calls within the given scope.

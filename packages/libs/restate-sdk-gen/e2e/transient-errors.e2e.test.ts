@@ -26,12 +26,8 @@
 
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { RestateTestEnvironment } from "@restatedev/restate-sdk-testcontainers";
-import {
-  service,
-  run,
-  type Operation,
-  clients,
-} from "@restatedev/restate-sdk-gen";
+import { service, run, type Operation } from "@restatedev/restate-sdk-gen";
+import { connect, type Ingress } from "@restatedev/restate-sdk-clients";
 
 const attempts = new Map<string, number>();
 const bump = (key: string): number => {
@@ -95,7 +91,7 @@ const modes = [
 
 describe.each(modes)("transient errors — $name mode", ({ alwaysReplay }) => {
   let env: RestateTestEnvironment;
-  let ingress: clients.GenIngress;
+  let ingress: Ingress;
 
   beforeAll(async () => {
     env = await RestateTestEnvironment.start({
@@ -103,7 +99,7 @@ describe.each(modes)("transient errors — $name mode", ({ alwaysReplay }) => {
       // Retries must be enabled — that's the whole point.
       alwaysReplay,
     });
-    ingress = clients.connect({ url: env.baseUrl() });
+    ingress = connect({ url: env.baseUrl() });
   });
 
   afterAll(async () => {
@@ -113,7 +109,7 @@ describe.each(modes)("transient errors — $name mode", ({ alwaysReplay }) => {
   test("inside ops.run: closure retries, eventually returns", async () => {
     attempts.clear();
     const key = `inside-${alwaysReplay ? "replay" : "default"}`;
-    const client = clients.client(ingress, transientSvc);
+    const client = ingress.client(transientSvc);
     expect(await client.insideRun(key)).toBe("ok-after-3");
     // Closure ran exactly 3 times — once-success is journaled and not
     // re-run on subsequent replays.
@@ -123,7 +119,7 @@ describe.each(modes)("transient errors — $name mode", ({ alwaysReplay }) => {
   test("outside ops.run: whole handler retries, eventually returns", async () => {
     attempts.clear();
     const key = `outside-${alwaysReplay ? "replay" : "default"}`;
-    const client = clients.client(ingress, transientSvc);
+    const client = ingress.client(transientSvc);
     expect(await client.outsideRun(key)).toBe("ok-after-3");
     // The body's bump() is non-journaled state. In default mode it
     // runs once per retry up to success → exactly 3. In alwaysReplay
@@ -136,7 +132,7 @@ describe.each(modes)("transient errors — $name mode", ({ alwaysReplay }) => {
   test("bounded retry: maxRetryAttempts hit → TerminalError", async () => {
     attempts.clear();
     const key = `bounded-${alwaysReplay ? "replay" : "default"}`;
-    const client = clients.client(ingress, transientSvc);
+    const client = ingress.client(transientSvc);
     await expect(client.boundedRetry(key)).rejects.toThrow(/doomed/);
     // 2 attempts before the SDK gives up.
     expect(attempts.get(key)).toBe(2);

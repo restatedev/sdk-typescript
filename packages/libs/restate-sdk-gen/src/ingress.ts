@@ -8,7 +8,25 @@
  * directory of this repository or package, or at
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
-/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument */
+
+/**
+ * @deprecated The `clients` ingress adapter is superseded by
+ * `@restatedev/restate-sdk-clients`. The service interface / `Descriptor`
+ * values produced by this package (`service`/`object`/`workflow`/`iface` /
+ * `implement`) are now first-class inputs to that package's ingress client,
+ * which reuses their declared serdes automatically:
+ *
+ * ```ts
+ * import { connect } from "@restatedev/restate-sdk-clients";
+ * const ingress = connect({ url });
+ * await ingress.client(greeter).greet(req);       // service
+ * await ingress.client(counter, "k").add(1);      // virtual object / workflow (with key)
+ * ```
+ *
+ * Every export here now delegates to that client and will be removed in a
+ * future release.
+ */
 
 import {
   Opts,
@@ -44,28 +62,18 @@ export {
 };
 
 /**
- * Connect to the Restate Ingress.
- *
- * @param opts connection options
- * @returns a connection the the restate ingress
+ * @deprecated Use `connect` from `@restatedev/restate-sdk-clients` and its typed
+ * client methods, e.g. `connect({ url }).serviceClient(def)`
  */
 export function connect(opts: ConnectionOpts): GenIngress {
   return clientsConnect(opts);
 }
 
 /**
- * Minimal ingress interface required by the sdk-gen ingress helpers.
- * Structurally compatible with `Ingress` from `@restatedev/restate-sdk-clients`
- * — any object returned by `connect()` satisfies this.
+ * @deprecated Use `connect` from `@restatedev/restate-sdk-clients` and its typed
+ * client methods, e.g. `connect({ url }).serviceClient(def)`
  */
-export type GenIngress = Omit<
-  Ingress,
-  | "serviceClient"
-  | "serviceSendClient"
-  | "objectClient"
-  | "objectSendClient"
-  | "workflowClient"
->;
+export type GenIngress = Ingress;
 
 // =============================================================================
 // Typed ingress client types
@@ -74,7 +82,12 @@ export type GenIngress = Omit<
 type InferInput<D> = D extends HandlerDescriptor<infer I, any> ? I : unknown;
 type InferOutput<D> = D extends HandlerDescriptor<any, infer O> ? O : unknown;
 
-/** Typed ingress call client — each method returns Promise<O> */
+/**
+ * Typed ingress call client — each method returns Promise<O>.
+ *
+ * @deprecated Use the client returned by `ingress.serviceClient(def)` /
+ * `ingress.objectClient(def, key)` from `@restatedev/restate-sdk-clients`.
+ */
 export type IngressHandlerClient<H extends Record<string, HandlerDescriptor>> =
   {
     readonly [K in keyof H]: (
@@ -83,7 +96,12 @@ export type IngressHandlerClient<H extends Record<string, HandlerDescriptor>> =
     ) => Promise<InferOutput<H[K]>>;
   };
 
-/** Typed ingress send client — each method returns Promise<Send> */
+/**
+ * Typed ingress send client — each method returns Promise<Send>.
+ *
+ * @deprecated Use the client returned by `ingress.serviceSendClient(def)` /
+ * `ingress.objectSendClient(def, key)` from `@restatedev/restate-sdk-clients`.
+ */
 export type IngressSendHandlerClient<
   H extends Record<string, HandlerDescriptor>,
 > = {
@@ -96,9 +114,13 @@ export type IngressSendHandlerClient<
 };
 
 // =============================================================================
-// client / sendClient
+// client / sendClient — thin wrappers over the regular ingress client.
 // =============================================================================
 
+/**
+ * @deprecated Call the regular ingress client directly: `ingress.client(def)`
+ * for a service, or `ingress.client(def, key)` for a virtual object / workflow.
+ */
 export function client<H extends Record<string, HandlerDescriptor>>(
   ingress: GenIngress,
   def: Descriptor<string, H, "service">
@@ -113,9 +135,15 @@ export function client(
   def: Descriptor<string, any, any>,
   key?: string
 ): IngressHandlerClient<any> {
-  return makeIngressClient(ingress, def, key);
+  return (key === undefined
+    ? ingress.client(def as any)
+    : ingress.client(def as any, key)) as unknown as IngressHandlerClient<any>;
 }
 
+/**
+ * @deprecated Call the regular ingress client directly: `ingress.sendClient(def)`
+ * for a service, or `ingress.sendClient(def, key)` for a virtual object / workflow.
+ */
 export function sendClient<H extends Record<string, HandlerDescriptor>>(
   ingress: GenIngress,
   def: Descriptor<string, H, "service">
@@ -130,13 +158,17 @@ export function sendClient(
   def: Descriptor<string, any, any>,
   key?: string
 ): IngressSendHandlerClient<any> {
-  return makeIngressSendClient(ingress, def, key);
+  return (key === undefined
+    ? ingress.sendClient(def as any)
+    : ingress.sendClient(
+        def as any,
+        key
+      )) as unknown as IngressSendHandlerClient<any>;
 }
 
 /**
- * Ingress client bundle bound to a specific scope, returned by {@link scope}.
- * Mirrors the in-handler `scope(...)` surface: same `client`/`sendClient`
- * overloads, but every call/send routes within the bound scope.
+ * @deprecated Use `ingress.scope(scopeKey)` from
+ * `@restatedev/restate-sdk-clients` and its `client`/`sendClient` methods.
  */
 export interface ScopedGenIngress {
   client<H extends Record<string, HandlerDescriptor>>(
@@ -156,117 +188,20 @@ export interface ScopedGenIngress {
 }
 
 /**
- * Route all ingress calls/sends through a named scope. The in-handler
- * `scope(scopeKey)` and this `scope(ingress, scopeKey)` produce the same
- * `.client(def)` / `.sendClient(def)` shape, so handler and ingress code
- * read identically (modulo the explicit `ingress`).
- *
- * @example
- *   await clients.scope(ingress, "tenant-123").client(Greeter).greet(name);
- *   await clients.scope(ingress, "tenant-123").client(Cart, "cart-42").add(item);
+ * @deprecated Use `ingress.scope(scopeKey)` from
+ * `@restatedev/restate-sdk-clients`, then `.client(def)` / `.sendClient(def)`
+ * on the returned scoped ingress.
  */
 export function scope(ingress: GenIngress, scopeKey: string): ScopedGenIngress {
+  const scoped = ingress.scope(scopeKey);
   return {
     client: (def: Descriptor<string, any, any>, key?: string) =>
-      makeIngressClient(ingress, def, key, scopeKey),
+      (key === undefined
+        ? scoped.client(def as any)
+        : scoped.client(def as any, key)) as unknown,
     sendClient: (def: Descriptor<string, any, any>, key?: string) =>
-      makeIngressSendClient(ingress, def, key, scopeKey),
+      (key === undefined
+        ? scoped.sendClient(def as any)
+        : scoped.sendClient(def as any, key)) as unknown,
   } as ScopedGenIngress;
-}
-
-function makeIngressClient(
-  ingress: GenIngress,
-  def: Descriptor<string, any, any>,
-  key?: string,
-  scope?: string
-): IngressHandlerClient<any> {
-  return new Proxy({} as any, {
-    get(_target, methodName: string) {
-      return (...args: unknown[]) => {
-        const { parameter, opts } = optsFromArgs(args);
-        const desc = def._handlers[methodName] as HandlerDescriptor | undefined;
-        const mergedOpts = Opts.from({
-          ...opts?.opts,
-          input: opts?.opts?.input ?? desc?._inputSerde,
-          output: opts?.opts?.output ?? desc?._outputSerde,
-        });
-        return ingress.call<unknown, unknown>({
-          service: def.name,
-          handler: methodName,
-          parameter,
-          key,
-          scope,
-          opts: mergedOpts,
-        });
-      };
-    },
-  });
-}
-
-function makeIngressSendClient(
-  ingress: GenIngress,
-  def: Descriptor<string, any, any>,
-  key?: string,
-  scope?: string
-): IngressSendHandlerClient<any> {
-  return new Proxy({} as any, {
-    get(_target, methodName: string) {
-      return (...args: unknown[]) => {
-        const { parameter, opts } = optsFromArgs(args);
-        const desc = def._handlers[methodName] as HandlerDescriptor | undefined;
-        const mergedOpts = SendOpts.from<unknown>({
-          ...opts?.opts,
-          input: opts?.opts?.input ?? desc?._inputSerde,
-        } as any);
-        return ingress.send({
-          service: def.name,
-          handler: methodName,
-          parameter,
-          key,
-          scope,
-          opts: mergedOpts,
-        });
-      };
-    },
-  });
-}
-
-// =============================================================================
-// optsFromArgs — parses (input, opts?) or (opts?) call signatures
-// =============================================================================
-
-function optsFromArgs(args: unknown[]): {
-  parameter?: unknown;
-  opts?: Opts<unknown, unknown> | SendOpts<unknown>;
-} {
-  let parameter: unknown;
-  let opts: Opts<unknown, unknown> | SendOpts<unknown> | undefined;
-  switch (args.length) {
-    case 0:
-      break;
-    case 1:
-      if (args[0] instanceof Opts) {
-        opts = args[0];
-      } else if (args[0] instanceof SendOpts) {
-        opts = args[0];
-      } else {
-        parameter = args[0];
-      }
-      break;
-    case 2:
-      parameter = args[0];
-      if (args[1] instanceof Opts) {
-        opts = args[1];
-      } else if (args[1] instanceof SendOpts) {
-        opts = args[1];
-      } else {
-        throw new TypeError(
-          "The second argument must be either Opts or SendOpts"
-        );
-      }
-      break;
-    default:
-      throw new TypeError("unexpected number of arguments");
-  }
-  return { parameter, opts };
 }

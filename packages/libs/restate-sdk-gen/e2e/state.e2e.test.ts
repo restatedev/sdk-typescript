@@ -27,12 +27,8 @@
 
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { RestateTestEnvironment } from "@restatedev/restate-sdk-testcontainers";
-import {
-  object,
-  state,
-  sharedState,
-  clients,
-} from "@restatedev/restate-sdk-gen";
+import { object, state, sharedState } from "@restatedev/restate-sdk-gen";
+import { connect, type Ingress } from "@restatedev/restate-sdk-clients";
 
 // Typed-state shape for the counter object. Keys and value types here
 // flow through to state<CounterState>() at every call site below.
@@ -91,14 +87,14 @@ const modes = [
 
 describe.each(modes)("state — $name mode", ({ alwaysReplay }) => {
   let env: RestateTestEnvironment;
-  let ingress: clients.GenIngress;
+  let ingress: Ingress;
 
   beforeAll(async () => {
     env = await RestateTestEnvironment.start({
       services: [counterObj],
       alwaysReplay,
     });
-    ingress = clients.connect({ url: env.baseUrl() });
+    ingress = connect({ url: env.baseUrl() });
   });
 
   afterAll(async () => {
@@ -107,7 +103,7 @@ describe.each(modes)("state — $name mode", ({ alwaysReplay }) => {
 
   test("get/set: counter accumulates across calls", async () => {
     const key = `acc-${alwaysReplay ? "replay" : "default"}`;
-    const client = clients.client(ingress, counterObj, key);
+    const client = ingress.client(counterObj, key);
     expect(await client.add(1)).toBe(1);
     expect(await client.add(2)).toBe(3);
     expect(await client.add(7)).toBe(10);
@@ -117,8 +113,8 @@ describe.each(modes)("state — $name mode", ({ alwaysReplay }) => {
   test("isolation: each VO key has independent state", async () => {
     const k1 = `iso1-${alwaysReplay ? "replay" : "default"}`;
     const k2 = `iso2-${alwaysReplay ? "replay" : "default"}`;
-    const c1 = clients.client(ingress, counterObj, k1);
-    const c2 = clients.client(ingress, counterObj, k2);
+    const c1 = ingress.client(counterObj, k1);
+    const c2 = ingress.client(counterObj, k2);
     await c1.add(5);
     await c2.add(11);
     expect(await c1.current()).toBe(5);
@@ -127,7 +123,7 @@ describe.each(modes)("state — $name mode", ({ alwaysReplay }) => {
 
   test("keys(): lists all set keys, drops cleared ones", async () => {
     const key = `keys-${alwaysReplay ? "replay" : "default"}`;
-    const client = clients.client(ingress, counterObj, key);
+    const client = ingress.client(counterObj, key);
     await client.add(1);
     await client.setSecondary("hello");
     expect((await client.keys()).sort()).toEqual(["count", "secondary"]);
@@ -137,7 +133,7 @@ describe.each(modes)("state — $name mode", ({ alwaysReplay }) => {
 
   test("clearAll: wipes all state for this object", async () => {
     const key = `clear-${alwaysReplay ? "replay" : "default"}`;
-    const client = clients.client(ingress, counterObj, key);
+    const client = ingress.client(counterObj, key);
     await client.add(42);
     await client.setSecondary("alongside");
     expect((await client.keys()).sort()).toEqual(["count", "secondary"]);

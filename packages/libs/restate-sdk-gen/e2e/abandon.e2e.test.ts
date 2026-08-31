@@ -30,8 +30,8 @@ import {
   race,
   sleep,
   type Operation,
-  clients,
 } from "@restatedev/restate-sdk-gen";
+import { connect, type Ingress } from "@restatedev/restate-sdk-clients";
 
 const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -97,14 +97,14 @@ const modes = [
 
 describe.each(modes)("abandon — $name mode", ({ alwaysReplay }) => {
   let env: RestateTestEnvironment;
-  let ingress: clients.GenIngress;
+  let ingress: Ingress;
 
   beforeAll(async () => {
     env = await RestateTestEnvironment.start({
       services: [abandonSvc],
       alwaysReplay,
     });
-    ingress = clients.connect({ url: env.baseUrl() });
+    ingress = connect({ url: env.baseUrl() });
   });
 
   afterAll(async () => {
@@ -112,12 +112,12 @@ describe.each(modes)("abandon — $name mode", ({ alwaysReplay }) => {
   });
 
   test("fire-and-forget spawn parked on a never-settling source does not hang the handler", async () => {
-    const client = clients.client(ingress, abandonSvc);
+    const client = ingress.client(abandonSvc);
     expect(await client.fireAndForget()).toBe("main-result");
   });
 
   test("race loser routine parked on a never-settling source is abandoned, winner returned", async () => {
-    const client = clients.client(ingress, abandonSvc);
+    const client = ingress.client(abandonSvc);
     expect(await client.raceWithStuckLoser()).toBe("fast");
   });
 });

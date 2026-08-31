@@ -8,6 +8,12 @@ import type {
   Serde,
   Duration,
   JournalValueCodec,
+  HandlerDescriptor,
+  ServiceDescriptor,
+  ObjectDescriptor,
+  WorkflowDescriptor,
+  InferInput,
+  InferOutput,
 } from "@restatedev/restate-sdk-core";
 import { millisOrDurationToMillis } from "@restatedev/restate-sdk-core";
 
@@ -48,19 +54,57 @@ export interface Ingress {
   ): IngressClient<VirtualObject<D>>;
 
   /**
-   * Create a client from a {@link ServiceDefinition}.
+   * Create a send client from a {@link ServiceDefinition}.
    */
   serviceSendClient<D>(
     opts: ServiceDefinitionFrom<D>
   ): IngressSendClient<Service<D>>;
 
   /**
-   * Create a client from a {@link VirtualObjectDefinition}.
+   * Create a send client from a {@link VirtualObjectDefinition}.
    */
   objectSendClient<D>(
     opts: VirtualObjectDefinitionFrom<D>,
     key: string
   ): IngressSendClient<VirtualObject<D>>;
+
+  /**
+   * Create a request/response client from a service interface / `Descriptor`.
+   *
+   * @example
+   * ```ts
+   * ingress.client(greeter).greet(req);      // service
+   * ingress.client(counter, "k").add(1);     // virtual object / workflow
+   * ```
+   */
+  client<P extends string, H extends Record<string, HandlerDescriptor>>(
+    serviceInterface: ServiceDescriptor<P, H>
+  ): IngressClientFromDescriptors<H>;
+  client<P extends string, H extends Record<string, HandlerDescriptor>>(
+    objectOrWorkflowInterface:
+      | ObjectDescriptor<P, H>
+      | WorkflowDescriptor<P, H>,
+    key: string
+  ): IngressClientFromDescriptors<H>;
+
+  /**
+   * Send-client (one-way) counterpart of {@link Ingress.client}.
+   *
+   * @example
+   * ```ts
+   * ingress.sendClient(greeter).greet(req);
+   * ingress.sendClient(counter, "k").add(1);
+   * ```
+   */
+  sendClient<P extends string, H extends Record<string, HandlerDescriptor>>(
+    serviceInterface: ServiceDescriptor<P, H>
+  ): IngressSendClientFromDescriptors<H>;
+  sendClient<P extends string, H extends Record<string, HandlerDescriptor>>(
+    objectOrWorkflowInterface:
+      | ObjectDescriptor<P, H>
+      | WorkflowDescriptor<P, H>,
+    key: string
+  ): IngressSendClientFromDescriptors<H>;
 
   /**
    * Resolve an awakeable from the ingress client.
@@ -188,6 +232,8 @@ export type ScopedIngress = Pick<
   | "objectClient"
   | "objectSendClient"
   | "workflowClient"
+  | "client"
+  | "sendClient"
 >;
 
 export interface IngressCallOptions<I = unknown, O = unknown> {
@@ -295,6 +341,37 @@ export type IngressClient<M> = {
   ) => PromiseLike<infer O>
     ? (...args: [...P, ...[opts?: Opts<InferArgType<P>, O>]]) => PromiseLike<O>
     : never;
+};
+
+/**
+ * Typed ingress request/response client derived from a service interface's
+ * handler descriptor map `H` (see `iface` in `@restatedev/restate-sdk-core`).
+ * Recovers the input/output types directly from the descriptors, so a code-free
+ * interface value produces a fully typed client that reuses the declared serdes.
+ */
+export type IngressClientFromDescriptors<
+  H extends Record<string, HandlerDescriptor>,
+> = {
+  readonly [K in keyof H]: [InferInput<H[K]>] extends [void]
+    ? (
+        opts?: Opts<InferInput<H[K]>, InferOutput<H[K]>>
+      ) => Promise<InferOutput<H[K]>>
+    : (
+        input: InferInput<H[K]>,
+        opts?: Opts<InferInput<H[K]>, InferOutput<H[K]>>
+      ) => Promise<InferOutput<H[K]>>;
+};
+
+/** One-way (send) counterpart of {@link IngressClientFromDescriptors}. */
+export type IngressSendClientFromDescriptors<
+  H extends Record<string, HandlerDescriptor>,
+> = {
+  readonly [K in keyof H]: [InferInput<H[K]>] extends [void]
+    ? (opts?: SendOpts<InferInput<H[K]>>) => Promise<Send<InferOutput<H[K]>>>
+    : (
+        input: InferInput<H[K]>,
+        opts?: SendOpts<InferInput<H[K]>>
+      ) => Promise<Send<InferOutput<H[K]>>>;
 };
 
 // eslint-disable-next-line @typescript-eslint/no-namespace

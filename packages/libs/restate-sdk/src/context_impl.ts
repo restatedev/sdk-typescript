@@ -45,7 +45,6 @@ import {
   TerminalError,
   UNKNOWN_ERROR_CODE,
 } from "./types/errors.js";
-import type { Client, SendClient } from "./types/rpc.js";
 import {
   HandlerKind,
   makeRpcCallProxy,
@@ -55,12 +54,7 @@ import type {
   Duration,
   JournalValueCodec,
   Serde,
-  Service,
-  ServiceDefinitionFrom,
-  VirtualObject,
-  VirtualObjectDefinitionFrom,
-  Workflow,
-  WorkflowDefinitionFrom,
+  HandlerDescriptor,
 } from "@restatedev/restate-sdk-core";
 import { millisOrDurationToMillis, serde } from "@restatedev/restate-sdk-core";
 import { RandImpl } from "./utils/rand.js";
@@ -77,6 +71,15 @@ import { ExternalProgressChannel } from "./utils/external_progress_channel.js";
 import type { ContextInternal } from "./internal.js";
 import { InputReader, OutputWriter } from "./endpoint/handlers/types.js";
 import { ExecutionOptions } from "./endpoint/components.js";
+
+/**
+ * The runtime shape a client method needs. implement() and type manipulations respect this.
+ */
+type ClientTarget = {
+  name: string;
+  _handlers?: Record<string, HandlerDescriptor>;
+  _kind?: "service" | "object" | "workflow";
+};
 
 export class ContextImpl
   implements ObjectContext, WorkflowContext, ContextInternal
@@ -384,132 +387,163 @@ export class ContextImpl
     }
   }
 
-  serviceClient<D>({ name }: ServiceDefinitionFrom<D>): Client<Service<D>> {
+  // The public overloaded signatures (classic definition OR service interface)
+  // live on the Context interface; these implementations are permissive and
+  // forward `def._handlers` (present on interface / implement() values, absent
+  // on classic definitions → serde reuse is a no-op there).
+  serviceClient(def: ClientTarget): any {
     return makeRpcCallProxy(
       (call) => this.genericCall(call),
       this.defaultSerde,
-
-      name
+      def.name,
+      undefined,
+      undefined,
+      def._handlers
     );
   }
 
-  objectClient<D>(
-    { name }: VirtualObjectDefinitionFrom<D>,
-    key: string
-  ): Client<VirtualObject<D>> {
+  objectClient(def: ClientTarget, key: string): any {
     return makeRpcCallProxy(
       (call) => this.genericCall(call),
       this.defaultSerde,
-      name,
-      key
+      def.name,
+      key,
+      undefined,
+      def._handlers
     );
   }
 
-  workflowClient<D>(
-    { name }: WorkflowDefinitionFrom<D>,
-    key: string
-  ): Client<Workflow<D>> {
+  workflowClient(def: ClientTarget, key: string): any {
     return makeRpcCallProxy(
       (call) => this.genericCall(call),
       this.defaultSerde,
-      name,
-      key
+      def.name,
+      key,
+      undefined,
+      def._handlers
     );
   }
 
-  public serviceSendClient<D>({
-    name,
-  }: ServiceDefinitionFrom<D>): SendClient<Service<D>> {
+  public serviceSendClient(def: ClientTarget): any {
     return makeRpcSendProxy(
       (send) => this.genericSend(send),
       this.defaultSerde,
-      name,
-      undefined
+      def.name,
+      undefined,
+      undefined,
+      def._handlers
     );
   }
 
-  public objectSendClient<D>(
-    { name }: VirtualObjectDefinitionFrom<D>,
-    key: string
-  ): SendClient<VirtualObject<D>> {
+  public objectSendClient(def: ClientTarget, key: string): any {
     return makeRpcSendProxy(
       (send) => this.genericSend(send),
       this.defaultSerde,
-      name,
-      key
+      def.name,
+      key,
+      undefined,
+      def._handlers
     );
   }
 
-  workflowSendClient<D>(
-    { name }: WorkflowDefinitionFrom<D>,
-    key: string
-  ): SendClient<Workflow<D>> {
+  workflowSendClient(def: ClientTarget, key: string): any {
     return makeRpcSendProxy(
       (send) => this.genericSend(send),
       this.defaultSerde,
-      name,
-      key
+      def.name,
+      key,
+      undefined,
+      def._handlers
     );
+  }
+
+  // Factory that dispatches on the interface's kind — mirrors the ingress
+  // client's `client(def)` / `sendClient(def)` ergonomics.
+  client(def: ClientTarget, key?: string): any {
+    return def._kind === "service"
+      ? this.serviceClient(def)
+      : this.objectClient(def, key as string);
+  }
+
+  sendClient(def: ClientTarget, key?: string): any {
+    return def._kind === "service"
+      ? this.serviceSendClient(def)
+      : this.objectSendClient(def, key as string);
   }
 
   scope(scopeKey: string): ScopedContext {
     return {
-      serviceClient: <D>({ name }: ServiceDefinitionFrom<D>) =>
-        makeRpcCallProxy<Client<Service<D>>>(
+      serviceClient: (def: ClientTarget): any =>
+        makeRpcCallProxy(
           (call) => this.genericCall(call),
           this.defaultSerde,
-          name,
+          def.name,
           undefined,
-          scopeKey
+          scopeKey,
+          def._handlers
         ),
-      serviceSendClient: <D>({ name }: ServiceDefinitionFrom<D>) =>
-        makeRpcSendProxy<SendClient<Service<D>>>(
+      serviceSendClient: (def: ClientTarget): any =>
+        makeRpcSendProxy(
           (send) => this.genericSend(send),
           this.defaultSerde,
-          name,
+          def.name,
           undefined,
-          scopeKey
+          scopeKey,
+          def._handlers
         ),
-      objectClient: <D>(
-        { name }: VirtualObjectDefinitionFrom<D>,
-        key: string
-      ) =>
-        makeRpcCallProxy<Client<VirtualObject<D>>>(
+      objectClient: (def: ClientTarget, key: string): any =>
+        makeRpcCallProxy(
           (call) => this.genericCall(call),
           this.defaultSerde,
-          name,
+          def.name,
           key,
-          scopeKey
+          scopeKey,
+          def._handlers
         ),
-      objectSendClient: <D>(
-        { name }: VirtualObjectDefinitionFrom<D>,
-        key: string
-      ) =>
-        makeRpcSendProxy<SendClient<VirtualObject<D>>>(
+      objectSendClient: (def: ClientTarget, key: string): any =>
+        makeRpcSendProxy(
           (send) => this.genericSend(send),
           this.defaultSerde,
-          name,
+          def.name,
           key,
-          scopeKey
+          scopeKey,
+          def._handlers
         ),
-      workflowClient: <D>({ name }: WorkflowDefinitionFrom<D>, key: string) =>
-        makeRpcCallProxy<Client<Workflow<D>>>(
+      workflowClient: (def: ClientTarget, key: string): any =>
+        makeRpcCallProxy(
           (call) => this.genericCall(call),
           this.defaultSerde,
-          name,
+          def.name,
           key,
-          scopeKey
+          scopeKey,
+          def._handlers
         ),
-      workflowSendClient: <D>(
-        { name }: WorkflowDefinitionFrom<D>,
-        key: string
-      ) =>
-        makeRpcSendProxy<SendClient<Workflow<D>>>(
+      workflowSendClient: (def: ClientTarget, key: string): any =>
+        makeRpcSendProxy(
           (send) => this.genericSend(send),
           this.defaultSerde,
-          name,
+          def.name,
           key,
-          scopeKey
+          scopeKey,
+          def._handlers
+        ),
+      client: (def: ClientTarget, key?: string): any =>
+        makeRpcCallProxy(
+          (call) => this.genericCall(call),
+          this.defaultSerde,
+          def.name,
+          def._kind === "service" ? undefined : key,
+          scopeKey,
+          def._handlers
+        ),
+      sendClient: (def: ClientTarget, key?: string): any =>
+        makeRpcSendProxy(
+          (send) => this.genericSend(send),
+          this.defaultSerde,
+          def.name,
+          def._kind === "service" ? undefined : key,
+          scopeKey,
+          def._handlers
         ),
     };
   }

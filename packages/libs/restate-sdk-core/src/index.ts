@@ -46,3 +46,20 @@ export type {
   StandardSchemaV1,
   StandardJSONSchemaV1,
 } from "./standard_schema.js";
+
+export { iface, makeHandlerDescriptor } from "./interface.js";
+export type {
+  ServiceInterface,
+  HandlerDescriptor,
+  Descriptor,
+  ServiceDescriptor,
+  ObjectDescriptor,
+  WorkflowDescriptor,
+  ImplementedServiceDefinition,
+  ImplementedObjectDefinition,
+  ImplementedWorkflowDefinition,
+  ImplementedDefinition,
+  InferInput,
+  InferOutput,
+  SerdeType,
+} from "./interface.js";

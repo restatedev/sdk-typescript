@@ -33,6 +33,8 @@ export type {
   IngressClient,
   IngressSendClient,
   IngressWorkflowClient,
+  IngressClientFromDescriptors,
+  IngressSendClientFromDescriptors,
   IngressCallOptions,
   RetryPolicy,
   RetryFailure,

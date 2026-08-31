@@ -26,8 +26,8 @@ import {
   race,
   select,
   type Operation,
-  clients,
 } from "@restatedev/restate-sdk-gen";
+import { connect, type Ingress } from "@restatedev/restate-sdk-clients";
 
 const wait = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -153,14 +153,14 @@ const modes = [
 
 describe.each(modes)("concurrency — $name mode", ({ alwaysReplay }) => {
   let env: RestateTestEnvironment;
-  let ingress: clients.GenIngress;
+  let ingress: Ingress;
 
   beforeAll(async () => {
     env = await RestateTestEnvironment.start({
       services: [concurrencySvc],
       alwaysReplay,
     });
-    ingress = clients.connect({ url: env.baseUrl() });
+    ingress = connect({ url: env.baseUrl() });
   });
 
   afterAll(async () => {
@@ -168,27 +168,27 @@ describe.each(modes)("concurrency — $name mode", ({ alwaysReplay }) => {
   });
 
   test("all returns both values in input order", async () => {
-    const client = clients.client(ingress, concurrencySvc);
+    const client = ingress.client(concurrencySvc);
     expect(await client.all()).toBe("alpha+bravo");
   });
 
   test("race returns the fast one", async () => {
-    const client = clients.client(ingress, concurrencySvc);
+    const client = ingress.client(concurrencySvc);
     expect(await client.race()).toBe("fast-result");
   });
 
   test("select returns the winning tag and the value via r.future", async () => {
-    const client = clients.client(ingress, concurrencySvc);
+    const client = ingress.client(concurrencySvc);
     expect(await client.selectTagged()).toBe("fast-won:F");
   });
 
   test("spawn pair: all over routine-backed futures", async () => {
-    const client = clients.client(ingress, concurrencySvc);
+    const client = ingress.client(concurrencySvc);
     expect(await client.spawnPair()).toBe("A|B");
   });
 
   test("mixed sources: run + spawn in one all", async () => {
-    const client = clients.client(ingress, concurrencySvc);
+    const client = ingress.client(concurrencySvc);
     expect(await client.mixedAllOf()).toBe("from-run + from-spawn");
   });
 });

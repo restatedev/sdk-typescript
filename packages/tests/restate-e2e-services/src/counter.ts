@@ -9,11 +9,8 @@
 
 import * as restate from "@restatedev/restate-sdk";
 import { REGISTRY } from "./services.js";
-import type { AwakeableHolder } from "./awakeable_holder.js";
 
 const COUNTER_KEY = "counter";
-
-const AwakeableHolder: AwakeableHolder = { name: "AwakeableHolder" };
 
 const service = restate.object({
   name: "Counter",
