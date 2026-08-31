@@ -1,5 +1,16 @@
 # @restatedev/restate-sdk-cloudflare-workers
 
+## 1.17.0
+
+### Minor Changes
+
+- Ported restate.iface to define service interfaces without depending on the SDK
+
+### Patch Changes
+
+- Updated dependencies
+  - @restatedev/restate-sdk-core@1.17.0
+
 ## 1.16.9
 
 ### Patch Changes

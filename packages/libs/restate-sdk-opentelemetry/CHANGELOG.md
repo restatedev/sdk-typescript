@@ -1,5 +1,11 @@
 # @restatedev/restate-sdk-opentelemetry
 
+## 1.17.0
+
+### Minor Changes
+
+- Ported restate.iface to define service interfaces without depending on the SDK
+
 ## 1.16.9
 
 ### Patch Changes

@@ -58,11 +58,11 @@ This library follows [Semantic Versioning](https://semver.org/).
 
 The compatibility with Restate is described in the following table:
 
-| Restate Server\sdk-typescript | 1.11 - 1.14 | 1.15 - 1.16 |
+| Restate Server\sdk-typescript | 1.11 - 1.14 | 1.15 - 1.17 |
 |-------------------------------|-------------|-------------|
-| 1.5                           | ✅           | ✅           |
-| 1.6                           | ✅           | ✅           |
-| 1.7                           | ✅           | ✅           |
+| 1.5                           | ✅           | ✅          |
+| 1.6                           | ✅           | ✅          |
+| 1.7                           | ✅           | ✅          |
 
 Some features require a minimum version of both Restate and the SDK:
 
