@@ -16,6 +16,8 @@ import type {
   ObjectSharedContext,
   WorkflowContext,
   WorkflowSharedContext,
+  TypedState,
+  UntypedState,
 } from "../context.js";
 import type {
   ServiceDefinition,
@@ -59,10 +61,10 @@ export type ServiceImplHandlers<H extends Record<string, HandlerDescriptor>> = {
 };
 
 /** @internal Object handler contexts follow the descriptor's shared flag. */
-export type ObjectImplHandlers<H extends Record<string, HandlerDescriptor>> = {
+export type ObjectImplHandlers<H extends Record<string, HandlerDescriptor>, S extends TypedState> = {
   [K in keyof H]: H[K] extends HandlerDescriptor<any, any, infer Shared>
     ? FnOf<
-        Shared extends true ? ObjectSharedContext : ObjectContext,
+        Shared extends true ? ObjectSharedContext<S> : ObjectContext<S>,
         InferInput<H[K]>,
         InferOutput<H[K]>
       >
@@ -70,11 +72,11 @@ export type ObjectImplHandlers<H extends Record<string, HandlerDescriptor>> = {
 };
 
 /** @internal `run` gets a WorkflowContext; every other handler a shared one. */
-export type WorkflowImplHandlers<H extends Record<string, HandlerDescriptor>> =
+export type WorkflowImplHandlers<H extends Record<string, HandlerDescriptor>, S extends TypedState> =
   {
     [K in keyof H]: K extends "run"
-      ? FnOf<WorkflowContext, InferInput<H[K]>, InferOutput<H[K]>>
-      : FnOf<WorkflowSharedContext, InferInput<H[K]>, InferOutput<H[K]>>;
+      ? FnOf<WorkflowContext<S>, InferInput<H[K]>, InferOutput<H[K]>>
+      : FnOf<WorkflowSharedContext<S>, InferInput<H[K]>, InferOutput<H[K]>>;
   };
 
 /** @internal */
@@ -111,32 +113,42 @@ export function implement<
 export function implement<
   P extends string,
   H extends Record<string, HandlerDescriptor>,
+  S extends TypedState = UntypedState,
 >(
   objectInterface: ObjectDescriptor<P, H>,
   config: {
-    handlers: ObjectImplHandlers<H>;
+    handlers: ObjectImplHandlers<H, S>;
     description?: string;
     metadata?: Record<string, string>;
     options?: ObjectOptions & {
       handlers?: Partial<Record<keyof H, ObjectPerHandlerOpts>>;
+      /**
+       * Use `restate.typed<YourStateType>()` to populate this
+       */
+      typedState?: S | undefined;
     };
   }
-): VirtualObjectDefinition<P, ObjectImplHandlers<H>> & ObjectDescriptor<P, H>;
+): VirtualObjectDefinition<P, ObjectImplHandlers<H, S>> & ObjectDescriptor<P, H>;
 
 export function implement<
   P extends string,
   H extends Record<string, HandlerDescriptor>,
+  S extends TypedState = UntypedState,
 >(
   workflowInterface: WorkflowDescriptor<P, H>,
   config: {
-    handlers: WorkflowImplHandlers<H>;
+    handlers: WorkflowImplHandlers<H, S>;
     description?: string;
     metadata?: Record<string, string>;
     options?: WorkflowOptions & {
       handlers?: Partial<Record<keyof H, WorkflowPerHandlerOpts>>;
+      /**
+       * Use `restate.typed<YourStateType>()` to populate this
+       */
+      typedState?: S | undefined;
     };
   }
-): WorkflowDefinition<P, WorkflowImplHandlers<H>> & WorkflowDescriptor<P, H>;
+): WorkflowDefinition<P, WorkflowImplHandlers<H, S>> & WorkflowDescriptor<P, H>;
 
 export function implement(
   contract: Descriptor<any, any, any>,
@@ -196,4 +208,8 @@ export function implement(
     _kind: contract._kind,
     _handlers: contract._handlers,
   });
+}
+
+export function typed<S extends TypedState>(): S | undefined {
+  return undefined;
 }
