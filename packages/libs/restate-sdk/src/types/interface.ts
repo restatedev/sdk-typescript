@@ -122,11 +122,11 @@ export function implement<
     metadata?: Record<string, string>;
     options?: ObjectOptions & {
       handlers?: Partial<Record<keyof H, ObjectPerHandlerOpts>>;
-      /**
-       * Use `restate.typed<YourStateType>()` to populate this
-       */
-      typedState?: S | undefined;
     };
+    /**
+     * Use `restate.state<YourStateType>()` to populate this.
+     */
+    states?: S | null;
   }
 ): VirtualObjectDefinition<P, ObjectImplHandlers<H, S>> & ObjectDescriptor<P, H>;
 
@@ -142,11 +142,11 @@ export function implement<
     metadata?: Record<string, string>;
     options?: WorkflowOptions & {
       handlers?: Partial<Record<keyof H, WorkflowPerHandlerOpts>>;
-      /**
-       * Use `restate.typed<YourStateType>()` to populate this
-       */
-      typedState?: S | undefined;
     };
+    /**
+     * Use `restate.state<YourStateType>()` to populate this.
+     */
+    states?: S | null;
   }
 ): WorkflowDefinition<P, WorkflowImplHandlers<H, S>> & WorkflowDescriptor<P, H>;
 
@@ -210,6 +210,13 @@ export function implement(
   });
 }
 
-export function typed<S extends TypedState>(): S | undefined {
-  return undefined;
+/**
+ * Define the value of TypedState for a Virtual Object or Workflow.
+ */
+export function state<S extends TypedState>(): S | null {
+  /**
+   * @internal In future, add a parameter `default?: Partial<S>` to allow default state values, then
+   * `return default ?? null`
+   */
+  return null;
 }
