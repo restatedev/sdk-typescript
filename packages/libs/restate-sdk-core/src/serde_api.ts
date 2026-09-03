@@ -260,7 +260,7 @@ function isStandardJSONSchemaV1(standard: StandardSchemaV1.Props): boolean {
 }
 
 export namespace serde {
-  export class JsonSerde<T> implements Serde<T | undefined> {
+  export class JsonSerde<T> implements Serde<T> {
     contentType = "application/json";
 
     constructor(readonly jsonSchema?: object) {}
@@ -272,13 +272,14 @@ export namespace serde {
       return new TextEncoder().encode(JSON.stringify(value));
     }
 
-    deserialize(data: Uint8Array): T | undefined {
+    deserialize(data: Uint8Array): T {
       if (data.length === 0) {
-        return undefined;
+        return undefined as T;
       }
       return JSON.parse(new TextDecoder().decode(data)) as T;
     }
 
+    /** @deprecated **/
     schema<U>(schema: object): Serde<U> {
       return new JsonSerde<U>(schema) as Serde<U>;
     }
