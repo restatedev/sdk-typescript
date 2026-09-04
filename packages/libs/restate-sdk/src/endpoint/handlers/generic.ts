@@ -31,7 +31,7 @@ import { X_RESTATE_SERVER } from "../../user_agent.js";
 import { CommandError, ContextImpl } from "../../context_impl.js";
 import { restoreError, sanitizeError } from "../../error_sanitization.js";
 import type { InvocationId, Request } from "../../context.js";
-import * as vm from "./vm/sdk_shared_core_wasm_bindings.js";
+import * as vm from "./vm/index.js";
 import { HandlerKind } from "../../types/rpc.js";
 import { createLogger, type Logger } from "../../logging/logger.js";
 import { DEFAULT_CONSOLE_LOGGER_LOG_LEVEL } from "../../logging/console_logger_transport.js";
@@ -64,8 +64,21 @@ import {
   simpleResponse,
   tryCreateContextualLogger,
 } from "./utils.js";
-import { destroyLogger, registerLogger } from "./core_logging.js";
+import {
+  destroyLogger,
+  fatal,
+  registerLogger,
+  vm_log,
+} from "./core_logging.js";
 import type { Hooks } from "../../hooks.js";
+
+// When running on the native (napi) shared-core, wire the log callbacks it
+// invokes. The WASM build instead imports vm_log/fatal statically via
+// wasm-bindgen `raw_module`, where registerLogCallbacks is absent and this
+// call no-ops. This runs here (rather than in core_logging.ts) to stay outside
+// the wasm-bindings <-> core_logging import cycle, so the selector's exports
+// are fully initialized by the time we register.
+vm.registerLogCallbacks?.(vm_log, fatal);
 
 // Hidden symbol key used by first-party hooks to read the live
 // replay/processing phase without widening the public HooksProvider API.

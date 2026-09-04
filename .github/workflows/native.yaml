@@ -1,0 +1,97 @@
+name: Build native shared-core
+
+# Cross-compiles the napi shared-core addon (@restatedev/restate-sdk-shared-core-native)
+# for every published target and uploads one `bindings-<target>` artifact per row.
+# Reusable: called by release.yml before publishing the per-platform npm packages.
+#
+# Target matrix mirrors the Java SDK's native.yaml: linux gnu+musl (x64/arm64)
+# and macOS arm64. No Windows (see the migration plan). Other Node platforms
+# fall back to the WASM build bundled in @restatedev/restate-sdk.
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: packages/libs/restate-sdk-shared-core-native
+
+jobs:
+  build:
+    if: github.repository_owner == 'restatedev'
+    strategy:
+      fail-fast: false
+      matrix:
+        settings:
+          - host: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            # napi-rs debian builder ships an old-enough glibc for broad compat.
+            docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-debian
+            build: napi build --release --target x86_64-unknown-linux-gnu
+          - host: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-debian-aarch64
+            build: napi build --release --target aarch64-unknown-linux-gnu
+          - host: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-alpine
+            build: napi build --release --target x86_64-unknown-linux-musl
+          - host: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+            docker: ghcr.io/napi-rs/napi-rs/nodejs-rust:lts-alpine
+            build: napi build --release --target aarch64-unknown-linux-musl
+          - host: macos-14
+            target: aarch64-apple-darwin
+            build: napi build --release --target aarch64-apple-darwin
+    name: ${{ matrix.settings.target }}
+    runs-on: ${{ matrix.settings.host }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.1.3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: .
+
+      # --- Linux: build inside the napi-rs builder image (glibc/musl + cross) ---
+      - name: Build in docker
+        if: matrix.settings.docker
+        uses: addnab/docker-run-action@v3
+        with:
+          image: ${{ matrix.settings.docker }}
+          options: >-
+            --user 0:0
+            -v ${{ github.workspace }}:/build
+            -w /build/packages/libs/restate-sdk-shared-core-native
+          run: |
+            rustup target add ${{ matrix.settings.target }}
+            npx --no-install ${{ matrix.settings.build }}
+
+      # --- macOS: build natively on the runner ---
+      - name: Setup Rust
+        if: ${{ !matrix.settings.docker }}
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          target: ${{ matrix.settings.target }}
+      - name: Build
+        if: ${{ !matrix.settings.docker }}
+        run: npx --no-install ${{ matrix.settings.build }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bindings-${{ matrix.settings.target }}
+          path: packages/libs/restate-sdk-shared-core-native/*.node
+          if-no-files-found: error
+          retention-days: 3
