@@ -2,7 +2,7 @@ name: Release
 
 on:
   push:
-    branches: [main, release-**, no-wasm]
+    branches: [main, release-**, exp]
   workflow_dispatch:
 
 jobs:
@@ -47,7 +47,7 @@ jobs:
         run: pnpm build
 
       - name: Publish snapshot
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/no-wasm'
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/exp'
         env:
           # Run the prepublishOnly verify's turbo tasks one at a time. api-extractor
           # intermittently fails ("Internal Error: Unable to determine module for
@@ -61,13 +61,14 @@ jobs:
           # We use dist-tag dev for the snapshot releases, see https://docs.npmjs.com/cli/v9/commands/npm-dist-tag for more info
           # A snapshot MUST not be published with latest tag (omitting --tag defaults to latest) to avoid users to install snapshot releases
           # when using pnpm install.
-          # Branches other than main publish under their own dist-tag, so they never
-          # take over the dev channel that main's snapshots own. The version string is
-          # the same 0.0.0-SNAPSHOT-<timestamp> shape everywhere; only the tag differs.
+          # Snapshots from branches other than main go out under a separate dist-tag so
+          # they never take over the dev channel that main's snapshots own. The version
+          # string is the same 0.0.0-SNAPSHOT-<timestamp> shape everywhere; only the
+          # tag differs.
           if [ "$GITHUB_REF" = "refs/heads/main" ]; then
             NPM_TAG="dev"
           else
-            NPM_TAG="no-wasm"
+            NPM_TAG="exp"
           fi
           echo "Publishing $VERSION with npm dist-tag $NPM_TAG"
           # Update all lib package versions using jq
