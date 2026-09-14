@@ -10,9 +10,17 @@ cp -r ../restate-sdk/dist .
 # Copy fetch.js
 cp patches/fetch.js dist/fetch.js
 
-# Copy vm
-rm -r dist/endpoint/handlers/vm
-cp -r patches/vm dist/endpoint/handlers
+# Swap the shared core for the workerd WASM build.
+#
+# The TypeScript shared core is only needed on runtimes without WebAssembly,
+# so it is dropped here, together with the backend selector that would pick
+# between the two (patches/index.js binds straight to the WASM build).
+rm -rf dist/endpoint/handlers/vm/ts
+rm -f dist/endpoint/handlers/vm/sdk_shared_core_wasm_bindings.*
 
-# Copy vm entrypoint
-cp patches/sdk_shared_core_wasm_bindings.js dist/endpoint/handlers/vm
+# Copy vm
+cp -r patches/vm/. dist/endpoint/handlers/vm/
+
+# Copy vm entrypoint and the selector replacement
+cp patches/sdk_shared_core_wasm_bindings.js dist/endpoint/handlers/vm/
+cp patches/index.js dist/endpoint/handlers/vm/index.js

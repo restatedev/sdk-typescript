@@ -11,7 +11,7 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import type * as vm from "./endpoint/handlers/vm/sdk_shared_core_wasm_bindings.js";
+import type * as vm from "./endpoint/handlers/vm/index.js";
 import { InputReader, OutputWriter } from "./endpoint/handlers/types.js";
 import { ExternalProgressChannel } from "./utils/external_progress_channel.js";
 

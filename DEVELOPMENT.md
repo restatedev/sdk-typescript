@@ -348,9 +348,42 @@ Path mappings are auto-generated when packages are created/deleted.
 - **Private packages** are source-only and get bundled into public packages automatically
 - Only non-private packages in `packages/libs/` are published
 
+### The Shared Core
+
+The Restate protocol state machine ("shared core") drives journal replay,
+suspension, and the wire protocol. The SDK ships two interchangeable
+implementations of it behind one interface:
+
+| Backend | Location | Used when |
+|---------|----------|-----------|
+| WASM | `packages/libs/restate-sdk/src/endpoint/handlers/vm/sdk_shared_core_wasm_bindings.js` | `WebAssembly` is available (the default everywhere it exists) |
+| TypeScript | `packages/libs/restate-sdk/src/endpoint/handlers/vm/ts/` | The runtime has no `WebAssembly` global |
+
+`vm/index.ts` picks between them at import time and re-exports one surface, so
+nothing else in the SDK knows which one is running. `vm/types.ts` defines that
+surface; both backends implement it exactly.
+
+Set `RESTATE_SHARED_CORE` to override the choice:
+
+```bash
+RESTATE_SHARED_CORE=ts    # force the TypeScript core
+RESTATE_SHARED_CORE=wasm  # force WASM, and fail loudly if it is unavailable
+```
+
+The TypeScript core is a port of the Rust `restate-sdk-shared-core` crate, file
+for file: `vm/ts/vm.ts` mirrors `vm/mod.rs` and `vm/transitions/*`,
+`async_results.ts` mirrors `async_results_state.rs`, and so on. It has no
+dependencies and uses no Node built-ins, so it runs on any JavaScript runtime.
+Its tests in `packages/libs/restate-sdk/test/core/` are ported from that crate's
+own test suite; the random-seed test additionally compares the two backends
+against each other.
+
+**When changing the protocol, change both backends.** Rebuilding the WASM
+bindings alone will make the two diverge.
+
 ### Building the Shared Core (WASM)
 
-The SDK includes Rust/WASM bindings in `sdk-shared-core-wasm-bindings/`. Most contributors don't need to rebuild this, but if you're modifying the shared core:
+The Rust/WASM bindings live in `sdk-shared-core-wasm-bindings/`. Most contributors don't need to rebuild this, but if you're modifying the shared core:
 
 ```bash
 pnpm build:core

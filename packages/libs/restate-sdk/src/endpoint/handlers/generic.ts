@@ -31,7 +31,7 @@ import { X_RESTATE_SERVER } from "../../user_agent.js";
 import { CommandError, ContextImpl } from "../../context_impl.js";
 import { restoreError, sanitizeError } from "../../error_sanitization.js";
 import type { InvocationId, Request } from "../../context.js";
-import * as vm from "./vm/sdk_shared_core_wasm_bindings.js";
+import * as vm from "./vm/index.js";
 import { HandlerKind } from "../../types/rpc.js";
 import { createLogger, type Logger } from "../../logging/logger.js";
 import { DEFAULT_CONSOLE_LOGGER_LOG_LEVEL } from "../../logging/console_logger_transport.js";
@@ -125,21 +125,26 @@ class RestateHandlerImpl implements RestateHandler {
     try {
       return this._handle(request, context);
     } catch (e) {
-      const error = ensureError(e);
-      (
-        tryCreateContextualLogger(
-          this.endpoint.loggerTransport,
-          request.url,
-          request.headers
-        ) ?? this.endpoint.rlog
-      ).error(
-        "Error while handling request: " + (error.stack ?? error.message)
-      );
-      return errorResponse(
-        error instanceof RestateError ? error.code : 500,
-        error.message
-      );
+      return this.unexpectedErrorResponse(e, request);
     }
+  }
+
+  private unexpectedErrorResponse(
+    e: unknown,
+    request: RestateRequest
+  ): RestateResponse {
+    const error = ensureError(e);
+    (
+      tryCreateContextualLogger(
+        this.endpoint.loggerTransport,
+        request.url,
+        request.headers
+      ) ?? this.endpoint.rlog
+    ).error("Error while handling request: " + (error.stack ?? error.message));
+    return errorResponse(
+      error instanceof RestateError ? error.code : 500,
+      error.message
+    );
   }
 
   private _handle(
@@ -171,10 +176,40 @@ class RestateHandlerImpl implements RestateHandler {
     }
 
     // Discovery, preview, and handling invocations require identity verification
-    const error = this.validateConnectionSignature(path, request.headers);
-    if (error !== null) {
-      return error;
+    const verification = this.validateConnectionSignature(
+      path,
+      request.headers
+    );
+    const dispatch = () => this.dispatch(parsed, request, context);
+    if (verification instanceof Promise) {
+      // The identity verifier is asynchronous (WebCrypto based): defer the
+      // dispatch until the verification settles.
+      return {
+        process: async (args) => {
+          let response: RestateResponse;
+          try {
+            response = (await verification) ?? dispatch();
+          } catch (e) {
+            response = this.unexpectedErrorResponse(e, request);
+          }
+          await response.process(args);
+        },
+      };
     }
+    if (verification !== null) {
+      return verification;
+    }
+    return dispatch();
+  }
+
+  private dispatch(
+    parsed: Exclude<
+      ReturnType<typeof parseUrlComponents>,
+      { type: "unknown" } | { type: "health" }
+    >,
+    request: RestateRequest,
+    context?: AdditionalContext
+  ): RestateResponse {
     if (parsed.type === "discover") {
       return handleDiscovery(
         this.endpoint,
@@ -195,10 +230,15 @@ class RestateHandlerImpl implements RestateHandler {
     );
   }
 
+  /**
+   * Returns `null` when the request is authorized (or no verification is
+   * configured), the 401 response when it's rejected, or a promise of either
+   * when the verifier is asynchronous.
+   */
   private validateConnectionSignature(
     path: string,
     headers: Headers
-  ): RestateResponse | null {
+  ): RestateResponse | null | Promise<RestateResponse | null> {
     if (!this.identityVerifier) {
       // not validating
       return null;
@@ -211,15 +251,22 @@ class RestateHandlerImpl implements RestateHandler {
           new vm.WasmHeader(k, v instanceof Array ? v[0]! : (v as string))
       );
 
-    try {
-      this.identityVerifier.verify_identity(path, vmHeaders);
-      return null;
-    } catch (e) {
+    const reject = (e: unknown): RestateResponse => {
       this.endpoint.rlog.error(
         // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
         `Rejecting request as its JWT did not validate: ${e}`
       );
       return errorResponse(401, "Unauthorized");
+    };
+
+    try {
+      const result = this.identityVerifier.verify_identity(path, vmHeaders);
+      if (result instanceof Promise) {
+        return result.then(() => null, reject);
+      }
+      return null;
+    } catch (e) {
+      return reject(e);
     }
   }
 

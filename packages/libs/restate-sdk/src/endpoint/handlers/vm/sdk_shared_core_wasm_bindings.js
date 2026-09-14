@@ -2061,7 +2061,7 @@ function __wbg_finalize_init(instance, module) {
   return wasm;
 }
 
-function initSync() {
+export function initSync() {
   if (wasm !== undefined) return wasm;
   const bytes = __decode_base64__(__wasm_base64__);
   const module = new WebAssembly.Module(bytes);
@@ -2069,5 +2069,3 @@ function initSync() {
   const instance = new WebAssembly.Instance(module, imports);
   return __wbg_finalize_init(instance, module);
 }
-
-initSync();

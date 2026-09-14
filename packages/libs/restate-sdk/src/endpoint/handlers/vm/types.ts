@@ -1,5 +1,69 @@
-/* tslint:disable */
-/* eslint-disable */
+/*
+ * Copyright (c) 2023-2025 - Restate Software, Inc., Restate GmbH
+ *
+ * This file is part of the Restate SDK for Node.js/TypeScript,
+ * which is released under the MIT license.
+ *
+ * You can find a copy of the license in file LICENSE in the root
+ * directory of this repository or package, or at
+ * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
+ */
+
+/**
+ * Backend-neutral data types of the shared-core binding surface.
+ *
+ * Both the WASM build of the shared core and the TypeScript implementation
+ * expose exactly this surface. The names intentionally match the historical
+ * wasm-bindgen generated names, so the consumers don't need to change.
+ */
+
+export enum LogLevel {
+  TRACE = 0,
+  DEBUG = 1,
+  INFO = 2,
+  WARN = 3,
+  ERROR = 4,
+}
+
+export enum WasmCommandType {
+  Input = 0,
+  Output = 1,
+  GetState = 2,
+  GetStateKeys = 3,
+  SetState = 4,
+  ClearState = 5,
+  ClearAllState = 6,
+  GetPromise = 7,
+  PeekPromise = 8,
+  CompletePromise = 9,
+  Sleep = 10,
+  Call = 11,
+  OneWayCall = 12,
+  SendSignal = 13,
+  Run = 14,
+  AttachInvocation = 15,
+  GetInvocationOutput = 16,
+  CompleteAwakeable = 17,
+  CancelInvocation = 18,
+}
+
+/**
+ * How the state machine should behave when it hits a journal mismatch (non-determinism) error.
+ */
+export enum WasmJournalMismatchBehavior {
+  /** Follow the normal retry policy. */
+  Retry = 0,
+  /** Pause the invocation instead of retrying. */
+  Pause = 1,
+  /** Fail the invocation terminally instead of retrying. */
+  Fail = 2,
+}
+
+export interface WasmHeader {
+  readonly key: string;
+  readonly value: string;
+}
+
 export interface WasmAwakeable {
   id: string;
   handle: number;
@@ -60,55 +124,7 @@ export type WasmUnresolvedFuture =
   | { AllSucceededOrFirstFailed: WasmUnresolvedFuture[] }
   | { Unknown: WasmUnresolvedFuture[] };
 
-export enum LogLevel {
-  TRACE = 0,
-  DEBUG = 1,
-  INFO = 2,
-  WARN = 3,
-  ERROR = 4,
-}
-
-export enum WasmCommandType {
-  Input = 0,
-  Output = 1,
-  GetState = 2,
-  GetStateKeys = 3,
-  SetState = 4,
-  ClearState = 5,
-  ClearAllState = 6,
-  GetPromise = 7,
-  PeekPromise = 8,
-  CompletePromise = 9,
-  Sleep = 10,
-  Call = 11,
-  OneWayCall = 12,
-  SendSignal = 13,
-  Run = 14,
-  AttachInvocation = 15,
-  GetInvocationOutput = 16,
-  CompleteAwakeable = 17,
-  CancelInvocation = 18,
-}
-
-export class WasmHeader {
-  free(): void;
-  [Symbol.dispose](): void;
-  constructor(key: string, value: string);
-  readonly key: string;
-  readonly value: string;
-}
-
-export class WasmIdentityVerifier {
-  free(): void;
-  [Symbol.dispose](): void;
-  constructor(keys: string[]);
-  verify_identity(path: string, headers: WasmHeader[]): void;
-}
-
-export class WasmInput {
-  private constructor();
-  free(): void;
-  [Symbol.dispose](): void;
+export interface WasmInput {
   readonly headers: WasmHeader[];
   readonly idempotency_key: string | undefined;
   readonly input: Uint8Array;
@@ -119,49 +135,21 @@ export class WasmInput {
   readonly scope: string | undefined;
 }
 
-/**
- * How the state machine should behave when it hits a journal mismatch (non-determinism) error.
- */
-export enum WasmJournalMismatchBehavior {
-  /**
-   * Follow the normal retry policy.
-   */
-  Retry = 0,
-  /**
-   * Pause the invocation instead of retrying.
-   */
-  Pause = 1,
-  /**
-   * Fail the invocation terminally instead of retrying.
-   */
-  Fail = 2,
-}
-
-export class WasmResponseHead {
-  private constructor();
-  free(): void;
-  [Symbol.dispose](): void;
+export interface WasmResponseHead {
   readonly headers: WasmHeader[];
   readonly status_code: number;
 }
 
-export class WasmVM {
-  free(): void;
-  [Symbol.dispose](): void;
+/**
+ * The shared-core VM surface used by the SDK.
+ */
+export interface WasmVM {
   do_progress(future: WasmUnresolvedFuture): WasmDoProgressResult;
   get_response_head(): WasmResponseHead;
   is_completed(handle: number): boolean;
   is_processing(): boolean;
   is_ready_to_execute(): boolean;
   last_command_index(): number;
-  constructor(
-    headers: WasmHeader[],
-    log_level: LogLevel,
-    logger_id: number,
-    disable_payload_checks: boolean,
-    explicit_cancellation: boolean,
-    on_journal_mismatch: WasmJournalMismatchBehavior
-  );
   notify_error(error_message: string, stacktrace?: string | null): void;
   notify_error_for_next_command(
     error_message: string,
@@ -265,19 +253,42 @@ export class WasmVM {
   take_output(): Uint8Array;
 }
 
-export function cancel_handle(): number;
+export interface WasmVMConstructor {
+  new (
+    headers: WasmHeader[],
+    log_level: LogLevel,
+    logger_id: number,
+    disable_payload_checks: boolean,
+    explicit_cancellation: boolean,
+    on_journal_mismatch: WasmJournalMismatchBehavior
+  ): WasmVM;
+}
+
+export interface WasmHeaderConstructor {
+  new (key: string, value: string): WasmHeader;
+}
 
 /**
- * This will set the log level of the overall log subscriber.
+ * Request identity verifier.
+ *
+ * `verify_identity` either returns/resolves normally when the request is
+ * authorized, or throws/rejects otherwise. The WASM build verifies
+ * synchronously; the TypeScript build relies on WebCrypto, which is
+ * asynchronous. Consumers must therefore `await` the result.
  */
-export function set_log_level(level: LogLevel): void;
+export interface WasmIdentityVerifier {
+  verify_identity(path: string, headers: WasmHeader[]): void | Promise<void>;
+}
 
-/**
- * Setups the WASM module
- */
-export function start(): void;
+export interface WasmIdentityVerifierConstructor {
+  new (keys: string[]): WasmIdentityVerifier;
+}
 
-/**
- * Instantiates the inlined WASM module. Idempotent.
- */
-export function initSync(): void;
+export interface SharedCoreBindings {
+  readonly kind: "wasm" | "ts";
+  readonly WasmVM: WasmVMConstructor;
+  readonly WasmHeader: WasmHeaderConstructor;
+  readonly WasmIdentityVerifier: WasmIdentityVerifierConstructor;
+  set_log_level(level: LogLevel): void;
+  cancel_handle(): number;
+}

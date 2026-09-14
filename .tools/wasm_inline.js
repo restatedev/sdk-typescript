@@ -20,6 +20,8 @@ let dts = readFileSync(join(PKG_DIR, `${projectName}.d.ts`), "utf8");
 // Trim .d.ts: everything from InitInput onwards is init-related boilerplate
 const dtsDelIdx = dts.indexOf("export type InitInput");
 if (dtsDelIdx !== -1) dts = dts.slice(0, dtsDelIdx);
+dts +=
+  "\n/**\n * Instantiates the inlined WASM module. Idempotent.\n */\nexport function initSync(): void;\n";
 
 // Keep only the bindings — drop __wbg_load, initSync, __wbg_init, and the export line.
 // Everything before __wbg_load already includes __wbg_get_imports and __wbg_finalize_init.
@@ -37,16 +39,14 @@ function __decode_base64__(base64) {
 }`;
 
 const INIT_SYNC = `\
-function initSync() {
+export function initSync() {
     if (wasm !== undefined) return wasm;
     const bytes = __decode_base64__(__wasm_base64__);
     const module = new WebAssembly.Module(bytes);
     const imports = __wbg_get_imports();
     const instance = new WebAssembly.Instance(module, imports);
     return __wbg_finalize_init(instance, module);
-}
-
-initSync();`;
+}`;
 
 const output = [
   `const __wasm_base64__ = "${wasmBase64}";`,

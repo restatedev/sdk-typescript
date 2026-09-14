@@ -20,6 +20,9 @@ The conformance test suite lives in a separate repo (`restatedev/e2e`). It's a G
 # Test the restate-sdk-gen services
 ./.tools/run-sdk-tests.sh --gen
 
+# Run the services on the pure TypeScript shared core (no WASM)
+./.tools/run-sdk-tests.sh --ts-core
+
 # Run a single test class (extra flags pass through to the runner)
 ./.tools/run-sdk-tests.sh --skip-build --test-suite=default --test-name=Combinators
 ```
