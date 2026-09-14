@@ -869,6 +869,15 @@ function hooksSuite(level: HookLevel) {
 
       await pauseInvocationViaAdminApi(getAdminUrl(), send.invocationId);
 
+      // The runtime pauses in one of two ways, depending on its version:
+      // - pre-1.8 (graceful): the in-flight run completes and the attempt
+      //   suspends, so the error hook reports "(599) Suspended invocation"
+      //   after the run hook closes.
+      // - 1.8+ with vqueues (forced): the attempt is aborted immediately, so
+      //   the error hook reports the connection closing (e.g. "Premature
+      //   close") and may fire before the local run step finishes.
+      // Accept both: fixed prefix, then the remaining two events in any order
+      // with either error message. The paused outcome below is the real check.
       await expect
         .poll(() => hooksDriver.getEvents(send.invocationId), {
           timeout: 10_000,
@@ -877,8 +886,10 @@ function hooksSuite(level: HookLevel) {
         .toEqual([
           "hook:handler:before",
           "hook:run:slow-step:before",
-          "hook:run:slow-step:after",
-          "hook:handler:error:[hw] (599) Suspended invocation",
+          ...inAnyOrder(
+            "hook:run:slow-step:after",
+            /hook:handler:error:\[hw\] .+/
+          ),
         ]);
 
       await waitForInvocationOutcome(
