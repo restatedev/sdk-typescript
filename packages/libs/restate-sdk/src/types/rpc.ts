@@ -658,7 +658,11 @@ export type WorkflowHandlerOpts<I, O> = ServiceHandlerOpts<I, O> & {
   enableLazyState?: boolean;
 };
 
-const HANDLER_SYMBOL = Symbol("Handler");
+// A global symbol, not a module-local one, so a handler stays recognisable
+// across two copies of the SDK loaded in the same process. That happens
+// whenever a dependency pins its own copy, or when an app mixes this package
+// with @restatedev/restate-sdk-lite.
+const HANDLER_SYMBOL = Symbol.for("@restatedev/restate-sdk/Handler");
 
 export class HandlerWrapper {
   public static from(

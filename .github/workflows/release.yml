@@ -2,7 +2,7 @@ name: Release
 
 on:
   push:
-    branches: [main, release-**]
+    branches: [main, release-**, no-wasm]
   workflow_dispatch:
 
 jobs:
@@ -47,7 +47,7 @@ jobs:
         run: pnpm build
 
       - name: Publish snapshot
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/no-wasm'
         env:
           # Run the prepublishOnly verify's turbo tasks one at a time. api-extractor
           # intermittently fails ("Internal Error: Unable to determine module for
@@ -58,19 +58,32 @@ jobs:
           # To use it:
           # "@restatedev/restate-sdk": "^0.0.0-SNAPSHOT"
           VERSION="0.0.0-SNAPSHOT-$(date '+%Y%m%d%H%M%S')"
+          # We use dist-tag dev for the snapshot releases, see https://docs.npmjs.com/cli/v9/commands/npm-dist-tag for more info
+          # A snapshot MUST not be published with latest tag (omitting --tag defaults to latest) to avoid users to install snapshot releases
+          # when using pnpm install.
+          # Branches other than main publish under their own dist-tag, so they never
+          # take over the dev channel that main's snapshots own. The version string is
+          # the same 0.0.0-SNAPSHOT-<timestamp> shape everywhere; only the tag differs.
+          if [ "$GITHUB_REF" = "refs/heads/main" ]; then
+            NPM_TAG="dev"
+          else
+            NPM_TAG="no-wasm"
+          fi
+          echo "Publishing $VERSION with npm dist-tag $NPM_TAG"
           # Update all lib package versions using jq
           for pkg in packages/libs/*/package.json; do
             jq --arg ver "$VERSION" '.version = $ver' "$pkg" > "$pkg.tmp" && mv "$pkg.tmp" "$pkg"
           done
           # Update workspace protocol dependencies to use the snapshot version
           pnpm install --no-frozen-lockfile
-          # We use dist-tag dev for the snapshot releases, see https://docs.npmjs.com/cli/v9/commands/npm-dist-tag for more info
-          # A snapshot MUST not be published with latest tag (omitting --tag defaults to latest) to avoid users to install snapshot releases
-          # when using pnpm install
-          pnpm --filter "./packages/libs/**" publish --tag dev --access public --no-git-checks --provenance
+          pnpm --filter "./packages/libs/**" publish --tag "$NPM_TAG" --access public --no-git-checks --provenance
           git checkout .
 
       - name: Check for new version
+        # Only main and release-** cut real releases. Any other branch that triggers
+        # this workflow publishes a snapshot above and must never create a git tag,
+        # a GitHub release, or a latest-tagged npm publish.
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release-')
         id: check
         run: |
           git fetch --tags

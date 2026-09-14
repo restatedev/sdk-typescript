@@ -34,7 +34,23 @@
       "import": "./dist/node.js",
       "require": "./dist/node.cjs"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./lite": {
+      "import": "./dist/lite/index.js",
+      "require": "./dist/lite/index.cjs"
+    },
+    "./lite/fetch": {
+      "import": "./dist/lite/fetch.js",
+      "require": "./dist/lite/fetch.cjs"
+    },
+    "./lite/lambda": {
+      "import": "./dist/lite/lambda.js",
+      "require": "./dist/lite/lambda.cjs"
+    },
+    "./lite/node": {
+      "import": "./dist/lite/node.js",
+      "require": "./dist/lite/node.cjs"
+    }
   },
   "files": [
     "dist",
@@ -47,7 +63,7 @@
     "test": "turbo run _test --filter={.}...",
     "_test": "vitest run",
     "build": "turbo run _build --filter={.}...",
-    "_build": "tsc --noEmit && tsdown",
+    "_build": "tsc --noEmit && tsdown && tsdown --config tsdown.lite.config.ts && node scripts/assert-lite-wasm-free.mjs",
     "dev": "tsc --noEmit --watch",
     "clean": "rm -rf dist *.tsbuildinfo .turbo",
     "check:types": "turbo run _check:types --filter={.}...",
@@ -56,7 +72,7 @@
     "check:exports": "turbo run _check:exports --filter={.}...",
     "_check:exports": "attw --pack .",
     "check:api": "turbo run _check:api --filter={.}...",
-    "_check:api": "api-extractor run --local && api-extractor run --local --config api-extractor.fetch.json && api-extractor run --local --config api-extractor.lambda.json && api-extractor run --local --config api-extractor.node.json",
+    "_check:api": "api-extractor run --local && api-extractor run --local --config api-extractor.fetch.json && api-extractor run --local --config api-extractor.lambda.json && api-extractor run --local --config api-extractor.node.json && api-extractor run --local --config api-extractor.lite.json && api-extractor run --local --config api-extractor.lite.fetch.json && api-extractor run --local --config api-extractor.lite.lambda.json && api-extractor run --local --config api-extractor.lite.node.json",
     "prepublishOnly": "pnpm -w verify"
   },
   "dependencies": {
@@ -75,6 +91,18 @@
       ],
       "node": [
         "./dist/node.d.ts"
+      ],
+      "lite": [
+        "./dist/lite/index.d.ts"
+      ],
+      "lite/fetch": [
+        "./dist/lite/fetch.d.ts"
+      ],
+      "lite/lambda": [
+        "./dist/lite/lambda.d.ts"
+      ],
+      "lite/node": [
+        "./dist/lite/node.d.ts"
       ]
     }
   }

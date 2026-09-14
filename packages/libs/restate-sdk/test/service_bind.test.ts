@@ -29,6 +29,20 @@ const greeterFoo = restate.service({
 });
 
 describe("BindService", () => {
+  it("brands handlers with a global symbol, so two SDK copies interoperate", () => {
+    // The brand must be Symbol.for, not a module-local Symbol. A project can
+    // hold two copies of the SDK: a dependency pinning its own version, or an
+    // app importing both @restatedev/restate-sdk and its `lite` entry, which
+    // are separate module graphs. With a module-local symbol, handlers from
+    // one copy are unrecognisable to the other and binding fails with
+    // "<name> is not a restate handler".
+    const brand = Symbol.for("@restatedev/restate-sdk/Handler");
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+    const handler = (greeterFoo as any).service?.greet as object;
+    expect(handler).toBeDefined();
+    expect(Object.getOwnPropertySymbols(handler)).toContain(brand);
+  });
+
   it("should preserve `this`", async () => {
     // @ts-expect-error service does not exist in the returned type
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call

@@ -370,6 +370,37 @@ RESTATE_SHARED_CORE=ts    # force the TypeScript core
 RESTATE_SHARED_CORE=wasm  # force WASM, and fail loudly if it is unavailable
 ```
 
+### The `lite` entry points
+
+The selector above still *imports* the WASM build, so its payload stays in the
+bundle even when the TypeScript core is the one running. For targets where that
+payload cannot ship at all, the package also exposes `lite` entry points that
+never reference it:
+
+| Regular | Lite |
+|---------|------|
+| `@restatedev/restate-sdk` | `@restatedev/restate-sdk/lite` |
+| `@restatedev/restate-sdk/fetch` | `@restatedev/restate-sdk/lite/fetch` |
+| `@restatedev/restate-sdk/lambda` | `@restatedev/restate-sdk/lite/lambda` |
+| `@restatedev/restate-sdk/node` | `@restatedev/restate-sdk/lite/node` |
+
+The API is identical; only the shared core differs. Bundling
+`@restatedev/restate-sdk/lite/fetch` instead of `@restatedev/restate-sdk/fetch`
+takes a hello-world worker from about 2.5 MB to 270 kB, with no WebAssembly in
+the output.
+
+They come from a second build pass, `tsdown.lite.config.ts`, which compiles the
+same sources into `dist/lite/` with every internal import of the shared-core
+selector redirected to `vm/lite.ts`. Two consequences worth knowing:
+
+- `vm/lite.ts` must keep the same export surface as `vm/index.ts`.
+- The lite pass must not write to `package.json`. Its `exports` entries are
+  declared by the main pass's `customExports` hook, because tsdown regenerates
+  the whole map from whichever pass owns it.
+
+`scripts/assert-lite-wasm-free.mjs` runs at the end of the build and fails it if
+any file under `dist/lite/` mentions WebAssembly.
+
 The TypeScript core is a port of the Rust `restate-sdk-shared-core` crate, file
 for file: `vm/ts/vm.ts` mirrors `vm/mod.rs` and `vm/transitions/*`,
 `async_results.ts` mirrors `async_results_state.rs`, and so on. It has no
