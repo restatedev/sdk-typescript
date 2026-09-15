@@ -38,6 +38,9 @@
       ],
       "@restatedev/restate-sdk-zod": [
         "packages/libs/restate-sdk-zod/src/index.ts"
+      ],
+      "@restatedev/tanstack-workflow": [
+        "packages/libs/tanstack-workflow/src/index.ts"
       ]
     }
   },
@@ -71,6 +74,9 @@
       "path": "packages/libs/restate-sdk-zod"
     },
     {
+      "path": "packages/libs/tanstack-workflow"
+    },
+    {
       "path": "packages/tests/e2e"
     },
     {
@@ -93,6 +99,9 @@
     },
     {
       "path": "packages/examples/otel"
+    },
+    {
+      "path": "packages/examples/tanstack-cloudflare"
     },
     {
       "path": "packages/examples/vercel"

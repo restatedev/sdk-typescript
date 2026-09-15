@@ -1,0 +1,23 @@
+{
+  "extends": "../../../api-extractor.base.json",
+  "mainEntryPointFilePath": "<projectFolder>/dist/index.d.ts",
+
+  // The repo-wide policy makes `ae-forgotten-export` an error, on the assumption
+  // that a package's dependencies stay external: a type reachable from the public
+  // API but not exported is then a real bug.
+  //
+  // This package is the exception. It deliberately inlines the whole Restate SDK
+  // type graph so that consumers never install the SDK (see tsdown.config.ts), so
+  // every internal node of that graph is reachable by construction. Enforcing the
+  // rule here means re-exporting 68+ SDK symbols and growing with every SDK
+  // release, which would turn this adapter into a second copy of the SDK's public
+  // API. src/index.ts re-exports the handful of types the documented API actually
+  // needs; the rest stay structural.
+  "messages": {
+    "extractorMessageReporting": {
+      "ae-forgotten-export": {
+        "logLevel": "warning"
+      }
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  // Used ONLY by tsdown (see tsdown.config.ts). Deliberately standalone rather
+  // than extending tsconfig.base.json, for two reasons:
+  //
+  //  1. "moduleResolution": "Bundler". The base config uses NodeNext, under which
+  //     the declaration bundler walks the SDK's `exports` map, finds no `types`
+  //     condition, lands on the runtime dist/lite/fetch.js and dies with
+  //     "`internal_exports` is not declared in this file".
+  //  2. No "declarationMap". The base config enables it, which makes TypeScript's
+  //     declaration emitter fail inside the dts plugin with "Debug Failure" while
+  //     resolving a source-mapping URL.
+  //
+  // Type correctness is still checked against the real config: `_build` runs
+  // `tsc --noEmit` (tsconfig.json) and `_check:types` uses tsconfig.build.json.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "noEmit": true
+  },
+  "include": ["src/**/*"]
+}
