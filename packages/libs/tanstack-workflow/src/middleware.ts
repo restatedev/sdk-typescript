@@ -14,6 +14,7 @@
 // pure and carry no dependency on the TanStack replay engine, so we reuse them
 // while driving the handler on Restate instead.
 
+import { TerminalError } from "@restatedev/restate-sdk/lite/fetch";
 import type {
   AnyMiddleware,
   AnyWorkflowDefinition,
@@ -85,7 +86,7 @@ export function composeMiddlewares(
       ctx,
       next: async (opts) => {
         if (advanced) {
-          throw new Error(
+          throw new TerminalError(
             "middleware.next() must be called at most once per invocation"
           );
         }
@@ -94,7 +95,7 @@ export function composeMiddlewares(
         if (ext && typeof ext === "object") {
           for (const key of Object.keys(ext)) {
             if (reservedCtxFields.has(key)) {
-              throw new Error(
+              throw new TerminalError(
                 `Middleware extension may not shadow reserved ctx field: ${key}`
               );
             }
@@ -110,22 +111,37 @@ export function composeMiddlewares(
   return compose(0);
 }
 
+/**
+ * Validate against a Standard Schema, synchronously.
+ *
+ * Every failure here is deterministic: the same value fails the same way on
+ * every attempt. They are therefore thrown as {@link TerminalError}, which stops
+ * Restate retrying. A plain Error would make Restate retry the invocation
+ * indefinitely on input it can never accept.
+ *
+ * @param errorCode HTTP status propagated to the caller. Use 400 when the value
+ * came from the caller, and leave the default when it is the workflow's own
+ * output or initial state.
+ */
 function validateSyncSchema(
   schema: SchemaInput,
   value: unknown,
-  label: string
+  label: string,
+  errorCode?: number
 ): unknown {
   const result = (schema as unknown as StandardSchemaLike)[
     "~standard"
   ].validate(value);
   if (result instanceof Promise) {
-    throw new Error(
+    throw new TerminalError(
       `${label}: async schema validation is not supported in a durable step boundary`
     );
   }
   if (result.issues) {
     const messages = result.issues.map((i) => i.message).join(", ");
-    throw new Error(`${label} validation failed: ${messages}`);
+    throw new TerminalError(`${label} validation failed: ${messages}`, {
+      errorCode,
+    });
   }
   return result.value;
 }
@@ -138,7 +154,8 @@ export function validateWorkflowInput(
   return validateSyncSchema(
     def.inputSchema,
     input,
-    `Workflow "${def.id}" input`
+    `Workflow "${def.id}" input`,
+    400
   );
 }
 
@@ -159,7 +176,8 @@ export function validateStandard(
   value: unknown,
   label: string
 ): unknown {
-  return validateSyncSchema(schema, value, label);
+  // Signal/event payloads come from the caller, same as workflow input.
+  return validateSyncSchema(schema, value, label, 400);
 }
 
 export function buildInitialState(

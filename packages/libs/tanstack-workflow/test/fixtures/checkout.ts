@@ -38,3 +38,11 @@ export const checkout = createWorkflow({
   });
   return { status: "approved" as const };
 });
+
+/** Returns a value its own output schema rejects, to exercise output validation. */
+export const badOutput = createWorkflow({
+  id: "bad-output",
+  input: z.object({ userId: z.string() }),
+  output: z.object({ status: z.enum(["approved", "rejected"]) }),
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+}).handler(async () => ({ status: "not-a-valid-status" }) as any);

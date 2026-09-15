@@ -89,6 +89,18 @@ branded with a global symbol, so they are recognised across copies.
 `@tanstack/workflow-core` is a peer dependency, not bundled. You author workflows
 against your own copy, and its types stay yours.
 
+## Error semantics
+
+Restate retries a handler that throws a plain `Error`, and stops when it throws a
+`TerminalError`. Schema validation is deterministic, so every validation failure
+is terminal: bad input, a bad `waitForEvent` payload, an output or initial state
+the schema rejects, and the two middleware contract violations. Input and signal
+payload failures carry HTTP 400, which propagates to the ingress caller.
+
+Your own code inside `ctx.step` keeps the normal Restate default: it is retried
+unless you throw a `TerminalError`, or set `retry.shouldRetry` to return false,
+which the adapter converts into one for you.
+
 ## Known gaps
 
 - Step retry maps `maxAttempts` / `baseMs` / `backoff` onto `ctx.run` options.

@@ -11,8 +11,9 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ObjectContext } from "@restatedev/restate-sdk/lite/fetch";
+import { TerminalError } from "@restatedev/restate-sdk/lite/fetch";
 import { runHandler } from "../src/adapter.js";
-import { charges, checkout, receipts } from "./fixtures/checkout.js";
+import { badOutput, charges, checkout, receipts } from "./fixtures/checkout.js";
 
 /**
  * Minimal in-memory stand-in for a Restate ObjectContext. `run` executes the
@@ -106,5 +107,27 @@ describe("restate tanstack-workflow adapter", () => {
     await expect(
       runHandler(checkout, ctx, { userId: "cus_123" })
     ).rejects.toThrow(/input validation failed/);
+  });
+
+  // Schema failures are deterministic: the same value fails identically on every
+  // attempt. If they were plain Errors, Restate would retry the invocation
+  // forever on input it can never accept.
+  it("fails input validation terminally, so Restate stops retrying", async () => {
+    const { ctx } = mockCtx({ key: "run5" });
+    const err = await runHandler(checkout, ctx, { userId: "cus_123" }).catch(
+      (e: unknown) => e
+    );
+    expect(err).toBeInstanceOf(TerminalError);
+    // 400 propagates to the ingress caller: the bad value came from them.
+    expect((err as TerminalError).code).toBe(400);
+  });
+
+  it("fails output validation terminally too", async () => {
+    const { ctx } = mockCtx({ key: "run6" });
+    const err = await runHandler(badOutput, ctx, { userId: "cus_123" }).catch(
+      (e: unknown) => e
+    );
+    expect(err).toBeInstanceOf(TerminalError);
+    expect((err as Error).message).toMatch(/output validation failed/);
   });
 });
