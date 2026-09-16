@@ -1,5 +1,13 @@
 # @restatedev/restate-sdk
 
+## 1.17.1
+
+### Patch Changes
+
+- Minor bug fixes
+- Updated dependencies
+  - @restatedev/restate-sdk-core@1.17.1
+
 ## 1.17.0
 
 ### Minor Changes
