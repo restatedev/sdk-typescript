@@ -15,9 +15,11 @@ import type * as d from "./discovery.js";
 import type { ContextImpl } from "../context_impl.js";
 import type {
   HandlerWrapper,
+  ObjectHandlerOpts,
   ObjectOptions,
   ServiceHandlerOpts,
   ServiceOptions,
+  WorkflowHandlerOpts,
   WorkflowOptions,
 } from "../types/rpc.js";
 import { HandlerKind } from "../types/rpc.js";
@@ -548,9 +550,55 @@ export function parseUrlComponents(urlPath?: string): PathComponents {
   return { type: "unknown", path: urlPath };
 }
 
+function resolveStatePreload(
+  options?:
+    | ServiceOptions
+    | ObjectOptions
+    | WorkflowOptions
+    | ServiceHandlerOpts<unknown, unknown>
+    | ObjectHandlerOpts<unknown, unknown>
+    | WorkflowHandlerOpts<unknown, unknown>
+): { enableLazyState?: boolean; eagerStateKeysWhitelist?: string[] } {
+  const state =
+    options !== undefined && "state" in options ? options.state : undefined;
+  const legacyEnableLazyState =
+    options !== undefined && "enableLazyState" in options
+      ? options.enableLazyState
+      : undefined;
+
+  if (state !== undefined && legacyEnableLazyState !== undefined) {
+    throw new Error(
+      "Cannot set both the 'state' option and the deprecated 'enableLazyState' option at the same time. Use only 'state'."
+    );
+  }
+
+  if (state === undefined) {
+    // Legacy passthrough (may itself be undefined).
+    return {
+      enableLazyState: legacyEnableLazyState,
+      eagerStateKeysWhitelist: undefined,
+    };
+  }
+
+  const preload = state.preload;
+  if (typeof preload === "boolean") {
+    // preload: true  => eager (preload all)  => not lazy
+    // preload: false => lazy  (preload none) => lazy
+    return { enableLazyState: !preload, eagerStateKeysWhitelist: undefined };
+  }
+
+  // preload is a whitelist of keys to preload eagerly (selective preloading).
+  // An empty whitelist is equivalent to fully lazy state.
+  return {
+    enableLazyState: true,
+    eagerStateKeysWhitelist: preload.length > 0 ? preload : undefined,
+  };
+}
+
 function commonServiceOptions(
   options?: ServiceOptions | ObjectOptions | WorkflowOptions
 ): Partial<d.Service> {
+  const statePreload = resolveStatePreload(options);
   return {
     journalRetention:
       options?.journalRetention !== undefined
@@ -569,10 +617,8 @@ function commonServiceOptions(
         ? millisOrDurationToMillis(options.abortTimeout)
         : undefined,
     ingressPrivate: options?.ingressPrivate,
-    enableLazyState:
-      options !== undefined && "enableLazyState" in options
-        ? options.enableLazyState
-        : undefined,
+    enableLazyState: statePreload.enableLazyState,
+    eagerStateKeysWhitelist: statePreload.eagerStateKeysWhitelist,
     retryPolicyExponentiationFactor: options?.retryPolicy?.exponentiationFactor,
     retryPolicyInitialInterval:
       options?.retryPolicy?.initialInterval !== undefined
@@ -595,6 +641,7 @@ function commonHandlerOptions(
   wrapper: HandlerWrapper,
   defaultSerde: Serde<any>
 ) {
+  const statePreload = resolveStatePreload(wrapper.options);
   return {
     input: handlerInputDiscovery(wrapper, defaultSerde),
     output: handlerOutputDiscovery(wrapper, defaultSerde),
@@ -615,10 +662,8 @@ function commonHandlerOptions(
         ? millisOrDurationToMillis(wrapper.options?.abortTimeout)
         : undefined,
     ingressPrivate: wrapper.options?.ingressPrivate,
-    enableLazyState:
-      wrapper.options !== undefined && "enableLazyState" in wrapper.options
-        ? wrapper.options?.enableLazyState
-        : undefined,
+    enableLazyState: statePreload.enableLazyState,
+    eagerStateKeysWhitelist: statePreload.eagerStateKeysWhitelist,
     retryPolicyExponentiationFactor:
       wrapper.options?.retryPolicy?.exponentiationFactor,
     retryPolicyInitialInterval:

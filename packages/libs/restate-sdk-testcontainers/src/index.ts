@@ -35,6 +35,7 @@ export type {
   ServiceOptions,
   ObjectOptions,
   WorkflowOptions,
+  StatePreload,
   TerminalError,
   RestateError,
   EndpointOptions,

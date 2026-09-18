@@ -63,9 +63,13 @@ export interface Service {
    */
   idempotencyRetention?: number;
   /**
-   * If true, lazy state is enabled.
+   * If true, lazy state is enabled. To still load some keys eagerly, check eagerStateKeysWhitelist.
    */
   enableLazyState?: boolean;
+  /**
+   * When lazy state is enabled, these state keys are still preloaded eagerly. Requires endpoint manifest v5.
+   */
+  eagerStateKeysWhitelist?: string[];
   /**
    * If true, the service cannot be invoked from the HTTP nor Kafka ingress.
    */
@@ -124,9 +128,13 @@ export interface Handler {
    */
   workflowCompletionRetention?: number;
   /**
-   * If true, lazy state is enabled.
+   * If true, lazy state is enabled. To still load some keys eagerly, check eagerStateKeysWhitelist.
    */
   enableLazyState?: boolean;
+  /**
+   * When lazy state is enabled, these state keys are still preloaded eagerly. Requires endpoint manifest v5.
+   */
+  eagerStateKeysWhitelist?: string[];
   /**
    * If true, the service cannot be invoked from the HTTP nor Kafka ingress.
    */

@@ -94,10 +94,14 @@ export type GenObjectHandlerOpts = GenHandlerOpts & {
   shared?: boolean;
 
   /**
-   * When set to `true`, lazy state will be enabled for all invocations to this handler.
-   *
-   * *NOTE:* You can set this field only if you register this endpoint against restate-server >= 1.4,
-   * otherwise the service discovery will fail.
+   * Configures which state keys are preloaded ("eager state") for invocations
+   * to this handler. See {@link restate.StatePreload}.
+   */
+  state?: restate.StatePreload;
+
+  /**
+   * @deprecated Use {@link restate.StatePreload | `state`} instead:
+   * `enableLazyState: true` is equivalent to `state: { preload: false }`.
    */
   enableLazyState?: boolean;
 };
@@ -105,10 +109,14 @@ export type GenObjectHandlerOpts = GenHandlerOpts & {
 /** Handler options for workflow handlers (shared is implicit from name) */
 export type GenWorkflowHandlerOpts = {
   /**
-   * When set to `true`, lazy state will be enabled for all invocations to this handler.
-   *
-   * *NOTE:* You can set this field only if you register this endpoint against restate-server >= 1.4,
-   * otherwise the service discovery will fail.
+   * Configures which state keys are preloaded ("eager state") for invocations
+   * to this handler. See {@link restate.StatePreload}.
+   */
+  state?: restate.StatePreload;
+
+  /**
+   * @deprecated Use {@link restate.StatePreload | `state`} instead:
+   * `enableLazyState: true` is equivalent to `state: { preload: false }`.
    */
   enableLazyState?: boolean;
 };
