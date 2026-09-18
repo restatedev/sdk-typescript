@@ -45,7 +45,8 @@
     "deps:check": "pnpm outdated",
     "deps:update": "pnpm update --latest --recursive",
     "build:core": "./.tools/build-core.sh",
-    "postbuild:core": "pnpm format"
+    "postbuild:core": "pnpm format",
+    "build:core-native": "pnpm --filter @restatedev/restate-sdk-shared-core-native run build:native"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.2",

@@ -1,0 +1,49 @@
+{
+  "name": "@restatedev/restate-sdk-shared-core-native",
+  "version": "1.16.5",
+  "description": "Native (napi-rs) build of the Restate shared-core state machine, loaded by @restatedev/restate-sdk on Node.js. Other runtimes use the WASM build bundled in @restatedev/restate-sdk.",
+  "author": "Restate Software, Inc., Restate GmbH",
+  "license": "MIT",
+  "homepage": "https://github.com/restatedev/sdk-typescript",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/restatedev/sdk-typescript.git"
+  },
+  "bugs": {
+    "url": "https://github.com/restatedev/sdk-typescript/issues"
+  },
+  "private": false,
+  "type": "commonjs",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "README.md"
+  ],
+  "napi": {
+    "name": "restate-sdk-shared-core-native",
+    "triples": {
+      "defaults": false,
+      "additional": [
+        "x86_64-unknown-linux-gnu",
+        "aarch64-unknown-linux-gnu",
+        "x86_64-unknown-linux-musl",
+        "aarch64-unknown-linux-musl",
+        "aarch64-apple-darwin"
+      ]
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build:native": "napi build --platform --release",
+    "build:native:debug": "napi build --platform",
+    "artifacts": "napi artifacts",
+    "version": "napi version"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "2.18.4"
+  }
+}

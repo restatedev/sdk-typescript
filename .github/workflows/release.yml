@@ -9,8 +9,12 @@ jobs:
   test:
     uses: ./.github/workflows/test.yml
 
+  # Cross-compile the napi shared-core addon for every published target.
+  build-native:
+    uses: ./.github/workflows/native.yaml
+
   release:
-    needs: test
+    needs: [test, build-native]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -46,6 +50,15 @@ jobs:
       - name: Build
         run: pnpm build
 
+      # Prebuilt native binaries produced by the build-native job, one per
+      # target. Staged into the native package before publishing.
+      - name: Download native binaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: bindings-*
+          path: packages/libs/restate-sdk-shared-core-native/artifacts
+          merge-multiple: true
+
       - name: Publish snapshot
         if: github.ref == 'refs/heads/main'
         env:
@@ -67,7 +80,10 @@ jobs:
           # We use dist-tag dev for the snapshot releases, see https://docs.npmjs.com/cli/v9/commands/npm-dist-tag for more info
           # A snapshot MUST not be published with latest tag (omitting --tag defaults to latest) to avoid users to install snapshot releases
           # when using pnpm install
-          pnpm --filter "./packages/libs/**" publish --tag dev --access public --no-git-checks --provenance
+          # Publish all libs except the native package, which is published
+          # separately together with its per-platform binary packages.
+          pnpm --filter "./packages/libs/**" --filter "!@restatedev/restate-sdk-shared-core-native" publish --tag dev --access public --no-git-checks --provenance
+          bash .tools/publish-native.sh dev
           git checkout .
 
       - name: Check for new version
@@ -133,4 +149,8 @@ jobs:
         if: steps.check.outputs.create_release == 'true'
         env:
           TURBO_CONCURRENCY: "1" # serialize the prepublishOnly verify (see "Publish snapshot")
-        run: pnpm -r --filter='./packages/libs/**' publish --tag "${{ steps.check.outputs.npm_tag }}" --access public --no-git-checks --provenance
+        run: |
+          # Publish all libs except the native package (handled separately below
+          # together with its per-platform binary packages).
+          pnpm -r --filter='./packages/libs/**' --filter='!@restatedev/restate-sdk-shared-core-native' publish --tag "${{ steps.check.outputs.npm_tag }}" --access public --no-git-checks --provenance
+          bash .tools/publish-native.sh "${{ steps.check.outputs.npm_tag }}"

@@ -1,6 +1,6 @@
 import { Logger } from "../../logging/logger.js";
 import { LogSource, RestateLogLevel } from "../../logging/logger_transport.js";
-import * as vm from "./vm/sdk_shared_core_wasm_bindings.js";
+import * as vm from "./vm/index.js";
 import { defaultLoggerTransport } from "../../logging/console_logger_transport.js";
 
 /**
