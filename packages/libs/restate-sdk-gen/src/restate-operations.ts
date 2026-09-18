@@ -276,7 +276,7 @@ export class RestateOperations {
   // (run/sleep/awakeable/typed clients/genericCall/workflowPromise)
   // funnels through here so the adapt + makeJournalFuture wiring
   // stays in one place.
-  private toFuture<T>(p: restate.RestatePromise<T>): Future<T> {
+  toFuture<T>(p: restate.RestatePromise<T>): Future<T> {
     return this.sched.makeJournalFuture(adapt(p));
   }
 

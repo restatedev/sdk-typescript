@@ -21,7 +21,10 @@
 //   import { internal } from "@restatedev/restate-sdk-gen";
 //   if (internal.isProcessing()) { ... }
 
+import { isRestatePromise, type RestatePromise } from "@restatedev/restate-sdk";
 import { peekCurrent } from "./current.js";
+import { currentOps } from "./free.js";
+import type { Future } from "./future.js";
 import { RestateOperations } from "./restate-operations.js";
 
 /**
@@ -45,4 +48,29 @@ export function isProcessing(): boolean | undefined {
   return current instanceof RestateOperations
     ? current.isProcessing()
     : undefined;
+}
+
+/**
+ * Wrap an existing SDK promise as a journal-backed Future without
+ * starting another operation or adding a journal entry.
+ *
+ * Call inside a generator running under `execute(ctx, ...)`, using a
+ * RestatePromise from that same invocation. Pass the SDK promise directly:
+ * `async` wrappers and `.then()` return native promises and are rejected.
+ *
+ * An InvocationPromise becomes a plain Future; invocation handles and
+ * child-invocation cancellation are not added by this bridge.
+ *
+ * @example
+ *   yield* internal.adopt(ctx.serviceClient(greeter).greet("Ada"));
+ *
+ * @experimental
+ */
+export function adopt<T>(promise: RestatePromise<T>): Future<T> {
+  if (!isRestatePromise(promise)) {
+    throw new TypeError(
+      "adopt requires a RestatePromise. Pass the SDK promise directly, without async or .then()."
+    );
+  }
+  return currentOps().toFuture(promise);
 }
