@@ -1,0 +1,26 @@
+[package]
+name = "restate-sdk-tunnel-native"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "napi-rs binding for the embedded relay-tunnel receiver (restate-sdk-shared-core relay engine)"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# N-API bindings. `napi4` is a safe N-API version baseline (Node 10+); we only
+# need plain sync class methods, so no tokio/async-runtime feature is enabled —
+# the relay engine owns its own tokio runtime behind the FFI boundary.
+napi = { version = "2", default-features = false, features = ["napi4"] }
+napi-derive = "2"
+# The relay engine (same branch + feature the Java FFM cdylib consumes). Swap to
+# a crates.io version once the `tunnel` feature ships in a release.
+restate-sdk-shared-core = { git = "https://github.com/restatedev/sdk-shared-core.git", branch = "relay", features = ["tunnel"] }
+serde_json = "1"
+
+[build-dependencies]
+napi-build = "2"
+
+[profile.release]
+lto = true
