@@ -10,6 +10,7 @@ import { errorResponse, simpleResponse } from "./utils.js";
 const ENDPOINT_MANIFEST_V2 = "application/vnd.restate.endpointmanifest.v2+json";
 const ENDPOINT_MANIFEST_V3 = "application/vnd.restate.endpointmanifest.v3+json";
 const ENDPOINT_MANIFEST_V4 = "application/vnd.restate.endpointmanifest.v4+json";
+const ENDPOINT_MANIFEST_V5 = "application/vnd.restate.endpointmanifest.v5+json";
 
 export function handleDiscovery(
   endpoint: Endpoint,
@@ -25,7 +26,9 @@ export function handleDiscovery(
 
   // Negotiate version to use
   let manifestVersion;
-  if (acceptVersionsString.includes(ENDPOINT_MANIFEST_V4)) {
+  if (acceptVersionsString.includes(ENDPOINT_MANIFEST_V5)) {
+    manifestVersion = 5;
+  } else if (acceptVersionsString.includes(ENDPOINT_MANIFEST_V4)) {
     manifestVersion = 4;
   } else if (acceptVersionsString.includes(ENDPOINT_MANIFEST_V3)) {
     manifestVersion = 3;
@@ -124,6 +127,27 @@ export function handleDiscovery(
     }
   }
 
+  // Verify none of the manifest v5 configuration options are used.
+  // Note: `enableLazyState` itself is already available since v3; only the
+  // eager-state whitelist (selective preloading) requires v5.
+  if (manifestVersion < 5) {
+    for (const service of discovery.services) {
+      const error = checkUnsupportedFeature(service, "eagerStateKeysWhitelist");
+      if (error !== undefined) {
+        return error;
+      }
+      for (const handler of service.handlers) {
+        const error = checkUnsupportedFeature(
+          handler,
+          "eagerStateKeysWhitelist"
+        );
+        if (error !== undefined) {
+          return error;
+        }
+      }
+    }
+  }
+
   const body = JSON.stringify(discovery);
   return simpleResponse(
     200,
@@ -133,7 +157,9 @@ export function handleDiscovery(
           ? ENDPOINT_MANIFEST_V2
           : manifestVersion === 3
             ? ENDPOINT_MANIFEST_V3
-            : ENDPOINT_MANIFEST_V4,
+            : manifestVersion === 4
+              ? ENDPOINT_MANIFEST_V4
+              : ENDPOINT_MANIFEST_V5,
       "x-restate-server": X_RESTATE_SERVER,
     },
     new TextEncoder().encode(body)
