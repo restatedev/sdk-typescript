@@ -89,6 +89,7 @@ export type {
   ServiceOptions,
   ObjectOptions,
   WorkflowOptions,
+  StatePreload,
   RetryPolicy,
 } from "./types/rpc.js";
 export {
