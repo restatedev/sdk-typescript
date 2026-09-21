@@ -1,5 +1,11 @@
 # @restatedev/restate-sdk-core
 
+## 1.17.2
+
+### Patch Changes
+
+- - Allow to provide description and metadata in the new iface API
+
 ## 1.17.1
 
 ### Patch Changes
