@@ -160,6 +160,10 @@ export function implement(
     const sdkOpts = {
       input: desc._inputSerde,
       output: desc._outputSerde,
+      // Contract-declared docs/metadata are defaults; explicit per-handler opts
+      // passed to implement() override them (they come after in the spread).
+      description: desc._description,
+      metadata: desc._metadata,
       ...((perHandlerOpts?.[name] as object) ?? {}),
     };
 
@@ -180,8 +184,10 @@ export function implement(
   const common = {
     name: contract.name,
     handlers: coreHandlers as any,
-    description: config.description,
-    metadata: config.metadata,
+    // Contract-declared docs/metadata are defaults; values passed to implement()
+    // override them.
+    description: config.description ?? contract._description,
+    metadata: config.metadata ?? contract._metadata,
     options: serviceOptions,
   };
 

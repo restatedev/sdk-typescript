@@ -91,10 +91,17 @@ export function implement<
 
 export function implement(
   iface: Descriptor<any, any, any>,
-  config: { handlers: Record<string, any>; options?: any }
+  config: {
+    handlers: Record<string, any>;
+    options?: any;
+  }
 ): ImplementedDefinition<any, any, any> {
-  // Build HandlerDef entries from interface descriptors + implementation fns
+  // Build HandlerDef entries from interface descriptors + implementation fns.
+  // Contract-declared per-handler docs/metadata (defaults) are merged with any
+  // per-handler opts passed to implement() (which override), and threaded
+  // through `options.handlers` — define.ts spreads those onto the SDK handler.
   const handlerEntries: Record<string, any> = {};
+  const contractHandlerOpts: Record<string, Record<string, unknown>> = {};
   for (const [name, desc] of Object.entries(
     iface._handlers as Record<string, HandlerDescriptor>
   )) {
@@ -106,25 +113,45 @@ export function implement(
       _inputSerde: desc._inputSerde,
       _outputSerde: desc._outputSerde,
     };
+    if (desc._description !== undefined || desc._metadata !== undefined) {
+      contractHandlerOpts[name] = {
+        description: desc._description,
+        metadata: desc._metadata,
+      };
+    }
   }
 
+  const { handlers: userHandlerOpts, ...restOptions } = (config.options ??
+    {}) as {
+    handlers?: Record<string, Record<string, unknown>>;
+    [key: string]: unknown;
+  };
+  const mergedHandlerOpts: Record<string, Record<string, unknown>> = {};
+  for (const name of Object.keys(iface._handlers as Record<string, unknown>)) {
+    const merged: Record<string, unknown> = {
+      ...contractHandlerOpts[name],
+      ...userHandlerOpts?.[name],
+    };
+    if (Object.keys(merged).length > 0) {
+      mergedHandlerOpts[name] = merged;
+    }
+  }
+
+  const common = {
+    name: iface.name,
+    handlers: handlerEntries,
+    // Service-level docs come from the contract; per-handler docs are merged
+    // into options.handlers below (contract defaults, implement() overrides).
+    description: iface._description,
+    metadata: iface._metadata,
+    options: { ...restOptions, handlers: mergedHandlerOpts },
+  };
+
   if (iface._kind === "service") {
-    return _defineService({
-      name: iface.name,
-      handlers: handlerEntries,
-      options: config.options,
-    }) as any;
+    return _defineService(common) as any;
   } else if (iface._kind === "object") {
-    return _defineObject({
-      name: iface.name,
-      handlers: handlerEntries,
-      options: config.options,
-    }) as any;
+    return _defineObject(common) as any;
   } else {
-    return _defineWorkflow({
-      name: iface.name,
-      handlers: handlerEntries,
-      options: config.options,
-    }) as any;
+    return _defineWorkflow(common) as any;
   }
 }
