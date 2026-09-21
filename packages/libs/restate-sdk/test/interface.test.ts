@@ -86,6 +86,73 @@ describe("iface + implement", () => {
   });
 });
 
+describe("iface contract documentation + metadata", () => {
+  const documented = restate.iface.service(
+    "documented",
+    {
+      greet: restate.iface.json<string, string>({
+        description: "Greets the caller",
+        metadata: { visibility: "public" },
+      }),
+      ping: restate.iface.json<void, string>(),
+    },
+    { description: "A documented service", metadata: { owner: "team-a" } }
+  );
+
+  it("stores description/metadata on the contract descriptor", () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const d = documented as any;
+    expect(d._description).toBe("A documented service");
+    expect(d._metadata).toEqual({ owner: "team-a" });
+    expect(d._handlers.greet._description).toBe("Greets the caller");
+    expect(d._handlers.greet._metadata).toEqual({ visibility: "public" });
+    // a handler declared without opts carries no docs
+    expect(d._handlers.ping._description).toBeUndefined();
+    expect(d._handlers.ping._metadata).toBeUndefined();
+  });
+
+  it("flows contract docs into the discovery manifest via implement()", () => {
+    const def = restate.implement(documented, {
+      handlers: {
+        // eslint-disable-next-line @typescript-eslint/require-await
+        greet: async (_ctx, name) => name,
+        // eslint-disable-next-line @typescript-eslint/require-await
+        ping: async () => "pong",
+      },
+    });
+
+    const svc = toServiceDiscovery(def);
+    expect(svc.documentation).toBe("A documented service");
+    expect(svc.metadata?.owner).toBe("team-a");
+
+    const greet = svc.handlers.find((h) => h.name === "greet");
+    expect(greet?.documentation).toBe("Greets the caller");
+    expect(greet?.metadata).toEqual({ visibility: "public" });
+  });
+
+  it("lets implement() override contract-declared docs", () => {
+    const def = restate.implement(documented, {
+      handlers: {
+        // eslint-disable-next-line @typescript-eslint/require-await
+        greet: async (_ctx, name) => name,
+        // eslint-disable-next-line @typescript-eslint/require-await
+        ping: async () => "pong",
+      },
+      description: "Overridden service description",
+      options: {
+        handlers: {
+          greet: { description: "Overridden greet description" },
+        },
+      },
+    });
+
+    const svc = toServiceDiscovery(def);
+    expect(svc.documentation).toBe("Overridden service description");
+    const greet = svc.handlers.find((h) => h.name === "greet");
+    expect(greet?.documentation).toBe("Overridden greet description");
+  });
+});
+
 describe("client serde reuse", () => {
   it("uses the interface serdes when no call opts are provided", async () => {
     const call = vi.fn(

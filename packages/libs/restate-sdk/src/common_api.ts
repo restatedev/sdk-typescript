@@ -111,6 +111,7 @@ export type {
 export { iface } from "@restatedev/restate-sdk-core";
 export type {
   ServiceInterface,
+  DescriptorOpts,
   HandlerDescriptor,
   Descriptor,
   ServiceDescriptor,

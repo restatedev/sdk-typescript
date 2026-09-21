@@ -50,6 +50,7 @@ export type {
 export { iface, makeHandlerDescriptor } from "./interface.js";
 export type {
   ServiceInterface,
+  DescriptorOpts,
   HandlerDescriptor,
   Descriptor,
   ServiceDescriptor,

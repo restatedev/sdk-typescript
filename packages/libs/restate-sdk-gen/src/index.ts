@@ -130,6 +130,7 @@ export type {
   Duration,
   StandardTypedV1,
   ServiceInterface,
+  DescriptorOpts,
   SerdeType,
 } from "@restatedev/restate-sdk-core";
 
