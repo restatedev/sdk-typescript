@@ -26,7 +26,7 @@ export class InputPump {
   private readonly runDone: Promise<InputReader>;
 
   constructor(
-    private readonly coreVm: vm.WasmVM,
+    private readonly coreVm: vm.VM,
     private readonly inputReader: InputReader,
     private readonly channel: ExternalProgressChannel,
     private readonly errorCallback: (e: any) => void
@@ -74,7 +74,7 @@ export class InputPump {
  */
 export class OutputPump {
   constructor(
-    private readonly coreVm: vm.WasmVM,
+    private readonly coreVm: vm.VM,
     private readonly outputWriter: OutputWriter
   ) {}
 

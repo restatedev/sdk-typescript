@@ -32,10 +32,10 @@ import type {
 } from "./context.js";
 import type * as vm from "#vm";
 import {
-  WasmCommandType,
-  WasmHeader,
-  WasmInput,
-  WasmVM,
+  CommandType,
+  Header,
+  Input,
+  VM,
 } from "#vm";
 import {
   ensureError,
@@ -113,8 +113,8 @@ export class ContextImpl
   private readonly trackedInvocationIdPromises?: SingleRestatePromise<string>[];
 
   constructor(
-    readonly coreVm: WasmVM,
-    input: WasmInput,
+    readonly coreVm: VM,
+    input: Input,
     public readonly console: Console,
     public readonly handlerKind: HandlerKind,
     readonly vmLogger: Console,
@@ -175,7 +175,7 @@ export class ContextImpl
 
   private _cancel(invocationId: string): void {
     this.processNonCompletableEntry(
-      WasmCommandType.CancelInvocation,
+      CommandType.CancelInvocation,
       () => {},
       (vm) => vm.sys_cancel_invocation(invocationId)
     );
@@ -183,7 +183,7 @@ export class ContextImpl
 
   attach<T>(invocationId: InvocationId, serde?: Serde<T>): RestatePromise<T> {
     return this.processCompletableEntry(
-      WasmCommandType.AttachInvocation,
+      CommandType.AttachInvocation,
       () => {},
       (vm) => vm.sys_attach_invocation(invocationId),
       SuccessWithSerde(serde ?? this.defaultSerde, this.journalValueCodec),
@@ -209,7 +209,7 @@ export class ContextImpl
 
   public get<T>(name: string, serde?: Serde<T>): RestatePromise<T | null> {
     return this.processCompletableEntry(
-      WasmCommandType.GetState,
+      CommandType.GetState,
       () => {},
       (vm) => vm.sys_get_state(name),
       VoidAsNull,
@@ -219,7 +219,7 @@ export class ContextImpl
 
   public stateKeys(): RestatePromise<Array<string>> {
     return this.processCompletableEntry(
-      WasmCommandType.GetStateKeys,
+      CommandType.GetStateKeys,
       () => {},
       (vm) => vm.sys_get_state_keys(),
       StateKeys
@@ -228,7 +228,7 @@ export class ContextImpl
 
   public set<T>(name: string, value: T, serde?: Serde<T>): void {
     this.processNonCompletableEntry(
-      WasmCommandType.SetState,
+      CommandType.SetState,
       () =>
         this.journalValueCodec.encode(
           (serde ?? this.defaultSerde).serialize(value)
@@ -239,7 +239,7 @@ export class ContextImpl
 
   public clear(name: string): void {
     this.processNonCompletableEntry(
-      WasmCommandType.ClearState,
+      CommandType.ClearState,
       () => {},
       (vm) => vm.sys_clear_state(name)
     );
@@ -247,7 +247,7 @@ export class ContextImpl
 
   public clearAll(): void {
     this.processNonCompletableEntry(
-      WasmCommandType.ClearAllState,
+      CommandType.ClearAllState,
       () => {},
       (vm) => vm.sys_clear_all_state()
     );
@@ -269,7 +269,7 @@ export class ContextImpl
         requestSerde.serialize(call.parameter)
       );
     } catch (e) {
-      this.abortAttempt(e, WasmCommandType.Call);
+      this.abortAttempt(e, CommandType.Call);
       return Object.assign(ConstRestatePromise.pending<RES>(), {
         invocationId: pendingPromise<InvocationId>(),
       });
@@ -283,7 +283,7 @@ export class ContextImpl
         call.key,
         call.headers
           ? Object.entries(call.headers).map(
-              ([key, value]) => new WasmHeader(key, value)
+              ([key, value]) => new Header(key, value)
             )
           : [],
         call.idempotencyKey,
@@ -297,7 +297,7 @@ export class ContextImpl
         this,
         call_handles.invocation_id_completion_id,
         completeCommandPromiseUsing(
-          WasmCommandType.Call,
+          CommandType.Call,
           commandIndex,
           InvocationIdCompleter
         )
@@ -311,7 +311,7 @@ export class ContextImpl
         this,
         call_handles.call_completion_id,
         completeCommandPromiseUsing(
-          WasmCommandType.Call,
+          CommandType.Call,
           commandIndex,
           SuccessWithSerde(responseSerde, this.journalValueCodec),
           Failure
@@ -338,7 +338,7 @@ export class ContextImpl
         requestSerde.serialize(send.parameter)
       );
     } catch (e) {
-      this.abortAttempt(e, WasmCommandType.OneWayCall);
+      this.abortAttempt(e, CommandType.OneWayCall);
       return Object.assign(ConstRestatePromise.pending<void>(), {
         invocationId: pendingPromise<InvocationId>(),
       });
@@ -357,7 +357,7 @@ export class ContextImpl
         send.key,
         send.headers
           ? Object.entries(send.headers).map(
-              ([key, value]) => new WasmHeader(key, value)
+              ([key, value]) => new Header(key, value)
             )
           : [],
         delay !== undefined && delay > 0 ? BigInt(delay) : undefined,
@@ -373,7 +373,7 @@ export class ContextImpl
           this,
           handles.invocation_id_completion_id,
           completeCommandPromiseUsing(
-            WasmCommandType.OneWayCall,
+            CommandType.OneWayCall,
             commandIndex,
             InvocationIdCompleter
           )
@@ -564,7 +564,7 @@ export class ContextImpl
     const serde = options?.serde ?? this.defaultSerde;
 
     // Prepare the handle
-    let wasmRun: vm.WasmRun;
+    let wasmRun: vm.Run;
     try {
       wasmRun = this.coreVm.sys_run(name ?? "");
     } catch (e) {
@@ -685,7 +685,7 @@ export class ContextImpl
       this,
       handle,
       completeCommandPromiseUsing(
-        WasmCommandType.Run,
+        CommandType.Run,
         commandIndex,
         SuccessWithSerde(serde, this.journalValueCodec),
         Failure
@@ -698,7 +698,7 @@ export class ContextImpl
     name?: string
   ): RestatePromise<void> {
     return this.processCompletableEntry(
-      WasmCommandType.Sleep,
+      CommandType.Sleep,
       () => {
         if (duration === undefined) {
           throw new Error(`Duration is undefined.`);
@@ -722,7 +722,7 @@ export class ContextImpl
     id: string;
     promise: RestatePromise<T>;
   } {
-    let awakeable: vm.WasmAwakeable;
+    let awakeable: vm.Awakeable;
     try {
       awakeable = this.coreVm.sys_awakeable();
     } catch (e) {
@@ -749,7 +749,7 @@ export class ContextImpl
 
   public resolveAwakeable<T>(id: string, payload?: T, serde?: Serde<T>): void {
     this.processNonCompletableEntry(
-      WasmCommandType.CompleteAwakeable,
+      CommandType.CompleteAwakeable,
       () => {
         // We coerce undefined to null as null can be stringified by JSON.stringify
         let value: Uint8Array;
@@ -771,7 +771,7 @@ export class ContextImpl
 
   public rejectAwakeable(id: string, reason: string | TerminalError): void {
     this.processNonCompletableEntry(
-      WasmCommandType.CompleteAwakeable,
+      CommandType.CompleteAwakeable,
       () => {},
       (vm) => {
         vm.sys_complete_awakeable_failure(id, toWasmFailure(reason));
@@ -852,9 +852,9 @@ export class ContextImpl
   // -- Various private methods
 
   processNonCompletableEntry<T>(
-    commandType: vm.WasmCommandType,
+    commandType: vm.CommandType,
     prepare: () => T,
-    vmCall: (vm: vm.WasmVM, input: T) => void
+    vmCall: (vm: vm.VM, input: T) => void
   ) {
     let input;
     try {
@@ -872,9 +872,9 @@ export class ContextImpl
   }
 
   processCompletableEntry<T, U>(
-    commandType: vm.WasmCommandType,
+    commandType: vm.CommandType,
     prepare: () => T,
-    vmCall: (vm: vm.WasmVM, t: T) => number,
+    vmCall: (vm: vm.VM, t: T) => number,
     ...completers: Array<Completer>
   ): RestatePromise<U> {
     let input;
@@ -900,7 +900,7 @@ export class ContextImpl
     );
   }
 
-  abortAttempt(e: unknown, commandType?: WasmCommandType) {
+  abortAttempt(e: unknown, commandType?: CommandType) {
     // ensureError so interceptors always receive a proper Error,
     // not a raw VM object like { code, message }.
     this.invocationEndPromise.reject(
@@ -911,7 +911,7 @@ export class ContextImpl
   }
 }
 
-function toWasmFailure(reason: string | TerminalError): vm.WasmFailure {
+function toWasmFailure(reason: string | TerminalError): vm.Failure {
   if (typeof reason === "string") {
     return {
       code: UNKNOWN_ERROR_CODE,
@@ -981,7 +981,7 @@ class SignalReferenceImpl<T> implements SignalReference<T> {
 
   resolve(payload?: T): void {
     this.ctx.processNonCompletableEntry(
-      WasmCommandType.SendSignal,
+      CommandType.SendSignal,
       () =>
         this.ctx.journalValueCodec.encode(this.serde.serialize(payload as T)),
       (vm, bytes) =>
@@ -991,7 +991,7 @@ class SignalReferenceImpl<T> implements SignalReference<T> {
 
   reject(reason: string | TerminalError): void {
     this.ctx.processNonCompletableEntry(
-      WasmCommandType.SendSignal,
+      CommandType.SendSignal,
       () => {},
       (vm) => {
         vm.sys_complete_signal_failure(
@@ -1036,7 +1036,7 @@ class DurablePromiseImpl<T> implements DurablePromise<T> {
 
   get(): RestatePromise<T> {
     return this.ctx.processCompletableEntry(
-      WasmCommandType.GetPromise,
+      CommandType.GetPromise,
       () => {},
       (vm) => vm.sys_get_promise(this.name),
       SuccessWithSerde(this.serde, this.ctx.journalValueCodec),
@@ -1046,7 +1046,7 @@ class DurablePromiseImpl<T> implements DurablePromise<T> {
 
   peek(): Promise<T | undefined> {
     return this.ctx.processCompletableEntry(
-      WasmCommandType.PeekPromise,
+      CommandType.PeekPromise,
       () => {},
       (vm) => vm.sys_peek_promise(this.name),
       VoidAsUndefined,
@@ -1057,7 +1057,7 @@ class DurablePromiseImpl<T> implements DurablePromise<T> {
 
   resolve(value?: T): Promise<void> {
     return this.ctx.processCompletableEntry(
-      WasmCommandType.CompletePromise,
+      CommandType.CompletePromise,
       () => this.ctx.journalValueCodec.encode(this.serde.serialize(value as T)),
       (vm, bytes) => vm.sys_complete_promise_success(this.name, bytes),
       VoidAsUndefined,
@@ -1067,7 +1067,7 @@ class DurablePromiseImpl<T> implements DurablePromise<T> {
 
   reject(errorMsg: string): Promise<void> {
     return this.ctx.processCompletableEntry(
-      WasmCommandType.CompletePromise,
+      CommandType.CompletePromise,
       () => {},
       (vm) =>
         vm.sys_complete_promise_failure(this.name, {
@@ -1121,15 +1121,15 @@ type Completer = (
 // - Completion failure (command exists): new CommandError(e, type, index)
 //   → notify_error_for_specific_command
 export class CommandError extends Error {
-  constructor(cause: unknown, commandType: WasmCommandType);
+  constructor(cause: unknown, commandType: CommandType);
   constructor(
     cause: unknown,
-    commandType: WasmCommandType,
+    commandType: CommandType,
     commandIndex: number
   );
   constructor(
     override readonly cause: unknown,
-    readonly commandType: WasmCommandType,
+    readonly commandType: CommandType,
     readonly commandIndex?: number
   ) {
     const msg = cause instanceof Error ? cause.message : String(cause);
@@ -1143,7 +1143,7 @@ export class CommandError extends Error {
 }
 
 function completeCommandPromiseUsing<T>(
-  commandType: WasmCommandType,
+  commandType: CommandType,
   commandIndex: number,
   ...completers: Array<Completer>
 ): (value: AsyncResultValue, prom: PromiseWithResolvers<T>) => Promise<void> {

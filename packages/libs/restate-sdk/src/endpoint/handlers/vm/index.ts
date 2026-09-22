@@ -17,9 +17,10 @@
  * import; on Cloudflare Workers / edge the `workerd` / `worker` / `edge-light` condition resolves
  * `#vm` to `./index.workerd.js` instead, which runs the same crate compiled to wasm.
  *
- * The runtime *values* below come from the native addon; the *types* come from its generated
- * declarations, except the three externally-tagged unions the binding types as `any`, which we
- * define here to match the Rust surface.
+ * The runtime *values* below come from the addon; the *types* come from its generated declarations.
+ * The addon still names its classes `Wasm*` internally (a distinct Rust identifier is needed next to
+ * the shared-core's own `Header`, `Failure`, ... types); this module re-exports them without that
+ * prefix, which is the surface the rest of the SDK uses.
  */
 
 import { createRequire } from "node:module";
@@ -53,14 +54,14 @@ const impl = loadSharedCore();
 
 // --- Runtime values (classes / enums / functions) ---
 
-export const WasmVM = impl.WasmVM;
-export const WasmHeader = impl.WasmHeader;
-export const WasmInput = impl.WasmInput;
-export const WasmResponseHead = impl.WasmResponseHead;
-export const WasmIdentityVerifier = impl.WasmIdentityVerifier;
+export const VM = impl.WasmVM;
+export const Header = impl.WasmHeader;
+export const Input = impl.WasmInput;
+export const ResponseHead = impl.WasmResponseHead;
+export const IdentityVerifier = impl.WasmIdentityVerifier;
 export const LogLevel = impl.LogLevel;
-export const WasmCommandType = impl.WasmCommandType;
-export const WasmJournalMismatchBehavior = impl.WasmJournalMismatchBehavior;
+export const CommandType = impl.WasmCommandType;
+export const JournalMismatchBehavior = impl.WasmJournalMismatchBehavior;
 export const cancel_handle = impl.cancel_handle;
 export const set_log_level = impl.set_log_level;
 export const start = impl.start;
@@ -68,28 +69,28 @@ export const start = impl.start;
 // --- Types ---
 
 // Class / enum names need both a value (above) and a type (here).
-export type WasmVM = Native.WasmVM;
-export type WasmHeader = Native.WasmHeader;
-export type WasmInput = Native.WasmInput;
-export type WasmResponseHead = Native.WasmResponseHead;
-export type WasmIdentityVerifier = Native.WasmIdentityVerifier;
+export type VM = Native.WasmVM;
+export type Header = Native.WasmHeader;
+export type Input = Native.WasmInput;
+export type ResponseHead = Native.WasmResponseHead;
+export type IdentityVerifier = Native.WasmIdentityVerifier;
 export type LogLevel = Native.LogLevel;
-export type WasmCommandType = Native.WasmCommandType;
-export type WasmJournalMismatchBehavior = Native.WasmJournalMismatchBehavior;
+export type CommandType = Native.WasmCommandType;
+export type JournalMismatchBehavior = Native.WasmJournalMismatchBehavior;
 
 export type {
-  WasmAwakeable,
-  WasmCallHandle,
-  WasmExponentialRetryConfig,
-  WasmFailure,
-  WasmFailureMetadata,
-  WasmRun,
-  WasmSendHandle,
+  WasmAwakeable as Awakeable,
+  WasmCallHandle as CallHandle,
+  WasmExponentialRetryConfig as ExponentialRetryConfig,
+  WasmFailure as Failure,
+  WasmFailureMetadata as FailureMetadata,
+  WasmRun as Run,
+  WasmSendHandle as SendHandle,
 } from "@restatedev/restate-sdk-shared-core-native";
 
 // Externally-tagged unions the napi binding types as `any` / `unknown`; declared here to match the
 // Rust surface (see the shared-core crate).
-export type WasmAsyncResultValue =
+export type AsyncResultValue =
   | "NotReady"
   | "Empty"
   | { Success: Uint8Array }
@@ -97,16 +98,16 @@ export type WasmAsyncResultValue =
   | { StateKeys: string[] }
   | { InvocationId: string };
 
-export type WasmDoProgressResult =
+export type DoProgressResult =
   | "AnyCompleted"
   | "WaitExternalProgress"
   | { ExecuteRun: number }
   | "CancelSignalReceived";
 
-export type WasmUnresolvedFuture =
+export type UnresolvedFuture =
   | { Single: number }
-  | { FirstCompleted: WasmUnresolvedFuture[] }
-  | { AllCompleted: WasmUnresolvedFuture[] }
-  | { FirstSucceededOrAllFailed: WasmUnresolvedFuture[] }
-  | { AllSucceededOrFirstFailed: WasmUnresolvedFuture[] }
-  | { Unknown: WasmUnresolvedFuture[] };
+  | { FirstCompleted: UnresolvedFuture[] }
+  | { AllCompleted: UnresolvedFuture[] }
+  | { FirstSucceededOrAllFailed: UnresolvedFuture[] }
+  | { AllSucceededOrFirstFailed: UnresolvedFuture[] }
+  | { Unknown: UnresolvedFuture[] };

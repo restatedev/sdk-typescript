@@ -89,7 +89,7 @@ export function createRestateHandler(
  * This is the RestateHandler implementation
  */
 class RestateHandlerImpl implements RestateHandler {
-  private readonly identityVerifier?: vm.WasmIdentityVerifier;
+  private readonly identityVerifier?: vm.IdentityVerifier;
 
   constructor(
     readonly endpoint: Endpoint,
@@ -108,7 +108,7 @@ class RestateHandlerImpl implements RestateHandler {
       this.endpoint.rlog.info(
         `Validating requests using signing keys [${this.endpoint.keySet}]`
       );
-      this.identityVerifier = new vm.WasmIdentityVerifier(this.endpoint.keySet);
+      this.identityVerifier = new vm.IdentityVerifier(this.endpoint.keySet);
     }
 
     // Set the logging level in the shared core too!
@@ -208,7 +208,7 @@ class RestateHandlerImpl implements RestateHandler {
       .filter(([, v]) => v !== undefined)
       .map(
         ([k, v]) =>
-          new vm.WasmHeader(k, v instanceof Array ? v[0]! : (v as string))
+          new vm.Header(k, v instanceof Array ? v[0]! : (v as string))
       );
 
     try {
@@ -271,7 +271,7 @@ class RestateInvokeResponse implements RestateResponse {
 
   private readonly loggerId: number;
   private vmLogger: Logger;
-  private readonly coreVm: vm.WasmVM;
+  private readonly coreVm: vm.VM;
 
   constructor(
     private readonly service: Component,
@@ -292,9 +292,9 @@ class RestateInvokeResponse implements RestateResponse {
       .filter(([, v]) => v !== undefined)
       .map(
         ([k, v]) =>
-          new vm.WasmHeader(k, v instanceof Array ? v[0]! : (v as string))
+          new vm.Header(k, v instanceof Array ? v[0]! : (v as string))
       );
-    this.coreVm = new vm.WasmVM(
+    this.coreVm = new vm.VM(
       vmHeaders,
       restateLogLevelToWasmLogLevel(DEFAULT_CONSOLE_LOGGER_LOG_LEVEL),
       this.loggerId,
@@ -525,7 +525,7 @@ class RestateInvokeResponse implements RestateResponse {
 }
 
 async function bufferJournalReplayInCoreVm(
-  coreVm: vm.WasmVM,
+  coreVm: vm.VM,
   inputReader: InputReader
 ) {
   while (!coreVm.is_ready_to_execute()) {
@@ -685,7 +685,7 @@ function notifyError(
 }
 
 async function flushAndClose(
-  coreVm: vm.WasmVM,
+  coreVm: vm.VM,
   vmLogger: Logger,
   inputReaderGetter: Promise<InputReader>,
   outputWriter: OutputWriter
@@ -848,14 +848,14 @@ function restateLogLevelToWasmLogLevel(level: RestateLogLevel): vm.LogLevel {
 
 function onJournalMismatchErrorsToWasm(
   behavior: "retry" | "pause" | "fail" | undefined
-): vm.WasmJournalMismatchBehavior {
+): vm.JournalMismatchBehavior {
   switch (behavior) {
     case "pause":
-      return vm.WasmJournalMismatchBehavior.Pause;
+      return vm.JournalMismatchBehavior.Pause;
     case "fail":
-      return vm.WasmJournalMismatchBehavior.Fail;
+      return vm.JournalMismatchBehavior.Fail;
     case "retry":
     case undefined:
-      return vm.WasmJournalMismatchBehavior.Retry;
+      return vm.JournalMismatchBehavior.Retry;
   }
 }
