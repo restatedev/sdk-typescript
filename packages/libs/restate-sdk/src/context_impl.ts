@@ -30,13 +30,13 @@ import type {
   ScopedContext,
   WorkflowContext,
 } from "./context.js";
-import type * as vm from "./endpoint/handlers/vm/index.js";
+import type * as vm from "#vm";
 import {
   WasmCommandType,
   WasmHeader,
   WasmInput,
   WasmVM,
-} from "./endpoint/handlers/vm/index.js";
+} from "#vm";
 import {
   ensureError,
   INTERNAL_ERROR_CODE,

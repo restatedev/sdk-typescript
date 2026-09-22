@@ -15,7 +15,7 @@
     "lint": "eslint ."
   },
   "dependencies": {
-    "@restatedev/restate-sdk-cloudflare-workers": "workspace:*",
+    "@restatedev/restate-sdk": "workspace:*",
     "@restatedev/restate-sdk-zod": "workspace:*",
     "zod": "catalog:"
   },

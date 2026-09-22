@@ -82,12 +82,6 @@ importers:
       vitest:
         specifier: ^3.2.6
         version: 3.2.6(@types/node@24.12.2)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.3)
-      wasm-pack:
-        specifier: ^0.0.0
-        version: 0.0.0
-      wasm-pack-inline:
-        specifier: ^0.1.4
-        version: 0.1.4
 
   packages/examples/bun:
     dependencies:
@@ -107,9 +101,9 @@ importers:
 
   packages/examples/cloudflare:
     dependencies:
-      '@restatedev/restate-sdk-cloudflare-workers':
+      '@restatedev/restate-sdk':
         specifier: workspace:*
-        version: link:../../libs/restate-sdk-cloudflare-workers
+        version: link:../../libs/restate-sdk
       '@restatedev/restate-sdk-zod':
         specifier: workspace:*
         version: link:../../libs/restate-sdk-zod
@@ -233,18 +227,6 @@ importers:
         specifier: ^8.10.115
         version: 8.10.161
     optionalDependencies:
-      '@restatedev/restate-sdk-shared-core-native':
-        specifier: workspace:*
-        version: link:../restate-sdk-shared-core-native
-
-  packages/libs/restate-sdk-clients:
-    dependencies:
-      '@restatedev/restate-sdk-core':
-        specifier: workspace:*
-        version: link:../restate-sdk-core
-
-  packages/libs/restate-sdk-cloudflare-workers:
-    dependencies:
       '@emnapi/core':
         specifier: 2.0.0-alpha.5
         version: 2.0.0-alpha.5
@@ -254,16 +236,15 @@ importers:
       '@napi-rs/wasm-runtime':
         specifier: ^1.2.4
         version: 1.2.4(@emnapi/core@2.0.0-alpha.5)(@emnapi/runtime@2.0.0-alpha.5)
+      '@restatedev/restate-sdk-shared-core-native':
+        specifier: workspace:*
+        version: link:../restate-sdk-shared-core-native
+
+  packages/libs/restate-sdk-clients:
+    dependencies:
       '@restatedev/restate-sdk-core':
         specifier: workspace:*
         version: link:../restate-sdk-core
-    devDependencies:
-      '@restatedev/restate-sdk':
-        specifier: workspace:*
-        version: link:../restate-sdk
-      '@types/aws-lambda':
-        specifier: ^8.10.115
-        version: 8.10.161
 
   packages/libs/restate-sdk-core: {}
 
@@ -3086,10 +3067,6 @@ packages:
     resolution: {integrity: sha512-y4Mg2tXshplEbSGzx7amzPwKKOCGuoSRP/CjEdwwk0FOGlUbq6lKuoyDZTNZkmxHdJtp54hdfY/JUrdL7Xfdug==}
     engines: {node: '>=14'}
 
-  commander@13.1.0:
-    resolution: {integrity: sha512-/rFeCpNJQbhSZjGVwO9RFV3xPqbnERS8MmIQzCtD/zl6gpJuV/bMLuN92oG3F7d8oDEHHRrujSXNUr8fpjntKw==}
-    engines: {node: '>=18'}
-
   compress-commons@6.0.2:
     resolution: {integrity: sha512-6FqVXeETqWPoGcfzrXb37E50NP0LXT8kAMu5ooZayhWWdgEY4lBEEcbQNXtkuKQsGduxiIcI4gOTsxTmuq/bSg==}
     engines: {node: '>= 14'}
@@ -3560,10 +3537,6 @@ packages:
 
   fs-constants@1.0.0:
     resolution: {integrity: sha512-y6OAwoSIf7FyjMIv94u+b5rdheZEjzR63GTyZJm5qh4Bi+2YgwLCcI/fPFZkL5PSixOt6ZNKm+w+Hfp/Bciwow==}
-
-  fs-extra@11.3.0:
-    resolution: {integrity: sha512-Z4XaCL6dUDHfP/jT25jJKMmtxvuwbkrD1vNSMFlo9lNLY2c5FHYSQgHPRZUjAB26TpDEoW9HCOgplrdbaPV/ew==}
-    engines: {node: '>=14.14'}
 
   fs-extra@11.3.4:
     resolution: {integrity: sha512-CTXd6rk/M3/ULNQj8FBqBWHYBVYybQ3VPBw0xGKFe3tuH7ytT6ACnvzpIQ3UZtB8yvUKC2cXn1a+x+5EVQLovA==}
@@ -5152,14 +5125,6 @@ packages:
         optional: true
       jsdom:
         optional: true
-
-  wasm-pack-inline@0.1.4:
-    resolution: {integrity: sha512-oIBCa/IG1PZPO6kfkPl158I55ua4r4tvCP1giYE+HZ0k2g80quman76Bo53T0nlyCFlSjfKb+/YXk5fbMg8ulg==}
-    engines: {node: '>=10'}
-    hasBin: true
-
-  wasm-pack@0.0.0:
-    resolution: {integrity: sha512-0BUQsu8p7oMogWBVQHY0vT+amMPOm4eBqLVDC0N57yV7b4Scn/iMZ5q0g0vGvweTiTz/RIGElmJ4B0+Oo/RGNg==}
 
   wcwidth@1.0.1:
     resolution: {integrity: sha512-XHPEwS0q6TaxcvG85+8EYkbiCux2XtWG2mkc47Ng2A77BQu9+DqIOJldST4HgPkuea7dvKSj5VgX3P1d4rW8Tg==}
@@ -7749,8 +7714,6 @@ snapshots:
 
   commander@10.0.1: {}
 
-  commander@13.1.0: {}
-
   compress-commons@6.0.2:
     dependencies:
       crc-32: 1.2.2
@@ -8327,12 +8290,6 @@ snapshots:
       signal-exit: 4.1.0
 
   fs-constants@1.0.0: {}
-
-  fs-extra@11.3.0:
-    dependencies:
-      graceful-fs: 4.2.11
-      jsonfile: 6.2.0
-      universalify: 2.0.1
 
   fs-extra@11.3.4:
     dependencies:
@@ -10116,13 +10073,6 @@ snapshots:
       - terser
       - tsx
       - yaml
-
-  wasm-pack-inline@0.1.4:
-    dependencies:
-      commander: 13.1.0
-      fs-extra: 11.3.0
-
-  wasm-pack@0.0.0: {}
 
   wcwidth@1.0.1:
     dependencies:

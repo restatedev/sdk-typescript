@@ -4,6 +4,9 @@
     "composite": false,
     "baseUrl": ".",
     "paths": {
+      "#vm": [
+        "packages/libs/restate-sdk/src/endpoint/handlers/vm/index.ts"
+      ],
       "@restatedev/restate-sdk": ["packages/libs/restate-sdk/src/index.ts"],
       "@restatedev/restate-sdk/fetch": [
         "packages/libs/restate-sdk/src/fetch.ts"
@@ -14,12 +17,6 @@
       "@restatedev/restate-sdk/node": ["packages/libs/restate-sdk/src/node.ts"],
       "@restatedev/restate-sdk-clients": [
         "packages/libs/restate-sdk-clients/src/index.ts"
-      ],
-      "@restatedev/restate-sdk-cloudflare-workers": [
-        "packages/libs/restate-sdk-cloudflare-workers/src/index.ts"
-      ],
-      "@restatedev/restate-sdk-cloudflare-workers/fetch": [
-        "packages/libs/restate-sdk-cloudflare-workers/src/fetch.ts"
       ],
       "@restatedev/restate-sdk-core": [
         "packages/libs/restate-sdk-core/src/index.ts"
@@ -48,9 +45,6 @@
     },
     {
       "path": "packages/libs/restate-sdk-clients"
-    },
-    {
-      "path": "packages/libs/restate-sdk-cloudflare-workers"
     },
     {
       "path": "packages/libs/restate-sdk-core"

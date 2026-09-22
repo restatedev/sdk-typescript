@@ -16,7 +16,7 @@ import type {
   InvocationId,
   InvocationPromise,
 } from "./context.js";
-import type * as vm from "./endpoint/handlers/vm/index.js";
+import type * as vm from "#vm";
 import {
   CancelledError,
   RestateError,

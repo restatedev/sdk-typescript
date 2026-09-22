@@ -13,9 +13,9 @@
  * Shared-core loader for Node.js / Deno / Bun.
  *
  * The Restate shared core is a Rust crate compiled with napi-rs. Here we load its **native addon**
- * (`@restatedev/restate-sdk-shared-core-native`). On Cloudflare Workers / edge this whole file is
- * replaced at package time (see `restate-sdk-cloudflare-workers/patches/vm/`) with a build that runs
- * the same crate compiled to wasm.
+ * (`@restatedev/restate-sdk-shared-core-native`). This is the default target of the `#vm` subpath
+ * import; on Cloudflare Workers / edge the `workerd` / `worker` / `edge-light` condition resolves
+ * `#vm` to `./index.workerd.js` instead, which runs the same crate compiled to wasm.
  *
  * The runtime *values* below come from the native addon; the *types* come from its generated
  * declarations, except the three externally-tagged unions the binding types as `any`, which we
@@ -41,8 +41,7 @@ function loadSharedCore(): SharedCore {
   } catch (e) {
     throw new Error(
       `Failed to load the Restate shared-core native addon ('${NATIVE_PACKAGE}') for this ` +
-        `platform. On Cloudflare Workers / edge use '@restatedev/restate-sdk-cloudflare-workers' ` +
-        `instead. Cause: ${e instanceof Error ? e.message : String(e)}`
+        `platform. Cause: ${e instanceof Error ? e.message : String(e)}`
     );
   }
   // Hand the SDK's logging functions to the native addon (fires synchronously, on the JS thread).
