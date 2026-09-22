@@ -16,7 +16,7 @@ import type {
   InvocationId,
   InvocationPromise,
 } from "./context.js";
-import type * as vm from "./endpoint/handlers/vm/sdk_shared_core_wasm_bindings.js";
+import type * as vm from "./endpoint/handlers/vm/index.js";
 import {
   CancelledError,
   RestateError,

@@ -31,7 +31,7 @@ import { X_RESTATE_SERVER } from "../../user_agent.js";
 import { CommandError, ContextImpl } from "../../context_impl.js";
 import { restoreError, sanitizeError } from "../../error_sanitization.js";
 import type { InvocationId, Request } from "../../context.js";
-import * as vm from "./vm/sdk_shared_core_wasm_bindings.js";
+import * as vm from "./vm/index.js";
 import { HandlerKind } from "../../types/rpc.js";
 import { createLogger, type Logger } from "../../logging/logger.js";
 import { DEFAULT_CONSOLE_LOGGER_LOG_LEVEL } from "../../logging/console_logger_transport.js";

@@ -10,9 +10,9 @@ cp -r ../restate-sdk/dist .
 # Copy fetch.js
 cp patches/fetch.js dist/fetch.js
 
-# Copy vm
+# Replace the vm dir with the Cloudflare (napi wasm) variant: the deferred workerd loader, the
+# threadless wasm32-wasip1 module, a top-level-await selector (index.js), and the LogLevel /
+# bundler-patch shim (sdk_shared_core_wasm_bindings.js).
 rm -r dist/endpoint/handlers/vm
 cp -r patches/vm dist/endpoint/handlers
-
-# Copy vm entrypoint
-cp patches/sdk_shared_core_wasm_bindings.js dist/endpoint/handlers/vm
+rm -f dist/endpoint/handlers/vm/.gitignore

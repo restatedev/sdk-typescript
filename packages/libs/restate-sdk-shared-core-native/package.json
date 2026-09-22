@@ -1,0 +1,38 @@
+{
+  "name": "@restatedev/restate-sdk-shared-core-native",
+  "version": "0.0.0",
+  "description": "napi-rs native build of the Restate SDK shared core (Node.js/Deno/Bun)",
+  "author": "Restate Developers",
+  "license": "MIT",
+  "private": true,
+  "type": "commonjs",
+  "main": "index.cjs",
+  "types": "index.d.ts",
+  "napi": {
+    "binaryName": "restate-sdk-shared-core-native",
+    "targets": [
+      "x86_64-unknown-linux-gnu",
+      "x86_64-apple-darwin",
+      "aarch64-apple-darwin",
+      "x86_64-pc-windows-msvc",
+      "aarch64-unknown-linux-gnu"
+    ]
+  },
+  "files": [
+    "index.cjs",
+    "index.d.ts",
+    "*.node"
+  ],
+  "scripts": {
+    "_build": "napi build --platform --release --no-const-enum --js index.cjs",
+    "build:debug": "napi build --platform --no-const-enum --js index.cjs",
+    "build:wasm": "napi build --target wasm32-wasip1 --release --no-const-enum -o wasm-out"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^3.10.4",
+    "@napi-rs/wasm-runtime": "^1.2.4",
+    "@emnapi/core": "2.0.0-alpha.5",
+    "@emnapi/runtime": "2.0.0-alpha.5",
+    "emnapi": "2.0.0-alpha.5"
+  }
+}

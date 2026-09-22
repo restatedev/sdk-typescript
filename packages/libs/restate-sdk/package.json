@@ -62,6 +62,9 @@
   "dependencies": {
     "@restatedev/restate-sdk-core": "workspace:*"
   },
+  "optionalDependencies": {
+    "@restatedev/restate-sdk-shared-core-native": "workspace:*"
+  },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.115"
   },

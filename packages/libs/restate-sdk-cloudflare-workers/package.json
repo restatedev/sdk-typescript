@@ -45,7 +45,10 @@
     "prepublishOnly": "pnpm -w verify"
   },
   "dependencies": {
-    "@restatedev/restate-sdk-core": "workspace:*"
+    "@restatedev/restate-sdk-core": "workspace:*",
+    "@napi-rs/wasm-runtime": "^1.2.4",
+    "@emnapi/core": "2.0.0-alpha.5",
+    "@emnapi/runtime": "2.0.0-alpha.5"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.115",

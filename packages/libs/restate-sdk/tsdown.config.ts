@@ -11,8 +11,11 @@ export default defineConfig({
   clean: true,
   external: [
     "@restatedev/restate-sdk-core",
+    // Native shared-core addon: loaded at runtime via createRequire, never bundled.
+    "@restatedev/restate-sdk-shared-core-native",
     // Node.js built-in modules
     "http2",
+    "node:module",
     "node:stream",
     "node:stream/web",
     "node:buffer",

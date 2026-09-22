@@ -1,9 +1,16 @@
-/* @ts-self-types="./sdk_shared_core_wasm_bindings.d.ts" */
-import * as wasm from "./sdk_shared_core_wasm_bindings_bg.wasm";
-import { __wbg_set_wasm } from "./sdk_shared_core_wasm_bindings_bg.js";
+// Cloudflare Workers compatibility shim.
+//
+// The real shared core is loaded (asynchronously) by `./index.js`. Two SDK files still import this
+// module directly and synchronously, so we keep a tiny stable stand-in:
+//   - `core_logging.js` reads `LogLevel` (the enum values are fixed: 0..4);
+//   - `fetch.js` calls `cloudflareWorkersBundlerPatch()` (a no-op kept to defeat a CF bundler bug).
 
-__wbg_set_wasm(wasm);
-wasm.__wbindgen_start();
-export {
-    LogLevel, WasmCommandType, WasmHeader, WasmIdentityVerifier, WasmInput, WasmJournalMismatchBehavior, WasmResponseHead, WasmVM, cancel_handle, set_log_level, start
-} from "./sdk_shared_core_wasm_bindings_bg.js";
+export const LogLevel = Object.freeze({
+  TRACE: 0,
+  DEBUG: 1,
+  INFO: 2,
+  WARN: 3,
+  ERROR: 4,
+});
+
+export function cloudflareWorkersBundlerPatch() {}
