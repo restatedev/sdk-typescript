@@ -17,10 +17,9 @@
  * import; on Cloudflare Workers / edge the `workerd` / `worker` / `edge-light` condition resolves
  * `#vm` to `./index.workerd.js` instead, which runs the same crate compiled to wasm.
  *
- * The runtime *values* below come from the addon; the *types* come from its generated declarations.
- * The addon still names its classes `Wasm*` internally (a distinct Rust identifier is needed next to
- * the shared-core's own `Header`, `Failure`, ... types); this module re-exports them without that
- * prefix, which is the surface the rest of the SDK uses.
+ * The runtime *values* below come from the addon; the *types* come from its generated declarations,
+ * except the three externally-tagged unions the binding types as `any`, which are declared here to
+ * match the Rust surface.
  */
 
 import { createRequire } from "node:module";
@@ -54,14 +53,14 @@ const impl = loadSharedCore();
 
 // --- Runtime values (classes / enums / functions) ---
 
-export const VM = impl.WasmVM;
-export const Header = impl.WasmHeader;
-export const Input = impl.WasmInput;
-export const ResponseHead = impl.WasmResponseHead;
-export const IdentityVerifier = impl.WasmIdentityVerifier;
+export const VM = impl.VM;
+export const Header = impl.Header;
+export const Input = impl.Input;
+export const ResponseHead = impl.ResponseHead;
+export const IdentityVerifier = impl.IdentityVerifier;
 export const LogLevel = impl.LogLevel;
-export const CommandType = impl.WasmCommandType;
-export const JournalMismatchBehavior = impl.WasmJournalMismatchBehavior;
+export const CommandType = impl.CommandType;
+export const JournalMismatchBehavior = impl.JournalMismatchBehavior;
 export const cancel_handle = impl.cancel_handle;
 export const set_log_level = impl.set_log_level;
 export const start = impl.start;
@@ -69,23 +68,23 @@ export const start = impl.start;
 // --- Types ---
 
 // Class / enum names need both a value (above) and a type (here).
-export type VM = Native.WasmVM;
-export type Header = Native.WasmHeader;
-export type Input = Native.WasmInput;
-export type ResponseHead = Native.WasmResponseHead;
-export type IdentityVerifier = Native.WasmIdentityVerifier;
+export type VM = Native.VM;
+export type Header = Native.Header;
+export type Input = Native.Input;
+export type ResponseHead = Native.ResponseHead;
+export type IdentityVerifier = Native.IdentityVerifier;
 export type LogLevel = Native.LogLevel;
-export type CommandType = Native.WasmCommandType;
-export type JournalMismatchBehavior = Native.WasmJournalMismatchBehavior;
+export type CommandType = Native.CommandType;
+export type JournalMismatchBehavior = Native.JournalMismatchBehavior;
 
 export type {
-  WasmAwakeable as Awakeable,
-  WasmCallHandle as CallHandle,
-  WasmExponentialRetryConfig as ExponentialRetryConfig,
-  WasmFailure as Failure,
-  WasmFailureMetadata as FailureMetadata,
-  WasmRun as Run,
-  WasmSendHandle as SendHandle,
+  Awakeable,
+  CallHandle,
+  ExponentialRetryConfig,
+  Failure,
+  FailureMetadata,
+  Run,
+  SendHandle,
 } from "@restatedev/restate-sdk-shared-core-native";
 
 // Externally-tagged unions the napi binding types as `any` / `unknown`; declared here to match the
@@ -94,7 +93,7 @@ export type AsyncResultValue =
   | "NotReady"
   | "Empty"
   | { Success: Uint8Array }
-  | { Failure: Native.WasmFailure }
+  | { Failure: Native.Failure }
   | { StateKeys: string[] }
   | { InvocationId: string };
 

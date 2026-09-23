@@ -27,14 +27,14 @@ const impl = __raw && __raw.exports ? __raw.exports : __raw;
 // Hand the SDK's logging functions to the wasm module (fires synchronously, on the JS thread).
 impl.registerLogCallbacks?.(vm_log, fatal);
 
-export const VM = impl.WasmVM;
-export const Header = impl.WasmHeader;
-export const Input = impl.WasmInput;
-export const ResponseHead = impl.WasmResponseHead;
-export const IdentityVerifier = impl.WasmIdentityVerifier;
+export const VM = impl.VM;
+export const Header = impl.Header;
+export const Input = impl.Input;
+export const ResponseHead = impl.ResponseHead;
+export const IdentityVerifier = impl.IdentityVerifier;
 export const LogLevel = impl.LogLevel;
-export const CommandType = impl.WasmCommandType;
-export const JournalMismatchBehavior = impl.WasmJournalMismatchBehavior;
+export const CommandType = impl.CommandType;
+export const JournalMismatchBehavior = impl.JournalMismatchBehavior;
 export const cancel_handle = impl.cancel_handle;
 export const set_log_level = impl.set_log_level;
 export const start = impl.start;

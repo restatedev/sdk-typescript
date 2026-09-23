@@ -1,11 +1,11 @@
-// napi-rs native build of the Restate SDK shared core.
+// napi-rs build of the Restate SDK shared core.
 //
-// This reproduces, method-for-method, the JS surface of the wasm-bindgen build in
-// `sdk-shared-core-wasm-bindings/src/lib.rs` (see the generated
-// `restate-sdk/src/endpoint/handlers/vm/sdk_shared_core_wasm_bindings.d.ts`), so the SDK
-// can load it in place of the wasm module with no other changes. Because napi camelCases
-// method / function / object-field names by default, every snake_case name is pinned with
-// `#[napi(js_name = "...")]`.
+// One crate, two artifacts: a native `.node` addon (Node/Deno/Bun) and a threadless
+// `wasm32-wasip1` wasm (Cloudflare Workers / edge). It exposes the `VM` state machine plus its
+// value types (`Header`, `Input`, `Failure`, ...). The JS-facing classes are named without a
+// prefix; internally the shared-core's own `Header`/`Failure`/... types are imported under `Core*`
+// aliases to avoid the name clash. napi camelCases method / function / object-field names by
+// default, so every snake_case name is pinned with `#[napi(js_name = "...")]`.
 
 #[macro_use]
 extern crate napi_derive;
@@ -20,11 +20,14 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use restate_sdk_shared_core::tracing_pretty::{Pretty, PrettyFields};
 use restate_sdk_shared_core::{
-    AttachInvocationTarget, AwaitResponse, AwakeableHandle, CallHandle, CommandRelationship,
-    CommandType, CoreVM, Error as CoreError, Header, HeaderMap, IdentityVerifier,
-    ImplicitCancellationOption, Input, JournalMismatchRetryBehavior, NonDeterministicChecksOption,
-    NonEmptyValue, OnMaxAttempts, ResponseHead, RetryPolicy, RunExitResult, RunHandle, SendHandle,
-    Target, TerminalFailure, UnresolvedFuture, VMOptions, Value, CANCEL_NOTIFICATION_HANDLE, VM,
+    AttachInvocationTarget, AwaitResponse, AwakeableHandle, CallHandle as CoreCallHandle,
+    CommandRelationship, CommandType as CoreCommandType, CoreVM, Error as CoreError,
+    Header as CoreHeader, HeaderMap, IdentityVerifier as CoreIdentityVerifier,
+    ImplicitCancellationOption, Input as CoreInput, JournalMismatchRetryBehavior,
+    NonDeterministicChecksOption, NonEmptyValue, OnMaxAttempts, ResponseHead as CoreResponseHead,
+    RetryPolicy, RunExitResult, RunHandle, SendHandle as CoreSendHandle, Target, TerminalFailure,
+    UnresolvedFuture as CoreUnresolvedFuture, VMOptions, Value, CANCEL_NOTIFICATION_HANDLE,
+    VM as CoreVmTrait,
 };
 use tracing::metadata::LevelFilter;
 use tracing::{Dispatch, Level, Subscriber};
@@ -50,9 +53,9 @@ fn single_key_obj<'e, T: ToNapiValue>(env: &'e Env, key: &str, val: T) -> Result
     Ok(obj.to_unknown())
 }
 
-/// Throw a `WasmFailure` as a **plain JS object** (not an `Error`), matching the wasm build so
+/// Throw a `Failure` as a **plain JS object** (not an `Error`), matching the wasm build so
 /// the SDK's `errors.ts:ensureError` extracts `{code,message,metadata}`.
-fn throw_failure(env: &Env, failure: WasmFailure) -> Error {
+fn throw_failure(env: &Env, failure: Failure) -> Error {
     match to_unknown(env, failure) {
         Ok(value) => {
             let _ = env.throw(value);
@@ -278,7 +281,7 @@ pub enum LogLevel {
 
 /// How the state machine should behave when it hits a journal mismatch (non-determinism) error.
 #[napi]
-pub enum WasmJournalMismatchBehavior {
+pub enum JournalMismatchBehavior {
     /// Follow the normal retry policy.
     Retry = 0,
     /// Pause the invocation instead of retrying.
@@ -287,18 +290,18 @@ pub enum WasmJournalMismatchBehavior {
     Fail = 2,
 }
 
-impl From<WasmJournalMismatchBehavior> for JournalMismatchRetryBehavior {
-    fn from(value: WasmJournalMismatchBehavior) -> Self {
+impl From<JournalMismatchBehavior> for JournalMismatchRetryBehavior {
+    fn from(value: JournalMismatchBehavior) -> Self {
         match value {
-            WasmJournalMismatchBehavior::Retry => Self::FollowRetryPolicy,
-            WasmJournalMismatchBehavior::Pause => Self::Pause,
-            WasmJournalMismatchBehavior::Fail => Self::FailTerminally,
+            JournalMismatchBehavior::Retry => Self::FollowRetryPolicy,
+            JournalMismatchBehavior::Pause => Self::Pause,
+            JournalMismatchBehavior::Fail => Self::FailTerminally,
         }
     }
 }
 
 #[napi]
-pub enum WasmCommandType {
+pub enum CommandType {
     Input = 0,
     Output = 1,
     GetState = 2,
@@ -320,47 +323,47 @@ pub enum WasmCommandType {
     CancelInvocation = 18,
 }
 
-impl From<WasmCommandType> for CommandType {
-    fn from(value: WasmCommandType) -> Self {
+impl From<CommandType> for CoreCommandType {
+    fn from(value: CommandType) -> Self {
         match value {
-            WasmCommandType::Input => CommandType::Input,
-            WasmCommandType::Output => CommandType::Output,
-            WasmCommandType::GetState => CommandType::GetState,
-            WasmCommandType::GetStateKeys => CommandType::GetStateKeys,
-            WasmCommandType::SetState => CommandType::SetState,
-            WasmCommandType::ClearState => CommandType::ClearState,
-            WasmCommandType::ClearAllState => CommandType::ClearAllState,
-            WasmCommandType::GetPromise => CommandType::GetPromise,
-            WasmCommandType::PeekPromise => CommandType::PeekPromise,
-            WasmCommandType::CompletePromise => CommandType::CompletePromise,
-            WasmCommandType::Sleep => CommandType::Sleep,
-            WasmCommandType::Call => CommandType::Call,
-            WasmCommandType::OneWayCall => CommandType::OneWayCall,
-            WasmCommandType::SendSignal => CommandType::SendSignal,
-            WasmCommandType::Run => CommandType::Run,
-            WasmCommandType::AttachInvocation => CommandType::AttachInvocation,
-            WasmCommandType::GetInvocationOutput => CommandType::GetInvocationOutput,
-            WasmCommandType::CompleteAwakeable => CommandType::CompleteAwakeable,
-            WasmCommandType::CancelInvocation => CommandType::CancelInvocation,
+            CommandType::Input => CoreCommandType::Input,
+            CommandType::Output => CoreCommandType::Output,
+            CommandType::GetState => CoreCommandType::GetState,
+            CommandType::GetStateKeys => CoreCommandType::GetStateKeys,
+            CommandType::SetState => CoreCommandType::SetState,
+            CommandType::ClearState => CoreCommandType::ClearState,
+            CommandType::ClearAllState => CoreCommandType::ClearAllState,
+            CommandType::GetPromise => CoreCommandType::GetPromise,
+            CommandType::PeekPromise => CoreCommandType::PeekPromise,
+            CommandType::CompletePromise => CoreCommandType::CompletePromise,
+            CommandType::Sleep => CoreCommandType::Sleep,
+            CommandType::Call => CoreCommandType::Call,
+            CommandType::OneWayCall => CoreCommandType::OneWayCall,
+            CommandType::SendSignal => CoreCommandType::SendSignal,
+            CommandType::Run => CoreCommandType::Run,
+            CommandType::AttachInvocation => CoreCommandType::AttachInvocation,
+            CommandType::GetInvocationOutput => CoreCommandType::GetInvocationOutput,
+            CommandType::CompleteAwakeable => CoreCommandType::CompleteAwakeable,
+            CommandType::CancelInvocation => CoreCommandType::CancelInvocation,
         }
     }
 }
 
 // ---------------------------------------------------------------------------
-// Classes: WasmHeader / WasmResponseHead / WasmInput
+// Classes: Header / ResponseHead / Input
 // ---------------------------------------------------------------------------
 
 #[napi]
-pub struct WasmHeader {
+pub struct Header {
     key: String,
     value: String,
 }
 
 #[napi]
-impl WasmHeader {
+impl Header {
     #[napi(constructor)]
     pub fn new(key: String, value: String) -> Self {
-        WasmHeader { key, value }
+        Header { key, value }
     }
     #[napi(getter)]
     pub fn key(&self) -> String {
@@ -372,60 +375,60 @@ impl WasmHeader {
     }
 }
 
-fn to_core_header(h: &WasmHeader) -> Header {
-    Header {
+fn to_core_header(h: &Header) -> CoreHeader {
+    CoreHeader {
         key: h.key.clone().into(),
         value: h.value.clone().into(),
     }
 }
 
-fn header_pairs(headers: &[&WasmHeader]) -> Vec<(String, String)> {
+fn header_pairs(headers: &[&Header]) -> Vec<(String, String)> {
     headers
         .iter()
         .map(|h| (h.key.clone(), h.value.clone()))
         .collect()
 }
 
-fn pairs_to_wasm_headers(pairs: &[(String, String)]) -> Vec<WasmHeader> {
+fn pairs_to_wasm_headers(pairs: &[(String, String)]) -> Vec<Header> {
     pairs
         .iter()
-        .map(|(k, v)| WasmHeader::new(k.clone(), v.clone()))
+        .map(|(k, v)| Header::new(k.clone(), v.clone()))
         .collect()
 }
 
 #[napi]
-pub struct WasmResponseHead {
+pub struct ResponseHead {
     status_code: u16,
     headers: Vec<(String, String)>,
 }
 
 #[napi]
-impl WasmResponseHead {
+impl ResponseHead {
     #[napi(getter, js_name = "status_code")]
     pub fn status_code(&self) -> u16 {
         self.status_code
     }
     #[napi(getter)]
-    pub fn headers(&self) -> Vec<WasmHeader> {
+    pub fn headers(&self) -> Vec<Header> {
         pairs_to_wasm_headers(&self.headers)
     }
 }
 
-impl From<ResponseHead> for WasmResponseHead {
-    fn from(value: ResponseHead) -> Self {
-        WasmResponseHead {
+impl From<CoreResponseHead> for ResponseHead {
+    fn from(value: CoreResponseHead) -> Self {
+        ResponseHead {
             status_code: value.status_code,
             headers: value
                 .headers
                 .into_iter()
-                .map(|Header { key, value }| (key.into(), value.into()))
+                .map(|CoreHeader { key, value }| (key.into(), value.into()))
                 .collect(),
         }
     }
 }
 
 #[napi]
-pub struct WasmInput {
+pub struct Input {
     invocation_id: String,
     key: String,
     idempotency_key: Option<String>,
@@ -437,7 +440,7 @@ pub struct WasmInput {
 }
 
 #[napi]
-impl WasmInput {
+impl Input {
     #[napi(getter, js_name = "invocation_id")]
     pub fn invocation_id(&self) -> String {
         self.invocation_id.clone()
@@ -459,7 +462,7 @@ impl WasmInput {
         self.limit_key.clone()
     }
     #[napi(getter)]
-    pub fn headers(&self) -> Vec<WasmHeader> {
+    pub fn headers(&self) -> Vec<Header> {
         pairs_to_wasm_headers(&self.headers)
     }
     #[napi(getter)]
@@ -472,9 +475,9 @@ impl WasmInput {
     }
 }
 
-impl From<Input> for WasmInput {
-    fn from(value: Input) -> Self {
-        WasmInput {
+impl From<CoreInput> for Input {
+    fn from(value: CoreInput) -> Self {
+        Input {
             invocation_id: value.invocation_id,
             key: value.key,
             idempotency_key: value.idempotency_key,
@@ -483,7 +486,7 @@ impl From<Input> for WasmInput {
             headers: value
                 .headers
                 .into_iter()
-                .map(|Header { key, value }| (key.into(), value.into()))
+                .map(|CoreHeader { key, value }| (key.into(), value.into()))
                 .collect(),
             input: (*value.input).to_vec(),
             random_seed: value.random_seed,
@@ -496,21 +499,21 @@ impl From<Input> for WasmInput {
 // ---------------------------------------------------------------------------
 
 #[napi(object)]
-pub struct WasmFailureMetadata {
+pub struct FailureMetadata {
     pub key: String,
     pub value: String,
 }
 
 #[napi(object)]
-pub struct WasmFailure {
+pub struct Failure {
     pub code: u16,
     pub message: String,
-    pub metadata: Vec<WasmFailureMetadata>,
+    pub metadata: Vec<FailureMetadata>,
 }
 
-impl From<CoreError> for WasmFailure {
+impl From<CoreError> for Failure {
     fn from(value: CoreError) -> Self {
-        WasmFailure {
+        Failure {
             code: value.code(),
             message: value.to_string(),
             metadata: vec![],
@@ -518,22 +521,22 @@ impl From<CoreError> for WasmFailure {
     }
 }
 
-impl From<TerminalFailure> for WasmFailure {
+impl From<TerminalFailure> for Failure {
     fn from(value: TerminalFailure) -> Self {
-        WasmFailure {
+        Failure {
             code: value.code,
             message: value.message,
             metadata: value
                 .metadata
                 .into_iter()
-                .map(|(k, v)| WasmFailureMetadata { key: k, value: v })
+                .map(|(k, v)| FailureMetadata { key: k, value: v })
                 .collect(),
         }
     }
 }
 
-impl From<WasmFailure> for TerminalFailure {
-    fn from(value: WasmFailure) -> Self {
+impl From<Failure> for TerminalFailure {
+    fn from(value: Failure) -> Self {
         TerminalFailure {
             code: value.code,
             message: value.message,
@@ -547,7 +550,7 @@ impl From<WasmFailure> for TerminalFailure {
 }
 
 #[napi(object)]
-pub struct WasmExponentialRetryConfig {
+pub struct ExponentialRetryConfig {
     #[napi(js_name = "initial_interval")]
     pub initial_interval: Option<f64>,
     pub factor: f64,
@@ -559,8 +562,8 @@ pub struct WasmExponentialRetryConfig {
     pub max_duration: Option<f64>,
 }
 
-impl From<WasmExponentialRetryConfig> for RetryPolicy {
-    fn from(value: WasmExponentialRetryConfig) -> Self {
+impl From<ExponentialRetryConfig> for RetryPolicy {
+    fn from(value: ExponentialRetryConfig) -> Self {
         RetryPolicy::Exponential {
             initial_interval: Duration::from_millis(
                 value.initial_interval.map(|v| v as u64).unwrap_or(10),
@@ -575,28 +578,28 @@ impl From<WasmExponentialRetryConfig> for RetryPolicy {
 }
 
 #[napi(object)]
-pub struct WasmAwakeable {
+pub struct Awakeable {
     pub id: String,
     pub handle: u32,
 }
 
 #[napi(object)]
-pub struct WasmRun {
+pub struct Run {
     pub replayed: bool,
     pub handle: u32,
 }
 
 #[napi(object)]
-pub struct WasmCallHandle {
+pub struct CallHandle {
     #[napi(js_name = "invocation_id_completion_id")]
     pub invocation_id_completion_id: u32,
     #[napi(js_name = "call_completion_id")]
     pub call_completion_id: u32,
 }
 
-impl From<CallHandle> for WasmCallHandle {
-    fn from(value: CallHandle) -> Self {
-        WasmCallHandle {
+impl From<CoreCallHandle> for CallHandle {
+    fn from(value: CoreCallHandle) -> Self {
+        CallHandle {
             invocation_id_completion_id: value.invocation_id_notification_handle.into(),
             call_completion_id: value.call_notification_handle.into(),
         }
@@ -604,14 +607,14 @@ impl From<CallHandle> for WasmCallHandle {
 }
 
 #[napi(object)]
-pub struct WasmSendHandle {
+pub struct SendHandle {
     #[napi(js_name = "invocation_id_completion_id")]
     pub invocation_id_completion_id: u32,
 }
 
-impl From<SendHandle> for WasmSendHandle {
-    fn from(value: SendHandle) -> Self {
-        WasmSendHandle {
+impl From<CoreSendHandle> for SendHandle {
+    fn from(value: CoreSendHandle) -> Self {
+        SendHandle {
             invocation_id_completion_id: value.invocation_id_notification_handle.into(),
         }
     }
@@ -623,36 +626,36 @@ impl From<SendHandle> for WasmSendHandle {
 
 /// Input to `do_progress`, deserialized from the externally-tagged JS object the SDK builds.
 #[derive(Serialize, Deserialize)]
-enum WasmUnresolvedFutureInput {
+enum UnresolvedFutureInput {
     Single(u32),
-    FirstCompleted(Vec<WasmUnresolvedFutureInput>),
-    AllCompleted(Vec<WasmUnresolvedFutureInput>),
-    FirstSucceededOrAllFailed(Vec<WasmUnresolvedFutureInput>),
-    AllSucceededOrFirstFailed(Vec<WasmUnresolvedFutureInput>),
-    Unknown(Vec<WasmUnresolvedFutureInput>),
+    FirstCompleted(Vec<UnresolvedFutureInput>),
+    AllCompleted(Vec<UnresolvedFutureInput>),
+    FirstSucceededOrAllFailed(Vec<UnresolvedFutureInput>),
+    AllSucceededOrFirstFailed(Vec<UnresolvedFutureInput>),
+    Unknown(Vec<UnresolvedFutureInput>),
 }
 
-impl From<WasmUnresolvedFutureInput> for UnresolvedFuture {
-    fn from(value: WasmUnresolvedFutureInput) -> Self {
-        fn conv(v: Vec<WasmUnresolvedFutureInput>) -> Vec<UnresolvedFuture> {
+impl From<UnresolvedFutureInput> for CoreUnresolvedFuture {
+    fn from(value: UnresolvedFutureInput) -> Self {
+        fn conv(v: Vec<UnresolvedFutureInput>) -> Vec<CoreUnresolvedFuture> {
             v.into_iter().map(Into::into).collect()
         }
         match value {
-            WasmUnresolvedFutureInput::Single(h) => UnresolvedFuture::Single(h.into()),
-            WasmUnresolvedFutureInput::FirstCompleted(c) => UnresolvedFuture::FirstCompleted(conv(c)),
-            WasmUnresolvedFutureInput::AllCompleted(c) => UnresolvedFuture::AllCompleted(conv(c)),
-            WasmUnresolvedFutureInput::FirstSucceededOrAllFailed(c) => {
-                UnresolvedFuture::FirstSucceededOrAllFailed(conv(c))
+            UnresolvedFutureInput::Single(h) => CoreUnresolvedFuture::Single(h.into()),
+            UnresolvedFutureInput::FirstCompleted(c) => CoreUnresolvedFuture::FirstCompleted(conv(c)),
+            UnresolvedFutureInput::AllCompleted(c) => CoreUnresolvedFuture::AllCompleted(conv(c)),
+            UnresolvedFutureInput::FirstSucceededOrAllFailed(c) => {
+                CoreUnresolvedFuture::FirstSucceededOrAllFailed(conv(c))
             }
-            WasmUnresolvedFutureInput::AllSucceededOrFirstFailed(c) => {
-                UnresolvedFuture::AllSucceededOrFirstFailed(conv(c))
+            UnresolvedFutureInput::AllSucceededOrFirstFailed(c) => {
+                CoreUnresolvedFuture::AllSucceededOrFirstFailed(conv(c))
             }
-            WasmUnresolvedFutureInput::Unknown(c) => UnresolvedFuture::Unknown(conv(c)),
+            UnresolvedFutureInput::Unknown(c) => CoreUnresolvedFuture::Unknown(conv(c)),
         }
     }
 }
 
-/// Builds the `WasmDoProgressResult` JS value.
+/// Builds the `DoProgressResult` JS value.
 fn build_do_progress<'e>(env: &'e Env, resp: AwaitResponse) -> Result<Unknown<'e>> {
     match resp {
         AwaitResponse::AnyCompleted => to_unknown(env, "AnyCompleted".to_string()),
@@ -664,24 +667,24 @@ fn build_do_progress<'e>(env: &'e Env, resp: AwaitResponse) -> Result<Unknown<'e
     }
 }
 
-/// Builds the `WasmAsyncResultValue` JS value.
+/// Builds the `AsyncResultValue` JS value.
 fn build_async_result<'e>(env: &'e Env, value: Option<Value>) -> Result<Unknown<'e>> {
     match value {
         None => to_unknown(env, "NotReady".to_string()),
         Some(Value::Void) => to_unknown(env, "Empty".to_string()),
         Some(Value::Success(b)) => single_key_obj(env, "Success", Uint8Array::new(b.to_vec())),
-        Some(Value::Failure(f)) => single_key_obj(env, "Failure", WasmFailure::from(f)),
+        Some(Value::Failure(f)) => single_key_obj(env, "Failure", Failure::from(f)),
         Some(Value::StateKeys(keys)) => single_key_obj(env, "StateKeys", keys),
         Some(Value::InvocationId(id)) => single_key_obj(env, "InvocationId", id),
     }
 }
 
 // ---------------------------------------------------------------------------
-// WasmVM
+// VM
 // ---------------------------------------------------------------------------
 
-#[napi(js_name = "WasmVM")]
-pub struct WasmVM {
+#[napi(js_name = "VM")]
+pub struct VM {
     vm: CoreVM,
     log_dispatcher: Dispatch,
 }
@@ -689,7 +692,7 @@ pub struct WasmVM {
 /// Run `$f` against the core VM under this VM's log dispatcher, then flush buffered logs.
 macro_rules! with_vm {
     ($self:expr, $env:expr, $f:expr) => {{
-        let WasmVM { vm, log_dispatcher } = $self;
+        let VM { vm, log_dispatcher } = $self;
         let __r = tracing::dispatcher::with_default(log_dispatcher, || $f(vm));
         flush_logs($env);
         __r
@@ -697,20 +700,20 @@ macro_rules! with_vm {
 }
 
 #[napi]
-impl WasmVM {
+impl VM {
     #[napi(constructor)]
     pub fn new(
         env: &Env,
-        headers: Vec<&WasmHeader>,
+        headers: Vec<&Header>,
         log_level: LogLevel,
         logger_id: u32,
         disable_payload_checks: bool,
         explicit_cancellation: bool,
-        on_journal_mismatch: WasmJournalMismatchBehavior,
+        on_journal_mismatch: JournalMismatchBehavior,
     ) -> Result<Self> {
         ensure_panic_hook();
         let log_dispatcher = Dispatch::new(log_subscriber(log_level, Some(logger_id)));
-        let header_list = WasmHeaderList(header_pairs(&headers));
+        let header_list = HeaderList(header_pairs(&headers));
 
         let vm_res = tracing::dispatcher::with_default(&log_dispatcher, || {
             CoreVM::new(
@@ -737,13 +740,13 @@ impl WasmVM {
         flush_logs(env);
 
         match vm_res {
-            Ok(vm) => Ok(WasmVM { vm, log_dispatcher }),
+            Ok(vm) => Ok(VM { vm, log_dispatcher }),
             Err(e) => Err(throw_failure(env, e.into())),
         }
     }
 
     #[napi(js_name = "get_response_head")]
-    pub fn get_response_head(&self, env: &Env) -> WasmResponseHead {
+    pub fn get_response_head(&self, env: &Env) -> ResponseHead {
         with_vm!(self, env, |vm: &CoreVM| CoreVM::get_response_head(vm)).into()
     }
 
@@ -791,7 +794,7 @@ impl WasmVM {
         env: &Env,
         error_message: String,
         stacktrace: Option<String>,
-        wasm_command_type: WasmCommandType,
+        wasm_command_type: CommandType,
     ) {
         let mut e = CoreError::internal(error_message);
         if let Some(stacktrace) = stacktrace {
@@ -813,7 +816,7 @@ impl WasmVM {
         env: &Env,
         error_message: String,
         stacktrace: Option<String>,
-        wasm_command_type: WasmCommandType,
+        wasm_command_type: CommandType,
         command_index: u32,
         command_name: Option<String>,
     ) {
@@ -851,8 +854,8 @@ impl WasmVM {
 
     #[napi(js_name = "do_progress", ts_args_type = "future: any", ts_return_type = "any")]
     pub fn do_progress<'e>(&mut self, env: &'e Env, future: Unknown) -> Result<Unknown<'e>> {
-        let parsed: WasmUnresolvedFutureInput = env.from_js_value(future)?;
-        let core_future: UnresolvedFuture = parsed.into();
+        let parsed: UnresolvedFutureInput = env.from_js_value(future)?;
+        let core_future: CoreUnresolvedFuture = parsed.into();
         let r = with_vm!(self, env, |vm: &mut CoreVM| CoreVM::do_await(vm, core_future));
         match r {
             Ok(resp) => build_do_progress(env, resp),
@@ -875,9 +878,9 @@ impl WasmVM {
     // --- Syscalls ---
 
     #[napi(js_name = "sys_input")]
-    pub fn sys_input(&mut self, env: &Env) -> Result<WasmInput> {
+    pub fn sys_input(&mut self, env: &Env) -> Result<Input> {
         with_vm!(self, env, |vm: &mut CoreVM| CoreVM::sys_input(vm))
-            .map(WasmInput::from)
+            .map(Input::from)
             .map_err(|e| throw_failure(env, e.into()))
     }
 
@@ -966,12 +969,12 @@ impl WasmVM {
         handler: String,
         buffer: Uint8Array,
         key: Option<String>,
-        headers: Vec<&WasmHeader>,
+        headers: Vec<&Header>,
         idempotency_key: Option<String>,
         scope: Option<String>,
         limit_key: Option<String>,
         name: Option<String>,
-    ) -> Result<WasmCallHandle> {
+    ) -> Result<CallHandle> {
         let target = Target {
             service,
             handler,
@@ -1002,13 +1005,13 @@ impl WasmVM {
         handler: String,
         buffer: Uint8Array,
         key: Option<String>,
-        headers: Vec<&WasmHeader>,
+        headers: Vec<&Header>,
         delay: Option<BigInt>,
         idempotency_key: Option<String>,
         scope: Option<String>,
         limit_key: Option<String>,
         name: Option<String>,
-    ) -> Result<WasmSendHandle> {
+    ) -> Result<SendHandle> {
         let target = Target {
             service,
             handler,
@@ -1034,9 +1037,9 @@ impl WasmVM {
     }
 
     #[napi(js_name = "sys_awakeable")]
-    pub fn sys_awakeable(&mut self, env: &Env) -> Result<WasmAwakeable> {
+    pub fn sys_awakeable(&mut self, env: &Env) -> Result<Awakeable> {
         with_vm!(self, env, |vm: &mut CoreVM| CoreVM::sys_awakeable(vm))
-            .map(|AwakeableHandle { id, handle }| WasmAwakeable {
+            .map(|AwakeableHandle { id, handle }| Awakeable {
                 id,
                 handle: handle.into(),
             })
@@ -1065,7 +1068,7 @@ impl WasmVM {
         &mut self,
         env: &Env,
         id: String,
-        value: WasmFailure,
+        value: Failure,
     ) -> Result<()> {
         let value = NonEmptyValue::Failure(value.into());
         with_vm!(self, env, |vm: &mut CoreVM| CoreVM::sys_complete_awakeable(
@@ -1111,7 +1114,7 @@ impl WasmVM {
         env: &Env,
         invocation_id: String,
         signal_name: String,
-        value: WasmFailure,
+        value: Failure,
     ) -> Result<()> {
         let value = NonEmptyValue::Failure(value.into());
         with_vm!(self, env, |vm: &mut CoreVM| CoreVM::sys_complete_signal(
@@ -1160,7 +1163,7 @@ impl WasmVM {
         &mut self,
         env: &Env,
         key: String,
-        value: WasmFailure,
+        value: Failure,
     ) -> Result<u32> {
         let value = NonEmptyValue::Failure(value.into());
         with_vm!(self, env, |vm: &mut CoreVM| CoreVM::sys_complete_promise(
@@ -1174,9 +1177,9 @@ impl WasmVM {
     }
 
     #[napi(js_name = "sys_run")]
-    pub fn sys_run(&mut self, env: &Env, name: String) -> Result<WasmRun> {
+    pub fn sys_run(&mut self, env: &Env, name: String) -> Result<Run> {
         with_vm!(self, env, |vm: &mut CoreVM| CoreVM::sys_run(vm, name))
-            .map(|RunHandle { replayed, handle }| WasmRun {
+            .map(|RunHandle { replayed, handle }| Run {
                 replayed,
                 handle: handle.into(),
             })
@@ -1205,7 +1208,7 @@ impl WasmVM {
         &mut self,
         env: &Env,
         handle: u32,
-        value: WasmFailure,
+        value: Failure,
     ) -> Result<()> {
         let result = RunExitResult::TerminalFailure(value.into());
         with_vm!(self, env, |vm: &mut CoreVM| CoreVM::propose_run_completion(
@@ -1225,7 +1228,7 @@ impl WasmVM {
         error_message: String,
         error_stacktrace: Option<String>,
         attempt_duration: BigInt,
-        config: Option<WasmExponentialRetryConfig>,
+        config: Option<ExponentialRetryConfig>,
     ) -> Result<()> {
         let result = RunExitResult::RetryableFailure {
             attempt_duration: Duration::from_millis(attempt_duration.get_u64().1),
@@ -1328,7 +1331,7 @@ impl WasmVM {
     }
 
     #[napi(js_name = "sys_write_output_failure")]
-    pub fn sys_write_output_failure(&mut self, env: &Env, value: WasmFailure) -> Result<()> {
+    pub fn sys_write_output_failure(&mut self, env: &Env, value: Failure) -> Result<()> {
         let value = NonEmptyValue::Failure(value.into());
         with_vm!(self, env, |vm: &mut CoreVM| CoreVM::sys_write_output(
             vm,
@@ -1356,12 +1359,12 @@ impl WasmVM {
 }
 
 // ---------------------------------------------------------------------------
-// Header map + identity verifier
+// CoreHeader map + identity verifier
 // ---------------------------------------------------------------------------
 
-struct WasmHeaderList(Vec<(String, String)>);
+struct HeaderList(Vec<(String, String)>);
 
-impl HeaderMap for WasmHeaderList {
+impl HeaderMap for HeaderList {
     type Error = Infallible;
 
     fn extract(&self, name: &str) -> std::result::Result<Option<&str>, Self::Error> {
@@ -1375,23 +1378,23 @@ impl HeaderMap for WasmHeaderList {
 }
 
 #[napi]
-pub struct WasmIdentityVerifier {
-    identity_verifier: IdentityVerifier,
+pub struct IdentityVerifier {
+    identity_verifier: CoreIdentityVerifier,
 }
 
 #[napi]
-impl WasmIdentityVerifier {
+impl IdentityVerifier {
     #[napi(constructor)]
     pub fn new(keys: Vec<String>) -> Result<Self> {
         let k: Vec<&str> = keys.iter().map(|s| s.as_str()).collect();
         let identity_verifier =
-            IdentityVerifier::new(&k).map_err(|e| Error::from_reason(e.to_string()))?;
-        Ok(WasmIdentityVerifier { identity_verifier })
+            CoreIdentityVerifier::new(&k).map_err(|e| Error::from_reason(e.to_string()))?;
+        Ok(IdentityVerifier { identity_verifier })
     }
 
     #[napi(js_name = "verify_identity")]
-    pub fn verify_identity(&self, path: String, headers: Vec<&WasmHeader>) -> Result<()> {
-        let list = WasmHeaderList(header_pairs(&headers));
+    pub fn verify_identity(&self, path: String, headers: Vec<&Header>) -> Result<()> {
+        let list = HeaderList(header_pairs(&headers));
         self.identity_verifier
             .verify_identity(&list, &path)
             .map_err(|e| Error::from_reason(e.to_string()))?;
