@@ -74,8 +74,8 @@
   "optionalDependencies": {
     "@restatedev/restate-sdk-shared-core-native": "workspace:*",
     "@napi-rs/wasm-runtime": "^1.2.4",
-    "@emnapi/core": "2.0.0-alpha.5",
-    "@emnapi/runtime": "2.0.0-alpha.5"
+    "@emnapi/core": "^1.11.3",
+    "@emnapi/runtime": "^1.11.3"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.115"
