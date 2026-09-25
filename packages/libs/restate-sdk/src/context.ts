@@ -1032,6 +1032,44 @@ export const RestatePromise = {
    *
    * See {@link Promise.any} for more details.
    *
+   * **NOTE**: The `AggregateError` is **not** a {@link TerminalError}, even when every rejection reason is one.
+   * Restate treats an error thrown by a handler as terminal only when it is a {@link TerminalError},
+   * so a handler that lets the `AggregateError` propagate is retried, although every alternative has
+   * already failed permanently. To fail the invocation instead, convert the aggregate explicitly.
+   * Convert only when **every** reason is a {@link TerminalError}; otherwise keep it retryable:
+   *
+   * ```ts
+   * function allAlternativesFailed(e: unknown): TerminalError | undefined {
+   *   if (
+   *     e instanceof AggregateError &&
+   *     e.errors.every((err): err is TerminalError => err instanceof TerminalError)
+   *   ) {
+   *     return new TerminalError(
+   *       `All ${e.errors.length} alternatives failed: ${e.errors
+   *         .map((err) => err.message)
+   *         .join("; ")}`
+   *     );
+   *   }
+   *   return undefined;
+   * }
+   *
+   * // Inline, in the handler:
+   * try {
+   *   return await RestatePromise.any([primary, fallback]);
+   * } catch (e) {
+   *   throw allAlternativesFailed(e) ?? e;
+   * }
+   *
+   * // Or declaratively, for one handler (or a whole service via `ServiceOptions`):
+   * restate.handlers.handler({ asTerminalError: allAlternativesFailed }, async (ctx) =>
+   *   RestatePromise.any([primary, fallback])
+   * );
+   * ```
+   *
+   * `RestatePromise.any([])` rejects with an `AggregateError` whose `errors` array is empty; the check above
+   * treats that as terminal too, since there is nothing left to retry. Test `e.errors.length` if you need a
+   * different outcome. Nested combinators are not inspected recursively.
+   *
    * @param values An iterable of Promises.
    * @returns A new Promise.
    */

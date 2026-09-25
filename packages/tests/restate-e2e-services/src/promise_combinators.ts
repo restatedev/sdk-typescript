@@ -11,6 +11,31 @@ import * as restate from "@restatedev/restate-sdk";
 import { REGISTRY } from "./services.js";
 import { TerminalError } from "@restatedev/restate-sdk";
 
+/**
+ * Documented handling pattern for https://github.com/restatedev/sdk-typescript/issues/672.
+ *
+ * `RestatePromise.any` rejects with a native `AggregateError` when every input rejects. That
+ * aggregate is not a `TerminalError`, so by default the invocation is retried. This helper turns
+ * it into a `TerminalError` only when every rejection reason is itself terminal (which includes
+ * the empty-input aggregate, whose `errors` array is empty), and leaves anything else untouched.
+ *
+ * Keep in sync with the `RestatePromise.any` JSDoc example in
+ * packages/libs/restate-sdk/src/context.ts.
+ */
+export function allAlternativesFailed(e: unknown): TerminalError | undefined {
+  if (
+    e instanceof AggregateError &&
+    e.errors.every((err): err is TerminalError => err instanceof TerminalError)
+  ) {
+    return new TerminalError(
+      `All ${e.errors.length} alternatives failed: ${e.errors
+        .map((err) => err.message)
+        .join("; ")}`
+    );
+  }
+  return undefined;
+}
+
 const promiseCombinators = restate.service({
   name: "PromiseCombinators",
   handlers: {
@@ -78,6 +103,53 @@ const promiseCombinators = restate.service({
         RestatePromise.reject<string>(new restate.TerminalError(m))
       );
       return RestatePromise.any(promises);
+    },
+
+    anyWithOneFulfilled: async (
+      _ctx: restate.Context,
+      input: { messages: string[]; fulfillIndex: number; value: string }
+    ): Promise<string> => {
+      const promises = input.messages.map((m, i) =>
+        i === input.fulfillIndex
+          ? RestatePromise.resolve(input.value)
+          : RestatePromise.reject<string>(new restate.TerminalError(m))
+      );
+      return RestatePromise.any(promises);
+    },
+
+    // Same input as anyWithAllRejected, with the documented inline conversion (see #672).
+    anyWithAllRejectedAsTerminal: async (
+      _ctx: restate.Context,
+      messages: string[]
+    ): Promise<string> => {
+      const promises = messages.map((m) =>
+        RestatePromise.reject<string>(new restate.TerminalError(m))
+      );
+      try {
+        return await RestatePromise.any(promises);
+      } catch (e) {
+        throw allAlternativesFailed(e) ?? e;
+      }
+    },
+
+    // Same input as anyWithAllRejected, with the documented declarative conversion (see #672).
+    anyWithAllRejectedAsTerminalErrorOption: restate.handlers.handler(
+      { asTerminalError: allAlternativesFailed },
+      async (_ctx: restate.Context, messages: string[]): Promise<string> => {
+        const promises = messages.map((m) =>
+          RestatePromise.reject<string>(new restate.TerminalError(m))
+        );
+        return RestatePromise.any(promises);
+      }
+    ),
+
+    // any([]) rejects with an empty AggregateError; the documented conversion treats it as terminal.
+    anyEmptyAsTerminal: async (_ctx: restate.Context): Promise<string> => {
+      try {
+        return await RestatePromise.any<restate.RestatePromise<string>[]>([]);
+      } catch (e) {
+        throw allAlternativesFailed(e) ?? e;
+      }
     },
 
     allSettledMixed: async (

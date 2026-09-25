@@ -48,22 +48,42 @@ export async function waitForInvocationOutcome(
   options?: {
     timeout?: number;
     interval?: number;
+    /**
+     * Upper bound for a single outcome check, covering both admin queries and
+     * their response bodies. Defaults to `timeout`, so the helper settles within
+     * about `timeout + requestTimeout` even if the admin API stops responding.
+     */
+    requestTimeout?: number;
   }
 ): Promise<InvocationOutcome> {
+  const timeout = options?.timeout ?? 10_000;
+  const requestTimeout = options?.requestTimeout ?? timeout;
   let outcome: InvocationOutcome | undefined;
 
-  await expect
-    .poll(
-      async () => {
-        outcome = await getInvocationOutcome(adminAPIBaseUrl, invocationId);
-        return outcome;
-      },
-      {
-        timeout: options?.timeout ?? 10_000,
-        interval: options?.interval ?? 100,
-      }
-    )
-    .toMatchObject(expected);
+  // expect.poll runs one last check at its deadline and waits for it, and that
+  // check can overlap one still in flight. Each check is therefore bounded, and
+  // every request this call started is aborted once it settles.
+  const owned = new AbortController();
+  try {
+    await expect
+      .poll(
+        async () => {
+          outcome = await getInvocationOutcome(
+            adminAPIBaseUrl,
+            invocationId,
+            AbortSignal.any([owned.signal, AbortSignal.timeout(requestTimeout)])
+          );
+          return outcome;
+        },
+        {
+          timeout,
+          interval: options?.interval ?? 100,
+        }
+      )
+      .toMatchObject(expected);
+  } finally {
+    owned.abort();
+  }
 
   return outcome!;
 }
@@ -101,9 +121,11 @@ export interface InvocationOutcome {
   transientErrors?: TransientError[];
 }
 
+// `signal` bounds both queries below, including reading their response bodies.
 async function getInvocationOutcome(
   adminUrl: string,
-  invocationId: string
+  invocationId: string,
+  signal?: AbortSignal
 ): Promise<InvocationOutcome> {
   const res = await fetch(`${adminUrl}/query`, {
     method: "POST",
@@ -120,6 +142,7 @@ async function getInvocationOutcome(
         WHERE i.id = '${invocationId}'
       `,
     }),
+    signal,
   });
   const json = (await res.json()) as {
     rows: {
@@ -188,6 +211,7 @@ async function getInvocationOutcome(
     body: JSON.stringify({
       query: `SELECT event_json FROM sys_journal_events WHERE id = '${invocationId}' AND event_type = 'TransientError' ORDER BY appended_at`,
     }),
+    signal,
   });
   const eventsJson = (await eventsRes.json()) as {
     rows: { event_json: string }[];
