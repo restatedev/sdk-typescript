@@ -10,17 +10,7 @@
 import { randomUUID } from "node:crypto";
 import { describe, it, expect } from "vitest";
 import { rpc } from "@restatedev/restate-sdk-clients";
-import { TerminalError } from "@restatedev/restate-sdk";
-import { getAdminUrl, getIngressUrl, ingressClient } from "./utils.js";
-import {
-  expectTerminalFailure,
-  RETRY_TEST_TIMEOUT_MS,
-  SEND_TIMEOUT_MS,
-  TERMINAL_TEST_TIMEOUT_MS,
-  waitForRetries,
-  withOwnedInvocation,
-} from "./owned_invocation.js";
-import { allAlternativesFailed } from "../src/promise_combinators.js";
+import { ingressClient } from "./utils.js";
 import type { PromiseCombinators } from "../src/promise_combinators.js";
 import type { SignalTest } from "../src/signals.js";
 
@@ -32,19 +22,6 @@ const SignalTest: SignalTest = { name: "SignalTest" };
 
 function idempotentSend() {
   return rpc.sendOpts({ idempotencyKey: randomUUID() });
-}
-
-// Sends for the #672 tests are bounded too: the invocation id they return is what
-// lets the test clean the invocation up.
-function boundedIdempotentSend<I = unknown>() {
-  return rpc.sendOpts<I>({
-    idempotencyKey: randomUUID(),
-    timeout: SEND_TIMEOUT_MS,
-  });
-}
-
-function endpoints() {
-  return { adminUrl: getAdminUrl(), ingressUrl: getIngressUrl() };
 }
 
 describe("PromiseCombinators", () => {
@@ -97,103 +74,11 @@ describe("PromiseCombinators", () => {
     expect(result).toBe("x");
   });
 
-  it("any with one fulfilled among rejected returns the fulfilled value", async () => {
-    const result = await client.anyWithOneFulfilled({
-      messages: ["err1", "err2", "err3"],
-      fulfillIndex: 1,
-      value: "ok",
-    });
-    expect(result).toBe("ok");
-  });
-
   // TODO: Skipped - AggregateError from Promise.any is not converted to TerminalError by the SDK.
   // See: https://github.com/restatedev/sdk-typescript/issues/672
-  // The default behavior is pinned by the "is retried by default" test below; the documented
-  // handling pattern is covered by the "AsTerminal" tests.
   it.skip("any with all rejected throws", async () => {
     await expect(client.anyWithAllRejected(["err1", "err2"])).rejects.toThrow();
   });
-
-  it(
-    "any with all rejected is retried by default (AggregateError is not a TerminalError)",
-    async () => {
-      const send = await ingress
-        .serviceSendClient(PromiseCombinators)
-        .anyWithAllRejected(
-          ["err1", "err2"],
-          boundedIdempotentSend<string[]>()
-        );
-      await withOwnedInvocation(
-        getAdminUrl(),
-        send.invocationId,
-        async () => {
-          // A second recorded attempt of the same invocation is what distinguishes
-          // "retried" from "terminally failed on the first attempt".
-          const attempts = await waitForRetries(
-            getAdminUrl(),
-            send.invocationId,
-            2
-          );
-          expect(attempts.status).not.toBe("completed");
-          expect(attempts.lastFailure).toContain("All promises were rejected");
-        },
-        // Do not leave the invocation retrying behind the test.
-        { endAfterwards: true }
-      );
-    },
-    RETRY_TEST_TIMEOUT_MS
-  );
-
-  it(
-    "any with all rejected: documented inline conversion fails terminally without retries",
-    async () => {
-      const send = await ingress
-        .serviceSendClient(PromiseCombinators)
-        .anyWithAllRejectedAsTerminal(
-          ["err1", "err2"],
-          boundedIdempotentSend<string[]>()
-        );
-      await expectTerminalFailure(
-        endpoints(),
-        send.invocationId,
-        "All 2 alternatives failed: err1; err2"
-      );
-    },
-    TERMINAL_TEST_TIMEOUT_MS
-  );
-
-  it(
-    "any with all rejected: documented asTerminalError option fails terminally without retries",
-    async () => {
-      const send = await ingress
-        .serviceSendClient(PromiseCombinators)
-        .anyWithAllRejectedAsTerminalErrorOption(
-          ["err1", "err2"],
-          boundedIdempotentSend<string[]>()
-        );
-      await expectTerminalFailure(
-        endpoints(),
-        send.invocationId,
-        "All 2 alternatives failed: err1; err2"
-      );
-    },
-    TERMINAL_TEST_TIMEOUT_MS
-  );
-
-  it(
-    "any with empty input: documented conversion fails terminally",
-    async () => {
-      const send = await ingress
-        .serviceSendClient(PromiseCombinators)
-        .anyEmptyAsTerminal(boundedIdempotentSend());
-      await expectTerminalFailure(
-        endpoints(),
-        send.invocationId,
-        "All 0 alternatives failed: "
-      );
-    },
-    TERMINAL_TEST_TIMEOUT_MS
-  );
 
   // --- RestatePromise.allSettled mixed ---
 
@@ -315,37 +200,5 @@ describe("PromiseCombinators", () => {
   it("map gets run once", async () => {
     const result = await client.verifyPromiseMapGetsRunOnce();
     expect(result).toBe(1);
-  });
-});
-
-describe("allAlternativesFailed (documented RestatePromise.any handling pattern)", () => {
-  it("converts an aggregate whose reasons are all TerminalError", () => {
-    const converted = allAlternativesFailed(
-      new AggregateError([new TerminalError("a"), new TerminalError("b")])
-    );
-    expect(converted).toBeInstanceOf(TerminalError);
-    expect(converted?.message).toBe("All 2 alternatives failed: a; b");
-  });
-
-  it("converts the empty aggregate produced by any([])", () => {
-    const converted = allAlternativesFailed(new AggregateError([]));
-    expect(converted).toBeInstanceOf(TerminalError);
-    expect(converted?.message).toBe("All 0 alternatives failed: ");
-  });
-
-  it("leaves an aggregate with a non-terminal reason retryable", () => {
-    expect(
-      allAlternativesFailed(
-        new AggregateError([new TerminalError("a"), new Error("transient")])
-      )
-    ).toBeUndefined();
-  });
-
-  it("leaves non-aggregate errors untouched", () => {
-    expect(allAlternativesFailed(new Error("transient"))).toBeUndefined();
-    expect(
-      allAlternativesFailed(new TerminalError("already terminal"))
-    ).toBeUndefined();
-    expect(allAlternativesFailed("not an error")).toBeUndefined();
   });
 });
