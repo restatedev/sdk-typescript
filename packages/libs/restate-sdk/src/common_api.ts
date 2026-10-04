@@ -83,8 +83,11 @@ export type {
   ServiceHandlerOpts,
   WorkflowHandlerOpts,
   ObjectHandlerOpts,
+  ActorHandlerOpts,
   ServiceOpts,
   ObjectOpts,
+  ActorOpts,
+  ActorOptions,
   WorkflowOpts,
   ServiceOptions,
   ObjectOptions,
@@ -95,10 +98,20 @@ export {
   service,
   object,
   workflow,
+  actor,
   handlers,
   Opts,
   SendOpts,
 } from "./types/rpc.js";
+export type {
+  ActorContext,
+  ActorSharedContext,
+  ActorKV,
+  ActorKVKey,
+  ActorKVValue,
+  ReadonlyActorKV,
+  ActorSendClient,
+} from "./actor.js";
 
 export { rpc } from "./types/rpc.js";
 

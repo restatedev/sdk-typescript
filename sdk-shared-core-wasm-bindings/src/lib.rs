@@ -5,7 +5,7 @@ use restate_sdk_shared_core::{
     Header, HeaderMap, IdentityVerifier, ImplicitCancellationOption, Input,
     JournalMismatchRetryBehavior, NonDeterministicChecksOption, NonEmptyValue, OnMaxAttempts,
     ResponseHead, RetryPolicy, RunExitResult, RunHandle, SendHandle, Target, TerminalFailure,
-    UnresolvedFuture, VMOptions, Value, CANCEL_NOTIFICATION_HANDLE, VM,
+    TxBegin, UnresolvedFuture, VMOptions, Value, CANCEL_NOTIFICATION_HANDLE, VM,
 };
 use serde::{Deserialize, Serialize};
 use std::cmp;
@@ -1124,6 +1124,105 @@ impl WasmVM {
     pub fn sys_end(&mut self) -> Result<(), WasmFailure> {
         use_log_dispatcher!(self, CoreVM::sys_end)
             .map(Into::into)
+            .map_err(Into::into)
+    }
+
+    // Transactional handlers
+
+    /// Returns `undefined` if the handler body must be executed,
+    /// otherwise the handle of the commit already performed by a previous attempt.
+    pub fn sys_tx_begin(&mut self) -> Result<Option<WasmNotificationHandle>, WasmFailure> {
+        use_log_dispatcher!(self, CoreVM::sys_tx_begin)
+            .map(|tx_begin| match tx_begin {
+                TxBegin::Execute => None,
+                TxBegin::Committed(handle) => Some(handle.into()),
+            })
+            .map_err(Into::into)
+    }
+
+    pub fn tx_get_state(&mut self, key: String) -> Result<Option<Uint8Array>, WasmFailure> {
+        use_log_dispatcher!(self, |vm| CoreVM::tx_state_get(vm, &key))
+            .map(|value| value.map(|b| (&*b).into()))
+            .map_err(Into::into)
+    }
+
+    pub fn tx_get_state_keys(&mut self) -> Result<Vec<String>, WasmFailure> {
+        use_log_dispatcher!(self, CoreVM::tx_state_get_keys).map_err(Into::into)
+    }
+
+    pub fn tx_set_state(&mut self, key: String, buffer: Vec<u8>) -> Result<(), WasmFailure> {
+        use_log_dispatcher!(self, |vm| CoreVM::tx_state_set(vm, key, buffer.into()))
+            .map_err(Into::into)
+    }
+
+    pub fn tx_clear_state(&mut self, key: String) -> Result<(), WasmFailure> {
+        use_log_dispatcher!(self, |vm| CoreVM::tx_state_clear(vm, key)).map_err(Into::into)
+    }
+
+    pub fn tx_clear_all_state(&mut self) -> Result<(), WasmFailure> {
+        use_log_dispatcher!(self, CoreVM::tx_state_clear_all).map_err(Into::into)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn tx_send(
+        &mut self,
+        service: String,
+        handler: String,
+        buffer: Vec<u8>,
+        key: Option<String>,
+        headers: Vec<WasmHeader>,
+        delay: Option<u64>,
+        idempotency_key: Option<String>,
+        scope: Option<String>,
+        limit_key: Option<String>,
+        name: Option<String>,
+    ) -> Result<(), WasmFailure> {
+        use_log_dispatcher!(self, |vm| CoreVM::tx_send(
+            vm,
+            Target {
+                service,
+                handler,
+                key,
+                idempotency_key,
+                scope,
+                limit_key,
+                headers: headers.into_iter().map(Header::from).collect(),
+            },
+            buffer.into(),
+            delay.map(|delay| now_since_unix_epoch() + Duration::from_millis(delay)),
+            name,
+        ))
+        .map_err(Into::into)
+    }
+
+    pub fn sys_tx_commit_success(
+        &mut self,
+        buffer: Vec<u8>,
+    ) -> Result<WasmNotificationHandle, WasmFailure> {
+        use_log_dispatcher!(self, |vm| CoreVM::sys_tx_commit(
+            vm,
+            NonEmptyValue::Success(buffer.into())
+        ))
+        .map(Into::into)
+        .map_err(Into::into)
+    }
+
+    pub fn sys_tx_commit_failure(
+        &mut self,
+        value: WasmFailure,
+    ) -> Result<WasmNotificationHandle, WasmFailure> {
+        use_log_dispatcher!(self, |vm| CoreVM::sys_tx_commit(
+            vm,
+            NonEmptyValue::Failure(value.into())
+        ))
+        .map(Into::into)
+        .map_err(Into::into)
+    }
+
+    /// Applies the commit and ends the invocation. Returns true if the committed output is a success.
+    pub fn sys_tx_end(&mut self) -> Result<bool, WasmFailure> {
+        use_log_dispatcher!(self, CoreVM::sys_tx_end)
+            .map(|output| matches!(output, NonEmptyValue::Success(_)))
             .map_err(Into::into)
     }
 

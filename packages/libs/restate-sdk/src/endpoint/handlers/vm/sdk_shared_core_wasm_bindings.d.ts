@@ -259,10 +259,38 @@ export class WasmVM {
   sys_set_state(key: string, buffer: Uint8Array): void;
   sys_signal(signal_name: string): number;
   sys_sleep(millis: bigint, name?: string | null): number;
+  /**
+   * Returns `undefined` if the handler body must be executed,
+   * otherwise the handle of the commit already performed by a previous attempt.
+   */
+  sys_tx_begin(): number | undefined;
+  sys_tx_commit_failure(value: WasmFailure): number;
+  sys_tx_commit_success(buffer: Uint8Array): number;
+  /**
+   * Applies the commit and ends the invocation. Returns true if the committed output is a success.
+   */
+  sys_tx_end(): boolean;
   sys_write_output_failure(value: WasmFailure): void;
   sys_write_output_success(buffer: Uint8Array): void;
   take_notification(handle: number): WasmAsyncResultValue;
   take_output(): Uint8Array;
+  tx_clear_all_state(): void;
+  tx_clear_state(key: string): void;
+  tx_get_state(key: string): Uint8Array | undefined;
+  tx_get_state_keys(): string[];
+  tx_send(
+    service: string,
+    handler: string,
+    buffer: Uint8Array,
+    key: string | null | undefined,
+    headers: WasmHeader[],
+    delay?: bigint | null,
+    idempotency_key?: string | null,
+    scope?: string | null,
+    limit_key?: string | null,
+    name?: string | null
+  ): void;
+  tx_set_state(key: string, buffer: Uint8Array): void;
 }
 
 export function cancel_handle(): number;

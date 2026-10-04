@@ -45,6 +45,7 @@ import {
 } from "@restatedev/restate-sdk-core";
 import { ensureError, TerminalError } from "./errors.js";
 import type { HooksProvider } from "../hooks.js";
+import type { ActorContext, ActorSharedContext } from "../actor.js";
 
 // ----------- rpc clients -------------------------------------------------------
 
@@ -648,6 +649,15 @@ export type ObjectHandlerOpts<I, O> = ServiceHandlerOpts<I, O> & {
   enableLazyState?: boolean;
 };
 
+/**
+ * Options of actor handlers.
+ *
+ * Actor handlers always read the state eagerly sent by the runtime, so lazy state can't be enabled.
+ *
+ * @experimental
+ */
+export type ActorHandlerOpts<I, O> = ServiceHandlerOpts<I, O>;
+
 export type WorkflowHandlerOpts<I, O> = ServiceHandlerOpts<I, O> & {
   /**
    * When set to `true`, lazy state will be enabled for all invocations to this handler.
@@ -667,7 +677,8 @@ export class HandlerWrapper {
     opts?:
       | ServiceHandlerOpts<unknown, unknown>
       | ObjectHandlerOpts<unknown, unknown>
-      | WorkflowHandlerOpts<unknown, unknown>
+      | WorkflowHandlerOpts<unknown, unknown>,
+    actor: boolean = false
   ): HandlerWrapper {
     // we must create here a copy of the handler
     // to be able to reuse the original handler in other places.
@@ -676,7 +687,7 @@ export class HandlerWrapper {
       return handler.apply(this, args);
     };
 
-    return new HandlerWrapper(kind, handlerCopy, opts);
+    return new HandlerWrapper(kind, handlerCopy, opts, actor);
   }
 
   public static fromHandler(handler: any): HandlerWrapper | undefined {
@@ -690,7 +701,11 @@ export class HandlerWrapper {
     public readonly options?:
       | ServiceHandlerOpts<unknown, unknown>
       | ObjectHandlerOpts<unknown, unknown>
-      | WorkflowHandlerOpts<unknown, unknown>
+      | WorkflowHandlerOpts<unknown, unknown>,
+    /**
+     * True if this is an actor handler, see {@link actor}.
+     */
+    public readonly actor: boolean = false
   ) {}
 
   bindInstance(t: unknown) {
@@ -980,6 +995,126 @@ export namespace handlers {
         throw new TypeError("The second argument must be a function");
       }
       return HandlerWrapper.from(HandlerKind.SHARED, fn, opts).transpose();
+    }
+  }
+
+  /**
+   * Actor handlers, see {@link actor}.
+   *
+   * @experimental
+   */
+  export namespace actor {
+    /**
+     * Creates an actor handler, where the whole handler is a single commit boundary.
+     * See {@link ActorContext} for the execution semantics.
+     *
+     * This is the default for handlers of an {@link actor}, so you need it only to pass options,
+     * or to add actor handlers to a regular {@link object}.
+     *
+     * @param opts additional configurations
+     * @param fn the handler to execute
+     */
+    export function exclusive<
+      O,
+      I = void,
+      TState extends TypedState = UntypedState,
+    >(
+      opts: ActorHandlerOpts<I, O>,
+      fn: (ctx: ActorContext<TState>, input: I) => Promise<O>
+    ): RemoveVoidArgument<typeof fn>;
+
+    /**
+     * Creates an actor handler, where the whole handler is a single commit boundary.
+     * See {@link ActorContext} for the execution semantics.
+     *
+     * @param fn the handler to execute
+     */
+    export function exclusive<
+      O,
+      I = void,
+      TState extends TypedState = UntypedState,
+    >(
+      fn: (ctx: ActorContext<TState>, input: I) => Promise<O>
+    ): RemoveVoidArgument<typeof fn>;
+
+    export function exclusive<O, I = void>(
+      optsOrFn:
+        | ActorHandlerOpts<I, O>
+        | ((ctx: ActorContext, input: I) => Promise<O>),
+      fn?: (ctx: ActorContext, input: I) => Promise<O>
+    ) {
+      if (typeof optsOrFn === "function") {
+        return HandlerWrapper.from(
+          HandlerKind.EXCLUSIVE,
+          optsOrFn,
+          undefined,
+          true
+        ).transpose();
+      }
+      if (typeof fn !== "function") {
+        throw new TypeError("The second argument must be a function");
+      }
+      return HandlerWrapper.from(
+        HandlerKind.EXCLUSIVE,
+        fn,
+        optsOrFn,
+        true
+      ).transpose();
+    }
+
+    /**
+     * Creates a read-only actor handler. Read-only handlers can run concurrently with other handlers,
+     * and read the state as of the last committed actor handler.
+     *
+     * @param opts additional configurations
+     * @param fn the handler to execute
+     */
+    export function shared<
+      O,
+      I = void,
+      TState extends TypedState = UntypedState,
+    >(
+      opts: ActorHandlerOpts<I, O>,
+      fn: (ctx: ActorSharedContext<TState>, input: I) => Promise<O>
+    ): RemoveVoidArgument<typeof fn>;
+
+    /**
+     * Creates a read-only actor handler. Read-only handlers can run concurrently with other handlers,
+     * and read the state as of the last committed actor handler.
+     *
+     * @param fn the handler to execute
+     */
+    export function shared<
+      O,
+      I = void,
+      TState extends TypedState = UntypedState,
+    >(
+      fn: (ctx: ActorSharedContext<TState>, input: I) => Promise<O>
+    ): RemoveVoidArgument<typeof fn>;
+
+    export function shared<O, I = void>(
+      optsOrFn:
+        | ActorHandlerOpts<I, O>
+        | ((ctx: ActorSharedContext, input: I) => Promise<O>),
+      fn?: (ctx: ActorSharedContext, input: I) => Promise<O>
+    ) {
+      if (typeof optsOrFn === "function") {
+        return HandlerWrapper.from(
+          HandlerKind.SHARED,
+          optsOrFn,
+          undefined,
+          true
+        ).transpose();
+      }
+      if (typeof fn !== "function") {
+        throw new TypeError("The second argument must be a function");
+      }
+      return HandlerWrapper.from(
+        HandlerKind.SHARED,
+        fn,
+        optsOrFn,
+        true
+      ).transpose();
     }
   }
 }
@@ -1436,6 +1571,92 @@ export const object = <P extends string, M>(object: {
       _handlers: buildHandlerDescriptors(routes, object.options?.serde),
     }
   ) as VirtualObjectDefinition<P, M>;
+};
+
+// ----------- actors ----------------------------------------------
+
+export type ActorOpts<U> = {
+  [K in keyof U]: U[K] extends ObjectHandler<U[K], ActorContext<any>>
+    ? U[K]
+    : U[K] extends ObjectHandler<U[K], ActorSharedContext<any>>
+      ? U[K]
+      : U[K] extends ObjectHandler<U[K], ObjectContext<any>>
+        ? U[K]
+        : U[K] extends ObjectHandler<U[K], ObjectSharedContext<any>>
+          ? U[K]
+          :
+              | ObjectHandler<U[K], ActorContext<any>>
+              | ObjectHandler<U[K], ActorSharedContext<any>>;
+};
+
+/**
+ * Options of an actor. Actors always read the state eagerly sent by the runtime, so lazy state can't be enabled.
+ *
+ * @experimental
+ */
+export type ActorOptions = ServiceOptions;
+
+/**
+ * Define a Restate actor: a virtual object whose handlers, by default, are actor handlers.
+ *
+ * An actor handler runs to completion against an in-memory, synchronous key-value view of the actor state ({@link ActorContext.kv}),
+ * without recording each step in the journal. When it returns, its state mutations, outgoing messages and result
+ * are committed atomically, as a single journal entry. See {@link ActorContext} for the execution semantics.
+ *
+ * Actors are virtual objects: they're invoked and addressed in the same way, using the actor name and a key.
+ * Regular journaled handlers can be mixed in using {@link handlers.object.exclusive}, e.g. for handlers that need to await calls or timers.
+ *
+ * @example
+ * ```ts
+ * const counter = actor({
+ *   name: "counter",
+ *   handlers: {
+ *     add: async (ctx: ActorContext, amount: number) => {
+ *       return ctx.kv.update<number>("count", (c) => (c ?? 0) + amount);
+ *     },
+ *     get: handlers.actor.shared(async (ctx: ActorSharedContext) => {
+ *       return ctx.kv.get<number>("count") ?? 0;
+ *     }),
+ *   },
+ * });
+ * ```
+ *
+ * @experimental
+ */
+export const actor = <P extends string, M>(actor: {
+  name: P;
+  handlers: ActorOpts<M> & ThisType<M>;
+  description?: string;
+  metadata?: Record<string, string>;
+  options?: ActorOptions;
+}): VirtualObjectDefinition<P, M> => {
+  if (!actor.handlers) {
+    throw new Error("actor handlers must be defined");
+  }
+
+  const handlers = Object.entries(actor.handlers).map(([name, handler]) => {
+    if (handler instanceof Function) {
+      if (HandlerWrapper.fromHandler(handler) !== undefined) {
+        return [name, handler];
+      }
+
+      return [
+        name,
+        HandlerWrapper.from(
+          HandlerKind.EXCLUSIVE,
+          handler,
+          undefined,
+          true
+        ).transpose(),
+      ];
+    }
+    throw new TypeError(`Unexpected handler type ${name}`);
+  });
+
+  return object({
+    ...actor,
+    handlers: Object.fromEntries(handlers) as ObjectOpts<M> & ThisType<M>,
+  });
 };
 
 // ----------- workflows ----------------------------------------------

@@ -29,6 +29,8 @@ import {
 import { parseUrlComponents } from "../components.js";
 import { X_RESTATE_SERVER } from "../../user_agent.js";
 import { CommandError, ContextImpl } from "../../context_impl.js";
+import { ActorContextImpl } from "../../actor_impl.js";
+import { NotificationReadyPromise } from "../../promises.js";
 import { restoreError, sanitizeError } from "../../error_sanitization.js";
 import type { InvocationId, Request } from "../../context.js";
 import * as vm from "./vm/sdk_shared_core_wasm_bindings.js";
@@ -498,12 +500,20 @@ class RestateInvokeResponse implements RestateResponse {
     // error) are broken out by raceWithAttemptEnd, which races against
     // invocationEndPromise — rejected by ContextImpl when the attempt ends.
     try {
-      await startUserHandler(
-        ctx,
-        this.service,
-        this.handler,
-        journalValueCodec
-      );
+      if (this.handler.isActor()) {
+        await startActorHandler(
+          ctx,
+          this.handler,
+          this.journalValueCodecInit !== undefined
+        );
+      } else {
+        await startUserHandler(
+          ctx,
+          this.service,
+          this.handler,
+          journalValueCodec
+        );
+      }
     } catch (e) {
       notifyError(e, ctx, this.handler.executionOptions.asTerminalError);
     } finally {
@@ -540,12 +550,7 @@ async function bufferJournalReplayInCoreVm(
   }
 }
 
-async function startUserHandler(
-  ctx: ContextImpl,
-  service: Component,
-  handler: ComponentHandler,
-  journalValueCodec: JournalValueCodec
-) {
+function instantiateHooks(ctx: ContextImpl, handler: ComponentHandler) {
   // Instantiate hooks from providers.
   // If a provider throws, the same rules as handler failures apply:
   // TerminalError → terminate invocation, other errors → retry.
@@ -569,6 +574,17 @@ async function startUserHandler(
   ctx.setRunInterceptor(
     composeInterceptors(hooks.map((h) => h.interceptor?.run).filter(isDefined))
   );
+
+  return handlerInterceptor;
+}
+
+async function startUserHandler(
+  ctx: ContextImpl,
+  service: Component,
+  handler: ComponentHandler,
+  journalValueCodec: JournalValueCodec
+) {
+  const handlerInterceptor = instantiateHooks(ctx, handler);
 
   let encodedOutput: Uint8Array | undefined;
   await raceWithAttemptEnd(
@@ -604,6 +620,117 @@ async function startUserHandler(
   ctx.coreVm.sys_write_output_success(encodedOutput!);
   ctx.coreVm.sys_end();
   ctx.vmLogger.info("Invocation completed successfully.");
+}
+
+/**
+ * Experimental toggle for the actor handlers pipelined commit, see `VM::sys_tx_end` in the shared core.
+ */
+const PIPELINED_COMMIT =
+  globalThis.process?.env?.RESTATE_EXPERIMENTAL_ACTOR_PIPELINED_COMMIT ===
+  "true";
+
+/**
+ * Runs an actor handler: the handler body is executed against the transactional VM API,
+ * and its effects are committed atomically together with its result. See {@link ActorContext}.
+ */
+async function startActorHandler(
+  ctx: ContextImpl,
+  handler: ComponentHandler,
+  isJournalCodecDefined: boolean
+) {
+  if (isJournalCodecDefined) {
+    // State reads in actor handlers are synchronous, while the codec decoding is async.
+    throw new TerminalError(
+      "Actor handlers don't support a journal value codec yet."
+    );
+  }
+  const handlerInterceptor = instantiateHooks(ctx, handler);
+
+  if (handler.kind() === HandlerKind.SHARED) {
+    // Read-only: no transaction, reads are served from the state snapshot.
+    const actorCtx = new ActorContextImpl(ctx, true);
+    let encodedOutput: Uint8Array | undefined;
+    try {
+      await raceWithAttemptEnd(
+        ctx,
+        handlerInterceptor
+      )(async () => {
+        encodedOutput = await handler.invoke(
+          actorCtx as unknown as ContextImpl,
+          ctx.request().body
+        );
+      });
+    } finally {
+      actorCtx.close();
+    }
+    ctx.coreVm.sys_write_output_success(encodedOutput!);
+    ctx.coreVm.sys_end();
+    ctx.vmLogger.info("Invocation completed successfully.");
+    return;
+  }
+
+  let commitHandle = ctx.coreVm.sys_tx_begin();
+  const proposedInThisAttempt = commitHandle === undefined;
+  if (commitHandle === undefined) {
+    const actorCtx = new ActorContextImpl(ctx, false);
+    let encodedOutput: Uint8Array | undefined;
+    let failure: TerminalError | undefined;
+    try {
+      await raceWithAttemptEnd(
+        ctx,
+        handlerInterceptor
+      )(async () => {
+        encodedOutput = await handler.invoke(
+          actorCtx as unknown as ContextImpl,
+          ctx.request().body
+        );
+      });
+    } catch (e) {
+      const error = ensureError(e, handler.executionOptions.asTerminalError);
+      if (
+        actorCtx.vmFailure !== undefined ||
+        !(error instanceof TerminalError)
+      ) {
+        // Nothing gets committed, the attempt fails, and the next attempt re-executes the handler.
+        throw e;
+      }
+      // Terminal errors abort the transaction: the error is committed as the result, without the state mutations.
+      logError(ctx.vmLogger, error);
+      failure = error;
+    } finally {
+      actorCtx.close();
+    }
+
+    commitHandle =
+      failure !== undefined
+        ? ctx.coreVm.sys_tx_commit_failure({
+            code: failure.code,
+            message: failure.message,
+            metadata: Object.entries(failure.metadata ?? {}).map(
+              ([key, value]) => ({ key, value })
+            ),
+          })
+        : ctx.coreVm.sys_tx_commit_success(encodedOutput!);
+  } else {
+    ctx.vmLogger.info(
+      "Actor handler already committed by a previous attempt, applying the commit."
+    );
+  }
+
+  // Wait for the commit to be durable, then let the VM apply it.
+  // With the pipelined commit, the VM streams the commands right after the commit proposal instead,
+  // relying on the runtime to store the proposal before any following command.
+  if (!(proposedInThisAttempt && PIPELINED_COMMIT)) {
+    await Promise.race([
+      new NotificationReadyPromise(ctx, commitHandle),
+      ctx.invocationEndPromise.promise,
+    ]);
+  }
+  if (ctx.coreVm.sys_tx_end()) {
+    ctx.vmLogger.info("Invocation completed successfully.");
+  } else {
+    ctx.vmLogger.info("Invocation completed with a terminal error.");
+  }
 }
 
 /**

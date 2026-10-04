@@ -55,6 +55,10 @@ export interface ComponentHandler {
   component(): Component;
   invoke(context: ContextImpl, input: Uint8Array): Promise<Uint8Array>;
   kind(): HandlerKind;
+  /**
+   * True if this is an actor handler, executed as a single transaction.
+   */
+  isActor(): boolean;
 
   /**
    * Returns the execution options, already merged with different layers (endpoint -> service -> handler)
@@ -221,6 +225,11 @@ export class ServiceComponent implements Component {
   }
 
   add(name: string, handlerWrapper: HandlerWrapper) {
+    if (handlerWrapper.actor) {
+      throw new TypeError(
+        `Handler ${this.componentName}/${name} is an actor handler, but ${this.componentName} is a service. Actor handlers can be used only in actors or virtual objects.`
+      );
+    }
     const handler = new ServiceHandler(name, handlerWrapper, this);
     this.handlers.set(name, handler);
     this.serdeRegistry.registerHandlerIO(
@@ -291,6 +300,10 @@ export class ServiceHandler implements ComponentHandler {
     return this.handlerWrapper.kind;
   }
 
+  isActor(): boolean {
+    return this.handlerWrapper.actor;
+  }
+
   invoke(context: ContextImpl, input: Uint8Array): Promise<Uint8Array> {
     return this.handlerWrapper.invoke(context, input);
   }
@@ -316,6 +329,11 @@ export class VirtualObjectComponent implements Component {
   }
 
   add(name: string, wrapper: HandlerWrapper) {
+    if (wrapper.actor && this.options?.enableLazyState) {
+      throw new TypeError(
+        `Actor handler ${this.componentName}/${name} requires eager state, but lazy state is enabled.`
+      );
+    }
     const handler = new VirtualObjectHandler(name, wrapper, this);
     this.handlers.set(name, handler);
     this.serdeRegistry.registerHandlerIO(
@@ -387,6 +405,10 @@ export class VirtualObjectHandler implements ComponentHandler {
     return this.handlerWrapper.kind;
   }
 
+  isActor(): boolean {
+    return this.handlerWrapper.actor;
+  }
+
   invoke(context: ContextImpl, input: Uint8Array): Promise<Uint8Array> {
     return this.handlerWrapper.invoke(context, input);
   }
@@ -410,6 +432,11 @@ export class WorkflowComponent implements Component {
   }
 
   add(name: string, wrapper: HandlerWrapper) {
+    if (wrapper.actor) {
+      throw new TypeError(
+        `Handler ${this.componentName}/${name} is an actor handler, but ${this.componentName} is a workflow. Actor handlers can be used only in actors or virtual objects.`
+      );
+    }
     const handler = new WorkflowHandler(name, wrapper, this);
     this.handlers.set(name, handler);
     this.serdeRegistry.registerHandlerIO(
@@ -483,6 +510,10 @@ export class WorkflowHandler implements ComponentHandler {
 
   kind(): HandlerKind {
     return this.handlerWrapper.kind;
+  }
+
+  isActor(): boolean {
+    return this.handlerWrapper.actor;
   }
 
   invoke(context: ContextImpl, input: Uint8Array): Promise<Uint8Array> {

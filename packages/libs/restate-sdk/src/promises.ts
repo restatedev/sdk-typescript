@@ -234,6 +234,45 @@ export class SingleRestatePromise<T> extends BaseRestatePromise<T> {
   readonly [Symbol.toStringTag] = "RestateSinglePromise";
 }
 
+/**
+ * Completes as soon as the given notification is available in the VM, without taking it.
+ *
+ * Used by actor handlers to await the durability of the transaction commit, before letting the VM apply it.
+ */
+export class NotificationReadyPromise extends BaseRestatePromise<void> {
+  private completed = false;
+  private completablePromise: PromiseWithResolvers<void> =
+    Promise.withResolvers();
+
+  constructor(
+    ctx: ContextImpl,
+    readonly handle: number
+  ) {
+    super(ctx);
+  }
+
+  unresolvedFuture(): vm.WasmUnresolvedFuture | null {
+    return this.completed ? null : { Single: this.handle };
+  }
+
+  tryComplete(): Promise<void> {
+    if (
+      !this.completed &&
+      this[RESTATE_CTX_SYMBOL].coreVm.is_completed(this.handle)
+    ) {
+      this.completed = true;
+      this.completablePromise.resolve();
+    }
+    return Promise.resolve();
+  }
+
+  publicPromise(): Promise<void> {
+    return this.completablePromise.promise;
+  }
+
+  readonly [Symbol.toStringTag] = "RestateNotificationReadyPromise";
+}
+
 export class InvocationRestatePromise<T>
   extends SingleRestatePromise<T>
   implements InvocationPromise<T>
