@@ -12,6 +12,7 @@
     "object": "RESTATE_LOGGING=debug tsx --tsconfig ./tsconfig.json ./src/object.ts",
     "actor": "RESTATE_LOGGING=debug tsx --tsconfig ./tsconfig.json ./src/actor.ts",
     "storage_journal": "RESTATE_LOGGING=debug tsx --tsconfig ./tsconfig.json ./src/storage_journal.ts",
+    "durable_harness": "tsx --tsconfig ./tsconfig.json ./src/durable_harness/app.ts",
     "greeter": "RESTATE_LOGGING=debug tsx --tsconfig ./tsconfig.json ./src/greeter.ts",
     "greeter_hooks": "RESTATE_LOGGING=ERROR tsx --tsconfig ./tsconfig.json ./src/greeter_with_hooks.ts",
     "greeter_http1": "RESTATE_LOGGING=debug tsx --tsconfig ./tsconfig.json ./src/greeter_http1.ts",
