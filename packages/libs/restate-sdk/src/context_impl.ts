@@ -116,6 +116,7 @@ export class ContextImpl
   private readonly trackedInvocationIdPromises?: SingleRestatePromise<string>[];
 
   readonly storageJournal: boolean;
+  private flushScheduled = false;
   // Transactions execute one at a time
   private transactionsQueue: Promise<unknown> = Promise.resolve();
 
@@ -381,6 +382,11 @@ export class ContextImpl
         send.name
       );
       const commandIndex = this.coreVm.last_command_index();
+      if (this.storageJournal) {
+        // A one-way send is often followed by more work rather than by an await, e.g. progress
+        // reports while streaming: write it out right away instead of at the next await point.
+        this.flushSoon();
+      }
 
       return {
         invocationId: new SingleRestatePromise(
@@ -705,6 +711,17 @@ export class ContextImpl
         Failure
       )
     );
+  }
+
+  private flushSoon() {
+    if (this.flushScheduled) {
+      return;
+    }
+    this.flushScheduled = true;
+    queueMicrotask(() => {
+      this.flushScheduled = false;
+      this.outputPump.awaitNextProgress().catch(() => {});
+    });
   }
 
   public transaction<T>(
