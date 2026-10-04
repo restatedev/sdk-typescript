@@ -3,8 +3,8 @@ use restate_sdk_shared_core::tracing_pretty::{Pretty, PrettyFields};
 use restate_sdk_shared_core::{
     AwaitResponse, AwakeableHandle, CallHandle, CommandRelationship, CommandType, CoreVM, Error,
     Header, HeaderMap, IdentityVerifier, ImplicitCancellationOption, Input,
-    JournalMismatchRetryBehavior, NonDeterministicChecksOption, NonEmptyValue, OnMaxAttempts,
-    JournalMode, ResponseHead, Restore, RetryPolicy, RunExitResult, RunHandle, SendHandle,
+    JournalMismatchRetryBehavior, JournalMode, NonDeterministicChecksOption, NonEmptyValue,
+    OnMaxAttempts, ResponseHead, Restore, RetryPolicy, RunExitResult, RunHandle, SendHandle,
     StepBegin, Target, TerminalFailure, TxBegin, UnresolvedFuture, VMOptions, Value,
     CANCEL_NOTIFICATION_HANDLE, VM,
 };
@@ -1280,15 +1280,35 @@ impl WasmVM {
         .map_err(Into::into)
     }
 
+    pub fn sys_storage_fresh(&mut self) -> Result<(), WasmFailure> {
+        use_log_dispatcher!(self, CoreVM::sys_storage_fresh).map_err(Into::into)
+    }
+
+    /// Returns `undefined` if the key can be read with `tx_get_state`,
+    /// otherwise the handle to await before calling `tx_state_take_loaded`.
+    pub fn tx_state_load(
+        &mut self,
+        key: String,
+    ) -> Result<Option<WasmNotificationHandle>, WasmFailure> {
+        use_log_dispatcher!(self, |vm| CoreVM::tx_state_load(vm, key))
+            .map(|h| h.map(Into::into))
+            .map_err(Into::into)
+    }
+
+    pub fn tx_state_take_loaded(
+        &mut self,
+        handle: WasmNotificationHandle,
+    ) -> Result<bool, WasmFailure> {
+        use_log_dispatcher!(self, |vm| CoreVM::tx_state_take_loaded(vm, handle.into()))
+            .map_err(Into::into)
+    }
+
     pub fn sys_step_take_result(
         &mut self,
         handle: WasmNotificationHandle,
     ) -> Result<WasmAsyncResultValue, WasmFailure> {
         Ok(
-            match use_log_dispatcher!(self, |vm| CoreVM::sys_step_take_result(
-                vm,
-                handle.into()
-            ))? {
+            match use_log_dispatcher!(self, |vm| CoreVM::sys_step_take_result(vm, handle.into()))? {
                 None => WasmAsyncResultValue::NotReady,
                 Some(NonEmptyValue::Success(b)) => WasmAsyncResultValue::Success(b.to_vec().into()),
                 Some(NonEmptyValue::Failure(f)) => WasmAsyncResultValue::Failure(f.into()),

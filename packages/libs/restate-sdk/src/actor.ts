@@ -71,6 +71,17 @@ export interface ReadonlyActorKV<TState extends TypedState = UntypedState> {
   ): ActorKVValue<TState, TValue, TKey> | undefined;
 
   /**
+   * Like {@link ReadonlyActorKV.get}, but when the state snapshot doesn't contain `key`, because the state is lazy
+   * or too big to be sent eagerly, it fetches it from Restate. Afterwards `get` can read it synchronously.
+   *
+   * Fetching requires the storage journal mode; in actor handlers this is equivalent to `get`.
+   */
+  load<TValue, TKey extends keyof TState = string>(
+    key: ActorKVKey<TState, TKey>,
+    serde?: Serde<ActorKVValue<TState, TValue, TKey>>
+  ): Promise<ActorKVValue<TState, TValue, TKey> | undefined>;
+
+  /**
    * Returns true if `key` is set.
    */
   has<TKey extends keyof TState = string>(

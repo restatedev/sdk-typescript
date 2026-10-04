@@ -115,7 +115,7 @@ export class ContextImpl
   // If undefined, we're not tracking invocation id promises
   private readonly trackedInvocationIdPromises?: SingleRestatePromise<string>[];
 
-  private readonly storageJournal: boolean;
+  readonly storageJournal: boolean;
   // Transactions execute one at a time
   private transactionsQueue: Promise<unknown> = Promise.resolve();
 
@@ -284,6 +284,9 @@ export class ContextImpl
     }
 
     try {
+      if (call.fresh) {
+        this.coreVm.sys_storage_fresh();
+      }
       const call_handles = this.coreVm.sys_call(
         call.service,
         call.method,
@@ -358,6 +361,9 @@ export class ContextImpl
           ? millisOrDurationToMillis(send.delay)
           : undefined;
 
+      if (send.fresh) {
+        this.coreVm.sys_storage_fresh();
+      }
       const handles = this.coreVm.sys_send(
         send.service,
         send.method,

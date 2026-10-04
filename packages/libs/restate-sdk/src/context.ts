@@ -281,6 +281,12 @@ export type GenericCall<REQ, RES> = {
    * Observability name, recorded in the Restate journal.
    */
   name?: string;
+  /**
+   * Storage journal mode only, see {@link ClientCallOptions.fresh}.
+   *
+   * @experimental
+   */
+  fresh?: boolean;
 };
 
 /**
@@ -314,6 +320,12 @@ export type GenericSend<REQ> = {
    * Observability name, recorded in the Restate journal.
    */
   name?: string;
+  /**
+   * Storage journal mode only, see {@link ClientCallOptions.fresh}.
+   *
+   * @experimental
+   */
+  fresh?: boolean;
 };
 
 /**

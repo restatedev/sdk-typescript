@@ -19,6 +19,7 @@ import type { ContextImpl } from "./context_impl.js";
 import { WasmHeader } from "./endpoint/handlers/vm/sdk_shared_core_wasm_bindings.js";
 import type { WasmVM } from "./endpoint/handlers/vm/sdk_shared_core_wasm_bindings.js";
 import { ensureError } from "./types/errors.js";
+import { NotificationReadyPromise } from "./promises.js";
 import { makeRpcSendProxy } from "./types/rpc.js";
 
 type ClientTarget = {
@@ -113,7 +114,12 @@ export class ActorContextImpl implements ActorContext<any> {
         `Cannot execute '${op}' after the actor handler returned. Make sure to await all the promises in the actor handler.`
       );
     }
-    if (this.readOnly && op !== "get state" && op !== "get state keys") {
+    if (
+      this.readOnly &&
+      op !== "get state" &&
+      op !== "get state keys" &&
+      op !== "load state"
+    ) {
       throw new Error(`Cannot execute '${op}' in a read-only actor handler.`);
     }
     try {
@@ -125,6 +131,19 @@ export class ActorContextImpl implements ActorContext<any> {
       this.ctx.abortAttempt(error);
       throw error;
     }
+  }
+
+  /** Makes `key` readable with `tx_get_state`, fetching it if needed. */
+  async loadState(key: string): Promise<void> {
+    if (!this.ctx.storageJournal) {
+      return;
+    }
+    const handle = this.vm("load state", (vm) => vm.tx_state_load(key));
+    if (handle === undefined) {
+      return;
+    }
+    await new NotificationReadyPromise(this.ctx, handle);
+    this.vm("load state", (vm) => vm.tx_state_take_loaded(handle));
   }
 
   private sendProxy(def: ClientTarget, key?: string): any {
@@ -148,6 +167,11 @@ class ActorKVImpl implements ActorKV<any> {
       return undefined;
     }
     return (serde ?? this.actorCtx.defaultSerde).deserialize(value);
+  }
+
+  async load(key: string, serde?: Serde<any>): Promise<any> {
+    await this.actorCtx.loadState(key);
+    return this.get(key, serde);
   }
 
   has(key: string): boolean {

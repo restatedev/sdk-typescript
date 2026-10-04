@@ -272,6 +272,7 @@ export class WasmVM {
   sys_step_commit_failure(value: WasmFailure): number;
   sys_step_commit_success(buffer: Uint8Array): number;
   sys_step_take_result(handle: number): WasmAsyncResultValue;
+  sys_storage_fresh(): void;
   /**
    * Returns `undefined` if the handler body must be executed,
    * otherwise the handle of the commit already performed by a previous attempt.
@@ -304,6 +305,12 @@ export class WasmVM {
     name?: string | null
   ): void;
   tx_set_state(key: string, buffer: Uint8Array): void;
+  /**
+   * Returns `undefined` if the key can be read with `tx_get_state`,
+   * otherwise the handle to await before calling `tx_state_take_loaded`.
+   */
+  tx_state_load(key: string): number | undefined;
+  tx_state_take_loaded(handle: number): boolean;
 }
 
 export function cancel_handle(): number;

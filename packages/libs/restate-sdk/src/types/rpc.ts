@@ -95,6 +95,14 @@ export type ClientCallOptions<I, O> = {
    * Observability name, recorded in the Restate journal.
    */
   name?: string;
+
+  /**
+   * Storage journal mode only: execute this request in every attempt, instead of reusing the one
+   * a previous attempt already made. Use it for requests that must observe the current state.
+   *
+   * @experimental
+   */
+  fresh?: boolean;
 };
 
 export class Opts<I, O> {
@@ -183,6 +191,14 @@ export type ClientSendOptions<I> = {
    * Observability name, recorded in the Restate journal.
    */
   name?: string;
+
+  /**
+   * Storage journal mode only: execute this request in every attempt, instead of reusing the one
+   * a previous attempt already made. Use it for requests that must observe the current state.
+   *
+   * @experimental
+   */
+  fresh?: boolean;
 };
 
 export class SendOpts<I> {
@@ -287,6 +303,7 @@ export const makeRpcCallProxy = <T>(
             scope,
             limitKey: opts?.limitKey,
             name: opts?.name,
+            fresh: opts?.fresh,
           });
         };
       },
@@ -327,6 +344,7 @@ export const makeRpcSendProxy = <T>(
             scope,
             limitKey: opts?.limitKey,
             name: opts?.name,
+            fresh: opts?.fresh,
           });
         };
       },
