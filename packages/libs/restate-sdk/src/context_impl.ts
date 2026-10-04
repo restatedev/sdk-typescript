@@ -67,6 +67,9 @@ import {
   SingleRestatePromise,
 } from "./promises.js";
 import { InputPump, OutputPump } from "./io.js";
+import { NotificationReadyPromise } from "./promises.js";
+import { ActorContextImpl } from "./actor_impl.js";
+import type { ActorContext } from "./actor.js";
 import { ExternalProgressChannel } from "./utils/external_progress_channel.js";
 import type { ContextInternal } from "./internal.js";
 import { InputReader, OutputWriter } from "./endpoint/handlers/types.js";
@@ -111,6 +114,10 @@ export class ContextImpl
 
   // If undefined, we're not tracking invocation id promises
   private readonly trackedInvocationIdPromises?: SingleRestatePromise<string>[];
+
+  private readonly storageJournal: boolean;
+  // Transactions execute one at a time
+  private transactionsQueue: Promise<unknown> = Promise.resolve();
 
   constructor(
     readonly coreVm: WasmVM,
@@ -157,6 +164,7 @@ export class ContextImpl
     this.trackedInvocationIdPromises = executionOptions?.explicitCancellation
       ? []
       : undefined;
+    this.storageJournal = executionOptions?.journal === "storage";
   }
 
   setRunInterceptor(
@@ -691,6 +699,80 @@ export class ContextImpl
         Failure
       )
     );
+  }
+
+  public transaction<T>(
+    name: string,
+    body: (tx: ActorContext<any>) => T | Promise<T>,
+    options?: { serde?: Serde<T> }
+  ): Promise<T> {
+    if (!this.storageJournal) {
+      return Promise.reject(
+        new TerminalError(
+          "ctx.transaction requires the storage journal mode, set the handler option journal: 'storage'"
+        )
+      );
+    }
+    const result = this.transactionsQueue.then(() =>
+      this.executeTransaction(name, body, options?.serde ?? this.defaultSerde)
+    );
+    this.transactionsQueue = result.catch(() => {});
+    return result;
+  }
+
+  private async executeTransaction<T>(
+    name: string,
+    body: (tx: ActorContext<any>) => T | Promise<T>,
+    serde: Serde<T>
+  ): Promise<T> {
+    let handle: number;
+    try {
+      const committed = this.coreVm.sys_step_begin(name);
+      if (committed !== undefined) {
+        handle = committed;
+      } else {
+        const tx = new ActorContextImpl(this, false);
+        let value: Uint8Array | undefined;
+        let failure: TerminalError | undefined;
+        try {
+          value = serde.serialize(await body(tx));
+        } catch (e) {
+          const error = ensureError(e, this.asTerminalError);
+          if (tx.vmFailure !== undefined || !(error instanceof TerminalError)) {
+            // Nothing is committed, the attempt fails and the next attempt executes the transaction again
+            this.abortAttempt(error);
+            return pendingPromise<T>();
+          }
+          failure = error;
+        } finally {
+          tx.close();
+        }
+        handle =
+          failure !== undefined
+            ? this.coreVm.sys_step_commit_failure(toWasmFailure(failure))
+            : this.coreVm.sys_step_commit_success(value!);
+      }
+    } catch (e) {
+      this.abortAttempt(e);
+      return pendingPromise<T>();
+    }
+
+    // Wait for the commit to be durable
+    await new NotificationReadyPromise(this, handle);
+
+    const result = this.coreVm.sys_step_take_result(handle);
+    if (typeof result === "object" && "Success" in result) {
+      return serde.deserialize(result.Success);
+    }
+    if (typeof result === "object" && "Failure" in result) {
+      throw new TerminalError(result.Failure.message, {
+        errorCode: result.Failure.code,
+        metadata: Object.fromEntries(
+          result.Failure.metadata.map(({ key, value }) => [key, value])
+        ),
+      });
+    }
+    throw new Error(`Unexpected transaction result ${JSON.stringify(result)}`);
   }
 
   public sleep(

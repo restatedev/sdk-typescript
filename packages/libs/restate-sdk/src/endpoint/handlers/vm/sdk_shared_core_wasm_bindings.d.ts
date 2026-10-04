@@ -160,7 +160,8 @@ export class WasmVM {
     logger_id: number,
     disable_payload_checks: boolean,
     explicit_cancellation: boolean,
-    on_journal_mismatch: WasmJournalMismatchBehavior
+    on_journal_mismatch: WasmJournalMismatchBehavior,
+    storage_journal: boolean
   );
   notify_error(error_message: string, stacktrace?: string | null): void;
   notify_error_for_next_command(
@@ -243,6 +244,10 @@ export class WasmVM {
   sys_get_state_keys(): number;
   sys_input(): WasmInput;
   sys_peek_promise(key: string): number;
+  /**
+   * Returns true if the handler must be executed, false if the invocation was already completed.
+   */
+  sys_restore(): boolean;
   sys_run(name: string): WasmRun;
   sys_send(
     service: string,
@@ -259,6 +264,14 @@ export class WasmVM {
   sys_set_state(key: string, buffer: Uint8Array): void;
   sys_signal(signal_name: string): number;
   sys_sleep(millis: bigint, name?: string | null): number;
+  /**
+   * Returns `undefined` if the step body must be executed,
+   * otherwise the handle of the step committed by a previous attempt.
+   */
+  sys_step_begin(name: string): number | undefined;
+  sys_step_commit_failure(value: WasmFailure): number;
+  sys_step_commit_success(buffer: Uint8Array): number;
+  sys_step_take_result(handle: number): WasmAsyncResultValue;
   /**
    * Returns `undefined` if the handler body must be executed,
    * otherwise the handle of the commit already performed by a previous attempt.

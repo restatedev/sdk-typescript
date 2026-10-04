@@ -4,8 +4,9 @@ use restate_sdk_shared_core::{
     AwaitResponse, AwakeableHandle, CallHandle, CommandRelationship, CommandType, CoreVM, Error,
     Header, HeaderMap, IdentityVerifier, ImplicitCancellationOption, Input,
     JournalMismatchRetryBehavior, NonDeterministicChecksOption, NonEmptyValue, OnMaxAttempts,
-    ResponseHead, RetryPolicy, RunExitResult, RunHandle, SendHandle, Target, TerminalFailure,
-    TxBegin, UnresolvedFuture, VMOptions, Value, CANCEL_NOTIFICATION_HANDLE, VM,
+    JournalMode, ResponseHead, Restore, RetryPolicy, RunExitResult, RunHandle, SendHandle,
+    StepBegin, Target, TerminalFailure, TxBegin, UnresolvedFuture, VMOptions, Value,
+    CANCEL_NOTIFICATION_HANDLE, VM,
 };
 use serde::{Deserialize, Serialize};
 use std::cmp;
@@ -557,6 +558,7 @@ impl WasmVM {
         disable_payload_checks: bool,
         explicit_cancellation: bool,
         on_journal_mismatch: WasmJournalMismatchBehavior,
+        storage_journal: bool,
     ) -> Result<WasmVM, WasmFailure> {
         let log_dispatcher = Dispatch::new(log_subscriber(log_level, Some(logger_id)));
 
@@ -579,6 +581,11 @@ impl WasmVM {
                     },
                     awaiting_on_policy: Default::default(),
                     journal_mismatch_retry_behavior: on_journal_mismatch.into(),
+                    journal_mode: if storage_journal {
+                        JournalMode::Storage
+                    } else {
+                        JournalMode::Replay
+                    },
                 },
             )
         })?;
@@ -1224,6 +1231,69 @@ impl WasmVM {
         use_log_dispatcher!(self, CoreVM::sys_tx_end)
             .map(|output| matches!(output, NonEmptyValue::Success(_)))
             .map_err(Into::into)
+    }
+
+    // Storage journal mode
+
+    /// Returns true if the handler must be executed, false if the invocation was already completed.
+    pub fn sys_restore(&mut self) -> Result<bool, WasmFailure> {
+        use_log_dispatcher!(self, CoreVM::sys_restore)
+            .map(|restore| restore == Restore::Execute)
+            .map_err(Into::into)
+    }
+
+    /// Returns `undefined` if the step body must be executed,
+    /// otherwise the handle of the step committed by a previous attempt.
+    pub fn sys_step_begin(
+        &mut self,
+        name: String,
+    ) -> Result<Option<WasmNotificationHandle>, WasmFailure> {
+        use_log_dispatcher!(self, |vm| CoreVM::sys_step_begin(vm, name))
+            .map(|step_begin| match step_begin {
+                StepBegin::Execute => None,
+                StepBegin::Committed(handle) => Some(handle.into()),
+            })
+            .map_err(Into::into)
+    }
+
+    pub fn sys_step_commit_success(
+        &mut self,
+        buffer: Vec<u8>,
+    ) -> Result<WasmNotificationHandle, WasmFailure> {
+        use_log_dispatcher!(self, |vm| CoreVM::sys_step_commit(
+            vm,
+            NonEmptyValue::Success(buffer.into())
+        ))
+        .map(Into::into)
+        .map_err(Into::into)
+    }
+
+    pub fn sys_step_commit_failure(
+        &mut self,
+        value: WasmFailure,
+    ) -> Result<WasmNotificationHandle, WasmFailure> {
+        use_log_dispatcher!(self, |vm| CoreVM::sys_step_commit(
+            vm,
+            NonEmptyValue::Failure(value.into())
+        ))
+        .map(Into::into)
+        .map_err(Into::into)
+    }
+
+    pub fn sys_step_take_result(
+        &mut self,
+        handle: WasmNotificationHandle,
+    ) -> Result<WasmAsyncResultValue, WasmFailure> {
+        Ok(
+            match use_log_dispatcher!(self, |vm| CoreVM::sys_step_take_result(
+                vm,
+                handle.into()
+            ))? {
+                None => WasmAsyncResultValue::NotReady,
+                Some(NonEmptyValue::Success(b)) => WasmAsyncResultValue::Success(b.to_vec().into()),
+                Some(NonEmptyValue::Failure(f)) => WasmAsyncResultValue::Failure(f.into()),
+            },
+        )
     }
 
     pub fn is_processing(&self) -> bool {

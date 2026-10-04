@@ -37,6 +37,7 @@ import type {
   WorkflowDescriptor,
 } from "@restatedev/restate-sdk-core";
 import type { TerminalError } from "./types/errors.js";
+import type { ActorContext } from "./actor.js";
 import {
   InternalRestatePromise,
   CombinatorRestatePromise,
@@ -839,6 +840,36 @@ export interface SignalReference<T> {
 export interface ObjectContext<TState extends TypedState = UntypedState>
   extends Context, KeyValueStore<TState>, RestateObjectContext {
   key: string;
+
+  /**
+   * Execute a transaction: a commit point identified by `name`.
+   *
+   * The transaction body reads and writes the state with the synchronous `tx.kv`, and sends messages with the `tx` send clients.
+   * When the body returns, its state mutations, its messages and its result are committed atomically, as a single journal entry.
+   * If the body throws a {@link TerminalError}, its mutations and messages are discarded, and the error is committed as the result.
+   *
+   * Once committed, the transaction is not executed again: on the next attempts it returns its stored result.
+   * The body must not await other Restate operations.
+   *
+   * Requires the storage journal mode, see the `journal` handler option.
+   *
+   * @example
+   * ```ts
+   * const left = await ctx.transaction("reserve", (tx) => {
+   *   const stock = tx.kv.get<number>("stock") ?? 0;
+   *   if (stock < qty) throw new TerminalError("Out of stock");
+   *   tx.kv.set("stock", stock - qty);
+   *   return stock - qty;
+   * });
+   * ```
+   *
+   * @experimental
+   */
+  transaction<T>(
+    name: string,
+    body: (tx: ActorContext<TState>) => T | Promise<T>,
+    options?: { serde?: Serde<T> }
+  ): Promise<T>;
 }
 
 /**

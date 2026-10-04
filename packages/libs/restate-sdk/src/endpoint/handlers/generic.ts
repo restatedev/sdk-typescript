@@ -304,7 +304,8 @@ class RestateInvokeResponse implements RestateResponse {
       handler.executionOptions.explicitCancellation ?? false,
       onJournalMismatchErrorsToWasm(
         handler.executionOptions.onJournalMismatchErrors
-      )
+      ),
+      handler.executionOptions.journal === "storage"
     );
     const responseHead = this.coreVm.get_response_head();
     this.statusCode = responseHead.status_code;
@@ -452,7 +453,13 @@ class RestateInvokeResponse implements RestateResponse {
 
       // See vm_log below for more details
       registerLogger(this.loggerId, this.vmLogger);
-      if (!this.coreVm.is_processing()) {
+      if (this.handler.executionOptions.journal === "storage") {
+        this.vmLogger.info(
+          this.coreVm.is_processing()
+            ? "Starting invocation."
+            : "Restoring invocation from its journal."
+        );
+      } else if (!this.coreVm.is_processing()) {
         this.vmLogger.info("Replaying invocation.");
       } else {
         this.vmLogger.info("Starting invocation.");
@@ -500,7 +507,15 @@ class RestateInvokeResponse implements RestateResponse {
     // error) are broken out by raceWithAttemptEnd, which races against
     // invocationEndPromise — rejected by ContextImpl when the attempt ends.
     try {
-      if (this.handler.isActor()) {
+      if (
+        this.handler.executionOptions.journal === "storage" &&
+        !ctx.coreVm.sys_restore()
+      ) {
+        // The output is already in the journal, the VM ended the invocation.
+        ctx.vmLogger.info(
+          "Invocation already completed by a previous attempt."
+        );
+      } else if (this.handler.isActor()) {
         await startActorHandler(
           ctx,
           this.handler,

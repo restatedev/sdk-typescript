@@ -48,6 +48,7 @@ export interface ExecutionOptions {
   hooks?: HooksProvider[];
   explicitCancellation?: boolean;
   onJournalMismatchErrors?: "retry" | "pause" | "fail";
+  journal?: "replay" | "storage";
 }
 
 export interface ComponentHandler {
@@ -150,6 +151,7 @@ function createExecutionOptions(
     onJournalMismatchErrors:
       handlerOptions?.onJournalMismatchErrors ??
       serviceOptions?.onJournalMismatchErrors,
+    journal: handlerOptions?.journal ?? serviceOptions?.journal,
   };
 }
 
@@ -335,6 +337,11 @@ export class VirtualObjectComponent implements Component {
       );
     }
     const handler = new VirtualObjectHandler(name, wrapper, this);
+    if (wrapper.actor && handler.executionOptions.journal === "storage") {
+      throw new TypeError(
+        `Actor handler ${this.componentName}/${name} can't use the storage journal mode. Use ctx.transaction in a regular handler instead.`
+      );
+    }
     this.handlers.set(name, handler);
     this.serdeRegistry.registerHandlerIO(
       name,

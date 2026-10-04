@@ -637,6 +637,23 @@ export type ServiceHandlerOpts<I, O> = {
    * @experimental
    */
   onJournalMismatchErrors?: "retry" | "pause" | "fail";
+
+  /**
+   * How the journal is used across attempts.
+   *
+   * - `"replay"` (default): on every attempt the handler replays its journal, so it must execute the same
+   *   operations in the same order, and the SDK checks it.
+   * - `"storage"`: the journal is used as a durable store of results, looked up by name, and the handler
+   *   doesn't need to be deterministic. On every attempt the handler runs from the beginning: runs, transactions,
+   *   calls, one-way calls and sleeps already in the journal are not executed again, they return their stored result.
+   *   They're identified by their name (`name#n` for the n-th occurrence of the same name in one attempt),
+   *   so give a name to the ones whose order can change across attempts.
+   *   State reads are not journaled. Awakeables are not supported, use named signals instead.
+   *   Multiple commit points can be defined with {@link ObjectContext.transaction}.
+   *
+   * @experimental
+   */
+  journal?: "replay" | "storage";
 };
 
 export type ObjectHandlerOpts<I, O> = ServiceHandlerOpts<I, O> & {
@@ -1343,6 +1360,23 @@ export type ServiceOptions = {
    * @experimental
    */
   onJournalMismatchErrors?: "retry" | "pause" | "fail";
+
+  /**
+   * How the journal is used across attempts.
+   *
+   * - `"replay"` (default): on every attempt the handler replays its journal, so it must execute the same
+   *   operations in the same order, and the SDK checks it.
+   * - `"storage"`: the journal is used as a durable store of results, looked up by name, and the handler
+   *   doesn't need to be deterministic. On every attempt the handler runs from the beginning: runs, transactions,
+   *   calls, one-way calls and sleeps already in the journal are not executed again, they return their stored result.
+   *   They're identified by their name (`name#n` for the n-th occurrence of the same name in one attempt),
+   *   so give a name to the ones whose order can change across attempts.
+   *   State reads are not journaled. Awakeables are not supported, use named signals instead.
+   *   Multiple commit points can be defined with {@link ObjectContext.transaction}.
+   *
+   * @experimental
+   */
+  journal?: "replay" | "storage";
 };
 
 /**

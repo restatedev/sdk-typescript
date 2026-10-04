@@ -118,3 +118,35 @@ describe("Actor", () => {
     expect(() => toServiceDiscovery(obj)).toThrow(/lazy state/);
   });
 });
+
+describe("Storage journal mode", () => {
+  it("can be enabled on regular handlers", () => {
+    const obj = restate.object({
+      name: "obj",
+      handlers: {
+        order: restate.handlers.object.exclusive(
+          { journal: "storage" },
+          async (ctx: restate.ObjectContext) => {
+            await ctx.transaction("reserve", (tx) => tx.kv.set("a", 1));
+          }
+        ),
+      },
+    });
+
+    expect(toServiceDiscovery(obj).handlers[0]?.ty).toEqual("EXCLUSIVE");
+  });
+
+  it("is rejected on actor handlers", () => {
+    const a = restate.actor({
+      name: "a",
+      options: { journal: "storage" },
+      handlers: {
+        tx: async (ctx: restate.ActorContext) => {
+          ctx.kv.set("a", 1);
+        },
+      },
+    });
+
+    expect(() => toServiceDiscovery(a)).toThrow(/storage journal mode/);
+  });
+});
