@@ -1032,6 +1032,31 @@ export const RestatePromise = {
    *
    * See {@link Promise.any} for more details.
    *
+   * The native `AggregateError` is not a {@link TerminalError}, even when all rejection reasons are.
+   * If it escapes the handler without being caught by application code or converted through
+   * `asTerminalError`, the invocation follows the server's retry policy.
+   *
+   * For example, an application can choose to fail terminally only when all rejection reasons
+   * are already terminal. This is an application policy, not automatic SDK behavior:
+   *
+   * ```ts
+   * // Inside a handler, with primary and fallback being RestatePromises:
+   * try {
+   *   return await RestatePromise.any([primary, fallback]);
+   * } catch (e) {
+   *   if (
+   *     e instanceof AggregateError &&
+   *     e.errors.every((reason) => reason instanceof TerminalError)
+   *   ) {
+   *     throw new TerminalError("All alternatives failed");
+   *   }
+   *   throw e;
+   * }
+   * ```
+   *
+   * This example also treats empty input as terminal (`every` is true for an empty array).
+   * It checks only immediate rejection reasons, without inspecting nested aggregates.
+   *
    * @param values An iterable of Promises.
    * @returns A new Promise.
    */
