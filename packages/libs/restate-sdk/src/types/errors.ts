@@ -209,10 +209,11 @@ export class PauseError extends RestateError {
   /**
    * Create a `PauseError` from the given cause.
    */
-  static from(cause: any): RetryableError {
+  static from(cause: any): PauseError {
     const error = ensureError(cause);
-    return new RetryableError(error.message, {
+    return new PauseError(error.message, {
       errorCode: error["errorCode" as keyof typeof error] as number,
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       cause: cause,
     });
   }
