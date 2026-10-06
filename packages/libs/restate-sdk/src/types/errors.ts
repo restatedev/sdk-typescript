@@ -213,6 +213,7 @@ export class PauseError extends RestateError {
     const error = ensureError(cause);
     return new PauseError(error.message, {
       errorCode: error["errorCode" as keyof typeof error] as number,
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       cause: cause,
     });
   }
