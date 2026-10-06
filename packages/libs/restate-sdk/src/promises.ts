@@ -16,7 +16,7 @@ import type {
   InvocationId,
   InvocationPromise,
 } from "./context.js";
-import type * as vm from "./endpoint/handlers/vm/sdk_shared_core_wasm_bindings.js";
+import type * as vm from "#vm";
 import {
   CancelledError,
   RestateError,
@@ -79,7 +79,7 @@ export abstract class InternalRestatePromise<T> implements RestatePromise<T> {
 
   abstract tryCancel(): void;
   abstract tryComplete(): Promise<void>;
-  abstract unresolvedFuture(): vm.WasmUnresolvedFuture | null;
+  abstract unresolvedFuture(): vm.UnresolvedFuture | null;
   abstract publicPromise(): Promise<T>;
 
   abstract readonly [Symbol.toStringTag]: string;
@@ -88,7 +88,7 @@ export abstract class InternalRestatePromise<T> implements RestatePromise<T> {
 export type AsyncResultValue =
   | "Empty"
   | { Success: Uint8Array }
-  | { Failure: vm.WasmFailure }
+  | { Failure: vm.Failure }
   | { StateKeys: string[] }
   | { InvocationId: string };
 
@@ -181,7 +181,7 @@ abstract class BaseRestatePromise<T> extends InternalRestatePromise<T> {
 
   abstract override tryComplete(): Promise<void>;
 
-  abstract override unresolvedFuture(): vm.WasmUnresolvedFuture | null;
+  abstract override unresolvedFuture(): vm.UnresolvedFuture | null;
 
   abstract override publicPromise(): Promise<T>;
 
@@ -203,7 +203,7 @@ export class SingleRestatePromise<T> extends BaseRestatePromise<T> {
     super(ctx);
   }
 
-  unresolvedFuture(): vm.WasmUnresolvedFuture | null {
+  unresolvedFuture(): vm.UnresolvedFuture | null {
     return this.state === PromiseState.COMPLETED
       ? null
       : { Single: this.handle };
@@ -325,13 +325,13 @@ export class CombinatorRestatePromise extends BaseRestatePromise<any> {
     );
   }
 
-  unresolvedFuture(): vm.WasmUnresolvedFuture | null {
+  unresolvedFuture(): vm.UnresolvedFuture | null {
     if (this.state === PromiseState.COMPLETED) return null;
     const children = this.childs
       .map((p) => p.unresolvedFuture())
-      .filter((f): f is vm.WasmUnresolvedFuture => f !== null);
+      .filter((f): f is vm.UnresolvedFuture => f !== null);
     if (children.length === 0) return null;
-    return { [this.combinatorVariant]: children } as vm.WasmUnresolvedFuture;
+    return { [this.combinatorVariant]: children } as vm.UnresolvedFuture;
   }
 
   async tryComplete(): Promise<void> {
@@ -378,7 +378,7 @@ export class MappedRestatePromise<T, U> extends BaseRestatePromise<U> {
     await this.inner.tryComplete();
   }
 
-  unresolvedFuture(): vm.WasmUnresolvedFuture | null {
+  unresolvedFuture(): vm.UnresolvedFuture | null {
     const inner = this.inner.unresolvedFuture();
     return inner === null ? null : { Unknown: [inner] };
   }
@@ -491,7 +491,7 @@ export class ConstRestatePromise<T> extends InternalRestatePromise<T> {
     return Promise.resolve();
   }
 
-  unresolvedFuture(): vm.WasmUnresolvedFuture | null {
+  unresolvedFuture(): vm.UnresolvedFuture | null {
     return null;
   }
 
@@ -503,7 +503,7 @@ export class ConstRestatePromise<T> extends InternalRestatePromise<T> {
  */
 export class PromisesExecutor {
   constructor(
-    private readonly coreVm: vm.WasmVM,
+    private readonly coreVm: vm.VM,
     private readonly outputPump: OutputPump,
     private readonly runClosuresTracker: RunClosuresTracker,
     private readonly externalProgressChannel: ExternalProgressChannel,

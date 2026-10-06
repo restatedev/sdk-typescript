@@ -14,7 +14,7 @@ packages/
 │   ├── restate-sdk/               # Main SDK
 │   ├── restate-sdk-clients/       # Client library
 │   ├── restate-sdk-core/          # Core functionality
-│   ├── restate-sdk-cloudflare-workers/  # Cloudflare Workers support
+│   ├── restate-sdk-shared-core-native/  # napi-rs shared core (native .node + wasm for edge)
 │   ├── restate-sdk-testcontainers/     # Testing utilities
 │   └── restate-sdk-zod/           # Zod integration
 ├── examples/                       # Example applications

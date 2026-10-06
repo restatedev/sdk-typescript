@@ -36,6 +36,15 @@
     },
     "./package.json": "./package.json"
   },
+  "imports": {
+    "#vm": {
+      "types": "./dist/endpoint/handlers/vm/index.d.ts",
+      "workerd": "./dist/endpoint/handlers/vm/index.workerd.js",
+      "worker": "./dist/endpoint/handlers/vm/index.workerd.js",
+      "edge-light": "./dist/endpoint/handlers/vm/index.workerd.js",
+      "default": "./dist/endpoint/handlers/vm/index.js"
+    }
+  },
   "files": [
     "dist",
     "README.md"
@@ -47,7 +56,7 @@
     "test": "turbo run _test --filter={.}...",
     "_test": "vitest run",
     "build": "turbo run _build --filter={.}...",
-    "_build": "tsc --noEmit && tsdown",
+    "_build": "tsc --noEmit && tsdown && cp src/endpoint/handlers/vm/index.workerd.js src/endpoint/handlers/vm/shared_core.wasm src/endpoint/handlers/vm/wasi_loader.js dist/endpoint/handlers/vm/",
     "dev": "tsc --noEmit --watch",
     "clean": "rm -rf dist *.tsbuildinfo .turbo",
     "check:types": "turbo run _check:types --filter={.}...",
@@ -61,6 +70,12 @@
   },
   "dependencies": {
     "@restatedev/restate-sdk-core": "workspace:*"
+  },
+  "optionalDependencies": {
+    "@restatedev/restate-sdk-shared-core-native": "workspace:*",
+    "@napi-rs/wasm-runtime": "^1.2.4",
+    "@emnapi/core": "^1.11.3",
+    "@emnapi/runtime": "^1.11.3"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.115"

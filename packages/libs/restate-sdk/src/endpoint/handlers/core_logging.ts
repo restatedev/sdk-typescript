@@ -1,6 +1,5 @@
 import { Logger } from "../../logging/logger.js";
 import { LogSource, RestateLogLevel } from "../../logging/logger_transport.js";
-import * as vm from "./vm/sdk_shared_core_wasm_bindings.js";
 import { defaultLoggerTransport } from "../../logging/console_logger_transport.js";
 
 /**
@@ -15,9 +14,9 @@ const logsTextDecoder = new TextDecoder("utf-8", { fatal: false });
  * When possible, it provides an invocationId, which is used to access the registered invocationLoggers, that should contain the logger per invocation id.
  */
 export function vm_log(
-  level: vm.LogLevel,
+  level: number,
   strBytes: Uint8Array,
-  loggerId?: number
+  loggerId?: number | null
 ) {
   try {
     const logger = (loggerId && invocationLoggers.get(loggerId)) || undefined;
@@ -86,17 +85,19 @@ export function destroyLogger(loggerId: number) {
   invocationLoggers.delete(loggerId);
 }
 
-function wasmLogLevelToRestateLogLevel(level: vm.LogLevel): RestateLogLevel {
+function wasmLogLevelToRestateLogLevel(level: number): RestateLogLevel {
   switch (level) {
-    case vm.LogLevel.TRACE:
+    case 0:
       return RestateLogLevel.TRACE;
-    case vm.LogLevel.DEBUG:
+    case 1:
       return RestateLogLevel.DEBUG;
-    case vm.LogLevel.INFO:
+    case 2:
       return RestateLogLevel.INFO;
-    case vm.LogLevel.WARN:
+    case 3:
       return RestateLogLevel.WARN;
-    case vm.LogLevel.ERROR:
+    case 4:
       return RestateLogLevel.ERROR;
+    default:
+      return RestateLogLevel.INFO;
   }
 }

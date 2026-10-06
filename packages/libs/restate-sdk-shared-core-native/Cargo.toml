@@ -1,0 +1,28 @@
+[package]
+name = "restate-sdk-shared-core-native"
+version = "0.0.0"
+edition = "2021"
+authors = ["Restate Developers <code@restate.dev>"]
+license = "MIT"
+publish = false
+description = "napi-rs native build of the Restate SDK shared core (Node.js/Deno/Bun)"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+napi = { version = "3", features = ["napi6", "serde-json"] }
+napi-derive = "3"
+restate-sdk-shared-core = { version = "7.0.3", features = ["request_identity", "rust_crypto", "tracing_pretty"] }
+serde = { version = "1", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt"] }
+
+[build-dependencies]
+napi-build = "2"
+
+[profile.release]
+opt-level = 2
+# LTO disabled during development for faster builds; re-enable (lto = true, opt-level = 3) for publishing.
+lto = false
+# Keep unwind (NOT abort): napi-rs catches panics at the FFI boundary and converts them to JS errors.

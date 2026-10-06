@@ -1,4 +1,4 @@
-import * as restate from "@restatedev/restate-sdk-cloudflare-workers/fetch";
+import * as restate from "@restatedev/restate-sdk/fetch";
 import { serde } from "@restatedev/restate-sdk-zod";
 
 import { z } from "zod";

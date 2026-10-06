@@ -3,7 +3,11 @@
   "compilerOptions": {
     "outDir": "./dist",
     "rootDir": "./src",
-    "composite": true
+    "composite": true,
+    "baseUrl": ".",
+    "paths": {
+      "#vm": ["./src/endpoint/handlers/vm/index.ts"]
+    }
   },
   "include": ["src/**/*"],
   "references": [
