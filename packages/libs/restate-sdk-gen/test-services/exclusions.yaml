@@ -1,7 +1,13 @@
 exclusions:
   "alwaysSuspending": []
-  "default": []
-  "lazyState": []
+  "default":
+    # restate-sdk-gen doesn't support get state with projection yet
+    - "dev.restate.sdktesting.tests.GetStateWithProjection.valuePresent"
+    - "dev.restate.sdktesting.tests.GetStateWithProjection.valueAbsent"
+  "lazyState":
+    # restate-sdk-gen doesn't support get state with projection yet
+    - "dev.restate.sdktesting.tests.GetStateWithProjection.valuePresent"
+    - "dev.restate.sdktesting.tests.GetStateWithProjection.valueAbsent"
   "persistedTimers": []
   "singleThreadSinglePartition": []
   "threeNodes": []
