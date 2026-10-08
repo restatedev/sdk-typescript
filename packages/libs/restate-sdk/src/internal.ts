@@ -1,6 +1,23 @@
 import { Context, InvocationId, RestatePromise } from "./context.js";
+import type { Serde } from "@restatedev/restate-sdk-core";
 
 export { isSuspendedError } from "./types/errors.js";
+
+/**
+ * Downcast the given context to {@link ContextInternal}, to access the internal APIs.
+ *
+ * Works with every context type passed to handlers, e.g. `Context`, `ObjectContext`, `ObjectSharedContext`, `WorkflowContext`.
+ *
+ * @example
+ * ```ts
+ * const ctxInternal = restate.internal.asInternal(ctx);
+ * ```
+ *
+ * @experimental
+ */
+export function asInternal(ctx: Context): ContextInternal {
+  return ctx as ContextInternal;
+}
 
 /**
  * Internal {@link Context} interface exposing additional features.
@@ -38,7 +55,7 @@ export interface ContextInternal extends Context {
    *   name: "greeter",
    *   handlers: {
    *     greet: async (ctx: restate.Context, name: string) => {
-   *       ctxInternal = ctx as restate.internal.ContextInternal;
+   *       const ctxInternal = restate.internal.asInternal(ctx);
    *       const result = await RestatePromise.race([
    *         ctx.run(() => longRunningTask(name)),
    *         ctxInternal.cancellation().map(() => { throw new restate.TerminalError("Cancelled") }),
@@ -56,7 +73,7 @@ export interface ContextInternal extends Context {
    *   name: "greeter",
    *   handlers: {
    *     greet: async (ctx: restate.Context, name: string) => {
-   *       const ctxInternal = ctx as restate.internal.ContextInternal;
+   *       const ctxInternal = restate.internal.asInternal(ctx);
    *       const controller = new AbortController();
    *       const cancellation = ctxInternal.cancellation()
    *         .map(() => {
@@ -80,7 +97,7 @@ export interface ContextInternal extends Context {
    *   name: "greeter",
    *   handlers: {
    *     greet: async (ctx: restate.Context, name: string) => {
-   *       const ctxInternal = ctx as restate.internal.ContextInternal;
+   *       const ctxInternal = restate.internal.asInternal(ctx);
    *       try {
    *         return await RestatePromise.race([
    *           ctx.run(() => longRunningTask(name)),
@@ -117,4 +134,60 @@ export interface ContextInternal extends Context {
    * @experimental
    */
   cancelPreviousCalls(): RestatePromise<InvocationId[]>;
+
+  /**
+   * Get state from the Restate runtime, apply the given `projection` to it,
+   * and record in the journal only the result of the projection.
+   *
+   * Use this to read big state values when you need only a small part of them:
+   * unlike `ctx.get`, the complete state value is not recorded in the journal,
+   * only its projection.
+   *
+   * It will appear in the UI as run(project:state_key).
+   *
+   * This method **MUST** only be used within Virtual Object and Workflow handlers.
+   *
+   * **NOTE:** Requires Restate >= 1.8 with service protocol V8 enabled, and **does not** work with request/response protocol mode (e.g. with AWS Lambda).
+   *
+   * @param name key of the state to retrieve
+   * @param projection function receiving the state value, or `null` if the state is empty.
+   * @param options serde for the state value, and serde for the projection result.
+   * @returns a {@link RestatePromise} resolved with the result of the projection.
+   *
+   * @example
+   * ```ts
+   * const ctxInternal = restate.internal.asInternal(ctx);
+   * const itemsCount = await ctxInternal.getProject<Item[], number>(
+   *   "items",
+   *   (items) => items?.length ?? 0
+   * );
+   * ```
+   *
+   * @experimental
+   */
+  getProject<TValue, TResult>(
+    name: string,
+    projection: (value: TValue | null) => TResult | Promise<TResult>,
+    options?: GetProjectOptions<TValue, TResult>
+  ): RestatePromise<TResult>;
 }
+
+/**
+ * Options for {@link ContextInternal.getProject}.
+ *
+ * @experimental
+ */
+export type GetProjectOptions<TValue, TResult> = {
+  /**
+   * Serde used to deserialize the state value.
+   */
+  serde?: Serde<TValue>;
+
+  /**
+   * Serde used to serialize the projection result, recorded in the journal.
+   *
+   * If not set, defaults to {@link GetProjectOptions.serde} when that is set,
+   * otherwise to the default serde.
+   */
+  resultSerde?: Serde<TResult>;
+};

@@ -68,7 +68,7 @@ import {
 } from "./promises.js";
 import { InputPump, OutputPump } from "./io.js";
 import { ExternalProgressChannel } from "./utils/external_progress_channel.js";
-import type { ContextInternal } from "./internal.js";
+import type { ContextInternal, GetProjectOptions } from "./internal.js";
 import { InputReader, OutputWriter } from "./endpoint/handlers/types.js";
 import { ExecutionOptions } from "./endpoint/components.js";
 
@@ -99,6 +99,7 @@ export class ContextImpl
   private readonly outputPump: OutputPump;
   readonly inputPump: InputPump;
   private readonly runClosuresTracker: RunClosuresTracker;
+  private readonly ephemeralRequestTracker: EphemeralRequestTracker;
   readonly promisesExecutor: PromisesExecutor;
   private readonly serviceKey: string;
   private runInterceptor: (
@@ -136,6 +137,9 @@ export class ContextImpl
     this.outputPump = new OutputPump(coreVm, outputWriter);
     const externalProgressChannel = new ExternalProgressChannel();
     this.runClosuresTracker = new RunClosuresTracker(externalProgressChannel);
+    this.ephemeralRequestTracker = new EphemeralRequestTracker(
+      externalProgressChannel
+    );
     this.inputPump = new InputPump(
       coreVm,
       inputReader,
@@ -146,6 +150,7 @@ export class ContextImpl
       coreVm,
       this.outputPump,
       this.runClosuresTracker,
+      this.ephemeralRequestTracker,
       externalProgressChannel,
       this.abortAttempt.bind(this)
     );
@@ -214,6 +219,55 @@ export class ContextImpl
       (vm) => vm.sys_get_state(name),
       VoidAsNull,
       SuccessWithSerde(serde ?? this.defaultSerde, this.journalValueCodec)
+    );
+  }
+
+  // DON'T make this function async, for the same reasons of run.
+  public getProject<TValue, TResult>(
+    name: string,
+    projection: (value: TValue | null) => TResult | Promise<TResult>,
+    options?: GetProjectOptions<TValue, TResult>
+  ): RestatePromise<TResult> {
+    const stateSerde: Serde<TValue> =
+      options?.serde ?? (this.defaultSerde as Serde<TValue>);
+    // The state value is read without recording it in the journal,
+    // only the projection result is recorded, as a regular run.
+    return this.run(
+      `project:${name}`,
+      async () => projection(await this.ephemeralStateGet(name, stateSerde)),
+      {
+        // If only the state serde is set, use it for the projection result too.
+        serde:
+          options?.resultSerde ??
+          (options?.serde as Serde<TResult> | undefined),
+      }
+    );
+  }
+
+  /**
+   * Get the state value with an ephemeral command: neither the command nor its notification are recorded in the journal.
+   * Because of this, the returned value MUST be used only within a run closure.
+   *
+   * The returned promise is completed only if a Restate's DurablePromise is being awaited.
+   */
+  private ephemeralStateGet<T>(
+    name: string,
+    serde: Serde<T>
+  ): Promise<T | null> {
+    let ephemeralCompletionId: number;
+    try {
+      ephemeralCompletionId = this.coreVm.ephemeral_state_get(name);
+    } catch (e) {
+      this.abortAttempt(e);
+      return pendingPromise();
+    }
+    return this.ephemeralRequestTracker.register(
+      ephemeralCompletionId,
+      completeUsing<T | null>(
+        {},
+        VoidAsNull,
+        SuccessWithSerde(serde, this.journalValueCodec)
+      )
     );
   }
 
@@ -296,9 +350,13 @@ export class ContextImpl
       const invocationIdPromise = new SingleRestatePromise(
         this,
         call_handles.invocation_id_completion_id,
-        completeCommandPromiseUsing(
-          WasmCommandType.Call,
-          commandIndex,
+        completeUsing(
+          {
+            command: {
+              type: WasmCommandType.Call,
+              index: commandIndex,
+            },
+          },
           InvocationIdCompleter
         )
       );
@@ -310,9 +368,13 @@ export class ContextImpl
       return new InvocationRestatePromise(
         this,
         call_handles.call_completion_id,
-        completeCommandPromiseUsing(
-          WasmCommandType.Call,
-          commandIndex,
+        completeUsing(
+          {
+            command: {
+              type: WasmCommandType.Call,
+              index: commandIndex,
+            },
+          },
           SuccessWithSerde(responseSerde, this.journalValueCodec),
           Failure
         ),
@@ -372,9 +434,13 @@ export class ContextImpl
         invocationId: new SingleRestatePromise(
           this,
           handles.invocation_id_completion_id,
-          completeCommandPromiseUsing(
-            WasmCommandType.OneWayCall,
-            commandIndex,
+          completeUsing(
+            {
+              command: {
+                type: WasmCommandType.OneWayCall,
+                index: commandIndex,
+              },
+            },
             InvocationIdCompleter
           )
         ),
@@ -684,9 +750,8 @@ export class ContextImpl
     return new SingleRestatePromise(
       this,
       handle,
-      completeCommandPromiseUsing(
-        WasmCommandType.Run,
-        commandIndex,
+      completeUsing(
+        { command: { type: WasmCommandType.Run, index: commandIndex } },
         SuccessWithSerde(serde, this.journalValueCodec),
         Failure
       )
@@ -738,7 +803,8 @@ export class ContextImpl
       promise: new SingleRestatePromise(
         this,
         awakeable.handle,
-        completeSignalPromiseUsing(
+        completeUsing(
+          {},
           VoidAsUndefined,
           SuccessWithSerde(serde ?? this.defaultSerde, this.journalValueCodec),
           Failure
@@ -793,7 +859,8 @@ export class ContextImpl
     return new SingleRestatePromise(
       this,
       handle,
-      completeSignalPromiseUsing(
+      completeUsing(
+        {},
         VoidAsUndefined,
         SuccessWithSerde(serde ?? this.defaultSerde, this.journalValueCodec),
         Failure
@@ -814,7 +881,7 @@ export class ContextImpl
       this.cancellationPromise = new SingleRestatePromise(
         this,
         1 /* HANDLE 1 is a hardcoded cancellation signal! */,
-        completeSignalPromiseUsing(VoidAsUndefined)
+        completeUsing({}, VoidAsUndefined)
       );
     }
 
@@ -896,7 +963,15 @@ export class ContextImpl
     return new SingleRestatePromise(
       this,
       handle,
-      completeCommandPromiseUsing(commandType, commandIndex, ...completers)
+      completeUsing(
+        {
+          command: {
+            type: commandType,
+            index: commandIndex,
+          },
+        },
+        ...completers
+      )
     );
   }
 
@@ -1081,6 +1156,58 @@ class DurablePromiseImpl<T> implements DurablePromise<T> {
   }
 }
 
+/// Tracker of the promises of ephemeral commands, e.g. ephemeral state get, keyed by ephemeral completion id.
+/// The promises are completed only by the PromisesExecutor loop, when the related ephemeral notification is ready.
+export class EphemeralRequestTracker {
+  private readonly pending = new Map<
+    number,
+    (value: AsyncResultValue) => Promise<void>
+  >();
+
+  constructor(private readonly channel: ExternalProgressChannel) {}
+
+  register<T>(
+    completionId: number,
+    completer: (
+      value: AsyncResultValue,
+      prom: PromiseWithResolvers<T>
+    ) => Promise<void>
+  ): Promise<T> {
+    const prom = Promise.withResolvers<T>();
+    this.pending.set(completionId, async (value) => {
+      try {
+        await completer(value, prom);
+      } catch (e) {
+        // Ephemeral results are used within run closures, propagate the error there.
+        prom.reject(e);
+      }
+    });
+    // Wake up the progress loop: it will either pick up the notification, if the VM could answer it locally,
+    // or flush the output containing the ephemeral command before waiting again for input.
+    this.channel.signal();
+    return prom.promise;
+  }
+
+  async complete(
+    completionId: number,
+    value: vm.WasmAsyncResultValue
+  ): Promise<void> {
+    const complete = this.pending.get(completionId);
+    if (complete === undefined) {
+      throw new Error(
+        `Ephemeral request with completion id ${completionId} doesn't exist`
+      );
+    }
+    if (value === "NotReady") {
+      throw new Error(
+        `Notification for ephemeral request with completion id ${completionId} is not ready. This is unexpected behavior.`
+      );
+    }
+    this.pending.delete(completionId);
+    await complete(value);
+  }
+}
+
 /// Tracker of run closures to run
 export class RunClosuresTracker {
   private runsToExecute: Map<number, () => Promise<any>> = new Map<
@@ -1142,9 +1269,13 @@ export class CommandError extends Error {
   }
 }
 
-function completeCommandPromiseUsing<T>(
-  commandType: WasmCommandType,
-  commandIndex: number,
+function completeUsing<T>(
+  meta: {
+    command?: {
+      type: WasmCommandType;
+      index: number;
+    };
+  },
   ...completers: Array<Completer>
 ): (value: AsyncResultValue, prom: PromiseWithResolvers<T>) => Promise<void> {
   return async (value: AsyncResultValue, prom: PromiseWithResolvers<any>) => {
@@ -1155,25 +1286,11 @@ function completeCommandPromiseUsing<T>(
         }
       }
     } catch (e) {
-      // eslint-disable-next-line @typescript-eslint/only-throw-error
-      throw new CommandError(e, commandType, commandIndex);
-    }
-
-    throw new Error(
-      `Unexpected variant in async result: ${JSON.stringify(value)}`
-    );
-  };
-}
-
-// This is like the function above, but won't decorate the error with the command metadata
-function completeSignalPromiseUsing<T>(
-  ...completers: Array<Completer>
-): (value: AsyncResultValue, prom: PromiseWithResolvers<T>) => Promise<void> {
-  return async (value: AsyncResultValue, prom: PromiseWithResolvers<any>) => {
-    for (const completer of completers) {
-      if (await completer(value, prom)) {
-        return;
+      if (meta.command !== undefined) {
+        throw new CommandError(e, meta.command.type, meta.command.index);
       }
+      // No meta to use for decoration
+      throw e;
     }
 
     throw new Error(

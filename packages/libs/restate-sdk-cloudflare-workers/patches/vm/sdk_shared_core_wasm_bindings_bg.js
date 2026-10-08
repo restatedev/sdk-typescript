@@ -336,6 +336,19 @@ export class WasmVM {
         return takeFromExternrefTable0(ret[0]);
     }
     /**
+     * @param {string} key
+     * @returns {number}
+     */
+    ephemeral_state_get(key) {
+        const ptr0 = passStringToWasm0(key, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmvm_ephemeral_state_get(this.__wbg_ptr, ptr0, len0);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return ret[0] >>> 0;
+    }
+    /**
      * @returns {WasmResponseHead}
      */
     get_response_head() {
@@ -894,6 +907,17 @@ export class WasmVM {
         if (ret[1]) {
             throw takeFromExternrefTable0(ret[0]);
         }
+    }
+    /**
+     * @param {number} completion_id
+     * @returns {WasmAsyncResultValue}
+     */
+    take_ephemeral_notification(completion_id) {
+        const ret = wasm.wasmvm_take_ephemeral_notification(this.__wbg_ptr, completion_id);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return takeFromExternrefTable0(ret[0]);
     }
     /**
      * @param {number} handle

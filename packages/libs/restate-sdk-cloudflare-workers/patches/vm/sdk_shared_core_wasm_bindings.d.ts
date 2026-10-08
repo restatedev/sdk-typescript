@@ -40,7 +40,7 @@ export interface WasmSendHandle {
 
 export type WasmAsyncResultValue = "NotReady" | "Empty" | { Success: Uint8Array } | { Failure: WasmFailure } | { StateKeys: string[] } | { InvocationId: string };
 
-export type WasmDoProgressResult = "AnyCompleted" | "WaitExternalProgress" | { ExecuteRun: number } | "CancelSignalReceived";
+export type WasmDoProgressResult = "AnyCompleted" | "WaitExternalProgress" | { ExecuteRun: number } | "CancelSignalReceived" | { EphemeralNotificationReady: number };
 
 export type WasmUnresolvedFuture = { Single: number } | { FirstCompleted: WasmUnresolvedFuture[] } | { AllCompleted: WasmUnresolvedFuture[] } | { FirstSucceededOrAllFailed: WasmUnresolvedFuture[] } | { AllSucceededOrFirstFailed: WasmUnresolvedFuture[] } | { Unknown: WasmUnresolvedFuture[] };
 
@@ -134,6 +134,7 @@ export class WasmVM {
     free(): void;
     [Symbol.dispose](): void;
     do_progress(future: WasmUnresolvedFuture): WasmDoProgressResult;
+    ephemeral_state_get(key: string): number;
     get_response_head(): WasmResponseHead;
     is_completed(handle: number): boolean;
     is_processing(): boolean;
@@ -177,6 +178,7 @@ export class WasmVM {
     sys_sleep(millis: bigint, name?: string | null): number;
     sys_write_output_failure(value: WasmFailure): void;
     sys_write_output_success(buffer: Uint8Array): void;
+    take_ephemeral_notification(completion_id: number): WasmAsyncResultValue;
     take_notification(handle: number): WasmAsyncResultValue;
     take_output(): Uint8Array;
 }
