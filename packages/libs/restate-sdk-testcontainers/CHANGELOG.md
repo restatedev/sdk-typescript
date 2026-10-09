@@ -1,5 +1,14 @@
 # @restatedev/restate-sdk-testcontainers
 
+## 1.17.3
+
+### Patch Changes
+
+- Release 1.17.3
+- Updated dependencies
+  - @restatedev/restate-sdk@1.17.3
+  - @restatedev/restate-sdk-clients@1.17.3
+
 ## 1.17.2
 
 ### Patch Changes

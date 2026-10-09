@@ -1,5 +1,11 @@
 # @restatedev/restate-sdk-opentelemetry
 
+## 1.17.3
+
+### Patch Changes
+
+- Release 1.17.3
+
 ## 1.17.2
 
 ### Patch Changes
