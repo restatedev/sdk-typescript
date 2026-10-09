@@ -20,7 +20,7 @@ tracing-subscriber = { version = "0.3.18", default-features = false, features = 
 
 # TODO remove once restate-sdk-shared-core with protocol V8 is released
 [patch.crates-io]
-restate-sdk-shared-core = { git = "https://github.com/restatedev/sdk-shared-core.git", branch = "get-state-without-recording" }
+restate-sdk-shared-core = { git = "https://github.com/restatedev/sdk-shared-core.git", rev = "382649d0652aa6d971ec16e788d24b4b2c8c8b45" }
 
 [profile.release]
 opt-level = 3

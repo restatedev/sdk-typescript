@@ -615,7 +615,7 @@ dependencies = [
 [[package]]
 name = "restate-sdk-shared-core"
 version = "7.0.3"
-source = "git+https://github.com/restatedev/sdk-shared-core.git?branch=get-state-without-recording#b1be0431931dbd9302883f37f732a12f98029d51"
+source = "git+https://github.com/restatedev/sdk-shared-core.git?rev=382649d0652aa6d971ec16e788d24b4b2c8c8b45#382649d0652aa6d971ec16e788d24b4b2c8c8b45"
 dependencies = [
  "base64",
  "bs58",
