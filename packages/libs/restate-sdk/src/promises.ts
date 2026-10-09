@@ -23,7 +23,11 @@ import {
   TerminalError,
   TimeoutError,
 } from "./types/errors.js";
-import type { ContextImpl, RunClosuresTracker } from "./context_impl.js";
+import type {
+  ContextImpl,
+  RunClosuresTracker,
+  EphemeralRequestTracker,
+} from "./context_impl.js";
 import { setImmediate } from "node:timers/promises";
 import type { OutputPump } from "./io.js";
 import type { ExternalProgressChannel } from "./utils/external_progress_channel.js";
@@ -506,6 +510,7 @@ export class PromisesExecutor {
     private readonly coreVm: vm.WasmVM,
     private readonly outputPump: OutputPump,
     private readonly runClosuresTracker: RunClosuresTracker,
+    private readonly ephemeralRequestTracker: EphemeralRequestTracker,
     private readonly externalProgressChannel: ExternalProgressChannel,
     private readonly errorCallback: (e: any) => void
   ) {}
@@ -566,6 +571,14 @@ export class PromisesExecutor {
         } else if (doProgressResult === "CancelSignalReceived") {
           restatePromise.tryCancel();
           return;
+        } else if ("EphemeralNotificationReady" in doProgressResult) {
+          // The notification of an ephemeral command is ready, this takes precedence over everything else.
+          // Complete the related promise, then the next recursion will continue making progress.
+          const completionId = doProgressResult.EphemeralNotificationReady;
+          await this.ephemeralRequestTracker.complete(
+            completionId,
+            this.coreVm.take_ephemeral_notification(completionId)
+          );
         } else {
           // We need to execute a run closure
           this.runClosuresTracker.executeRun(doProgressResult.ExecuteRun);

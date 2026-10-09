@@ -343,6 +343,7 @@ impl From<ResponseHead> for WasmResponseHead {
 }
 
 type WasmNotificationHandle = u32;
+type WasmEphemeralNotificationHandle = u32;
 
 #[derive(Tsify, Serialize, Deserialize)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
@@ -496,6 +497,8 @@ pub enum WasmDoProgressResult {
     ExecuteRun(#[tsify(type = "number")] WasmNotificationHandle),
     /// Got cancel signal
     CancelSignalReceived,
+    /// The notification of an ephemeral command is ready, take it with take_ephemeral_notification.
+    EphemeralNotificationReady(#[tsify(type = "number")] WasmEphemeralNotificationHandle),
 }
 
 impl From<AwaitResponse> for WasmDoProgressResult {
@@ -507,6 +510,9 @@ impl From<AwaitResponse> for WasmDoProgressResult {
             }
             AwaitResponse::ExecuteRun(n) => WasmDoProgressResult::ExecuteRun(n.into()),
             AwaitResponse::CancelSignalReceived => WasmDoProgressResult::CancelSignalReceived,
+            AwaitResponse::EphemeralNotificationReady(ephemeral_notification_id) => {
+                WasmDoProgressResult::EphemeralNotificationReady(ephemeral_notification_id.into())
+            }
         }
     }
 }
@@ -769,6 +775,36 @@ impl WasmVM {
         ))
         .map(Into::into)
         .map_err(Into::into)
+    }
+
+    pub fn ephemeral_state_get(
+        &mut self,
+        key: String,
+    ) -> Result<WasmEphemeralNotificationHandle, WasmFailure> {
+        use_log_dispatcher!(self, |vm| CoreVM::ephemeral_state_get(vm, key))
+            .map(Into::into)
+            .map_err(Into::into)
+    }
+
+    pub fn take_ephemeral_notification(
+        &mut self,
+        ephemeral_notification_handle: WasmEphemeralNotificationHandle,
+    ) -> Result<WasmAsyncResultValue, WasmFailure> {
+        Ok(
+            match use_log_dispatcher!(self, |vm| CoreVM::take_ephemeral_notification(
+                vm,
+                ephemeral_notification_handle.into()
+            ))? {
+                None => WasmAsyncResultValue::NotReady,
+                Some(Value::Void) => WasmAsyncResultValue::Empty,
+                Some(Value::Success(b)) => WasmAsyncResultValue::Success(b.to_vec().into()),
+                Some(Value::Failure(f)) => WasmAsyncResultValue::Failure(f.into()),
+                Some(Value::StateKeys(keys)) => WasmAsyncResultValue::StateKeys(keys),
+                Some(Value::InvocationId(invocation_id)) => {
+                    WasmAsyncResultValue::InvocationId(invocation_id)
+                }
+            },
+        )
     }
 
     pub fn sys_get_state_keys(&mut self) -> Result<WasmNotificationHandle, WasmFailure> {
