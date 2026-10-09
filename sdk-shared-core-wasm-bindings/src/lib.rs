@@ -8,6 +8,7 @@ use restate_sdk_shared_core::{
     UnresolvedFuture, VMOptions, Value, CANCEL_NOTIFICATION_HANDLE, VM,
 };
 use serde::{Deserialize, Serialize};
+use std::alloc::{GlobalAlloc, Layout, System};
 use std::cmp;
 use std::convert::{Infallible, Into};
 use std::io::Write;
@@ -20,6 +21,51 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::{Layer, Registry};
 use tsify::Tsify;
 use wasm_bindgen::prelude::*;
+
+/// Global allocator that reports allocation failures through `fatal` before failing.
+///
+/// On wasm32-unknown-unknown, an allocation failure aborts with a bare `unreachable` trap:
+/// std's OOM handler doesn't invoke the panic hook, and its stderr message is discarded.
+/// This also covers allocations requested by the JS glue (`__wbindgen_malloc`/`__wbindgen_realloc`).
+struct OomReportingAllocator;
+
+#[global_allocator]
+static GLOBAL_ALLOCATOR: OomReportingAllocator = OomReportingAllocator;
+
+unsafe impl GlobalAlloc for OomReportingAllocator {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        let ptr = System.alloc(layout);
+        if ptr.is_null() {
+            report_oom();
+        }
+        ptr
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        System.dealloc(ptr, layout)
+    }
+
+    unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
+        let ptr = System.alloc_zeroed(layout);
+        if ptr.is_null() {
+            report_oom();
+        }
+        ptr
+    }
+
+    unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+        let new_ptr = System.realloc(ptr, layout, new_size);
+        if new_ptr.is_null() {
+            report_oom();
+        }
+        new_ptr
+    }
+}
+
+#[cold]
+fn report_oom() {
+    fatal("out of memory: shared core memory allocation failed. Scale up your service processes/container replicas.");
+}
 
 /// Setups the WASM module
 #[wasm_bindgen(start)]
