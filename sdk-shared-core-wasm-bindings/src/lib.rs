@@ -793,7 +793,7 @@ impl WasmVM {
         Ok(
             match use_log_dispatcher!(self, |vm| CoreVM::take_ephemeral_notification(
                 vm,
-                completion_id.into()
+                ephemeral_notification_handle.into()
             ))? {
                 None => WasmAsyncResultValue::NotReady,
                 Some(Value::Void) => WasmAsyncResultValue::Empty,

@@ -263,7 +263,9 @@ export class WasmVM {
   sys_sleep(millis: bigint, name?: string | null): number;
   sys_write_output_failure(value: WasmFailure): void;
   sys_write_output_success(buffer: Uint8Array): void;
-  take_ephemeral_notification(completion_id: number): WasmAsyncResultValue;
+  take_ephemeral_notification(
+    ephemeral_notification_handle: number
+  ): WasmAsyncResultValue;
   take_notification(handle: number): WasmAsyncResultValue;
   take_output(): Uint8Array;
 }

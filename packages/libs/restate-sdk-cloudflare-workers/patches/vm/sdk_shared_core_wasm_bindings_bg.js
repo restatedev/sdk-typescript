@@ -909,11 +909,11 @@ export class WasmVM {
         }
     }
     /**
-     * @param {number} completion_id
+     * @param {number} ephemeral_notification_handle
      * @returns {WasmAsyncResultValue}
      */
-    take_ephemeral_notification(completion_id) {
-        const ret = wasm.wasmvm_take_ephemeral_notification(this.__wbg_ptr, completion_id);
+    take_ephemeral_notification(ephemeral_notification_handle) {
+        const ret = wasm.wasmvm_take_ephemeral_notification(this.__wbg_ptr, ephemeral_notification_handle);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }
