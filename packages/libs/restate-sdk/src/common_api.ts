@@ -124,7 +124,7 @@ export type {
   InferInput,
   InferOutput,
 } from "@restatedev/restate-sdk-core";
-export { implement } from "./types/interface.js";
+export { implement, state } from "./types/interface.js";
 export type {
   /** @internal */
   FnOf,
