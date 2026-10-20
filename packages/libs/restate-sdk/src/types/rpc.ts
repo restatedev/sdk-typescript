@@ -16,6 +16,7 @@
 
 import type {
   Context,
+  EntryOptions,
   GenericCall,
   GenericSend,
   InvocationHandle,
@@ -48,7 +49,7 @@ import type { HooksProvider } from "../hooks.js";
 
 // ----------- rpc clients -------------------------------------------------------
 
-export type ClientCallOptions<I, O> = {
+export type ClientCallOptions<I, O> = EntryOptions & {
   /**
    * Override input serde.
    */
@@ -89,11 +90,6 @@ export type ClientCallOptions<I, O> = {
    * Add headers to the request, which the callee will be able to access using {@link Request.headers}.
    */
   headers?: Record<string, string>;
-
-  /**
-   * Observability name, recorded in the Restate journal.
-   */
-  name?: string;
 };
 
 export class Opts<I, O> {
@@ -113,7 +109,7 @@ export class Opts<I, O> {
   }
 }
 
-export type ClientSendOptions<I> = {
+export type ClientSendOptions<I> = EntryOptions & {
   /**
    * Makes a type-safe one-way RPC to the specified target service, after a delay specified by the
    * milliseconds' argument.
@@ -177,11 +173,6 @@ export type ClientSendOptions<I> = {
    * Add headers to the request, which the callee will be able to access using {@link Request.headers}.
    */
   headers?: Record<string, string>;
-
-  /**
-   * Observability name, recorded in the Restate journal.
-   */
-  name?: string;
 };
 
 export class SendOpts<I> {

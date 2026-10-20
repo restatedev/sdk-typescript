@@ -9,7 +9,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 wasm-bindgen = "0.2.121"
-restate-sdk-shared-core = { version = "7.0.3", features = ["request_identity", "rust_crypto", "tracing_pretty"] }
+restate-sdk-shared-core = { version = "8.1.0", features = ["request_identity", "rust_crypto", "tracing_pretty"] }
 serde = { version = "1.0.210", features = ["derive"] }
 tsify = { version = "0.5.6", default-features = false, features = ["js"] }
 getrandom = { version = "0.2", features = ["js"] } # Needed for jsonwebtoken
@@ -17,10 +17,6 @@ js-sys = "0.3.98"
 serde_bytes = "0.11.19"
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.18", default-features = false, features = ["fmt"] }
-
-# TODO remove once restate-sdk-shared-core with protocol V8 is released
-[patch.crates-io]
-restate-sdk-shared-core = { git = "https://github.com/restatedev/sdk-shared-core.git", rev = "382649d0652aa6d971ec16e788d24b4b2c8c8b45" }
 
 [profile.release]
 opt-level = 3

@@ -1,7 +1,42 @@
 import { Context, InvocationId, RestatePromise } from "./context.js";
 import type { Serde } from "@restatedev/restate-sdk-core";
+import { EXPLICIT_RECOVERY } from "./endpoint/components.js";
 
 export { isSuspendedError } from "./types/errors.js";
+
+/**
+ * Options set by {@link explicitRecovery}, to spread into the options of a service, virtual object, workflow or handler.
+ *
+ * @experimental
+ */
+export type ExplicitRecoveryOptions = Record<never, never>;
+
+/**
+ * Run the handlers with explicit recovery: a retried or resumed invocation doesn't replay the journal of its earlier attempts,
+ * but runs the handler again from the start, executing every context operation anew, e.g. reading the current state.
+ *
+ * The handler takes care of recovering from the effects of the earlier attempts, which might repeat (at least once):
+ * * Each attempt's calls and sends are new requests. To reach the invocation an earlier attempt started, give it an idempotency key that is the same on every attempt, such as one made from `ctx.request().id`.
+ * * `ctx.run` executes its action again on every attempt.
+ * * Awakeables are not supported.
+ *
+ * Spread the returned options into the service or handler options. Handler options take precedence over service options.
+ *
+ * @example
+ * ```ts
+ * const counter = restate.object({
+ *   name: "counter",
+ *   handlers: { ... },
+ *   options: { ...restate.internal.explicitRecovery() },
+ * });
+ * ```
+ *
+ * @experimental
+ */
+export function explicitRecovery(): ExplicitRecoveryOptions {
+  const options = { [EXPLICIT_RECOVERY]: true };
+  return options;
+}
 
 /**
  * Downcast the given context to {@link ContextInternal}, to access the internal APIs.

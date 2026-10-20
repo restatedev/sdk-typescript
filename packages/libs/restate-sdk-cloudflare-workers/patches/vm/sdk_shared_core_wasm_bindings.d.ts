@@ -140,7 +140,7 @@ export class WasmVM {
     is_processing(): boolean;
     is_ready_to_execute(): boolean;
     last_command_index(): number;
-    constructor(headers: WasmHeader[], log_level: LogLevel, logger_id: number, disable_payload_checks: boolean, explicit_cancellation: boolean, on_journal_mismatch: WasmJournalMismatchBehavior);
+    constructor(headers: WasmHeader[], log_level: LogLevel, logger_id: number, disable_payload_checks: boolean, explicit_cancellation: boolean, on_journal_mismatch: WasmJournalMismatchBehavior, explicit_recovery: boolean);
     notify_error(error_message: string, stacktrace?: string | null): void;
     notify_error_for_next_command(error_message: string, stacktrace: string | null | undefined, wasm_command_type: WasmCommandType): void;
     notify_error_for_specific_command(error_message: string, stacktrace: string | null | undefined, wasm_command_type: WasmCommandType, command_index: number, command_name?: string | null): void;
@@ -156,8 +156,8 @@ export class WasmVM {
     sys_awakeable(): WasmAwakeable;
     sys_call(service: string, handler: string, buffer: Uint8Array, key: string | null | undefined, headers: WasmHeader[], idempotency_key?: string | null, scope?: string | null, limit_key?: string | null, name?: string | null): WasmCallHandle;
     sys_cancel_invocation(target_invocation_id: string): void;
-    sys_clear_all_state(): void;
-    sys_clear_state(key: string): void;
+    sys_clear_all_state(name?: string | null): void;
+    sys_clear_state(key: string, name?: string | null): void;
     sys_complete_awakeable_failure(id: string, value: WasmFailure): void;
     sys_complete_awakeable_success(id: string, buffer: Uint8Array): void;
     sys_complete_promise_failure(key: string, value: WasmFailure): number;
@@ -167,13 +167,13 @@ export class WasmVM {
     sys_end(): void;
     sys_get_invocation_output(invocation_id: string): number;
     sys_get_promise(key: string): number;
-    sys_get_state(key: string): number;
-    sys_get_state_keys(): number;
+    sys_get_state(key: string, name?: string | null): number;
+    sys_get_state_keys(name?: string | null): number;
     sys_input(): WasmInput;
     sys_peek_promise(key: string): number;
     sys_run(name: string): WasmRun;
     sys_send(service: string, handler: string, buffer: Uint8Array, key: string | null | undefined, headers: WasmHeader[], delay?: bigint | null, idempotency_key?: string | null, scope?: string | null, limit_key?: string | null, name?: string | null): WasmSendHandle;
-    sys_set_state(key: string, buffer: Uint8Array): void;
+    sys_set_state(key: string, buffer: Uint8Array, name?: string | null): void;
     sys_signal(signal_name: string): number;
     sys_sleep(millis: bigint, name?: string | null): number;
     sys_write_output_failure(value: WasmFailure): void;

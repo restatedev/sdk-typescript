@@ -27,6 +27,7 @@ import type {
   RunAction,
   RunOptions,
   SignalReference,
+  EntryOptions,
   ScopedContext,
   WorkflowContext,
 } from "./context.js";
@@ -212,11 +213,15 @@ export class ContextImpl
     return this.invocationRequest;
   }
 
-  public get<T>(name: string, serde?: Serde<T>): RestatePromise<T | null> {
+  public get<T>(
+    name: string,
+    serde?: Serde<T>,
+    options?: EntryOptions
+  ): RestatePromise<T | null> {
     return this.processCompletableEntry(
       WasmCommandType.GetState,
       () => {},
-      (vm) => vm.sys_get_state(name),
+      (vm) => vm.sys_get_state(name, options?.name),
       VoidAsNull,
       SuccessWithSerde(serde ?? this.defaultSerde, this.journalValueCodec)
     );
@@ -271,39 +276,44 @@ export class ContextImpl
     );
   }
 
-  public stateKeys(): RestatePromise<Array<string>> {
+  public stateKeys(options?: EntryOptions): RestatePromise<Array<string>> {
     return this.processCompletableEntry(
       WasmCommandType.GetStateKeys,
       () => {},
-      (vm) => vm.sys_get_state_keys(),
+      (vm) => vm.sys_get_state_keys(options?.name),
       StateKeys
     );
   }
 
-  public set<T>(name: string, value: T, serde?: Serde<T>): void {
+  public set<T>(
+    name: string,
+    value: T,
+    serde?: Serde<T>,
+    options?: EntryOptions
+  ): void {
     this.processNonCompletableEntry(
       WasmCommandType.SetState,
       () =>
         this.journalValueCodec.encode(
           (serde ?? this.defaultSerde).serialize(value)
         ),
-      (vm, bytes) => vm.sys_set_state(name, bytes)
+      (vm, bytes) => vm.sys_set_state(name, bytes, options?.name)
     );
   }
 
-  public clear(name: string): void {
+  public clear(name: string, options?: EntryOptions): void {
     this.processNonCompletableEntry(
       WasmCommandType.ClearState,
       () => {},
-      (vm) => vm.sys_clear_state(name)
+      (vm) => vm.sys_clear_state(name, options?.name)
     );
   }
 
-  public clearAll(): void {
+  public clearAll(options?: EntryOptions): void {
     this.processNonCompletableEntry(
       WasmCommandType.ClearAllState,
       () => {},
-      (vm) => vm.sys_clear_all_state()
+      (vm) => vm.sys_clear_all_state(options?.name)
     );
   }
 

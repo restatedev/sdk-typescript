@@ -3,9 +3,9 @@ use restate_sdk_shared_core::tracing_pretty::{Pretty, PrettyFields};
 use restate_sdk_shared_core::{
     AwaitResponse, AwakeableHandle, CallHandle, CommandRelationship, CommandType, CoreVM, Error,
     Header, HeaderMap, IdentityVerifier, ImplicitCancellationOption, Input,
-    JournalMismatchRetryBehavior, NonDeterministicChecksOption, NonEmptyValue, OnMaxAttempts,
-    ResponseHead, RetryPolicy, RunExitResult, RunHandle, SendHandle, Target, TerminalFailure,
-    UnresolvedFuture, VMOptions, Value, CANCEL_NOTIFICATION_HANDLE, VM,
+    JournalMismatchRetryBehavior, JournalReplay, NonDeterministicChecksOption, NonEmptyValue,
+    OnMaxAttempts, ResponseHead, RetryPolicy, RunExitResult, RunHandle, SendHandle, Target,
+    TerminalFailure, UnresolvedFuture, VMOptions, Value, CANCEL_NOTIFICATION_HANDLE, VM,
 };
 use serde::{Deserialize, Serialize};
 use std::alloc::{GlobalAlloc, Layout, System};
@@ -609,6 +609,7 @@ impl WasmVM {
         disable_payload_checks: bool,
         explicit_cancellation: bool,
         on_journal_mismatch: WasmJournalMismatchBehavior,
+        explicit_recovery: bool,
     ) -> Result<WasmVM, WasmFailure> {
         let log_dispatcher = Dispatch::new(log_subscriber(log_level, Some(logger_id)));
 
@@ -631,6 +632,11 @@ impl WasmVM {
                     },
                     awaiting_on_policy: Default::default(),
                     journal_mismatch_retry_behavior: on_journal_mismatch.into(),
+                    journal_replay: if explicit_recovery {
+                        JournalReplay::Disabled
+                    } else {
+                        JournalReplay::Enabled
+                    },
                 },
             )
         })?;
@@ -767,10 +773,15 @@ impl WasmVM {
             .map_err(Into::into)
     }
 
-    pub fn sys_get_state(&mut self, key: String) -> Result<WasmNotificationHandle, WasmFailure> {
+    pub fn sys_get_state(
+        &mut self,
+        key: String,
+        name: Option<String>,
+    ) -> Result<WasmNotificationHandle, WasmFailure> {
         use_log_dispatcher!(self, |vm| CoreVM::sys_state_get(
             vm,
             key,
+            name,
             Default::default()
         ))
         .map(Into::into)
@@ -807,28 +818,41 @@ impl WasmVM {
         )
     }
 
-    pub fn sys_get_state_keys(&mut self) -> Result<WasmNotificationHandle, WasmFailure> {
-        use_log_dispatcher!(self, CoreVM::sys_state_get_keys)
+    pub fn sys_get_state_keys(
+        &mut self,
+        name: Option<String>,
+    ) -> Result<WasmNotificationHandle, WasmFailure> {
+        use_log_dispatcher!(self, |vm| CoreVM::sys_state_get_keys(vm, name))
             .map(Into::into)
             .map_err(Into::into)
     }
 
-    pub fn sys_set_state(&mut self, key: String, buffer: Vec<u8>) -> Result<(), WasmFailure> {
+    pub fn sys_set_state(
+        &mut self,
+        key: String,
+        buffer: Vec<u8>,
+        name: Option<String>,
+    ) -> Result<(), WasmFailure> {
         use_log_dispatcher!(self, |vm| CoreVM::sys_state_set(
             vm,
             key,
             buffer.into(),
+            name,
             Default::default()
         ))
         .map_err(Into::into)
     }
 
-    pub fn sys_clear_state(&mut self, key: String) -> Result<(), WasmFailure> {
-        use_log_dispatcher!(self, |vm| CoreVM::sys_state_clear(vm, key)).map_err(Into::into)
+    pub fn sys_clear_state(
+        &mut self,
+        key: String,
+        name: Option<String>,
+    ) -> Result<(), WasmFailure> {
+        use_log_dispatcher!(self, |vm| CoreVM::sys_state_clear(vm, key, name)).map_err(Into::into)
     }
 
-    pub fn sys_clear_all_state(&mut self) -> Result<(), WasmFailure> {
-        use_log_dispatcher!(self, CoreVM::sys_state_clear_all).map_err(Into::into)
+    pub fn sys_clear_all_state(&mut self, name: Option<String>) -> Result<(), WasmFailure> {
+        use_log_dispatcher!(self, |vm| CoreVM::sys_state_clear_all(vm, name)).map_err(Into::into)
     }
 
     pub fn sys_sleep(

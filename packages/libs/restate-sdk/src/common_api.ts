@@ -29,6 +29,7 @@ export type {
   RunAction,
   RunOptions,
   KeyValueStore,
+  EntryOptions,
   DurablePromise,
   Request,
   ScopedContext,

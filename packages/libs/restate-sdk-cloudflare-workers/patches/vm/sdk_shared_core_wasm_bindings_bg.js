@@ -394,11 +394,12 @@ export class WasmVM {
      * @param {boolean} disable_payload_checks
      * @param {boolean} explicit_cancellation
      * @param {WasmJournalMismatchBehavior} on_journal_mismatch
+     * @param {boolean} explicit_recovery
      */
-    constructor(headers, log_level, logger_id, disable_payload_checks, explicit_cancellation, on_journal_mismatch) {
+    constructor(headers, log_level, logger_id, disable_payload_checks, explicit_cancellation, on_journal_mismatch, explicit_recovery) {
         const ptr0 = passArrayJsValueToWasm0(headers, wasm.__wbindgen_malloc);
         const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.wasmvm_new(ptr0, len0, log_level, logger_id, disable_payload_checks, explicit_cancellation, on_journal_mismatch);
+        const ret = wasm.wasmvm_new(ptr0, len0, log_level, logger_id, disable_payload_checks, explicit_cancellation, on_journal_mismatch, explicit_recovery);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }
@@ -613,19 +614,27 @@ export class WasmVM {
             throw takeFromExternrefTable0(ret[0]);
         }
     }
-    sys_clear_all_state() {
-        const ret = wasm.wasmvm_sys_clear_all_state(this.__wbg_ptr);
+    /**
+     * @param {string | null} [name]
+     */
+    sys_clear_all_state(name) {
+        var ptr0 = isLikeNone(name) ? 0 : passStringToWasm0(name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        var len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmvm_sys_clear_all_state(this.__wbg_ptr, ptr0, len0);
         if (ret[1]) {
             throw takeFromExternrefTable0(ret[0]);
         }
     }
     /**
      * @param {string} key
+     * @param {string | null} [name]
      */
-    sys_clear_state(key) {
+    sys_clear_state(key, name) {
         const ptr0 = passStringToWasm0(key, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.wasmvm_sys_clear_state(this.__wbg_ptr, ptr0, len0);
+        var ptr1 = isLikeNone(name) ? 0 : passStringToWasm0(name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        var len1 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmvm_sys_clear_state(this.__wbg_ptr, ptr0, len0, ptr1, len1);
         if (ret[1]) {
             throw takeFromExternrefTable0(ret[0]);
         }
@@ -752,22 +761,28 @@ export class WasmVM {
     }
     /**
      * @param {string} key
+     * @param {string | null} [name]
      * @returns {number}
      */
-    sys_get_state(key) {
+    sys_get_state(key, name) {
         const ptr0 = passStringToWasm0(key, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
-        const ret = wasm.wasmvm_sys_get_state(this.__wbg_ptr, ptr0, len0);
+        var ptr1 = isLikeNone(name) ? 0 : passStringToWasm0(name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        var len1 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmvm_sys_get_state(this.__wbg_ptr, ptr0, len0, ptr1, len1);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }
         return ret[0] >>> 0;
     }
     /**
+     * @param {string | null} [name]
      * @returns {number}
      */
-    sys_get_state_keys() {
-        const ret = wasm.wasmvm_sys_get_state_keys(this.__wbg_ptr);
+    sys_get_state_keys(name) {
+        var ptr0 = isLikeNone(name) ? 0 : passStringToWasm0(name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        var len0 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmvm_sys_get_state_keys(this.__wbg_ptr, ptr0, len0);
         if (ret[2]) {
             throw takeFromExternrefTable0(ret[1]);
         }
@@ -850,13 +865,16 @@ export class WasmVM {
     /**
      * @param {string} key
      * @param {Uint8Array} buffer
+     * @param {string | null} [name]
      */
-    sys_set_state(key, buffer) {
+    sys_set_state(key, buffer, name) {
         const ptr0 = passStringToWasm0(key, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
         const len0 = WASM_VECTOR_LEN;
         const ptr1 = passArray8ToWasm0(buffer, wasm.__wbindgen_malloc);
         const len1 = WASM_VECTOR_LEN;
-        const ret = wasm.wasmvm_sys_set_state(this.__wbg_ptr, ptr0, len0, ptr1, len1);
+        var ptr2 = isLikeNone(name) ? 0 : passStringToWasm0(name, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        var len2 = WASM_VECTOR_LEN;
+        const ret = wasm.wasmvm_sys_set_state(this.__wbg_ptr, ptr0, len0, ptr1, len1, ptr2, len2);
         if (ret[1]) {
             throw takeFromExternrefTable0(ret[0]);
         }
