@@ -128,6 +128,16 @@ export type TypedState = Record<string, any>;
 export type UntypedState = { _: never };
 
 /**
+ * Options of a journal entry.
+ */
+export type EntryOptions = {
+  /**
+   * Observability name, recorded in the Restate journal.
+   */
+  name?: string;
+};
+
+/**
  * Key value store operations. Only keyed services have an attached key-value store.
  */
 export interface KeyValueStore<TState extends TypedState> {
@@ -137,6 +147,8 @@ export interface KeyValueStore<TState extends TypedState> {
    * and deserialized with `JSON.parse(value.toString()) as T`.
    *
    * @param name key of the state to retrieve
+   * @param serde serde of the state value
+   * @param options additional options, see {@link EntryOptions}
    * @returns a Promise that is resolved with the value of the state key
    *
    * @example
@@ -144,10 +156,11 @@ export interface KeyValueStore<TState extends TypedState> {
    */
   get<TValue, TKey extends keyof TState = string>(
     name: TState extends UntypedState ? string : TKey,
-    serde?: Serde<TState extends UntypedState ? TValue : TState[TKey]>
+    serde?: Serde<TState extends UntypedState ? TValue : TState[TKey]>,
+    options?: EntryOptions
   ): Promise<(TState extends UntypedState ? TValue : TState[TKey]) | null>;
 
-  stateKeys(): Promise<Array<string>>;
+  stateKeys(options?: EntryOptions): Promise<Array<string>>;
 
   /**
    * Set/store state in the Restate runtime.
@@ -156,6 +169,8 @@ export interface KeyValueStore<TState extends TypedState> {
    *
    * @param name key of the state to set
    * @param value value to set
+   * @param serde serde of the state value
+   * @param options additional options, see {@link EntryOptions}
    *
    * @example
    * ctx.set("STATE", "Hello");
@@ -163,27 +178,31 @@ export interface KeyValueStore<TState extends TypedState> {
   set<TValue, TKey extends keyof TState = string>(
     name: TState extends UntypedState ? string : TKey,
     value: TState extends UntypedState ? TValue : TState[TKey],
-    serde?: Serde<TState extends UntypedState ? TValue : TState[TKey]>
+    serde?: Serde<TState extends UntypedState ? TValue : TState[TKey]>,
+    options?: EntryOptions
   ): void;
 
   /**
    * Clear/delete state in the Restate runtime.
    * @param name key of the state to delete
+   * @param options additional options, see {@link EntryOptions}
    *
    * @example
    * ctx.clear("STATE");
    */
   clear<TKey extends keyof TState>(
-    name: TState extends UntypedState ? string : TKey
+    name: TState extends UntypedState ? string : TKey,
+    options?: EntryOptions
   ): void;
 
   /**
    * Clear/delete all the state entries in the Restate runtime.
+   * @param options additional options, see {@link EntryOptions}
    *
    * @example
    * ctx.clearAll();
    */
-  clearAll(): void;
+  clearAll(options?: EntryOptions): void;
 }
 
 export interface ContextDate {
@@ -862,6 +881,8 @@ export interface ObjectSharedContext<TState extends TypedState = UntypedState>
    * and deserialized with `JSON.parse(value.toString()) as T`.
    *
    * @param name key of the state to retrieve
+   * @param serde serde of the state value
+   * @param options additional options, see {@link EntryOptions}
    * @returns a Promise that is resolved with the value of the state key
    *
    * @example
@@ -869,13 +890,14 @@ export interface ObjectSharedContext<TState extends TypedState = UntypedState>
    */
   get<TValue, TKey extends keyof TState = string>(
     name: TState extends UntypedState ? string : TKey,
-    serde?: Serde<TState extends UntypedState ? TValue : TState[TKey]>
+    serde?: Serde<TState extends UntypedState ? TValue : TState[TKey]>,
+    options?: EntryOptions
   ): Promise<(TState extends UntypedState ? TValue : TState[TKey]) | null>;
 
   /**
    * Retrieve all the state keys for this object.
    */
-  stateKeys(): Promise<Array<string>>;
+  stateKeys(options?: EntryOptions): Promise<Array<string>>;
 }
 
 export interface Rand {

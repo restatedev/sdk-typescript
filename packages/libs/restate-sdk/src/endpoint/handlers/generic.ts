@@ -302,7 +302,8 @@ class RestateInvokeResponse implements RestateResponse {
       handler.executionOptions.explicitCancellation ?? false,
       onJournalMismatchErrorsToWasm(
         handler.executionOptions.onJournalMismatchErrors
-      )
+      ),
+      handler.executionOptions.explicitRecovery ?? false
     );
     const responseHead = this.coreVm.get_response_head();
     this.statusCode = responseHead.status_code;

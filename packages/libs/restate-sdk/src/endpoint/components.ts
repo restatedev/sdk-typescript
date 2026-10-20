@@ -48,6 +48,19 @@ export interface ExecutionOptions {
   hooks?: HooksProvider[];
   explicitCancellation?: boolean;
   onJournalMismatchErrors?: "retry" | "pause" | "fail";
+  explicitRecovery?: boolean;
+}
+
+/**
+ * Key of the option set by `restate.internal.explicitRecovery()`: a symbol, to
+ * keep it out of the service and handler option types.
+ */
+export const EXPLICIT_RECOVERY = Symbol("ExplicitRecovery");
+
+function explicitRecoveryOf(options?: object): boolean | undefined {
+  return (options as { [EXPLICIT_RECOVERY]?: boolean } | undefined)?.[
+    EXPLICIT_RECOVERY
+  ];
 }
 
 export interface ComponentHandler {
@@ -146,6 +159,8 @@ function createExecutionOptions(
     onJournalMismatchErrors:
       handlerOptions?.onJournalMismatchErrors ??
       serviceOptions?.onJournalMismatchErrors,
+    explicitRecovery:
+      explicitRecoveryOf(handlerOptions) ?? explicitRecoveryOf(serviceOptions),
   };
 }
 
