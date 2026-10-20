@@ -1,5 +1,14 @@
 # @restatedev/restate-sdk-gen
 
+## 1.17.4
+
+### Patch Changes
+
+- Added entry names to state operations
+- Updated dependencies
+  - @restatedev/restate-sdk-clients@1.17.4
+  - @restatedev/restate-sdk-core@1.17.4
+
 ## 1.17.3
 
 ### Patch Changes

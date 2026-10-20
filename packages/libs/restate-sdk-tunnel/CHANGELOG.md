@@ -1,5 +1,11 @@
 # @restatedev/restate-sdk-tunnel
 
+## 1.17.4
+
+### Patch Changes
+
+- Added entry names to state operations
+
 ## 1.17.3
 
 ### Patch Changes
