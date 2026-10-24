@@ -175,8 +175,12 @@ export class RetryableError extends RestateError {
    */
   static from(cause: any, options?: RetryableErrorOptions): RetryableError {
     const error = ensureError(cause);
+    const errorCode =
+      error instanceof RestateError
+        ? error.code
+        : (error["errorCode" as keyof typeof error] as number | undefined);
     return new RetryableError(error.message, {
-      errorCode: error["errorCode" as keyof typeof error] as number,
+      errorCode,
       cause: cause,
       ...options,
     });
@@ -211,8 +215,12 @@ export class PauseError extends RestateError {
    */
   static from(cause: any): PauseError {
     const error = ensureError(cause);
+    const errorCode =
+      error instanceof RestateError
+        ? error.code
+        : (error["errorCode" as keyof typeof error] as number | undefined);
     return new PauseError(error.message, {
-      errorCode: error["errorCode" as keyof typeof error] as number,
+      errorCode,
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       cause: cause,
     });
