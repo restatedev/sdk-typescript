@@ -661,4 +661,16 @@ describe("ingress auto-retry", () => {
     expect(signals[0]).not.toBe(signals[1]);
     expect(signals[0]?.aborted).toBe(false);
   });
+
+  it("forwards per-call Opts.from({ headers }) on workflowAttach and workflowOutput", async () => {
+    queue(ok({ result: "done" }), ok({ result: "done" }));
+    await workflow().workflowAttach(
+      Opts.from({ headers: { "x-custom-attach": "a1" } })
+    );
+    await workflow().workflowOutput(
+      Opts.from({ headers: { "x-custom-output": "o1" } })
+    );
+    expect(attemptHeaders()[0]?.["x-custom-attach"]).toBe("a1");
+    expect(attemptHeaders()[1]?.["x-custom-output"]).toBe("o1");
+  });
 });

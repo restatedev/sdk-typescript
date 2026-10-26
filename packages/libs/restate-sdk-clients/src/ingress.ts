@@ -386,6 +386,7 @@ const doWorkflowHandleCall = async <O>(
   //
   const headers = {
     ...(opts.headers ?? {}),
+    ...(callOpts?.opts?.headers ?? {}),
   };
   //
   // make the call
