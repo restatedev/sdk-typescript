@@ -35,11 +35,8 @@ jobs:
           DEBUG: 1
           LAMBDA_EXECUTOR: local
           DOCKER_HOST: unix:///var/run/docker.sock
-        options: >-
-          --health-cmd "curl -f http://localhost:4566/_localstack/health || exit 1"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
+        # No custom --health-cmd: the image ships its own HEALTHCHECK, and since 2026.10.0
+        # it doesn't include curl anymore.
         volumes:
           - /var/run/docker.sock:/var/run/docker.sock
 
