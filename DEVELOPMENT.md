@@ -214,7 +214,6 @@ This monorepo uses:
 - **Turbo** for task orchestration and caching
 - **tsdown** for building publishable packages (ESM + CJS + TypeScript declarations)
 - **Vitest** for testing
-- **Changesets** for version management
 
 ### Dev vs Production Modes
 
@@ -232,69 +231,34 @@ This monorepo uses:
 
 ## Releasing the Package
 
-This repo uses two release workflows:
+All packages are always released together, with the same version. There are no changesets or changelogs: release notes are generated in the GitHub release, edit them there if needed.
 
-### Option 1: Automatic Release (Recommended)
-
-1. Create a changeset:
+1. Prepare the release commit and tag (nothing is pushed):
    ```bash
-   pnpm changeset
+   .tools/prepare-release.sh 1.2.3
    ```
 
-2. Commit the changeset:
+2. Push the commit and the tag, the script prints the exact command:
    ```bash
-   git add .changeset
-   git commit -m "Add changeset for new feature"
+   git push --atomic origin HEAD:main v1.2.3
    ```
 
-3. Merge to main branch
+3. The tag push triggers the `Release` workflow (`.github/workflows/release.yml`), which:
+   - Runs all the verification workflows (build and test, integration, compatibility) on the tagged commit
+   - Builds and publishes all the packages to npm
+   - Creates the GitHub release with auto-generated notes
+   - Deploys the docs
 
-4. Update versions:
-   ```bash
-   pnpm changeset version  # Apply changesets to bump versions
-   ```
+**Pre-releases:** versions like `1.2.3-rc.1` are published with the pre-release identifier as npm dist-tag (e.g. `rc`), and marked as pre-release on GitHub.
 
-5. Push to main:
-   - GitHub Actions automatically detects the version bump
-   - Creates a git tag (e.g., `v1.2.3`)
-   - Creates a GitHub release
-   - Publishes packages to npm
+**Backports:** run the script on a `release-*` branch and push to that branch. If the version is lower than the current `latest` on npm, it's published with the `release-<major>.<minor>` dist-tag instead.
 
-### Option 2: Manual Release (For Hotfixes)
+**Retrying:** if a job fails (e.g. a flaky test), re-run the failed jobs of the `Release` run, or run the workflow manually on the tag. Packages already on npm are skipped.
 
-1. Create a hotfix branch:
-   ```bash
-   git checkout -b hotfix/critical-fix
-   ```
+**Snapshots:**
 
-2. Create changeset and update version:
-   ```bash
-   pnpm changeset
-   pnpm changeset version
-   ```
-
-3. Commit and push:
-   ```bash
-   git add .
-   git commit -m "Release v1.2.3 - critical fix"
-   git push origin hotfix/critical-fix
-   ```
-
-4. Create and push a tag:
-   ```bash
-   git tag v1.2.3
-   git push origin v1.2.3
-   ```
-
-5. Create a GitHub release:
-   ```bash
-   gh release create v1.2.3 --title "Release v1.2.3" --generate-notes
-   ```
-   Or via GitHub UI: Releases → Draft a new release → Select the tag → Publish release
-
-When the release is published, GitHub Actions automatically publishes packages to npm.
-
-**Important:** Never run `pnpm release` locally. Always let GitHub Actions handle publishing to ensure consistency and proper CI checks.
+- Every push to main publishes a `0.0.0-SNAPSHOT-<timestamp>` version with the `dev` dist-tag, use it with `"@restatedev/restate-sdk": "^0.0.0-SNAPSHOT"`.
+- To publish a snapshot of any branch, run the `Release` workflow manually on that branch (Actions → Release → Run workflow), optionally setting `snapshot_name` (defaults to the branch name). This skips the tests and publishes `0.0.0-SNAPSHOT.<name>.<timestamp>` with `<name>` as dist-tag, use it with `"@restatedev/restate-sdk": "<name>"`. These never resolve from `^0.0.0-SNAPSHOT`.
 
 ## Re-generating the Discovery Manifest
 

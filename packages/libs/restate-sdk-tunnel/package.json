@@ -44,8 +44,7 @@
     "check:exports": "turbo run _check:exports --filter={.}...",
     "_check:exports": "attw --pack .",
     "check:api": "turbo run _check:api --filter={.}...",
-    "_check:api": "api-extractor run --local",
-    "prepublishOnly": "pnpm -w verify"
+    "_check:api": "api-extractor run --local"
   },
   "dependencies": {},
   "devDependencies": {

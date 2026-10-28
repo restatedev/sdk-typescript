@@ -9,14 +9,12 @@ This document provides guidance for AI coding assistants (like Claude, Cursor, e
 - `pnpm new` - Package generator
 - `pnpm delete` - Package deletion
 - `pnpm add-entry` - Add custom entry points
-- `pnpm changeset` - Create changesets
 
 **Instead:** Ask the user to run these commands and wait for them to complete. Provide clear instructions on what options to select.
 
 **Safe to run (non-interactive):**
 - `pnpm install`, `pnpm build`, `pnpm test`, `pnpm verify`
 - `pnpm dev`, `pnpm lint`, `pnpm format`
-- `pnpm version` (applies changesets)
 - `pnpm generate:configs` (regenerates TypeScript configs)
 
 ## Project Overview
@@ -26,7 +24,6 @@ This is a TypeScript monorepo template built with:
 - **Turbo** for task orchestration and caching
 - **tsdown** for building publishable packages
 - **Vitest** for testing
-- **Changesets** for version management
 
 ## Key Concepts
 
@@ -96,7 +93,6 @@ The `pnpm new` command is interactive and will hang if run by an AI agent. Inste
 - `pnpm new` - Package generator (interactive prompts)
 - `pnpm delete` - Package deletion (interactive selection)
 - `pnpm add-entry` - Entry point addition (interactive prompts)
-- `pnpm changeset` - Changeset creation (interactive prompts)
 
 ### Adding Package Dependencies
 
@@ -259,20 +255,13 @@ git commit -m "Your message"
 
 ### Release Process
 
-**⚠️ Note: `pnpm changeset` is interactive**
+All packages are always released together, with the same version.
 
-**Automatic workflow (recommended):**
-1. Ask user to create changeset: "Please run `pnpm changeset` to create a changeset for your changes"
-2. User commits the changeset and merges to main
-3. GitHub Actions automatically creates tag, release, and publishes
+1. `.tools/prepare-release.sh <version>` (not interactive - safe to run) bumps every package, commits `Release v<version>` and tags `v<version>`
+2. The user pushes the commit and the tag (the script prints the command). **Agents never push release tags themselves.**
+3. The tag push triggers `release.yml`, which runs all the verification workflows, then publishes to npm, creates the GitHub release (with generated notes) and deploys the docs
 
-**Manual workflow (hotfixes):**
-1. Ask user to create changeset: "Please run `pnpm changeset`"
-2. User or agent runs: `pnpm version` (not interactive - safe to run)
-3. Commit and tag: `git tag v1.2.3 && git push origin v1.2.3`
-4. Create GitHub release (triggers publish)
-
-**Never run `pnpm release` locally** - let CI handle publishing.
+There are no changesets or changelogs, release notes live in the GitHub releases.
 
 ## Troubleshooting
 

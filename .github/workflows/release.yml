@@ -1,40 +1,86 @@
 name: Release
 
+# - Push to main: publish a snapshot to npm with the `dev` dist-tag.
+# - Manual run on a branch: publish a named snapshot (no tests), with the `snapshot_name` input
+#   (defaults to the branch name) as npm dist-tag. On main without a name, same as a push to main.
+# - Push of a v* tag (created with .tools/prepare-release.sh): run all the verification
+#   workflows on the tagged commit, then build and publish to npm, create the GitHub release
+#   and deploy the docs. Re-run the failed jobs, or dispatch this workflow on the tag, to retry.
+#
+# NOTE: npm trusted publishing is bound to this file name, don't rename it.
+
 on:
   push:
-    branches: [main, release-**]
+    branches: [main]
+    tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      snapshot_name:
+        description: "Snapshot name, used as npm dist-tag. Defaults to the branch name. Ignored when running on a tag"
+        required: false
+        default: ""
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   test:
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || startsWith(github.ref, 'refs/tags/v')
     uses: ./.github/workflows/test.yml
 
-  release:
+  integration:
+    if: startsWith(github.ref, 'refs/tags/v')
+    uses: ./.github/workflows/integration.yaml
+    permissions:
+      contents: read
+      issues: read
+      checks: write
+      pull-requests: write
+      actions: read
+
+  integration-gen:
+    if: startsWith(github.ref, 'refs/tags/v')
+    uses: ./.github/workflows/integration-gen.yaml
+    permissions:
+      contents: read
+      issues: read
+      checks: write
+      pull-requests: write
+      actions: read
+
+  integration-fetch:
+    if: startsWith(github.ref, 'refs/tags/v')
+    uses: ./.github/workflows/integration-fetch.yaml
+    permissions:
+      contents: read
+      issues: read
+      checks: write
+      pull-requests: write
+      actions: read
+
+  compatibility:
+    if: startsWith(github.ref, 'refs/tags/v')
+    uses: ./.github/workflows/compatibility.yaml
+    secrets: inherit
+
+  snapshot:
+    # Gated on the tests when pushing to main, manual snapshots don't run them.
+    if: ${{ !cancelled() && github.ref_type == 'branch' && needs.test.result != 'failure' }}
     needs: test
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
       id-token: write
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
           registry-url: "https://registry.npmjs.org"
-
-      - name: Setup Deno
-        uses: denoland/setup-deno@v1
-        with:
-          deno-version: v2.6
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
 
       - uses: pnpm/action-setup@v4
         with:
@@ -43,94 +89,138 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build
-        run: pnpm build
-
-      - name: Publish snapshot
-        if: github.ref == 'refs/heads/main'
+      - name: Set snapshot version
+        id: snapshot
         env:
-          # Run the prepublishOnly verify's turbo tasks one at a time. api-extractor
-          # intermittently fails ("Internal Error: Unable to determine module for
-          # dist/<entry>.d.ts") when several api-extractor/build tasks run in parallel.
-          TURBO_CONCURRENCY: "1"
+          SNAPSHOT_NAME: ${{ inputs.snapshot_name }}
         run: |
           # We're using 0.0.0 to avoid this version to be higher than released versions.
-          # To use it:
-          # "@restatedev/restate-sdk": "^0.0.0-SNAPSHOT"
-          VERSION="0.0.0-SNAPSHOT-$(date '+%Y%m%d%H%M%S')"
-          # Update all lib package versions using jq
+          # A snapshot MUST not be published with the latest dist-tag (omitting --tag defaults to latest)
+          # to avoid users to install snapshot releases when using pnpm install,
+          # see https://docs.npmjs.com/cli/v9/commands/npm-dist-tag for more info
+          TIMESTAMP=$(date '+%Y%m%d%H%M%S')
+          if [ -z "$SNAPSHOT_NAME" ] && [ "$GITHUB_REF_NAME" = "main" ]; then
+            # To use it: "@restatedev/restate-sdk": "^0.0.0-SNAPSHOT"
+            VERSION="0.0.0-SNAPSHOT-$TIMESTAMP"
+            NPM_TAG="dev"
+          else
+            # To use it: "@restatedev/restate-sdk": "<name>"
+            # SNAPSHOT.<name> sorts lower than SNAPSHOT-<timestamp>, so ^0.0.0-SNAPSHOT keeps resolving to the main snapshots.
+            NAME=$(echo "${SNAPSHOT_NAME:-$GITHUB_REF_NAME}" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9-]+/-/g; s/^-+//; s/-+$//')
+            if [[ ! "$NAME" =~ ^[a-z][a-z0-9-]*$ ]] || [ "$NAME" = "latest" ]; then
+              echo "::error::Invalid snapshot name '$NAME', it must start with a letter and can't be 'latest'. Set the snapshot_name input"
+              exit 1
+            fi
+            VERSION="0.0.0-SNAPSHOT.$NAME.$TIMESTAMP"
+            NPM_TAG="$NAME"
+          fi
+          echo "npm_tag=$NPM_TAG" >> "$GITHUB_OUTPUT"
+          echo "Publishing \`$VERSION\` with dist-tag \`$NPM_TAG\`, e.g. \`npm install @restatedev/restate-sdk@$NPM_TAG\`" >> "$GITHUB_STEP_SUMMARY"
+
           for pkg in packages/libs/*/package.json; do
             jq --arg ver "$VERSION" '.version = $ver' "$pkg" > "$pkg.tmp" && mv "$pkg.tmp" "$pkg"
           done
           # Update workspace protocol dependencies to use the snapshot version
           pnpm install --no-frozen-lockfile
-          # We use dist-tag dev for the snapshot releases, see https://docs.npmjs.com/cli/v9/commands/npm-dist-tag for more info
-          # A snapshot MUST not be published with latest tag (omitting --tag defaults to latest) to avoid users to install snapshot releases
-          # when using pnpm install
-          pnpm --filter "./packages/libs/**" publish --tag dev --access public --no-git-checks --provenance
-          git checkout .
 
-      - name: Check for new version
-        id: check
+      # Build after setting the version, as it gets embedded in the build output (e.g. the user agent)
+      - name: Build
+        run: pnpm build
+
+      - name: Publish snapshot
+        run: pnpm --filter "./packages/libs/**" publish --tag "${{ steps.snapshot.outputs.npm_tag }}" --access public --no-git-checks --provenance
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs:
+      [test, integration, integration-gen, integration-fetch, compatibility]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    outputs:
+      npm_tag: ${{ steps.version.outputs.npm_tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: "https://registry.npmjs.org"
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.1.3
+
+      - name: Check version and compute npm dist-tag
+        id: version
         run: |
-          git fetch --tags
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-          for package in packages/libs/*/package.json; do
-            if [ -f "$package" ]; then
-              NAME=$(jq -r '.name' "$package")
-              VERSION=$(jq -r '.version' "$package")
-              PRIVATE=$(jq -r '.private // false' "$package")
-
-              if [ "$PRIVATE" = "false" ]; then
-                if ! git rev-parse "v$VERSION" >/dev/null 2>&1; then
-                  echo "New version detected: $NAME@$VERSION"
-                  echo "create_release=true" >> "$GITHUB_OUTPUT"
-                  echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-
-                  # Pre-release versions (e.g. 1.2.3-rc.1, 1.2.3-alpha.0) MUST NOT be published
-                  # with the latest npm dist-tag (omitting --tag defaults to latest), otherwise
-                  # users would get the pre-release on a plain install.
-                  # We use the pre-release identifier (rc, alpha, beta, ...) as the dist-tag.
-                  if [[ "$VERSION" == *-* ]]; then
-                    PRERELEASE_ID="${VERSION#*-}"
-                    PRERELEASE_ID="${PRERELEASE_ID%%.*}"
-                    echo "Pre-release detected, using npm dist-tag: $PRERELEASE_ID"
-                    echo "prerelease=true" >> "$GITHUB_OUTPUT"
-                    echo "npm_tag=$PRERELEASE_ID" >> "$GITHUB_OUTPUT"
-                  else
-                    echo "prerelease=false" >> "$GITHUB_OUTPUT"
-                    echo "npm_tag=latest" >> "$GITHUB_OUTPUT"
-                  fi
-                  break
-                fi
-              fi
+          for pkg in packages/libs/*/package.json; do
+            PKG_VERSION=$(jq -r '.version' "$pkg")
+            if [ "$PKG_VERSION" != "$VERSION" ]; then
+              echo "::error::$pkg has version $PKG_VERSION, expected $VERSION. Create the release tag with .tools/prepare-release.sh"
+              exit 1
             fi
           done
 
-      - name: Create and Push Tag
-        if: steps.check.outputs.create_release == 'true'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag "v${{ steps.check.outputs.version }}"
-          git push origin "v${{ steps.check.outputs.version }}"
-
-      - name: Create Release
-        if: steps.check.outputs.create_release == 'true'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          EXTRA_FLAGS=""
-          if [ "${{ steps.check.outputs.prerelease }}" = "true" ]; then
-            EXTRA_FLAGS="--prerelease"
+          if [[ "$VERSION" == *-* ]]; then
+            # Pre-release versions (e.g. 1.2.3-rc.1, 1.2.3-alpha.0) MUST NOT be published
+            # with the latest npm dist-tag (omitting --tag defaults to latest), otherwise
+            # users would get the pre-release on a plain install.
+            # We use the pre-release identifier (rc, alpha, beta, ...) as the dist-tag.
+            PRERELEASE_ID="${VERSION#*-}"
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            echo "npm_tag=${PRERELEASE_ID%%.*}" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
-          gh release create "v${{ steps.check.outputs.version }}" \
-            --title "Release v${{ steps.check.outputs.version }}" \
-            --generate-notes \
-            $EXTRA_FLAGS
+          echo "prerelease=false" >> "$GITHUB_OUTPUT"
 
-      - name: Publish release to npm
-        if: steps.check.outputs.create_release == 'true'
+          # Releasing an older line (e.g. a backport) must not move the latest dist-tag backwards.
+          LATEST=$(npm view @restatedev/restate-sdk dist-tags.latest)
+          if [ "$(printf '%s\n%s\n' "$LATEST" "$VERSION" | sort -V | tail -n1)" = "$VERSION" ]; then
+            echo "npm_tag=latest" >> "$GITHUB_OUTPUT"
+          else
+            MAJOR_MINOR=$(echo "$VERSION" | cut -d. -f1,2)
+            echo "npm_tag=release-$MAJOR_MINOR" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      # Already published packages are skipped, so this is safe to re-run.
+      - name: Publish to npm
+        run: pnpm -r --filter "./packages/libs/**" publish --tag "${{ steps.version.outputs.npm_tag }}" --access public --no-git-checks --provenance
+
+      - name: Create GitHub release
         env:
-          TURBO_CONCURRENCY: "1" # serialize the prepublishOnly verify (see "Publish snapshot")
-        run: pnpm -r --filter='./packages/libs/**' publish --tag "${{ steps.check.outputs.npm_tag }}" --access public --no-git-checks --provenance
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists"
+            exit 0
+          fi
+          EXTRA_FLAGS=()
+          if [ "${{ steps.version.outputs.prerelease }}" = "true" ]; then
+            EXTRA_FLAGS+=(--prerelease)
+          fi
+          if [ "${{ steps.version.outputs.npm_tag }}" != "latest" ]; then
+            EXTRA_FLAGS+=(--latest=false)
+          fi
+          gh release create "$TAG" --title "Release $TAG" --generate-notes --verify-tag "${EXTRA_FLAGS[@]}"
+
+  docs:
+    needs: release
+    if: needs.release.outputs.npm_tag == 'latest'
+    uses: ./.github/workflows/release-docs.yml
+    permissions:
+      contents: read
+      pages: write
+      id-token: write

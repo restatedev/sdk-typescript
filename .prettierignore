@@ -16,7 +16,6 @@ cdk.out
 lambda.zip
 *.md
 pnpm-lock.yaml
-.changeset
 *.hbs
 packages/libs/restate-sdk-cloudflare-workers/**
 sdk-shared-core-wasm-bindings/target/**
