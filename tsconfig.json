@@ -86,9 +86,6 @@
       "path": "packages/examples/cloudflare"
     },
     {
-      "path": "packages/examples/deno"
-    },
-    {
       "path": "packages/examples/lambda"
     },
     {

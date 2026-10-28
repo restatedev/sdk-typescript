@@ -19,7 +19,6 @@ packages/
 │   └── restate-sdk-zod/           # Zod integration
 ├── examples/                       # Example applications
 │   ├── node/
-│   ├── deno/
 │   ├── bun/
 │   ├── vercel/
 │   ├── lambda/
@@ -125,7 +124,7 @@ pnpm examples:dev bun          # Run Bun example
 pnpm examples:dev cloudflare   # Run Cloudflare example
 ```
 
-Available examples: `node` (default), `bun`, `deno`, `vercel`, `lambda`, `cloudflare`
+Available examples: `node` (default), `bun`, `vercel`, `lambda`, `cloudflare`
 
 ### Production Mode (Uses Built Output)
 

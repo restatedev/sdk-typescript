@@ -12,9 +12,6 @@ jobs:
   node:
     uses: ./.github/workflows/_test-node-template.yml
 
-  deno:
-    uses: ./.github/workflows/_test-deno-template.yml
-
   bun:
     uses: ./.github/workflows/_test-bun-template.yml
 
