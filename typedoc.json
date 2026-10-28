@@ -9,7 +9,8 @@
     "packages/libs/restate-sdk-testcontainers",
     "packages/libs/restate-sdk-zod",
     "packages/libs/restate-sdk-gen",
-    "packages/libs/restate-sdk-tunnel"
+    "packages/libs/restate-sdk-tunnel",
+    "packages/libs/restate-sdk-integration-client"
   ],
   "entryPointStrategy": "packages",
   "packageOptions": {

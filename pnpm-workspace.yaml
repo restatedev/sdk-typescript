@@ -4,6 +4,7 @@ packages:
   - packages/examples/*
 
 allowBuilds:
+  "@bufbuild/buf": false
   cpu-features: false
   esbuild: false
   heapdump: true
@@ -33,6 +34,7 @@ overrides:
   next: ^16.2.6
 
 ignoredBuiltDependencies:
+  - "@bufbuild/buf"
   - cpu-features
   - esbuild
   - protobufjs

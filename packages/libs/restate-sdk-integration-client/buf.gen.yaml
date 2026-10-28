@@ -1,0 +1,11 @@
+# Generates the protobuf-es code for the ingestion API into src/generated.
+# Run with `pnpm generate:proto`; the output is committed.
+version: v2
+inputs:
+  - directory: proto
+plugins:
+  - local: protoc-gen-es
+    out: src/generated
+    opt:
+      - target=ts
+      - import_extension=js

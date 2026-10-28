@@ -92,3 +92,29 @@ jobs:
       - name: Run e2e tests
         run: pnpm --filter @restatedev/restate-sdk-gen test:e2e
         timeout-minutes: 15
+
+  # restate-sdk-integration-client e2e suite: drives the ingestion API of a
+  # real Restate container (ghcr.io/restatedev/restate:main, as the API is not
+  # in a released image yet) via @restatedev/restate-sdk-testcontainers.
+  restate-sdk-integration-client-e2e:
+    if: github.repository_owner == 'restatedev'
+    runs-on: warp-ubuntu-latest-x64-4x
+    strategy:
+      matrix:
+        node-version: [22.x]
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          registry-url: "https://registry.npmjs.org"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.1.3
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Run e2e tests
+        run: pnpm --filter @restatedev/restate-sdk-integration-client test:e2e
+        timeout-minutes: 15
