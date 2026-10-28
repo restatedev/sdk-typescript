@@ -46,10 +46,10 @@ jobs:
       AWS_REGION: us-east-1
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4.4.0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v4.4.0
         with:
           node-version: "22"
 
@@ -66,7 +66,7 @@ jobs:
           timeout 60 bash -c 'until curl -f http://localhost:4566/_localstack/health; do sleep 2; done'
           echo "LocalStack is ready!"
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v4.3.0
         with:
           version: 11.1.3
 
