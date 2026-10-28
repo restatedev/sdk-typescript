@@ -35,9 +35,6 @@
     "build-docs": "pnpm build && npx typedoc",
     "examples:dev": "bash -c 'pnpm --filter \"./packages/examples/${1:-node}\" dev' --",
     "examples:start": "bash -c 'turbo run _start --filter=\"./packages/examples/${1:-node}...\"' --",
-    "changeset": "changeset",
-    "version": "changeset version",
-    "release": "pnpm build && pnpm changeset publish",
     "new": "plop package",
     "delete": "plop delete-package",
     "add-entry": "plop add-entry",
@@ -49,7 +46,6 @@
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.2",
-    "@changesets/cli": "^2.29.8",
     "@eslint/js": "^9.39.2",
     "@eslint/json": "^0.13.2",
     "@microsoft/api-extractor": "^7.58.0",

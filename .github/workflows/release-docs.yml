@@ -1,9 +1,8 @@
 name: Release docs
 
+# Called by release.yml on release, can also be run manually.
 on:
-  push:
-    tags:
-      - v**
+  workflow_call:
   workflow_dispatch:
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages

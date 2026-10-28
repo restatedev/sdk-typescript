@@ -24,6 +24,7 @@ on:
         required: false
         default: ""
         type: string
+  workflow_call:
 
 jobs:
   sdk-test-suite:
