@@ -5,5 +5,13 @@
     "rootDir": "./src",
     "composite": true
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*"],
+  "references": [
+    {
+      "path": "../restate-sdk-clients/tsconfig.build.json"
+    },
+    {
+      "path": "../restate-sdk-testcontainers/tsconfig.build.json"
+    }
+  ]
 }

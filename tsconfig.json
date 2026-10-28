@@ -27,6 +27,9 @@
       "@restatedev/restate-sdk-gen": [
         "packages/libs/restate-sdk-gen/src/index.ts"
       ],
+      "@restatedev/restate-sdk-integration-client": [
+        "packages/libs/restate-sdk-integration-client/src/index.ts"
+      ],
       "@restatedev/restate-sdk-opentelemetry": [
         "packages/libs/restate-sdk-opentelemetry/src/index.ts"
       ],
@@ -59,6 +62,9 @@
       "path": "packages/libs/restate-sdk-gen"
     },
     {
+      "path": "packages/libs/restate-sdk-integration-client"
+    },
+    {
       "path": "packages/libs/restate-sdk-opentelemetry"
     },
     {
@@ -69,9 +75,6 @@
     },
     {
       "path": "packages/libs/restate-sdk-zod"
-    },
-    {
-      "path": "packages/tests/e2e"
     },
     {
       "path": "packages/tests/restate-e2e-services"
