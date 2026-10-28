@@ -644,9 +644,12 @@ export class ContextImpl
         maxRetryAttempts < 0 ||
         maxRetryAttempts > 4_294_967_295)
     ) {
-      throw new RangeError(
-        `maxRetryAttempts must be an integer between 0 and 4294967295, got ${maxRetryAttempts}`
+      this.abortAttempt(
+        new RangeError(
+          `maxRetryAttempts must be an integer between 0 and 4294967295, got ${maxRetryAttempts}`
+        )
       );
+      return ConstRestatePromise.pending();
     }
     const serde = options?.serde ?? this.defaultSerde;
 
