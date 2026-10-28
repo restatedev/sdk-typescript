@@ -637,6 +637,7 @@ impl WasmVM {
                     } else {
                         JournalReplay::Enabled
                     },
+                    signal_delivery: Default::default(),
                 },
             )
         })?;
