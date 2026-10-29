@@ -59,6 +59,13 @@ export interface RelayConnectOptions {
    * auto-generate an ephemeral, process-unique id.
    */
   instanceId?: string;
+  /**
+   * The version of the code this process serves (e.g. `1.2.3` or a build id;
+   * `[A-Za-z0-9._-]`, at most 64 chars). The relay routes each version apart
+   * and, with auto-registration on, registers each version as its own
+   * deployment. Omit for an unversioned receiver.
+   */
+  version?: string;
 }
 
 /**
@@ -135,6 +142,7 @@ export async function serveTunnel(
         // as absent (serde `Option::None`).
         connections: relay.connections,
         instance_id: relay.instanceId,
+        version: relay.version,
       })
     );
   } catch (e) {

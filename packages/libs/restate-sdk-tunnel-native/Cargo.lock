@@ -391,7 +391,7 @@ checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 [[package]]
 name = "restate-sdk-shared-core"
 version = "7.0.2"
-source = "git+https://github.com/restatedev/sdk-shared-core.git?branch=relay#7789348906c6ae7d2ed6719043c4a2ff4b99b9d0"
+source = "git+https://github.com/restatedev/sdk-shared-core.git?branch=relay#74b116983caa675a5bbae313288fe47fbbad8f26"
 dependencies = [
  "async-trait",
  "base64",
