@@ -227,6 +227,9 @@ export type RunOptions<T> = {
   /**
    * Max number of attempts (including the initial), before giving up.
    *
+   * Must be an integer between 0 and 4294967295 (inclusive). Omit this option to avoid setting an attempt limit.
+   * Invalid values abort the invocation attempt before the run is journaled or its action is executed.
+   *
    * When giving up, `ctx.run` will throw a `TerminalError` wrapping the original error message.
    */
   maxRetryAttempts?: number;

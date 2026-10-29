@@ -637,6 +637,20 @@ export class ContextImpl
       nameOrAction,
       actionSecondParameter
     );
+    const maxRetryAttempts = options?.maxRetryAttempts;
+    if (
+      maxRetryAttempts !== undefined &&
+      (!Number.isInteger(maxRetryAttempts) ||
+        maxRetryAttempts < 0 ||
+        maxRetryAttempts > 4_294_967_295)
+    ) {
+      this.abortAttempt(
+        new RangeError(
+          `maxRetryAttempts must be an integer between 0 and 4294967295, got ${maxRetryAttempts}`
+        )
+      );
+      return ConstRestatePromise.pending();
+    }
     const serde = options?.serde ?? this.defaultSerde;
 
     // Prepare the handle
@@ -687,7 +701,7 @@ export class ContextImpl
                 err.retryAfter !== undefined
                   ? BigInt(millisOrDurationToMillis(err.retryAfter))
                   : undefined,
-                options?.maxRetryAttempts,
+                maxRetryAttempts,
                 options?.maxRetryDuration !== undefined
                   ? BigInt(millisOrDurationToMillis(options?.maxRetryDuration))
                   : undefined
@@ -709,7 +723,7 @@ export class ContextImpl
               let retryPolicy;
               if (
                 options?.retryIntervalFactor !== undefined ||
-                options?.maxRetryAttempts !== undefined ||
+                maxRetryAttempts !== undefined ||
                 options?.initialRetryInterval !== undefined ||
                 options?.maxRetryDuration !== undefined ||
                 options?.maxRetryInterval !== undefined
@@ -719,7 +733,7 @@ export class ContextImpl
                   initial_interval: millisOrDurationToMillis(
                     options?.initialRetryInterval ?? 50
                   ),
-                  max_attempts: options?.maxRetryAttempts,
+                  max_attempts: maxRetryAttempts,
                   max_duration:
                     options?.maxRetryDuration === undefined
                       ? undefined
