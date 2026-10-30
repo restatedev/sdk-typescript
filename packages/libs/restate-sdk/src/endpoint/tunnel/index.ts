@@ -9,30 +9,24 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-// The tunnel engine.
-//
-// Serve a Restate SDK deployment over an OUTBOUND connection to Restate
-// Cloud's tunnel — no inbound HTTP listener, no public ingress to your
-// network. `restate.serve()` uses it automatically in connect mode (when a
-// Restate Cloud environment and credential are configured, see
-// `cloud_env.ts`); `connectTunnel` is the lower-level entry point.
-//
-//   import { connectTunnel } from "@restatedev/restate-sdk/node";
-//
-//   connectTunnel({
-//     region: "us",
-//     environmentId: "env_...",
-//     authToken: process.env.RESTATE_AUTH_TOKEN!,
-//     signingPublicKey: "publickeyv1_...",
-//     tunnelName: "my-cluster",
-//     services: [greeter],
-//   });
+// The engine behind `connect()`: serves a Restate SDK deployment over an
+// OUTBOUND connection to Restate Cloud — no inbound HTTP listener, no public
+// ingress to your network. The directory keeps its historical name; the
+// public API is `connect()` in ../connect.
 //
 // Node-only (uses node:tls / node:http2 / node:dns).
 
-export { connectTunnel } from "./connect.js";
+export { startEngine, buildDeploymentUrl } from "./engine.js";
+export { srvNameForRegionDomain, requireHeaderSafe } from "./options.js";
 export type {
+  Connection,
+  ConnectionOptions,
+  ConnectOptions,
+  ConnectTlsOptions,
+  ConnectTuningOptions,
   ConnectTunnelOptions,
+  EngineHandle,
+  EngineOptions,
   ReconnectRetryPolicy,
   TunnelConnection,
   TunnelTlsOptions,

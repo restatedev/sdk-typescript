@@ -15,13 +15,26 @@ import { NodeEndpoint } from "./endpoint/node_endpoint.js";
 import type { EndpointOptions } from "./endpoint/types.js";
 import { withOptions } from "./endpoint/withOptions.js";
 
-export { connectTunnel } from "./endpoint/tunnel/index.js";
+export { connect } from "./endpoint/connect/index.js";
 export type {
-  ConnectTunnelOptions,
+  Connection,
+  ConnectionOptions,
+  ConnectOptions,
+  ConnectTlsOptions,
+  ConnectTuningOptions,
   ReconnectRetryPolicy,
-  TunnelConnection,
-  TunnelTlsOptions,
 } from "./endpoint/tunnel/index.js";
+// The legacy connectTunnel() API, kept for @restatedev/restate-sdk-tunnel,
+// which re-exports it under its public names. Not part of this package's
+// public surface (hence the underscore): use connect().
+/** @internal */
+export { connectTunnel as _connectTunnel } from "./endpoint/connect/tunnel.js";
+/** @internal */
+export type {
+  ConnectTunnelOptions as _ConnectTunnelOptions,
+  TunnelConnection as _TunnelConnection,
+  TunnelTlsOptions as _TunnelTlsOptions,
+} from "./endpoint/connect/tunnel.js";
 
 /**
  * Create a new {@link RestateEndpoint}.

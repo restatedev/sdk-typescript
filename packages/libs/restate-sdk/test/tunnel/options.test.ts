@@ -9,67 +9,45 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-import * as fs from "node:fs";
-import * as os from "node:os";
-import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import {
   resolveOptions,
   buildTlsConnectOptions,
-  srvNameForRegion,
-  TUNNEL_NAME_ENV,
-  ENVIRONMENT_ID_ENV,
-  CLOUD_REGION_ENV,
-  SIGNING_PUBLIC_KEY_ENV,
-  AUTH_TOKEN_FILE_ENV,
+  srvNameForRegionDomain,
   TUNNEL_WORKER_ID_ENV,
 } from "../../src/endpoint/tunnel/options.js";
 import { parseServerAddress } from "../../src/endpoint/tunnel/targets.js";
-import type { ConnectTunnelOptions } from "../../src/endpoint/tunnel/types.js";
+import type { EngineOptions } from "../../src/endpoint/tunnel/types.js";
 
-const valid: ConnectTunnelOptions = {
-  region: "us",
+const valid: EngineOptions = {
+  discovery: { srvName: "tunnel.us.restate.cloud" },
   environmentId: "env_abc123",
-  authToken: "key_xyz.secret",
-  signingPublicKey: "publickeyv1_AfQwmwfgEZhrWpvv8N52SHpRtZqGGaFr4AZN6qtYWSiY",
-  tunnelName: "my-tunnel",
+  authToken: () => "key_xyz.secret",
+  identityKeys: ["publickeyv1_AfQwmwfgEZhrWpvv8N52SHpRtZqGGaFr4AZN6qtYWSiY"],
+  name: "my-deployment",
   services: [],
 };
 
-const OPTION_ENVS = [
-  TUNNEL_NAME_ENV,
-  ENVIRONMENT_ID_ENV,
-  CLOUD_REGION_ENV,
-  SIGNING_PUBLIC_KEY_ENV,
-  AUTH_TOKEN_FILE_ENV,
-  TUNNEL_WORKER_ID_ENV,
-];
-
-// Options resolution reads environment fallbacks from process.env; isolate
-// every test from the host environment and from each other.
-const savedEnv: Record<string, string | undefined> = {};
-const tmpDirs: string[] = [];
+let savedWorkerId: string | undefined;
 beforeEach(() => {
-  for (const name of OPTION_ENVS) {
-    savedEnv[name] = process.env[name];
-    delete process.env[name];
-  }
+  savedWorkerId = process.env[TUNNEL_WORKER_ID_ENV];
+  delete process.env[TUNNEL_WORKER_ID_ENV];
 });
 afterEach(() => {
-  for (const name of OPTION_ENVS) {
-    if (savedEnv[name] === undefined) delete process.env[name];
-    else process.env[name] = savedEnv[name];
-  }
-  for (const dir of tmpDirs.splice(0)) {
-    fs.rmSync(dir, { recursive: true, force: true });
-  }
+  if (savedWorkerId === undefined) delete process.env[TUNNEL_WORKER_ID_ENV];
+  else process.env[TUNNEL_WORKER_ID_ENV] = savedWorkerId;
 });
 
 describe("resolveOptions — validation", () => {
   test("accepts a valid config and applies defaults", () => {
     const r = resolveOptions(valid);
     expect(r.srvName).toBe("tunnel.us.restate.cloud");
+    expect(r.tunnelServers).toBeUndefined();
+    expect(r.name).toBe("my-deployment");
+    expect(r.identityKeys).toEqual(valid.identityKeys);
+    expect(r.authToken()).toBe("key_xyz.secret");
     expect(r.bidirectional).toBe(true);
+    expect(r.connectTimeoutMs).toBe(5_000);
     expect(r.handshakeTimeoutMs).toBe(5_000);
     expect(r.reconnectInitialMs).toBe(10);
     expect(r.reconnectMaxMs).toBe(120_000);
@@ -96,110 +74,41 @@ describe("resolveOptions — validation", () => {
     expect(r.reconnectFactor).toBe(3);
   });
 
-  test("accepts a multi-label (BYOC) region", () => {
-    const r = resolveOptions({
-      ...valid,
-      region: "inl4edhpbxasp9yuz1n0yvvkme.byoc",
-    });
-    expect(r.srvName).toBe(
-      "tunnel.inl4edhpbxasp9yuz1n0yvvkme.byoc.restate.cloud"
-    );
-  });
-
-  test("rejects a malformed region", () => {
-    for (const region of ["US", "us/extra", ".us", "us.", "us..eu"]) {
-      expect(() => resolveOptions({ ...valid, region })).toThrow(
-        /invalid region/
-      );
-    }
-  });
-
-  test("rejects neither region nor tunnelServers", () => {
-    expect(() => resolveOptions({ ...valid, region: undefined })).toThrow(
-      new RegExp(`specify one of .*${CLOUD_REGION_ENV}`)
-    );
-  });
-
-  test("rejects both region and tunnelServers", () => {
-    expect(() => resolveOptions({ ...valid, tunnelServers: ["h:1"] })).toThrow(
-      /exactly one of/
-    );
-  });
-
-  test("tunnelServersSrv is a third, exclusive discovery mode", () => {
-    const r = resolveOptions({
-      ...valid,
-      region: undefined,
-      tunnelServersSrv: "tunnel.dev.example.cloud",
-    });
-    expect(r.srvName).toBe("tunnel.dev.example.cloud");
-    expect(() =>
-      resolveOptions({ ...valid, tunnelServersSrv: "x.example" })
-    ).toThrow(/exactly one of/);
-  });
-
-  test("a malformed tunnelServers entry throws synchronously (not a retry loop)", () => {
+  test("explicit servers are parsed eagerly; a malformed entry or an empty list throws (not a retry loop)", () => {
     // Left to the supervisor, a parse error would look like a transient
     // resolution failure and retry forever without ever connecting.
+    expect(
+      resolveOptions({
+        ...valid,
+        discovery: { servers: ["good.example:9080"] },
+      }).tunnelServers
+    ).toEqual(["good.example:9080"]);
     expect(() =>
       resolveOptions({
         ...valid,
-        region: undefined,
-        tunnelServers: ["good.example:9080", "no-port"],
+        discovery: { servers: ["good.example:9080", "no-port"] },
       })
     ).toThrow(/invalid tunnel server address/);
+    expect(() =>
+      resolveOptions({ ...valid, discovery: { servers: [] } })
+    ).toThrow(/must not be empty/);
+    expect(() =>
+      resolveOptions({ ...valid, discovery: { srvName: "bad/srv" } })
+    ).toThrow(/invalid serversSrv/);
   });
 
-  test("rejects environmentId without env_ prefix", () => {
-    expect(() => resolveOptions({ ...valid, environmentId: "abc123" })).toThrow(
-      /env_/
+  test("workerId: explicit > RESTATE_TUNNEL_WORKER_ID > generated; header-hostile values rejected", () => {
+    process.env[TUNNEL_WORKER_ID_ENV] = "worker-from-env";
+    expect(resolveOptions(valid).tunnelWorkerId).toBe("worker-from-env");
+    expect(
+      resolveOptions({ ...valid, workerId: "worker-explicit" }).tunnelWorkerId
+    ).toBe("worker-explicit");
+    expect(() => resolveOptions({ ...valid, workerId: "worker id" })).toThrow(
+      /HTTP header/
     );
-  });
-
-  test("rejects a signing key without the publickeyv1_ prefix", () => {
-    expect(() =>
-      resolveOptions({ ...valid, signingPublicKey: "not-a-key" })
-    ).toThrow(/publickeyv1_/);
-  });
-
-  test("requires authToken, tunnelName", () => {
-    expect(() => resolveOptions({ ...valid, authToken: "" })).toThrow(
-      /authToken/
+    expect(() => resolveOptions({ ...valid, workerId: "worker\nid" })).toThrow(
+      /HTTP header/
     );
-    expect(() => resolveOptions({ ...valid, tunnelName: "" })).toThrow(
-      /tunnelName/
-    );
-  });
-
-  test("rejects a tunnelName with path-hostile characters", () => {
-    expect(() => resolveOptions({ ...valid, tunnelName: "a/b" })).toThrow(
-      /invalid tunnelName/
-    );
-  });
-
-  test("connectTimeoutMs defaults to 5s", () => {
-    expect(resolveOptions(valid).connectTimeoutMs).toBe(5_000);
-  });
-
-  test("rejects header-hostile credentials (silent Node header stripping)", () => {
-    expect(() =>
-      resolveOptions({ ...valid, authToken: "key_x\nInjected: yes" })
-    ).toThrow(/HTTP header/);
-    expect(() =>
-      resolveOptions({ ...valid, authToken: "key with spaces" })
-    ).toThrow(/HTTP header/);
-    expect(() =>
-      resolveOptions({ ...valid, environmentId: "env_abc\r\n" })
-    ).toThrow(/env_/);
-  });
-
-  test("rejects a header-hostile tunnel worker id", () => {
-    expect(() =>
-      resolveOptions({ ...valid, tunnelWorkerId: "worker id" })
-    ).toThrow(/HTTP header/);
-    expect(() =>
-      resolveOptions({ ...valid, tunnelWorkerId: "worker\nid" })
-    ).toThrow(/HTTP header/);
   });
 
   test("rejects non-positive numeric options", () => {
@@ -209,147 +118,6 @@ describe("resolveOptions — validation", () => {
     expect(() => resolveOptions({ ...valid, pingIntervalMs: -5 })).toThrow(
       /positive/
     );
-  });
-});
-
-describe("resolveOptions — RESTATE_INPROC_* environment fallbacks", () => {
-  const tokenFile = (contents: string): string => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tunnel-token-"));
-    tmpDirs.push(dir);
-    const file = path.join(dir, "token");
-    fs.writeFileSync(file, contents);
-    return file;
-  };
-
-  test("a fully operator-configured pod needs only the token file", () => {
-    process.env[TUNNEL_NAME_ENV] = "greeter-5b8c7d9f4";
-    process.env[ENVIRONMENT_ID_ENV] = "env_abc123";
-    process.env[CLOUD_REGION_ENV] = "eu";
-    process.env[SIGNING_PUBLIC_KEY_ENV] = valid.signingPublicKey!;
-    process.env[AUTH_TOKEN_FILE_ENV] = tokenFile("key_fromfile.secret\n");
-
-    const r = resolveOptions({ services: [] });
-    expect(r.tunnelName).toBe("greeter-5b8c7d9f4");
-    expect(r.environmentId).toBe("env_abc123");
-    expect(r.srvName).toBe("tunnel.eu.restate.cloud");
-    expect(r.signingPublicKey).toBe(valid.signingPublicKey);
-    // mounted secrets routinely carry a trailing newline — trimmed
-    expect(r.authToken()).toBe("key_fromfile.secret");
-  });
-
-  test("explicit options win over the environment", () => {
-    process.env[TUNNEL_NAME_ENV] = "from-env";
-    process.env[ENVIRONMENT_ID_ENV] = "env_fromenv";
-    process.env[CLOUD_REGION_ENV] = "eu";
-    process.env[SIGNING_PUBLIC_KEY_ENV] = "publickeyv1_fromenv";
-    process.env[AUTH_TOKEN_FILE_ENV] = tokenFile("key_fromfile");
-
-    const r = resolveOptions(valid);
-    expect(r.tunnelName).toBe("my-tunnel");
-    expect(r.environmentId).toBe("env_abc123");
-    expect(r.srvName).toBe("tunnel.us.restate.cloud");
-    expect(r.signingPublicKey).toBe(valid.signingPublicKey);
-    expect(r.authToken()).toBe("key_xyz.secret");
-  });
-
-  test("tunnelWorkerId falls back to RESTATE_TUNNEL_WORKER_ID and can be explicit", () => {
-    process.env[TUNNEL_WORKER_ID_ENV] = "worker-from-env";
-
-    expect(resolveOptions(valid).tunnelWorkerId).toBe("worker-from-env");
-    expect(
-      resolveOptions({ ...valid, tunnelWorkerId: "worker-explicit" })
-        .tunnelWorkerId
-    ).toBe("worker-explicit");
-  });
-
-  test("an explicit discovery option beats an injected region", () => {
-    process.env[CLOUD_REGION_ENV] = "eu";
-    // would be a "specify exactly one" conflict if the env region counted
-    const r = resolveOptions({
-      ...valid,
-      region: undefined,
-      tunnelServersSrv: "tunnel.dev.example.cloud",
-    });
-    expect(r.srvName).toBe("tunnel.dev.example.cloud");
-  });
-
-  test("an explicitly empty tunnelServers stays a config error despite an env region", () => {
-    process.env[CLOUD_REGION_ENV] = "eu";
-    expect(() =>
-      resolveOptions({ ...valid, region: undefined, tunnelServers: [] })
-    ).toThrow(/specify one of/);
-  });
-
-  test("environment-sourced values get the same validation as options", () => {
-    process.env[ENVIRONMENT_ID_ENV] = "not-an-env-id";
-    expect(() =>
-      resolveOptions({ ...valid, environmentId: undefined })
-    ).toThrow(/env_/);
-  });
-
-  test("an empty env var counts as unset", () => {
-    process.env[TUNNEL_NAME_ENV] = "";
-    expect(() => resolveOptions({ ...valid, tunnelName: undefined })).toThrow(
-      new RegExp(`tunnelName is required .*${TUNNEL_NAME_ENV}`)
-    );
-  });
-
-  test("missing-value errors name the env var that would fill the gap", () => {
-    expect(() =>
-      resolveOptions({ ...valid, environmentId: undefined })
-    ).toThrow(new RegExp(ENVIRONMENT_ID_ENV));
-    expect(() => resolveOptions({ ...valid, authToken: undefined })).toThrow(
-      new RegExp(AUTH_TOKEN_FILE_ENV)
-    );
-    expect(() =>
-      resolveOptions({ ...valid, signingPublicKey: undefined })
-    ).toThrow(new RegExp(SIGNING_PUBLIC_KEY_ENV));
-  });
-
-  test("a token file is re-read on every call — rotation without restart", () => {
-    const file = tokenFile("key_first");
-    process.env[AUTH_TOKEN_FILE_ENV] = file;
-
-    const r = resolveOptions({ ...valid, authToken: undefined });
-    expect(r.authToken()).toBe("key_first");
-    fs.writeFileSync(file, "key_second\n");
-    expect(r.authToken()).toBe("key_second");
-  });
-
-  test("token-file misconfiguration throws at resolve time, not mid-redial", () => {
-    process.env[AUTH_TOKEN_FILE_ENV] = "/does/not/exist/token";
-    expect(() => resolveOptions({ ...valid, authToken: undefined })).toThrow();
-
-    process.env[AUTH_TOKEN_FILE_ENV] = tokenFile("\n");
-    expect(() => resolveOptions({ ...valid, authToken: undefined })).toThrow(
-      /empty/
-    );
-
-    process.env[AUTH_TOKEN_FILE_ENV] = tokenFile("key with spaces");
-    expect(() => resolveOptions({ ...valid, authToken: undefined })).toThrow(
-      /HTTP header/
-    );
-
-    // a non-regular file (here: a directory) is rejected by the stat guard
-    // BEFORE the read — a FIFO would block the event loop forever
-    process.env[AUTH_TOKEN_FILE_ENV] = path.dirname(tokenFile("x"));
-    expect(() => resolveOptions({ ...valid, authToken: undefined })).toThrow(
-      /not a regular file/
-    );
-  });
-
-  test("a token read failure after resolve surfaces from the provider", () => {
-    const file = tokenFile("key_first");
-    process.env[AUTH_TOKEN_FILE_ENV] = file;
-    const r = resolveOptions({ ...valid, authToken: undefined });
-    fs.rmSync(file);
-    expect(() => r.authToken()).toThrow();
-  });
-
-  test("an explicit authToken never touches the file system", () => {
-    process.env[AUTH_TOKEN_FILE_ENV] = "/does/not/exist/token";
-    const r = resolveOptions(valid);
-    expect(r.authToken()).toBe("key_xyz.secret");
   });
 });
 
@@ -383,10 +151,14 @@ describe("buildTlsConnectOptions — the ALPN invariant", () => {
   });
 });
 
-describe("srvNameForRegion", () => {
-  test("derives the region SRV name", () => {
-    expect(srvNameForRegion("us")).toBe("tunnel.us.restate.cloud");
-    expect(srvNameForRegion("eu")).toBe("tunnel.eu.restate.cloud");
+describe("srvNameForRegionDomain", () => {
+  test("prefixes the region domain with tunnel.", () => {
+    expect(srvNameForRegionDomain("us.restate.cloud")).toBe(
+      "tunnel.us.restate.cloud"
+    );
+    expect(srvNameForRegionDomain("abc.byoc.restate.cloud")).toBe(
+      "tunnel.abc.byoc.restate.cloud"
+    );
   });
 });
 
@@ -452,18 +224,15 @@ describe("client-drain / graceful-shutdown options", () => {
     ).toThrow(/startupReadyTimeoutMs must be a positive number/);
   });
 
-  test("supportsClientDrain defaults to true", () => {
+  test("supportsClientDrain defaults to true and can be disabled", () => {
     expect(resolveOptions(valid).supportsClientDrain).toBe(true);
-  });
-
-  test("supportsClientDrain can be disabled", () => {
     expect(
       resolveOptions({ ...valid, supportsClientDrain: false })
         .supportsClientDrain
     ).toBe(false);
   });
 
-  test("gracefulShutdown is on by default; false opts out", () => {
+  test("gracefulShutdown: on by default (SIGTERM, drain grace); true/object/false forms", () => {
     expect(resolveOptions(valid).gracefulShutdown).toEqual({
       signals: ["SIGTERM"],
       graceMs: 120_000,
@@ -471,37 +240,19 @@ describe("client-drain / graceful-shutdown options", () => {
     expect(
       resolveOptions({ ...valid, gracefulShutdown: false }).gracefulShutdown
     ).toBeUndefined();
-  });
-
-  test("gracefulShutdown: true uses SIGTERM and the drain grace", () => {
-    expect(
-      resolveOptions({ ...valid, gracefulShutdown: true }).gracefulShutdown
-    ).toEqual({ signals: ["SIGTERM"], graceMs: 120_000 });
-  });
-
-  test("gracefulShutdown: true inherits a custom drainGraceMs", () => {
     expect(
       resolveOptions({ ...valid, gracefulShutdown: true, drainGraceMs: 30_000 })
         .gracefulShutdown
     ).toEqual({ signals: ["SIGTERM"], graceMs: 30_000 });
-  });
-
-  test("gracefulShutdown accepts custom signals and grace", () => {
     expect(
       resolveOptions({
         ...valid,
         gracefulShutdown: { signals: ["SIGTERM", "SIGINT"], graceMs: 5_000 },
       }).gracefulShutdown
     ).toEqual({ signals: ["SIGTERM", "SIGINT"], graceMs: 5_000 });
-  });
-
-  test("gracefulShutdown rejects an empty signal list", () => {
     expect(() =>
       resolveOptions({ ...valid, gracefulShutdown: { signals: [] } })
     ).toThrow(/must not be empty/);
-  });
-
-  test("gracefulShutdown rejects a non-positive grace", () => {
     expect(() =>
       resolveOptions({ ...valid, gracefulShutdown: { graceMs: 0 } })
     ).toThrow(/positive/);

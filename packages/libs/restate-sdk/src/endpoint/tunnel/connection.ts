@@ -47,7 +47,7 @@ import * as http2 from "node:http2";
 import { randomBytes } from "node:crypto";
 
 import type { NodeEndpoint } from "../node_endpoint.js";
-import type { ResolvedOptions } from "./options.js";
+import type { DiagnosticLogger, ResolvedOptions } from "./options.js";
 import { buildTlsConnectOptions } from "./options.js";
 import type { Target } from "./targets.js";
 import {
@@ -361,7 +361,10 @@ function dial(
       if (done) return;
       done = true;
       cleanup();
-      log(`tunnel: failed to connect to ${label}: ${reason} (${identity})`);
+      log(
+        `tunnel: failed to connect to ${label}: ${reason} (${identity})`,
+        "warn"
+      );
       socket.destroy();
       resolve({ ok: false, outcome: { kind: "retryable", reason } });
     }
@@ -423,7 +426,7 @@ class ConnectionAttempt implements DrainableConnection {
   private socket: net.Socket | undefined;
 
   private readonly plaintext: boolean;
-  private readonly log: (message: string) => void;
+  private readonly log: DiagnosticLogger;
   private readonly connectionId = newTunnelConnectionId();
 
   constructor(
@@ -804,7 +807,7 @@ class ConnectionAttempt implements DrainableConnection {
       {
         authToken: this.authToken,
         environmentId: this.deps.opts.environmentId,
-        tunnelName: this.deps.opts.tunnelName,
+        tunnelName: this.deps.opts.name,
         tunnelWorkerId: this.deps.opts.tunnelWorkerId,
         tunnelConnectionId: this.connectionId,
         supportsDrain: this.deps.opts.supportsDrain,

@@ -20,8 +20,9 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as restate from "../../src/index.js";
 
-import { connectTunnel } from "../../src/endpoint/tunnel/index.js";
-import type { ConnectTunnelOptions } from "../../src/endpoint/tunnel/index.js";
+import { connect } from "../../src/endpoint/connect/index.js";
+import type { ConnectOptions } from "../../src/endpoint/tunnel/index.js";
+import type { LoggerTransport } from "../../src/logging/logger_transport.js";
 import {
   startFakeCloud,
   roundtrip,
@@ -47,17 +48,28 @@ const okTrailers = (name: string = TUNNEL_NAME): Record<string, string> => ({
   "tunnel-name": name,
 });
 
-const baseOptions = (port: number): ConnectTunnelOptions => ({
-  tunnelServers: [`http://127.0.0.1:${port}`],
-  environmentId: "env_abc123",
-  authToken: "key_test.secret",
-  signingPublicKey: identity.publicKey,
-  tunnelName: TUNNEL_NAME,
-  tunnelWorkerId: "worker-test-1",
+// The connect key for environment env_abc123: the API key in the userinfo
+// slot, the signing key and the fake's address as parameters.
+const connectKey = (port: number): string =>
+  `restate://key_test.secret@abc123.env.example.test/?signing-key=${identity.publicKey}&tunnel-servers=http://127.0.0.1:${port}`;
+
+const baseOptions = (port: number): ConnectOptions => ({
+  key: connectKey(port),
+  name: TUNNEL_NAME,
   services: [greeter],
-  handshakeTimeoutMs: 300,
-  reconnectRetryPolicy: { initialInterval: 5, maxInterval: 50 },
+  connection: {
+    workerId: "worker-test-1",
+    handshakeTimeoutMs: 300,
+    reconnectRetryPolicy: { initialInterval: 5, maxInterval: 50 },
+  },
 });
+
+/** A LoggerTransport that collects every message (all levels) into `into`. */
+const collect =
+  (into: string[]): LoggerTransport =>
+  (_params, message) => {
+    into.push(String(message));
+  };
 
 // The SDK's minimum supported endpoint-manifest version is v2.
 const DISCOVER_ACCEPT = "application/vnd.restate.endpointmanifest.v2+json";
@@ -66,7 +78,7 @@ async function withFake(
   fakeOptions: FakeCloudOptions,
   run: (
     fake: Awaited<ReturnType<typeof startFakeCloud>>,
-    options: ConnectTunnelOptions
+    options: ConnectOptions
   ) => Promise<void>
 ): Promise<void> {
   const fake = await startFakeCloud(fakeOptions);
@@ -77,18 +89,16 @@ async function withFake(
   }
 }
 
-describe("connectTunnel — handshake", () => {
+describe("connect() — handshake", () => {
   test("happy path: handshake completes, credentials presented, info learned", async () => {
     await withFake(
       { decideTrailers: () => okTrailers() },
       async (fake, options) => {
-        const conn = connectTunnel(options);
+        const conn = connect(options);
         try {
           await conn.ready;
           expect(conn.connectionCount).toBe(1);
-          expect(conn.tunnelName).toBe(TUNNEL_NAME);
-          expect(conn.proxyUrl).toBe(okTrailers()["proxy-url"]);
-          expect(conn.tunnelUrl).toBe(okTrailers()["tunnel-url"]);
+          expect(conn.name).toBe(TUNNEL_NAME);
           expect(conn.error).toBeUndefined();
 
           const creds = await (await fake.waitForConnection(0)).creds;
@@ -119,9 +129,9 @@ describe("connectTunnel — handshake", () => {
       { decideTrailers: () => okTrailers() },
       async (_fake, options) => {
         const logs: string[] = [];
-        const conn = connectTunnel({
+        const conn = connect({
           ...options,
-          tunnelDiagnosticLogger: (m) => logs.push(m),
+          logger: collect(logs),
         });
         try {
           await conn.ready;
@@ -162,7 +172,7 @@ describe("connectTunnel — handshake", () => {
         }),
       },
       async (_fake, options) => {
-        const conn = connectTunnel(options);
+        const conn = connect(options);
         try {
           await conn.ready;
           expect(conn.deploymentUrl).toBe(
@@ -179,7 +189,7 @@ describe("connectTunnel — handshake", () => {
     await withFake(
       { decideTrailers: () => ({ "tunnel-status": "unauthorized" }) },
       async (fake, options) => {
-        const conn = connectTunnel(options);
+        const conn = connect(options);
         try {
           await expect(conn.ready).rejects.toThrow(/unauthorized/);
           expect(conn.error?.message).toMatch(/unauthorized/);
@@ -199,7 +209,7 @@ describe("connectTunnel — handshake", () => {
     await withFake(
       { decideTrailers: () => okTrailers("some-other-name") },
       async (_fake, options) => {
-        const conn = connectTunnel(options);
+        const conn = connect(options);
         try {
           await expect(conn.ready).rejects.toThrow(/tunnel-name mismatch/);
         } finally {
@@ -216,7 +226,7 @@ describe("connectTunnel — handshake", () => {
           index === 0 ? { "tunnel-status": "too-many-tunnels" } : okTrailers(),
       },
       async (fake, options) => {
-        const conn = connectTunnel(options);
+        const conn = connect(options);
         try {
           await conn.ready;
           expect(fake.connections.length).toBe(2);
@@ -235,7 +245,7 @@ describe("connectTunnel — handshake", () => {
         decideTrailers: (_creds, index) => (index === 0 ? null : okTrailers()),
       },
       async (fake, options) => {
-        const conn = connectTunnel(options);
+        const conn = connect(options);
         try {
           await conn.ready;
           expect(fake.connections.length).toBe(2);
@@ -251,7 +261,7 @@ describe("connectTunnel — handshake", () => {
     await withFake(
       { decideTrailers: () => okTrailers() },
       async (fake, options) => {
-        const conn = connectTunnel(options);
+        const conn = connect(options);
         await conn.ready;
         await conn.close();
         const seen = fake.connections.length;
@@ -262,12 +272,12 @@ describe("connectTunnel — handshake", () => {
   });
 });
 
-describe("connectTunnel — dispatch", () => {
+describe("connect() — dispatch", () => {
   test("forwarded /discover with a correctly-signed identity reaches the SDK", async () => {
     await withFake(
       { decideTrailers: () => okTrailers() },
       async (fake, options) => {
-        const conn = connectTunnel(options);
+        const conn = connect(options);
         try {
           await conn.ready;
           const { session } = await fake.waitForConnection(0);
@@ -297,7 +307,7 @@ describe("connectTunnel — dispatch", () => {
     await withFake(
       { decideTrailers: () => okTrailers() },
       async (fake, options) => {
-        const conn = connectTunnel(options);
+        const conn = connect(options);
         try {
           await conn.ready;
           const { session } = await fake.waitForConnection(0);
@@ -318,7 +328,7 @@ describe("connectTunnel — dispatch", () => {
     await withFake(
       { decideTrailers: () => okTrailers() },
       async (fake, options) => {
-        const conn = connectTunnel(options);
+        const conn = connect(options);
         try {
           await conn.ready;
           const { session } = await fake.waitForConnection(0);
@@ -343,7 +353,7 @@ describe("connectTunnel — dispatch", () => {
     await withFake(
       { decideTrailers: () => okTrailers() },
       async (fake, options) => {
-        const conn = connectTunnel(options);
+        const conn = connect(options);
         try {
           await conn.ready;
           const { session } = await fake.waitForConnection(0);
@@ -370,7 +380,7 @@ describe("connectTunnel — dispatch", () => {
     await withFake(
       { decideTrailers: () => okTrailers() },
       async (fake, options) => {
-        const conn = connectTunnel(options);
+        const conn = connect(options);
         try {
           await conn.ready;
           const { session } = await fake.waitForConnection(0);
@@ -390,7 +400,7 @@ describe("connectTunnel — dispatch", () => {
     await withFake(
       { decideTrailers: () => okTrailers() },
       async (fake, options) => {
-        const conn = connectTunnel(options);
+        const conn = connect(options);
         try {
           await conn.ready;
           const { session } = await fake.waitForConnection(0);
@@ -407,7 +417,7 @@ describe("connectTunnel — dispatch", () => {
   });
 });
 
-describe("connectTunnel — TLS (negotiated h2)", () => {
+describe("connect() — TLS (negotiated h2)", () => {
   const cert = fs.readFileSync(path.join(__dirname, "fixtures", "cert.pem"));
   const key = fs.readFileSync(path.join(__dirname, "fixtures", "key.pem"));
 
@@ -423,11 +433,14 @@ describe("connectTunnel — TLS (negotiated h2)", () => {
     const port = (server.address() as { port: number }).port;
 
     const reasons: string[] = [];
-    const conn = connectTunnel({
+    const conn = connect({
       ...baseOptions(0),
-      tunnelServers: [`127.0.0.1:${port}`],
-      tls: { ca: cert },
-      tunnelDiagnosticLogger: (m) => reasons.push(m),
+      connection: {
+        ...baseOptions(0).connection,
+        servers: [`127.0.0.1:${port}`],
+        tls: { ca: cert },
+      },
+      logger: collect(reasons),
     });
     try {
       await new Promise((r) => setTimeout(r, 300));
@@ -443,11 +456,14 @@ describe("connectTunnel — TLS (negotiated h2)", () => {
     await withFake(
       { tls: { cert, key }, decideTrailers: () => okTrailers() },
       async (fake, options) => {
-        const conn = connectTunnel({
+        const conn = connect({
           ...options,
-          // host:port form (no scheme): TLS comes from the tls option.
-          tunnelServers: [`127.0.0.1:${fake.port}`],
-          tls: { ca: cert },
+          connection: {
+            ...options.connection,
+            // host:port form (no scheme): TLS comes from the tls option.
+            servers: [`127.0.0.1:${fake.port}`],
+            tls: { ca: cert },
+          },
         });
         try {
           await conn.ready;

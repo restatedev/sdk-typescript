@@ -12,8 +12,9 @@
 // The tunnel engine.
 // =============================================================================
 //
-// connectTunnel() serves a Restate SDK deployment over OUTBOUND connections to
-// Restate Cloud's tunnel servers — no inbound listener. The pieces:
+// startEngine() serves a Restate SDK deployment over OUTBOUND connections to
+// Restate Cloud's tunnel servers — no inbound listener. `connect()` (and the
+// deprecated `connectTunnel()`) resolve the identity and call it. The pieces:
 //
 //   connection.ts — one dial → role-flip → handshake → serve cycle
 //   supervisor.ts — the slot supervisor (one connection per resolved server)
@@ -43,7 +44,7 @@ import type { RestateEndpoint } from "../../endpoint.js";
 import { NodeEndpoint } from "../node_endpoint.js";
 import { withOptions } from "../withOptions.js";
 
-import type { ConnectTunnelOptions, TunnelConnection } from "./types.js";
+import type { EngineHandle, EngineOptions } from "./types.js";
 import { resolveOptions } from "./options.js";
 import type { HandshakeInfo } from "./handshake.js";
 import {
@@ -100,6 +101,29 @@ class InflightTracker {
         resolve(true);
       };
     });
+  }
+}
+
+/**
+ * The deployment URL to register, from the `proxy-url` trailer of the
+ * handshake (`<proxy base>/<bare environment id>/<name>`), shared contract
+ * with the CLI and the Cloud UI:
+ *
+ *   `<proxy base>:9080/<bare environment id>/<name>/http/in-process/9080/`
+ *
+ * The port is **always 9080** (the proxy), never the zone-specific port the
+ * trailer may carry (9081–9083), so every replica and every reconnect prints
+ * the same URL. The `/http/in-process/9080/` tail is a constant: an
+ * in-process deployment is never dialed, the server routes by the name.
+ */
+export function buildDeploymentUrl(proxyUrl: string): string {
+  try {
+    const proxy = new URL(proxyUrl);
+    proxy.port = "9080";
+    const base = proxy.toString().replace(/\/+$/, "");
+    return `${base}/http/in-process/9080/`;
+  } catch {
+    return `${proxyUrl.replace(/\/+$/, "")}/http/in-process/9080/`;
   }
 }
 
@@ -189,13 +213,16 @@ function registerGracefulShutdownSignals(
 }
 
 /**
- * Connect this deployment to a Restate Cloud tunnel and serve `services`
- * over it. Returns immediately; connection management runs in the
- * background until `close()`/`shutdown()` (or the `signal`) stops it. See
- * {@link TunnelConnection.ready} to await the first successful handshake.
+ * Connect this deployment to Restate Cloud and serve `services` over the
+ * connection. Returns immediately; connection management runs in the
+ * background until `close()`/`shutdown()` (or the `signal`) stops it; `ready`
+ * settles with the first handshake.
+ *
+ * The engine entry point behind `connect()` and `connectTunnel()`; the
+ * identity arrives resolved, and each caller projects the handle onto its
+ * public shape.
  */
-export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
-  // Resolve options, eventually picking them up from env.
+export function startEngine(options: EngineOptions): EngineHandle {
   const resolvedOptions = resolveOptions(options);
 
   // Built once, shared across connections and streams (it is stateless per
@@ -203,18 +230,18 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
   // it checks `aud` against the post-strip `req.url` pathname.
   const sdkHandler = withOptions<RestateEndpoint>(new NodeEndpoint(), {
     services: options.services,
-    // The signing public key IS the request-identity key: every forwarded
-    // request must carry a JWT signed by this environment.
-    identityKeys: [resolvedOptions.signingPublicKey],
+    // The environment's signing key IS the request-identity key: every
+    // forwarded request must carry a JWT signed by this environment.
+    identityKeys: resolvedOptions.identityKeys,
     defaultServiceOptions: options.defaultServiceOptions,
     logger: options.logger,
     journalValueCodecProvider: options.journalValueCodecProvider,
   }).handler({ bidirectional: resolvedOptions.bidirectional });
 
-  // Logger used for debugging the tunnel
+  // Diagnostics: the SDK logger by default (see resolveDiagnosticLogger).
   const log = resolvedOptions.logger;
-  const logWithWorker = (message: string) =>
-    log(`${message} (worker_id=${resolvedOptions.tunnelWorkerId})`);
+  const logWithWorker: typeof log = (message, level) =>
+    log(`${message} (worker_id=${resolvedOptions.tunnelWorkerId})`, level);
   let startupGatePassed = resolvedOptions.startupReady === undefined;
   const opts = {
     ...resolvedOptions,
@@ -267,7 +294,8 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
       output.lastInfo = info;
       if (firstConnection) {
         log(
-          `tunnel: service ready (name=${info.tunnelName}, proxy=${info.proxyUrl}, tunnel=${info.tunnelUrl}, worker_id=${identity.workerId}, connection_id=${identity.connectionId}, target=${identity.target})`
+          `tunnel: service ready (name=${info.tunnelName}, proxy=${info.proxyUrl}, tunnel=${info.tunnelUrl}, worker_id=${identity.workerId}, connection_id=${identity.connectionId}, target=${identity.target})`,
+          "info"
         );
       } else {
         log(
@@ -337,7 +365,8 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
     supervisor.stopResolving();
     for (const c of [...activeConnections]) c.beginClientDrain();
     logWithWorker(
-      `tunnel: graceful shutdown — refusing new invocations, draining ${inflight.inFlight} in-flight`
+      `tunnel: graceful shutdown — refusing new invocations, draining ${inflight.inFlight} in-flight`,
+      "info"
     );
     const drained = await inflight.whenDrained(graceMs);
     // In-flight drained: ask h2 to close cleanly. Grace elapsed: force the
@@ -381,7 +410,7 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
   };
 
   // Install process-signal handlers (graceful shutdown is on by default; see
-  // ConnectTunnelOptions.gracefulShutdown). Registered BEFORE the
+  // ConnectTuningOptions.gracefulShutdown). Registered BEFORE the
   // already-aborted-signal handling below, so that path's synchronous close()
   // tears them down via teardown() rather than leaving a live handler on a
   // connection that is already closed.
@@ -391,7 +420,8 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
       registerGracefulShutdownSignals(signals, {
         async shutdown(signal) {
           logWithWorker(
-            `tunnel: received ${signal} — shutting down gracefully`
+            `tunnel: received ${signal} — shutting down gracefully`,
+            "info"
           );
           await shutdown({ graceMs });
         },
@@ -416,6 +446,7 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
     get connectionCount() {
       return output.connectionCount;
     },
+    name: resolvedOptions.name,
     get tunnelName() {
       return output.lastInfo?.tunnelName;
     },
@@ -428,18 +459,7 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
     get deploymentUrl() {
       const lastInfo = output.lastInfo;
       if (lastInfo === undefined) return undefined;
-      // Public clusters may advertise the proxy without a port; the proxy
-      // listens on 9080. The destination (`/http/in-process/9080/`) is a
-      // constant — an in-process tunnel is never dialed, so the server routes
-      // purely by the tunnelName earlier in the path.
-      try {
-        const proxy = new URL(lastInfo.proxyUrl);
-        if (proxy.port === "") proxy.port = "9080";
-        const base = proxy.toString().replace(/\/$/, "");
-        return `${base}/http/in-process/9080/`;
-      } catch {
-        return `${lastInfo.proxyUrl}/http/in-process/9080/`;
-      }
+      return buildDeploymentUrl(lastInfo.proxyUrl);
     },
     get error() {
       return output.fatalError;
