@@ -15,7 +15,7 @@ import type { PaymentWorkflow } from "./workflow.js";
 
 const WF: PaymentWorkflow = { name: "payment" };
 
-const ingress = restate.connect({ url: "http://localhost:8080" });
+const ingress = restate.connect();
 
 async function basicUsageExample() {
   const paymentClient = ingress.workflowClient(WF, "my-workflow-key1");

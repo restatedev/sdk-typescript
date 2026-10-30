@@ -13,7 +13,6 @@
     "greeter": "RESTATE_LOGGING=debug tsx --tsconfig ./tsconfig.json ./src/greeter.ts",
     "cloud": "tsx --tsconfig ./tsconfig.json ./src/greeter_cloud.ts",
     "greeter_hooks": "RESTATE_LOGGING=ERROR tsx --tsconfig ./tsconfig.json ./src/greeter_with_hooks.ts",
-    "greeter_http1": "RESTATE_LOGGING=debug tsx --tsconfig ./tsconfig.json ./src/greeter_http1.ts",
     "preview_serde": "RESTATE_LOGGING=debug tsx --tsconfig ./tsconfig.json ./src/preview_serde.ts",
     "zgreeter": "RESTATE_LOGGING=debug tsx --tsconfig ./tsconfig.json ./src/zod_greeter.ts",
     "iface": "RESTATE_LOGGING=debug tsx --tsconfig ./tsconfig.json ./src/iface_greeter.ts",

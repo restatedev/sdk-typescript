@@ -19,7 +19,7 @@ const Greeter: Greeter = { name: "greeter" };
 const Counter: Counter = { name: "counter" };
 const Workflow: PaymentWorkflow = { name: "payment" };
 
-const ingress = restate.connect({ url: "http://localhost:8080" });
+const ingress = restate.connect();
 
 const simpleCall = async (name: string) => {
   const greeter = ingress.serviceClient<Greeter>({ name: "greeter" });
@@ -73,7 +73,6 @@ const customHeadersCall = async (name: string) => {
 
 const globalCustomHeaders = async (name: string) => {
   const ingress = restate.connect({
-    url: "http://localhost:8080",
     headers: { Authorization: "Bearer mytoken123" },
   });
 
@@ -83,9 +82,7 @@ const globalCustomHeaders = async (name: string) => {
 };
 
 const delayedCall = async (name: string) => {
-  const ingress = restate.connect({
-    url: "http://localhost:8080",
-  });
+  const ingress = restate.connect();
 
   const greeting = await ingress
     .serviceSendClient(Greeter)
@@ -95,9 +92,7 @@ const delayedCall = async (name: string) => {
 };
 
 const sendAndCollectResultLater = async (name: string) => {
-  const ingress = restate.connect({
-    url: "http://localhost:8080",
-  });
+  const ingress = restate.connect();
 
   const send = await ingress
     .serviceSendClient(Greeter)

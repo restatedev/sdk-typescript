@@ -45,15 +45,12 @@ const frontend = restate.service({
   },
 });
 
-void restate.serve({
-  services: [greeter, frontend],
-  port: 9080,
-});
+void restate.serve({ services: [greeter, frontend] });
 
 // 4. Calling greeter from OUTSIDE Restate (ingress).
 
 export async function callFromIngress(name: string) {
-  const ingress = connect({ url: "http://localhost:8080" });
+  const ingress = connect();
 
   const { result } = await ingress.client(greeterInterface).greet({
     name,

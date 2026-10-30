@@ -36,13 +36,7 @@ const greeter = restate.service({
   },
 });
 
-// serve() reads RESTATE_SIGNING_PUBLIC_KEY on its own; this keeps the
-// older comma-separated RESTATE_IDENTITY_KEYS working for this example.
-const identityKeys =
-  process.env.RESTATE_IDENTITY_KEYS?.split(",").filter(Boolean);
-
-void restate.serve({
-  services: [greeter],
-  port: 9080,
-  identityKeys,
-});
+// Listens on PORT (default 9080); validates requests against
+// RESTATE_SIGNING_PUBLIC_KEY when set, and connects to Restate Cloud instead
+// when RESTATE_ENVIRONMENT_ID + RESTATE_AUTH_TOKEN are configured (./.env).
+void restate.serve({ services: [greeter] });

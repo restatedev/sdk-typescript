@@ -4,7 +4,7 @@ on:
   workflow_call:
 
 env:
-  RESTATE_IDENTITY_KEYS: "publickeyv1_8yHkhqyKeDaLytykZnKqrEQK27wF5A569edCqc5Vq2VH"
+  RESTATE_SIGNING_PUBLIC_KEY: "publickeyv1_8yHkhqyKeDaLytykZnKqrEQK27wF5A569edCqc5Vq2VH"
 
 jobs:
   test:
