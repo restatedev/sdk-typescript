@@ -10,7 +10,7 @@
  */
 
 import { describe, expect, test } from "vitest";
-import { forwardedTail } from "../src/forwarded.js";
+import { forwardedTail } from "../../src/endpoint/tunnel/forwarded.js";
 
 describe("forwardedTail", () => {
   // The stripped tail must be BYTE-EXACT: the SDK verifies the identity

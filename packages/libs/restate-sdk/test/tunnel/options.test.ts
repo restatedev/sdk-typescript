@@ -23,9 +23,9 @@ import {
   SIGNING_PUBLIC_KEY_ENV,
   AUTH_TOKEN_FILE_ENV,
   TUNNEL_WORKER_ID_ENV,
-} from "../src/options.js";
-import { parseServerAddress } from "../src/targets.js";
-import type { ConnectTunnelOptions } from "../src/types.js";
+} from "../../src/endpoint/tunnel/options.js";
+import { parseServerAddress } from "../../src/endpoint/tunnel/targets.js";
+import type { ConnectTunnelOptions } from "../../src/endpoint/tunnel/types.js";
 
 const valid: ConnectTunnelOptions = {
   region: "us",

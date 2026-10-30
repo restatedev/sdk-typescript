@@ -39,7 +39,9 @@
 //     (and `closed` provably has none).
 
 import type * as net from "node:net";
-import { createEndpointHandler } from "@restatedev/restate-sdk";
+import type { RestateEndpoint } from "../../endpoint.js";
+import { NodeEndpoint } from "../node_endpoint.js";
+import { withOptions } from "../withOptions.js";
 
 import type { ConnectTunnelOptions, TunnelConnection } from "./types.js";
 import { resolveOptions } from "./options.js";
@@ -199,16 +201,15 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
   // Built once, shared across connections and streams (it is stateless per
   // call). identityKeys delegates per-request JWT verification to the SDK —
   // it checks `aud` against the post-strip `req.url` pathname.
-  const sdkHandler = createEndpointHandler({
+  const sdkHandler = withOptions<RestateEndpoint>(new NodeEndpoint(), {
     services: options.services,
-    bidirectional: resolvedOptions.bidirectional,
-    // TODO identityKeys and signingPublicKey are the very same field.
-    //  This can be aligned into the same field (and could be nice also for the regular SDK to read the key from env).
+    // The signing public key IS the request-identity key: every forwarded
+    // request must carry a JWT signed by this environment.
     identityKeys: [resolvedOptions.signingPublicKey],
     defaultServiceOptions: options.defaultServiceOptions,
     logger: options.logger,
     journalValueCodecProvider: options.journalValueCodecProvider,
-  });
+  }).handler({ bidirectional: resolvedOptions.bidirectional });
 
   // Logger used for debugging the tunnel
   const log = resolvedOptions.logger;

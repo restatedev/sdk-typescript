@@ -15,6 +15,14 @@ import { NodeEndpoint } from "./endpoint/node_endpoint.js";
 import type { EndpointOptions } from "./endpoint/types.js";
 import { withOptions } from "./endpoint/withOptions.js";
 
+export { connectTunnel } from "./endpoint/tunnel/index.js";
+export type {
+  ConnectTunnelOptions,
+  ReconnectRetryPolicy,
+  TunnelConnection,
+  TunnelTlsOptions,
+} from "./endpoint/tunnel/index.js";
+
 /**
  * Create a new {@link RestateEndpoint}.
  * @deprecated Please use {@link createEndpointHandler}

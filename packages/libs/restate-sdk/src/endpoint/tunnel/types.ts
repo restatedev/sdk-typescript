@@ -9,9 +9,10 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-// Public types for @restatedev/restate-sdk-tunnel.
+// Public types of the tunnel engine (connectTunnel / serve() connect mode).
 
-import type { Duration, EndpointOptions } from "@restatedev/restate-sdk";
+import type { Duration } from "@restatedev/restate-sdk-core";
+import type { EndpointOptions } from "../types.js";
 
 /**
  * TLS options for the outbound tunnel connection.

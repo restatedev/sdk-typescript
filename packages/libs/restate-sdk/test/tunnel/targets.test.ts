@@ -19,7 +19,10 @@ vi.mock("node:dns", () => ({
 }));
 
 import * as dns from "node:dns";
-import { resolveTargets, targetKey } from "../src/targets.js";
+import {
+  resolveTargets,
+  targetKey,
+} from "../../src/endpoint/tunnel/targets.js";
 
 const resolveSrv = vi.mocked(dns.promises.resolveSrv);
 const lookup = vi.mocked(dns.promises.lookup);

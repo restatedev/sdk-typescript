@@ -46,6 +46,7 @@ import * as tls from "node:tls";
 import * as http2 from "node:http2";
 import { randomBytes } from "node:crypto";
 
+import type { NodeEndpoint } from "../node_endpoint.js";
 import type { ResolvedOptions } from "./options.js";
 import { buildTlsConnectOptions } from "./options.js";
 import type { Target } from "./targets.js";
@@ -142,9 +143,7 @@ function endInternalError(res: http2.Http2ServerResponse): void {
 }
 
 /** The Node request handler produced by the SDK's createEndpointHandler. */
-type SdkHandler = ReturnType<
-  typeof import("@restatedev/restate-sdk").createEndpointHandler
->;
+type SdkHandler = ReturnType<NodeEndpoint["handler"]>;
 
 /**
  * The engine's handle on a live connection: lets `shutdown()` ask each one to

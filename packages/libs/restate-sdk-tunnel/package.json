@@ -1,7 +1,7 @@
 {
   "name": "@restatedev/restate-sdk-tunnel",
   "version": "1.18.0",
-  "description": "Reverse-tunnel client for Restate Cloud — serve a Restate SDK deployment over an outbound tunnel connection, with no inbound HTTP listener",
+  "description": "Compatibility re-export of connectTunnel from @restatedev/restate-sdk — serve a Restate SDK deployment over an outbound tunnel connection to Restate Cloud",
   "author": "Restate Developers",
   "email": "code@restate.dev",
   "license": "MIT",
@@ -51,6 +51,6 @@
     "@restatedev/restate-sdk": "workspace:*"
   },
   "peerDependencies": {
-    "@restatedev/restate-sdk": "^1.15.0"
+    "@restatedev/restate-sdk": "workspace:^"
   }
 }

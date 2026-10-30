@@ -24,10 +24,10 @@ vi.mock("node:dns", () => ({
 }));
 
 import * as dns from "node:dns";
-import * as restate from "@restatedev/restate-sdk";
+import * as restate from "../../src/index.js";
 
-import { connectTunnel } from "../src/index.js";
-import type { ConnectTunnelOptions } from "../src/index.js";
+import { connectTunnel } from "../../src/endpoint/tunnel/index.js";
+import type { ConnectTunnelOptions } from "../../src/endpoint/tunnel/index.js";
 import { startFakeCloud, roundtrip } from "./fake-cloud.js";
 import { generateIdentityKey } from "./identity.js";
 

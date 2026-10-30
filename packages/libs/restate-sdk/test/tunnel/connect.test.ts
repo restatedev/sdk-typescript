@@ -18,10 +18,10 @@
 import { describe, expect, test } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import * as restate from "@restatedev/restate-sdk";
+import * as restate from "../../src/index.js";
 
-import { connectTunnel } from "../src/index.js";
-import type { ConnectTunnelOptions } from "../src/index.js";
+import { connectTunnel } from "../../src/endpoint/tunnel/index.js";
+import type { ConnectTunnelOptions } from "../../src/endpoint/tunnel/index.js";
 import {
   startFakeCloud,
   roundtrip,

@@ -18,5 +18,14 @@ export default defineConfig({
     "node:buffer",
     "node:timers/promises",
     "node:zlib",
+    // used by the tunnel engine (connect mode of serve())
+    "node:http",
+    "node:http2",
+    "node:net",
+    "node:tls",
+    "node:dns",
+    "node:os",
+    "node:fs",
+    "node:crypto",
   ],
 });

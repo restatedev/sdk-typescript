@@ -15,7 +15,10 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import { randomBytes } from "node:crypto";
 import type * as tls from "node:tls";
-import type { Duration } from "@restatedev/restate-sdk";
+import {
+  millisOrDurationToMillis,
+  type Duration,
+} from "@restatedev/restate-sdk-core";
 import type { ConnectTunnelOptions, TunnelTlsOptions } from "./types.js";
 import { parseServerAddress } from "./targets.js";
 
@@ -199,21 +202,9 @@ function positive(
   return value;
 }
 
-/**
- * Normalize a `Duration | number` into milliseconds (a number is already ms).
- * Inlined rather than importing the SDK's `millisOrDurationToMillis`, which is
- * not part of its public API — this keeps the tunnel package dependency-free.
- */
+/** Normalize a `Duration | number` into milliseconds (a number is already ms). */
 function toMillis(value: Duration | number | undefined): number | undefined {
-  if (value === undefined) return undefined;
-  if (typeof value === "number") return Math.trunc(value);
-  return Math.trunc(
-    (value.milliseconds ?? 0) +
-      1000 * (value.seconds ?? 0) +
-      1000 * 60 * (value.minutes ?? 0) +
-      1000 * 60 * 60 * (value.hours ?? 0) +
-      1000 * 60 * 60 * 24 * (value.days ?? 0)
-  );
+  return value === undefined ? undefined : millisOrDurationToMillis(value);
 }
 
 /**
