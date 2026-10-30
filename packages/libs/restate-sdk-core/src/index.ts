@@ -41,6 +41,9 @@ export { durationToMillis, millisOrDurationToMillis } from "./duration.js";
 
 export type { JournalValueCodec } from "./entry_codec.js";
 
+export type { CloudKey } from "./cloud_key.js";
+export { parseCloudKey } from "./cloud_key.js";
+
 export type {
   StandardTypedV1,
   StandardSchemaV1,
