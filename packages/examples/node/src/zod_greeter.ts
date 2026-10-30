@@ -36,6 +36,8 @@ const greeter = restate.service({
   },
 });
 
+// serve() reads RESTATE_SIGNING_PUBLIC_KEY on its own; this keeps the
+// older comma-separated RESTATE_IDENTITY_KEYS working for this example.
 const identityKeys =
   process.env.RESTATE_IDENTITY_KEYS?.split(",").filter(Boolean);
 

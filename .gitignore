@@ -21,6 +21,10 @@ sdk-tests.jar
 
 .restate
 
+# Restate Cloud credentials written by `restate cloud link`
+.env
+!.env.example
+
 docs-out
 
 .wrangler
