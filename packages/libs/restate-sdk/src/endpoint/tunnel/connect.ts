@@ -45,6 +45,8 @@ import { withOptions } from "../withOptions.js";
 
 import type { ConnectTunnelOptions, TunnelConnection } from "./types.js";
 import { resolveOptions } from "./options.js";
+import { TunnelNameCoordinator } from "./tunnel_name.js";
+import { buildDeploymentUrl, TUNNEL_NAME_ENVS } from "../cloud_env.js";
 import type { HandshakeInfo } from "./handshake.js";
 import {
   type ConnectionDeps,
@@ -193,8 +195,20 @@ function registerGracefulShutdownSignals(
  * over it. Returns immediately; connection management runs in the
  * background until `close()`/`shutdown()` (or the `signal`) stops it. See
  * {@link TunnelConnection.ready} to await the first successful handshake.
+ *
+ * @deprecated Use `serve({ services })` from `@restatedev/restate-sdk`: it
+ * connects to Restate Cloud on its own when `RESTATE_ENVIRONMENT_ID` and
+ * `RESTATE_AUTH_TOKEN` are configured (in the process environment or in
+ * `./.env`, as written by `restate cloud link`), prints how to register the
+ * deployment, and listens on `PORT` otherwise. Tunnel options go under
+ * `serve({ connect: { ... } })`. This function keeps working.
  */
 export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
+  return startTunnel(options);
+}
+
+/** The engine entry point used by `serve()` and by {@link connectTunnel}. */
+export function startTunnel(options: ConnectTunnelOptions): TunnelConnection {
   // Resolve options, eventually picking them up from env.
   const resolvedOptions = resolveOptions(options);
 
@@ -211,10 +225,13 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
     journalValueCodecProvider: options.journalValueCodecProvider,
   }).handler({ bidirectional: resolvedOptions.bidirectional });
 
-  // Logger used for debugging the tunnel
+  // Tunnel diagnostics: the SDK logger by default (see resolveDiagnosticLogger).
   const log = resolvedOptions.logger;
-  const logWithWorker = (message: string) =>
-    log(`${message} (worker_id=${resolvedOptions.tunnelWorkerId})`);
+  const logWithWorker: typeof log = (message, level) =>
+    log(`${message} (worker_id=${resolvedOptions.tunnelWorkerId})`, level);
+  // The deployment name every connection presents; coordinated when the
+  // server mints it (no RESTATE_TUNNEL_NAME configured).
+  const tunnelName = new TunnelNameCoordinator(resolvedOptions.tunnelName);
   let startupGatePassed = resolvedOptions.startupReady === undefined;
   const opts = {
     ...resolvedOptions,
@@ -257,6 +274,7 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
   const connectionDeps: ConnectionDeps = {
     opts,
     sdkHandler,
+    tunnelName,
     draining,
     activeSockets,
     activeConnections,
@@ -266,8 +284,15 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
       output.connectionCount++;
       output.lastInfo = info;
       if (firstConnection) {
+        if (resolvedOptions.tunnelName === undefined) {
+          log(
+            `no ${TUNNEL_NAME_ENVS[0]} set — using server-assigned deployment name "${info.tunnelName}", which changes on restart`,
+            "warn"
+          );
+        }
         log(
-          `tunnel: service ready (name=${info.tunnelName}, proxy=${info.proxyUrl}, tunnel=${info.tunnelUrl}, worker_id=${identity.workerId}, connection_id=${identity.connectionId}, target=${identity.target})`
+          `tunnel: service ready (name=${info.tunnelName}, proxy=${info.proxyUrl}, tunnel=${info.tunnelUrl}, worker_id=${identity.workerId}, connection_id=${identity.connectionId}, target=${identity.target})`,
+          "info"
         );
       } else {
         log(
@@ -337,7 +362,8 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
     supervisor.stopResolving();
     for (const c of [...activeConnections]) c.beginClientDrain();
     logWithWorker(
-      `tunnel: graceful shutdown — refusing new invocations, draining ${inflight.inFlight} in-flight`
+      `tunnel: graceful shutdown — refusing new invocations, draining ${inflight.inFlight} in-flight`,
+      "info"
     );
     const drained = await inflight.whenDrained(graceMs);
     // In-flight drained: ask h2 to close cleanly. Grace elapsed: force the
@@ -391,7 +417,8 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
       registerGracefulShutdownSignals(signals, {
         async shutdown(signal) {
           logWithWorker(
-            `tunnel: received ${signal} — shutting down gracefully`
+            `tunnel: received ${signal} — shutting down gracefully`,
+            "info"
           );
           await shutdown({ graceMs });
         },
@@ -428,18 +455,14 @@ export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
     get deploymentUrl() {
       const lastInfo = output.lastInfo;
       if (lastInfo === undefined) return undefined;
-      // Public clusters may advertise the proxy without a port; the proxy
-      // listens on 9080. The destination (`/http/in-process/9080/`) is a
-      // constant — an in-process tunnel is never dialed, so the server routes
-      // purely by the tunnelName earlier in the path.
-      try {
-        const proxy = new URL(lastInfo.proxyUrl);
-        if (proxy.port === "") proxy.port = "9080";
-        const base = proxy.toString().replace(/\/$/, "");
-        return `${base}/http/in-process/9080/`;
-      } catch {
-        return `${lastInfo.proxyUrl}/http/in-process/9080/`;
-      }
+      // Always port 9080 (the proxy), never the zone-specific port the
+      // `proxy-url` trailer carries — see buildDeploymentUrl.
+      return buildDeploymentUrl({
+        environmentId: resolvedOptions.environmentId,
+        srvName: resolvedOptions.srvName,
+        proxyUrl: lastInfo.proxyUrl,
+        tunnelName: lastInfo.tunnelName,
+      });
     },
     get error() {
       return output.fatalError;

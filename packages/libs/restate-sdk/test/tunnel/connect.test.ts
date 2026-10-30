@@ -62,6 +62,18 @@ const baseOptions = (port: number): ConnectTunnelOptions => ({
 // The SDK's minimum supported endpoint-manifest version is v2.
 const DISCOVER_ACCEPT = "application/vnd.restate.endpointmanifest.v2+json";
 
+async function until(
+  cond: () => boolean,
+  timeoutMs = 2_000,
+  what = "condition"
+): Promise<void> {
+  const start = Date.now();
+  while (!cond()) {
+    if (Date.now() - start > timeoutMs) throw new Error(`timed out: ${what}`);
+    await new Promise((r) => setTimeout(r, 10));
+  }
+}
+
 async function withFake(
   fakeOptions: FakeCloudOptions,
   run: (
@@ -462,6 +474,84 @@ describe("connectTunnel — TLS (negotiated h2)", () => {
           });
           expect(status).toBe(200);
           expect(body).toContain("greeter");
+        } finally {
+          await conn.close();
+        }
+      }
+    );
+  });
+});
+
+describe("connectTunnel — optional deployment name", () => {
+  test("no tunnelName: header omitted, server-minted name adopted, warned once, and re-requested on reconnect", async () => {
+    const MINTED = "quiet-amber-otter";
+    const fake = await startFakeCloud({
+      // The first handshake carries no name: mint one. Later handshakes must
+      // request the minted name; echo whatever they ask for.
+      decideTrailers: (creds, index) =>
+        okTrailers(
+          index === 0
+            ? MINTED
+            : typeof creds["tunnel-name"] === "string"
+              ? creds["tunnel-name"]
+              : "WRONG"
+        ),
+    });
+    const logs: string[] = [];
+    const { tunnelName: _drop, ...options } = baseOptions(fake.port);
+    const conn = connectTunnel({
+      ...options,
+      tunnelDiagnosticLogger: (m) => logs.push(m),
+    });
+    try {
+      await conn.ready;
+      const first = await fake.waitForConnection(0);
+      expect((await first.creds)["tunnel-name"]).toBeUndefined();
+      expect(conn.tunnelName).toBe(MINTED);
+      expect(conn.deploymentUrl).toBe(
+        `https://tunnel.example:9080/abc123/${MINTED}/http/in-process/9080/`
+      );
+      const warnings = logs.filter((m) =>
+        m.includes("no RESTATE_TUNNEL_NAME set")
+      );
+      expect(warnings).toHaveLength(1);
+      expect(warnings[0]).toContain(`"${MINTED}"`);
+      expect(warnings[0]).toContain("changes on restart");
+
+      // Force a redial: the replacement connection presents the minted name
+      // explicitly, so the process keeps one identity for its lifetime.
+      first.session.destroy();
+      const second = await fake.waitForConnection(1);
+      expect((await second.creds)["tunnel-name"]).toBe(MINTED);
+      await until(() => conn.connectionCount === 2, 2_000, "reconnect");
+      expect(conn.tunnelName).toBe(MINTED);
+      expect(
+        logs.filter((m) => m.includes("no RESTATE_TUNNEL_NAME set"))
+      ).toHaveLength(1);
+    } finally {
+      await conn.close();
+      await fake.close();
+    }
+  });
+
+  test("deploymentUrl pins port 9080 even when the proxy-url trailer carries a zone port", async () => {
+    await withFake(
+      {
+        decideTrailers: () => ({
+          ...okTrailers(),
+          "proxy-url": `https://tunnel.example:9082/abc123/${TUNNEL_NAME}`,
+        }),
+      },
+      async (_fake, options) => {
+        const conn = connectTunnel(options);
+        try {
+          await conn.ready;
+          expect(conn.proxyUrl).toBe(
+            `https://tunnel.example:9082/abc123/${TUNNEL_NAME}`
+          );
+          expect(conn.deploymentUrl).toBe(
+            `https://tunnel.example:9080/abc123/${TUNNEL_NAME}/http/in-process/9080/`
+          );
         } finally {
           await conn.close();
         }

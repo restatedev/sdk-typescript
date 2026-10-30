@@ -18,7 +18,8 @@
 //
 //   1. We answer immediately: `200` whose RESPONSE HEADERS carry our
 //      credentials — `authorization: Bearer <token>`,
-//      `environment-id: env_<id>`, `tunnel-name: <name>`, advisory diagnostic
+//      `environment-id: env_<id>`, `tunnel-name: <name>` (omitted to let the
+//      server mint a name, returned in the trailers), advisory diagnostic
 //      ids (`tunnel-worker-id`, `tunnel-connection-id`), and `supports-drain:
 //      true` when the drain handover is enabled (the default — see the
 //      /_/drain-tunnel handling in connect.ts).
@@ -57,7 +58,8 @@ export type HandshakeOutcome =
 export interface HandshakeCredentials {
   authToken: string;
   environmentId: string;
-  tunnelName: string;
+  /** The deployment name to request; `undefined` lets the server mint one. */
+  tunnelName: string | undefined;
   /** Stable-ish per SDK worker/process, for cross-side diagnostics. */
   tunnelWorkerId: string;
   /** Unique per h2 tunnel connection attempt, for cross-side diagnostics. */
@@ -137,9 +139,10 @@ export function performHandshake(
         });
         return;
       }
-      if (tunnelName !== creds.tunnelName) {
+      if (creds.tunnelName !== undefined && tunnelName !== creds.tunnelName) {
         // We requested a specific name; the server must echo it. A different
-        // name means our registration URL would not route here.
+        // name means our registration URL would not route here. (With no
+        // requested name, whatever the server minted is ours.)
         finish({
           kind: "fatal",
           reason: `tunnel-name mismatch: requested ${JSON.stringify(creds.tunnelName)}, got ${JSON.stringify(tunnelName)}`,
@@ -176,7 +179,9 @@ export function performHandshake(
     res.writeHead(200, {
       authorization: `Bearer ${creds.authToken}`,
       "environment-id": creds.environmentId,
-      "tunnel-name": creds.tunnelName,
+      ...(creds.tunnelName !== undefined && {
+        "tunnel-name": creds.tunnelName,
+      }),
       "tunnel-worker-id": creds.tunnelWorkerId,
       "tunnel-connection-id": creds.tunnelConnectionId,
       ...(creds.supportsDrain && { "supports-drain": "true" }),

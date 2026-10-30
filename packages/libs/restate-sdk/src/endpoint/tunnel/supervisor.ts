@@ -31,7 +31,7 @@
 //       signals and wakes the resolve loop out of any sleep; the (un-abortable)
 //       DNS work is raced against the wake signal, never awaited.
 
-import type { ResolvedOptions } from "./options.js";
+import type { DiagnosticLogger, ResolvedOptions } from "./options.js";
 import { resolveTargets, targetKey, type Target } from "./targets.js";
 import { runConnection, type ConnectionDeps } from "./connection.js";
 import { Backoff, MIN_UPTIME_FOR_BACKOFF_RESET_MS } from "./backoff.js";
@@ -69,7 +69,7 @@ export class Supervisor {
     private readonly opts: ResolvedOptions,
     private readonly deps: ConnectionDeps,
     private readonly hooks: SupervisorHooks,
-    private readonly log: (message: string) => void
+    private readonly log: DiagnosticLogger
   ) {
     this.stopSignal.signal.addEventListener("abort", () => this.wake.abort(), {
       once: true,
@@ -147,7 +147,8 @@ export class Supervisor {
         `tunnel: startup readiness gate failed: ${reason}`
       );
       this.log(
-        `tunnel: FATAL — startup readiness gate failed: ${reason}; stopping all connections`
+        `tunnel: FATAL — startup readiness gate failed: ${reason}; stopping all connections`,
+        "error"
       );
       this.hooks.onFatal(this.fatal);
       this.stopSignal.abort();
@@ -171,7 +172,10 @@ export class Supervisor {
       if (outcome.kind === "fatal") {
         // E1: shared credentials — stop everything.
         this.fatal = new Error(`tunnel: ${outcome.reason}`);
-        this.log(`tunnel: FATAL — ${outcome.reason}; stopping all connections`);
+        this.log(
+          `tunnel: FATAL — ${outcome.reason}; stopping all connections`,
+          "error"
+        );
         this.hooks.onFatal(this.fatal);
         this.stopSignal.abort();
         break;
@@ -184,16 +188,17 @@ export class Supervisor {
         if (outcome.kind === "drained" && heldLongEnough) {
           // A stable connection was asked to rotate and the server is holding
           // the old one open for us — replace it NOW.
-          this.log("tunnel: draining — reconnecting immediately");
+          this.log("tunnel: draining — reconnecting immediately", "info");
           continue;
         }
         this.log(
           outcome.kind === "drained"
             ? "tunnel: drained shortly after connecting — reconnecting with backoff"
-            : "tunnel: connection ended — reconnecting"
+            : "tunnel: connection ended — reconnecting",
+          "warn"
         );
       } else {
-        this.log(`tunnel: ${outcome.reason} — reconnecting`);
+        this.log(`tunnel: ${outcome.reason} — reconnecting`, "warn");
       }
       await delay(backoff.next(), ctl.signal);
     }
@@ -218,7 +223,8 @@ export class Supervisor {
         // Keep whatever slots exist serving; retry the resolution later
         // (the Rust client does the same on SRV failures).
         this.log(
-          `tunnel: target resolution failed: ${err instanceof Error ? err.message : String(err)} — retrying`
+          `tunnel: target resolution failed: ${err instanceof Error ? err.message : String(err)} — retrying`,
+          "warn"
         );
         await delay(
           Math.min(5_000, this.opts.resolveIntervalMs),
@@ -251,12 +257,14 @@ export class Supervisor {
           );
           if (added.length > 0) {
             this.log(
-              `tunnel: discovered new tunnel target(s): ${formatTargetList(added)}`
+              `tunnel: discovered new tunnel target(s): ${formatTargetList(added)}`,
+              "info"
             );
           }
           if (removed.length > 0) {
             this.log(
-              `tunnel: tunnel target(s) disappeared: ${formatTargetList(removed)}`
+              `tunnel: tunnel target(s) disappeared: ${formatTargetList(removed)}`,
+              "info"
             );
           }
         }

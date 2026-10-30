@@ -21,18 +21,35 @@ import {
 } from "@restatedev/restate-sdk-core";
 import type { ConnectTunnelOptions, TunnelTlsOptions } from "./types.js";
 import { parseServerAddress } from "./targets.js";
+import {
+  AUTH_TOKEN_ENVS,
+  AUTH_TOKEN_FILE_ENVS,
+  ENVIRONMENT_ID_ENVS,
+  readDiscoveryEnv,
+  readEnv,
+  SIGNING_PUBLIC_KEY_ENVS,
+  TUNNEL_NAME_ENVS,
+  TUNNEL_WORKER_ID_ENVS,
+} from "../cloud_env.js";
+import type { LoggerTransport } from "../../logging/logger_transport.js";
+import { LogSource } from "../../logging/logger_transport.js";
+import { createLogger } from "../../logging/logger.js";
+import { defaultLoggerTransport } from "../../logging/console_logger_transport.js";
 
-// The environment variables options fall back to when not given explicitly
-// (option > environment > throw). They form the contract with the
-// restate-operator, which injects the first four into the pods of a
-// `tunnelMode: in-process` RestateDeployment; AUTH_TOKEN_FILE is reserved
-// for the user's own Secret mount — credentials are never injected.
-export const TUNNEL_NAME_ENV = "RESTATE_INPROC_TUNNEL_NAME";
-export const ENVIRONMENT_ID_ENV = "RESTATE_INPROC_ENVIRONMENT_ID";
-export const CLOUD_REGION_ENV = "RESTATE_INPROC_CLOUD_REGION";
-export const SIGNING_PUBLIC_KEY_ENV = "RESTATE_INPROC_SIGNING_PUBLIC_KEY";
-export const AUTH_TOKEN_FILE_ENV = "RESTATE_INPROC_AUTH_TOKEN_FILE";
-export const TUNNEL_WORKER_ID_ENV = "RESTATE_TUNNEL_WORKER_ID";
+// Options fall back to environment variables when not given explicitly
+// (option > RESTATE_<X> > RESTATE_INPROC_<X> > throw); the names live in
+// `cloud_env.ts`. The RESTATE_INPROC_* names form the contract with the
+// restate-operator, which injects them into the pods of a `tunnelMode:
+// in-process` RestateDeployment; RESTATE_INPROC_AUTH_TOKEN_FILE is reserved for
+// the user's own Secret mount — credentials are never injected.
+
+/** Severity of a tunnel diagnostic; the default sink is the SDK logger. */
+export type DiagnosticLevel = "debug" | "info" | "warn" | "error";
+/** Engine-internal diagnostic sink. `level` defaults to `debug`. */
+export type DiagnosticLogger = (
+  message: string,
+  level?: DiagnosticLevel
+) => void;
 
 export interface ResolvedOptions {
   /** The SRV name to discover tunnel servers from (region-derived or given). */
@@ -48,7 +65,12 @@ export interface ResolvedOptions {
    */
   authToken: () => string;
   signingPublicKey: string;
-  tunnelName: string;
+  /**
+   * The deployment name to request, or `undefined` to let the tunnel server
+   * mint one (the engine then reuses the minted name for every further
+   * connection of this process, and warns that it changes on restart).
+   */
+  tunnelName: string | undefined;
   tunnelWorkerId: string;
   bidirectional: boolean;
   startupReady?: () => Promise<void>;
@@ -71,26 +93,32 @@ export interface ResolvedOptions {
   connectionWindowSize: number;
   maxSessionMemory: number;
   tls: boolean | TunnelTlsOptions;
-  logger: (message: string) => void;
+  logger: DiagnosticLogger;
 }
 
 /** An env var set to the empty string is treated as unset. */
-function fromEnv(name: string): string | undefined {
-  const value = process.env[name];
-  return value === undefined || value === "" ? undefined : value;
+function fromEnv(names: readonly string[]): string | undefined {
+  return readEnv(names)?.value;
+}
+
+/** Resolve option > environment (first set name wins) > undefined. */
+function optional(
+  value: string | undefined,
+  envNames: readonly string[]
+): string | undefined {
+  return value !== undefined && value !== "" ? value : fromEnv(envNames);
 }
 
 /** Resolve option > environment > throw. */
 function requireConfigured(
   value: string | undefined,
   name: string,
-  envName: string
+  envNames: readonly string[]
 ): string {
-  const resolved =
-    value !== undefined && value !== "" ? value : fromEnv(envName);
+  const resolved = optional(value, envNames);
   if (resolved === undefined) {
     throw new Error(
-      `tunnel: ${name} is required (pass the option or set ${envName})`
+      `tunnel: ${name} is required (pass the option or set ${envNames[0]}; \`restate cloud link\` writes it to ./.env)`
     );
   }
   return resolved;
@@ -111,14 +139,16 @@ function requireHeaderSafe(value: string, what: string): string {
 }
 
 function resolveAuthToken(option: string | undefined): () => string {
-  if (option !== undefined && option !== "") {
-    requireHeaderSafe(option, "authToken");
-    return () => option;
+  // option > RESTATE_AUTH_TOKEN > a token file (RESTATE_INPROC_AUTH_TOKEN_FILE).
+  const token = optional(option, AUTH_TOKEN_ENVS);
+  if (token !== undefined) {
+    requireHeaderSafe(token, "authToken");
+    return () => token;
   }
-  const tokenFile = fromEnv(AUTH_TOKEN_FILE_ENV);
+  const tokenFile = fromEnv(AUTH_TOKEN_FILE_ENVS);
   if (tokenFile === undefined) {
     throw new Error(
-      `tunnel: authToken is required (pass the option or set ${AUTH_TOKEN_FILE_ENV})`
+      `tunnel: authToken is required (pass the option or set ${AUTH_TOKEN_ENVS[0]}; \`restate cloud link\` writes it to ./.env)`
     );
   }
   const readToken = () => {
@@ -157,7 +187,7 @@ function sanitizeDefaultWorkerIdSegment(value: string): string {
 }
 
 function makeDefaultTunnelWorkerId(): string {
-  const host = fromEnv("HOSTNAME") ?? os.hostname() ?? "worker";
+  const host = fromEnv(["HOSTNAME"]) ?? os.hostname() ?? "worker";
   const suffix = randomBytes(4).toString("hex");
   return `${sanitizeDefaultWorkerIdSegment(host)}-${suffix}`;
 }
@@ -167,10 +197,7 @@ function makeDefaultTunnelWorkerId(): string {
 const DEFAULT_TUNNEL_WORKER_ID = makeDefaultTunnelWorkerId();
 
 function resolveTunnelWorkerId(option: string | undefined): string {
-  const value =
-    option !== undefined && option !== ""
-      ? option
-      : fromEnv(TUNNEL_WORKER_ID_ENV);
+  const value = optional(option, TUNNEL_WORKER_ID_ENVS);
   return requireHeaderSafe(value ?? DEFAULT_TUNNEL_WORKER_ID, "tunnelWorkerId");
 }
 
@@ -209,34 +236,40 @@ function toMillis(value: Duration | number | undefined): number | undefined {
 
 /**
  * Validate user options and apply defaults. Throws on misconfiguration.
- * Each identity/discovery option falls back to its RESTATE_INPROC_* env var
- * (option > environment > throw), so a pod the restate-operator configured
- * for `tunnelMode: in-process` needs no explicit configuration beyond the
- * auth token.
+ * Each identity/discovery option falls back to the environment (option >
+ * `RESTATE_<X>` > `RESTATE_INPROC_<X>` > throw, see `cloud_env.ts`), so a
+ * `.env` written by `restate cloud link`, or a pod the restate-operator
+ * configured for `tunnelMode: in-process`, needs no explicit configuration.
  */
 export function resolveOptions(options: ConnectTunnelOptions): ResolvedOptions {
-  const hasSrv =
-    options.tunnelServersSrv !== undefined && options.tunnelServersSrv !== "";
-  const hasServers =
-    options.tunnelServers !== undefined && options.tunnelServers.length > 0;
-  // The env var only fills the gap when NO discovery option was given — an
-  // explicit tunnelServersSrv/tunnelServers wins over an injected region, and
-  // an explicitly-given-but-empty tunnelServers stays a loud config error
-  // rather than silently yielding to the environment.
   let region = options.region;
+  let tunnelServersSrv = options.tunnelServersSrv;
+  let tunnelServers = options.tunnelServers;
+  // The environment only fills the gap when NO discovery option was given — an
+  // explicit option wins over an injected region, and an
+  // explicitly-given-but-empty tunnelServers stays a loud config error rather
+  // than silently yielding to the environment.
   if (
     (region === undefined || region === "") &&
-    !hasSrv &&
-    options.tunnelServers === undefined
+    (tunnelServersSrv === undefined || tunnelServersSrv === "") &&
+    tunnelServers === undefined
   ) {
-    region = fromEnv(CLOUD_REGION_ENV);
+    const discovery = readDiscoveryEnv();
+    if (discovery?.kind === "region") region = discovery.region;
+    else if (discovery?.kind === "srv") {
+      tunnelServersSrv = discovery.tunnelServersSrv;
+    } else if (discovery?.kind === "servers") {
+      tunnelServers = discovery.tunnelServers;
+    }
   }
   const hasRegion = region !== undefined && region !== "";
+  const hasSrv = tunnelServersSrv !== undefined && tunnelServersSrv !== "";
+  const hasServers = tunnelServers !== undefined && tunnelServers.length > 0;
   const discoveryCount =
     Number(hasRegion) + Number(hasSrv) + Number(hasServers);
   if (discoveryCount === 0) {
     throw new Error(
-      `tunnel: specify one of \`region\`, \`tunnelServersSrv\` or \`tunnelServers\` (or set ${CLOUD_REGION_ENV})`
+      "tunnel: specify one of `region`, `tunnelServersSrv` or `tunnelServers` (or set RESTATE_CLOUD_REGION; `restate cloud link` writes it to ./.env)"
     );
   }
   if (discoveryCount > 1) {
@@ -250,9 +283,9 @@ export function resolveOptions(options: ConnectTunnelOptions): ResolvedOptions {
   if (hasRegion && !/^[a-z0-9-]+(\.[a-z0-9-]+)*$/.test(region!)) {
     throw new Error(`tunnel: invalid region ${JSON.stringify(region)}`);
   }
-  if (hasSrv && !/^[A-Za-z0-9._-]+$/.test(options.tunnelServersSrv!)) {
+  if (hasSrv && !/^[A-Za-z0-9._-]+$/.test(tunnelServersSrv!)) {
     throw new Error(
-      `tunnel: invalid tunnelServersSrv ${JSON.stringify(options.tunnelServersSrv)}`
+      `tunnel: invalid tunnelServersSrv ${JSON.stringify(tunnelServersSrv)}`
     );
   }
   // Parse explicit servers eagerly: a config typo must throw here, like
@@ -260,13 +293,13 @@ export function resolveOptions(options: ConnectTunnelOptions): ResolvedOptions {
   // Left to the supervisor it would look like a transient resolution
   // failure and retry forever without ever connecting.
   if (hasServers) {
-    for (const address of options.tunnelServers!) parseServerAddress(address);
+    for (const address of tunnelServers!) parseServerAddress(address);
   }
 
   const environmentId = requireConfigured(
     options.environmentId,
     "environmentId",
-    ENVIRONMENT_ID_ENV
+    ENVIRONMENT_ID_ENVS
   );
   if (!/^env_[A-Za-z0-9_-]+$/.test(environmentId)) {
     throw new Error(
@@ -277,19 +310,16 @@ export function resolveOptions(options: ConnectTunnelOptions): ResolvedOptions {
   const signingPublicKey = requireConfigured(
     options.signingPublicKey,
     "signingPublicKey",
-    SIGNING_PUBLIC_KEY_ENV
+    SIGNING_PUBLIC_KEY_ENVS
   );
   if (!signingPublicKey.startsWith("publickeyv1_")) {
     throw new Error(
       "tunnel: signingPublicKey must be a request-identity public key (publickeyv1_...)"
     );
   }
-  const tunnelName = requireConfigured(
-    options.tunnelName,
-    "tunnelName",
-    TUNNEL_NAME_ENV
-  );
-  if (!/^[A-Za-z0-9._-]+$/.test(tunnelName)) {
+  // Optional: with no name the server mints one (see ResolvedOptions.tunnelName).
+  const tunnelName = optional(options.tunnelName, TUNNEL_NAME_ENVS);
+  if (tunnelName !== undefined && !/^[A-Za-z0-9._-]+$/.test(tunnelName)) {
     throw new Error(
       `tunnel: invalid tunnelName ${JSON.stringify(tunnelName)} — use letters, digits, '.', '_' or '-'`
     );
@@ -311,9 +341,9 @@ export function resolveOptions(options: ConnectTunnelOptions): ResolvedOptions {
     srvName: hasRegion
       ? srvNameForRegion(region!)
       : hasSrv
-        ? options.tunnelServersSrv
+        ? tunnelServersSrv
         : undefined,
-    tunnelServers: hasServers ? options.tunnelServers : undefined,
+    tunnelServers: hasServers ? tunnelServers : undefined,
     environmentId,
     authToken,
     signingPublicKey,
@@ -382,8 +412,31 @@ export function resolveOptions(options: ConnectTunnelOptions): ResolvedOptions {
       "maxSessionMemory"
     ),
     tls: options.tls ?? true,
-    logger: options.tunnelDiagnosticLogger ?? (() => {}),
+    logger: resolveDiagnosticLogger(
+      options.tunnelDiagnosticLogger,
+      options.logger
+    ),
   };
+}
+
+/**
+ * Tunnel diagnostics go through the SDK's {@link LoggerTransport} (the one
+ * given in the endpoint options, or the default console transport) at the
+ * level each message carries — connection churn at debug, lifecycle at info,
+ * reconnects at warn, fatal stops at error. An explicit
+ * `tunnelDiagnosticLogger` intercepts every message instead, regardless of
+ * level (the pre-existing raw hook).
+ */
+function resolveDiagnosticLogger(
+  raw: ((message: string) => void) | undefined,
+  transport: LoggerTransport | undefined
+): DiagnosticLogger {
+  if (raw !== undefined) return (message) => raw(message);
+  const rlog = createLogger(
+    transport ?? defaultLoggerTransport,
+    LogSource.SYSTEM
+  );
+  return (message, level = "debug") => rlog[level](message);
 }
 
 /** Resolve the opt-in auto signal-handling config (undefined = leave signals alone). */

@@ -41,6 +41,9 @@ export { durationToMillis, millisOrDurationToMillis } from "./duration.js";
 
 export type { JournalValueCodec } from "./entry_codec.js";
 
+export type { LoadEnvFileResult } from "./env_file.js";
+export { loadEnvFile, readEnvVar } from "./env_file.js";
+
 export type {
   StandardTypedV1,
   StandardSchemaV1,

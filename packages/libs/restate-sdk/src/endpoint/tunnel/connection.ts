@@ -47,7 +47,8 @@ import * as http2 from "node:http2";
 import { randomBytes } from "node:crypto";
 
 import type { NodeEndpoint } from "../node_endpoint.js";
-import type { ResolvedOptions } from "./options.js";
+import type { DiagnosticLogger, ResolvedOptions } from "./options.js";
+import type { TunnelNameCoordinator } from "./tunnel_name.js";
 import { buildTlsConnectOptions } from "./options.js";
 import type { Target } from "./targets.js";
 import {
@@ -165,6 +166,8 @@ export interface ConnectionDeps {
   opts: ResolvedOptions;
   /** Built once by the engine; stateless per call, shared across streams. */
   sdkHandler: SdkHandler;
+  /** The deployment name every connection presents (see tunnel_name.ts). */
+  tunnelName: TunnelNameCoordinator;
   /** Takes ownership of a detached session on a server-drain handover. */
   draining: DrainingRegistry;
   /** Engine-level socket registry, so close() can destroy in-flight dials. */
@@ -361,7 +364,10 @@ function dial(
       if (done) return;
       done = true;
       cleanup();
-      log(`tunnel: failed to connect to ${label}: ${reason} (${identity})`);
+      log(
+        `tunnel: failed to connect to ${label}: ${reason} (${identity})`,
+        "warn"
+      );
       socket.destroy();
       resolve({ ok: false, outcome: { kind: "retryable", reason } });
     }
@@ -423,7 +429,7 @@ class ConnectionAttempt implements DrainableConnection {
   private socket: net.Socket | undefined;
 
   private readonly plaintext: boolean;
-  private readonly log: (message: string) => void;
+  private readonly log: DiagnosticLogger;
   private readonly connectionId = newTunnelConnectionId();
 
   constructor(
@@ -798,23 +804,38 @@ class ConnectionAttempt implements DrainableConnection {
   ): void {
     if (this.state.kind !== "handshaking") return;
     clearTimeout(this.state.firstRequestTimer);
-    this.state.handshake = performHandshake(
-      req,
-      res,
-      {
-        authToken: this.authToken,
-        environmentId: this.deps.opts.environmentId,
-        tunnelName: this.deps.opts.tunnelName,
-        tunnelWorkerId: this.deps.opts.tunnelWorkerId,
-        tunnelConnectionId: this.connectionId,
-        supportsDrain: this.deps.opts.supportsDrain,
-        supportsClientDrain: this.deps.opts.supportsClientDrain,
-      },
-      this.deps.opts.handshakeTimeoutMs
-    ).then((outcome) => {
+    // The name to present: configured, or coordinated across connections when
+    // the server mints it (resolves promptly, see tunnel_name.ts).
+    this.state.handshake = this.deps.tunnelName.acquire().then((lease) => {
       // settle (session/socket error) may have raced us to `closed`.
-      if (this.state.kind !== "handshaking") return { ok: false };
-      if (outcome.kind === "ok") {
+      if (this.state.kind !== "handshaking") {
+        if (lease.minting) this.deps.tunnelName.mintFailed();
+        return { ok: false };
+      }
+      return performHandshake(
+        req,
+        res,
+        {
+          authToken: this.authToken,
+          environmentId: this.deps.opts.environmentId,
+          tunnelName: lease.name,
+          tunnelWorkerId: this.deps.opts.tunnelWorkerId,
+          tunnelConnectionId: this.connectionId,
+          supportsDrain: this.deps.opts.supportsDrain,
+          supportsClientDrain: this.deps.opts.supportsClientDrain,
+        },
+        this.deps.opts.handshakeTimeoutMs
+      ).then((outcome) => {
+        if (this.state.kind !== "handshaking") {
+          if (lease.minting) this.deps.tunnelName.mintFailed();
+          return { ok: false };
+        }
+        if (outcome.kind !== "ok") {
+          if (lease.minting) this.deps.tunnelName.mintFailed();
+          this.settle(outcome);
+          return { ok: false };
+        }
+        if (lease.minting) this.deps.tunnelName.minted(outcome.info.tunnelName);
         const { session } = this.state;
         const openedAt = Date.now();
         const watchdog = this.startWatchdog(session);
@@ -828,9 +849,7 @@ class ConnectionAttempt implements DrainableConnection {
         );
         this.deps.onEstablished(outcome.info, this.identity);
         return { ok: true };
-      }
-      this.settle(outcome);
-      return { ok: false };
+      });
     });
   }
 

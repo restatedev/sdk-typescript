@@ -31,7 +31,10 @@ export interface Target {
   plaintext?: boolean;
 }
 
-type DiagnosticLogger = (message: string) => void;
+type DiagnosticLogger = (
+  message: string,
+  level?: "debug" | "info" | "warn" | "error"
+) => void;
 
 function formatError(err: unknown): string {
   return err instanceof Error ? err.message : String(err);

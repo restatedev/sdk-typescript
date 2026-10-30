@@ -30,7 +30,7 @@
 //
 // Node-only (uses node:tls / node:http2 / node:dns).
 
-export { connectTunnel } from "./connect.js";
+export { connectTunnel, startTunnel } from "./connect.js";
 export type {
   ConnectTunnelOptions,
   ReconnectRetryPolicy,

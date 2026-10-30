@@ -17,15 +17,28 @@ import {
   resolveOptions,
   buildTlsConnectOptions,
   srvNameForRegion,
-  TUNNEL_NAME_ENV,
-  ENVIRONMENT_ID_ENV,
-  CLOUD_REGION_ENV,
-  SIGNING_PUBLIC_KEY_ENV,
-  AUTH_TOKEN_FILE_ENV,
-  TUNNEL_WORKER_ID_ENV,
 } from "../../src/endpoint/tunnel/options.js";
 import { parseServerAddress } from "../../src/endpoint/tunnel/targets.js";
 import type { ConnectTunnelOptions } from "../../src/endpoint/tunnel/types.js";
+import {
+  AUTH_TOKEN_ENVS,
+  AUTH_TOKEN_FILE_ENVS,
+  CLOUD_REGION_ENVS,
+  ENVIRONMENT_ID_ENVS,
+  SIGNING_PUBLIC_KEY_ENVS,
+  TUNNEL_NAME_ENVS,
+  TUNNEL_SERVERS_ENVS,
+  TUNNEL_SERVERS_SRV_ENVS,
+  TUNNEL_WORKER_ID_ENVS,
+} from "../../src/endpoint/cloud_env.js";
+
+// The operator-contract (RESTATE_INPROC_*) names, second in every chain.
+const TUNNEL_NAME_ENV = TUNNEL_NAME_ENVS[1];
+const ENVIRONMENT_ID_ENV = ENVIRONMENT_ID_ENVS[1];
+const CLOUD_REGION_ENV = CLOUD_REGION_ENVS[1];
+const SIGNING_PUBLIC_KEY_ENV = SIGNING_PUBLIC_KEY_ENVS[1];
+const AUTH_TOKEN_FILE_ENV = AUTH_TOKEN_FILE_ENVS[0];
+const TUNNEL_WORKER_ID_ENV = TUNNEL_WORKER_ID_ENVS[0];
 
 const valid: ConnectTunnelOptions = {
   region: "us",
@@ -37,12 +50,15 @@ const valid: ConnectTunnelOptions = {
 };
 
 const OPTION_ENVS = [
-  TUNNEL_NAME_ENV,
-  ENVIRONMENT_ID_ENV,
-  CLOUD_REGION_ENV,
-  SIGNING_PUBLIC_KEY_ENV,
-  AUTH_TOKEN_FILE_ENV,
-  TUNNEL_WORKER_ID_ENV,
+  ...TUNNEL_NAME_ENVS,
+  ...ENVIRONMENT_ID_ENVS,
+  ...CLOUD_REGION_ENVS,
+  ...TUNNEL_SERVERS_SRV_ENVS,
+  ...TUNNEL_SERVERS_ENVS,
+  ...SIGNING_PUBLIC_KEY_ENVS,
+  ...AUTH_TOKEN_ENVS,
+  ...AUTH_TOKEN_FILE_ENVS,
+  ...TUNNEL_WORKER_ID_ENVS,
 ];
 
 // Options resolution reads environment fallbacks from process.env; isolate
@@ -116,7 +132,7 @@ describe("resolveOptions — validation", () => {
 
   test("rejects neither region nor tunnelServers", () => {
     expect(() => resolveOptions({ ...valid, region: undefined })).toThrow(
-      new RegExp(`specify one of .*${CLOUD_REGION_ENV}`)
+      new RegExp(`specify one of .*${CLOUD_REGION_ENVS[0]}`)
     );
   });
 
@@ -162,12 +178,15 @@ describe("resolveOptions — validation", () => {
     ).toThrow(/publickeyv1_/);
   });
 
-  test("requires authToken, tunnelName", () => {
+  test("requires authToken; tunnelName is optional (the server mints one)", () => {
     expect(() => resolveOptions({ ...valid, authToken: "" })).toThrow(
       /authToken/
     );
-    expect(() => resolveOptions({ ...valid, tunnelName: "" })).toThrow(
-      /tunnelName/
+    expect(resolveOptions({ ...valid, tunnelName: "" }).tunnelName).toBe(
+      undefined
+    );
+    expect(resolveOptions({ ...valid, tunnelName: undefined }).tunnelName).toBe(
+      undefined
     );
   });
 
@@ -288,22 +307,66 @@ describe("resolveOptions — RESTATE_INPROC_* environment fallbacks", () => {
   });
 
   test("an empty env var counts as unset", () => {
-    process.env[TUNNEL_NAME_ENV] = "";
-    expect(() => resolveOptions({ ...valid, tunnelName: undefined })).toThrow(
-      new RegExp(`tunnelName is required .*${TUNNEL_NAME_ENV}`)
+    process.env[ENVIRONMENT_ID_ENVS[0]] = "";
+    process.env[ENVIRONMENT_ID_ENV] = "";
+    expect(() =>
+      resolveOptions({ ...valid, environmentId: undefined })
+    ).toThrow(
+      new RegExp(`environmentId is required .*${ENVIRONMENT_ID_ENVS[0]}`)
     );
   });
 
-  test("missing-value errors name the env var that would fill the gap", () => {
+  test("missing-value errors name the canonical env var and `restate cloud link`", () => {
     expect(() =>
       resolveOptions({ ...valid, environmentId: undefined })
-    ).toThrow(new RegExp(ENVIRONMENT_ID_ENV));
+    ).toThrow(new RegExp(`${ENVIRONMENT_ID_ENVS[0]}.*restate cloud link`));
     expect(() => resolveOptions({ ...valid, authToken: undefined })).toThrow(
-      new RegExp(AUTH_TOKEN_FILE_ENV)
+      new RegExp(`${AUTH_TOKEN_ENVS[0]}.*restate cloud link`)
     );
     expect(() =>
       resolveOptions({ ...valid, signingPublicKey: undefined })
-    ).toThrow(new RegExp(SIGNING_PUBLIC_KEY_ENV));
+    ).toThrow(new RegExp(SIGNING_PUBLIC_KEY_ENVS[0]));
+  });
+
+  test("RESTATE_* names win over RESTATE_INPROC_*; standalone server names map to discovery options", () => {
+    // Full chain: option > RESTATE_<X> > RESTATE_INPROC_<X>.
+    process.env[ENVIRONMENT_ID_ENVS[0]] = "env_canonical";
+    process.env[ENVIRONMENT_ID_ENV] = "env_inproc";
+    process.env[TUNNEL_NAME_ENVS[0]] = "canonical-name";
+    process.env[TUNNEL_NAME_ENV] = "inproc-name";
+    process.env[SIGNING_PUBLIC_KEY_ENVS[0]] = "publickeyv1_canonical";
+    process.env[SIGNING_PUBLIC_KEY_ENV] = "publickeyv1_inproc";
+    process.env[AUTH_TOKEN_ENVS[0]] = "key_canonical.secret";
+    process.env[AUTH_TOKEN_FILE_ENV] = tokenFile("key_fromfile");
+    process.env[CLOUD_REGION_ENVS[0]] = "eu";
+    process.env[CLOUD_REGION_ENV] = "us";
+
+    const r = resolveOptions({ services: [] });
+    expect(r.environmentId).toBe("env_canonical");
+    expect(r.tunnelName).toBe("canonical-name");
+    expect(r.signingPublicKey).toBe("publickeyv1_canonical");
+    expect(r.authToken()).toBe("key_canonical.secret");
+    expect(r.srvName).toBe("tunnel.eu.restate.cloud");
+
+    // Region chain: RESTATE_CLOUD_REGION > RESTATE_TUNNEL_SERVERS_SRV >
+    // RESTATE_TUNNEL_SERVERS > RESTATE_INPROC_CLOUD_REGION.
+    delete process.env[CLOUD_REGION_ENVS[0]];
+    process.env[TUNNEL_SERVERS_SRV_ENVS[0]] = "tunnel.byoc.example";
+    process.env[TUNNEL_SERVERS_ENVS[0]] = "a.example:9080, b.example:9080";
+    expect(resolveOptions({ services: [] }).srvName).toBe(
+      "tunnel.byoc.example"
+    );
+    delete process.env[TUNNEL_SERVERS_SRV_ENVS[0]];
+    const servers = resolveOptions({ services: [] });
+    expect(servers.srvName).toBe(undefined);
+    expect(servers.tunnelServers).toEqual(["a.example:9080", "b.example:9080"]);
+    delete process.env[TUNNEL_SERVERS_ENVS[0]];
+    expect(resolveOptions({ services: [] }).srvName).toBe(
+      "tunnel.us.restate.cloud"
+    );
+    // The token falls through to the file only without RESTATE_AUTH_TOKEN.
+    delete process.env[AUTH_TOKEN_ENVS[0]];
+    expect(resolveOptions({ services: [] }).authToken()).toBe("key_fromfile");
   });
 
   test("a token file is re-read on every call — rotation without restart", () => {
