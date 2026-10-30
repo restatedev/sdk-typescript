@@ -29,6 +29,7 @@ import {
 } from "./api.js";
 
 import { Opts, SendOpts } from "./api.js";
+import { resolveConnectionOpts, type ResolvedConnectionOpts } from "./env.js";
 import {
   abortableSleep,
   backoffDelay,
@@ -39,13 +40,26 @@ import {
 } from "./retry.js";
 
 /**
- * Connect to the restate Ingress
+ * Connect to the Restate ingress.
+ *
+ * With a `url`, exactly that. Without one, the ingress is taken from
+ * `RESTATE_INGRESS_KEY`, the ingress key from the Cloud UI (Development →
+ * Configure Client): `restate://<api key>@<environment id>.env.<region domain>/`
+ * becomes `https://<environment id>.env.<region domain>:8080` with the API key
+ * as bearer (unless an `Authorization` header is given). Neither set →
+ * an error, since a URL is required.
+ *
+ * @example
+ * ```ts
+ * const rs = connect({ url: "http://localhost:8080" }); // a local Restate
+ * const cloud = connect();                               // RESTATE_INGRESS_KEY
+ * ```
  *
  * @param opts connection options
- * @returns a connection the the restate ingress
+ * @returns a connection to the Restate ingress
  */
-export function connect(opts: ConnectionOpts): Ingress {
-  return new HttpIngress(opts);
+export function connect(opts: ConnectionOpts = {}): Ingress {
+  return new HttpIngress(resolveConnectionOpts(opts));
 }
 
 /**
@@ -136,7 +150,7 @@ const getFetch = (opts: ConnectionOpts): NonNullable<ConnectionOpts["fetch"]> =>
   opts.fetch ?? globalThis.fetch;
 
 const fetchWithRetries = async (
-  opts: ConnectionOpts,
+  opts: ResolvedConnectionOpts,
   url: string,
   init: RequestInit,
   callOpts: Opts<unknown, unknown> | SendOpts<unknown> | undefined,
@@ -252,7 +266,7 @@ const fetchWithRetries = async (
 };
 
 const doComponentInvocation = async <I, O>(
-  opts: ConnectionOpts,
+  opts: ResolvedConnectionOpts,
   params: InvocationParameters<I>,
   canBeRetried = Boolean(params.opts?.opts.idempotencyKey)
 ): Promise<O> => {
@@ -372,7 +386,7 @@ const doComponentInvocation = async <I, O>(
 };
 
 const doWorkflowHandleCall = async <O>(
-  opts: ConnectionOpts,
+  opts: ResolvedConnectionOpts,
   wfName: string,
   wfKey: string,
   op: "output" | "attach",
@@ -411,7 +425,7 @@ const doWorkflowHandleCall = async <O>(
 };
 
 class HttpIngress implements Ingress {
-  constructor(private readonly opts: ConnectionOpts) {}
+  constructor(private readonly opts: ResolvedConnectionOpts) {}
 
   private proxy(
     component: string,

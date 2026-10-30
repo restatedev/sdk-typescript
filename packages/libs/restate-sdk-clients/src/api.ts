@@ -650,8 +650,11 @@ export type ConnectionOpts = {
   /**
    * Restate ingress URL.
    * For example: http://localhost:8080
+   *
+   * Optional for `connect()`: when omitted, the ingress comes from
+   * `RESTATE_INGRESS_KEY` (see `connect()`).
    */
-  url: string;
+  url?: string;
   /**
    * Headers to attach on every request.
    * Use this to attach authentication headers.
