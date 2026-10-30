@@ -29,6 +29,7 @@ import {
 } from "./api.js";
 
 import { Opts, SendOpts } from "./api.js";
+import { resolveConnectionOpts } from "./env.js";
 import {
   abortableSleep,
   backoffDelay,
@@ -39,13 +40,24 @@ import {
 } from "./retry.js";
 
 /**
- * Connect to the restate Ingress
+ * Connect to the Restate ingress.
  *
- * @param opts connection options
- * @returns a connection the the restate ingress
+ * With no `url`, the address is read from `RESTATE_INGRESS_URL` (process
+ * environment first, then `./.env` — the file `restate cloud link` writes) and
+ * falls back to `http://localhost:8080`. With no `Authorization` header, a
+ * bearer is taken from `RESTATE_AUTH_TOKEN` when set. Explicit options win.
+ *
+ * @example
+ * ```ts
+ * const rs = connect(); // local Restate, or the Cloud environment in ./.env
+ * await rs.serviceClient(greeter).greet("world");
+ * ```
+ *
+ * @param opts connection options; all optional
+ * @returns a connection to the Restate ingress
  */
-export function connect(opts: ConnectionOpts): Ingress {
-  return new HttpIngress(opts);
+export function connect(opts: Partial<ConnectionOpts> = {}): Ingress {
+  return new HttpIngress(resolveConnectionOpts(opts));
 }
 
 /**

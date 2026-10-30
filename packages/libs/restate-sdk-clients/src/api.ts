@@ -650,11 +650,17 @@ export type ConnectionOpts = {
   /**
    * Restate ingress URL.
    * For example: http://localhost:8080
+   *
+   * `connect()` accepts it as optional: when omitted it is read from
+   * `RESTATE_INGRESS_URL` (process environment, then `./.env`), defaulting to
+   * `http://localhost:8080`.
    */
   url: string;
   /**
    * Headers to attach on every request.
-   * Use this to attach authentication headers.
+   * Use this to attach authentication headers. When no `Authorization` header
+   * is given and `RESTATE_AUTH_TOKEN` is set, `connect()` adds
+   * `Authorization: Bearer <token>`.
    */
   headers?: Record<string, string>;
 
