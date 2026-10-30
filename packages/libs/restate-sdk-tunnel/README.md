@@ -1,44 +1,41 @@
 # @restatedev/restate-sdk-tunnel
 
-> **Moved into `@restatedev/restate-sdk`.** This package is a compatibility
-> re-export and will keep working, but new code does not need it.
-
-The in-process tunnel engine — serving a Restate SDK deployment over an
-**outbound** connection to Restate Cloud, with no inbound HTTP listener — now
-ships inside `@restatedev/restate-sdk` (the `/node` entry):
-
-- `restate.serve({ services })` **connects on its own** when it finds a Restate
-  Cloud environment and credential (`RESTATE_ENVIRONMENT_ID` and
-  `RESTATE_AUTH_TOKEN`, in the process environment or in `./.env`, which
-  `restate cloud link` writes). It listens on `PORT` otherwise. See the
-  `serve()` documentation in `@restatedev/restate-sdk`.
-- `connectTunnel()` is exported from `@restatedev/restate-sdk/node` for
-  programmatic use, with the same options and the same `TunnelConnection`
-  handle as before.
+> **Deprecated.** Connecting to Restate Cloud is built into
+> `@restatedev/restate-sdk` as `connect()`. This package is a compatibility
+> re-export of the old `connectTunnel()` and keeps working, but new code does
+> not need it.
 
 ```ts
 // before
 import { connectTunnel } from "@restatedev/restate-sdk-tunnel";
+connectTunnel({
+  region: "eu",
+  environmentId: "env_...",
+  authToken: process.env.RESTATE_AUTH_TOKEN!,
+  signingPublicKey: "publickeyv1_...",
+  tunnelName: "greeter-v1",
+  services: [greeter],
+});
 
-// now — same function, same options
-import { connectTunnel } from "@restatedev/restate-sdk/node";
-
-// or just
-import { serve } from "@restatedev/restate-sdk";
-serve({ services: [greeter] }); // connect mode when the Cloud variables are set
+// now
+import * as restate from "@restatedev/restate-sdk";
+restate.connect({ services: [greeter], name: "greeter-v1" });
 ```
 
-Environment variables: the engine reads the `RESTATE_*` names
-(`RESTATE_ENVIRONMENT_ID`, `RESTATE_AUTH_TOKEN`, `RESTATE_CLOUD_REGION`,
-`RESTATE_SIGNING_PUBLIC_KEY`, `RESTATE_TUNNEL_NAME`) and keeps accepting the
-`RESTATE_INPROC_*` names the restate-operator injects, plus
-`RESTATE_INPROC_AUTH_TOKEN_FILE` for a mounted token file.
+`connect()` takes the credential and every coordinate from one variable,
+`RESTATE_CONNECT_KEY`, created in the Cloud UI under Development → Configure
+SDK; the deployment name comes from the `name` option or `RESTATE_CONNECT_NAME`.
+The expanded variables (`RESTATE_ENVIRONMENT_ID`, `RESTATE_AUTH_TOKEN` or
+`RESTATE_INPROC_AUTH_TOKEN_FILE`, `RESTATE_CLOUD_REGION`,
+`RESTATE_SIGNING_PUBLIC_KEY`, and the `RESTATE_INPROC_*` names the
+restate-operator injects) stay accepted when no key is set, so existing
+deployments keep working unchanged.
+
+This package is the only place `connectTunnel()` lives on, with its previous
+options and handle; it logs a deprecation warning once per process.
 
 ## Install
 
 ```bash
 npm install @restatedev/restate-sdk
 ```
-
-`@restatedev/restate-sdk-tunnel` itself only re-exports from
-`@restatedev/restate-sdk`, which is its peer dependency.
