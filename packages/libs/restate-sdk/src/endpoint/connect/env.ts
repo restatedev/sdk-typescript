@@ -125,24 +125,6 @@ export interface DiscoveryOverrides {
   servers?: string[];
 }
 
-/** The expanded spelling of the coordinates (the deprecated `connectTunnel` options). */
-export interface ExpandedOverrides extends DiscoveryOverrides {
-  region?: string;
-  environmentId?: string;
-  authToken?: string;
-  signingPublicKey?: string;
-}
-
-/** True when any expanded identity field is given explicitly. */
-export function hasExpandedOverrides(o: ExpandedOverrides): boolean {
-  return (
-    given(o.region) ||
-    given(o.environmentId) ||
-    given(o.authToken) ||
-    given(o.signingPublicKey)
-  );
-}
-
 /**
  * The coordinates for `connect()`: `key` option → `RESTATE_CONNECT_KEY` →
  * the expanded variables → error naming the variable and the Cloud UI page.
@@ -233,20 +215,18 @@ function coordinatesFromKey(
 }
 
 /**
- * The coordinates from the expanded variables (and, for the deprecated
- * `connectTunnel()`, its explicit fields): option → `RESTATE_<X>` →
- * `RESTATE_INPROC_<X>` → error naming the variable.
+ * The coordinates from the expanded variables (`RESTATE_<X>`, then
+ * `RESTATE_INPROC_<X>`), each missing piece an error naming its variable.
+ * Explicit `identityKeys` and discovery options win over the environment.
  */
 export function coordinatesFromExpanded(
-  o: ExpandedOverrides & { identityKeys?: string[] }
+  o: DiscoveryOverrides & { identityKeys?: string[] }
 ): Coordinates {
   const environmentId = requireHeaderSafe(
-    given(o.environmentId)
-      ? o.environmentId
-      : (readFirstEnv(ENVIRONMENT_ID_ENVS)?.value ??
-          fail(
-            `environmentId is required — pass the option or set ${ENVIRONMENT_ID_ENVS[0]} (or ${CONNECT_KEY_ENV} from ${CONNECT_KEY_URL})`
-          )),
+    readFirstEnv(ENVIRONMENT_ID_ENVS)?.value ??
+      fail(
+        `environmentId is required — set ${ENVIRONMENT_ID_ENVS[0]} (or ${CONNECT_KEY_ENV} from ${CONNECT_KEY_URL})`
+      ),
     "environmentId"
   );
   if (!/^env_[A-Za-z0-9_-]+$/.test(environmentId)) {
@@ -255,55 +235,24 @@ export function coordinatesFromExpanded(
     );
   }
 
-  const authToken = given(o.authToken)
-    ? constantToken(o.authToken, "authToken")
-    : (tokenFromEnv() ??
-      fail(
-        `authToken is required — pass the option, set ${AUTH_TOKEN_ENVS[0]} or a token file in ${AUTH_TOKEN_FILE_ENVS[0]} (or ${CONNECT_KEY_ENV} from ${CONNECT_KEY_URL})`
-      ));
+  const authToken =
+    tokenFromEnv() ??
+    fail(
+      `authToken is required — set ${AUTH_TOKEN_ENVS[0]} or a token file in ${AUTH_TOKEN_FILE_ENVS[0]} (or ${CONNECT_KEY_ENV} from ${CONNECT_KEY_URL})`
+    );
 
   const identityKeys = resolveIdentityKeys(
     o.identityKeys,
-    given(o.signingPublicKey)
-      ? o.signingPublicKey
-      : readFirstEnv(SIGNING_PUBLIC_KEY_ENVS)?.value,
-    `signingPublicKey is required — pass the option or set ${SIGNING_PUBLIC_KEY_ENVS[0]} (or ${CONNECT_KEY_ENV} from ${CONNECT_KEY_URL})`
+    readFirstEnv(SIGNING_PUBLIC_KEY_ENVS)?.value,
+    `signingPublicKey is required — set ${SIGNING_PUBLIC_KEY_ENVS[0]} (or ${CONNECT_KEY_ENV} from ${CONNECT_KEY_URL})`
   );
 
-  // Discovery: the options (exactly one of region / SRV / servers), else the
-  // environment: RESTATE_CLOUD_REGION → RESTATE_TUNNEL_SERVERS_SRV →
-  // RESTATE_TUNNEL_SERVERS → RESTATE_INPROC_CLOUD_REGION. An explicit option
-  // always wins over an injected region, and an explicitly-given-but-empty
-  // servers list stays a loud error rather than yielding to the environment.
-  let discovery: EngineOptions["discovery"] | undefined;
+  // Discovery: the options, else the environment: RESTATE_CLOUD_REGION →
+  // RESTATE_TUNNEL_SERVERS_SRV → RESTATE_TUNNEL_SERVERS →
+  // RESTATE_INPROC_CLOUD_REGION.
+  let discovery = pickDiscovery(o);
   let regionLabel: string | undefined;
-  const explicit =
-    given(o.region) || given(o.serversSrv) || o.servers !== undefined;
-  if (explicit) {
-    const count =
-      Number(given(o.region)) +
-      Number(given(o.serversSrv)) +
-      Number(o.servers !== undefined);
-    if (count > 1) {
-      throw new Error(
-        "connect(): specify exactly one of `region`, `tunnelServersSrv` or `tunnelServers`"
-      );
-    }
-    if (given(o.region)) {
-      const domain = regionDomainForRegion(o.region);
-      discovery = { srvName: srvNameForRegionDomain(domain) };
-      regionLabel = domain;
-    } else if (o.servers !== undefined) {
-      if (o.servers.length === 0) {
-        throw new Error(
-          `connect(): specify one of \`region\`, \`tunnelServersSrv\` or \`tunnelServers\` (or set ${CLOUD_REGION_ENVS[0]})`
-        );
-      }
-      discovery = { servers: o.servers };
-    } else {
-      discovery = pickDiscovery(o)!;
-    }
-  } else {
+  if (discovery === undefined) {
     const region = readEnv(CLOUD_REGION_ENVS[0]);
     const srv = readFirstEnv(TUNNEL_SERVERS_SRV_ENVS)?.value;
     const servers = readFirstEnv(TUNNEL_SERVERS_ENVS)?.value;
@@ -404,7 +353,12 @@ function pickDiscovery(
     );
   }
   if (given(o.serversSrv)) return { srvName: o.serversSrv };
-  if (o.servers !== undefined) return { servers: o.servers };
+  if (o.servers !== undefined) {
+    if (o.servers.length === 0) {
+      throw new Error("connect(): `servers` must not be empty");
+    }
+    return { servers: o.servers };
+  }
   return undefined;
 }
 

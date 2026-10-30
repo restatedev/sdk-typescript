@@ -24,17 +24,6 @@ export type {
   ConnectTuningOptions,
   ReconnectRetryPolicy,
 } from "./endpoint/tunnel/index.js";
-// The legacy connectTunnel() API, kept for @restatedev/restate-sdk-tunnel,
-// which re-exports it under its public names. Not part of this package's
-// public surface (hence the underscore): use connect().
-/** @internal */
-export { connectTunnel as _connectTunnel } from "./endpoint/connect/tunnel.js";
-/** @internal */
-export type {
-  ConnectTunnelOptions as _ConnectTunnelOptions,
-  TunnelConnection as _TunnelConnection,
-  TunnelTlsOptions as _TunnelTlsOptions,
-} from "./endpoint/connect/tunnel.js";
 
 /**
  * Create a new {@link RestateEndpoint}.

@@ -31,8 +31,10 @@ The expanded variables (`RESTATE_ENVIRONMENT_ID`, `RESTATE_AUTH_TOKEN` or
 restate-operator injects) stay accepted when no key is set, so existing
 deployments keep working unchanged.
 
-This package is the only place `connectTunnel()` lives on, with its previous
-options and handle; it logs a deprecation warning once per process.
+`connectTunnel()` lives only in this package, with its previous options and
+handle: it translates them onto `connect()` (the identity fields become the key
+string, the tuning moves under `connection`) and logs a deprecation warning
+once per process.
 
 ## Install
 

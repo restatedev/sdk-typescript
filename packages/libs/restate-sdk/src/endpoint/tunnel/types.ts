@@ -10,7 +10,6 @@
  */
 
 // Public types of connect(): options, tuning and the connection handle.
-// (`connectTunnel` and `TunnelConnection` are the deprecated names.)
 
 import type { Duration } from "@restatedev/restate-sdk-core";
 import type { EndpointOptions } from "../types.js";
@@ -43,12 +42,6 @@ export interface ConnectTlsOptions {
 }
 
 /**
- * The TLS options under their former name.
- * @deprecated Use {@link ConnectTlsOptions}.
- */
-export type TunnelTlsOptions = ConnectTlsOptions;
-
-/**
  * Reconnect backoff policy. Between reconnect attempts the engine waits a
  * jittered exponential delay: it starts at {@link initialInterval}, grows by
  * {@link exponentiationFactor} per failed attempt, is capped at
@@ -73,8 +66,7 @@ export interface ReconnectRetryPolicy {
 }
 
 /**
- * Connection tuning shared by {@link connect} and the deprecated
- * {@link connectTunnel}: reconnect and drain behaviour, HTTP/2 limits, TLS.
+ * Connection tuning for {@link connect}: reconnect and drain behaviour, HTTP/2 limits, TLS.
  * Every option has a default that fits Restate Cloud; most deployments set
  * none of them.
  */
@@ -329,185 +321,6 @@ export interface Connection {
 }
 
 /**
- * Options for the deprecated {@link connectTunnel}: the identity spelled out
- * as separate fields instead of one {@link ConnectOptions.key}.
- *
- * The identity and discovery options fall back to `RESTATE_INPROC_*`
- * environment variables when not given (option > environment > throw):
- * `tunnelName` ← `RESTATE_INPROC_TUNNEL_NAME`, `environmentId` ←
- * `RESTATE_INPROC_ENVIRONMENT_ID`, `region` ← `RESTATE_INPROC_CLOUD_REGION`,
- * `signingPublicKey` ← `RESTATE_INPROC_SIGNING_PUBLIC_KEY`, and `authToken`
- * ← the file named by `RESTATE_INPROC_AUTH_TOKEN_FILE` (re-read on every
- * reconnect, so rotations are picked up). The
- * [restate-operator](https://github.com/restatedev/restate-operator)
- * injects the first four into the pods of a `tunnelMode: in-process`
- * RestateDeployment and registers the matching URL — there,
- * `connectTunnel({ services })` plus a token-file Secret mount (named by
- * `RESTATE_INPROC_AUTH_TOKEN_FILE`) is a complete configuration.
- *
- * @deprecated Use {@link ConnectOptions} with {@link connect}.
- */
-export interface ConnectTunnelOptions
-  extends Omit<EndpointOptions, "identityKeys">, ConnectTuningOptions {
-  /**
-   * Restate Cloud region (e.g. `"us"`, `"eu"`). Tunnel servers are
-   * discovered via a DNS SRV lookup of `tunnel.<region>.restate.cloud`,
-   * expanded to every resolved address — the engine holds **one tunnel
-   * connection per resolved tunnel server** (like the standalone client),
-   * and re-resolves every {@link ConnectTuningOptions.resolveIntervalMs},
-   * starting connections to servers that appear and tearing down connections
-   * to servers that vanish.
-   *
-   * Exactly one of `region`, `tunnelServersSrv` or `tunnelServers` must be
-   * set. When none is, `region` falls back to the
-   * `RESTATE_INPROC_CLOUD_REGION` environment variable.
-   */
-  region?: string;
-  /**
-   * A DNS SRV name to discover tunnel servers from, for environments whose
-   * SRV name doesn't follow the `tunnel.<region>.restate.cloud` template
-   * (the standalone client's `RESTATE_TUNNEL_SERVERS_SRV`). Same expansion
-   * and reconciliation semantics as `region`.
-   *
-   * Exactly one of `region`, `tunnelServersSrv` or `tunnelServers` must be
-   * set.
-   */
-  tunnelServersSrv?: string;
-  /**
-   * Explicit tunnel server addresses, instead of region-based discovery.
-   * Each entry is either `"host:port"` (TLS governed by the `tls` option)
-   * or a URL `"https://host:port"` / `"http://host:port"` (scheme selects
-   * TLS/plaintext for that server). The engine holds one tunnel connection
-   * per entry; the set is fixed (no re-resolution).
-   *
-   * Exactly one of `region`, `tunnelServersSrv` or `tunnelServers` must be
-   * set.
-   */
-  tunnelServers?: string[];
-  /**
-   * The Restate Cloud environment ID to tunnel to, including the `env_`
-   * prefix (e.g. `"env_201k0yd4rz8yftmd4awh1bajg4v"`).
-   *
-   * Falls back to the `RESTATE_INPROC_ENVIRONMENT_ID` environment variable.
-   */
-  environmentId?: string;
-  /**
-   * A Restate Cloud API key (`key_...`), or a user JWT. Presented as
-   * `authorization: Bearer <token>` during the tunnel handshake; validated
-   * server-side.
-   *
-   * Falls back to the contents of the file named by the
-   * `RESTATE_INPROC_AUTH_TOKEN_FILE` environment variable — the right shape
-   * for a mounted Kubernetes Secret: the file is re-read on every reconnect,
-   * so a rotated token is picked up without a restart.
-   */
-  authToken?: string;
-  /**
-   * The environment's request-identity public key
-   * (`publickeyv1_<base58>`). Passed to the SDK's request-identity
-   * verification so every forwarded request is checked to genuinely come
-   * from your environment. Shown by Restate Cloud for your environment.
-   *
-   * Falls back to the `RESTATE_INPROC_SIGNING_PUBLIC_KEY` environment
-   * variable.
-   */
-  signingPublicKey?: string;
-  /**
-   * The deployment's identity: the rendezvous key both ends use to route.
-   * The tunnel server keys connections by `<environment>/<tunnelName>` and
-   * load-balances each proxied invocation across every connection
-   * registered under that key — so replicas of the *same* deployment must
-   * share one `tunnelName`, and distinct deployments must each have their
-   * own. It appears in the deployment registration URL, so it should be
-   * stable across restarts (e.g. `"greeter-v1"`).
-   *
-   * Falls back to the `RESTATE_INPROC_TUNNEL_NAME` environment variable
-   * (the restate-operator injects a per-revision name there).
-   */
-  tunnelName?: string;
-  /**
-   * Stable diagnostic identifier for this SDK worker/process. The tunnel
-   * server can include it in routing and failure logs so operators can grep
-   * server-side events against SDK-side logs. Defaults to
-   * `RESTATE_TUNNEL_WORKER_ID` when set, otherwise a hostname-based id with a
-   * short random suffix that is stable for this process. Advisory only: it is
-   * sent in the tunnel handshake for diagnostics, not used for authentication.
-   */
-  tunnelWorkerId?: string;
-  /**
-   * Diagnostic logger. Default: the SDK logger (connection churn at debug,
-   * lifecycle at info, reconnects at warn, fatal stops at error). When set,
-   * every message goes to this function instead, regardless of level.
-   */
-  tunnelDiagnosticLogger?: (message: string) => void;
-}
-
-/**
- * Handle returned by the deprecated {@link connectTunnel}.
- *
- * @deprecated Use {@link Connection} with {@link connect}.
- */
-export interface TunnelConnection {
-  /** Stop reconnecting, close the current connection, and wait for teardown. */
-  close(): Promise<void>;
-  /**
-   * Gracefully drain, then stop. Proactively sends HTTP/2 GOAWAY so Restate
-   * Cloud stops opening new streams, refuses any raced streams with a drain
-   * sentinel, lets in-flight invocations finish — bounded by `graceMs`
-   * (default {@link ConnectTuningOptions.drainGraceMs}) — and then closes the
-   * session gracefully. If the grace elapses first, the session/socket are
-   * force-closed. The default {@link ConnectTuningOptions.gracefulShutdown}
-   * handler wires this to `SIGTERM`; {@link close} is the abrupt alternative.
-   * Requires {@link ConnectTuningOptions.supportsClientDrain} (the default)
-   * to have been advertised; otherwise it degrades to an abrupt {@link close}.
-   */
-  shutdown(opts?: { graceMs?: number }): Promise<void>;
-  /** Number of successful tunnel handshakes since `connectTunnel` was called. */
-  readonly connectionCount: number;
-  /**
-   * The tunnel name confirmed by the server in the most recent successful
-   * handshake. `undefined` until the first handshake completes.
-   */
-  readonly tunnelName: string | undefined;
-  /**
-   * The public proxy **base** URL for this tunnel
-   * (`<proxy-host>/<env-id>/<tunnel-name>`), learned from the most recent
-   * successful handshake. The deployment registration URL is this base plus
-   * a `/<scheme>/<host>/<port>` destination segment — for an in-process
-   * deployment the destination is vestigial, e.g.
-   * `${proxyUrl}/http/in-process/9080`. Registering the bare base URL will
-   * not route.
-   */
-  readonly proxyUrl: string | undefined;
-  /** The tunnel server URL, learned from the most recent successful handshake. */
-  readonly tunnelUrl: string | undefined;
-  /**
-   * The full deployment registration URL: the proxy base on port 9080 plus
-   * `/http/in-process/9080/` — register this with
-   * `restate dep register <url>` (or the UI) once the tunnel is
-   * {@link ready}. `undefined` until the first successful handshake.
-   *
-   * The `/http/in-process/9080/` destination segment is a constant: an
-   * in-process tunnel terminates at this very process, so the destination
-   * is never dialed and plays no routing role — the deployment's identity
-   * is the `tunnelName` earlier in the path.
-   */
-  readonly deploymentUrl: string | undefined;
-  /**
-   * Set when the tunnel stopped on a non-retryable failure (e.g. the server
-   * answered `unauthorized` or `bad-tunnel-name`). Once set, the tunnel no
-   * longer reconnects.
-   */
-  readonly error: Error | undefined;
-  /**
-   * Resolves when the first tunnel handshake succeeds; rejects if the
-   * tunnel stops on a non-retryable failure before ever connecting.
-   * Useful for readiness checks; safe to ignore.
-   */
-  readonly ready: Promise<void>;
-}
-
-/**
  * Everything the engine needs, fully resolved: `connect()` and
  * `connectTunnel()` build this from their options and the environment.
  * Internal.
@@ -539,10 +352,15 @@ export interface EngineOptions extends ConnectTuningOptions {
 }
 
 /**
- * What the engine returns: everything both public handles need. `connect()`
- * projects it onto {@link Connection}, `connectTunnel()` onto
- * {@link TunnelConnection}. Internal.
+ * What the engine returns: the public {@link Connection} plus what the last
+ * handshake announced. `connect()` projects it onto {@link Connection}.
+ * Internal.
  */
-export interface EngineHandle extends TunnelConnection {
-  readonly name: string;
+export interface EngineHandle extends Connection {
+  /** The name confirmed by the server in the most recent handshake. */
+  readonly tunnelName: string | undefined;
+  /** The proxy base URL announced in the most recent handshake. */
+  readonly proxyUrl: string | undefined;
+  /** The server URL announced in the most recent handshake. */
+  readonly tunnelUrl: string | undefined;
 }

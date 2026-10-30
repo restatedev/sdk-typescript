@@ -24,10 +24,7 @@ export type {
   ConnectOptions,
   ConnectTlsOptions,
   ConnectTuningOptions,
-  ConnectTunnelOptions,
   EngineHandle,
   EngineOptions,
   ReconnectRetryPolicy,
-  TunnelConnection,
-  TunnelTlsOptions,
 } from "./types.js";

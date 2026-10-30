@@ -20,8 +20,8 @@ import * as path from "node:path";
 import { describe, expect, test, vi } from "vitest";
 import * as restate from "../../src/index.js";
 
-import { connectTunnel } from "../../src/endpoint/connect/tunnel.js";
-import type { ConnectTunnelOptions } from "../../src/endpoint/tunnel/index.js";
+import { connectTunnel } from "./legacy.js";
+import type { ConnectTunnelOptions } from "./legacy.js";
 import { startFakeCloud, roundtrip } from "./fake-cloud.js";
 import { generateIdentityKey } from "./identity.js";
 

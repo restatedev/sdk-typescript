@@ -18,7 +18,6 @@ import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { parseCloudKey } from "@restatedev/restate-sdk-core";
 import * as restate from "../src/index.js";
-import { connectTunnel } from "../src/endpoint/connect/tunnel.js";
 import {
   AUTH_TOKEN_ENVS,
   AUTH_TOKEN_FILE_ENVS,
@@ -329,43 +328,29 @@ describe("resolution from the environment", () => {
     expect(() => resolveCoordinates({}, noWarn)).toThrow(/not a regular file/);
   });
 
-  test("connectTunnel()'s explicit fields map onto the expanded resolution, exactly one discovery option", () => {
-    const explicit = coordinatesFromExpanded({
-      region: "inl4edhpbxasp9yuz1n0yvvkme.byoc",
-      environmentId: "env_abc123",
-      authToken: "key_xyz.secret",
-      signingPublicKey: SIGNING_KEY,
-    });
-    expect(explicit.discovery).toEqual({
+  test("discovery options win over the environment's region; an empty servers list stays an error", () => {
+    process.env[ENVIRONMENT_ID_ENVS[0]] = "env_abc123";
+    process.env[AUTH_TOKEN_ENVS[0]] = "key_xyz.secret";
+    process.env[SIGNING_PUBLIC_KEY_ENVS[0]] = SIGNING_KEY;
+    process.env[CLOUD_REGION_ENVS[1]] = "inl4edhpbxasp9yuz1n0yvvkme.byoc";
+    const fromEnv = coordinatesFromExpanded({});
+    expect(fromEnv.discovery).toEqual({
       srvName: "tunnel.inl4edhpbxasp9yuz1n0yvvkme.byoc.restate.cloud",
     });
-    expect(explicit.regionLabel).toBe(
+    expect(fromEnv.regionLabel).toBe(
       "inl4edhpbxasp9yuz1n0yvvkme.byoc.restate.cloud"
     );
-    expect(explicit.authToken()).toBe("key_xyz.secret");
-    expect(explicit.identityKeys).toEqual([SIGNING_KEY]);
-
-    process.env[CLOUD_REGION_ENVS[1]] = "eu";
-    const base = {
-      environmentId: "env_abc123",
-      authToken: "key_xyz.secret",
-      signingPublicKey: SIGNING_KEY,
-    };
-    // An explicit discovery option beats an injected region …
+    expect(fromEnv.authToken()).toBe("key_xyz.secret");
+    expect(fromEnv.identityKeys).toEqual([SIGNING_KEY]);
     expect(
-      coordinatesFromExpanded({
-        ...base,
-        serversSrv: "tunnel.dev.example",
-      }).discovery
+      coordinatesFromExpanded({ serversSrv: "tunnel.dev.example" }).discovery
     ).toEqual({ srvName: "tunnel.dev.example" });
-    // … an explicitly empty servers stays a loud error …
-    expect(() => coordinatesFromExpanded({ ...base, servers: [] })).toThrow(
-      /specify one of/
+    expect(() => coordinatesFromExpanded({ servers: [] })).toThrow(
+      /must not be empty/
     );
-    // … and two discovery options are rejected.
     expect(() =>
-      coordinatesFromExpanded({ ...base, region: "us", servers: ["h:1"] })
-    ).toThrow(/exactly one of/);
+      coordinatesFromExpanded({ servers: ["h:1"], serversSrv: "s" })
+    ).toThrow(/at most one of/);
   });
 });
 
@@ -438,47 +423,12 @@ describe("connect() end to end", () => {
     }
   });
 
-  test("misconfiguration throws synchronously; connectTunnel() is the same engine and warns once", async () => {
+  test("misconfiguration throws synchronously; the legacy API is not exported", () => {
     expect(() => restate.connect({ services: [] })).toThrow(/needs a name/);
     expect(() => restate.connect({ services: [], name: "x" })).toThrow(
       /RESTATE_CONNECT_KEY/
     );
-
-    const identity = generateIdentityKey();
-    const fake = await startFakeCloud({
-      decideTrailers: () => ({
-        "tunnel-status": "ok",
-        "proxy-url": "https://tunnel.example:9080/abc123/legacy",
-        "tunnel-url": "https://tunnel.example:9080",
-        "tunnel-name": "legacy",
-      }),
-    });
-    const warnings: string[] = [];
-    const logger: LoggerTransport = (params, message) => {
-      if (params.level === "warn") warnings.push(String(message));
-    };
-    const legacy = connectTunnel({
-      services: [],
-      logger,
-      tunnelServers: [`http://127.0.0.1:${fake.port}`],
-      environmentId: "env_abc123",
-      authToken: "key_test.secret",
-      signingPublicKey: identity.publicKey,
-      tunnelName: "legacy",
-    });
-    try {
-      await legacy.ready;
-      expect(legacy.tunnelName).toBe("legacy");
-      expect(legacy.proxyUrl).toBe("https://tunnel.example:9080/abc123/legacy");
-      // The regular SDK does not expose the legacy API.
-      expect("connectTunnel" in restate).toBe(false);
-      const creds = await (await fake.waitForConnection(0)).creds;
-      expect(creds["authorization"]).toBe("Bearer key_test.secret");
-      expect(creds["environment-id"]).toBe("env_abc123");
-      expect(warnings.filter((w) => w.includes("deprecated"))).toHaveLength(1);
-    } finally {
-      await legacy.close();
-      await fake.close();
-    }
+    expect("connectTunnel" in restate).toBe(false);
+    expect("_connectTunnel" in restate).toBe(false);
   });
 });
