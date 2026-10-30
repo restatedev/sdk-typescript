@@ -26,6 +26,22 @@ const greeter = restate.service({
 restate.serve({ services: [greeter], port: 9080 });
 ```
 
+### Running against Restate Cloud
+
+The same `serve()` call connects to a Restate Cloud environment when it finds the
+credentials: run `restate cloud link` once per project (it writes `./.env`), then
+start your service as usual. `serve()` loads `./.env`, connects over an outbound
+tunnel (no inbound listener), and prints how to register the deployment:
+
+```
+restate deployments register tunnel://<name>
+```
+
+Without those variables it listens on `PORT` (default 9080) as before. See the
+`serve()` documentation for `mode`, `connect` and `envFile`. `clients.connect()`
+from `@restatedev/restate-sdk-clients` reads the same file (`RESTATE_INGRESS_URL`,
+`RESTATE_AUTH_TOKEN`) when called without arguments.
+
 ## Community
 
 * 🤗️ [Join our online community](https://discord.gg/skW3AZ6uGd) for help, sharing feedback and talking to the community.

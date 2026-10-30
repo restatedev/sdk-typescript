@@ -120,7 +120,6 @@ export class NodeEndpoint implements RestateEndpoint {
     const endpoint = this.builder.build();
 
     const actualPort = port ?? parseInt(process.env.PORT ?? "9080");
-    endpoint.rlog.info(`Restate SDK started listening on ${actualPort}...`);
 
     const server = http2.createServer(
       nodeHttp2Handler(endpoint, "BIDI_STREAM")
@@ -144,6 +143,9 @@ export class NodeEndpoint implements RestateEndpoint {
             )
           );
         } else {
+          endpoint.rlog.info(
+            `Restate SDK started listening on ${address.port}...`
+          );
           resolve(address.port);
         }
       });
