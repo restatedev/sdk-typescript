@@ -24,6 +24,7 @@ workflows:
         - 'actions/checkout@v4.4.0'
         - 'actions/setup-node@v4.4.0'
         - 'pnpm/action-setup@v4.3.0'
+    '.github/workflows/cla.yml': []
     '.github/workflows/compatibility.yaml': []
     '.github/workflows/docker.yml':
         - 'actions/checkout@v4.4.0'
