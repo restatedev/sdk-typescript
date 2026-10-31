@@ -1,0 +1,455 @@
+/*
+ * Copyright (c) 2023-2026 - Restate Software, Inc., Restate GmbH
+ *
+ * This file is part of the Restate SDK for Node.js/TypeScript,
+ * which is released under the MIT license.
+ *
+ * You can find a copy of the license in file LICENSE in the root
+ * directory of this repository or package, or at
+ * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
+ */
+
+// The tunnel engine.
+// =============================================================================
+//
+// startEngine() serves a Restate SDK deployment over OUTBOUND connections to
+// Restate Cloud's tunnel servers — no inbound listener. `connect()` resolves
+// the identity and calls it. The pieces:
+//
+//   connection.ts — one dial → role-flip → handshake → serve cycle
+//   supervisor.ts — the slot supervisor (one connection per resolved server)
+//   handshake.ts  — the /_/start-tunnel credentials/trailers exchange
+//   forwarded.ts  — the /<scheme>/<host>/<port> destination-prefix strip
+//   targets.ts    — server discovery (SRV per-IP expansion / explicit list)
+//   draining.ts   — server-drain handover ownership
+//   backoff.ts    — jittered exponential reconnect policy
+//
+// The engine has three kinds of state, kept deliberately separate:
+//
+//   * Injected infrastructure — the registries (activeSockets/activeConnections/
+//     draining/inflight) that ConnectionDeps hands to every connection. By
+//     definition the per-connection layer reads these, so they are created once
+//     and injected, not stored in a lifecycle phase.
+//   * Observable output — connectionCount / lastInfo / fatalError, which the
+//     handle exposes in every phase (including after close()), so they live in
+//     one lifetime record rather than a phase.
+//   * Lifecycle state — `EngineState`, a disjoint union whose live phases own
+//     the supervisor + the event-loop anchor (and, while draining, the in-flight
+//     drain promise). Each transition narrows the state and destructures what it
+//     needs, so no function reaches for the live machinery in the wrong phase
+//     (and `closed` provably has none).
+
+import type * as net from "node:net";
+import type { RestateEndpoint } from "../../endpoint.js";
+import { NodeEndpoint } from "../node_endpoint.js";
+import { withOptions } from "../withOptions.js";
+
+import type { EngineHandle, EngineOptions } from "./types.js";
+import { resolveOptions } from "./options.js";
+import type { HandshakeInfo } from "./handshake.js";
+import {
+  type ConnectionDeps,
+  type ConnectionIdentity,
+  type DrainableConnection,
+} from "./connection.js";
+import { DrainingRegistry } from "./draining.js";
+import { Supervisor } from "./supervisor.js";
+import { Deferred } from "./util.js";
+
+/**
+ * Counts forwarded invocations in flight and lets a graceful shutdown wait for
+ * them to finish. Spans both actively-served and server-drained (detached)
+ * sessions, since every dispatch increments and every stream close decrements
+ * regardless of which session it belongs to.
+ */
+class InflightTracker {
+  private count = 0;
+  private notifyDrained: (() => void) | undefined;
+
+  get inFlight(): number {
+    return this.count;
+  }
+
+  started(): void {
+    this.count++;
+  }
+
+  ended(): void {
+    this.count = Math.max(0, this.count - 1);
+    if (this.count === 0 && this.notifyDrained !== undefined) {
+      const notify = this.notifyDrained;
+      this.notifyDrained = undefined;
+      notify();
+    }
+  }
+
+  /** Resolve true once nothing is in flight, or false after `graceMs`.
+   * Only one shutdown runs at a time, so a single waiter suffices. */
+  whenDrained(graceMs: number): Promise<boolean> {
+    return new Promise((resolve) => {
+      if (this.count === 0) {
+        resolve(true);
+        return;
+      }
+      const timer = setTimeout(() => {
+        this.notifyDrained = undefined;
+        resolve(false);
+      }, graceMs);
+      timer.unref();
+      this.notifyDrained = () => {
+        clearTimeout(timer);
+        resolve(true);
+      };
+    });
+  }
+}
+
+/**
+ * The deployment URL to register, from the `proxy-url` trailer of the
+ * handshake (`<proxy base>/<bare environment id>/<name>`), shared contract
+ * with the CLI and the Cloud UI:
+ *
+ *   `<proxy base>:9080/<bare environment id>/<name>/http/in-process/9080/`
+ *
+ * The port is **always 9080** (the proxy), never the zone-specific port the
+ * trailer may carry (9081–9083), so every replica and every reconnect prints
+ * the same URL. The `/http/in-process/9080/` tail is a constant: an
+ * in-process deployment is never dialed, the server routes by the name.
+ */
+export function buildDeploymentUrl(proxyUrl: string): string {
+  try {
+    const proxy = new URL(proxyUrl);
+    proxy.port = "9080";
+    const base = proxy.toString().replace(/\/+$/, "");
+    return `${base}/http/in-process/9080/`;
+  } catch {
+    return `${proxyUrl.replace(/\/+$/, "")}/http/in-process/9080/`;
+  }
+}
+
+/** The engine's observable output — readable from the handle in every phase. */
+interface Output {
+  connectionCount: number;
+  lastInfo: HandshakeInfo | undefined;
+  fatalError: Error | undefined;
+}
+
+/** The live machinery, owned by the running/draining phases and gone in closed. */
+interface Active {
+  readonly supervisor: Supervisor;
+  /** Anchors the event loop while live (a bare awaited promise won't keep Node
+   * alive between a session closing and the next redial timer). */
+  readonly keepAlive: NodeJS.Timeout;
+}
+
+/** The engine lifecycle as one disjoint state; live phases carry `Active`. */
+type EngineState =
+  | { readonly kind: "running"; readonly active: Active }
+  | {
+      readonly kind: "draining";
+      readonly active: Active;
+      readonly completed: Promise<void>;
+    }
+  | { readonly kind: "closed" };
+
+interface SignalShutdownParticipant {
+  shutdown(signal: NodeJS.Signals): Promise<void>;
+}
+
+const signalShutdownRegistrations = new Map<
+  NodeJS.Signals,
+  Set<SignalShutdownParticipant>
+>();
+const signalShutdownHandlers = new Map<NodeJS.Signals, () => void>();
+let signalShutdownInProgress = false;
+
+async function runGracefulShutdownSignal(
+  signal: NodeJS.Signals
+): Promise<void> {
+  if (signalShutdownInProgress) return;
+  signalShutdownInProgress = true;
+  const registrations = [...(signalShutdownRegistrations.get(signal) ?? [])];
+  await Promise.allSettled(
+    registrations.map((entry) => entry.shutdown(signal))
+  );
+  try {
+    process.exit(0);
+  } finally {
+    // Tests stub process.exit(); real process.exit() does not return.
+    signalShutdownInProgress = false;
+  }
+}
+
+function registerGracefulShutdownSignals(
+  signals: NodeJS.Signals[],
+  participant: SignalShutdownParticipant
+): () => void {
+  const unregisters = signals.map((signal) => {
+    let registrations = signalShutdownRegistrations.get(signal);
+    if (registrations === undefined) {
+      registrations = new Set();
+      signalShutdownRegistrations.set(signal, registrations);
+    }
+    registrations.add(participant);
+    if (!signalShutdownHandlers.has(signal)) {
+      const handler = () => void runGracefulShutdownSignal(signal);
+      signalShutdownHandlers.set(signal, handler);
+      process.once(signal, handler);
+    }
+    return () => {
+      const current = signalShutdownRegistrations.get(signal);
+      if (current === undefined) return;
+      current.delete(participant);
+      if (current.size > 0) return;
+      const handler = signalShutdownHandlers.get(signal);
+      if (handler !== undefined) process.removeListener(signal, handler);
+      signalShutdownHandlers.delete(signal);
+      signalShutdownRegistrations.delete(signal);
+    };
+  });
+  return () => {
+    for (const unregister of unregisters) unregister();
+  };
+}
+
+/**
+ * Connect this deployment to Restate Cloud and serve `services` over the
+ * connection. Returns immediately; connection management runs in the
+ * background until `close()`/`shutdown()` (or the `signal`) stops it; `ready`
+ * settles with the first handshake.
+ *
+ * The engine entry point behind `connect()`; the identity arrives resolved
+ * and `connect()` projects the handle onto its public shape.
+ */
+export function startEngine(options: EngineOptions): EngineHandle {
+  const resolvedOptions = resolveOptions(options);
+
+  // Built once, shared across connections and streams (it is stateless per
+  // call). identityKeys delegates per-request JWT verification to the SDK —
+  // it checks `aud` against the post-strip `req.url` pathname.
+  const sdkHandler = withOptions<RestateEndpoint>(new NodeEndpoint(), {
+    services: options.services,
+    // The environment's signing key IS the request-identity key: every
+    // forwarded request must carry a JWT signed by this environment.
+    identityKeys: resolvedOptions.identityKeys,
+    defaultServiceOptions: options.defaultServiceOptions,
+    logger: options.logger,
+    journalValueCodecProvider: options.journalValueCodecProvider,
+  }).handler({ bidirectional: resolvedOptions.bidirectional });
+
+  // Diagnostics: the SDK logger by default (see resolveDiagnosticLogger).
+  const log = resolvedOptions.logger;
+  const logWithWorker: typeof log = (message, level) =>
+    log(`${message} (worker_id=${resolvedOptions.tunnelWorkerId})`, level);
+  const opts = resolvedOptions;
+
+  // Injected infrastructure: the per-connection layer reads these via deps.
+  const activeSockets = new Set<net.Socket>();
+  const activeConnections = new Set<DrainableConnection>();
+  const draining = new DrainingRegistry();
+  const inflight = new InflightTracker();
+
+  // Observable output (valid in every phase, including after close).
+  const output: Output = {
+    connectionCount: 0,
+    lastInfo: undefined,
+    fatalError: undefined,
+  };
+
+  // Resolves on the first successful handshake; rejects on a fatal stop or if
+  // the tunnel closes before connecting. The catch keeps a never-awaited
+  // rejection from surfacing as unhandled.
+  const ready = new Deferred<void>();
+  void ready.promise.catch(() => {});
+
+  // Assigned synchronously below once the live machinery exists; the deps
+  // closures only read it at runtime, long after.
+  let state: EngineState;
+
+  // Opt-in process-signal registrations, removed on teardown so a closed
+  // connection can never later intercept a signal and exit the host process.
+  const signalUnregisters: Array<() => void> = [];
+
+  const connectionDeps: ConnectionDeps = {
+    opts,
+    sdkHandler,
+    draining,
+    activeSockets,
+    activeConnections,
+    onEstablished: (info, identity: ConnectionIdentity) => {
+      if (state.kind === "closed") return;
+      const firstConnection = output.connectionCount === 0;
+      output.connectionCount++;
+      output.lastInfo = info;
+      if (firstConnection) {
+        log(
+          `tunnel: service ready (name=${info.tunnelName}, proxy=${info.proxyUrl}, tunnel=${info.tunnelUrl}, worker_id=${identity.workerId}, connection_id=${identity.connectionId}, target=${identity.target})`,
+          "debug"
+        );
+      } else {
+        log(
+          `tunnel: additional connection ready (connections=${output.connectionCount}, name=${info.tunnelName}, worker_id=${identity.workerId}, connection_id=${identity.connectionId}, target=${identity.target})`
+        );
+      }
+      ready.resolve();
+    },
+    isShuttingDown: () => state.kind === "draining",
+    inflightStarted: () => inflight.started(),
+    inflightEnded: () => inflight.ended(),
+  };
+
+  const supervisor = new Supervisor(
+    opts,
+    connectionDeps,
+    {
+      onFatal: (err) => {
+        output.fatalError = err; // E1 surfaces on ready/error
+        ready.reject(err);
+        options.onFatal?.(err);
+      },
+      hasOtherConnections: () => activeConnections.size > 0,
+    },
+    logWithWorker
+  );
+
+  const keepAlive = setInterval(() => {}, 0x7fffffff);
+
+  state = { kind: "running", active: { supervisor, keepAlive } };
+
+  // ---- transitions ----
+
+  /** Abrupt teardown; idempotent. Destructures the live machinery from the
+   * state, so it can only run while running/draining. */
+  const teardown = (): void => {
+    if (state.kind === "closed") return;
+    const { supervisor, keepAlive } = state.active;
+    state = { kind: "closed" };
+    for (const unregister of signalUnregisters) unregister();
+    signalUnregisters.length = 0;
+    supervisor.abortAll();
+    for (const socket of activeSockets) socket.destroy();
+    activeSockets.clear();
+    draining.destroyAll();
+    clearInterval(keepAlive);
+  };
+
+  // Resolves when the supervisor has fully wound down; then tear down (covers a
+  // fatal that stopped us with no close()/shutdown() call) and settle `ready`.
+  const done = supervisor.done.then(() => {
+    teardown();
+    ready.reject(
+      output.fatalError ??
+        new Error("tunnel: closed before the first handshake")
+    );
+  });
+
+  const drainGracefully = async (
+    active: Active,
+    graceMs: number
+  ): Promise<void> => {
+    const { supervisor } = active;
+    // Stop dialing/resolving new connections (existing ones keep serving) and
+    // move every live connection into a client-drain: serving ones refuse new
+    // invocations and finish in-flight in place; not-yet-serving ones abort.
+    // Snapshot — beginClientDrain may settle a connection, removing it.
+    supervisor.stopResolving();
+    for (const c of [...activeConnections]) c.beginClientDrain();
+    logWithWorker(
+      `tunnel: graceful shutdown — refusing new invocations, draining ${inflight.inFlight} in-flight`,
+      "info"
+    );
+    const drained = await inflight.whenDrained(graceMs);
+    // In-flight drained: ask h2 to close cleanly. Grace elapsed: force the
+    // still-open sessions down, which tears down any stuck streams.
+    await Promise.all(
+      [...activeConnections].map((c) =>
+        c.finishClientDrain({ force: !drained })
+      )
+    );
+    // Now tear down the supervisor and any idle retry loops. For the graceful
+    // case the live h2 sessions have already closed; for the forced case this
+    // is idempotent cleanup.
+    teardown();
+    await done;
+  };
+
+  const close = async (): Promise<void> => {
+    teardown();
+    await done;
+  };
+
+  const shutdown = ({ graceMs }: { graceMs?: number } = {}): Promise<void> => {
+    // Coalesce: a drain already in progress, or already closed.
+    if (state.kind === "draining") return state.completed;
+    if (state.kind === "closed") return done;
+    // Start the drain and record its promise on the state before the first
+    // await, so every connection sees isShuttingDown() for the whole drain.
+    // (drainGracefully runs synchronously up to inflight.whenDrained, so no new
+    // invocation can interleave before `state` is set.)
+    const { active } = state;
+    const completed = drainGracefully(
+      active,
+      graceMs ?? resolvedOptions.drainGraceMs
+    );
+    state = { kind: "draining", active, completed };
+    return completed;
+  };
+
+  // Install process-signal handlers (graceful shutdown is on by default; see
+  // ConnectionOptions.gracefulShutdown). Registered BEFORE the
+  // already-aborted-signal handling below, so that path's synchronous close()
+  // tears them down via teardown() rather than leaving a live handler on a
+  // connection that is already closed.
+  if (resolvedOptions.gracefulShutdown !== undefined) {
+    const { signals, graceMs } = resolvedOptions.gracefulShutdown;
+    signalUnregisters.push(
+      registerGracefulShutdownSignals(signals, {
+        async shutdown(signal) {
+          logWithWorker(
+            `tunnel: received ${signal} — shutting down gracefully`,
+            "info"
+          );
+          await shutdown({ graceMs });
+        },
+      })
+    );
+  }
+
+  if (options.signal?.aborted) {
+    // An already-aborted signal means "don't run" — stop before dialing.
+    void close();
+  } else {
+    options.signal?.addEventListener("abort", () => void close(), {
+      once: true,
+    });
+  }
+
+  // ---- the public handle (reads the observable output) ----
+
+  return {
+    close,
+    shutdown,
+    get connectionCount() {
+      return output.connectionCount;
+    },
+    name: resolvedOptions.name,
+    get tunnelName() {
+      return output.lastInfo?.tunnelName;
+    },
+    get proxyUrl() {
+      return output.lastInfo?.proxyUrl;
+    },
+    get tunnelUrl() {
+      return output.lastInfo?.tunnelUrl;
+    },
+    get deploymentUrl() {
+      const lastInfo = output.lastInfo;
+      if (lastInfo === undefined) return undefined;
+      return buildDeploymentUrl(lastInfo.proxyUrl);
+    },
+    get error() {
+      return output.fatalError;
+    },
+    ready: ready.promise,
+  };
+}
