@@ -1,10 +1,5 @@
 # @restatedev/restate-sdk-tunnel
 
-> **Deprecated.** Connecting to Restate Cloud is built into `@restatedev/restate-sdk`:
-> `restate.connect({ services: [greeter], name: "greeter-v1" })` with `RESTATE_CONNECT_KEY`
-> from the Cloud UI (Development → Configure SDK). This package keeps working unchanged
-> for existing deployments; new code should use `connect()`.
-
 Serve a Restate SDK deployment over an **outbound** connection to Restate
 Cloud's tunnel — no inbound HTTP listener, no public ingress into your
 network. A drop-in alternative to binding a listener with `restate.serve(...)`
