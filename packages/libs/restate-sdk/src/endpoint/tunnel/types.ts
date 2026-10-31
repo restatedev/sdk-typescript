@@ -163,11 +163,6 @@ export interface ConnectionOptions {
    */
   resolveIntervalMs?: number;
   /**
-   * Protocol mode for the SDK handler. Default `true` (`BIDI_STREAM`) —
-   * the connection is always HTTP/2, so full-duplex streaming is available.
-   */
-  bidirectional?: boolean;
-  /**
    * Optional one-shot startup readiness gate. Without this option the engine
    * dials immediately. When supplied, it waits for this promise or callback
    * to complete before dialing any server, so Restate Cloud cannot select

@@ -207,7 +207,8 @@ export function resolveOptions(options: EngineOptions): ResolvedOptions {
     identityKeys: options.identityKeys,
     name: options.name,
     tunnelWorkerId: resolveTunnelWorkerId(options.workerId),
-    bidirectional: options.bidirectional ?? true,
+    // Always HTTP/2 over the connection, so always full-duplex streaming.
+    bidirectional: true,
     startupReady: resolveStartupReady(options.startupReady),
     startupReadyTimeoutMs: positive(
       options.startupReadyTimeoutMs,
