@@ -191,6 +191,9 @@ function registerGracefulShutdownSignals(
  * over it. Returns immediately; connection management runs in the
  * background until `close()`/`shutdown()` (or the `signal`) stops it. See
  * {@link TunnelConnection.ready} to await the first successful handshake.
+ *
+ * @deprecated Use `connect({ services, name })` from `@restatedev/restate-sdk`
+ * with `RESTATE_CONNECT_KEY` from the Cloud UI (Development → Configure SDK).
  */
 export function connectTunnel(options: ConnectTunnelOptions): TunnelConnection {
   // Resolve options, eventually picking them up from env.
