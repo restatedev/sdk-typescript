@@ -1,6 +1,6 @@
 {
   "name": "@restatedev/restate-sdk-integration-client",
-  "version": "1.18.0",
+  "version": "1.18.1",
   "description": "Client for the Restate ingress integration (ingestion) API",
   "author": "Restate Developers",
   "email": "code@restate.dev",
