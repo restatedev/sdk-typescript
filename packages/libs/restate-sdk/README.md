@@ -26,25 +26,6 @@ const greeter = restate.service({
 restate.serve({ services: [greeter], port: 9080 });
 ```
 
-### Connecting to Restate Cloud
-
-To run the same services against a Restate Cloud environment, connect outbound
-instead of listening: create a connect key in the Cloud UI (Development →
-Configure SDK), export it, and call `connect()` with a deployment name.
-
-```bash
-export RESTATE_CONNECT_KEY=restate://…
-```
-
-```typescript
-restate.connect({ services: [greeter], name: "greeter-v1" });
-```
-
-The SDK prints how to register the deployment, once:
-`restate deployments register connect://greeter-v1`, or the Cloud UI link.
-`serve()` and `connect()` are two functions: no mode detection, nothing in the
-environment flips one into the other.
-
 ## Community
 
 * 🤗️ [Join our online community](https://discord.gg/skW3AZ6uGd) for help, sharing feedback and talking to the community.
