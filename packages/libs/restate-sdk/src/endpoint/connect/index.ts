@@ -184,10 +184,6 @@ export function explainFatal(
       `Could not reach Restate Cloud for environment ${environmentId}: ${reason}.`,
       `Check the network, and that the key's region is right (${CONNECT_KEY_ENV}).`
     );
-  } else if (reason.includes("startup readiness gate failed")) {
-    lines.push(
-      `The startupReady gate failed, so the connection to Restate Cloud was never opened: ${reason}`
-    );
   } else {
     lines.push(`The connection to Restate Cloud stopped: ${reason}`);
   }

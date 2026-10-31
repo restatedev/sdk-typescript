@@ -112,86 +112,6 @@ describe("handshake gate", () => {
 });
 
 describe("startup readiness gate", () => {
-  test("does not connect to the tunnel server until startupReady resolves, then serves", async () => {
-    const gate = deferred<void>();
-    const fake = await startFakeCloud({ decideTrailers: () => okTrailers() });
-    const logs: string[] = [];
-    const conn = connectTunnel({
-      ...baseOptions(fake.port),
-      startupReady: gate.promise,
-      tunnelDiagnosticLogger: (m) => logs.push(m),
-    });
-    try {
-      await new Promise((r) => setTimeout(r, 120));
-      expect(fake.connections.length).toBe(0);
-      expect(conn.connectionCount).toBe(0);
-      expect(logs.join("\n")).toMatch(
-        /tunnel: waiting for startup readiness gate/
-      );
-
-      gate.resolve();
-      await conn.ready;
-      expect(fake.connections.length).toBe(1);
-      expect(logs.join("\n")).toMatch(/tunnel: startup readiness gate passed/);
-
-      const c0 = await fake.waitForConnection(0);
-      const result = await roundtrip(c0.session, discoverReq());
-      expect(result.status).toBe(200);
-      expect(result.body).toContain("greeter");
-    } finally {
-      await conn.close();
-      await fake.close();
-    }
-  });
-
-  test("a stuck startupReady gate fails fatally without dialing", async () => {
-    const fake = await startFakeCloud({ decideTrailers: () => okTrailers() });
-    const logs: string[] = [];
-    const conn = connectTunnel({
-      ...baseOptions(fake.port),
-      startupReady: new Promise<void>(() => {}),
-      startupReadyTimeoutMs: 20,
-      tunnelDiagnosticLogger: (m) => logs.push(m),
-    });
-    try {
-      await expect(conn.ready).rejects.toThrow(
-        /startup readiness gate failed: startup readiness gate timed out after 20ms/
-      );
-      expect(fake.connections.length).toBe(0);
-      expect(logs.join("\n")).toMatch(
-        /tunnel: waiting for startup readiness gate \(timeoutMs=20\)/
-      );
-      expect(logs.join("\n")).toMatch(
-        /tunnel: FATAL .* startup readiness gate timed out after 20ms/
-      );
-    } finally {
-      await conn.close();
-      await fake.close();
-    }
-  });
-
-  test("close() while startupReady is pending stops cleanly without dialing", async () => {
-    const gate = deferred<void>();
-    const fake = await startFakeCloud({ decideTrailers: () => okTrailers() });
-    const conn = connectTunnel({
-      ...baseOptions(fake.port),
-      startupReady: gate.promise,
-      startupReadyTimeoutMs: 5_000,
-    });
-    try {
-      const start = Date.now();
-      await conn.close();
-      expect(Date.now() - start).toBeLessThan(500);
-      await expect(conn.ready).rejects.toThrow(
-        /closed before the first handshake/
-      );
-      expect(conn.error).toBeUndefined();
-      expect(fake.connections.length).toBe(0);
-    } finally {
-      await fake.close();
-    }
-  });
-
   test("a forwarded request before the tunnel handshake gets the not-ready sentinel, never 502", async () => {
     let sessionResolve!: (session: http2.ClientHttp2Session) => void;
     const sessionPromise = new Promise<http2.ClientHttp2Session>((resolve) => {
@@ -393,31 +313,6 @@ describe("graceful drain", () => {
       await new Promise((r) => setTimeout(r, 250));
       expect(c0.session.destroyed).toBe(true);
       expect(conn.connectionCount).toBe(2); // replacement still serving
-    } finally {
-      await conn.close();
-      await fake.close();
-    }
-  });
-
-  test("supportsDrain: false — header absent, drain acknowledged but ignored", async () => {
-    const fake = await startFakeCloud({ decideTrailers: () => okTrailers() });
-    const conn = connectTunnel({
-      ...baseOptions(fake.port),
-      supportsDrain: false,
-    });
-    try {
-      await conn.ready;
-      const c0 = await fake.waitForConnection(0);
-      expect((await c0.creds)["supports-drain"]).toBeUndefined();
-      const ack = await roundtrip(c0.session, {
-        ":method": "GET",
-        ":path": "/_/drain-tunnel",
-      });
-      expect(ack.status).toBe(200);
-      await new Promise((r) => setTimeout(r, 150));
-      // No handover: still the one connection, still serving.
-      expect(fake.connections.length).toBe(1);
-      expect(conn.connectionCount).toBe(1);
     } finally {
       await conn.close();
       await fake.close();

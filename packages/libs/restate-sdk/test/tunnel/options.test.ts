@@ -217,38 +217,6 @@ describe("parseServerAddress", () => {
 });
 
 describe("client-drain / graceful-shutdown options", () => {
-  test("startupReady is optional and can be promise- or callback-backed", async () => {
-    expect(resolveOptions(valid).startupReady).toBeUndefined();
-    expect(resolveOptions(valid).startupReadyTimeoutMs).toBe(120_000);
-    await expect(
-      resolveOptions({
-        ...valid,
-        startupReady: Promise.resolve(),
-      }).startupReady?.()
-    ).resolves.toBeUndefined();
-    await expect(
-      resolveOptions({
-        ...valid,
-        startupReady: () => Promise.resolve(),
-      }).startupReady?.()
-    ).resolves.toBeUndefined();
-    expect(
-      resolveOptions({ ...valid, startupReadyTimeoutMs: 5_000 })
-        .startupReadyTimeoutMs
-    ).toBe(5_000);
-    expect(() =>
-      resolveOptions({ ...valid, startupReadyTimeoutMs: 0 })
-    ).toThrow(/startupReadyTimeoutMs must be a positive number/);
-  });
-
-  test("supportsClientDrain defaults to true and can be disabled", () => {
-    expect(resolveOptions(valid).supportsClientDrain).toBe(true);
-    expect(
-      resolveOptions({ ...valid, supportsClientDrain: false })
-        .supportsClientDrain
-    ).toBe(false);
-  });
-
   test("gracefulShutdown: on by default (SIGTERM, drain grace); true/object/false forms", () => {
     expect(resolveOptions(valid).gracefulShutdown).toEqual({
       signals: ["SIGTERM"],

@@ -163,49 +163,10 @@ export interface ConnectionOptions {
    */
   resolveIntervalMs?: number;
   /**
-   * Optional one-shot startup readiness gate. Without this option the engine
-   * dials immediately. When supplied, it waits for this promise or callback
-   * to complete before dialing any server, so Restate Cloud cannot select
-   * this worker until the local handler is ready. If the gate rejects,
-   * throws, or does not complete within {@link startupReadyTimeoutMs}, the
-   * connection stops and `ready` rejects.
-   *
-   * This is the startup counterpart to {@link supportsClientDrain}: startup
-   * gates traffic until the handler is ready; shutdown drain removes the
-   * connection from selection before the handler stops.
-   */
-  startupReady?: PromiseLike<void> | (() => void | PromiseLike<void>);
-  /**
-   * Deadline for {@link startupReady}. Default 120_000. Only used when
-   * `startupReady` is supplied; a stuck startup gate is treated as fatal so a
-   * broken worker is visible instead of silently absent from the fleet.
-   */
-  startupReadyTimeoutMs?: number;
-  /**
-   * Advertise graceful-drain support (`supports-drain: true`) in the
-   * handshake. Default `true`. When Restate Cloud rolls a server it asks
-   * drain-capable connections to drain: the engine then immediately opens a
-   * replacement connection while the old one keeps serving its in-flight
-   * invocations (bounded by {@link drainGraceMs}) — zero dropped requests
-   * across cloud rollovers. With `false`, the cloud simply closes the
-   * connection and in-flight invocations are retried by the Restate runtime
-   * after the redial.
-   */
-  supportsDrain?: boolean;
-  /**
    * How long a draining connection may keep serving its in-flight
    * invocations before being torn down. Default 120_000.
    */
   drainGraceMs?: number;
-  /**
-   * Advertise client-initiated graceful drain (`supports-client-drain: true`)
-   * in the handshake. Default `true`. When enabled, `shutdown()` (or the
-   * default {@link gracefulShutdown} signal handler) proactively sends
-   * HTTP/2 GOAWAY and refuses any raced streams with a drain sentinel, so
-   * Restate Cloud stops routing new work to this process while its in-flight
-   * invocations finish — the basis for zero-dropped-invocation rollouts.
-   */
-  supportsClientDrain?: boolean;
   /**
    * Automatic graceful shutdown on process signals. **On by default**: the
    * engine installs a one-shot handler for each signal (default `SIGTERM`)
@@ -306,8 +267,6 @@ export interface Connection {
    * session gracefully. If the grace elapses first, the session/socket are
    * force-closed. The default {@link ConnectionOptions.gracefulShutdown}
    * handler wires this to `SIGTERM`; {@link close} is the abrupt alternative.
-   * Requires {@link ConnectionOptions.supportsClientDrain} (the default)
-   * to have been advertised; otherwise it degrades to an abrupt {@link close}.
    * Rejects like {@link close} if the connection had already stopped on a
    * non-retryable failure.
    */

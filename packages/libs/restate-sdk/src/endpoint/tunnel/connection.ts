@@ -181,8 +181,6 @@ export interface ConnectionDeps {
    * this connection's own `draining{client}` state.
    */
   isShuttingDown: () => boolean;
-  /** True once the startup readiness gate has passed. */
-  isStartupReady: () => boolean;
   /** A forwarded invocation began executing (counts toward the drain wait). */
   inflightStarted: () => void;
   /** A forwarded invocation finished (its stream closed). */
@@ -850,15 +848,6 @@ class ConnectionAttempt implements DrainableConnection {
     // detached session keeps serving (the zero-drop property).
     const clientDraining =
       this.state.kind === "draining" && this.state.trigger === "client";
-    if (!this.deps.isStartupReady()) {
-      // Defensive fallback: the supervisor gates dialing until startupReady
-      // passes, so normal protocol traffic should not reach this state.
-      this.logWithIdentity(
-        `tunnel: refused forwarded stream ${res.stream.id ?? "?"} before startup readiness gate completed`
-      );
-      this.notReady(res);
-      return;
-    }
     if (clientDraining || this.deps.isShuttingDown()) {
       this.logWithIdentity(
         `tunnel: refused forwarded stream ${res.stream.id ?? "?"} during client drain`

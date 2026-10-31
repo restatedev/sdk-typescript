@@ -52,8 +52,6 @@ export interface ResolvedOptions {
   name: string;
   tunnelWorkerId: string;
   bidirectional: boolean;
-  startupReady?: () => Promise<void>;
-  startupReadyTimeoutMs: number;
   resolveIntervalMs: number;
   supportsDrain: boolean;
   drainGraceMs: number;
@@ -122,22 +120,6 @@ function resolveTunnelWorkerId(option: string | undefined): string {
       ? option
       : fromEnv(TUNNEL_WORKER_ID_ENV);
   return requireHeaderSafe(value ?? DEFAULT_TUNNEL_WORKER_ID, "workerId");
-}
-
-function resolveStartupReady(
-  option: EngineOptions["startupReady"]
-): (() => Promise<void>) | undefined {
-  if (option === undefined) return undefined;
-  if (typeof option === "function") {
-    return async () => {
-      await option();
-    };
-  }
-  const ready = Promise.resolve(option);
-  ready.catch(() => {});
-  return async () => {
-    await ready;
-  };
 }
 
 function positive(
@@ -209,20 +191,15 @@ export function resolveOptions(options: EngineOptions): ResolvedOptions {
     tunnelWorkerId: resolveTunnelWorkerId(options.workerId),
     // Always HTTP/2 over the connection, so always full-duplex streaming.
     bidirectional: true,
-    startupReady: resolveStartupReady(options.startupReady),
-    startupReadyTimeoutMs: positive(
-      options.startupReadyTimeoutMs,
-      120_000,
-      "startupReadyTimeoutMs"
-    ),
     resolveIntervalMs: positive(
       options.resolveIntervalMs,
       30_000,
       "resolveIntervalMs"
     ),
-    supportsDrain: options.supportsDrain ?? true,
+    // Both drain protocols are always advertised; the engine implements them.
+    supportsDrain: true,
     drainGraceMs,
-    supportsClientDrain: options.supportsClientDrain ?? true,
+    supportsClientDrain: true,
     gracefulShutdown: resolveGracefulShutdown(
       options.gracefulShutdown,
       drainGraceMs

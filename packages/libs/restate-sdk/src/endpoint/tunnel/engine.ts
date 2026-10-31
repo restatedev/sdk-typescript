@@ -242,17 +242,7 @@ export function startEngine(options: EngineOptions): EngineHandle {
   const log = resolvedOptions.logger;
   const logWithWorker: typeof log = (message, level) =>
     log(`${message} (worker_id=${resolvedOptions.tunnelWorkerId})`, level);
-  let startupGatePassed = resolvedOptions.startupReady === undefined;
-  const opts = {
-    ...resolvedOptions,
-    startupReady:
-      resolvedOptions.startupReady === undefined
-        ? undefined
-        : async () => {
-            await resolvedOptions.startupReady!();
-            startupGatePassed = true;
-          },
-  };
+  const opts = resolvedOptions;
 
   // Injected infrastructure: the per-connection layer reads these via deps.
   const activeSockets = new Set<net.Socket>();
@@ -305,7 +295,6 @@ export function startEngine(options: EngineOptions): EngineHandle {
       ready.resolve();
     },
     isShuttingDown: () => state.kind === "draining",
-    isStartupReady: () => startupGatePassed,
     inflightStarted: () => inflight.started(),
     inflightEnded: () => inflight.ended(),
   };
@@ -390,10 +379,6 @@ export function startEngine(options: EngineOptions): EngineHandle {
   };
 
   const shutdown = ({ graceMs }: { graceMs?: number } = {}): Promise<void> => {
-    // Without the advertised capability the server ignores our drain sentinel,
-    // so a graceful drain can't work (refused requests just keep getting
-    // routed back) — fall back to an abrupt close, as documented.
-    if (!resolvedOptions.supportsClientDrain) return close();
     // Coalesce: a drain already in progress, or already closed.
     if (state.kind === "draining") return state.completed;
     if (state.kind === "closed") return done;
