@@ -28,10 +28,7 @@ import { LogSource } from "../../logging/logger_transport.js";
 import { defaultLoggerTransport } from "../../logging/console_logger_transport.js";
 
 /**
- * Connect your services to Restate Cloud and serve them over the connection —
- * no inbound listener, no public ingress to your network. The counterpart of
- * `serve()` for Restate Cloud: you either serve an HTTP endpoint or connect
- * outbound; the two never mix.
+ * Connect your services to Restate Cloud and serve them over the connection.
  *
  * ```ts
  * import * as restate from "@restatedev/restate-sdk";
@@ -43,10 +40,8 @@ import { defaultLoggerTransport } from "../../logging/console_logger_transport.j
  *
  * - a **name** for the deployment (`name` option, or `RESTATE_CONNECT_NAME`):
  *   the identity you register, shared by replicas of the same deployment;
- * - a **connect key** (`RESTATE_CONNECT_KEY`): one string from the Cloud UI,
- *   Development → Configure SDK, carrying the credential, the environment, the
- *   region and the request-identity key:
- *   `restate://<api key>@<environment id>.env.<region domain>/?signing-key=…`.
+ * - a **connect key** (`RESTATE_CONNECT_KEY`): one string you can obtain from
+ *   Cloud UI -> Development → Configure SDK.
  *
  * Both are read from the process environment; the SDK never reads a file.
  *
@@ -60,11 +55,7 @@ import { defaultLoggerTransport } from "../../logging/console_logger_transport.j
  *   or open https://cloud.restate.dev/to/overview?register-deployment=connect://greeter-v1
  * ```
  *
- * Registration is deliberately not automatic. Request identity validation is
- * always on (`identityKeys` defaults to the key's `signing-key`). Misconfiguration
- * throws synchronously, naming the variable to set; the returned
- * {@link Connection} reconnects in the background until closed, and its
- * `ready` promise settles with the first handshake.
+ * The returned {@link Connection} reconnects in the background until closed.
  *
  * @param options the services, the name and the tuning, see {@link ConnectOptions}
  * @returns the connection handle
@@ -93,9 +84,6 @@ export function connect(options: ConnectOptions): Connection {
   return {
     ready: handle.ready,
     name: handle.name,
-    get deploymentUrl() {
-      return handle.deploymentUrl;
-    },
     close: () => handle.close(),
     shutdown: (opts) => handle.shutdown(opts),
     get connectionCount() {

@@ -201,42 +201,34 @@ export interface ConnectTuningOptions {
 
 /**
  * Options for {@link connect}: the endpoint options (`services`, …) plus the
- * two inputs that identify the deployment — the {@link name} (or
- * `RESTATE_CONNECT_NAME`) and the {@link key} (or `RESTATE_CONNECT_KEY`) — and,
- * rarely needed, the {@link connection} tuning. Request identity validation is
- * always on: `identityKeys` defaults to the key's `signing-key`.
+ * two inputs that identify the deployment: the {@link name} (or
+ * `RESTATE_CONNECT_NAME`) and the {@link key} (or `RESTATE_CONNECT_KEY`).
  */
 export interface ConnectOptions extends EndpointOptions {
   /**
-   * The deployment name, e.g. `"greeter-v1"`: the identity you register
+   * Required: The deployment name, e.g. `"greeter-v1"`: the identity you register
    * (`restate deployments register connect://<name>`). Restate Cloud routes by
    * `<environment>/<name>` and load-balances across every connection under
    * it, so replicas of the same deployment share one name and distinct
    * deployments each have their own. Letters, digits, `.`, `_` and `-`.
    *
-   * Falls back to `RESTATE_CONNECT_NAME`. Required: an unnamed deployment is
-   * a mistake, there is no inferred default.
+   * Also configurable via env `RESTATE_CONNECT_NAME`.
    */
   name?: string;
   /**
-   * The connect key from the Cloud UI (Development → Configure SDK):
-   * `restate://<api key>@<environment id>.env.<region domain>/?signing-key=…`.
-   * One string carrying the credential and every coordinate. Falls back to
-   * `RESTATE_CONNECT_KEY`. Usually left unset so the secret stays out of the
-   * code.
+   * The connect key from the Cloud UI -> Development → Configure SDK.
+   *
+   * Also configurable via env `RESTATE_CONNECT_KEY`.
    */
   key?: string;
   /**
-   * How the connection is made and kept: server discovery overrides,
-   * reconnect and drain behaviour, HTTP/2 limits, TLS. Every option has a
-   * default that fits Restate Cloud; most deployments leave this out.
+   * Advanced connection options.
    */
   connection?: ConnectionOptions;
 }
 
 /**
- * The {@link ConnectOptions.connection} tuning: the shared
- * {@link ConnectTuningOptions} plus server discovery and the worker id.
+ * Advanced connection options.
  */
 export interface ConnectionOptions extends ConnectTuningOptions {
   /**
@@ -287,15 +279,6 @@ export interface Connection {
   readonly ready: Promise<void>;
   /** The deployment name, as configured and confirmed by the server. */
   readonly name: string;
-  /**
-   * The deployment URL to register (`restate deployments register <url>`):
-   * the proxy base Restate Cloud announced in the handshake, always on port
-   * 9080, plus `/http/in-process/9080/` — a constant tail, since an
-   * in-process deployment is never dialed and routing is by {@link name}.
-   * `undefined` until the first successful handshake. Registering by name
-   * (`connect://<name>`) needs none of this.
-   */
-  readonly deploymentUrl: string | undefined;
   /** Stop reconnecting, close the current connections, and wait for teardown. */
   close(): Promise<void>;
   /**
@@ -357,6 +340,12 @@ export interface EngineOptions extends ConnectTuningOptions {
  * Internal.
  */
 export interface EngineHandle extends Connection {
+  /**
+   * The deployment URL (`<proxy base>:9080/<bare env id>/<name>/http/in-process/9080/`),
+   * `undefined` until the first successful handshake. Logged at debug;
+   * registration is by name.
+   */
+  readonly deploymentUrl: string | undefined;
   /** The name confirmed by the server in the most recent handshake. */
   readonly tunnelName: string | undefined;
   /** The proxy base URL announced in the most recent handshake. */

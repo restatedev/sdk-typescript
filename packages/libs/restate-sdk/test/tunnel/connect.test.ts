@@ -112,11 +112,6 @@ describe("connect() — handshake", () => {
           // Drain is implemented and advertised by default.
           expect(creds["supports-drain"]).toBe("true");
           expect(creds["supports-client-drain"]).toBe("true");
-          // The ready-made registration URL: advertised proxy base + the
-          // constant in-process destination (routing is by tunnelName).
-          expect(conn.deploymentUrl).toBe(
-            `${okTrailers()["proxy-url"]}/http/in-process/9080/`
-          );
         } finally {
           await conn.close();
         }
@@ -154,29 +149,6 @@ describe("connect() — handshake", () => {
           );
           expect(joined).toMatch(
             /tunnel: service ready \(name=test-tunnel, .*worker_id=worker-test-1, connection_id=[0-9A-HJKMNP-TV-Z]{26}, target=/
-          );
-        } finally {
-          await conn.close();
-        }
-      }
-    );
-  });
-
-  test("deploymentUrl normalizes a missing proxy port", async () => {
-    await withFake(
-      {
-        decideTrailers: () => ({
-          ...okTrailers(),
-          // Public clusters can advertise the proxy without a port.
-          "proxy-url": `https://tunnel.example/abc123/${TUNNEL_NAME}`,
-        }),
-      },
-      async (_fake, options) => {
-        const conn = connect(options);
-        try {
-          await conn.ready;
-          expect(conn.deploymentUrl).toBe(
-            `https://tunnel.example:9080/abc123/${TUNNEL_NAME}/http/in-process/9080/`
           );
         } finally {
           await conn.close();

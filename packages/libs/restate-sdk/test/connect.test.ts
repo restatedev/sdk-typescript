@@ -409,9 +409,6 @@ describe("connect() end to end", () => {
     try {
       await connection.ready;
       expect(connection.name).toBe("greeter-v1");
-      expect(connection.deploymentUrl).toBe(
-        "https://tunnel.eu.restate.cloud:9080/abc123/greeter-v1/http/in-process/9080/"
-      );
       const info = lines.filter(
         (l) =>
           l.level === "info" &&
