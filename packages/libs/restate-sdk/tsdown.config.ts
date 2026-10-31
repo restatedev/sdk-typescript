@@ -18,7 +18,7 @@ export default defineConfig({
     "node:buffer",
     "node:timers/promises",
     "node:zlib",
-    // used by the tunnel engine (connect mode of serve())
+    // used by the connect() engine
     "node:http",
     "node:http2",
     "node:net",

@@ -30,7 +30,7 @@ import { defaultLoggerTransport } from "../../logging/console_logger_transport.j
 /**
  * Connect your services to Restate Cloud and serve them over the connection —
  * no inbound listener, no public ingress to your network. The counterpart of
- * {@link serve} for Restate Cloud: you either serve an HTTP endpoint or connect
+ * `serve()` for Restate Cloud: you either serve an HTTP endpoint or connect
  * outbound; the two never mix.
  *
  * ```ts
@@ -131,10 +131,11 @@ export function start(
   rlog: Logger
 ): EngineHandle {
   const { regionLabel, ...engineCoordinates } = coordinates;
+  // startEngine validates the tuning synchronously; log only once it did.
+  const connection = startEngine({ ...rest, name, ...engineCoordinates });
   rlog.info(
     `Connecting to Restate Cloud environment ${coordinates.environmentId} (${regionLabel})`
   );
-  const connection = startEngine({ ...rest, name, ...engineCoordinates });
   connection.ready.then(
     () => {
       rlog.debug(`Deployment URL: ${connection.deploymentUrl ?? "?"}`);

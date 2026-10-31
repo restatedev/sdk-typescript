@@ -16,7 +16,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { parseCloudKey } from "@restatedev/restate-sdk-core";
+import { parseCloudKey } from "../src/endpoint/connect/key.js";
 import * as restate from "../src/index.js";
 import {
   AUTH_TOKEN_ENVS,
@@ -107,6 +107,13 @@ describe("the connect key", () => {
     expect(byoc.params).toEqual([]);
     // No userinfo is allowed by the grammar (the token may come from a file).
     expect(parseCloudKey(`restate://${HOST}/`, "x").apiKey).toBeUndefined();
+    // The host is case-insensitive; a bare id that still carries env_ is a paste mistake.
+    expect(
+      parseCloudKey(`restate://k@ABC.Env.EU.Restate.Cloud/`, "x").environmentId
+    ).toBe("env_abc");
+    expect(() =>
+      parseCloudKey(`restate://k@env_abc.env.eu.restate.cloud/`, "x")
+    ).toThrow(/the host must be/);
     // A percent-encoded key is decoded; a `:` splits into user:password and is re-joined.
     expect(parseCloudKey(`restate://key%40x:y@${HOST}/`, "x").apiKey).toBe(
       "key@x:y"
@@ -121,7 +128,7 @@ describe("the connect key", () => {
         )
       );
     bad(`https://k@${HOST}/`, /the scheme is "https", not restate/);
-    bad(`restate://k@${HOST}/path`, /the path must be empty, got "\/path"/);
+    bad(`restate://k@${HOST}/path`, /the path must be empty\)/);
     bad(`restate://k@${HOST}:8080/`, /the host must not carry a port/);
     bad(`restate://k@${HOST}/#x`, /a fragment is not allowed/);
     bad(
@@ -174,6 +181,10 @@ describe("the connect key", () => {
         noWarn
       )
     ).toThrow(/at most one of/);
+
+    expect(() =>
+      resolveCoordinates({ key: `${MANAGED_KEY}&tunnel-servers=` }, noWarn)
+    ).toThrow(/tunnel-servers parameter is empty/);
 
     const warnings: string[] = [];
     resolveCoordinates({ key: `${MANAGED_KEY}&future=1&other=2` }, (m) =>
@@ -417,6 +428,47 @@ describe("connect() end to end", () => {
         "  restate deployments register connect://greeter-v1",
         "  or open https://cloud.restate.dev/to/overview?register-deployment=connect://greeter-v1",
       ]);
+    } finally {
+      await connection.close();
+      await fake.close();
+    }
+  });
+
+  test("an operator pod: RESTATE_INPROC_* variables and a token file, no key, end to end", async () => {
+    const identity = generateIdentityKey();
+    const fake = await startFakeCloud({
+      decideTrailers: () => ({
+        "tunnel-status": "ok",
+        "proxy-url":
+          "https://tunnel.eu.restate.cloud:9080/abc123/greeter-7f9c4",
+        "tunnel-url": "https://tunnel.eu.restate.cloud:9080",
+        "tunnel-name": "greeter-7f9c4",
+      }),
+    });
+    process.env[ENVIRONMENT_ID_ENVS[1]] = "env_abc123";
+    process.env[CONNECT_NAME_ENVS[1]] = "greeter-7f9c4";
+    process.env[SIGNING_PUBLIC_KEY_ENVS[1]] = identity.publicKey;
+    process.env[AUTH_TOKEN_FILE_ENVS[0]] = tokenFile("key_mounted.secret\n");
+    // The operator injects a region; the test points discovery at the fake.
+    process.env[CLOUD_REGION_ENVS[1]] = "eu";
+    const lines: string[] = [];
+    const connection = restate.connect({
+      services: [],
+      logger: (_params, message) => {
+        lines.push(String(message));
+      },
+      connection: { servers: [`http://127.0.0.1:${fake.port}`] },
+    });
+    try {
+      await connection.ready;
+      expect(connection.name).toBe("greeter-7f9c4");
+      const creds = await (await fake.waitForConnection(0)).creds;
+      expect(creds["authorization"]).toBe("Bearer key_mounted.secret");
+      expect(creds["environment-id"]).toBe("env_abc123");
+      expect(creds["tunnel-name"]).toBe("greeter-7f9c4");
+      expect(lines).toContain(
+        "  restate deployments register connect://greeter-7f9c4"
+      );
     } finally {
       await connection.close();
       await fake.close();
