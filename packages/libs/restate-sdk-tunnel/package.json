@@ -1,7 +1,7 @@
 {
   "name": "@restatedev/restate-sdk-tunnel",
   "version": "1.18.0",
-  "description": "Deprecated: use connect() from @restatedev/restate-sdk. Compatibility re-export of connectTunnel",
+  "description": "Reverse-tunnel client for Restate Cloud — serve a Restate SDK deployment over an outbound tunnel connection, with no inbound HTTP listener",
   "author": "Restate Developers",
   "email": "code@restate.dev",
   "license": "MIT",
@@ -51,6 +51,6 @@
     "@restatedev/restate-sdk": "workspace:*"
   },
   "peerDependencies": {
-    "@restatedev/restate-sdk": "workspace:^"
+    "@restatedev/restate-sdk": "^1.15.0"
   }
 }

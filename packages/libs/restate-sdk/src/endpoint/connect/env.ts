@@ -26,7 +26,7 @@
 // environment id, token or token file, region or SRV / servers, signing key.
 
 import * as fs from "node:fs";
-import { parseCloudKey, type CloudKey } from "@restatedev/restate-sdk-core";
+import { parseCloudKey, type CloudKey } from "./key.js";
 import {
   requireHeaderSafe,
   srvNameForRegionDomain,
@@ -192,6 +192,9 @@ function coordinatesFromKey(
         ));
 
   const keyServers = params.get("tunnel-servers");
+  if (keyServers !== undefined && splitList(keyServers).length === 0) {
+    fail("the connect key's tunnel-servers parameter is empty");
+  }
   const keyDiscovery: DiscoveryOverrides = {
     serversSrv: params.get("tunnel-srv"),
     servers: keyServers === undefined ? undefined : splitList(keyServers),

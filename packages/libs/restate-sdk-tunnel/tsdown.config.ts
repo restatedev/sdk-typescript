@@ -8,5 +8,5 @@ export default defineConfig({
   dts: true,
   clean: true,
   ignoreWatch: ["dist", ".turbo", "*.tsbuildinfo"],
-  external: [/^@restatedev\/restate-sdk(\/.*)?$/],
+  external: ["@restatedev/restate-sdk"],
 });

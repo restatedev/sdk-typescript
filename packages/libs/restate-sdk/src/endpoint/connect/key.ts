@@ -9,8 +9,8 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-// The Restate Cloud key grammar, shared by `RESTATE_CONNECT_KEY` (the SDK's
-// `connect()`) and `RESTATE_INGRESS_KEY` (`clients.connect()`):
+// The Restate Cloud key grammar (`RESTATE_CONNECT_KEY`; `RESTATE_INGRESS_KEY`
+// in @restatedev/restate-sdk-clients shares it, with its own trimmed parser):
 //
 //   restate://<api key>@<bare environment id>.env.<region domain>/?<params>
 //
@@ -64,17 +64,21 @@ export function parseCloudKey(value: string, what: string): CloudKey {
     );
   }
   if (url.port !== "") return fail("the host must not carry a port");
+  // The path is not echoed: a key pasted with a stray `/` would put part of
+  // the credential in the error message.
   if (url.pathname !== "" && url.pathname !== "/") {
-    return fail(`the path must be empty, got ${JSON.stringify(url.pathname)}`);
+    return fail("the path must be empty");
   }
   if (url.hash !== "") return fail("a fragment is not allowed");
 
-  const host = url.hostname;
+  // Hosts are case-insensitive; a non-special scheme keeps the pasted case.
+  const host = url.hostname.toLowerCase();
   const marker = host.indexOf(".env.");
   const bareEnvironmentId = marker > 0 ? host.slice(0, marker) : "";
   const regionDomain = marker > 0 ? host.slice(marker + ".env.".length) : "";
   if (
     !BARE_ENVIRONMENT_ID.test(bareEnvironmentId) ||
+    bareEnvironmentId.startsWith("env_") ||
     !DOMAIN.test(regionDomain)
   ) {
     return fail(
