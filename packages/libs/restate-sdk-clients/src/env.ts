@@ -34,7 +34,7 @@ const INGRESS_KEY_URL =
  * ingress is `https://<host>:8080`. Query parameters are ignored with one
  * warning (none are defined for this key).
  */
-export function ingressFromKey(
+function ingressFromKey(
   value: string,
   what: string = INGRESS_KEY_ENV
 ): { url: string; token: string } {

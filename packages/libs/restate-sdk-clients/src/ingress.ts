@@ -44,15 +44,12 @@ import {
  *
  * With a `url`, exactly that. Without one, the ingress is taken from
  * `RESTATE_INGRESS_KEY`, the ingress key from the Cloud UI (Development →
- * Configure Client): `restate://<api key>@<environment id>.env.<region domain>/`
- * becomes `https://<environment id>.env.<region domain>:8080` with the API key
- * as bearer (unless an `Authorization` header is given). Neither set →
- * an error, since a URL is required.
+ * Configure Client).
  *
  * @example
  * ```ts
  * const rs = connect({ url: "http://localhost:8080" }); // a local Restate
- * const cloud = connect();                               // RESTATE_INGRESS_KEY
+ * const cloud = connect();                              // uses RESTATE_INGRESS_KEY
  * ```
  *
  * @param opts connection options

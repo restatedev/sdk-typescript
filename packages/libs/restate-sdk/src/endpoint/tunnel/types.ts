@@ -42,25 +42,45 @@ export interface ConnectTlsOptions {
 }
 
 /**
- * Reconnect backoff policy. Between reconnect attempts the engine waits a
- * jittered exponential delay: it starts at {@link initialInterval}, grows by
- * {@link exponentiationFactor} per failed attempt, is capped at
- * {@link maxInterval}, and resets after a connection stays up long enough to be
- * considered stable. Intervals accept a {@link Duration} or a number of
- * milliseconds.
+ * Reconnect retry policy, the same shape as the invocation and client retry
+ * policies: a jittered exponential backoff between attempts, reset after a
+ * connection stays up long enough to count as stable. Intervals accept a
+ * {@link Duration} or a number of milliseconds.
  *
- * The field names mirror the invocation and ingress retry policies. Note the
- * reconnect loop is unbounded — there is no `maxAttempts`; it redials forever
- * until a connection succeeds or the connection is shut down.
+ * Unlike those policies the reconnect loop is unbounded by default — a
+ * deployment keeps trying until Restate Cloud is reachable again — so
+ * {@link maxAttempts} and {@link maxDuration} default to `false`.
  */
 export interface ReconnectRetryPolicy {
-  /** Initial delay. A number is interpreted as milliseconds. Default 10 milliseconds. */
+  /**
+   * Max number of attempts (including the initial) in a row without a stable
+   * connection, before giving up. Giving up is a non-retryable stop: the
+   * connection's `ready`, `close()` and `shutdown()` reject with the reason.
+   *
+   * Defaults to `false`: no attempt bound.
+   */
+  maxAttempts?: number | false;
+  /**
+   * Max total duration without a stable connection, measured from the first
+   * failed attempt, before giving up. If a number is provided, it is
+   * interpreted as milliseconds.
+   *
+   * Defaults to `false`: no duration bound.
+   */
+  maxDuration?: Duration | number | false;
+  /**
+   * Initial backoff interval. If a number is provided, it is interpreted as
+   * milliseconds. Defaults to `10` milliseconds.
+   */
   initialInterval?: Duration | number;
-  /** Maximum delay. A number is interpreted as milliseconds. Default 120_000 milliseconds. */
+  /**
+   * Maximum backoff interval. If a number is provided, it is interpreted as
+   * milliseconds. Defaults to `120_000` milliseconds.
+   */
   maxInterval?: Duration | number;
   /**
-   * Exponentiation factor applied to the delay after each failed attempt.
-   * Default 2.
+   * Exponentiation factor to use when computing the next retry delay.
+   * Defaults to `2`.
    */
   exponentiationFactor?: number;
 }
