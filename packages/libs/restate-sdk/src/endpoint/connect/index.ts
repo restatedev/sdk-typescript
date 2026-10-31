@@ -61,6 +61,25 @@ import { defaultLoggerTransport } from "../../logging/console_logger_transport.j
  * @returns the connection handle
  */
 export function connect(options: ConnectOptions): Connection {
+  const handle = connectEngine(options);
+  // The fatal error is on the handle; surface it where the caller waits.
+  const settled = async (done: Promise<void>): Promise<void> => {
+    await done;
+    if (handle.error !== undefined) throw handle.error;
+  };
+  return {
+    ready: handle.ready,
+    name: handle.name,
+    close: () => settled(handle.close()),
+    shutdown: (opts) => settled(handle.shutdown(opts)),
+  };
+}
+
+/**
+ * `connect()` without the projection: the engine handle, with the connection
+ * count and the fatal error. Internal (tests).
+ */
+export function connectEngine(options: ConnectOptions): EngineHandle {
   const {
     name: nameOption,
     key,
@@ -75,24 +94,7 @@ export function connect(options: ConnectOptions): Connection {
     { key, identityKeys, serversSrv, servers },
     (message) => rlog.warn(message)
   );
-  const handle = start(
-    { ...endpointOptions, ...tuning },
-    name,
-    coordinates,
-    rlog
-  );
-  return {
-    ready: handle.ready,
-    name: handle.name,
-    close: () => handle.close(),
-    shutdown: (opts) => handle.shutdown(opts),
-    get connectionCount() {
-      return handle.connectionCount;
-    },
-    get error() {
-      return handle.error;
-    },
-  };
+  return start({ ...endpointOptions, ...tuning }, name, coordinates, rlog);
 }
 
 /** The SDK system logger for the given endpoint options. */

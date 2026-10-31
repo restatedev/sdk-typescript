@@ -66,11 +66,71 @@ export interface ReconnectRetryPolicy {
 }
 
 /**
- * Connection tuning for {@link connect}: reconnect and drain behaviour, HTTP/2 limits, TLS.
- * Every option has a default that fits Restate Cloud; most deployments set
- * none of them.
+ * Options for {@link connect}: the endpoint options (`services`, …) plus the
+ * two inputs that identify the deployment: the {@link name} (or
+ * `RESTATE_CONNECT_NAME`) and the {@link key} (or `RESTATE_CONNECT_KEY`).
  */
-export interface ConnectTuningOptions {
+export interface ConnectOptions extends EndpointOptions {
+  /**
+   * Required: The deployment name, e.g. `"greeter-v1"`: the identity you register
+   * (`restate deployments register connect://<name>`). Restate Cloud routes by
+   * `<environment>/<name>` and load-balances across every connection under
+   * it, so replicas of the same deployment share one name and distinct
+   * deployments each have their own. Letters, digits, `.`, `_` and `-`.
+   *
+   * Also configurable via env `RESTATE_CONNECT_NAME`.
+   */
+  name?: string;
+  /**
+   * The connect key from the Cloud UI -> Development → Configure SDK.
+   *
+   * Also configurable via env `RESTATE_CONNECT_KEY`.
+   */
+  key?: string;
+  /**
+   * Advanced connection options.
+   */
+  connection?: ConnectionOptions;
+}
+
+/**
+ * The {@link ConnectOptions.connection} tuning: server discovery, the worker
+ * id, reconnect and drain behaviour, HTTP/2 limits, TLS. Every option has a
+ * default that fits Restate Cloud; most deployments set none of them.
+ */
+export interface ConnectionOptions {
+  /**
+   * A DNS SRV name to discover the servers to connect to, instead of the one
+   * derived from the key (`tunnel.<region domain>`, or its `tunnel-srv`
+   * parameter). For environments with a custom domain; the Cloud UI puts it
+   * in the key when needed, so this is rarely set by hand. Servers are
+   * discovered via a DNS SRV lookup expanded to every resolved address — the
+   * engine holds **one connection per resolved server** and re-resolves every
+   * {@link resolveIntervalMs}, starting connections to
+   * servers that appear and tearing down connections to servers that vanish.
+   *
+   * At most one of `serversSrv` and `servers` may be set.
+   */
+  serversSrv?: string;
+  /**
+   * Explicit server addresses, instead of DNS discovery. Each entry is either
+   * `"host:port"` (TLS governed by the `tls` option) or a URL
+   * `"https://host:port"` / `"http://host:port"` (scheme selects TLS/plaintext
+   * for that server). One connection per entry; the set is fixed (no
+   * re-resolution). Private networks and tests.
+   *
+   * At most one of `serversSrv` and `servers` may be set.
+   */
+  servers?: string[];
+  /**
+   * Stable diagnostic identifier for this SDK worker/process. Restate Cloud
+   * can include it in routing and failure logs so operators can grep
+   * server-side events against SDK-side logs. Defaults to a hostname-based
+   * id with a short random suffix that is stable for this process. Advisory
+   * only: it is sent in the handshake for diagnostics, not used for
+   * authentication.
+   */
+  workerId?: string;
   /**
    * How often DNS SRV discovery re-resolves the server set. Default 30_000.
    * (The Rust client re-resolves on DNS TTL expiry; Node does not expose
@@ -200,72 +260,6 @@ export interface ConnectTuningOptions {
 }
 
 /**
- * Options for {@link connect}: the endpoint options (`services`, …) plus the
- * two inputs that identify the deployment: the {@link name} (or
- * `RESTATE_CONNECT_NAME`) and the {@link key} (or `RESTATE_CONNECT_KEY`).
- */
-export interface ConnectOptions extends EndpointOptions {
-  /**
-   * Required: The deployment name, e.g. `"greeter-v1"`: the identity you register
-   * (`restate deployments register connect://<name>`). Restate Cloud routes by
-   * `<environment>/<name>` and load-balances across every connection under
-   * it, so replicas of the same deployment share one name and distinct
-   * deployments each have their own. Letters, digits, `.`, `_` and `-`.
-   *
-   * Also configurable via env `RESTATE_CONNECT_NAME`.
-   */
-  name?: string;
-  /**
-   * The connect key from the Cloud UI -> Development → Configure SDK.
-   *
-   * Also configurable via env `RESTATE_CONNECT_KEY`.
-   */
-  key?: string;
-  /**
-   * Advanced connection options.
-   */
-  connection?: ConnectionOptions;
-}
-
-/**
- * Advanced connection options.
- */
-export interface ConnectionOptions extends ConnectTuningOptions {
-  /**
-   * A DNS SRV name to discover the servers to connect to, instead of the one
-   * derived from the key (`tunnel.<region domain>`, or its `tunnel-srv`
-   * parameter). For environments with a custom domain; the Cloud UI puts it
-   * in the key when needed, so this is rarely set by hand. Servers are
-   * discovered via a DNS SRV lookup expanded to every resolved address — the
-   * engine holds **one connection per resolved server** and re-resolves every
-   * {@link ConnectTuningOptions.resolveIntervalMs}, starting connections to
-   * servers that appear and tearing down connections to servers that vanish.
-   *
-   * At most one of `serversSrv` and `servers` may be set.
-   */
-  serversSrv?: string;
-  /**
-   * Explicit server addresses, instead of DNS discovery. Each entry is either
-   * `"host:port"` (TLS governed by the `tls` option) or a URL
-   * `"https://host:port"` / `"http://host:port"` (scheme selects TLS/plaintext
-   * for that server). One connection per entry; the set is fixed (no
-   * re-resolution). Private networks and tests.
-   *
-   * At most one of `serversSrv` and `servers` may be set.
-   */
-  servers?: string[];
-  /**
-   * Stable diagnostic identifier for this SDK worker/process. Restate Cloud
-   * can include it in routing and failure logs so operators can grep
-   * server-side events against SDK-side logs. Defaults to a hostname-based
-   * id with a short random suffix that is stable for this process. Advisory
-   * only: it is sent in the handshake for diagnostics, not used for
-   * authentication.
-   */
-  workerId?: string;
-}
-
-/**
  * Handle returned by {@link connect}: the outbound connection to Restate
  * Cloud serving your services.
  */
@@ -279,28 +273,26 @@ export interface Connection {
   readonly ready: Promise<void>;
   /** The deployment name, as configured and confirmed by the server. */
   readonly name: string;
-  /** Stop reconnecting, close the current connections, and wait for teardown. */
+  /**
+   * Stop reconnecting, close the current connections, and wait for teardown.
+   * Rejects with the fatal error if the connection had already stopped on a
+   * non-retryable failure (e.g. Restate Cloud rejected the key or the name).
+   */
   close(): Promise<void>;
   /**
    * Gracefully drain, then stop. Proactively sends HTTP/2 GOAWAY so Restate
    * Cloud stops opening new streams, refuses any raced streams with a drain
    * sentinel, lets in-flight invocations finish — bounded by `graceMs`
-   * (default {@link ConnectTuningOptions.drainGraceMs}) — and then closes the
+   * (default {@link ConnectionOptions.drainGraceMs}) — and then closes the
    * session gracefully. If the grace elapses first, the session/socket are
-   * force-closed. The default {@link ConnectTuningOptions.gracefulShutdown}
+   * force-closed. The default {@link ConnectionOptions.gracefulShutdown}
    * handler wires this to `SIGTERM`; {@link close} is the abrupt alternative.
-   * Requires {@link ConnectTuningOptions.supportsClientDrain} (the default)
+   * Requires {@link ConnectionOptions.supportsClientDrain} (the default)
    * to have been advertised; otherwise it degrades to an abrupt {@link close}.
+   * Rejects like {@link close} if the connection had already stopped on a
+   * non-retryable failure.
    */
   shutdown(opts?: { graceMs?: number }): Promise<void>;
-  /** Number of successful handshakes since {@link connect} was called. */
-  readonly connectionCount: number;
-  /**
-   * Set when the connection stopped on a non-retryable failure (e.g. the
-   * server rejected the key or the name). Once set, the engine no longer
-   * reconnects.
-   */
-  readonly error: Error | undefined;
 }
 
 /**
@@ -308,7 +300,10 @@ export interface Connection {
  * `connectTunnel()` build this from their options and the environment.
  * Internal.
  */
-export interface EngineOptions extends ConnectTuningOptions {
+export interface EngineOptions extends Omit<
+  ConnectionOptions,
+  "serversSrv" | "servers" | "workerId"
+> {
   services: EndpointOptions["services"];
   defaultServiceOptions?: EndpointOptions["defaultServiceOptions"];
   logger?: EndpointOptions["logger"];
@@ -340,6 +335,10 @@ export interface EngineOptions extends ConnectTuningOptions {
  * Internal.
  */
 export interface EngineHandle extends Connection {
+  /** Number of successful handshakes since the engine started. */
+  readonly connectionCount: number;
+  /** Set when the engine stopped on a non-retryable failure; it no longer reconnects. */
+  readonly error: Error | undefined;
   /**
    * The deployment URL (`<proxy base>:9080/<bare env id>/<name>/http/in-process/9080/`),
    * `undefined` until the first successful handshake. Logged at debug;

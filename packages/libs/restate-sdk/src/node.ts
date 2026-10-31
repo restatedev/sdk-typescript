@@ -21,7 +21,6 @@ export type {
   ConnectionOptions,
   ConnectOptions,
   ConnectTlsOptions,
-  ConnectTuningOptions,
   ReconnectRetryPolicy,
 } from "./endpoint/tunnel/index.js";
 

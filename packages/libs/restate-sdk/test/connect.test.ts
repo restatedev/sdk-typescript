@@ -472,6 +472,26 @@ describe("connect() end to end", () => {
     }
   });
 
+  test("a fatal stop rejects ready and, afterwards, close()", async () => {
+    const identity = generateIdentityKey();
+    const fake = await startFakeCloud({
+      decideTrailers: () => ({ "tunnel-status": "unauthorized" }),
+    });
+    process.env[CONNECT_KEY_ENV] =
+      `restate://key_bad@abc123.env.eu.restate.cloud/?signing-key=${identity.publicKey}&tunnel-servers=http://127.0.0.1:${fake.port}`;
+    const connection = restate.connect({
+      services: [],
+      name: "greeter-v1",
+      logger: () => {},
+    });
+    try {
+      await expect(connection.ready).rejects.toThrow(/unauthorized/);
+      await expect(connection.close()).rejects.toThrow(/unauthorized/);
+    } finally {
+      await fake.close();
+    }
+  });
+
   test("misconfiguration throws synchronously; the legacy API is not exported", () => {
     expect(() => restate.connect({ services: [] })).toThrow(/needs a name/);
     expect(() => restate.connect({ services: [], name: "x" })).toThrow(

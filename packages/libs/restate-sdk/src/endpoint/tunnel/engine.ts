@@ -410,7 +410,7 @@ export function startEngine(options: EngineOptions): EngineHandle {
   };
 
   // Install process-signal handlers (graceful shutdown is on by default; see
-  // ConnectTuningOptions.gracefulShutdown). Registered BEFORE the
+  // ConnectionOptions.gracefulShutdown). Registered BEFORE the
   // already-aborted-signal handling below, so that path's synchronous close()
   // tears them down via teardown() rather than leaving a live handler on a
   // connection that is already closed.

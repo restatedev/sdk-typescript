@@ -23,7 +23,6 @@ export type {
   ConnectionOptions,
   ConnectOptions,
   ConnectTlsOptions,
-  ConnectTuningOptions,
   EngineHandle,
   EngineOptions,
   ReconnectRetryPolicy,

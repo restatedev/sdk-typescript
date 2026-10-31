@@ -15,10 +15,10 @@
 // the raw diagnostic hook becomes a logger transport that receives the
 // engine's `tunnel: …` lines.
 
-import { connect } from "../../src/endpoint/connect/index.js";
+import { connectEngine } from "../../src/endpoint/connect/index.js";
 import type {
-  Connection,
   ConnectionOptions,
+  EngineHandle,
 } from "../../src/endpoint/tunnel/types.js";
 import type { EndpointOptions } from "../../src/endpoint/types.js";
 import type { LoggerTransport } from "../../src/logging/logger_transport.js";
@@ -38,7 +38,7 @@ export interface ConnectTunnelOptions
   tunnelDiagnosticLogger?: (message: string) => void;
 }
 
-export function connectTunnel(options: ConnectTunnelOptions): Connection {
+export function connectTunnel(options: ConnectTunnelOptions): EngineHandle {
   const {
     region,
     tunnelServersSrv,
@@ -66,7 +66,7 @@ export function connectTunnel(options: ConnectTunnelOptions): Connection {
           if (text.startsWith("tunnel:")) tunnelDiagnosticLogger(text);
           else logger?.(params, message, ...rest);
         };
-  return connect({
+  return connectEngine({
     services,
     defaultServiceOptions,
     journalValueCodecProvider,

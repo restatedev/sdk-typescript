@@ -20,7 +20,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as restate from "../../src/index.js";
 
-import { connect } from "../../src/endpoint/connect/index.js";
+import { connectEngine } from "../../src/endpoint/connect/index.js";
 import type { ConnectOptions } from "../../src/endpoint/tunnel/index.js";
 import type { LoggerTransport } from "../../src/logging/logger_transport.js";
 import {
@@ -94,7 +94,7 @@ describe("connect() — handshake", () => {
     await withFake(
       { decideTrailers: () => okTrailers() },
       async (fake, options) => {
-        const conn = connect(options);
+        const conn = connectEngine(options);
         try {
           await conn.ready;
           expect(conn.connectionCount).toBe(1);
@@ -124,7 +124,7 @@ describe("connect() — handshake", () => {
       { decideTrailers: () => okTrailers() },
       async (_fake, options) => {
         const logs: string[] = [];
-        const conn = connect({
+        const conn = connectEngine({
           ...options,
           logger: collect(logs),
         });
@@ -161,7 +161,7 @@ describe("connect() — handshake", () => {
     await withFake(
       { decideTrailers: () => ({ "tunnel-status": "unauthorized" }) },
       async (fake, options) => {
-        const conn = connect(options);
+        const conn = connectEngine(options);
         try {
           await expect(conn.ready).rejects.toThrow(/unauthorized/);
           expect(conn.error?.message).toMatch(/unauthorized/);
@@ -181,7 +181,7 @@ describe("connect() — handshake", () => {
     await withFake(
       { decideTrailers: () => okTrailers("some-other-name") },
       async (_fake, options) => {
-        const conn = connect(options);
+        const conn = connectEngine(options);
         try {
           await expect(conn.ready).rejects.toThrow(/tunnel-name mismatch/);
         } finally {
@@ -198,7 +198,7 @@ describe("connect() — handshake", () => {
           index === 0 ? { "tunnel-status": "too-many-tunnels" } : okTrailers(),
       },
       async (fake, options) => {
-        const conn = connect(options);
+        const conn = connectEngine(options);
         try {
           await conn.ready;
           expect(fake.connections.length).toBe(2);
@@ -217,7 +217,7 @@ describe("connect() — handshake", () => {
         decideTrailers: (_creds, index) => (index === 0 ? null : okTrailers()),
       },
       async (fake, options) => {
-        const conn = connect(options);
+        const conn = connectEngine(options);
         try {
           await conn.ready;
           expect(fake.connections.length).toBe(2);
@@ -233,7 +233,7 @@ describe("connect() — handshake", () => {
     await withFake(
       { decideTrailers: () => okTrailers() },
       async (fake, options) => {
-        const conn = connect(options);
+        const conn = connectEngine(options);
         await conn.ready;
         await conn.close();
         const seen = fake.connections.length;
@@ -249,7 +249,7 @@ describe("connect() — dispatch", () => {
     await withFake(
       { decideTrailers: () => okTrailers() },
       async (fake, options) => {
-        const conn = connect(options);
+        const conn = connectEngine(options);
         try {
           await conn.ready;
           const { session } = await fake.waitForConnection(0);
@@ -279,7 +279,7 @@ describe("connect() — dispatch", () => {
     await withFake(
       { decideTrailers: () => okTrailers() },
       async (fake, options) => {
-        const conn = connect(options);
+        const conn = connectEngine(options);
         try {
           await conn.ready;
           const { session } = await fake.waitForConnection(0);
@@ -300,7 +300,7 @@ describe("connect() — dispatch", () => {
     await withFake(
       { decideTrailers: () => okTrailers() },
       async (fake, options) => {
-        const conn = connect(options);
+        const conn = connectEngine(options);
         try {
           await conn.ready;
           const { session } = await fake.waitForConnection(0);
@@ -325,7 +325,7 @@ describe("connect() — dispatch", () => {
     await withFake(
       { decideTrailers: () => okTrailers() },
       async (fake, options) => {
-        const conn = connect(options);
+        const conn = connectEngine(options);
         try {
           await conn.ready;
           const { session } = await fake.waitForConnection(0);
@@ -352,7 +352,7 @@ describe("connect() — dispatch", () => {
     await withFake(
       { decideTrailers: () => okTrailers() },
       async (fake, options) => {
-        const conn = connect(options);
+        const conn = connectEngine(options);
         try {
           await conn.ready;
           const { session } = await fake.waitForConnection(0);
@@ -372,7 +372,7 @@ describe("connect() — dispatch", () => {
     await withFake(
       { decideTrailers: () => okTrailers() },
       async (fake, options) => {
-        const conn = connect(options);
+        const conn = connectEngine(options);
         try {
           await conn.ready;
           const { session } = await fake.waitForConnection(0);
@@ -405,7 +405,7 @@ describe("connect() — TLS (negotiated h2)", () => {
     const port = (server.address() as { port: number }).port;
 
     const reasons: string[] = [];
-    const conn = connect({
+    const conn = connectEngine({
       ...baseOptions(0),
       connection: {
         ...baseOptions(0).connection,
@@ -428,7 +428,7 @@ describe("connect() — TLS (negotiated h2)", () => {
     await withFake(
       { tls: { cert, key }, decideTrailers: () => okTrailers() },
       async (fake, options) => {
-        const conn = connect({
+        const conn = connectEngine({
           ...options,
           connection: {
             ...options.connection,
