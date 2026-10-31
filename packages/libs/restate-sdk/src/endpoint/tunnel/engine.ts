@@ -317,6 +317,7 @@ export function startEngine(options: EngineOptions): EngineHandle {
       onFatal: (err) => {
         output.fatalError = err; // E1 surfaces on ready/error
         ready.reject(err);
+        options.onFatal?.(err);
       },
     },
     logWithWorker

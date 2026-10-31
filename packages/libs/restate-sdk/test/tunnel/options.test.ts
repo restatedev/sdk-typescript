@@ -52,6 +52,8 @@ describe("resolveOptions — validation", () => {
     expect(r.reconnectInitialMs).toBe(10);
     expect(r.reconnectMaxMs).toBe(120_000);
     expect(r.reconnectFactor).toBe(2);
+    expect(r.reconnectMaxAttempts).toBeUndefined();
+    expect(r.reconnectMaxDurationMs).toBeUndefined();
     expect(r.pingIntervalMs).toBe(75_000);
     expect(r.maxConcurrentStreams).toBe(4096);
     expect(r.connectionWindowSize).toBe(16 * 1024 * 1024);
@@ -72,6 +74,21 @@ describe("resolveOptions — validation", () => {
     expect(r.reconnectInitialMs).toBe(1000);
     expect(r.reconnectMaxMs).toBe(30_000);
     expect(r.reconnectFactor).toBe(3);
+    const bounded = resolveOptions({
+      ...valid,
+      reconnectRetryPolicy: { maxAttempts: 3, maxDuration: { seconds: 2 } },
+    });
+    expect(bounded.reconnectMaxAttempts).toBe(3);
+    expect(bounded.reconnectMaxDurationMs).toBe(2000);
+    expect(
+      resolveOptions({
+        ...valid,
+        reconnectRetryPolicy: { maxAttempts: false, maxDuration: false },
+      }).reconnectMaxAttempts
+    ).toBeUndefined();
+    expect(() =>
+      resolveOptions({ ...valid, reconnectRetryPolicy: { maxAttempts: 0 } })
+    ).toThrow(/positive/);
   });
 
   test("explicit servers are parsed eagerly; a malformed entry or an empty list throws (not a retry loop)", () => {

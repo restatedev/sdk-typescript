@@ -17,6 +17,9 @@ import type {
   EngineOptions,
 } from "../tunnel/types.js";
 import {
+  CONNECT_KEY_ENV,
+  CONNECT_KEY_URL,
+  CONNECT_NAME_ENVS,
   registrationDeepLink,
   registrationIdentifier,
   resolveCoordinates,
@@ -122,7 +125,16 @@ export function start(
 ): EngineHandle {
   const { regionLabel, ...engineCoordinates } = coordinates;
   // startEngine validates the tuning synchronously; log only once it did.
-  const connection = startEngine({ ...rest, name, ...engineCoordinates });
+  const connection = startEngine({
+    ...rest,
+    name,
+    ...engineCoordinates,
+    onFatal: (error) => {
+      for (const line of explainFatal(error, name, coordinates.environmentId)) {
+        rlog.error(line);
+      }
+    },
+  });
   rlog.info(
     `Connecting to Restate Cloud environment ${coordinates.environmentId} (${regionLabel})`
   );
@@ -137,9 +149,48 @@ export function start(
       rlog.info(`  or open ${registrationDeepLink(name)}`);
     },
     () => {
-      // The failure is on the handle (`error`, `ready`) and in the engine's
-      // own error log; nothing to add here.
+      // Explained by onFatal above (or a plain close() before the first handshake).
     }
   );
   return connection;
+}
+
+/**
+ * A non-retryable stop, in plain words: what Restate Cloud said, what it
+ * means, what to do. The engine's own `tunnel: FATAL — …` line stays at debug.
+ */
+export function explainFatal(
+  error: Error,
+  name: string,
+  environmentId: string
+): string[] {
+  const reason = error.message.replace(/^tunnel: /, "");
+  const lines: string[] = [];
+  if (reason.includes("tunnel-status: unauthorized")) {
+    lines.push(
+      `Restate Cloud rejected the connect key for environment ${environmentId}: it is invalid, revoked, or for another environment.`,
+      `Create a new key at ${CONNECT_KEY_URL} and set ${CONNECT_KEY_ENV}.`
+    );
+  } else if (
+    reason.includes("tunnel-status: bad-tunnel-name") ||
+    reason.startsWith("tunnel-name mismatch")
+  ) {
+    lines.push(
+      `Restate Cloud rejected the deployment name "${name}" (${reason}).`,
+      `Use letters, digits, '.', '_' or '-' — ${CONNECT_NAME_ENVS[0]} or the name option.`
+    );
+  } else if (reason.startsWith("gave up reconnecting")) {
+    lines.push(
+      `Could not reach Restate Cloud for environment ${environmentId}: ${reason}.`,
+      `Check the network, and that the key's region is right (${CONNECT_KEY_ENV}).`
+    );
+  } else if (reason.includes("startup readiness gate failed")) {
+    lines.push(
+      `The startupReady gate failed, so the connection to Restate Cloud was never opened: ${reason}`
+    );
+  } else {
+    lines.push(`The connection to Restate Cloud stopped: ${reason}`);
+  }
+  lines.push("Not retrying. Fix the configuration and restart.");
+  return lines;
 }

@@ -65,6 +65,10 @@ export interface ResolvedOptions {
   reconnectInitialMs: number;
   reconnectMaxMs: number;
   reconnectFactor: number;
+  /** Attempts in a row without a stable connection before giving up; undefined = unbounded. */
+  reconnectMaxAttempts: number | undefined;
+  /** Time without a stable connection before giving up; undefined = unbounded. */
+  reconnectMaxDurationMs: number | undefined;
   pingIntervalMs: number;
   pingTimeoutMs: number;
   pingMaxMissed: number;
@@ -146,6 +150,15 @@ function positive(
     throw new Error(`${name} must be a positive number`);
   }
   return value;
+}
+
+/** A retry bound: `false` or undefined is unbounded, a number must be positive. */
+function bound(
+  value: number | false | undefined,
+  name: string
+): number | undefined {
+  if (value === undefined || value === false) return undefined;
+  return positive(value, 0, name);
 }
 
 /** Normalize a `Duration | number` into milliseconds (a number is already ms). */
@@ -237,6 +250,18 @@ export function resolveOptions(options: EngineOptions): ResolvedOptions {
       options.reconnectRetryPolicy?.exponentiationFactor,
       2,
       "reconnectRetryPolicy.exponentiationFactor"
+    ),
+    reconnectMaxAttempts: bound(
+      options.reconnectRetryPolicy?.maxAttempts,
+      "reconnectRetryPolicy.maxAttempts"
+    ),
+    reconnectMaxDurationMs: bound(
+      toMillis(
+        options.reconnectRetryPolicy?.maxDuration === false
+          ? undefined
+          : options.reconnectRetryPolicy?.maxDuration
+      ),
+      "reconnectRetryPolicy.maxDuration"
     ),
     pingIntervalMs,
     pingTimeoutMs,

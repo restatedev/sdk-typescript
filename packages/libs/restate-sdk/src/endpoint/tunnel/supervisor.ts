@@ -148,7 +148,7 @@ export class Supervisor {
       );
       this.log(
         `tunnel: FATAL — startup readiness gate failed: ${reason}; stopping all connections`,
-        "error"
+        "debug"
       );
       this.hooks.onFatal(this.fatal);
       this.stopSignal.abort();
@@ -156,6 +156,28 @@ export class Supervisor {
     } finally {
       if (timeout !== undefined) clearTimeout(timeout);
     }
+  }
+
+  /** The reconnect policy's bounds: why to stop, or undefined to keep trying. */
+  private giveUpReason(
+    attempts: number,
+    streakStartedAt: number | undefined
+  ): string | undefined {
+    const { reconnectMaxAttempts, reconnectMaxDurationMs } = this.opts;
+    if (
+      reconnectMaxAttempts !== undefined &&
+      attempts >= reconnectMaxAttempts
+    ) {
+      return `gave up reconnecting after ${attempts} attempt(s) (reconnectRetryPolicy.maxAttempts)`;
+    }
+    if (
+      reconnectMaxDurationMs !== undefined &&
+      streakStartedAt !== undefined &&
+      Date.now() - streakStartedAt >= reconnectMaxDurationMs
+    ) {
+      return `gave up reconnecting after ${Date.now() - streakStartedAt} ms (reconnectRetryPolicy.maxDuration)`;
+    }
+    return undefined;
   }
 
   /** The per-server loop: dial → serve → classify outcome → backoff → redial. */
@@ -166,7 +188,12 @@ export class Supervisor {
       this.opts.reconnectMaxMs
     );
 
+    // Attempts in a row without a stable connection, and when the streak began.
+    let attempts = 0;
+    let streakStartedAt: number | undefined;
     while (!this.stopping && !ctl.signal.aborted && this.fatal === undefined) {
+      attempts++;
+      streakStartedAt ??= Date.now();
       const outcome = await runConnection(target, ctl.signal, this.deps);
       if (this.stopping || ctl.signal.aborted) break;
       if (outcome.kind === "fatal") {
@@ -174,7 +201,7 @@ export class Supervisor {
         this.fatal = new Error(`tunnel: ${outcome.reason}`);
         this.log(
           `tunnel: FATAL — ${outcome.reason}; stopping all connections`,
-          "error"
+          "debug"
         );
         this.hooks.onFatal(this.fatal);
         this.stopSignal.abort();
@@ -184,7 +211,11 @@ export class Supervisor {
         // E2: only a connection that actually held resets the backoff.
         const heldLongEnough =
           outcome.uptimeMs >= MIN_UPTIME_FOR_BACKOFF_RESET_MS;
-        if (heldLongEnough) backoff.reset();
+        if (heldLongEnough) {
+          backoff.reset();
+          attempts = 0;
+          streakStartedAt = undefined;
+        }
         if (outcome.kind === "drained" && heldLongEnough) {
           // A stable connection was asked to rotate and the server is holding
           // the old one open for us — replace it NOW.
@@ -199,6 +230,17 @@ export class Supervisor {
         );
       } else {
         this.log(`tunnel: ${outcome.reason} — reconnecting`, "warn");
+      }
+      const gaveUp = this.giveUpReason(attempts, streakStartedAt);
+      if (gaveUp !== undefined) {
+        this.fatal = new Error(`tunnel: ${gaveUp}`);
+        this.log(
+          `tunnel: FATAL — ${gaveUp}; stopping all connections`,
+          "debug"
+        );
+        this.hooks.onFatal(this.fatal);
+        this.stopSignal.abort();
+        break;
       }
       await delay(backoff.next(), ctl.signal);
     }

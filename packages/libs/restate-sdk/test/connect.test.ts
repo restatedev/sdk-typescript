@@ -479,15 +479,56 @@ describe("connect() end to end", () => {
     });
     process.env[CONNECT_KEY_ENV] =
       `restate://key_bad@abc123.env.eu.restate.cloud/?signing-key=${identity.publicKey}&tunnel-servers=http://127.0.0.1:${fake.port}`;
+    const errors: string[] = [];
     const connection = restate.connect({
       services: [],
       name: "greeter-v1",
-      logger: () => {},
+      logger: (params, message) => {
+        if (params.level === "error") errors.push(String(message));
+      },
     });
     try {
       await expect(connection.ready).rejects.toThrow(/unauthorized/);
       await expect(connection.close()).rejects.toThrow(/unauthorized/);
+      // Explained in plain words, once, with the fix; the raw engine line is debug.
+      expect(errors).toEqual([
+        "Restate Cloud rejected the connect key for environment env_abc123: it is invalid, revoked, or for another environment.",
+        "Create a new key at https://cloud.restate.dev/to/developers/integration#configure-sdk and set RESTATE_CONNECT_KEY.",
+        "Not retrying. Fix the configuration and restart.",
+      ]);
     } finally {
+      await fake.close();
+    }
+  });
+
+  test("reconnectRetryPolicy.maxAttempts: giving up is a fatal stop, explained", async () => {
+    const identity = generateIdentityKey();
+    // A stalled handshake is retryable; with two attempts allowed the engine gives up.
+    const fake = await startFakeCloud({ decideTrailers: () => null });
+    process.env[CONNECT_KEY_ENV] =
+      `restate://key_test@abc123.env.eu.restate.cloud/?signing-key=${identity.publicKey}&tunnel-servers=http://127.0.0.1:${fake.port}`;
+    const errors: string[] = [];
+    const connection = restate.connect({
+      services: [],
+      name: "greeter-v1",
+      logger: (params, message) => {
+        if (params.level === "error") errors.push(String(message));
+      },
+      connection: {
+        handshakeTimeoutMs: 50,
+        reconnectRetryPolicy: { maxAttempts: 2, initialInterval: 1 },
+      },
+    });
+    try {
+      await expect(connection.ready).rejects.toThrow(
+        /gave up reconnecting after 2 attempt/
+      );
+      expect(errors[0]).toMatch(
+        /^Could not reach Restate Cloud for environment env_abc123: gave up/
+      );
+      expect(errors[1]).toMatch(/RESTATE_CONNECT_KEY/);
+    } finally {
+      await connection.close().catch(() => {});
       await fake.close();
     }
   });

@@ -66,14 +66,18 @@ export interface ReconnectRetryPolicy {
 }
 
 /**
- * Options for {@link connect}: the endpoint options (`services`, …) plus the
- * two inputs that identify the deployment: the {@link name} (or
- * `RESTATE_CONNECT_NAME`) and the {@link key} (or `RESTATE_CONNECT_KEY`).
+ * Options for {@link connect}.
+ *
+ * A usual connect setup requires 3 configuration options:
+ *
+ * * The `services` to expose
+ * * The {@link name} (or env `RESTATE_CONNECT_NAME`) of the deployment, used to identify this version of the code.
+ * * The {@link key} (or `RESTATE_CONNECT_KEY`) required to connect to Restate Cloud/BYOC
  */
 export interface ConnectOptions extends EndpointOptions {
   /**
    * Required: The deployment name, e.g. `"greeter-v1"`: the identity you register
-   * (`restate deployments register connect://<name>`). Restate Cloud routes by
+   * (`restate deployments register connect://<name>`). Restate Cloud/BYOC routes by
    * `<environment>/<name>` and load-balances across every connection under
    * it, so replicas of the same deployment share one name and distinct
    * deployments each have their own. Letters, digits, `.`, `_` and `-`.
@@ -327,6 +331,8 @@ export interface EngineOptions extends Omit<
   workerId?: string;
   /** Raw diagnostic hook replacing the SDK logger (the legacy option). */
   diagnosticLogger?: (message: string) => void;
+  /** Called once when the engine stops on a non-retryable failure. */
+  onFatal?: (error: Error) => void;
 }
 
 /**
