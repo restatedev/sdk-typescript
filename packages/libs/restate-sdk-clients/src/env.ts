@@ -38,9 +38,11 @@ function ingressFromKey(
   value: string,
   what: string = INGRESS_KEY_ENV
 ): { url: string; token: string } {
+  // Reasons never echo parts of the value: a key pasted with a lost `@` or a
+  // stray `/` would otherwise put the credential in the error message.
   const fail = (reason: string): never => {
     throw new Error(
-      `${what} is not a Restate Cloud key (${reason}); expected restate://<api key>@<environment id>.env.<region domain>/`
+      `${what} is not a Restate Cloud key (${reason}); expected restate://<api key>@<environment id>.env.<region domain>/ — copy it again from ${INGRESS_KEY_URL}`
     );
   };
   let url: URL;
@@ -56,15 +58,14 @@ function ingressFromKey(
   }
   if (url.port !== "") return fail("the host must not carry a port");
   if (url.pathname !== "" && url.pathname !== "/") {
-    return fail(`the path must be empty, got ${JSON.stringify(url.pathname)}`);
+    return fail("the path must be empty");
   }
   if (url.hash !== "") return fail("a fragment is not allowed");
-  if (
-    !/^[A-Za-z0-9_-]+\.env\.[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*$/.test(url.hostname)
-  ) {
-    return fail(
-      `the host must be <environment id>.env.<region domain>, got ${JSON.stringify(url.hostname)}`
-    );
+  // Hosts are case-insensitive; a non-special scheme keeps the pasted case.
+  const host = url.hostname.toLowerCase();
+  const match = /^([a-z0-9_-]+)\.env\.[a-z0-9-]+(\.[a-z0-9-]+)*$/.exec(host);
+  if (match === null || match[1]!.startsWith("env_")) {
+    return fail("the host must be <environment id>.env.<region domain>");
   }
   if (url.username === "" && url.password === "") {
     throw new Error(
@@ -80,6 +81,11 @@ function ingressFromKey(
   } catch {
     return fail("the API key is not valid percent-encoding");
   }
+  if (!/^[\x21-\x7e]+$/.test(token)) {
+    return fail(
+      "the API key contains characters that cannot travel in an HTTP header"
+    );
+  }
   const params = [...url.searchParams.keys()];
   if (params.length > 0) {
     // eslint-disable-next-line no-console
@@ -87,7 +93,7 @@ function ingressFromKey(
       `clients.connect(): ignoring unknown ${what} parameter(s) ${params.map((name) => JSON.stringify(name)).join(", ")}`
     );
   }
-  return { url: `https://${url.hostname}:8080`, token };
+  return { url: `https://${host}:8080`, token };
 }
 
 /** Connection options with the ingress URL settled. */

@@ -49,7 +49,10 @@ export interface ConnectTlsOptions {
  *
  * Unlike those policies the reconnect loop is unbounded by default — a
  * deployment keeps trying until Restate Cloud is reachable again — so
- * {@link maxAttempts} and {@link maxDuration} default to `false`.
+ * {@link maxAttempts} and {@link maxDuration} default to `false`. A bound is
+ * counted per server (and for DNS discovery itself); reaching it stops the
+ * deployment only when no other connection is alive, otherwise that server
+ * is dropped until discovery brings it back.
  */
 export interface ReconnectRetryPolicy {
   /**
@@ -251,7 +254,7 @@ export interface Connection {
    * readiness checks; safe to ignore.
    */
   readonly ready: Promise<void>;
-  /** The deployment name, as configured and confirmed by the server. */
+  /** The deployment name, as configured. */
   readonly name: string;
   /**
    * Stop reconnecting, close the current connections, and wait for teardown.
@@ -274,9 +277,8 @@ export interface Connection {
 }
 
 /**
- * Everything the engine needs, fully resolved: `connect()` and
- * `connectTunnel()` build this from their options and the environment.
- * Internal.
+ * Everything the engine needs, fully resolved: `connect()` builds this from
+ * its options and the environment. Internal.
  */
 export interface EngineOptions extends Omit<
   ConnectionOptions,
@@ -303,7 +305,7 @@ export interface EngineOptions extends Omit<
   discovery: { srvName: string } | { servers: string[] };
   /** Diagnostic worker id; a stable hostname-based default otherwise. */
   workerId?: string;
-  /** Raw diagnostic hook replacing the SDK logger (the legacy option). */
+  /** Raw diagnostic hook replacing the SDK logger (tests). */
   diagnosticLogger?: (message: string) => void;
   /** Called once when the engine stops on a non-retryable failure. */
   onFatal?: (error: Error) => void;

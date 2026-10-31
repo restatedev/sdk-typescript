@@ -96,6 +96,24 @@ describe("connect() and RESTATE_INGRESS_KEY", () => {
     expect(() => resolveConnectionOpts({})).toThrow(
       /RESTATE_INGRESS_KEY carries no API key/
     );
+    // Same grammar as the SDK's parser: case-insensitive host, no env_ in the
+    // bare id, header-safe token, nothing echoed, the UI page linked.
+    process.env[INGRESS_KEY_ENV] =
+      "restate://key_x@201K0YD4RZ8YFTMD4AWH1BAJG4V.ENV.EU.Restate.Cloud/";
+    expect(resolveConnectionOpts({}).url).toBe(
+      "https://201k0yd4rz8yftmd4awh1bajg4v.env.eu.restate.cloud:8080"
+    );
+    process.env[INGRESS_KEY_ENV] =
+      "restate://key_x@env_abc.env.eu.restate.cloud/";
+    expect(() => resolveConnectionOpts({})).toThrow(/the host must be/);
+    process.env[INGRESS_KEY_ENV] =
+      "restate://key%20x@abc.env.eu.restate.cloud/";
+    expect(() => resolveConnectionOpts({})).toThrow(/HTTP header/);
+    process.env[INGRESS_KEY_ENV] =
+      "restate://key_SECRET.abc.env.eu.restate.cloud/";
+    expect(() => resolveConnectionOpts({})).toThrow(
+      /^(?!.*key_SECRET).*copy it again from https:\/\/cloud\.restate\.dev/
+    );
 
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     process.env[INGRESS_KEY_ENV] = `${INGRESS_KEY}?future=1&other=2`;

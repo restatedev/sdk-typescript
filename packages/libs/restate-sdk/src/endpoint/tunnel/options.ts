@@ -18,6 +18,7 @@
 import * as os from "node:os";
 import { randomBytes } from "node:crypto";
 import type * as tls from "node:tls";
+import { isIP } from "node:net";
 import {
   millisOrDurationToMillis,
   type Duration,
@@ -269,7 +270,7 @@ export function resolveOptions(options: EngineOptions): ResolvedOptions {
  * given in the endpoint options, or the default console transport) at the
  * level each message carries — connection churn at debug, lifecycle at info,
  * reconnects at warn, fatal stops at error. An explicit
- * `diagnosticLogger` (the legacy `tunnelDiagnosticLogger`) intercepts every
+ * `diagnosticLogger` (tests) intercepts every
  * message instead, regardless of level.
  */
 function resolveDiagnosticLogger(
@@ -323,7 +324,11 @@ export function buildTlsConnectOptions(
   servername: string
 ): tls.ConnectionOptions | undefined {
   if (tlsOption === false) return undefined;
-  const base: tls.ConnectionOptions = { servername, ALPNProtocols: ["h2"] };
+  // SNI cannot carry an IP literal (RFC 6066); Node warns and ignores it.
+  const base: tls.ConnectionOptions = {
+    ...(isIP(servername) === 0 && { servername }),
+    ALPNProtocols: ["h2"],
+  };
   if (tlsOption === true) return base;
   return {
     ...base,

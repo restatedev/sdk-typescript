@@ -13,8 +13,8 @@
 // =============================================================================
 //
 // startEngine() serves a Restate SDK deployment over OUTBOUND connections to
-// Restate Cloud's tunnel servers — no inbound listener. `connect()` (and the
-// deprecated `connectTunnel()`) resolve the identity and call it. The pieces:
+// Restate Cloud's tunnel servers — no inbound listener. `connect()` resolves
+// the identity and calls it. The pieces:
 //
 //   connection.ts — one dial → role-flip → handshake → serve cycle
 //   supervisor.ts — the slot supervisor (one connection per resolved server)
@@ -218,9 +218,8 @@ function registerGracefulShutdownSignals(
  * background until `close()`/`shutdown()` (or the `signal`) stops it; `ready`
  * settles with the first handshake.
  *
- * The engine entry point behind `connect()` and `connectTunnel()`; the
- * identity arrives resolved, and each caller projects the handle onto its
- * public shape.
+ * The engine entry point behind `connect()`; the identity arrives resolved
+ * and `connect()` projects the handle onto its public shape.
  */
 export function startEngine(options: EngineOptions): EngineHandle {
   const resolvedOptions = resolveOptions(options);
@@ -285,7 +284,7 @@ export function startEngine(options: EngineOptions): EngineHandle {
       if (firstConnection) {
         log(
           `tunnel: service ready (name=${info.tunnelName}, proxy=${info.proxyUrl}, tunnel=${info.tunnelUrl}, worker_id=${identity.workerId}, connection_id=${identity.connectionId}, target=${identity.target})`,
-          "info"
+          "debug"
         );
       } else {
         log(
@@ -308,6 +307,7 @@ export function startEngine(options: EngineOptions): EngineHandle {
         ready.reject(err);
         options.onFatal?.(err);
       },
+      hasOtherConnections: () => activeConnections.size > 0,
     },
     logWithWorker
   );

@@ -139,7 +139,7 @@ export function resolveCoordinates(
 ): Coordinates {
   if (given(options.key)) {
     return coordinatesFromKey(
-      parseCloudKey(options.key, "the `key` option"),
+      parseCloudKey(options.key, "the `key` option", CONNECT_KEY_URL),
       options,
       warn
     );
@@ -147,7 +147,7 @@ export function resolveCoordinates(
   const fromEnv = readEnv(CONNECT_KEY_ENV);
   if (fromEnv !== undefined) {
     return coordinatesFromKey(
-      parseCloudKey(fromEnv, CONNECT_KEY_ENV),
+      parseCloudKey(fromEnv, CONNECT_KEY_ENV, CONNECT_KEY_URL),
       options,
       warn
     );
@@ -177,6 +177,15 @@ function coordinatesFromKey(
     );
   }
 
+  // A key for one environment next to an operator's variables for another
+  // is almost certainly a stray developer key: say so.
+  const injected = readFirstEnv(ENVIRONMENT_ID_ENVS);
+  if (injected !== undefined && injected.value !== key.environmentId) {
+    warn(
+      `connect(): the connect key is for environment ${key.environmentId} but ${injected.name} is set to ${injected.value}; the key wins`
+    );
+  }
+
   const identityKeys = resolveIdentityKeys(
     options.identityKeys,
     params.get("signing-key"),
@@ -195,8 +204,15 @@ function coordinatesFromKey(
   if (keyServers !== undefined && splitList(keyServers).length === 0) {
     fail("the connect key's tunnel-servers parameter is empty");
   }
+  const keySrv = params.get("tunnel-srv");
+  if (keySrv === "") fail("the connect key's tunnel-srv parameter is empty");
+  if (keySrv !== undefined && keyServers !== undefined) {
+    fail(
+      "the connect key carries both tunnel-srv and tunnel-servers; it may carry one"
+    );
+  }
   const keyDiscovery: DiscoveryOverrides = {
-    serversSrv: params.get("tunnel-srv"),
+    serversSrv: keySrv,
     servers: keyServers === undefined ? undefined : splitList(keyServers),
   };
   const override = pickDiscovery(options);

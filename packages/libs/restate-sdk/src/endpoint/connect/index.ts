@@ -104,8 +104,7 @@ export function connectEngine(options: ConnectOptions): EngineHandle {
 }
 
 /**
- * Start the engine with resolved identity and log the banner on ready. Shared
- * by `connect()` and the legacy `connectTunnel()`.
+ * Start the engine with the resolved identity and log the banner on ready.
  */
 function start(
   rest: Omit<

@@ -50,6 +50,8 @@ function formatTargetList(keys: string[]): string {
 export interface SupervisorHooks {
   /** A slot hit a non-retryable failure; the whole tunnel must stop (E1). */
   onFatal: (err: Error) => void;
+  /** True while any other connection attempt or session is alive. */
+  hasOtherConnections: () => boolean;
 }
 
 export class Supervisor {
@@ -188,6 +190,15 @@ export class Supervisor {
         this.log(`tunnel: ${outcome.reason} — reconnecting`, "warn");
       }
       const gaveUp = this.giveUpReason(attempts, streakStartedAt);
+      if (gaveUp !== undefined && this.hooks.hasOtherConnections()) {
+        // Other servers are serving: drop this one, keep the deployment up.
+        // Re-resolution brings the target back with a fresh streak.
+        this.log(
+          `tunnel: ${gaveUp} for ${targetKey(target)} — other connections keep serving`,
+          "warn"
+        );
+        return;
+      }
       if (gaveUp !== undefined) {
         this.fatal = new Error(`tunnel: ${gaveUp}`);
         this.log(
@@ -205,6 +216,10 @@ export class Supervisor {
   /** Resolve the server set, reconcile slots, repeat. For SRV discovery the
    * set is re-resolved every resolveIntervalMs; an explicit set is fixed. */
   private async supervise(): Promise<void> {
+    // Resolution failures while nothing is connected count toward the
+    // reconnect bounds too: a wrong SRV name must not retry forever.
+    let resolutionFailures = 0;
+    let resolutionStreakStartedAt: number | undefined;
     while (!this.stopping && this.fatal === undefined) {
       let targets: Target[];
       try {
@@ -223,12 +238,32 @@ export class Supervisor {
           `tunnel: target resolution failed: ${err instanceof Error ? err.message : String(err)} — retrying`,
           "warn"
         );
+        if (this.slots.size === 0) {
+          resolutionFailures++;
+          resolutionStreakStartedAt ??= Date.now();
+          const gaveUp = this.giveUpReason(
+            resolutionFailures,
+            resolutionStreakStartedAt
+          );
+          if (gaveUp !== undefined) {
+            this.fatal = new Error(`tunnel: ${gaveUp}`);
+            this.log(
+              `tunnel: FATAL — ${gaveUp}; stopping all connections`,
+              "debug"
+            );
+            this.hooks.onFatal(this.fatal);
+            this.stopSignal.abort();
+            break;
+          }
+        }
         await delay(
           Math.min(5_000, this.opts.resolveIntervalMs),
           this.wake.signal
         );
         continue;
       }
+      resolutionFailures = 0;
+      resolutionStreakStartedAt = undefined;
       if (this.stopping || this.fatal !== undefined) break;
 
       const desired = new Map(targets.map((t) => [targetKey(t), t] as const));

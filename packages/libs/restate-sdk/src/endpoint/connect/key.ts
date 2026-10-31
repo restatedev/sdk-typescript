@@ -41,15 +41,22 @@ const DOMAIN = /^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*$/;
  * Parse a Restate Cloud key (`restate://<api key>@<environment id>.env.<region
  * domain>/?…`). Throws an `Error` whose message starts with `what` (the variable
  * or option the value came from) when the string does not follow the grammar;
- * the message says what is wrong and shows the expected shape.
+ * the message says what is wrong, shows the expected shape and links `help`.
  *
  * @param value the key string
  * @param what how to call the value in errors, e.g. `RESTATE_CONNECT_KEY`
+ * @param help where to get a fresh key, linked in every error
  */
-export function parseCloudKey(value: string, what: string): CloudKey {
+export function parseCloudKey(
+  value: string,
+  what: string,
+  help: string
+): CloudKey {
+  // Reasons never echo parts of the value: a key pasted with a lost `@` or a
+  // stray `/` would otherwise put the credential in the error message.
   const fail = (reason: string): never => {
     throw new Error(
-      `${what} is not a Restate Cloud key (${reason}); expected restate://<api key>@<environment id>.env.<region domain>/`
+      `${what} is not a Restate Cloud key (${reason}); expected restate://<api key>@<environment id>.env.<region domain>/ — copy it again from ${help}`
     );
   };
   let url: URL;
@@ -81,9 +88,7 @@ export function parseCloudKey(value: string, what: string): CloudKey {
     bareEnvironmentId.startsWith("env_") ||
     !DOMAIN.test(regionDomain)
   ) {
-    return fail(
-      `the host must be <environment id>.env.<region domain>, got ${JSON.stringify(host)}`
-    );
+    return fail("the host must be <environment id>.env.<region domain>");
   }
 
   // The userinfo slot: `username[:password]`, percent-decoded. API keys carry
