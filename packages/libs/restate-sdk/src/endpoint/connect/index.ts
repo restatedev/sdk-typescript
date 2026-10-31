@@ -20,11 +20,11 @@ import {
   CONNECT_KEY_ENV,
   CONNECT_KEY_URL,
   CONNECT_NAME_ENVS,
+  type Coordinates,
   registrationDeepLink,
   registrationIdentifier,
   resolveCoordinates,
   resolveName,
-  type Coordinates,
 } from "./env.js";
 import { createLogger, type Logger } from "../../logging/logger.js";
 import { LogSource } from "../../logging/logger_transport.js";
@@ -91,7 +91,10 @@ export function connectEngine(options: ConnectOptions): EngineHandle {
     ...endpointOptions
   } = options;
   const { serversSrv, servers, ...tuning } = connection;
-  const rlog = systemLogger(options);
+  const rlog = createLogger(
+    options.logger ?? defaultLoggerTransport,
+    LogSource.SYSTEM
+  );
   const name = resolveName(nameOption);
   const coordinates = resolveCoordinates(
     { key, identityKeys, serversSrv, servers },
@@ -100,21 +103,11 @@ export function connectEngine(options: ConnectOptions): EngineHandle {
   return start({ ...endpointOptions, ...tuning }, name, coordinates, rlog);
 }
 
-/** The SDK system logger for the given endpoint options. */
-export function systemLogger(options: {
-  logger?: ConnectOptions["logger"];
-}): Logger {
-  return createLogger(
-    options.logger ?? defaultLoggerTransport,
-    LogSource.SYSTEM
-  );
-}
-
 /**
  * Start the engine with resolved identity and log the banner on ready. Shared
  * by `connect()` and the legacy `connectTunnel()`.
  */
-export function start(
+function start(
   rest: Omit<
     EngineOptions,
     "name" | "environmentId" | "authToken" | "identityKeys" | "discovery"
@@ -159,7 +152,7 @@ export function start(
  * A non-retryable stop, in plain words: what Restate Cloud said, what it
  * means, what to do. The engine's own `tunnel: FATAL — …` line stays at debug.
  */
-export function explainFatal(
+function explainFatal(
   error: Error,
   name: string,
   environmentId: string
