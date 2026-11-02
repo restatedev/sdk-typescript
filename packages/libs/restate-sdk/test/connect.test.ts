@@ -16,7 +16,10 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { parseCloudKey } from "../src/endpoint/connect/key.js";
+import {
+  CLOUD_KEY_PREFIX,
+  parseCloudKey,
+} from "../src/endpoint/connect/key.js";
 import * as restate from "../src/index.js";
 import {
   AUTH_TOKEN_ENVS,
@@ -37,12 +40,26 @@ import {
   LogSource,
   type LoggerTransport,
 } from "../src/logging/logger_transport.js";
+import {
+  cloudKey,
+  connectKey,
+  encodeCloudKeyQuery,
+} from "./tunnel/cloud-key.js";
 import { startFakeCloud } from "./tunnel/fake-cloud.js";
 import { generateIdentityKey } from "./tunnel/identity.js";
 
 const SIGNING_KEY = "publickeyv1_w7YHemBctH5Ck2nQRQ47iBBqhNHy4FV7t2Usbye2A6f";
-const HOST = "201k0yd4rz8yftmd4awh1bajg4v.env.eu.restate.cloud";
-const MANAGED_KEY = `restate://key_01abc.5Kd@${HOST}/?signing-key=${SIGNING_KEY}`;
+const ENVIRONMENT_ID = "env_201k0yd4rz8yftmd4awh1bajg4v";
+const MANAGED_QUERY = `envid=${ENVIRONMENT_ID}&apikey=key_01abc.5Kd&region=eu.restate.cloud&signingkey=${SIGNING_KEY}`;
+const MANAGED_KEY = encodeCloudKeyQuery(MANAGED_QUERY);
+/** The key the fake cloud in the e2e tests accepts: servers come from the options. */
+const fakeKey = (signingKey: string, apiKey = "key_test.secret") =>
+  connectKey({
+    environmentId: "env_abc123",
+    apiKey,
+    region: "eu.restate.cloud",
+    signingKey,
+  });
 
 const ENVS = [
   CONNECT_KEY_ENV,
@@ -86,111 +103,111 @@ const noWarn = (message: string) => {
 };
 
 describe("the connect key", () => {
-  test("parses the managed and BYOC shapes: API key, environment id, region domain, parameters", () => {
-    const managed = parseCloudKey(MANAGED_KEY, "RESTATE_CONNECT_KEY", "<help>");
-    expect(managed).toEqual({
-      apiKey: "key_01abc.5Kd",
-      host: HOST,
-      environmentId: "env_201k0yd4rz8yftmd4awh1bajg4v",
-      regionDomain: "eu.restate.cloud",
-      params: [["signing-key", SIGNING_KEY]],
-    });
-    const byoc = parseCloudKey(
-      "restate://key_02@abc.env.inl4edhpbxasp9yuz1n0yvvkme.byoc.restate.cloud",
-      "x",
-      "<help>"
+  test("decodes rstcloudv1_ + base58 into its query parameters, in order, with nothing percent-encoded", () => {
+    // The UI's output for a managed environment: no `%` anywhere in the query.
+    expect(MANAGED_QUERY).not.toContain("%");
+    expect(MANAGED_KEY).toMatch(/^rstcloudv1_[1-9A-HJ-NP-Za-km-z]+$/);
+    expect(parseCloudKey(MANAGED_KEY, "RESTATE_CONNECT_KEY", "<help>")).toEqual(
+      [
+        ["envid", ENVIRONMENT_ID],
+        ["apikey", "key_01abc.5Kd"],
+        ["region", "eu.restate.cloud"],
+        ["signingkey", SIGNING_KEY],
+      ]
     );
-    expect(byoc.environmentId).toBe("env_abc");
-    expect(byoc.regionDomain).toBe(
-      "inl4edhpbxasp9yuz1n0yvvkme.byoc.restate.cloud"
-    );
-    expect(byoc.apiKey).toBe("key_02");
-    expect(byoc.params).toEqual([]);
-    // No userinfo is allowed by the grammar (the token may come from a file).
+    // Surrounding whitespace (a pasted line) is fine; percent-encoded values
+    // decode like any query string; repeated names are kept for the caller.
     expect(
-      parseCloudKey(`restate://${HOST}/`, "x", "<help>").apiKey
-    ).toBeUndefined();
-    // The host is case-insensitive; a bare id that still carries env_ is a paste mistake.
-    expect(
-      parseCloudKey(`restate://k@ABC.Env.EU.Restate.Cloud/`, "x", "<help>")
-        .environmentId
-    ).toBe("env_abc");
+      parseCloudKey(` ${encodeCloudKeyQuery("a=x%20y&a=2&b=")} `, "x", "<help>")
+    ).toEqual([
+      ["a", "x y"],
+      ["a", "2"],
+      ["b", ""],
+    ]);
+    // Leading zero bytes survive base58 (as `1`s) and are then rejected as
+    // non-printable, like any other control character.
+    expect(encodeCloudKeyQuery("\0\0a")).toMatch(/^rstcloudv1_11/);
     expect(() =>
-      parseCloudKey(`restate://k@env_abc.env.eu.restate.cloud/`, "x", "<help>")
-    ).toThrow(/the host must be/);
-    // A percent-encoded key is decoded; a `:` splits into user:password and is re-joined.
-    expect(
-      parseCloudKey(`restate://key%40x:y@${HOST}/`, "x", "<help>").apiKey
-    ).toBe("key@x:y");
+      parseCloudKey(encodeCloudKeyQuery("\0\0a"), "x", "<help>")
+    ).toThrow(/not a query string/);
   });
 
-  test("rejects a bad scheme, path, port, fragment or host, naming the source", () => {
+  test("rejects a wrong prefix, non-base58, non-UTF-8 or non-query content, naming the source and never echoing it", () => {
     const bad = (value: string, reason: RegExp) =>
       expect(() =>
         parseCloudKey(value, "RESTATE_CONNECT_KEY", "<help>")
       ).toThrow(
         new RegExp(
-          `^RESTATE_CONNECT_KEY is not a Restate Cloud key \\(${reason.source}`
+          `^RESTATE_CONNECT_KEY is not a Restate Cloud key \\(${reason.source}\\); expected rstcloudv1_<base58> — copy it again from <help>$`
         )
       );
-    bad(`https://k@${HOST}/`, /the scheme is "https", not restate/);
-    bad(`restate://k@${HOST}/path`, /the path must be empty\)/);
-    // A key pasted with a lost `@` is rejected without echoing it.
-    expect(() =>
-      parseCloudKey(
-        `restate://key_SECRET.${HOST}/`,
-        "RESTATE_CONNECT_KEY",
-        "<help>"
-      )
-    ).toThrow(
-      /^(?!.*key_SECRET).*the host must be .*copy it again from <help>/
-    );
-    bad(`restate://k@${HOST}:8080/`, /the host must not carry a port/);
-    bad(`restate://k@${HOST}/#x`, /a fragment is not allowed/);
     bad(
-      "restate://k@abc.eu.restate.cloud/",
-      /the host must be <environment id>\.env\.<region domain>/
+      "restate://key_SECRET@abc.env.eu.restate.cloud/",
+      /it does not start with rstcloudv1_/
     );
-    bad("restate://k@.env.eu.restate.cloud/", /the host must be/);
-    bad("restate://k@abc.env./", /the host must be/);
-    bad("not a url", /not a URL/);
+    bad("rstcloudv2_abc", /it does not start with rstcloudv1_/);
+    bad(CLOUD_KEY_PREFIX, /nothing follows the prefix/);
+    bad(`${CLOUD_KEY_PREFIX}0OIl`, /the part after the prefix is not base58/);
+    bad(
+      `${CLOUD_KEY_PREFIX}abc def`,
+      /the part after the prefix is not base58/
+    );
+    // 0xff is never valid UTF-8.
+    bad(`${CLOUD_KEY_PREFIX}5Q`, /the decoded content is not UTF-8/);
+    bad(
+      encodeCloudKeyQuery("a=1 b=2"),
+      /the decoded content is not a query string/
+    );
+    bad(encodeCloudKeyQuery("=1"), /the decoded content is not a query string/);
+    // A secret in a malformed key never reaches the message.
+    expect(() =>
+      parseCloudKey("key_SECRET.abc", "RESTATE_CONNECT_KEY", "<help>")
+    ).toThrow(/^(?!.*SECRET).*copy it again from <help>/);
   });
 
-  test("becomes coordinates: signing key → identityKeys, region domain → SRV, tunnel-srv / tunnel-servers override, unknown params warned once", () => {
+  test("becomes coordinates: signingkey → identityKeys, region → SRV, explicit options win, unknown params warned once", () => {
     const managed = resolveCoordinates({ key: MANAGED_KEY }, noWarn);
-    expect(managed.environmentId).toBe("env_201k0yd4rz8yftmd4awh1bajg4v");
+    expect(managed.environmentId).toBe(ENVIRONMENT_ID);
     expect(managed.authToken()).toBe("key_01abc.5Kd");
     expect(managed.identityKeys).toEqual([SIGNING_KEY]);
     expect(managed.discovery).toEqual({ srvName: "tunnel.eu.restate.cloud" });
     expect(managed.regionLabel).toBe("eu.restate.cloud");
 
-    const srv = resolveCoordinates(
-      { key: `${MANAGED_KEY}&tunnel-srv=tunnel.custom.example` },
+    // BYOC: the region is the cluster's domain, the SRV name follows.
+    const byoc = resolveCoordinates(
+      {
+        key: connectKey({
+          environmentId: "env_abc",
+          apiKey: "key_02",
+          region: "inl4edhpbxasp9yuz1n0yvvkme.byoc.restate.cloud",
+          signingKey: SIGNING_KEY,
+        }),
+      },
       noWarn
     );
-    expect(srv.discovery).toEqual({ srvName: "tunnel.custom.example" });
-    expect(srv.regionLabel).toBe("custom.example");
-
-    const servers = resolveCoordinates(
-      { key: `${MANAGED_KEY}&tunnel-servers=a.example:9080,%20b.example:9080` },
-      noWarn
-    );
-    expect(servers.discovery).toEqual({
-      servers: ["a.example:9080", "b.example:9080"],
+    expect(byoc.environmentId).toBe("env_abc");
+    expect(byoc.discovery).toEqual({
+      srvName: "tunnel.inl4edhpbxasp9yuz1n0yvvkme.byoc.restate.cloud",
     });
-    expect(servers.regionLabel).toBe("a.example:9080,b.example:9080");
 
     // Explicit options beat the key; identityKeys too.
     const explicit = resolveCoordinates(
       {
-        key: `${MANAGED_KEY}&tunnel-srv=tunnel.custom.example`,
+        key: MANAGED_KEY,
         servers: ["x.example:1"],
         identityKeys: ["publickeyv1_mine"],
       },
       noWarn
     );
     expect(explicit.discovery).toEqual({ servers: ["x.example:1"] });
+    expect(explicit.regionLabel).toBe("x.example:1");
     expect(explicit.identityKeys).toEqual(["publickeyv1_mine"]);
+    const srv = resolveCoordinates(
+      { key: MANAGED_KEY, serversSrv: "tunnel.custom.example" },
+      noWarn
+    );
+    expect(srv.discovery).toEqual({ srvName: "tunnel.custom.example" });
+    expect(srv.regionLabel).toBe("custom.example");
     expect(() =>
       resolveCoordinates(
         { key: MANAGED_KEY, servers: ["x:1"], serversSrv: "s" },
@@ -198,41 +215,95 @@ describe("the connect key", () => {
       )
     ).toThrow(/at most one of/);
 
+    // Missing or malformed coordinates, never echoing the key.
+    const without = (name: string) =>
+      encodeCloudKeyQuery(
+        MANAGED_QUERY.split("&")
+          .filter((p) => !p.startsWith(`${name}=`))
+          .join("&")
+      );
+    expect(() => resolveCoordinates({ key: without("envid") }, noWarn)).toThrow(
+      /no envid parameter.*integration#configure-sdk/
+    );
     expect(() =>
-      resolveCoordinates({ key: `${MANAGED_KEY}&tunnel-servers=` }, noWarn)
-    ).toThrow(/tunnel-servers parameter is empty/);
-
-    expect(() =>
-      resolveCoordinates({ key: `${MANAGED_KEY}&tunnel-srv=` }, noWarn)
-    ).toThrow(/tunnel-srv parameter is empty/);
+      resolveCoordinates({ key: without("region") }, noWarn)
+    ).toThrow(/no region parameter.*integration#configure-sdk/);
     expect(() =>
       resolveCoordinates(
-        { key: `${MANAGED_KEY}&tunnel-srv=a.example&tunnel-servers=b:1` },
+        {
+          key: cloudKey({
+            envid: "abc",
+            apikey: "k",
+            region: "eu.restate.cloud",
+            signingkey: SIGNING_KEY,
+          }),
+        },
         noWarn
       )
-    ).toThrow(/both tunnel-srv and tunnel-servers/);
+    ).toThrow(/envid is not an environment id/);
+    expect(() =>
+      resolveCoordinates(
+        {
+          key: cloudKey({
+            envid: "env_abc",
+            apikey: "k",
+            region: "eu.restate.cloud/x",
+            signingkey: SIGNING_KEY,
+          }),
+        },
+        noWarn
+      )
+    ).toThrow(/region is not a domain name/);
+    expect(() =>
+      resolveCoordinates(
+        { key: encodeCloudKeyQuery(`${MANAGED_QUERY}&apikey=again`) },
+        noWarn
+      )
+    ).toThrow(/repeats the apikey parameter/);
+    expect(() =>
+      resolveCoordinates(
+        {
+          key: cloudKey({
+            envid: "env_abc",
+            apikey: "key with space",
+            region: "eu.restate.cloud",
+            signingkey: SIGNING_KEY,
+          }),
+        },
+        noWarn
+      )
+    ).toThrow(
+      /apikey contains characters that cannot travel in an HTTP header/
+    );
 
     // A key next to an operator's variables for another environment: warned.
     process.env[ENVIRONMENT_ID_ENVS[1]] = "env_other";
     const mismatch: string[] = [];
     resolveCoordinates({ key: MANAGED_KEY }, (m) => mismatch.push(m));
     expect(mismatch).toEqual([
-      "connect(): the connect key is for environment env_201k0yd4rz8yftmd4awh1bajg4v but RESTATE_INPROC_ENVIRONMENT_ID is set to env_other; the key wins",
+      `connect(): the connect key is for environment ${ENVIRONMENT_ID} but RESTATE_INPROC_ENVIRONMENT_ID is set to env_other; the key wins`,
     ]);
     delete process.env[ENVIRONMENT_ID_ENVS[1]];
 
     const warnings: string[] = [];
-    resolveCoordinates({ key: `${MANAGED_KEY}&future=1&other=2` }, (m) =>
-      warnings.push(m)
+    resolveCoordinates(
+      { key: encodeCloudKeyQuery(`${MANAGED_QUERY}&future=1&other=2`) },
+      (m) => warnings.push(m)
     );
     expect(warnings).toHaveLength(1);
-    expect(warnings[0]).toMatch(/"future", "other"/);
+    expect(warnings[0]).toMatch(
+      /"future", "other".*envid, apikey, region, signingkey/
+    );
   });
 
-  test("without userinfo the token comes from RESTATE_AUTH_TOKEN or the token file; without signing-key it is an error", () => {
-    const bare = `restate://${HOST}/?signing-key=${SIGNING_KEY}`;
+  test("without apikey the token comes from RESTATE_AUTH_TOKEN or the token file; without signingkey it is an error", () => {
+    const bare = connectKey({
+      environmentId: ENVIRONMENT_ID,
+      region: "eu.restate.cloud",
+      signingKey: SIGNING_KEY,
+    });
     expect(() => resolveCoordinates({ key: bare }, noWarn)).toThrow(
-      /carries no API key.*RESTATE_AUTH_TOKEN.*RESTATE_INPROC_AUTH_TOKEN_FILE/
+      /carries no apikey.*RESTATE_AUTH_TOKEN.*RESTATE_INPROC_AUTH_TOKEN_FILE/
     );
     const file = tokenFile("key_fromfile\n");
     process.env[AUTH_TOKEN_FILE_ENVS[0]] = file;
@@ -249,14 +320,31 @@ describe("the connect key", () => {
       "key_01abc.5Kd"
     );
 
+    // An ingress key (no signingkey) in RESTATE_CONNECT_KEY: said in so many words.
     expect(() =>
-      resolveCoordinates({ key: `restate://k@${HOST}/` }, noWarn)
+      resolveCoordinates(
+        {
+          key: connectKey({
+            environmentId: ENVIRONMENT_ID,
+            apiKey: "k",
+            region: "eu.restate.cloud",
+          }),
+        },
+        noWarn
+      )
     ).toThrow(
-      /no signing-key parameter.*cloud\.restate\.dev\/to\/developers\/integration#configure-sdk/
+      /no signingkey parameter.*an ingress key cannot connect a service.*cloud\.restate\.dev\/to\/developers\/integration#configure-sdk/
     );
     expect(() =>
       resolveCoordinates(
-        { key: `restate://k@${HOST}/?signing-key=nope` },
+        {
+          key: connectKey({
+            environmentId: ENVIRONMENT_ID,
+            apiKey: "k",
+            region: "eu.restate.cloud",
+            signingKey: "nope",
+          }),
+        },
         noWarn
       )
     ).toThrow(/publickeyv1_/);
@@ -335,7 +423,12 @@ describe("resolution from the environment", () => {
     expect(
       resolveCoordinates(
         {
-          key: `restate://k@x.env.us.restate.cloud/?signing-key=${SIGNING_KEY}`,
+          key: connectKey({
+            environmentId: "env_x",
+            apiKey: "k",
+            region: "us.restate.cloud",
+            signingKey: SIGNING_KEY,
+          }),
         },
         () => {}
       ).environmentId
@@ -442,10 +535,13 @@ describe("connect() end to end", () => {
         message: String(message),
       });
     };
-    process.env[CONNECT_KEY_ENV] =
-      `restate://key_test.secret@abc123.env.eu.restate.cloud/?signing-key=${identity.publicKey}&tunnel-servers=http://127.0.0.1:${fake.port}`;
+    process.env[CONNECT_KEY_ENV] = fakeKey(identity.publicKey);
     process.env[CONNECT_NAME_ENVS[0]] = "greeter-v1";
-    const connection = restate.connect({ services: [], logger });
+    const connection = restate.connect({
+      services: [],
+      logger,
+      connection: { servers: [`http://127.0.0.1:${fake.port}`] },
+    });
     try {
       await connection.ready;
       expect(connection.name).toBe("greeter-v1");
@@ -517,8 +613,7 @@ describe("connect() end to end", () => {
     const fake = await startFakeCloud({
       decideTrailers: () => ({ "tunnel-status": "unauthorized" }),
     });
-    process.env[CONNECT_KEY_ENV] =
-      `restate://key_bad@abc123.env.eu.restate.cloud/?signing-key=${identity.publicKey}&tunnel-servers=http://127.0.0.1:${fake.port}`;
+    process.env[CONNECT_KEY_ENV] = fakeKey(identity.publicKey, "key_bad");
     const errors: string[] = [];
     const connection = restate.connect({
       services: [],
@@ -526,6 +621,7 @@ describe("connect() end to end", () => {
       logger: (params, message) => {
         if (params.level === "error") errors.push(String(message));
       },
+      connection: { servers: [`http://127.0.0.1:${fake.port}`] },
     });
     try {
       await expect(connection.ready).rejects.toThrow(/unauthorized/);
@@ -545,8 +641,7 @@ describe("connect() end to end", () => {
     const identity = generateIdentityKey();
     // A stalled handshake is retryable; with two attempts allowed the engine gives up.
     const fake = await startFakeCloud({ decideTrailers: () => null });
-    process.env[CONNECT_KEY_ENV] =
-      `restate://key_test@abc123.env.eu.restate.cloud/?signing-key=${identity.publicKey}&tunnel-servers=http://127.0.0.1:${fake.port}`;
+    process.env[CONNECT_KEY_ENV] = fakeKey(identity.publicKey, "key_test");
     const errors: string[] = [];
     const connection = restate.connect({
       services: [],
@@ -555,6 +650,7 @@ describe("connect() end to end", () => {
         if (params.level === "error") errors.push(String(message));
       },
       connection: {
+        servers: [`http://127.0.0.1:${fake.port}`],
         handshakeTimeoutMs: 50,
         reconnectRetryPolicy: { maxAttempts: 2, initialInterval: 1 },
       },

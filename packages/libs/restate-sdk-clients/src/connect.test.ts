@@ -14,8 +14,30 @@ import type { ServiceDefinition } from "@restatedev/restate-sdk-core";
 import { connect } from "./ingress.js";
 import { INGRESS_KEY_ENV, resolveConnectionOpts } from "./env.js";
 
-const INGRESS_KEY =
-  "restate://key_09xyz.2Pq@201k0yd4rz8yftmd4awh1bajg4v.env.eu.restate.cloud/";
+// What the Cloud UI mints: `rstcloudv1_` + base58 over a query string.
+const BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+function cloudKey(query: string): string {
+  const digits: number[] = [];
+  for (const byte of new TextEncoder().encode(query)) {
+    let carry = byte;
+    for (let i = 0; i < digits.length; i++) {
+      carry += digits[i]! << 8;
+      digits[i] = carry % 58;
+      carry = (carry / 58) | 0;
+    }
+    while (carry > 0) {
+      digits.push(carry % 58);
+      carry = (carry / 58) | 0;
+    }
+  }
+  return `rstcloudv1_${digits
+    .reverse()
+    .map((d) => BASE58[d]!)
+    .join("")}`;
+}
+const INGRESS_QUERY =
+  "envid=env_201k0yd4rz8yftmd4awh1bajg4v&apikey=key_09xyz.2Pq&region=eu.restate.cloud";
+const INGRESS_KEY = cloudKey(INGRESS_QUERY);
 
 let saved: string | undefined;
 beforeEach(() => {
@@ -87,41 +109,63 @@ describe("connect() and RESTATE_INGRESS_KEY", () => {
   });
 
   it("rejects a malformed key naming the variable, and warns once about unknown parameters", () => {
+    expect(INGRESS_QUERY).not.toContain("%");
+    expect(INGRESS_KEY).toMatch(/^rstcloudv1_[1-9A-HJ-NP-Za-km-z]+$/);
+
     process.env[INGRESS_KEY_ENV] = "https://not-a-restate-key";
     expect(() => resolveConnectionOpts({})).toThrow(
-      /RESTATE_INGRESS_KEY is not a Restate Cloud key \(the scheme is "https", not restate\)/
+      /RESTATE_INGRESS_KEY is not a Restate Cloud key \(it does not start with rstcloudv1_\); expected rstcloudv1_<base58> — copy it again from https:\/\/cloud\.restate\.dev/
     );
-    process.env[INGRESS_KEY_ENV] =
-      "restate://201k0yd4rz8yftmd4awh1bajg4v.env.eu.restate.cloud/";
+    process.env[INGRESS_KEY_ENV] = "rstcloudv1_0OIl";
+    expect(() => resolveConnectionOpts({})).toThrow(/not base58/);
+    process.env[INGRESS_KEY_ENV] = "rstcloudv1_5Q"; // a lone 0xff byte
+    expect(() => resolveConnectionOpts({})).toThrow(/not UTF-8/);
+    process.env[INGRESS_KEY_ENV] = cloudKey("a b");
+    expect(() => resolveConnectionOpts({})).toThrow(/not a query string/);
+    process.env[INGRESS_KEY_ENV] = cloudKey(
+      "envid=env_201k0yd4rz8yftmd4awh1bajg4v&region=eu.restate.cloud"
+    );
     expect(() => resolveConnectionOpts({})).toThrow(
-      /RESTATE_INGRESS_KEY carries no API key/
+      /RESTATE_INGRESS_KEY carries no apikey/
     );
-    // Same grammar as the SDK's parser: case-insensitive host, no env_ in the
-    // bare id, header-safe token, nothing echoed, the UI page linked.
-    process.env[INGRESS_KEY_ENV] =
-      "restate://key_x@201K0YD4RZ8YFTMD4AWH1BAJG4V.ENV.EU.Restate.Cloud/";
+    // Same format as the SDK's parser: the environment id and the region are
+    // checked, the host is lowercased, the token header-safe, nothing echoed.
+    process.env[INGRESS_KEY_ENV] = cloudKey(
+      "envid=env_201K0YD4RZ8YFTMD4AWH1BAJG4V&apikey=key_x&region=EU.Restate.Cloud"
+    );
     expect(resolveConnectionOpts({}).url).toBe(
       "https://201k0yd4rz8yftmd4awh1bajg4v.env.eu.restate.cloud:8080"
     );
-    process.env[INGRESS_KEY_ENV] =
-      "restate://key_x@env_abc.env.eu.restate.cloud/";
-    expect(() => resolveConnectionOpts({})).toThrow(/the host must be/);
-    process.env[INGRESS_KEY_ENV] =
-      "restate://key%20x@abc.env.eu.restate.cloud/";
+    process.env[INGRESS_KEY_ENV] = cloudKey(
+      "envid=abc&apikey=key_x&region=eu.restate.cloud"
+    );
+    expect(() => resolveConnectionOpts({})).toThrow(/no envid parameter/);
+    process.env[INGRESS_KEY_ENV] = cloudKey("envid=env_abc&apikey=key_x");
+    expect(() => resolveConnectionOpts({})).toThrow(/no region parameter/);
+    process.env[INGRESS_KEY_ENV] = cloudKey(
+      "envid=env_abc&apikey=key_x&region=eu.restate.cloud/x"
+    );
+    expect(() => resolveConnectionOpts({})).toThrow(/no region parameter/);
+    process.env[INGRESS_KEY_ENV] = cloudKey(
+      "envid=env_abc&apikey=key%20x&region=eu.restate.cloud"
+    );
     expect(() => resolveConnectionOpts({})).toThrow(/HTTP header/);
-    process.env[INGRESS_KEY_ENV] =
-      "restate://key_SECRET.abc.env.eu.restate.cloud/";
+    process.env[INGRESS_KEY_ENV] = cloudKey(`${INGRESS_QUERY}&apikey=again`);
+    expect(() => resolveConnectionOpts({})).toThrow(/repeats the apikey/);
+    process.env[INGRESS_KEY_ENV] = "rstcloudv1_SECRET";
     expect(() => resolveConnectionOpts({})).toThrow(
-      /^(?!.*key_SECRET).*copy it again from https:\/\/cloud\.restate\.dev/
+      /^(?!.*SECRET).*copy it again from https:\/\/cloud\.restate\.dev/
     );
 
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    process.env[INGRESS_KEY_ENV] = `${INGRESS_KEY}?future=1&other=2`;
+    process.env[INGRESS_KEY_ENV] = cloudKey(
+      `${INGRESS_QUERY}&signingkey=publickeyv1_x&future=1`
+    );
     const resolved = resolveConnectionOpts({});
     expect(resolved.url).toBe(
       "https://201k0yd4rz8yftmd4awh1bajg4v.env.eu.restate.cloud:8080"
     );
     expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn.mock.calls[0]![0]).toMatch(/"future", "other"/);
+    expect(warn.mock.calls[0]![0]).toMatch(/"signingkey", "future"/);
   });
 });

@@ -128,9 +128,8 @@ export interface ConnectOptions extends EndpointOptions {
 export interface ConnectionOptions {
   /**
    * A DNS SRV name to discover the servers to connect to, instead of the one
-   * derived from the key (`tunnel.<region domain>`, or its `tunnel-srv`
-   * parameter). For environments with a custom domain; the Cloud UI puts it
-   * in the key when needed, so this is rarely set by hand. Servers are
+   * derived from the key's region (`tunnel.<region>`). For environments with
+   * a custom domain; rarely set by hand. Servers are
    * discovered via a DNS SRV lookup expanded to every resolved address — the
    * engine holds **one connection per resolved server** and re-resolves every
    * {@link resolveIntervalMs}, starting connections to
@@ -288,7 +287,7 @@ export interface EngineOptions extends Omit<
   defaultServiceOptions?: EndpointOptions["defaultServiceOptions"];
   logger?: EndpointOptions["logger"];
   journalValueCodecProvider?: EndpointOptions["journalValueCodecProvider"];
-  /** Request-identity keys; the key's `signing-key` by default. Never empty. */
+  /** Request-identity keys; the key's `signingkey` by default. Never empty. */
   identityKeys: string[];
   /** The deployment name, validated. */
   name: string;

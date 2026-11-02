@@ -19,14 +19,16 @@
 //                → RESTATE_TUNNEL_NAME → error
 //   key   option → RESTATE_CONNECT_KEY → the expanded variables → error
 //
-// The key is one URL-shaped string from the Cloud UI (Development → Configure
-// SDK), see `parseCloudKey` in restate-sdk-core. The expanded variables are
-// the older spelling of the same coordinates, kept for the restate-operator
-// (`RESTATE_INPROC_*`) and the standalone tunnel container (`RESTATE_*`):
-// environment id, token or token file, region or SRV / servers, signing key.
+// The key is one `rstcloudv1_…` string from the Cloud UI (Development →
+// Configure SDK): base58 over `envid=…&apikey=…&region=…&signingkey=…`, see
+// `parseCloudKey` in `key.ts`.
+// The expanded variables are the older spelling of the same coordinates, kept
+// for the restate-operator (`RESTATE_INPROC_*`) and the standalone tunnel
+// container (`RESTATE_*`): environment id, token or token file, region or
+// SRV / servers, signing key.
 
 import * as fs from "node:fs";
-import { parseCloudKey, type CloudKey } from "./key.js";
+import { parseCloudKey } from "./key.js";
 import {
   requireHeaderSafe,
   srvNameForRegionDomain,
@@ -67,7 +69,10 @@ export const SIGNING_PUBLIC_KEY_ENVS = [
 ] as const;
 
 /** The query parameters a connect key may carry; anything else is ignored with a warning. */
-const KNOWN_KEY_PARAMS = ["signing-key", "tunnel-srv", "tunnel-servers"];
+const KNOWN_KEY_PARAMS = ["envid", "apikey", "region", "signingkey"];
+
+/** A region domain: lowercase labels of [a-z0-9-], dot-separated, none empty. */
+const REGION_DOMAIN = /^[a-z0-9-]+(\.[a-z0-9-]+)*$/;
 
 /** An env var set to the empty string is treated as unset. */
 function readEnv(name: string): string | undefined {
@@ -161,15 +166,20 @@ export function resolveCoordinates(
 }
 
 function coordinatesFromKey(
-  key: CloudKey,
+  key: Array<[name: string, value: string]>,
   options: { identityKeys?: string[] } & DiscoveryOverrides,
   warn: (message: string) => void
 ): Coordinates {
   const params = new Map<string, string>();
   const unknown: string[] = [];
-  for (const [name, value] of key.params) {
-    if (KNOWN_KEY_PARAMS.includes(name)) params.set(name, value);
-    else unknown.push(name);
+  for (const [name, value] of key) {
+    if (!KNOWN_KEY_PARAMS.includes(name)) {
+      unknown.push(name);
+    } else if (params.has(name)) {
+      fail(`the connect key repeats the ${name} parameter`);
+    } else {
+      params.set(name, value);
+    }
   }
   if (unknown.length > 0) {
     warn(
@@ -177,59 +187,65 @@ function coordinatesFromKey(
     );
   }
 
+  const environmentId = params.get("envid");
+  if (environmentId === undefined) {
+    fail(
+      `the connect key has no envid parameter — copy it again from ${CONNECT_KEY_URL}`
+    );
+  }
+  if (!/^env_[A-Za-z0-9_-]+$/.test(environmentId)) {
+    fail(
+      "the connect key's envid is not an environment id (env_ followed by alphanumerics)"
+    );
+  }
+
   // A key for one environment next to an operator's variables for another
   // is almost certainly a stray developer key: say so.
   const injected = readFirstEnv(ENVIRONMENT_ID_ENVS);
-  if (injected !== undefined && injected.value !== key.environmentId) {
+  if (injected !== undefined && injected.value !== environmentId) {
     warn(
-      `connect(): the connect key is for environment ${key.environmentId} but ${injected.name} is set to ${injected.value}; the key wins`
+      `connect(): the connect key is for environment ${environmentId} but ${injected.name} is set to ${injected.value}; the key wins`
     );
   }
 
   const identityKeys = resolveIdentityKeys(
     options.identityKeys,
-    params.get("signing-key"),
-    `the connect key has no signing-key parameter and no identityKeys were given — copy the key again from ${CONNECT_KEY_URL}`
+    params.get("signingkey"),
+    `the connect key has no signingkey parameter and no identityKeys were given — an ingress key cannot connect a service; copy a connect key from ${CONNECT_KEY_URL}`
   );
 
+  const apiKey = params.get("apikey");
   const authToken =
-    key.apiKey !== undefined
-      ? constantToken(key.apiKey, "the connect key's API key")
+    apiKey !== undefined && apiKey !== ""
+      ? constantToken(apiKey, "the connect key's apikey")
       : (tokenFromEnv() ??
         fail(
-          `the connect key carries no API key (restate://<api key>@…) and no token is configured in ${AUTH_TOKEN_ENVS[0]} or a file in ${AUTH_TOKEN_FILE_ENVS[0]}`
+          `the connect key carries no apikey and no token is configured in ${AUTH_TOKEN_ENVS[0]} or a file in ${AUTH_TOKEN_FILE_ENVS[0]}`
         ));
 
-  const keyServers = params.get("tunnel-servers");
-  if (keyServers !== undefined && splitList(keyServers).length === 0) {
-    fail("the connect key's tunnel-servers parameter is empty");
-  }
-  const keySrv = params.get("tunnel-srv");
-  if (keySrv === "") fail("the connect key's tunnel-srv parameter is empty");
-  if (keySrv !== undefined && keyServers !== undefined) {
+  const regionDomain = params.get("region");
+  if (regionDomain === undefined) {
     fail(
-      "the connect key carries both tunnel-srv and tunnel-servers; it may carry one"
+      `the connect key has no region parameter — copy it again from ${CONNECT_KEY_URL}`
     );
   }
-  const keyDiscovery: DiscoveryOverrides = {
-    serversSrv: keySrv,
-    servers: keyServers === undefined ? undefined : splitList(keyServers),
-  };
+  if (!REGION_DOMAIN.test(regionDomain)) {
+    fail("the connect key's region is not a domain name");
+  }
+
+  // Discovery: explicit options, else the region's SRV name.
   const override = pickDiscovery(options);
-  const discovery =
-    override ??
-    pickDiscovery(keyDiscovery) ??
-    ({ srvName: srvNameForRegionDomain(key.regionDomain) } as const);
+  const discovery = override ?? {
+    srvName: srvNameForRegionDomain(regionDomain),
+  };
 
   return {
-    environmentId: key.environmentId,
+    environmentId,
     authToken,
     identityKeys,
     discovery,
     regionLabel:
-      override === undefined && pickDiscovery(keyDiscovery) === undefined
-        ? key.regionDomain
-        : discoveryLabel(discovery),
+      override === undefined ? regionDomain : discoveryLabel(discovery),
   };
 }
 
@@ -384,7 +400,7 @@ function pickDiscovery(
 /** A region (`us`, `eu`, `<slug>.byoc`) is the labels before `.restate.cloud`. */
 function regionDomainForRegion(region: string): string {
   // Each label lowercase [a-z0-9-], dot-separated, no empty labels.
-  if (!/^[a-z0-9-]+(\.[a-z0-9-]+)*$/.test(region)) {
+  if (!REGION_DOMAIN.test(region)) {
     throw new Error(`connect(): invalid region ${JSON.stringify(region)}`);
   }
   return `${region}.restate.cloud`;
