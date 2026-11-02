@@ -12,13 +12,19 @@
 // Ingress connection from RESTATE_INGRESS_KEY.
 //
 // `connect()` without a `url` reads `RESTATE_INGRESS_KEY`, an ingress key from
-// the Cloud UI (Development → Configure Client):
+// the Cloud UI (Development → Configure Client). Explicit options always win;
+// with neither a `url` nor the variable, `connect()` fails fast, as it always
+// required a `url`.
 //
-//   restate://<api key>@<bare environment id>.env.<region domain>/
+// INTERNAL: the key is opaque to users (public docs and errors only say "copy
+// it again"). Its format, shared with the SDK's connect key, is
 //
-// The ingress is `https://<host>:8080` and the API key is the bearer. Explicit
-// options always win; with neither a `url` nor the variable, `connect()`
-// fails fast, as it always required a `url`.
+//   rstcloudv1_<base58>
+//
+// where the base58 part (Bitcoin alphabet) encodes the query string
+// `envid=env_…&apikey=key_…&region=eu.restate.cloud`. The ingress is
+// `https://<envid minus env_>.env.<region>:8080` and the API key is the
+// bearer.
 
 import type { ConnectionOpts } from "./api.js";
 
@@ -27,73 +33,109 @@ export const INGRESS_KEY_ENV = "RESTATE_INGRESS_KEY";
 const INGRESS_KEY_URL =
   "https://cloud.restate.dev/to/developers/integration#configure-client";
 
-/**
- * The ingress URL and bearer an ingress key stands for:
- * `restate://<api key>@<bare environment id>.env.<region domain>/`, parsed
- * with `new URL()`. The host is the environment's own hostname, so the
- * ingress is `https://<host>:8080`. Query parameters are ignored with one
- * warning (none are defined for this key).
- */
+const CLOUD_KEY_PREFIX = "rstcloudv1_";
+const BASE58_ALPHABET =
+  "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+/** The parameters an ingress key carries; anything else is ignored with a warning. */
+const KNOWN_KEY_PARAMS = ["envid", "apikey", "region"];
+
+/** The ingress URL and bearer an ingress key stands for; see the header comment. */
 function ingressFromKey(
   value: string,
   what: string = INGRESS_KEY_ENV
 ): { url: string; token: string } {
-  // Reasons never echo parts of the value: a key pasted with a lost `@` or a
-  // stray `/` would otherwise put the credential in the error message.
+  // Reasons never echo parts of the value (the whole thing is a credential)
+  // and never describe the encoding: the key is opaque, the fix is a fresh copy.
   const fail = (reason: string): never => {
     throw new Error(
-      `${what} is not a Restate Cloud key (${reason}); expected restate://<api key>@<environment id>.env.<region domain>/ — copy it again from ${INGRESS_KEY_URL}`
+      `${what} is not a Restate Cloud key (${reason}); expected ${CLOUD_KEY_PREFIX}<base58> — copy it again from ${INGRESS_KEY_URL}`
     );
   };
-  let url: URL;
-  try {
-    url = new URL(value.trim());
-  } catch {
-    return fail("not a URL");
+  const corrupted = () => fail("it is truncated or corrupted");
+  const trimmed = value.trim();
+  if (!trimmed.startsWith(CLOUD_KEY_PREFIX)) {
+    return fail(`it does not start with ${CLOUD_KEY_PREFIX}`);
   }
-  if (url.protocol !== "restate:") {
-    return fail(
-      `the scheme is ${JSON.stringify(url.protocol.replace(/:$/, ""))}, not restate`
+  const encoded = trimmed.slice(CLOUD_KEY_PREFIX.length);
+  if (encoded === "") return corrupted();
+  let query: string;
+  try {
+    query = new TextDecoder("utf-8", { fatal: true }).decode(
+      base58Decode(encoded)
+    );
+  } catch {
+    return corrupted();
+  }
+  if (!/^[\x21-\x7e]+$/.test(query)) return corrupted();
+
+  const params = new Map<string, string>();
+  const unknown: string[] = [];
+  for (const [name, param] of new URLSearchParams(query).entries()) {
+    if (name === "") return corrupted();
+    if (!KNOWN_KEY_PARAMS.includes(name)) unknown.push(name);
+    else if (params.has(name)) return fail("it is malformed");
+    else params.set(name, param);
+  }
+  if (unknown.length > 0) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `clients.connect(): ${what} carries data this version does not understand (${unknown.map((name) => JSON.stringify(name)).join(", ")}); ignoring it — a newer version may need it`
     );
   }
-  if (url.port !== "") return fail("the host must not carry a port");
-  if (url.pathname !== "" && url.pathname !== "/") {
-    return fail("the path must be empty");
+
+  const environmentId = params.get("envid");
+  const match =
+    environmentId === undefined
+      ? null
+      : /^env_([A-Za-z0-9_-]+)$/.exec(environmentId);
+  if (match === null) return fail("it is incomplete or malformed");
+  // Hosts are case-insensitive; the UI writes them lowercase.
+  const region = params.get("region")?.toLowerCase();
+  if (region === undefined || !/^[a-z0-9-]+(\.[a-z0-9-]+)*$/.test(region)) {
+    return fail("it is incomplete or malformed");
   }
-  if (url.hash !== "") return fail("a fragment is not allowed");
-  // Hosts are case-insensitive; a non-special scheme keeps the pasted case.
-  const host = url.hostname.toLowerCase();
-  const match = /^([a-z0-9_-]+)\.env\.[a-z0-9-]+(\.[a-z0-9-]+)*$/.exec(host);
-  if (match === null || match[1]!.startsWith("env_")) {
-    return fail("the host must be <environment id>.env.<region domain>");
-  }
-  if (url.username === "" && url.password === "") {
+  const token = params.get("apikey");
+  if (token === undefined || token === "") {
     throw new Error(
-      `${what} carries no API key (restate://<api key>@…); copy it again from ${INGRESS_KEY_URL}`
+      `${what} carries no API key; copy it again from ${INGRESS_KEY_URL}`
     );
-  }
-  // The userinfo slot, percent-decoded; a `:` splits it, so re-join.
-  const raw =
-    url.password === "" ? url.username : `${url.username}:${url.password}`;
-  let token: string;
-  try {
-    token = decodeURIComponent(raw);
-  } catch {
-    return fail("the API key is not valid percent-encoding");
   }
   if (!/^[\x21-\x7e]+$/.test(token)) {
     return fail(
       "the API key contains characters that cannot travel in an HTTP header"
     );
   }
-  const params = [...url.searchParams.keys()];
-  if (params.length > 0) {
-    // eslint-disable-next-line no-console
-    console.warn(
-      `clients.connect(): ignoring unknown ${what} parameter(s) ${params.map((name) => JSON.stringify(name)).join(", ")}`
-    );
+  return {
+    url: `https://${match[1]!.toLowerCase()}.env.${region}:8080`,
+    token,
+  };
+}
+
+/** Decode base58 (Bitcoin alphabet); throws on a character outside it. */
+function base58Decode(text: string): Uint8Array {
+  // Little-endian base-256 digits, multiplied up one base58 digit at a time.
+  const digits: number[] = [];
+  for (const char of text) {
+    let carry = BASE58_ALPHABET.indexOf(char);
+    if (carry < 0) throw new Error(`not base58: ${JSON.stringify(char)}`);
+    for (let i = 0; i < digits.length; i++) {
+      carry += digits[i]! * 58;
+      digits[i] = carry & 0xff;
+      carry >>= 8;
+    }
+    while (carry > 0) {
+      digits.push(carry & 0xff);
+      carry >>= 8;
+    }
   }
-  return { url: `https://${host}:8080`, token };
+  // Each leading `1` is a leading zero byte.
+  let zeros = 0;
+  while (zeros < text.length && text[zeros] === "1") zeros++;
+  const out = new Uint8Array(zeros + digits.length);
+  for (let i = 0; i < digits.length; i++) {
+    out[zeros + i] = digits[digits.length - 1 - i]!;
+  }
+  return out;
 }
 
 /** Connection options with the ingress URL settled. */

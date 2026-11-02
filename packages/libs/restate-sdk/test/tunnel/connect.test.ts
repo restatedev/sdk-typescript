@@ -28,6 +28,7 @@ import {
   roundtrip,
   type FakeCloudOptions,
 } from "./fake-cloud.js";
+import { connectKey as encodeConnectKey } from "./cloud-key.js";
 import { generateIdentityKey } from "./identity.js";
 
 const identity = generateIdentityKey();
@@ -48,16 +49,22 @@ const okTrailers = (name: string = TUNNEL_NAME): Record<string, string> => ({
   "tunnel-name": name,
 });
 
-// The connect key for environment env_abc123: the API key in the userinfo
-// slot, the signing key and the fake's address as parameters.
-const connectKey = (port: number): string =>
-  `restate://key_test.secret@abc123.env.example.test/?signing-key=${identity.publicKey}&tunnel-servers=http://127.0.0.1:${port}`;
+// The connect key for environment env_abc123: the API key, the region and the
+// signing key. The fake's address goes in the connection options.
+const connectKey = (): string =>
+  encodeConnectKey({
+    environmentId: "env_abc123",
+    apiKey: "key_test.secret",
+    region: "example.test",
+    signingKey: identity.publicKey,
+  });
 
 const baseOptions = (port: number): ConnectOptions => ({
-  key: connectKey(port),
+  key: connectKey(),
   name: TUNNEL_NAME,
   services: [greeter],
   connection: {
+    servers: [`http://127.0.0.1:${port}`],
     workerId: "worker-test-1",
     handshakeTimeoutMs: 300,
     reconnectRetryPolicy: { initialInterval: 5, maxInterval: 50 },

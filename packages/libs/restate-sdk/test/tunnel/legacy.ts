@@ -22,6 +22,7 @@ import type {
 } from "../../src/endpoint/tunnel/types.js";
 import type { EndpointOptions } from "../../src/endpoint/types.js";
 import type { LoggerTransport } from "../../src/logging/logger_transport.js";
+import { connectKey } from "./cloud-key.js";
 
 export interface ConnectTunnelOptions
   extends
@@ -57,7 +58,12 @@ export function connectTunnel(options: ConnectTunnelOptions): EngineHandle {
   } = options;
   const regionDomain =
     region !== undefined ? `${region}.restate.cloud` : "example.test";
-  const key = `restate://${encodeURIComponent(authToken)}@${environmentId.replace(/^env_/, "")}.env.${regionDomain}/?signing-key=${signingPublicKey}`;
+  const key = connectKey({
+    environmentId,
+    apiKey: authToken,
+    region: regionDomain,
+    signingKey: signingPublicKey,
+  });
   const hooked: LoggerTransport | undefined =
     tunnelDiagnosticLogger === undefined
       ? logger
