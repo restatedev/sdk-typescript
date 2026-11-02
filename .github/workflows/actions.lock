@@ -66,6 +66,11 @@ workflows:
         - 'docker/setup-qemu-action@v3.7.0'
         - 'pnpm/action-setup@v4.3.0'
         - 'restatedev/e2e@v2.3'
+    '.github/workflows/pullfrog.yml':
+        - 'actions/checkout@v6.1.0'
+        - 'actions/setup-node@v4.4.0'
+        - 'pnpm/action-setup@v4.3.0'
+        - 'pullfrog/pullfrog@v0.1.110'
     '.github/workflows/release-docs.yml':
         - 'actions/checkout@v4.4.0'
         - 'actions/deploy-pages@v4.0.5'
@@ -88,6 +93,11 @@ dependencies:
     'actions/checkout@v4.4.0':
         ref: 'v4.4.0'
         commit: 'sha1-11d5960a326750d5838078e36cf38b85af677262'
+        owner_id: 44036562
+        repo_id: 197814629
+    'actions/checkout@v6.1.0':
+        ref: 'v6.1.0'
+        commit: 'sha1-d23441a48e516b6c34aea4fa41551a30e30af803'
         owner_id: 44036562
         repo_id: 197814629
     'actions/checkout@v7.0.1':
@@ -192,6 +202,11 @@ dependencies:
         commit: 'sha1-b906affcce14559ad1aafd4ab0e942779e9f58b1'
         owner_id: 21320719
         repo_id: 262289747
+    'pullfrog/pullfrog@v0.1.110':
+        ref: 'v0.1.110'
+        commit: 'sha1-895164fc90f5c493e72693c919c6cf269af158eb'
+        owner_id: 223181266
+        repo_id: 1032749534
     'restatedev/e2e@v2.2':
         ref: 'v2.2'
         commit: 'sha1-edd926b59e51af418b95c143220c0a2a62b7fd7b'
