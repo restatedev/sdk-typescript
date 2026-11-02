@@ -12,15 +12,19 @@
 // Ingress connection from RESTATE_INGRESS_KEY.
 //
 // `connect()` without a `url` reads `RESTATE_INGRESS_KEY`, an ingress key from
-// the Cloud UI (Development → Configure Client):
+// the Cloud UI (Development → Configure Client). Explicit options always win;
+// with neither a `url` nor the variable, `connect()` fails fast, as it always
+// required a `url`.
+//
+// INTERNAL: the key is opaque to users (public docs and errors only say "copy
+// it again"). Its format, shared with the SDK's connect key, is
 //
 //   rstcloudv1_<base58>
 //
 // where the base58 part (Bitcoin alphabet) encodes the query string
 // `envid=env_…&apikey=key_…&region=eu.restate.cloud`. The ingress is
 // `https://<envid minus env_>.env.<region>:8080` and the API key is the
-// bearer. Explicit options always win; with neither a `url` nor the variable,
-// `connect()` fails fast, as it always required a `url`.
+// bearer.
 
 import type { ConnectionOpts } from "./api.js";
 
@@ -35,55 +39,47 @@ const BASE58_ALPHABET =
 /** The parameters an ingress key carries; anything else is ignored with a warning. */
 const KNOWN_KEY_PARAMS = ["envid", "apikey", "region"];
 
-/**
- * The ingress URL and bearer an ingress key stands for. Same format as the
- * SDK's connect key (`rstcloudv1_` + base58 over a query string), read with
- * the parameters an ingress needs: `envid`, `apikey`, `region`.
- */
+/** The ingress URL and bearer an ingress key stands for; see the header comment. */
 function ingressFromKey(
   value: string,
   what: string = INGRESS_KEY_ENV
 ): { url: string; token: string } {
-  // Reasons never echo parts of the value: the whole thing is a credential.
+  // Reasons never echo parts of the value (the whole thing is a credential)
+  // and never describe the encoding: the key is opaque, the fix is a fresh copy.
   const fail = (reason: string): never => {
     throw new Error(
       `${what} is not a Restate Cloud key (${reason}); expected ${CLOUD_KEY_PREFIX}<base58> — copy it again from ${INGRESS_KEY_URL}`
     );
   };
+  const corrupted = () => fail("it is truncated or corrupted");
   const trimmed = value.trim();
   if (!trimmed.startsWith(CLOUD_KEY_PREFIX)) {
     return fail(`it does not start with ${CLOUD_KEY_PREFIX}`);
   }
   const encoded = trimmed.slice(CLOUD_KEY_PREFIX.length);
-  if (encoded === "") return fail("nothing follows the prefix");
-  let bytes: Uint8Array;
-  try {
-    bytes = base58Decode(encoded);
-  } catch {
-    return fail("the part after the prefix is not base58");
-  }
+  if (encoded === "") return corrupted();
   let query: string;
   try {
-    query = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    query = new TextDecoder("utf-8", { fatal: true }).decode(
+      base58Decode(encoded)
+    );
   } catch {
-    return fail("the decoded content is not UTF-8");
+    return corrupted();
   }
-  if (!/^[\x21-\x7e]+$/.test(query)) {
-    return fail("the decoded content is not a query string");
-  }
+  if (!/^[\x21-\x7e]+$/.test(query)) return corrupted();
 
   const params = new Map<string, string>();
   const unknown: string[] = [];
   for (const [name, param] of new URLSearchParams(query).entries()) {
-    if (name === "") return fail("the decoded content is not a query string");
+    if (name === "") return corrupted();
     if (!KNOWN_KEY_PARAMS.includes(name)) unknown.push(name);
-    else if (params.has(name)) return fail(`it repeats the ${name} parameter`);
+    else if (params.has(name)) return fail("it is malformed");
     else params.set(name, param);
   }
   if (unknown.length > 0) {
     // eslint-disable-next-line no-console
     console.warn(
-      `clients.connect(): ignoring unknown ${what} parameter(s) ${unknown.map((name) => JSON.stringify(name)).join(", ")}`
+      `clients.connect(): ${what} carries data this version does not understand (${unknown.map((name) => JSON.stringify(name)).join(", ")}); ignoring it — a newer version may need it`
     );
   }
 
@@ -92,18 +88,16 @@ function ingressFromKey(
     environmentId === undefined
       ? null
       : /^env_([A-Za-z0-9_-]+)$/.exec(environmentId);
-  if (match === null) {
-    return fail("it has no envid parameter holding an environment id");
-  }
+  if (match === null) return fail("it is incomplete or malformed");
   // Hosts are case-insensitive; the UI writes them lowercase.
   const region = params.get("region")?.toLowerCase();
   if (region === undefined || !/^[a-z0-9-]+(\.[a-z0-9-]+)*$/.test(region)) {
-    return fail("it has no region parameter holding a domain name");
+    return fail("it is incomplete or malformed");
   }
   const token = params.get("apikey");
   if (token === undefined || token === "") {
     throw new Error(
-      `${what} carries no apikey; copy it again from ${INGRESS_KEY_URL}`
+      `${what} carries no API key; copy it again from ${INGRESS_KEY_URL}`
     );
   }
   if (!/^[\x21-\x7e]+$/.test(token)) {

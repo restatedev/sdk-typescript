@@ -9,8 +9,11 @@
  * https://github.com/restatedev/sdk-typescript/blob/main/LICENSE
  */
 
-// The Restate Cloud key format (`RESTATE_CONNECT_KEY`; `RESTATE_INGRESS_KEY`
-// in @restatedev/restate-sdk-clients shares it, with its own trimmed parser):
+// INTERNAL: the Restate Cloud key format. To users the key is opaque: public
+// docs and error messages only ever say "copy it again from the Cloud UI";
+// this comment is the one place in restate-sdk that spells the format out
+// (`RESTATE_INGRESS_KEY` in @restatedev/restate-sdk-clients shares it, with
+// its own trimmed parser).
 //
 //   rstcloudv1_<base58>
 //
@@ -52,7 +55,9 @@ export function parseCloudKey(
   what: string,
   help: string
 ): Array<[name: string, value: string]> {
-  // Reasons never echo parts of the value: the whole thing is a credential.
+  // Reasons never echo parts of the value (the whole thing is a credential)
+  // and never describe the encoding: a user only needs to know whether they
+  // pasted something else or lost part of the key.
   const fail = (reason: string): never => {
     throw new Error(
       `${what} is not a Restate Cloud key (${reason}); expected ${CLOUD_KEY_SHAPE} — copy it again from ${help}`
@@ -63,28 +68,21 @@ export function parseCloudKey(
     return fail(`it does not start with ${CLOUD_KEY_PREFIX}`);
   }
   const encoded = trimmed.slice(CLOUD_KEY_PREFIX.length);
-  if (encoded === "") return fail("nothing follows the prefix");
-  let bytes: Uint8Array;
-  try {
-    bytes = base58Decode(encoded);
-  } catch {
-    return fail("the part after the prefix is not base58");
-  }
+  const corrupted = () => fail("it is truncated or corrupted");
+  if (encoded === "") return corrupted();
   let query: string;
   try {
-    query = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    query = new TextDecoder("utf-8", { fatal: true }).decode(
+      base58Decode(encoded)
+    );
   } catch {
-    return fail("the decoded content is not UTF-8");
+    return corrupted();
   }
   // `URLSearchParams` accepts anything; demand the shape we produce: printable
   // ASCII, non-empty, every entry with a name.
-  if (!/^[\x21-\x7e]+$/.test(query)) {
-    return fail("the decoded content is not a query string");
-  }
+  if (!/^[\x21-\x7e]+$/.test(query)) return corrupted();
   const params = [...new URLSearchParams(query).entries()];
-  if (params.some(([name]) => name === "")) {
-    return fail("the decoded content is not a query string");
-  }
+  if (params.some(([name]) => name === "")) return corrupted();
   return params;
 }
 

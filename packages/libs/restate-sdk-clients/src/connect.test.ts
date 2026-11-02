@@ -117,16 +117,16 @@ describe("connect() and RESTATE_INGRESS_KEY", () => {
       /RESTATE_INGRESS_KEY is not a Restate Cloud key \(it does not start with rstcloudv1_\); expected rstcloudv1_<base58> — copy it again from https:\/\/cloud\.restate\.dev/
     );
     process.env[INGRESS_KEY_ENV] = "rstcloudv1_0OIl";
-    expect(() => resolveConnectionOpts({})).toThrow(/not base58/);
+    expect(() => resolveConnectionOpts({})).toThrow(/truncated or corrupted/);
     process.env[INGRESS_KEY_ENV] = "rstcloudv1_5Q"; // a lone 0xff byte
-    expect(() => resolveConnectionOpts({})).toThrow(/not UTF-8/);
+    expect(() => resolveConnectionOpts({})).toThrow(/truncated or corrupted/);
     process.env[INGRESS_KEY_ENV] = cloudKey("a b");
-    expect(() => resolveConnectionOpts({})).toThrow(/not a query string/);
+    expect(() => resolveConnectionOpts({})).toThrow(/truncated or corrupted/);
     process.env[INGRESS_KEY_ENV] = cloudKey(
       "envid=env_201k0yd4rz8yftmd4awh1bajg4v&region=eu.restate.cloud"
     );
     expect(() => resolveConnectionOpts({})).toThrow(
-      /RESTATE_INGRESS_KEY carries no apikey/
+      /RESTATE_INGRESS_KEY carries no API key/
     );
     // Same format as the SDK's parser: the environment id and the region are
     // checked, the host is lowercased, the token header-safe, nothing echoed.
@@ -139,19 +139,19 @@ describe("connect() and RESTATE_INGRESS_KEY", () => {
     process.env[INGRESS_KEY_ENV] = cloudKey(
       "envid=abc&apikey=key_x&region=eu.restate.cloud"
     );
-    expect(() => resolveConnectionOpts({})).toThrow(/no envid parameter/);
+    expect(() => resolveConnectionOpts({})).toThrow(/incomplete or malformed/);
     process.env[INGRESS_KEY_ENV] = cloudKey("envid=env_abc&apikey=key_x");
-    expect(() => resolveConnectionOpts({})).toThrow(/no region parameter/);
+    expect(() => resolveConnectionOpts({})).toThrow(/incomplete or malformed/);
     process.env[INGRESS_KEY_ENV] = cloudKey(
       "envid=env_abc&apikey=key_x&region=eu.restate.cloud/x"
     );
-    expect(() => resolveConnectionOpts({})).toThrow(/no region parameter/);
+    expect(() => resolveConnectionOpts({})).toThrow(/incomplete or malformed/);
     process.env[INGRESS_KEY_ENV] = cloudKey(
       "envid=env_abc&apikey=key%20x&region=eu.restate.cloud"
     );
     expect(() => resolveConnectionOpts({})).toThrow(/HTTP header/);
     process.env[INGRESS_KEY_ENV] = cloudKey(`${INGRESS_QUERY}&apikey=again`);
-    expect(() => resolveConnectionOpts({})).toThrow(/repeats the apikey/);
+    expect(() => resolveConnectionOpts({})).toThrow(/it is malformed/);
     process.env[INGRESS_KEY_ENV] = "rstcloudv1_SECRET";
     expect(() => resolveConnectionOpts({})).toThrow(
       /^(?!.*SECRET).*copy it again from https:\/\/cloud\.restate\.dev/
@@ -166,6 +166,8 @@ describe("connect() and RESTATE_INGRESS_KEY", () => {
       "https://201k0yd4rz8yftmd4awh1bajg4v.env.eu.restate.cloud:8080"
     );
     expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn.mock.calls[0]![0]).toMatch(/"signingkey", "future"/);
+    expect(warn.mock.calls[0]![0]).toMatch(
+      /does not understand \("signingkey", "future"\)/
+    );
   });
 });

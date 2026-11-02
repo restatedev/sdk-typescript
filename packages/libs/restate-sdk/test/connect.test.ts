@@ -129,10 +129,10 @@ describe("the connect key", () => {
     expect(encodeCloudKeyQuery("\0\0a")).toMatch(/^rstcloudv1_11/);
     expect(() =>
       parseCloudKey(encodeCloudKeyQuery("\0\0a"), "x", "<help>")
-    ).toThrow(/not a query string/);
+    ).toThrow(/truncated or corrupted/);
   });
 
-  test("rejects a wrong prefix, non-base58, non-UTF-8 or non-query content, naming the source and never echoing it", () => {
+  test("rejects a wrong prefix or corrupted content, naming the source and never echoing or explaining the encoding", () => {
     const bad = (value: string, reason: RegExp) =>
       expect(() =>
         parseCloudKey(value, "RESTATE_CONNECT_KEY", "<help>")
@@ -146,19 +146,13 @@ describe("the connect key", () => {
       /it does not start with rstcloudv1_/
     );
     bad("rstcloudv2_abc", /it does not start with rstcloudv1_/);
-    bad(CLOUD_KEY_PREFIX, /nothing follows the prefix/);
-    bad(`${CLOUD_KEY_PREFIX}0OIl`, /the part after the prefix is not base58/);
-    bad(
-      `${CLOUD_KEY_PREFIX}abc def`,
-      /the part after the prefix is not base58/
-    );
+    bad(CLOUD_KEY_PREFIX, /it is truncated or corrupted/);
+    bad(`${CLOUD_KEY_PREFIX}0OIl`, /it is truncated or corrupted/);
+    bad(`${CLOUD_KEY_PREFIX}abc def`, /it is truncated or corrupted/);
     // 0xff is never valid UTF-8.
-    bad(`${CLOUD_KEY_PREFIX}5Q`, /the decoded content is not UTF-8/);
-    bad(
-      encodeCloudKeyQuery("a=1 b=2"),
-      /the decoded content is not a query string/
-    );
-    bad(encodeCloudKeyQuery("=1"), /the decoded content is not a query string/);
+    bad(`${CLOUD_KEY_PREFIX}5Q`, /it is truncated or corrupted/);
+    bad(encodeCloudKeyQuery("a=1 b=2"), /it is truncated or corrupted/);
+    bad(encodeCloudKeyQuery("=1"), /it is truncated or corrupted/);
     // A secret in a malformed key never reaches the message.
     expect(() =>
       parseCloudKey("key_SECRET.abc", "RESTATE_CONNECT_KEY", "<help>")
@@ -223,11 +217,11 @@ describe("the connect key", () => {
           .join("&")
       );
     expect(() => resolveCoordinates({ key: without("envid") }, noWarn)).toThrow(
-      /no envid parameter.*integration#configure-sdk/
+      /connect key is incomplete.*integration#configure-sdk/
     );
     expect(() =>
       resolveCoordinates({ key: without("region") }, noWarn)
-    ).toThrow(/no region parameter.*integration#configure-sdk/);
+    ).toThrow(/connect key is incomplete.*integration#configure-sdk/);
     expect(() =>
       resolveCoordinates(
         {
@@ -240,7 +234,7 @@ describe("the connect key", () => {
         },
         noWarn
       )
-    ).toThrow(/envid is not an environment id/);
+    ).toThrow(/connect key is malformed.*integration#configure-sdk/);
     expect(() =>
       resolveCoordinates(
         {
@@ -253,13 +247,13 @@ describe("the connect key", () => {
         },
         noWarn
       )
-    ).toThrow(/region is not a domain name/);
+    ).toThrow(/connect key is malformed/);
     expect(() =>
       resolveCoordinates(
         { key: encodeCloudKeyQuery(`${MANAGED_QUERY}&apikey=again`) },
         noWarn
       )
-    ).toThrow(/repeats the apikey parameter/);
+    ).toThrow(/connect key is malformed/);
     expect(() =>
       resolveCoordinates(
         {
@@ -273,7 +267,7 @@ describe("the connect key", () => {
         noWarn
       )
     ).toThrow(
-      /apikey contains characters that cannot travel in an HTTP header/
+      /API key contains characters that cannot travel in an HTTP header/
     );
 
     // A key next to an operator's variables for another environment: warned.
@@ -291,9 +285,8 @@ describe("the connect key", () => {
       (m) => warnings.push(m)
     );
     expect(warnings).toHaveLength(1);
-    expect(warnings[0]).toMatch(
-      /"future", "other".*envid, apikey, region, signingkey/
-    );
+    expect(warnings[0]).toMatch(/does not understand \("future", "other"\)/);
+    expect(warnings[0]).not.toMatch(/envid|signingkey/);
   });
 
   test("without apikey the token comes from RESTATE_AUTH_TOKEN or the token file; without signingkey it is an error", () => {
@@ -303,7 +296,7 @@ describe("the connect key", () => {
       signingKey: SIGNING_KEY,
     });
     expect(() => resolveCoordinates({ key: bare }, noWarn)).toThrow(
-      /carries no apikey.*RESTATE_AUTH_TOKEN.*RESTATE_INPROC_AUTH_TOKEN_FILE/
+      /carries no API key.*RESTATE_AUTH_TOKEN.*RESTATE_INPROC_AUTH_TOKEN_FILE/
     );
     const file = tokenFile("key_fromfile\n");
     process.env[AUTH_TOKEN_FILE_ENVS[0]] = file;
@@ -333,7 +326,7 @@ describe("the connect key", () => {
         noWarn
       )
     ).toThrow(
-      /no signingkey parameter.*an ingress key cannot connect a service.*cloud\.restate\.dev\/to\/developers\/integration#configure-sdk/
+      /carries no signing key.*this is an ingress key or an incomplete paste.*cloud\.restate\.dev\/to\/developers\/integration#configure-sdk/
     );
     expect(() =>
       resolveCoordinates(

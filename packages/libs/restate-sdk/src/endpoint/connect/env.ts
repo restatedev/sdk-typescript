@@ -19,10 +19,9 @@
 //                → RESTATE_TUNNEL_NAME → error
 //   key   option → RESTATE_CONNECT_KEY → the expanded variables → error
 //
-// The key is one `rstcloudv1_…` string from the Cloud UI (Development →
-// Configure SDK): base58 over `envid=…&apikey=…&region=…&signingkey=…`, see
-// `parseCloudKey` in `key.ts`.
-// The expanded variables are the older spelling of the same coordinates, kept
+// The key is one opaque `rstcloudv1_…` string from the Cloud UI (Development →
+// Configure SDK); its format is documented in `key.ts` only. The expanded
+// variables are the older spelling of the same coordinates, kept
 // for the restate-operator (`RESTATE_INPROC_*`) and the standalone tunnel
 // container (`RESTATE_*`): environment id, token or token file, region or
 // SRV / servers, signing key.
@@ -176,28 +175,32 @@ function coordinatesFromKey(
     if (!KNOWN_KEY_PARAMS.includes(name)) {
       unknown.push(name);
     } else if (params.has(name)) {
-      fail(`the connect key repeats the ${name} parameter`);
+      fail(
+        `the connect key is malformed — copy it again from ${CONNECT_KEY_URL}`
+      );
     } else {
       params.set(name, value);
     }
   }
   if (unknown.length > 0) {
     warn(
-      `connect(): ignoring unknown connect key parameter(s) ${unknown.map((n) => JSON.stringify(n)).join(", ")} — this SDK version knows ${KNOWN_KEY_PARAMS.join(", ")}`
+      `connect(): the connect key carries data this SDK version does not understand (${unknown.map((n) => JSON.stringify(n)).join(", ")}); ignoring it — a newer SDK may need it`
     );
   }
 
-  const environmentId = params.get("envid");
-  if (environmentId === undefined) {
+  // A missing or malformed piece is a bad paste, never explained further:
+  // the key is opaque to the user, the fix is always a fresh copy.
+  const incomplete = (): never =>
     fail(
-      `the connect key has no envid parameter — copy it again from ${CONNECT_KEY_URL}`
+      `the connect key is incomplete — copy it again from ${CONNECT_KEY_URL}`
     );
-  }
-  if (!/^env_[A-Za-z0-9_-]+$/.test(environmentId)) {
+  const malformed = (): never =>
     fail(
-      "the connect key's envid is not an environment id (env_ followed by alphanumerics)"
+      `the connect key is malformed — copy it again from ${CONNECT_KEY_URL}`
     );
-  }
+
+  const environmentId = params.get("envid") ?? incomplete();
+  if (!/^env_[A-Za-z0-9_-]+$/.test(environmentId)) malformed();
 
   // A key for one environment next to an operator's variables for another
   // is almost certainly a stray developer key: say so.
@@ -211,27 +214,20 @@ function coordinatesFromKey(
   const identityKeys = resolveIdentityKeys(
     options.identityKeys,
     params.get("signingkey"),
-    `the connect key has no signingkey parameter and no identityKeys were given — an ingress key cannot connect a service; copy a connect key from ${CONNECT_KEY_URL}`
+    `the connect key carries no signing key and no identityKeys were given — this is an ingress key or an incomplete paste; copy a connect key from ${CONNECT_KEY_URL}`
   );
 
   const apiKey = params.get("apikey");
   const authToken =
     apiKey !== undefined && apiKey !== ""
-      ? constantToken(apiKey, "the connect key's apikey")
+      ? constantToken(apiKey, "the connect key's API key")
       : (tokenFromEnv() ??
         fail(
-          `the connect key carries no apikey and no token is configured in ${AUTH_TOKEN_ENVS[0]} or a file in ${AUTH_TOKEN_FILE_ENVS[0]}`
+          `the connect key carries no API key and no token is configured in ${AUTH_TOKEN_ENVS[0]} or a file in ${AUTH_TOKEN_FILE_ENVS[0]}`
         ));
 
-  const regionDomain = params.get("region");
-  if (regionDomain === undefined) {
-    fail(
-      `the connect key has no region parameter — copy it again from ${CONNECT_KEY_URL}`
-    );
-  }
-  if (!REGION_DOMAIN.test(regionDomain)) {
-    fail("the connect key's region is not a domain name");
-  }
+  const regionDomain = params.get("region") ?? incomplete();
+  if (!REGION_DOMAIN.test(regionDomain)) malformed();
 
   // Discovery: explicit options, else the region's SRV name.
   const override = pickDiscovery(options);
