@@ -63,5 +63,6 @@ The compatibility with Restate is described in the following table:
 Some features require a minimum version of both Restate and the SDK:
 
 - **`TerminalError.metadata`**: requires Restate >= 1.6 with sdk-typescript >= 1.11. Check the in-code documentation for more details.
+- **`RetryableError.metadata` and `errorCode` propagated to the `TerminalError` when `ctx.run` retries are exhausted**: requires Restate >= 1.6 with sdk-typescript >= 1.18.3. Check the in-code documentation for more details.
 - **`ctx.run`'s `retryPolicy` pause and `PauseError`**: requires Restate >= 1.7 with sdk-typescript >= 1.15, setting `RESTATE_EXPERIMENTAL_ENABLE_PROTOCOL_V7=true` on the Restate Server. Check the in-code documentation for more details.
 - **Scope and limit key**: requires Restate >= 1.7 with sdk-typescript >= 1.15

@@ -370,6 +370,31 @@ impl From<Error> for WasmFailure {
     }
 }
 
+/// Retryable failure of a `ctx.run` attempt.
+///
+/// `code` and `metadata` are propagated to the terminal failure, in case the retry policy gives up.
+#[derive(Tsify, Serialize, Deserialize)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct WasmRetryableFailure {
+    pub code: u16,
+    pub message: String,
+    pub stacktrace: Option<String>,
+    pub metadata: Vec<WasmFailureMetadata>,
+}
+
+impl From<WasmRetryableFailure> for Error {
+    fn from(value: WasmRetryableFailure) -> Self {
+        Error::new(value.code, value.message)
+            .with_stacktrace(value.stacktrace.unwrap_or_default())
+            .with_metadata(
+                value
+                    .metadata
+                    .into_iter()
+                    .map(|metadata| (metadata.key, metadata.value)),
+            )
+    }
+}
+
 #[derive(Tsify, Serialize, Deserialize)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct WasmExponentialRetryConfig {
@@ -1119,8 +1144,7 @@ impl WasmVM {
     pub fn propose_run_completion_failure_transient(
         &mut self,
         handle: WasmNotificationHandle,
-        error_message: String,
-        error_stacktrace: Option<String>,
+        failure: WasmRetryableFailure,
         attempt_duration: u64,
         config: Option<WasmExponentialRetryConfig>,
     ) -> Result<(), WasmFailure> {
@@ -1129,8 +1153,7 @@ impl WasmVM {
             handle.into(),
             RunExitResult::RetryableFailure {
                 attempt_duration: Duration::from_millis(attempt_duration),
-                error: Error::internal(error_message)
-                    .with_stacktrace(error_stacktrace.unwrap_or_default()),
+                error: failure.into(),
             },
             config
                 .map(|config| config.into())
@@ -1142,8 +1165,7 @@ impl WasmVM {
     pub fn propose_run_completion_failure_transient_with_delay_override(
         &mut self,
         handle: WasmNotificationHandle,
-        error_message: String,
-        error_stacktrace: Option<String>,
+        failure: WasmRetryableFailure,
         attempt_duration: u64,
         delay_override: Option<u64>,
         max_retry_attempts_override: Option<u32>,
@@ -1167,8 +1189,7 @@ impl WasmVM {
             handle.into(),
             RunExitResult::RetryableFailure {
                 attempt_duration: Duration::from_millis(attempt_duration),
-                error: Error::internal(error_message)
-                    .with_stacktrace(error_stacktrace.unwrap_or_default()),
+                error: failure.into(),
             },
             retry_policy
         ))
@@ -1178,8 +1199,7 @@ impl WasmVM {
     pub fn propose_run_completion_failure_transient_with_pause(
         &mut self,
         handle: WasmNotificationHandle,
-        error_message: String,
-        error_stacktrace: Option<String>,
+        failure: WasmRetryableFailure,
         attempt_duration: u64,
     ) -> Result<(), WasmFailure> {
         use_log_dispatcher!(self, |vm| CoreVM::propose_run_completion(
@@ -1187,9 +1207,7 @@ impl WasmVM {
             handle.into(),
             RunExitResult::RetryableFailure {
                 attempt_duration: Duration::from_millis(attempt_duration),
-                error: Error::internal(error_message)
-                    .with_stacktrace(error_stacktrace.unwrap_or_default())
-                    .with_should_pause(true),
+                error: Error::from(failure).with_should_pause(true),
             },
             RetryPolicy::Infinite
         ))

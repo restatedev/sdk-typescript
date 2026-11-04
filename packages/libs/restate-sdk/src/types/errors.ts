@@ -140,8 +140,16 @@ export class CancelledError extends TerminalError {
 export interface RetryableErrorOptions {
   /**
    * In how long it should retry.
+   *
+   * When unset, uses the retry policy configured in the context where it's thrown.
    */
   retryAfter?: Duration | number;
+  /**
+   * Metadata key-value pairs to attach to the error.
+   *
+   * **Note **: requires Restate 1.6+.
+   */
+  metadata?: Record<string, string>;
 }
 
 /**
@@ -154,6 +162,7 @@ export class RetryableError extends RestateError {
   public override name = "RetryableError";
 
   readonly retryAfter?: Duration | number;
+  readonly metadata?: Record<string, string>;
 
   constructor(
     message: string,
@@ -168,6 +177,7 @@ export class RetryableError extends RestateError {
       cause: options?.cause,
     });
     this.retryAfter = options?.retryAfter;
+    this.metadata = options?.metadata;
   }
 
   /**
