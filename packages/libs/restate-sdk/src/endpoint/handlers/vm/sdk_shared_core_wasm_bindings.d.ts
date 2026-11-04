@@ -1,5 +1,17 @@
 /* tslint:disable */
 /* eslint-disable */
+/**
+ * Retryable failure of a `ctx.run` attempt.
+ *
+ * `code` and `metadata` are propagated to the terminal failure, in case the retry policy gives up.
+ */
+export interface WasmRetryableFailure {
+  code: number;
+  message: string;
+  stacktrace: string | undefined;
+  metadata: WasmFailureMetadata[];
+}
+
 export interface WasmAwakeable {
   id: string;
   handle: number;
@@ -188,15 +200,13 @@ export class WasmVM {
   propose_run_completion_failure(handle: number, value: WasmFailure): void;
   propose_run_completion_failure_transient(
     handle: number,
-    error_message: string,
-    error_stacktrace: string | null | undefined,
+    failure: WasmRetryableFailure,
     attempt_duration: bigint,
     config?: WasmExponentialRetryConfig | null
   ): void;
   propose_run_completion_failure_transient_with_delay_override(
     handle: number,
-    error_message: string,
-    error_stacktrace: string | null | undefined,
+    failure: WasmRetryableFailure,
     attempt_duration: bigint,
     delay_override?: bigint | null,
     max_retry_attempts_override?: number | null,
@@ -204,8 +214,7 @@ export class WasmVM {
   ): void;
   propose_run_completion_failure_transient_with_pause(
     handle: number,
-    error_message: string,
-    error_stacktrace: string | null | undefined,
+    failure: WasmRetryableFailure,
     attempt_duration: bigint
   ): void;
   propose_run_completion_success(handle: number, buffer: Uint8Array): void;

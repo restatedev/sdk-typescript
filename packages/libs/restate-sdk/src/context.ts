@@ -413,6 +413,9 @@ export interface Context extends RestateContext {
    * - Providing retry policy options in {@link RunOptions}
    * - Throwing {@link RetryableError}, providing `retryAfter` option. This can be especially useful when interacting with HTTP requests returning the `Retry-After` header. You can combine the usage of throwing {@link RetryableError} with the `maxRetryAttempts`/`maxRetryDuration` from {@link RunOptions}.
    *
+   * When the retry policy gives up, `ctx.run` throws a `TerminalError` with the message of the last attempt.
+   * If the last attempt threw a {@link RetryableError}, its `errorCode` and `metadata` are propagated to the `TerminalError` as well.
+   *
    * @example Run some external action and persist its result
    * ```ts
    * const result = await ctx.run(someExternalAction)
@@ -452,6 +455,27 @@ export interface Context extends RestateContext {
    *   // Retry at most ten times
    *   maxRetryAttempts: 10
    * });
+   * ```
+   * @example Propagate error metadata when retries are exhausted
+   * ```ts
+   * try {
+   *   await ctx.run("payment action", async () => {
+   *     const res = await paymentProvider.charge(txId, paymentInfo);
+   *     if (!res.ok) {
+   *       // Retried using the RunOptions retry policy. If retries are exhausted,
+   *       // errorCode and metadata end up in the TerminalError thrown by ctx.run.
+   *       throw new RetryableError("Payment provider unavailable", {
+   *         errorCode: 503,
+   *         metadata: { providerStatus: res.status, requestId: res.requestId },
+   *       });
+   *     }
+   *   }, { maxRetryAttempts: 10 });
+   * } catch (e) {
+   *   if (e instanceof TerminalError) {
+   *     console.log(e.code, e.metadata);
+   *   }
+   *   throw e;
+   * }
    * ```
    *
    * @param action The function to run.
