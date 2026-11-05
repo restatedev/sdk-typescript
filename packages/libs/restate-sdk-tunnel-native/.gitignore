@@ -1,0 +1,12 @@
+# Rust build output
+/target
+
+# napi-rs generated host artifacts (built locally via `napi build`; the
+# multi-platform prebuild matrix + publishing is deferred — see the plan doc).
+*.node
+/index.cjs
+/index.d.cts
+
+# tsdown output
+/dist
+*.tsbuildinfo
