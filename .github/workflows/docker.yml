@@ -7,6 +7,11 @@ on:
       - v**
   workflow_dispatch:
 
+# The default GITHUB_TOKEN is read-only; pushing images to GHCR needs packages: write
+permissions:
+  contents: read
+  packages: write
+
 env:
   REPOSITORY_OWNER: ${{ github.repository_owner }}
   GHCR_REGISTRY: "ghcr.io"
