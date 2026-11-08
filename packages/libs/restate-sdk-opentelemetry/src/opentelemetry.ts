@@ -240,7 +240,6 @@ export function openTelemetryHook(
         handler: async (next) => {
           try {
             await context.with(attemptContext, next);
-            attemptSpan.setStatus({ code: SpanStatusCode.OK });
           } catch (e) {
             if (!internal.isSuspendedError(e)) {
               attemptSpan.setStatus({
@@ -274,7 +273,6 @@ export function openTelemetryHook(
         return context.with(runContext, async () => {
           try {
             await next();
-            runSpan.setStatus({ code: SpanStatusCode.OK });
           } catch (e) {
             if (!internal.isSuspendedError(e)) {
               runSpan.setStatus({
