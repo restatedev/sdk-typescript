@@ -101,15 +101,47 @@ export interface InvocationOutcome {
   transientErrors?: TransientError[];
 }
 
+// When the write-blob-table feature is enabled, the runtime stores the invocation output
+// in the blob table instead of appending a `Command: Output` entry to the journal.
+function isOutputStoredInBlobTable(): boolean {
+  return Object.entries(process.env).some(
+    ([k, v]) =>
+      k.toUpperCase() === "RESTATE_EXPERIMENTAL_ENABLE_WRITE_BLOB_TABLE" &&
+      v?.toLowerCase() === "true"
+  );
+}
+
+function parseOutputValue(decoded: string): unknown {
+  try {
+    return JSON.parse(decoded) as unknown;
+  } catch {
+    return decoded;
+  }
+}
+
 async function getInvocationOutcome(
   adminUrl: string,
   invocationId: string
 ): Promise<InvocationOutcome> {
+  const outputFromBlob = isOutputStoredInBlobTable();
   const res = await fetch(`${adminUrl}/query`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     body: JSON.stringify({
-      query: `
+      query: outputFromBlob
+        ? `
+        SELECT
+          s.status,
+          s.completion_result,
+          s.completion_failure,
+          b.result AS blob_result,
+          b.output_utf8,
+          b.failure_json
+        FROM sys_invocation_status s
+        LEFT JOIN sys_blob b ON s.completion_blob_id = b.id
+        WHERE s.id = '${invocationId}'
+      `
+        : `
         SELECT
           i.status,
           i.completion_result,
@@ -126,24 +158,36 @@ async function getInvocationOutcome(
       status: string;
       completion_result: string | null;
       completion_failure: string | null;
-      entry_json: string | null;
+      entry_json?: string | null;
+      blob_result?: string | null;
+      output_utf8?: string | null;
+      failure_json?: string | null;
     }[];
   };
   const row = json.rows[0];
   if (!row) return { status: "not_found" };
   if (row.status !== "completed") return { status: row.status };
 
-  let journalOutput:
-    | {
-        value?: unknown;
-        failure?: {
-          code: number;
-          message: string;
-          metadata?: Record<string, string>;
-        };
-      }
-    | undefined;
-  if (row.entry_json) {
+  let journalOutput: InvocationOutcome["journalOutput"];
+  if (row.blob_result === "success" && row.output_utf8 != null) {
+    journalOutput = { value: parseOutputValue(row.output_utf8) };
+  } else if (row.blob_result === "failure" && row.failure_json) {
+    const failure = JSON.parse(row.failure_json) as {
+      code: number;
+      message: string;
+      metadata?: Record<string, string>;
+    };
+    journalOutput = {
+      failure: {
+        code: failure.code,
+        message: failure.message,
+        metadata:
+          failure.metadata && Object.keys(failure.metadata).length > 0
+            ? failure.metadata
+            : undefined,
+      },
+    };
+  } else if (row.entry_json) {
     const entry = JSON.parse(row.entry_json) as {
       Command?: {
         Output?: {
@@ -161,11 +205,7 @@ async function getInvocationOutcome(
     const result = entry?.Command?.Output?.result;
     if (result?.Success) {
       const decoded = new TextDecoder().decode(new Uint8Array(result.Success));
-      try {
-        journalOutput = { value: JSON.parse(decoded) as unknown };
-      } catch {
-        journalOutput = { value: decoded };
-      }
+      journalOutput = { value: parseOutputValue(decoded) };
     } else if (result?.Failure) {
       const metadata = result.Failure.metadata?.length
         ? Object.fromEntries(
