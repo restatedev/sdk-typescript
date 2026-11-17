@@ -14,6 +14,7 @@
 import type {
   ContextDate,
   DurablePromise,
+  EntryOptions,
   GenericCall,
   GenericSend,
   InvocationHandle,
@@ -26,9 +27,8 @@ import type {
   RestatePromise,
   RunAction,
   RunOptions,
-  SignalReference,
-  EntryOptions,
   ScopedContext,
+  SignalReference,
   WorkflowContext,
 } from "./context.js";
 import type * as vm from "./endpoint/handlers/vm/sdk_shared_core_wasm_bindings.js";
@@ -54,18 +54,19 @@ import {
 } from "./types/rpc.js";
 import type {
   Duration,
+  HandlerDescriptor,
   JournalValueCodec,
   Serde,
-  HandlerDescriptor,
 } from "@restatedev/restate-sdk-core";
 import { millisOrDurationToMillis, serde } from "@restatedev/restate-sdk-core";
 import { RandImpl } from "./utils/rand.js";
-import { AsyncResultValue, CombinatorRestatePromise } from "./promises.js";
 import {
+  AsyncResultValue,
+  CombinatorRestatePromise,
   ConstRestatePromise,
+  InvocationRestatePromise,
   pendingPromise,
   PromisesExecutor,
-  InvocationRestatePromise,
   SingleRestatePromise,
 } from "./promises.js";
 import { InputPump, OutputPump } from "./io.js";
@@ -234,15 +235,26 @@ export class ContextImpl
       WasmCommandType.GetInvocationOutput,
       () => {},
       (vm) => vm.sys_get_invocation_output(invocationId),
-      // Void: the target invocation has not completed yet
-      VoidAsRunning,
+      (value, prom) => {
+        if (value === "Empty") {
+          // The target invocation has not completed yet
+          prom.resolve({ status: "running" } satisfies InvocationOutput<T>);
+          return Promise.resolve(true);
+        } else if (typeof value === "object" && "Failure" in value) {
+          // The target invocation failure is a result, not a rejection
+          prom.resolve({
+            status: "failure",
+            error: failureToTerminalError(value.Failure),
+          } satisfies InvocationOutput<T>);
+          return Promise.resolve(true);
+        }
+        return Promise.resolve(false);
+      },
       SuccessWithSerde<T>(
         serde ?? (this.defaultSerde as Serde<T>),
         this.journalValueCodec,
         (value): InvocationOutput<T> => ({ status: "success", value })
-      ),
-      // The target invocation failure is a result here, not an error
-      FailureAsInvocationOutput
+      )
     );
   }
 
@@ -1388,14 +1400,6 @@ const VoidAsUndefined: Completer = (value, prom) => {
   }
   return Promise.resolve(false);
 };
-const VoidAsRunning: Completer = (value, prom) => {
-  if (value === "Empty") {
-    prom.resolve({ status: "running" } satisfies InvocationOutput<unknown>);
-    return Promise.resolve(true);
-  }
-  return Promise.resolve(false);
-};
-
 function SuccessWithSerde<T>(
   serde: Serde<T>,
   journalCodec?: JournalValueCodec,
@@ -1437,17 +1441,6 @@ function failureToTerminalError(failure: vm.WasmFailure): TerminalError {
 const Failure: Completer = (value, prom) => {
   if (typeof value === "object" && "Failure" in value) {
     prom.reject(failureToTerminalError(value.Failure));
-    return Promise.resolve(true);
-  }
-  return Promise.resolve(false);
-};
-
-const FailureAsInvocationOutput: Completer = (value, prom) => {
-  if (typeof value === "object" && "Failure" in value) {
-    prom.resolve({
-      status: "failure",
-      error: failureToTerminalError(value.Failure),
-    } satisfies InvocationOutput<unknown>);
     return Promise.resolve(true);
   }
   return Promise.resolve(false);
