@@ -14,6 +14,7 @@
 import type {
   ContextDate,
   DurablePromise,
+  EntryOptions,
   GenericCall,
   GenericSend,
   InvocationHandle,
@@ -26,9 +27,8 @@ import type {
   RestatePromise,
   RunAction,
   RunOptions,
-  SignalReference,
-  EntryOptions,
   ScopedContext,
+  SignalReference,
   WorkflowContext,
 } from "./context.js";
 import type * as vm from "./endpoint/handlers/vm/sdk_shared_core_wasm_bindings.js";
@@ -54,23 +54,28 @@ import {
 } from "./types/rpc.js";
 import type {
   Duration,
+  HandlerDescriptor,
   JournalValueCodec,
   Serde,
-  HandlerDescriptor,
 } from "@restatedev/restate-sdk-core";
 import { millisOrDurationToMillis, serde } from "@restatedev/restate-sdk-core";
 import { RandImpl } from "./utils/rand.js";
-import { AsyncResultValue, CombinatorRestatePromise } from "./promises.js";
 import {
+  AsyncResultValue,
+  CombinatorRestatePromise,
   ConstRestatePromise,
+  InvocationRestatePromise,
   pendingPromise,
   PromisesExecutor,
-  InvocationRestatePromise,
   SingleRestatePromise,
 } from "./promises.js";
 import { InputPump, OutputPump } from "./io.js";
 import { ExternalProgressChannel } from "./utils/external_progress_channel.js";
-import type { ContextInternal, GetProjectOptions } from "./internal.js";
+import type {
+  ContextInternal,
+  GetProjectOptions,
+  InvocationOutput,
+} from "./internal.js";
 import { InputReader, OutputWriter } from "./endpoint/handlers/types.js";
 import { ExecutionOptions } from "./endpoint/components.js";
 
@@ -219,6 +224,37 @@ export class ContextImpl
       (vm) => vm.sys_attach_invocation(invocationId),
       SuccessWithSerde(serde ?? this.defaultSerde, this.journalValueCodec),
       Failure
+    );
+  }
+
+  getInvocationOutput<T>(
+    invocationId: InvocationId,
+    serde?: Serde<T>
+  ): RestatePromise<InvocationOutput<T>> {
+    return this.processCompletableEntry(
+      WasmCommandType.GetInvocationOutput,
+      () => {},
+      (vm) => vm.sys_get_invocation_output(invocationId),
+      (value, prom) => {
+        if (value === "Empty") {
+          // The target invocation has not completed yet
+          prom.resolve({ status: "running" } satisfies InvocationOutput<T>);
+          return Promise.resolve(true);
+        } else if (typeof value === "object" && "Failure" in value) {
+          // The target invocation failure is a result, not a rejection
+          prom.resolve({
+            status: "failure",
+            error: failureToTerminalError(value.Failure),
+          } satisfies InvocationOutput<T>);
+          return Promise.resolve(true);
+        }
+        return Promise.resolve(false);
+      },
+      SuccessWithSerde<T>(
+        serde ?? (this.defaultSerde as Serde<T>),
+        this.journalValueCodec,
+        (value): InvocationOutput<T> => ({ status: "success", value })
+      )
     );
   }
 
@@ -1364,11 +1400,10 @@ const VoidAsUndefined: Completer = (value, prom) => {
   }
   return Promise.resolve(false);
 };
-
 function SuccessWithSerde<T>(
   serde: Serde<T>,
   journalCodec?: JournalValueCodec,
-  transform?: <U>(success: T) => U
+  transform?: (success: T) => unknown
 ): Completer {
   return async (value, prom) => {
     if (typeof value !== "object" || !("Success" in value)) {
@@ -1380,33 +1415,32 @@ function SuccessWithSerde<T>(
     } else {
       buffer = value.Success;
     }
-    let val = serde.deserialize(buffer);
-    if (transform) {
-      val = transform(val);
-    }
-    prom.resolve(val);
+    const val = serde.deserialize(buffer);
+    prom.resolve(transform ? transform(val) : val);
     return true;
   };
 }
 
+function failureToTerminalError(failure: vm.WasmFailure): TerminalError {
+  const metadata = (failure.metadata ?? []).reduce(
+    (
+      acc: Record<string, string>,
+      { key, value: v }: { key: string; value: string }
+    ) => {
+      acc[key] = v;
+      return acc;
+    },
+    {} as Record<string, string>
+  );
+  return new TerminalError(failure.message, {
+    errorCode: failure.code,
+    metadata,
+  });
+}
+
 const Failure: Completer = (value, prom) => {
   if (typeof value === "object" && "Failure" in value) {
-    const metadata = (value.Failure.metadata ?? []).reduce(
-      (
-        acc: Record<string, string>,
-        { key, value: v }: { key: string; value: string }
-      ) => {
-        acc[key] = v;
-        return acc;
-      },
-      {} as Record<string, string>
-    );
-    prom.reject(
-      new TerminalError(value.Failure.message, {
-        errorCode: value.Failure.code,
-        metadata,
-      })
-    );
+    prom.reject(failureToTerminalError(value.Failure));
     return Promise.resolve(true);
   }
   return Promise.resolve(false);
