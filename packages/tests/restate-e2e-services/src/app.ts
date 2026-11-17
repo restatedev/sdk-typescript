@@ -27,6 +27,7 @@ import "./virtual_object_command_interpreter.js";
 import "./promise_combinators.js";
 import "./explicit_cancellation.js";
 import "./signals.js";
+import "./get_invocation_output.js";
 import "./preview_serdes.js";
 import "./ingress_default_serde.js";
 import "./hooks.js";
