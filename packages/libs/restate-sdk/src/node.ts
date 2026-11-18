@@ -10,6 +10,7 @@
  */
 
 export * from "./common_api.js";
+import type * as http2 from "node:http2";
 import type { RestateEndpoint } from "./endpoint.js";
 import { NodeEndpoint } from "./endpoint/node_endpoint.js";
 import type { EndpointOptions } from "./endpoint/types.js";
@@ -84,8 +85,34 @@ export function createEndpointHandler(options: NodeEndpointOptions) {
   ).handler({ bidirectional });
 }
 
+const DEFAULT_SERVE_HTTP2_SETTINGS: Readonly<http2.Settings> = {
+  maxConcurrentStreams: 8,
+};
+
 export interface ServeOptions extends EndpointOptions {
+  /**
+   * Port to listen on. Defaults to the `PORT` environment variable, or 9080.
+   */
   port?: number;
+
+  /**
+   * HTTP/2 settings of the server. Settings you pass are applied on top of
+   * the defaults, which are Node's defaults except for
+   * `maxConcurrentStreams: 8`.
+   *
+   * Restate sends invocations as HTTP/2 streams over a few long-lived
+   * connections, and opens another connection only when the existing ones
+   * are close to their `maxConcurrentStreams`. A low `maxConcurrentStreams`
+   * makes Restate open more connections, which lets connection-level load
+   * balancing (for example an L4 load balancer in front of several replicas)
+   * spread invocations evenly.
+   *
+   * Restate Server versions before 1.7 don't open additional connections:
+   * they use one connection per partition, so `maxConcurrentStreams` limits
+   * how many invocations of this endpoint run concurrently per partition. If
+   * you run many concurrent invocations against such a server, raise it.
+   */
+  http2Settings?: http2.Settings;
 }
 
 /**
@@ -102,6 +129,14 @@ export interface ServeOptions extends EndpointOptions {
  * @param {ServeOptions} options - Configuration options for the endpoint handler.
  * @returns a Promise that resolves with the bound port, or rejects with a failure otherwise.
  */
-export function serve({ port, ...options }: ServeOptions) {
-  return withOptions<RestateEndpoint>(new NodeEndpoint(), options).listen(port);
+export function serve({
+  port,
+  http2Settings,
+  ...options
+}: ServeOptions): Promise<number> {
+  const endpoint = new NodeEndpoint();
+  withOptions<RestateEndpoint>(endpoint, options);
+  return endpoint.listen(port, {
+    http2Settings: { ...DEFAULT_SERVE_HTTP2_SETTINGS, ...http2Settings },
+  });
 }

@@ -29,6 +29,11 @@ import { tryCreateContextualLogger } from "./handlers/utils.js";
 import type { InputReader, OutputWriter } from "./handlers/types.js";
 import type { ProtocolMode } from "./discovery.js";
 
+export interface NodeListenOptions {
+  /** HTTP/2 settings of the server. Defaults to Node's defaults. */
+  http2Settings?: http2.Settings;
+}
+
 export class NodeEndpoint implements RestateEndpoint {
   private builder: EndpointBuilder = new EndpointBuilder();
 
@@ -116,13 +121,14 @@ export class NodeEndpoint implements RestateEndpoint {
     };
   }
 
-  listen(port?: number): Promise<number> {
+  listen(port?: number, options?: NodeListenOptions): Promise<number> {
     const endpoint = this.builder.build();
 
     const actualPort = port ?? parseInt(process.env.PORT ?? "9080");
     endpoint.rlog.info(`Restate SDK started listening on ${actualPort}...`);
 
     const server = http2.createServer(
+      options?.http2Settings ? { settings: options.http2Settings } : {},
       nodeHttp2Handler(endpoint, "BIDI_STREAM")
     );
 
