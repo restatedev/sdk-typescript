@@ -31,6 +31,11 @@ on:
         required: false
         default: ""
         type: string
+      restateImageCacheKey:
+        description: "WarpBuild cache key of restate.tar, saved by the calling restate workflow. Restored instead of downloading the artifact, which stays the fallback; used together with restateCommit"
+        required: false
+        default: ""
+        type: string
       restateImage:
         description: "restate image, superseded by restate commit"
         required: false
@@ -100,12 +105,23 @@ jobs:
               }
             }
 
+      # The calling restate workflow also saves restate.tar to the WarpBuild cache. Restoring it
+      # is much faster than the artifact download below, which stays the fallback. `path` must
+      # match the save in restate's docker.yml, because it is part of the cache version.
+      - name: Restore restate snapshot from the WarpBuild cache
+        id: restate-image-cache
+        if: ${{ inputs.restateCommit != '' && inputs.restateImageCacheKey != '' && github.event_name != 'workflow_dispatch' }}
+        uses: WarpBuilds/cache/restore@v1.4.13
+        with:
+          path: restate.tar
+          key: ${{ inputs.restateImageCacheKey }}
+
       ### Download the Restate container image, if needed
       # Setup restate snapshot if necessary
       # Due to https://github.com/actions/upload-artifact/issues/53
       # We must use download-artifact to get artifacts created during *this* workflow run, ie by workflow call
       - name: Download restate snapshot from in-progress workflow
-        if: ${{ inputs.restateCommit != '' && github.event_name != 'workflow_dispatch' }}
+        if: ${{ inputs.restateCommit != '' && github.event_name != 'workflow_dispatch' && steps.restate-image-cache.outputs.cache-hit != 'true' }}
         uses: actions/download-artifact@v8.0.2
         with:
           name: restate.tar
