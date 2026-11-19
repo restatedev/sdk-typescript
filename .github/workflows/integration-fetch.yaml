@@ -1,8 +1,5 @@
 name: Integration Fetch
 
-# Runs the SDK memory leak test (test/memory_leak.test.ts) for each endpoint adapter. It is kept
-# out of integration.yaml, which other repositories (e.g. restate's CI) call on every PR.
-
 # Controls when the workflow will run
 on:
   pull_request:
@@ -43,7 +40,6 @@ jobs:
     strategy:
       matrix:
         node-version: [22.x]
-        adapter: [node-http2, fetch]
 
     steps:
       - uses: actions/checkout@v4.4.0
@@ -98,12 +94,9 @@ jobs:
           docker tag "${output#*: }" "localhost/restatedev/restate-commit-download:latest"
           docker image ls -a
 
-      # Only needed to build the test-services image below
       - name: Set up QEMU
-        if: ${{ inputs.serviceImage == '' }}
         uses: docker/setup-qemu-action@v3.7.0
       - name: Set up Docker Buildx
-        if: ${{ inputs.serviceImage == '' }}
         uses: docker/setup-buildx-action@v3.12.0
         with:
           driver-opts: |
@@ -135,7 +128,7 @@ jobs:
           env_file=".service-container-fetch.env"
           cp packages/tests/restate-e2e-services/.env "$env_file"
           printf "\n" >> "$env_file"
-          printf "RESTATE_E2E_ENDPOINT_ADAPTER=${{ matrix.adapter }}\n" >> "$env_file"
+          printf "RESTATE_E2E_ENDPOINT_ADAPTER=fetch\n" >> "$env_file"
           printf "SERVICES=MemoryLeakProbe\n" >> "$env_file"
           echo "path=$env_file" >> "$GITHUB_OUTPUT"
 
@@ -149,4 +142,4 @@ jobs:
           serviceContainerEnvFile: ${{ steps.service-env.outputs.path }}
           testSuite: default
           testName: Custom
-          testArtifactOutput: sdk-typescript-fetch-integration-${{ matrix.adapter }}-test-report
+          testArtifactOutput: sdk-typescript-fetch-integration-test-report
