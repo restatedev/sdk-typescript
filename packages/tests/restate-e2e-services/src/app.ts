@@ -31,7 +31,6 @@ import "./get_invocation_output.js";
 import "./preview_serdes.js";
 import "./ingress_default_serde.js";
 import "./hooks.js";
-import "./retryable_error_metadata.js";
 import "./memory_leak.js";
 import * as http2 from "http2";
 import * as heapdump from "heapdump";
