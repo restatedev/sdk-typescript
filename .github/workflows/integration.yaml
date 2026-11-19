@@ -4,12 +4,9 @@ name: Integration
 on:
   pull_request:
   push:
-    branches: [main, release-**, assigned, labeled, '*xyw*']
+    branches: [main, release-**]
   schedule:
     - cron: "0 */6 * * *"
-    - cron: "0 */5 * * 1"
-    - cron: "0 */7 * * 2"
-    
   workflow_dispatch:
     inputs:
       restateCommit:
@@ -76,20 +73,20 @@ jobs:
       actions: read
     strategy:
       matrix:
-        node-version: [26.2]
+        node-version: [22.x]
 
     steps:
-      - uses: actions/checkout@v5.4.2
+      - uses: actions/checkout@v4.4.0
         with:
           repository: restatedev/sdk-typescript
           ref: ${{ inputs.sdkRepoRef }}
 
       - name: Use Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v5.4.2
+        uses: actions/setup-node@v4.4.0
         with:
           node-version: ${{ matrix.node-version }}
           registry-url: "https://registry.npmjs.org"
-      - uses: pnpm/action-setup@v5.5.6
+      - uses: pnpm/action-setup@v4.3.0
         with:
           version: 11.1.3
       - run: pnpm install --frozen-lockfile
@@ -99,7 +96,7 @@ jobs:
       - name: Set up Docker containerd snapshotter
         uses: docker/setup-docker-action@v4.7.0
         with:
-          version: "v30.5.4"
+          version: "v28.5.2"
           set-host: true
           daemon-config: |
             {
