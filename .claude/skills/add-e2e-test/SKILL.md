@@ -13,7 +13,6 @@ All e2e test infrastructure lives under `packages/tests/restate-e2e-services/`. 
 - **Services** (`src/`): Restate service definitions (the SUT). Registered via `REGISTRY` and imported in `app.ts`.
 - **Tests** (`test/`): Vitest test files that call services through the ingress client.
 - **Test config** (`custom_tests.yaml`): YAML config read by the Java e2e test runner to know which commands to execute.
-  The memory leak test (`test/memory_leak.test.ts`) is excluded there and runs on its own in `integration-fetch.yaml` (`custom_tests_fetch.yaml`), for both endpoint adapters.
 - **Shared utils** (`test/utils.ts`): Provides `ingressClient()`, `getIngressUrl()`, `getAdminUrl()` — reads from env vars injected by the test runner.
 
 ## Steps to add a new e2e test
