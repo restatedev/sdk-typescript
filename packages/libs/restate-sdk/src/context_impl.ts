@@ -42,7 +42,6 @@ import {
   ensureError,
   INTERNAL_ERROR_CODE,
   PauseError,
-  RestateError,
   RetryableError,
   TerminalError,
   UNKNOWN_ERROR_CODE,
@@ -87,30 +86,6 @@ type ClientTarget = {
   _handlers?: Record<string, HandlerDescriptor>;
   _kind?: "service" | "object" | "workflow";
 };
-
-function toWasmFailureMetadata(
-  metadata?: Record<string, string>
-): vm.WasmFailureMetadata[] {
-  return Object.entries(metadata ?? {}).map(([key, value]) => ({
-    key,
-    value,
-  }));
-}
-
-/**
- * Build the retryable failure to propose to the VM for a failed `ctx.run` attempt.
- * Code and metadata are propagated to the terminal failure, if the retry policy gives up.
- */
-function toWasmRetryableFailure(err: Error): vm.WasmRetryableFailure {
-  return {
-    code: err instanceof RestateError ? err.code : INTERNAL_ERROR_CODE,
-    message: err.message,
-    stacktrace: err.stack,
-    metadata: toWasmFailureMetadata(
-      err instanceof RetryableError ? err.metadata : undefined
-    ),
-  };
-}
 
 export class ContextImpl
   implements ObjectContext, WorkflowContext, ContextInternal
@@ -749,19 +724,19 @@ export class ContextImpl
               this.coreVm.propose_run_completion_failure(handle, {
                 code: err.code,
                 message: err.message,
-                metadata: toWasmFailureMetadata(err.metadata),
+                metadata: Object.entries(err.metadata ?? {}).map(
+                  ([key, value]) => ({ key, value })
+                ),
               });
-            } else if (
-              err instanceof RetryableError &&
-              err.retryAfter !== undefined
-            ) {
-              // Explicit retry delay: use a fixed delay policy with the given interval,
-              // bounded by maxRetryAttempts/maxRetryDuration if set.
+            } else if (err instanceof RetryableError) {
               this.coreVm.propose_run_completion_failure_transient_with_delay_override(
                 handle,
-                toWasmRetryableFailure(err),
+                err.message,
+                err.stack,
                 BigInt(attemptDuration),
-                BigInt(millisOrDurationToMillis(err.retryAfter)),
+                err.retryAfter !== undefined
+                  ? BigInt(millisOrDurationToMillis(err.retryAfter))
+                  : undefined,
                 maxRetryAttempts,
                 options?.maxRetryDuration !== undefined
                   ? BigInt(millisOrDurationToMillis(options?.maxRetryDuration))
@@ -770,18 +745,15 @@ export class ContextImpl
             } else if (err instanceof PauseError) {
               this.coreVm.propose_run_completion_failure_transient_with_pause(
                 handle,
-                toWasmRetryableFailure(err),
+                err.message,
+                err.stack,
                 BigInt(attemptDuration)
               );
             } else {
-              // Generic error, or RetryableError without retryAfter:
-              // follow the retry policy configured in RunOptions (if any).
-              if (!(err instanceof RetryableError)) {
-                this.vmLogger.warn(
-                  `Error when processing ctx.run '${name}'.\n`,
-                  err
-                );
-              }
+              this.vmLogger.warn(
+                `Error when processing ctx.run '${name}'.\n`,
+                err
+              );
 
               // Configure the retry policy if any of the parameters are set.
               let retryPolicy;
@@ -809,7 +781,8 @@ export class ContextImpl
               }
               this.coreVm.propose_run_completion_failure_transient(
                 handle,
-                toWasmRetryableFailure(err),
+                err.message,
+                err.stack,
                 BigInt(attemptDuration),
                 retryPolicy
               );
