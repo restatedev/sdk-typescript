@@ -494,6 +494,18 @@ export type ServiceHandlerOpts<I, O> = {
   ingressPrivate?: boolean;
 
   /**
+   * When set to `false`, Restate never preempts invocations to this handler: it doesn't eagerly suspend
+   * them while they are awaiting a result (for example from a call, a sleep or an awakeable) to free up
+   * concurrency capacity for other invocations. Invocations still suspend when `inactivityTimeout` expires.
+   *
+   * If unset, the service-level `preemptable` setting applies, which defaults to `true`.
+   *
+   * Note: Takes effect only when registering this endpoint with a restate-server supporting service discovery
+   * protocol V6 or newer. Older servers never preempt invocations, so this option is ignored by them.
+   */
+  preemptable?: boolean;
+
+  /**
    * Retry policy to apply to all requests to this handler. For each unspecified field, the default value configured in the service or, if absent, in the restate-server configuration file, will be applied instead.
    */
   retryPolicy?: RetryPolicy;
@@ -1090,6 +1102,18 @@ export type ServiceOptions = {
    * Note: Available only when registering this endpoint with restate-server v1.4 or newer; otherwise service discovery will fail.
    */
   ingressPrivate?: boolean;
+
+  /**
+   * When set to `false`, Restate never preempts invocations to this service: it doesn't eagerly suspend
+   * them while they are awaiting a result (for example from a call, a sleep or an awakeable) to free up
+   * concurrency capacity for other invocations. Invocations still suspend when `inactivityTimeout` expires.
+   *
+   * Defaults to `true`. Can be overridden per handler.
+   *
+   * Note: Takes effect only when registering this endpoint with a restate-server supporting service discovery
+   * protocol V6 or newer. Older servers never preempt invocations, so this option is ignored by them.
+   */
+  preemptable?: boolean;
 
   /**
    * Retry policy to apply to all requests to this service. For each unspecified field, the default value configured in the restate-server configuration file will be applied instead.

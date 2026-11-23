@@ -11,6 +11,8 @@
 
 import { toServiceDiscovery } from "./testutils.js";
 import * as restate from "../src/index.js";
+import { createEndpointHandler } from "../src/fetch.js";
+import type * as discovery from "../src/endpoint/discovery.js";
 import { describe, expect, it } from "vitest";
 
 const greeterFoo = restate.service({
@@ -192,5 +194,83 @@ describe("PropagateConfigOptions", () => {
     expect(svc.ingressPrivate).toEqual(false);
     // Only service level is configured in this case, runtime deals with configuration levels
     expect(svc.handlers[0]?.ingressPrivate).toBeUndefined();
+  });
+});
+
+describe("Preemptable", () => {
+  const MANIFEST_V5 = "application/vnd.restate.endpointmanifest.v5+json";
+  const MANIFEST_V6 = "application/vnd.restate.endpointmanifest.v6+json";
+
+  const fetchHandler = createEndpointHandler({
+    services: [
+      restate.service({
+        name: "notPreemptable",
+        handlers: {
+          overridden: restate.handlers.handler(
+            { preemptable: true },
+            // eslint-disable-next-line @typescript-eslint/require-await
+            async (_ctx: restate.Context) => {}
+          ),
+          // eslint-disable-next-line @typescript-eslint/require-await
+          async inherited(_ctx: restate.Context) {},
+        },
+        options: { preemptable: false },
+      }),
+      restate.service({
+        name: "unset",
+        handlers: {
+          // eslint-disable-next-line @typescript-eslint/require-await
+          async greet(_ctx: restate.Context) {},
+        },
+      }),
+    ],
+  });
+
+  async function discover(accept: string) {
+    const res = await fetchHandler(
+      new Request("http://localhost/discover", { headers: { accept } })
+    );
+    expect(res.status).toEqual(200);
+    const manifest = (await res.json()) as discovery.Endpoint;
+    const service = (name: string) =>
+      manifest.services.find((s) => s.name === name)!;
+    const handler = (svc: discovery.Service, name: string) =>
+      svc.handlers.find((h) => h.name === name)!;
+    return {
+      contentType: res.headers.get("content-type"),
+      notPreemptable: service("notPreemptable"),
+      unset: service("unset"),
+      handler,
+    };
+  }
+
+  it("negotiates V6 and emits preemptable only when explicitly set", async () => {
+    const { contentType, notPreemptable, unset, handler } = await discover(
+      `${MANIFEST_V5}, ${MANIFEST_V6}`
+    );
+
+    expect(contentType).toEqual(MANIFEST_V6);
+    expect(notPreemptable.preemptable).toBe(false);
+    expect(handler(notPreemptable, "overridden").preemptable).toBe(true);
+    expect(handler(notPreemptable, "inherited")).not.toHaveProperty(
+      "preemptable"
+    );
+    expect(unset).not.toHaveProperty("preemptable");
+    expect(handler(unset, "greet")).not.toHaveProperty("preemptable");
+  });
+
+  it("drops preemptable when V5 is negotiated", async () => {
+    const { contentType, notPreemptable, handler } =
+      await discover(MANIFEST_V5);
+
+    expect(contentType).toEqual(MANIFEST_V5);
+    expect(notPreemptable).not.toHaveProperty("preemptable");
+    expect(handler(notPreemptable, "overridden")).not.toHaveProperty(
+      "preemptable"
+    );
+
+    // Dropping the field must not alter the endpoint metadata used by later discoveries.
+    const v6 = await discover(MANIFEST_V6);
+    expect(v6.notPreemptable.preemptable).toBe(false);
   });
 });

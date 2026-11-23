@@ -11,6 +11,7 @@ const ENDPOINT_MANIFEST_V2 = "application/vnd.restate.endpointmanifest.v2+json";
 const ENDPOINT_MANIFEST_V3 = "application/vnd.restate.endpointmanifest.v3+json";
 const ENDPOINT_MANIFEST_V4 = "application/vnd.restate.endpointmanifest.v4+json";
 const ENDPOINT_MANIFEST_V5 = "application/vnd.restate.endpointmanifest.v5+json";
+const ENDPOINT_MANIFEST_V6 = "application/vnd.restate.endpointmanifest.v6+json";
 
 export function handleDiscovery(
   endpoint: Endpoint,
@@ -26,7 +27,9 @@ export function handleDiscovery(
 
   // Negotiate version to use
   let manifestVersion;
-  if (acceptVersionsString.includes(ENDPOINT_MANIFEST_V5)) {
+  if (acceptVersionsString.includes(ENDPOINT_MANIFEST_V6)) {
+    manifestVersion = 6;
+  } else if (acceptVersionsString.includes(ENDPOINT_MANIFEST_V5)) {
     manifestVersion = 5;
   } else if (acceptVersionsString.includes(ENDPOINT_MANIFEST_V4)) {
     manifestVersion = 4;
@@ -148,6 +151,20 @@ export function handleDiscovery(
     }
   }
 
+  if (manifestVersion < 6) {
+    // Drop the preemptable field. No need to fail in this case, as runtimes
+    // older than V6 never preempt invocations.
+    // Copy services and handlers, as they're shared with the endpoint metadata.
+    discovery.services = discovery.services.map((service) => ({
+      ...service,
+      preemptable: undefined,
+      handlers: service.handlers.map((handler) => ({
+        ...handler,
+        preemptable: undefined,
+      })),
+    }));
+  }
+
   const body = JSON.stringify(discovery);
   return simpleResponse(
     200,
@@ -159,7 +176,9 @@ export function handleDiscovery(
             ? ENDPOINT_MANIFEST_V3
             : manifestVersion === 4
               ? ENDPOINT_MANIFEST_V4
-              : ENDPOINT_MANIFEST_V5,
+              : manifestVersion === 5
+                ? ENDPOINT_MANIFEST_V5
+                : ENDPOINT_MANIFEST_V6,
       "x-restate-server": X_RESTATE_SERVER,
     },
     new TextEncoder().encode(body)
