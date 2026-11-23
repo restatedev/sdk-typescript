@@ -10,6 +10,7 @@
  */
 
 export * from "./common_api.js";
+
 import type * as http2 from "node:http2";
 import type { RestateEndpoint } from "./endpoint.js";
 import { NodeEndpoint } from "./endpoint/node_endpoint.js";
@@ -85,10 +86,6 @@ export function createEndpointHandler(options: NodeEndpointOptions) {
   ).handler({ bidirectional });
 }
 
-const DEFAULT_SERVE_HTTP2_SETTINGS: Readonly<http2.Settings> = {
-  maxConcurrentStreams: 8,
-};
-
 export interface ServeOptions extends EndpointOptions {
   /**
    * Port to listen on. Defaults to the `PORT` environment variable, or 9080.
@@ -96,9 +93,7 @@ export interface ServeOptions extends EndpointOptions {
   port?: number;
 
   /**
-   * HTTP/2 settings of the server. Settings you pass are applied on top of
-   * the defaults, which are Node's defaults except for
-   * `maxConcurrentStreams: 8`.
+   * HTTP/2 settings of the server.
    *
    * Restate sends invocations as HTTP/2 streams over a few long-lived
    * connections, and opens another connection only when the existing ones
@@ -137,6 +132,6 @@ export function serve({
   const endpoint = new NodeEndpoint();
   withOptions<RestateEndpoint>(endpoint, options);
   return endpoint.listen(port, {
-    http2Settings: { ...DEFAULT_SERVE_HTTP2_SETTINGS, ...http2Settings },
+    http2Settings,
   });
 }
