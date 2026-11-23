@@ -103,9 +103,10 @@ export interface ServeOptions extends EndpointOptions {
    * spread invocations evenly.
    *
    * Restate Server versions before 1.7 don't open additional connections:
-   * they use one connection per partition, so `maxConcurrentStreams` limits
-   * how many invocations of this endpoint run concurrently per partition. If
-   * you run many concurrent invocations against such a server, raise it.
+   * they use one connection per partition, so a low `maxConcurrentStreams`
+   * also limits how many invocations of this endpoint run concurrently per
+   * partition. Avoid lowering it if you run many concurrent invocations
+   * against such a server.
    */
   http2Settings?: http2.Settings;
 }
