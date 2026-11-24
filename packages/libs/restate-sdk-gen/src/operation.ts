@@ -91,7 +91,8 @@ export function gen<T>(
 // The user unwraps the future after switching on the tag — `yield* r.future`
 // is effectively sync at that point since it's already settled. select
 // doesn't propagate the value or the error: telling you which branch is
-// ready is its only job.
+// ready is its only job. Invocation cancellation and interrupts are not
+// branch outcomes: they are thrown by `yield* select(...)` itself.
 
 export type SelectResult<B extends Record<string, Future<unknown>>> = {
   [K in keyof B]: { tag: K; future: B[K] };
