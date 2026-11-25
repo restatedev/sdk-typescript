@@ -725,6 +725,7 @@ export class ContextImpl
     const handle = wasmRun.handle;
     const commandIndex = this.coreVm.last_command_index();
 
+    let localFailure: TerminalError | undefined;
     if (!wasmRun.replayed) {
       // Let's prepare the run task only if the run wasnt replayed.
       const doRun: () => Promise<any> = async () => {
@@ -745,7 +746,8 @@ export class ContextImpl
         try {
           if (err !== undefined) {
             if (err instanceof TerminalError) {
-              // Record failure, go ahead
+              // Keep the original stack on this attempt only.
+              localFailure = err;
               this.coreVm.propose_run_completion_failure(handle, {
                 code: err.code,
                 message: err.message,
@@ -840,7 +842,7 @@ export class ContextImpl
       completeUsing(
         { command: { type: WasmCommandType.Run, index: commandIndex } },
         SuccessWithSerde(serde, this.journalValueCodec),
-        Failure
+        (value, prom) => Failure(value, prom, localFailure)
       )
     );
   }
@@ -1438,13 +1440,25 @@ function failureToTerminalError(failure: vm.WasmFailure): TerminalError {
   });
 }
 
-const Failure: Completer = (value, prom) => {
+function Failure(
+  value: AsyncResultValue,
+  prom: PromiseWithResolvers<any>,
+  localFailure?: TerminalError
+): Promise<boolean> {
   if (typeof value === "object" && "Failure" in value) {
-    prom.reject(failureToTerminalError(value.Failure));
+    const error = failureToTerminalError(value.Failure);
+    if (
+      localFailure &&
+      localFailure.code === error.code &&
+      localFailure.message === error.message
+    ) {
+      error.cause = localFailure;
+    }
+    prom.reject(error);
     return Promise.resolve(true);
   }
   return Promise.resolve(false);
-};
+}
 
 const StateKeys: Completer = (value, prom) => {
   if (typeof value === "object" && "StateKeys" in value) {
