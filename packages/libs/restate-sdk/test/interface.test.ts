@@ -336,3 +336,94 @@ describe("service()/object()/workflow() carry the Descriptor contract", () => {
     expect(arg.outputSerde).toBe(restate.serde.binary);
   });
 });
+
+describe("implement() preserves options.serde handler descriptors", () => {
+  it("propagates service-level options.serde to handlers without explicit contract serdes", async () => {
+    const contract = restate.iface.service("customSerdeSvc", {
+      echo: restate.iface.json<Uint8Array, Uint8Array>({
+        description: "Echo binary payload",
+        metadata: { tier: "edge" },
+      }),
+      empty: restate.iface.serdes({
+        input: restate.serde.empty,
+        output: restate.serde.empty,
+      }),
+    });
+
+    const def = restate.implement(contract, {
+      handlers: {
+        // eslint-disable-next-line @typescript-eslint/require-await
+        echo: async (_ctx, x) => x,
+        // eslint-disable-next-line @typescript-eslint/require-await
+        empty: async () => {},
+      },
+      options: { serde: restate.serde.binary },
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const handlers = (def as any)._handlers;
+    expect(handlers.echo._inputSerde).toBe(restate.serde.binary);
+    expect(handlers.echo._outputSerde).toBe(restate.serde.binary);
+    expect(handlers.echo._description).toBe("Echo binary payload");
+    expect(handlers.echo._metadata).toEqual({ tier: "edge" });
+    // Explicit contract serdes remain intact
+    expect(handlers.empty._inputSerde).toBe(restate.serde.empty);
+    expect(handlers.empty._outputSerde).toBe(restate.serde.empty);
+
+    const call = vi.fn(
+      (_c: GenericCall<unknown, unknown>): Promise<unknown> =>
+        Promise.resolve(new Uint8Array())
+    );
+    const client = makeRpcCallProxy<{
+      echo: (i: Uint8Array) => Promise<Uint8Array>;
+    }>(call, restate.serde.json, def.name, undefined, undefined, handlers);
+    await client.echo(new Uint8Array([9]));
+    expect(call.mock.calls[0]![0].inputSerde).toBe(restate.serde.binary);
+    expect(call.mock.calls[0]![0].outputSerde).toBe(restate.serde.binary);
+  });
+
+  it("propagates per-handler options.handlers.<name>.serde on objects and workflows", () => {
+    const wf = restate.iface.workflow("wfSerde", {
+      run: restate.iface.json<string, string>(),
+      status: restate.iface.shared.json<void, Uint8Array>(),
+    });
+
+    const wfDef = restate.implement(wf, {
+      handlers: {
+        // eslint-disable-next-line @typescript-eslint/require-await
+        run: async (_ctx, v) => v,
+        // eslint-disable-next-line @typescript-eslint/require-await
+        status: async () => new Uint8Array(),
+      },
+      options: {
+        handlers: {
+          status: { serde: restate.serde.binary },
+        },
+      },
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const wfHandlers = (wfDef as any)._handlers;
+    expect(wfHandlers.status._inputSerde).toBe(restate.serde.binary);
+    expect(wfHandlers.status._outputSerde).toBe(restate.serde.binary);
+    expect(wfHandlers.run._inputSerde).toBeUndefined();
+
+    const objDef = restate.implement(counter, {
+      handlers: {
+        // eslint-disable-next-line @typescript-eslint/require-await
+        add: async (_ctx, n) => n,
+        // eslint-disable-next-line @typescript-eslint/require-await
+        get: async () => 0,
+      },
+      options: {
+        serde: restate.serde.binary,
+      },
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const objHandlers = (objDef as any)._handlers;
+    expect(objHandlers.add._inputSerde).toBe(restate.serde.binary);
+    expect(objHandlers.get._shared).toBe(true);
+    expect(objHandlers.get._outputSerde).toBe(restate.serde.binary);
+  });
+});

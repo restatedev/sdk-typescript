@@ -198,8 +198,25 @@ export function implement(
         ? object(common)
         : workflow(common);
 
+  const computedHandlers = (
+    def as { _handlers?: Record<string, Record<string, unknown>> }
+  )._handlers;
+  const mergedHandlers: Record<string, any> = {};
+  for (const [name, desc] of Object.entries(
+    contract._handlers as Record<string, Record<string, unknown>>
+  )) {
+    const computed = computedHandlers?.[name];
+    mergedHandlers[name] = computed
+      ? {
+          ...desc,
+          _inputSerde: computed._inputSerde ?? desc._inputSerde,
+          _outputSerde: computed._outputSerde ?? desc._outputSerde,
+        }
+      : desc;
+  }
+
   return Object.assign(def, {
     _kind: contract._kind,
-    _handlers: contract._handlers,
+    _handlers: mergedHandlers,
   });
 }
