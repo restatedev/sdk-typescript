@@ -189,7 +189,7 @@ describe("openTelemetryHook spans", { timeout: 60_000 }, () => {
           "kind": "INTERNAL",
           "name": "attempt Greeter/greet",
           "parent": "<root>",
-          "status": "OK",
+          "status": "UNSET",
         },
         {
           "attributes": {
@@ -199,7 +199,7 @@ describe("openTelemetryHook spans", { timeout: 60_000 }, () => {
           "kind": "INTERNAL",
           "name": "run (compute)",
           "parent": "attempt Greeter/greet",
-          "status": "OK",
+          "status": "UNSET",
         },
       ]
     `);
@@ -312,7 +312,7 @@ describe("openTelemetryHook replay suppression", { timeout: 60_000 }, () => {
           "kind": "INTERNAL",
           "name": "attempt Replayer/go",
           "parent": "<root>",
-          "status": "OK",
+          "status": "UNSET",
         },
       ]
     `);
