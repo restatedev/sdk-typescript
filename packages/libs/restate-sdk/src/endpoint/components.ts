@@ -636,6 +636,7 @@ function commonServiceOptions(
         ? millisOrDurationToMillis(options.abortTimeout)
         : undefined,
     ingressPrivate: options?.ingressPrivate,
+    preemptable: options?.preemptable,
     enableLazyState: statePreload.enableLazyState,
     eagerStateKeysWhitelist: statePreload.eagerStateKeysWhitelist,
     retryPolicyExponentiationFactor: options?.retryPolicy?.exponentiationFactor,
@@ -681,6 +682,7 @@ function commonHandlerOptions(
         ? millisOrDurationToMillis(wrapper.options?.abortTimeout)
         : undefined,
     ingressPrivate: wrapper.options?.ingressPrivate,
+    preemptable: wrapper.options?.preemptable,
     enableLazyState: statePreload.enableLazyState,
     eagerStateKeysWhitelist: statePreload.eagerStateKeysWhitelist,
     retryPolicyExponentiationFactor:

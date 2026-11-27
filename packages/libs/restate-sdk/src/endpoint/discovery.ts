@@ -76,6 +76,10 @@ export interface Service {
    */
   ingressPrivate?: boolean;
   /**
+   * If false, the runtime never preempts invocations of this service, i.e. it doesn't eagerly suspend them while they are waiting on an await point to free up concurrency capacity for other invocations. Invocations still suspend when the inactivity timeout fires. Defaults to true. Available since discovery protocol V6.
+   */
+  preemptable?: boolean;
+  /**
    * Retry policy initial interval, expressed in milliseconds.
    */
   retryPolicyInitialInterval?: number;
@@ -140,6 +144,10 @@ export interface Handler {
    * If true, the service cannot be invoked from the HTTP nor Kafka ingress.
    */
   ingressPrivate?: boolean;
+  /**
+   * If false, the runtime never preempts invocations of this handler, i.e. it doesn't eagerly suspend them while they are waiting on an await point to free up concurrency capacity for other invocations. Invocations still suspend when the inactivity timeout fires. If unset, the service-level setting applies. Available since discovery protocol V6.
+   */
+  preemptable?: boolean;
   /**
    * Retry policy initial interval, expressed in milliseconds.
    */
