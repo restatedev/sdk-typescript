@@ -388,7 +388,8 @@ const doWorkflowHandleCall = async <O>(
   wfKey: string,
   op: "output" | "attach",
   callOpts?: Opts<unknown, O> | SendOpts<unknown>,
-  runOutputSerde?: Serde<unknown>
+  runOutputSerde?: Serde<unknown>,
+  scope?: string
 ): Promise<O> => {
   const outputSerde =
     callOpts?.opts.output ?? runOutputSerde ?? opts.serde ?? serde.json;
@@ -402,9 +403,27 @@ const doWorkflowHandleCall = async <O>(
   //
   // make the call
   //
-  const url = `${opts.url}/restate/workflow/${wfName}/${encodeURIComponent(
+  let url = `${opts.url}/restate/workflow/${wfName}/${encodeURIComponent(
     wfKey
   )}/${op}`;
+  let request: RequestInit = { method: "GET", headers };
+  if (scope !== undefined) {
+    // The legacy workflow path cannot identify a scope. The target API
+    // observes the same scoped workflow identity used by calls/submissions.
+    url = `${opts.url}/restate/${op}`;
+    const targetHeaders = new Headers(headers);
+    targetHeaders.set("content-type", "application/json");
+    request = {
+      method: "POST",
+      headers: Object.fromEntries(targetHeaders),
+      body: JSON.stringify({
+        target: "workflow",
+        workflowName: wfName,
+        workflowKey: wfKey,
+        scope,
+      }),
+    };
+  }
   // Attach and output only observe the existing workflow, so both are eligible
   // when the connection has a retry policy.
   const retryPolicy = resolveRetryPolicy(opts.retry);
@@ -412,7 +431,7 @@ const doWorkflowHandleCall = async <O>(
   const responseBuf = await fetchWithRetries(
     opts,
     url,
-    { method: "GET", headers },
+    request,
     callOpts,
     retryPolicy
   );
@@ -668,7 +687,8 @@ class HttpIngress implements Ingress {
             key,
             "attach",
             opts,
-            runOutputSerde
+            runOutputSerde,
+            scopeKey
           );
 
         const workflowOutput = async (
@@ -681,7 +701,8 @@ class HttpIngress implements Ingress {
               key,
               "output",
               opts,
-              runOutputSerde
+              runOutputSerde,
+              scopeKey
             );
             return { ready: true, result };
           } catch (e) {
