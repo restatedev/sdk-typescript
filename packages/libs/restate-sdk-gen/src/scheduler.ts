@@ -39,9 +39,11 @@
 //       the one currently advancing (so `run` can hand it a per-fiber
 //       signal); it is null between advances.
 //   S3. Invocation cancellation is observed as the race promise
-//       rejecting. It is fanned out to every parked source's `fire`,
-//       reusing the normal wake path; the AbortController is aborted
-//       then replaced so post-cancel recovery sees a fresh signal.
+//       rejecting. It is fanned out by waking every fiber that
+//       contributed a source with the error, bypassing the sources'
+//       `fire` callbacks (no source settled); the AbortController is
+//       aborted then replaced so post-cancel recovery sees a fresh
+//       signal.
 
 import type { Awaitable, AwaitableLib } from "./awaitable.js";
 import {
@@ -427,12 +429,15 @@ export class Scheduler implements SchedulerOps {
       gen<R>(function* () {
         const out = new Array<FutureSettledResult<unknown>>(fs.length);
         for (let i = 0; i < fs.length; i++) {
-          try {
-            const value = yield* fs[i]!;
-            out[i] = { status: "fulfilled", value };
-          } catch (reason) {
-            out[i] = { status: "rejected", reason };
-          }
+          // awaitRace over the single input, not `yield* fs[i]` in a
+          // try/catch: the input's own rejection comes back as
+          // `settled`, while an invocation cancellation or an interrupt
+          // is thrown and propagates instead of being recorded as this
+          // input's rejection.
+          const { settled } = yield* awaitRace([fs[i]!]);
+          out[i] = settled.ok
+            ? { status: "fulfilled", value: settled.v }
+            : { status: "rejected", reason: settled.e };
         }
         return out as R;
       })
@@ -491,8 +496,14 @@ export class Scheduler implements SchedulerOps {
     // it is alive, so the conjunction reduces to !main.isDone().
     while (!this.mainExited() && this.fibers.size > 0) {
       const items: PromiseSource[] = [];
+      // Fibers that contributed at least one source to this race, in
+      // collection order. A race rejection is delivered to these.
+      const parked: Fiber<unknown>[] = [];
       for (const f of this.fibers) {
-        for (const src of f.parkedSources()) items.push(src);
+        const sources = f.parkedSources();
+        if (sources.length === 0) continue;
+        parked.push(f);
+        for (const src of sources) items.push(src);
       }
       if (items.length === 0) {
         // Live fibers exist but no journal promises are pending — a
@@ -514,10 +525,16 @@ export class Scheduler implements SchedulerOps {
       // promises are unaffected — the rejection lives on this
       // aggregate race promise. We fan the rejection out to every
       // parked fiber: each was, in effect, contributing a source to
-      // this race, so each gets the TerminalError delivered at its
+      // this race, so each gets the TerminalError thrown at its
       // current yield point. Fibers may catch and continue normally;
       // subsequent iterations build fresh race promises that are not
       // infected by this rejection.
+      //
+      // The rejection is delivered by waking each fiber directly, not
+      // through its sources' `fire` callbacks. No source settled: for
+      // a fiber parked in AwaitRace, `fire` would report "branch i
+      // rejected with e", and select / the any fallback would treat
+      // the cancellation as that branch's own outcome.
       //
       // Before fanning out, abort the current AbortController so
       // in-flight syscalls inside ops.run closures (those listening
@@ -534,7 +551,7 @@ export class Scheduler implements SchedulerOps {
           this.abortController = this.newAbortController();
         }
         const errSettled: Settled = { ok: false, e };
-        for (const it of items) it.fire(errSettled);
+        for (const f of parked) f.wake(errSettled);
         this.drainReady();
         continue;
       }

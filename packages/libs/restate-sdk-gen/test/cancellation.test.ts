@@ -27,7 +27,13 @@
 // (constructed after cancellation is delivered) are unaffected.
 
 import { describe, expect, test } from "vitest";
-import { gen, spawn, type Future, type Operation } from "../src/index.js";
+import {
+  gen,
+  select,
+  spawn,
+  type Future,
+  type Operation,
+} from "../src/index.js";
 import { Scheduler } from "../src/internal.js";
 import { cancellingLib, deferred } from "./test-promise.js";
 
@@ -184,7 +190,7 @@ describe("cancellation — fan-out across multiple parked routines", () => {
     d2.resolve("late2");
   });
 
-  test("AwaitAny over journal sources: cancel delivers TerminalError once via won-flag", async () => {
+  test("AwaitRace over journal sources: cancel delivers TerminalError once", async () => {
     const { lib, cancel } = cancellingLib();
     const sched = new Scheduler(lib);
     const d1 = deferred<string>();
@@ -280,6 +286,157 @@ describe("cancellation — interaction with all", () => {
     expect(await result).toBe("cancelled:Invocation cancelled");
     d2.resolve(2);
     d3.resolve(3);
+  });
+});
+
+// A race rejection is not the outcome of any one source. These tests
+// cover the combinators that report per-source outcomes (select, and the
+// any / allSettled fallbacks over mixed backings): the cancellation must
+// be thrown, not attributed to a branch.
+describe("cancellation — not attributed to a branch", () => {
+  test.each([
+    ["timer first", ["timer", "stop"]],
+    ["stop first", ["stop", "timer"]],
+  ])("select over journal branches (%s): cancel is thrown", async (_, keys) => {
+    const { lib, cancel } = cancellingLib();
+    const sched = new Scheduler(lib);
+    const dTimer = deferred<string>();
+    const dStop = deferred<string>();
+    const futures: Record<string, Future<string>> = {
+      timer: sched.makeJournalFuture(dTimer.promise),
+      stop: sched.makeJournalFuture(dStop.promise),
+    };
+    const branches = Object.fromEntries(keys!.map((k) => [k, futures[k]!]));
+
+    const op = gen(function* () {
+      try {
+        const r = yield* select(branches);
+        return `selected:${r.tag}`;
+      } catch (e) {
+        return `cancelled:${(e as Error).message}`;
+      }
+    });
+
+    const result = sched.run(op);
+    queueMicrotask(() => cancel(new CancelError()));
+    expect(await result).toBe("cancelled:Invocation cancelled");
+    dTimer.resolve("late");
+    dStop.resolve("late");
+  });
+
+  test("select over a journal branch and a spawned branch: cancel is thrown", async () => {
+    const { lib, cancel } = cancellingLib();
+    const sched = new Scheduler(lib);
+    const dTimer = deferred<string>();
+    const dStop = deferred<string>();
+
+    const op = gen(function* () {
+      const timer = sched.makeJournalFuture(dTimer.promise);
+      const stop = spawn(
+        gen(function* () {
+          return yield* sched.makeJournalFuture(dStop.promise);
+        })
+      );
+      try {
+        const r = yield* select({ timer, stop });
+        return `selected:${r.tag}`;
+      } catch (e) {
+        return `cancelled:${(e as Error).message}`;
+      }
+    });
+
+    const result = sched.run(op);
+    queueMicrotask(() => cancel(new CancelError()));
+    expect(await result).toBe("cancelled:Invocation cancelled");
+    dTimer.resolve("late");
+    dStop.resolve("late");
+  });
+
+  test("any fallback: cancel is thrown, not collected into an AggregateError", async () => {
+    const { lib, cancel } = cancellingLib();
+    const sched = new Scheduler(lib);
+    const d1 = deferred<string>();
+    const d2 = deferred<string>();
+
+    const op = gen(function* () {
+      const task = spawn(
+        gen(function* () {
+          return yield* sched.makeJournalFuture(d1.promise);
+        })
+      );
+      try {
+        return yield* sched.any([task, sched.makeJournalFuture(d2.promise)]);
+      } catch (e) {
+        return `cancelled:${(e as Error).name}:${(e as Error).message}`;
+      }
+    });
+
+    const result = sched.run(op);
+    queueMicrotask(() => cancel(new CancelError()));
+    expect(await result).toBe("cancelled:TerminalError:Invocation cancelled");
+    d1.resolve("late1");
+    d2.resolve("late2");
+  });
+
+  test("any fallback: cancel is thrown even if the other branch keeps running", async () => {
+    const { lib, cancel } = cancellingLib();
+    const sched = new Scheduler(lib);
+    const d1 = deferred<string>();
+    const d2 = deferred<string>();
+
+    const op = gen(function* () {
+      const never = sched.makeChannel<string>();
+      // The task swallows the cancellation and waits on a channel that
+      // never receives a value.
+      const task = spawn(
+        gen(function* () {
+          try {
+            return yield* sched.makeJournalFuture(d1.promise);
+          } catch {
+            return yield* never.receive;
+          }
+        })
+      );
+      try {
+        return yield* sched.any([task, sched.makeJournalFuture(d2.promise)]);
+      } catch (e) {
+        return `cancelled:${(e as Error).message}`;
+      }
+    });
+
+    const result = sched.run(op);
+    queueMicrotask(() => cancel(new CancelError()));
+    expect(await result).toBe("cancelled:Invocation cancelled");
+    d1.resolve("late1");
+    d2.resolve("late2");
+  });
+
+  test("allSettled fallback: cancel is thrown, not recorded as a rejected input", async () => {
+    const { lib, cancel } = cancellingLib();
+    const sched = new Scheduler(lib);
+    const d1 = deferred<string>();
+
+    const op = gen(function* () {
+      const task = spawn(
+        gen(function* () {
+          return "task-done";
+        })
+      );
+      try {
+        const r = yield* sched.allSettled([
+          sched.makeJournalFuture(d1.promise),
+          task,
+        ]);
+        return `settled:${r.map((x) => x.status).join(",")}`;
+      } catch (e) {
+        return `cancelled:${(e as Error).message}`;
+      }
+    });
+
+    const result = sched.run(op);
+    queueMicrotask(() => cancel(new CancelError()));
+    expect(await result).toBe("cancelled:Invocation cancelled");
+    d1.resolve("late");
   });
 });
 
